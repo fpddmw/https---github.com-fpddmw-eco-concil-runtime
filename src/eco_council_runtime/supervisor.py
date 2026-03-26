@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.cli_invocation import runtime_module_argv
 from eco_council_runtime.controller.agent_turns import (
     build_agent_message,
     current_agent_turn,
@@ -141,20 +142,26 @@ from eco_council_runtime.controller.state_config import (
     signal_corpus_cli_updates_requested,
     write_history_context_file,
 )
-from eco_council_runtime.layout import (
-    CASE_LIBRARY_SCRIPT_PATH,
-    ORCHESTRATE_SCRIPT_PATH,
-    PROJECT_DIR,
-    REPORTING_SCRIPT_PATH,
-    SIGNAL_CORPUS_SCRIPT_PATH,
-)
+from eco_council_runtime.layout import PROJECT_DIR
 REPO_DIR = PROJECT_DIR
 
-CASE_LIBRARY_SCRIPT = CASE_LIBRARY_SCRIPT_PATH
-ORCHESTRATE_SCRIPT = ORCHESTRATE_SCRIPT_PATH
-REPORTING_SCRIPT = REPORTING_SCRIPT_PATH
-SIGNAL_CORPUS_SCRIPT = SIGNAL_CORPUS_SCRIPT_PATH
 SCHEMA_VERSION = resolve_schema_version(DEFAULT_SCHEMA_VERSION)
+
+
+def case_library_argv(*args: object) -> list[str]:
+    return runtime_module_argv("case_library", *args)
+
+
+def orchestrate_argv(*args: object) -> list[str]:
+    return runtime_module_argv("orchestrate", *args)
+
+
+def reporting_argv(*args: object) -> list[str]:
+    return runtime_module_argv("reporting", *args)
+
+
+def signal_corpus_argv(*args: object) -> list[str]:
+    return runtime_module_argv("signal_corpus", *args)
 
 
 def load_state(run_dir: Path) -> dict[str, Any]:
@@ -338,16 +345,7 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir).expanduser().resolve()
     mission_input = Path(args.mission_input).expanduser().resolve()
     run_json_command(
-        [
-            "python3",
-            str(ORCHESTRATE_SCRIPT),
-            "bootstrap-run",
-            "--run-dir",
-            str(run_dir),
-            "--mission-input",
-            str(mission_input),
-            "--pretty",
-        ],
+        orchestrate_argv("bootstrap-run", "--run-dir", str(run_dir), "--mission-input", str(mission_input), "--pretty"),
         cwd=REPO_DIR,
     )
     round_id = latest_round_id(run_dir)
@@ -472,16 +470,7 @@ def command_summarize_run(args: argparse.Namespace) -> dict[str, Any]:
 def continue_prepare_round(run_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
     round_id = maybe_text(state.get("current_round_id"))
     payload = run_json_command(
-        [
-            "python3",
-            str(ORCHESTRATE_SCRIPT),
-            "prepare-round",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ],
+        orchestrate_argv("prepare-round", "--run-dir", str(run_dir), "--round-id", round_id, "--pretty"),
         cwd=REPO_DIR,
     )
     state["stage"] = STAGE_READY_FETCH
@@ -492,9 +481,7 @@ def continue_prepare_round(run_dir: Path, state: dict[str, Any]) -> dict[str, An
 def continue_execute_fetch(run_dir: Path, state: dict[str, Any], timeout_seconds: int) -> dict[str, Any]:
     round_id = maybe_text(state.get("current_round_id"))
     payload = run_json_command(
-        [
-            "python3",
-            str(ORCHESTRATE_SCRIPT),
+        orchestrate_argv(
             "execute-fetch-plan",
             "--run-dir",
             str(run_dir),
@@ -505,7 +492,7 @@ def continue_execute_fetch(run_dir: Path, state: dict[str, Any], timeout_seconds
             "--continue-on-error",
             "--skip-existing",
             "--pretty",
-        ],
+        ),
         cwd=REPO_DIR,
     )
     execution_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
@@ -577,17 +564,7 @@ def maybe_auto_import_signal_corpus(run_dir: Path, state: dict[str, Any], round_
     attempted_at_utc = utc_now_iso()
     try:
         payload = run_json_command(
-            [
-                "python3",
-                str(SIGNAL_CORPUS_SCRIPT),
-                "import-run",
-                "--db",
-                db_text,
-                "--run-dir",
-                str(run_dir),
-                "--overwrite",
-                "--pretty",
-            ],
+            signal_corpus_argv("import-run", "--db", db_text, "--run-dir", str(run_dir), "--overwrite", "--pretty"),
             cwd=REPO_DIR,
         )
         result = {
@@ -627,17 +604,7 @@ def maybe_auto_import_case_library(run_dir: Path, state: dict[str, Any], round_i
     attempted_at_utc = utc_now_iso()
     try:
         payload = run_json_command(
-            [
-                "python3",
-                str(CASE_LIBRARY_SCRIPT),
-                "import-run",
-                "--db",
-                db_text,
-                "--run-dir",
-                str(run_dir),
-                "--overwrite",
-                "--pretty",
-            ],
+            case_library_argv("import-run", "--db", db_text, "--run-dir", str(run_dir), "--overwrite", "--pretty"),
             cwd=REPO_DIR,
         )
         result = {
@@ -669,16 +636,7 @@ def maybe_auto_import_case_library(run_dir: Path, state: dict[str, Any], round_i
 def continue_run_data_plane(run_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
     round_id = maybe_text(state.get("current_round_id"))
     payload = run_json_command(
-        [
-            "python3",
-            str(ORCHESTRATE_SCRIPT),
-            "run-data-plane",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ],
+        orchestrate_argv("run-data-plane", "--run-dir", str(run_dir), "--round-id", round_id, "--pretty"),
         cwd=REPO_DIR,
     )
     signal_corpus_import = maybe_auto_import_signal_corpus(run_dir, state, round_id)
@@ -728,16 +686,7 @@ def continue_recover_or_run_data_plane(run_dir: Path, state: dict[str, Any]) -> 
 def continue_run_matching_adjudication(run_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
     round_id = maybe_text(state.get("current_round_id"))
     payload = run_json_command(
-        [
-            "python3",
-            str(ORCHESTRATE_SCRIPT),
-            "run-matching-adjudication",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ],
+        orchestrate_argv("run-matching-adjudication", "--run-dir", str(run_dir), "--round-id", round_id, "--pretty"),
         cwd=REPO_DIR,
     )
     state["stage"] = STAGE_AWAITING_INVESTIGATION_REVIEW
@@ -793,9 +742,7 @@ def continue_recover_or_run_matching_adjudication(run_dir: Path, state: dict[str
 def continue_promote(run_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
     round_id = maybe_text(state.get("current_round_id"))
     payload = run_json_command(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
+        reporting_argv(
             "promote-all",
             "--run-dir",
             str(run_dir),
@@ -803,7 +750,7 @@ def continue_promote(run_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
             round_id,
             "--allow-overwrite",
             "--pretty",
-        ],
+        ),
         cwd=REPO_DIR,
     )
     decision_payload = read_json(decision_target_path(run_dir, round_id))
@@ -824,16 +771,7 @@ def continue_promote(run_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
 def continue_advance_round(run_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
     round_id = maybe_text(state.get("current_round_id"))
     payload = run_json_command(
-        [
-            "python3",
-            str(ORCHESTRATE_SCRIPT),
-            "advance-round",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ],
+        orchestrate_argv("advance-round", "--run-dir", str(run_dir), "--round-id", round_id, "--pretty"),
         cwd=REPO_DIR,
     )
     new_round_id = latest_round_id(run_dir)

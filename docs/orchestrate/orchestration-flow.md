@@ -40,7 +40,7 @@ For each round:
 5. `run-data-plane`
 6. OpenClaw experts revise report drafts
 7. OpenClaw moderator revises decision draft
-8. `python3 eco-council-runtime/scripts/eco_council_supervisor.py continue-run --run-dir [RUN_DIR]`
+8. `PYTHONPATH=src python3 -m eco_council_runtime.supervisor continue-run --run-dir [RUN_DIR]`
 9. if `council_decision.next_round_required=true`, run `advance-round`
 
 ## File Boundaries

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import os
-import shlex
 from pathlib import Path
 from typing import Any, Callable
 
+from eco_council_runtime.cli_invocation import runtime_module_command
 from eco_council_runtime.controller.constants import (
     AGENT_ID_SAFE,
     MAX_OPENCLAW_INLINE_MESSAGE_CHARS,
@@ -24,7 +24,7 @@ from eco_council_runtime.controller.paths import (
     supervisor_outbox_dir,
 )
 from eco_council_runtime.external_skills import sync_openclaw_managed_skills
-from eco_council_runtime.layout import PROJECT_DIR, SUPERVISOR_SCRIPT_PATH
+from eco_council_runtime.layout import PROJECT_DIR
 
 
 def openclaw_cli_env(run_dir: Path) -> dict[str, str]:
@@ -153,16 +153,7 @@ def agent_command_guide_path(*, state: dict[str, Any], role: str) -> Path:
 
 
 def supervisor_status_command(run_dir: Path) -> str:
-    return shlex.join(
-        [
-            "python3",
-            str(SUPERVISOR_SCRIPT_PATH),
-            "status",
-            "--run-dir",
-            str(run_dir),
-            "--pretty",
-        ]
-    )
+    return runtime_module_command("supervisor", "status", "--run-dir", run_dir, "--pretty")
 
 
 def installed_skill_guide_lines(state: dict[str, Any]) -> list[str]:
@@ -185,65 +176,58 @@ def installed_skill_guide_lines(state: dict[str, Any]) -> list[str]:
 
 def openclaw_agent_guide_text(*, run_dir: Path, state: dict[str, Any], role: str) -> str:
     run_dir = run_dir.expanduser().resolve()
-    supervisor_script = SUPERVISOR_SCRIPT_PATH
     skill_runtime = openclaw_skill_runtime_section(state)
     skills_root = maybe_text(skill_runtime.get("skills_root"))
     skills_root_args = ["--skills-root", skills_root] if skills_root else []
     status_command = supervisor_status_command(run_dir)
-    continue_command = shlex.join(
-        [
-            "python3",
-            str(supervisor_script),
-            "continue-run",
-            "--run-dir",
-            str(run_dir),
-            "--yes",
-            *skills_root_args,
-            "--pretty",
-        ]
+    continue_command = runtime_module_command(
+        "supervisor",
+        "continue-run",
+        "--run-dir",
+        run_dir,
+        "--yes",
+        *skills_root_args,
+        "--pretty",
     )
-    run_agent_command = shlex.join(
-        [
-            "python3",
-            str(supervisor_script),
-            "run-agent-step",
-            "--run-dir",
-            str(run_dir),
-            "--role",
-            role,
-            "--yes",
-            *skills_root_args,
-            "--pretty",
-        ]
+    run_agent_command = runtime_module_command(
+        "supervisor",
+        "run-agent-step",
+        "--run-dir",
+        run_dir,
+        "--role",
+        role,
+        "--yes",
+        *skills_root_args,
+        "--pretty",
     )
-    provision_command = shlex.join(
-        [
-            "python3",
-            str(supervisor_script),
-            "provision-openclaw-agents",
-            "--run-dir",
-            str(run_dir),
-            "--yes",
-            *skills_root_args,
-            "--pretty",
-        ]
+    provision_command = runtime_module_command(
+        "supervisor",
+        "provision-openclaw-agents",
+        "--run-dir",
+        run_dir,
+        "--yes",
+        *skills_root_args,
+        "--pretty",
     )
-    summarize_command = shlex.join(
-        [
-            "python3",
-            str(supervisor_script),
-            "summarize-run",
-            "--run-dir",
-            str(run_dir),
-            "--lang",
-            "zh",
-            "--pretty",
-        ]
+    summarize_command = runtime_module_command(
+        "supervisor",
+        "summarize-run",
+        "--run-dir",
+        run_dir,
+        "--lang",
+        "zh",
+        "--pretty",
     )
     init_command = (
-        "python3 "
-        + str(supervisor_script)
-        + " init-run --run-dir NEW_RUN_DIR --mission-input MISSION_JSON [--skills-root SKILLS_ROOT] --yes --pretty"
+        runtime_module_command(
+            "supervisor",
+            "init-run",
+            "--run-dir",
+            "NEW_RUN_DIR",
+            "--mission-input",
+            "MISSION_JSON",
+        )
+        + " [--skills-root SKILLS_ROOT] --yes --pretty"
     )
     return "\n".join(
         [

@@ -41,7 +41,7 @@ Use after the returned JSON has been reviewed and imported into the canonical dr
 
 ```text
 Run:
-python3 eco-council-runtime/scripts/eco_council_supervisor.py continue-run \
+PYTHONPATH=src python3 -m eco_council_runtime.supervisor continue-run \
   --run-dir [RUN_DIR] \
   --pretty
 Return only JSON.
@@ -51,7 +51,7 @@ Return only JSON.
 
 ```text
 Run:
-python3 eco-council-runtime/scripts/eco_council_reporting.py promote-report-draft \
+PYTHONPATH=src python3 -m eco_council_runtime.reporting promote-report-draft \
   --run-dir [RUN_DIR] \
   --round-id round-001 \
   --role sociologist \
@@ -63,7 +63,7 @@ Return only JSON.
 
 ```text
 Run:
-python3 eco-council-runtime/scripts/eco_council_reporting.py promote-decision-draft \
+PYTHONPATH=src python3 -m eco_council_runtime.reporting promote-decision-draft \
   --run-dir [RUN_DIR] \
   --round-id round-001 \
   --pretty

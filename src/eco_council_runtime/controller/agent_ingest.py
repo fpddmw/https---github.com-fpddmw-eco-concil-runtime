@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+from eco_council_runtime.cli_invocation import runtime_module_argv
 from eco_council_runtime.controller.common import maybe_int, unique_strings
 from eco_council_runtime.controller.io import (
     cloned_json,
@@ -19,21 +20,20 @@ from eco_council_runtime.controller.paths import (
     source_selection_packet_path,
 )
 from eco_council_runtime.controller.policy import contract_call
-from eco_council_runtime.layout import CONTRACT_SCRIPT_PATH, PROJECT_DIR
+from eco_council_runtime.layout import PROJECT_DIR
 
 
 def validate_input_file(kind: str, input_path: Path) -> None:
     payload = run_json_command(
-        [
-            "python3",
-            str(CONTRACT_SCRIPT_PATH),
+        runtime_module_argv(
+            "contract",
             "validate",
             "--kind",
             kind,
             "--input",
-            str(input_path),
+            input_path,
             "--pretty",
-        ],
+        ),
         cwd=PROJECT_DIR,
     )
     validation_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload

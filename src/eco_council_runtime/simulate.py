@@ -19,10 +19,8 @@ from pathlib import Path
 from typing import Any
 import zipfile
 
-from eco_council_runtime.layout import PROJECT_DIR, SIMULATE_ASSETS_DIR, SIMULATE_SCENARIO_DIR, SCRIPTS_DIR
+from eco_council_runtime.layout import SIMULATE_ASSETS_DIR, SIMULATE_SCENARIO_DIR
 
-SCRIPT_DIR = SCRIPTS_DIR
-SKILL_DIR = PROJECT_DIR
 ASSETS_DIR = SIMULATE_ASSETS_DIR
 PRESET_DIR = SIMULATE_SCENARIO_DIR
 

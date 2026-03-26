@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.cli_invocation import runtime_module_command
 from eco_council_runtime.controller.common import first_nonempty, maybe_int
 from eco_council_runtime.controller.constants import (
     READINESS_ROLES,
@@ -61,7 +62,6 @@ from eco_council_runtime.controller.policy import (
     load_override_requests,
     policy_profile_summary,
 )
-from eco_council_runtime.layout import SUPERVISOR_SCRIPT_PATH
 
 
 def count_json_list(path: Path) -> int:
@@ -178,19 +178,20 @@ def default_summary_output_path(run_dir: Path, round_id: str = "", lang: str = "
 
 def recommended_commands_for_stage(run_dir: Path, state: dict[str, Any]) -> list[str]:
     stage = maybe_text(state.get("stage"))
-    script = f"python3 {SUPERVISOR_SCRIPT_PATH}"
-    current_run = str(run_dir)
+    def supervisor_command(*args: object) -> str:
+        return runtime_module_command("supervisor", *args, "--run-dir", run_dir, "--yes", "--pretty")
+
     if stage == STAGE_AWAITING_TASK_REVIEW:
-        return [f"{script} run-agent-step --run-dir {current_run} --role moderator --yes --pretty"]
+        return [supervisor_command("run-agent-step", "--role", "moderator")]
     if stage == STAGE_AWAITING_SOURCE_SELECTION:
         return [
-            f"{script} run-agent-step --run-dir {current_run} --role sociologist --yes --pretty",
-            f"{script} run-agent-step --run-dir {current_run} --role environmentalist --yes --pretty",
+            supervisor_command("run-agent-step", "--role", "sociologist"),
+            supervisor_command("run-agent-step", "--role", "environmentalist"),
         ]
     if stage == STAGE_AWAITING_EVIDENCE_CURATION:
         return [
-            f"{script} run-agent-step --run-dir {current_run} --role sociologist --yes --pretty",
-            f"{script} run-agent-step --run-dir {current_run} --role environmentalist --yes --pretty",
+            supervisor_command("run-agent-step", "--role", "sociologist"),
+            supervisor_command("run-agent-step", "--role", "environmentalist"),
         ]
     if stage in {
         STAGE_READY_PREPARE,
@@ -200,25 +201,25 @@ def recommended_commands_for_stage(run_dir: Path, state: dict[str, Any]) -> list
         STAGE_READY_PROMOTE,
         STAGE_READY_ADVANCE,
     }:
-        return [f"{script} continue-run --run-dir {current_run} --yes --pretty"]
+        return [supervisor_command("continue-run")]
     if stage == STAGE_AWAITING_DATA_READINESS:
         return [
-            f"{script} run-agent-step --run-dir {current_run} --role sociologist --yes --pretty",
-            f"{script} run-agent-step --run-dir {current_run} --role environmentalist --yes --pretty",
+            supervisor_command("run-agent-step", "--role", "sociologist"),
+            supervisor_command("run-agent-step", "--role", "environmentalist"),
         ]
     if stage == STAGE_AWAITING_MATCHING_AUTHORIZATION:
-        return [f"{script} run-agent-step --run-dir {current_run} --role moderator --yes --pretty"]
+        return [supervisor_command("run-agent-step", "--role", "moderator")]
     if stage == STAGE_AWAITING_MATCHING_ADJUDICATION:
-        return [f"{script} run-agent-step --run-dir {current_run} --role moderator --yes --pretty"]
+        return [supervisor_command("run-agent-step", "--role", "moderator")]
     if stage == STAGE_AWAITING_INVESTIGATION_REVIEW:
-        return [f"{script} run-agent-step --run-dir {current_run} --role moderator --yes --pretty"]
+        return [supervisor_command("run-agent-step", "--role", "moderator")]
     if stage == STAGE_AWAITING_REPORTS:
         return [
-            f"{script} run-agent-step --run-dir {current_run} --role sociologist --yes --pretty",
-            f"{script} run-agent-step --run-dir {current_run} --role environmentalist --yes --pretty",
+            supervisor_command("run-agent-step", "--role", "sociologist"),
+            supervisor_command("run-agent-step", "--role", "environmentalist"),
         ]
     if stage == STAGE_AWAITING_DECISION:
-        return [f"{script} run-agent-step --run-dir {current_run} --role moderator --yes --pretty"]
+        return [supervisor_command("run-agent-step", "--role", "moderator")]
     return []
 
 

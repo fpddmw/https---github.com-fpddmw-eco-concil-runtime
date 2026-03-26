@@ -42,17 +42,23 @@ The current controller-oriented modules live under `src/eco_council_runtime/cont
 
 When extending the control plane, prefer adding logic to these controller submodules or to future `domain/`, `application/`, and `adapters/` packages rather than expanding monolithic entry files.
 
+## CLI entrypoints
+
+From a source checkout, run CLIs with `PYTHONPATH=src python3 -m eco_council_runtime.<module> ...`.
+
+After installation, prefer the console scripts exposed in `pyproject.toml`, for example `eco-council-supervisor` and `eco-council-reporting`.
+
 ## Useful local commands
 
 ```bash
-python3 eco-council-runtime/scripts/eco_council_contract.py scaffold-run-from-mission \
-  --mission eco-council-runtime/assets/contract/examples/mission.json \
+PYTHONPATH=src python3 -m eco_council_runtime.contract scaffold-run-from-mission \
+  --mission-input assets/contract/examples/mission.json \
   --run-dir /tmp/eco_runtime_demo \
   --pretty
 
-python3 eco-council-runtime/scripts/eco_council_supervisor.py init-run \
+PYTHONPATH=src python3 -m eco_council_runtime.supervisor init-run \
   --run-dir /tmp/eco_runtime_demo \
-  --mission-input eco-council-runtime/assets/contract/examples/mission.json \
+  --mission-input assets/contract/examples/mission.json \
   --skills-root /path/to/skills \
   --no-provision-openclaw \
   --pretty

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import sqlite3
 import sys
@@ -12,10 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.layout import PROJECT_DIR, SCRIPTS_DIR, SUPERVISOR_SIGNAL_CORPUS_DDL_PATH
+from eco_council_runtime.layout import SUPERVISOR_SIGNAL_CORPUS_DDL_PATH
 
-SCRIPT_DIR = SCRIPTS_DIR
-SKILL_DIR = PROJECT_DIR
 DDL_PATH = SUPERVISOR_SIGNAL_CORPUS_DDL_PATH
 
 

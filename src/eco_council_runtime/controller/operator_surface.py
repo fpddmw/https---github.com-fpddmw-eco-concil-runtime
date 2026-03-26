@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import shlex
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.cli_invocation import runtime_module_command
 from eco_council_runtime.controller.common import maybe_int, unique_strings
 from eco_council_runtime.controller.constants import (
     DEFAULT_HISTORY_TOP_K,
@@ -98,7 +98,6 @@ from eco_council_runtime.controller.state_config import (
     ensure_signal_corpus_config,
     normalize_history_top_k,
 )
-from eco_council_runtime.layout import SUPERVISOR_SCRIPT_PATH
 
 SCHEMA_VERSION = resolve_schema_version(DEFAULT_SCHEMA_VERSION)
 
@@ -252,18 +251,7 @@ def failure_recovery_commands(run_dir: Path, state: dict[str, Any], action_name:
     commands = list(recommended_commands_for_stage(run_dir, state))
     commands.append(supervisor_status_command(run_dir))
     if action_name == "execute-fetch-plan":
-        commands.append(
-            shlex.join(
-                [
-                    "python3",
-                    str(SUPERVISOR_SCRIPT_PATH),
-                    "import-fetch-execution",
-                    "--run-dir",
-                    str(run_dir),
-                    "--pretty",
-                ]
-            )
-        )
+        commands.append(runtime_module_command("supervisor", "import-fetch-execution", "--run-dir", run_dir, "--pretty"))
     return unique_strings(commands)
 
 
@@ -333,7 +321,10 @@ def manual_agent_handoff_lines(
 def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
     round_id = maybe_text(state.get("current_round_id"))
     stage = maybe_text(state.get("stage"))
-    script_path = str(SUPERVISOR_SCRIPT_PATH)
+
+    def supervisor_command(*args: object) -> str:
+        return runtime_module_command("supervisor", *args, "--run-dir", run_dir, "--pretty")
+
     lines = [
         f"Current round: {round_id}",
         f"Current stage: {stage}",
@@ -382,13 +373,13 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
         lines.extend(
             [
                 "Preferred: run the moderator turn automatically:",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --pretty",
+                supervisor_command("run-agent-step"),
                 "",
                 *manual_agent_handoff_lines(
                     run_dir=run_dir,
                     role="moderator",
                     outbox_name="moderator_task_review",
-                    import_command="python3 " + script_path + " import-task-review --run-dir " + str(run_dir) + " --input /path/to/moderator_tasks.json --pretty",
+                    import_command=supervisor_command("import-task-review", "--input", "/path/to/moderator_tasks.json"),
                     artifact_label="task-review",
                 ),
             ]
@@ -397,14 +388,20 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
         lines.extend(
             [
                 "Preferred: run the two expert source-selection turns automatically, one by one:",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role sociologist --pretty",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role environmentalist --pretty",
+                supervisor_command("run-agent-step", "--role", "sociologist"),
+                supervisor_command("run-agent-step", "--role", "environmentalist"),
                 "",
                 *manual_agent_handoff_lines(
                     run_dir=run_dir,
                     role="sociologist",
                     outbox_name="sociologist_source_selection",
-                    import_command="python3 " + script_path + " import-source-selection --run-dir " + str(run_dir) + " --role sociologist --input /path/to/sociologist_source_selection.json --pretty",
+                    import_command=supervisor_command(
+                        "import-source-selection",
+                        "--role",
+                        "sociologist",
+                        "--input",
+                        "/path/to/sociologist_source_selection.json",
+                    ),
                     artifact_label="source-selection",
                 ),
                 "",
@@ -412,7 +409,13 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
                     run_dir=run_dir,
                     role="environmentalist",
                     outbox_name="environmentalist_source_selection",
-                    import_command="python3 " + script_path + " import-source-selection --run-dir " + str(run_dir) + " --role environmentalist --input /path/to/environmentalist_source_selection.json --pretty",
+                    import_command=supervisor_command(
+                        "import-source-selection",
+                        "--role",
+                        "environmentalist",
+                        "--input",
+                        "/path/to/environmentalist_source_selection.json",
+                    ),
                     artifact_label="source-selection",
                 ),
             ]
@@ -421,40 +424,40 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
         lines.extend(
             [
                 "Run the next approved shell stage:",
-                "python3 " + script_path + " continue-run --run-dir " + str(run_dir) + " --pretty",
+                supervisor_command("continue-run"),
             ]
         )
     elif stage == STAGE_READY_FETCH:
         lines.extend(
             [
                 "Run the local raw-data fetch plan:",
-                "python3 " + script_path + " continue-run --run-dir " + str(run_dir) + " --pretty",
+                supervisor_command("continue-run"),
                 "",
                 "External/manual alternative:",
                 "1. Materialize the raw artifacts and canonical fetch_execution.json with an external runner.",
                 "2. Import that fetch execution result:",
-                "python3 " + script_path + " import-fetch-execution --run-dir " + str(run_dir) + " --pretty",
+                supervisor_command("import-fetch-execution"),
             ]
         )
     elif stage == STAGE_READY_DATA_PLANE:
         lines.extend(
             [
                 "Run normalization and evidence-curation packet generation:",
-                "python3 " + script_path + " continue-run --run-dir " + str(run_dir) + " --pretty",
+                supervisor_command("continue-run"),
             ]
         )
     elif stage == STAGE_AWAITING_EVIDENCE_CURATION:
         lines.extend(
             [
                 "Preferred: run the two expert curation turns automatically, one by one:",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role sociologist --pretty",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role environmentalist --pretty",
+                supervisor_command("run-agent-step", "--role", "sociologist"),
+                supervisor_command("run-agent-step", "--role", "environmentalist"),
                 "",
                 *manual_agent_handoff_lines(
                     run_dir=run_dir,
                     role="sociologist",
                     outbox_name="sociologist_claim_curation",
-                    import_command="python3 " + script_path + " import-claim-curation --run-dir " + str(run_dir) + " --input /path/to/claim_curation.json --pretty",
+                    import_command=supervisor_command("import-claim-curation", "--input", "/path/to/claim_curation.json"),
                     artifact_label="claim-curation",
                 ),
                 "",
@@ -462,7 +465,11 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
                     run_dir=run_dir,
                     role="environmentalist",
                     outbox_name="environmentalist_observation_curation",
-                    import_command="python3 " + script_path + " import-observation-curation --run-dir " + str(run_dir) + " --input /path/to/observation_curation.json --pretty",
+                    import_command=supervisor_command(
+                        "import-observation-curation",
+                        "--input",
+                        "/path/to/observation_curation.json",
+                    ),
                     artifact_label="observation-curation",
                 ),
             ]
@@ -471,14 +478,20 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
         lines.extend(
             [
                 "Preferred: run the two expert data-readiness turns automatically, one by one:",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role sociologist --pretty",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role environmentalist --pretty",
+                supervisor_command("run-agent-step", "--role", "sociologist"),
+                supervisor_command("run-agent-step", "--role", "environmentalist"),
                 "",
                 *manual_agent_handoff_lines(
                     run_dir=run_dir,
                     role="sociologist",
                     outbox_name="sociologist_data_readiness",
-                    import_command="python3 " + script_path + " import-data-readiness --run-dir " + str(run_dir) + " --role sociologist --input /path/to/sociologist_data_readiness.json --pretty",
+                    import_command=supervisor_command(
+                        "import-data-readiness",
+                        "--role",
+                        "sociologist",
+                        "--input",
+                        "/path/to/sociologist_data_readiness.json",
+                    ),
                     artifact_label="data-readiness",
                 ),
                 "",
@@ -486,7 +499,13 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
                     run_dir=run_dir,
                     role="environmentalist",
                     outbox_name="environmentalist_data_readiness",
-                    import_command="python3 " + script_path + " import-data-readiness --run-dir " + str(run_dir) + " --role environmentalist --input /path/to/environmentalist_data_readiness.json --pretty",
+                    import_command=supervisor_command(
+                        "import-data-readiness",
+                        "--role",
+                        "environmentalist",
+                        "--input",
+                        "/path/to/environmentalist_data_readiness.json",
+                    ),
                     artifact_label="data-readiness",
                 ),
             ]
@@ -495,13 +514,17 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
         lines.extend(
             [
                 "Preferred: run the moderator matching-authorization turn automatically:",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role moderator --pretty",
+                supervisor_command("run-agent-step", "--role", "moderator"),
                 "",
                 *manual_agent_handoff_lines(
                     run_dir=run_dir,
                     role="moderator",
                     outbox_name="moderator_matching_authorization",
-                    import_command="python3 " + script_path + " import-matching-authorization --run-dir " + str(run_dir) + " --input /path/to/matching_authorization.json --pretty",
+                    import_command=supervisor_command(
+                        "import-matching-authorization",
+                        "--input",
+                        "/path/to/matching_authorization.json",
+                    ),
                     artifact_label="matching-authorization",
                 ),
             ]
@@ -510,13 +533,17 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
         lines.extend(
             [
                 "Preferred: run the moderator matching-adjudication turn automatically:",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role moderator --pretty",
+                supervisor_command("run-agent-step", "--role", "moderator"),
                 "",
                 *manual_agent_handoff_lines(
                     run_dir=run_dir,
                     role="moderator",
                     outbox_name="moderator_matching_adjudication",
-                    import_command="python3 " + script_path + " import-matching-adjudication --run-dir " + str(run_dir) + " --input /path/to/matching_adjudication.json --pretty",
+                    import_command=supervisor_command(
+                        "import-matching-adjudication",
+                        "--input",
+                        "/path/to/matching_adjudication.json",
+                    ),
                     artifact_label="matching-adjudication",
                 ),
             ]
@@ -525,20 +552,24 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
         lines.extend(
             [
                 "Run the matching materialization stage and build the investigation-review packet:",
-                "python3 " + script_path + " continue-run --run-dir " + str(run_dir) + " --pretty",
+                supervisor_command("continue-run"),
             ]
         )
     elif stage == STAGE_AWAITING_INVESTIGATION_REVIEW:
         lines.extend(
             [
                 "Preferred: run the moderator investigation-review turn automatically:",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role moderator --pretty",
+                supervisor_command("run-agent-step", "--role", "moderator"),
                 "",
                 *manual_agent_handoff_lines(
                     run_dir=run_dir,
                     role="moderator",
                     outbox_name="moderator_investigation_review",
-                    import_command="python3 " + script_path + " import-investigation-review --run-dir " + str(run_dir) + " --input /path/to/investigation_review.json --pretty",
+                    import_command=supervisor_command(
+                        "import-investigation-review",
+                        "--input",
+                        "/path/to/investigation_review.json",
+                    ),
                     artifact_label="investigation-review",
                 ),
             ]
@@ -547,14 +578,20 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
         lines.extend(
             [
                 "Preferred: run the two expert report turns automatically, one by one:",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role sociologist --pretty",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role environmentalist --pretty",
+                supervisor_command("run-agent-step", "--role", "sociologist"),
+                supervisor_command("run-agent-step", "--role", "environmentalist"),
                 "",
                 *manual_agent_handoff_lines(
                     run_dir=run_dir,
                     role="sociologist",
                     outbox_name="sociologist_report",
-                    import_command="python3 " + script_path + " import-report --run-dir " + str(run_dir) + " --role sociologist --input /path/to/sociologist_report.json --pretty",
+                    import_command=supervisor_command(
+                        "import-report",
+                        "--role",
+                        "sociologist",
+                        "--input",
+                        "/path/to/sociologist_report.json",
+                    ),
                     artifact_label="report",
                 ),
                 "",
@@ -562,7 +599,13 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
                     run_dir=run_dir,
                     role="environmentalist",
                     outbox_name="environmentalist_report",
-                    import_command="python3 " + script_path + " import-report --run-dir " + str(run_dir) + " --role environmentalist --input /path/to/environmentalist_report.json --pretty",
+                    import_command=supervisor_command(
+                        "import-report",
+                        "--role",
+                        "environmentalist",
+                        "--input",
+                        "/path/to/environmentalist_report.json",
+                    ),
                     artifact_label="report",
                 ),
             ]
@@ -571,13 +614,13 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
         lines.extend(
             [
                 "Preferred: run the moderator decision turn automatically:",
-                "python3 " + script_path + " run-agent-step --run-dir " + str(run_dir) + " --role moderator --pretty",
+                supervisor_command("run-agent-step", "--role", "moderator"),
                 "",
                 *manual_agent_handoff_lines(
                     run_dir=run_dir,
                     role="moderator",
                     outbox_name="moderator_decision",
-                    import_command="python3 " + script_path + " import-decision --run-dir " + str(run_dir) + " --input /path/to/council_decision.json --pretty",
+                    import_command=supervisor_command("import-decision", "--input", "/path/to/council_decision.json"),
                     artifact_label="decision",
                 ),
             ]
@@ -586,14 +629,14 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
         lines.extend(
             [
                 "Promote the approved drafts into canonical files:",
-                "python3 " + script_path + " continue-run --run-dir " + str(run_dir) + " --pretty",
+                supervisor_command("continue-run"),
             ]
         )
     elif stage == STAGE_READY_ADVANCE:
         lines.extend(
             [
                 "Open the next round after approval:",
-                "python3 " + script_path + " continue-run --run-dir " + str(run_dir) + " --pretty",
+                supervisor_command("continue-run"),
             ]
         )
     else:

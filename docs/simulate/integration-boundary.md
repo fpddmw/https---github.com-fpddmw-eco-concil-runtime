@@ -49,7 +49,7 @@ Instead:
 
 1. run the simulator
 2. import the resulting canonical `fetch_execution.json` with:
-   - `python3 eco-council-supervisor/scripts/eco_council_supervisor.py import-fetch-execution ...`
+   - `PYTHONPATH=src python3 -m eco_council_runtime.supervisor import-fetch-execution ...`
 3. continue to the data plane
 
 This keeps simulation as one external fetch runner among many possible runners.

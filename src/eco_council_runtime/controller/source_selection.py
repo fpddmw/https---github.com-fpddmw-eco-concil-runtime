@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.cli_invocation import runtime_module_command
 from eco_council_runtime.controller.constants import DEFAULT_SCHEMA_VERSION
 from eco_council_runtime.controller.io import load_json_if_exists, maybe_text, read_json, write_json, write_text
 from eco_council_runtime.controller.paths import (
@@ -25,7 +26,6 @@ from eco_council_runtime.controller.policy import (
     role_family_memory,
     role_source_governance,
 )
-from eco_council_runtime.layout import CONTRACT_SCRIPT_PATH
 
 SCHEMA_VERSION = resolve_schema_version(DEFAULT_SCHEMA_VERSION)
 
@@ -69,12 +69,14 @@ def build_source_selection_packet(run_dir: Path, round_id: str, role: str) -> Pa
 def render_source_selection_prompt(run_dir: Path, round_id: str, role: str) -> Path:
     packet_path = build_source_selection_packet(run_dir, round_id, role)
     target_path = source_selection_path(run_dir, round_id, role)
-    validate_command = (
-        "python3 "
-        + str(CONTRACT_SCRIPT_PATH)
-        + " validate --kind source-selection --input "
-        + str(target_path)
-        + " --pretty"
+    validate_command = runtime_module_command(
+        "contract",
+        "validate",
+        "--kind",
+        "source-selection",
+        "--input",
+        target_path,
+        "--pretty",
     )
     lines = [
         "Use the eco-council runtime contract validation command below.",

@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -19,26 +18,16 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.layout import (
-    CONTRACT_SCRIPT_PATH,
-    NORMALIZE_SCRIPT_PATH,
-    PROJECT_DIR,
-    REPORTING_SCRIPT_PATH,
-    SCRIPTS_DIR,
-)
+from eco_council_runtime.cli_invocation import runtime_module_argv, runtime_module_command
 from eco_council_runtime.external_skills import (
     default_env_file as detached_default_env_file,
     fetch_script_path,
     openaq_api_script_path,
     skill_dir,
 )
+from eco_council_runtime.layout import PROJECT_DIR
 
-SCRIPT_DIR = SCRIPTS_DIR
 REPO_DIR = PROJECT_DIR
-
-CONTRACT_SCRIPT = CONTRACT_SCRIPT_PATH
-NORMALIZE_SCRIPT = NORMALIZE_SCRIPT_PATH
-REPORTING_SCRIPT = REPORTING_SCRIPT_PATH
 
 PUBLIC_SOURCES = (
     "gdelt-doc-search",
@@ -1137,6 +1126,38 @@ def default_env_file(skill_name: str) -> Path | None:
         return None
 
 
+def contract_argv(*args: object) -> list[str]:
+    return runtime_module_argv("contract", *args)
+
+
+def contract_command(*args: object) -> str:
+    return runtime_module_command("contract", *args)
+
+
+def normalize_argv(*args: object) -> list[str]:
+    return runtime_module_argv("normalize", *args)
+
+
+def normalize_command(*args: object) -> str:
+    return runtime_module_command("normalize", *args)
+
+
+def reporting_argv(*args: object) -> list[str]:
+    return runtime_module_argv("reporting", *args)
+
+
+def reporting_command(*args: object) -> str:
+    return runtime_module_command("reporting", *args)
+
+
+def orchestrate_argv(*args: object) -> list[str]:
+    return runtime_module_argv("orchestrate", *args)
+
+
+def orchestrate_command(*args: object) -> str:
+    return runtime_module_command("orchestrate", *args)
+
+
 def shell_join(argv: list[str]) -> str:
     return " ".join(shlex.quote(str(part)) for part in argv)
 
@@ -1768,9 +1789,7 @@ def build_environmentalist_steps(
             notes.append("Collect fire detections for the mission bbox. Point missions are expanded by a deterministic bbox padding.")
             command = shell_command(argv, env_file=env_file)
         elif source_skill == "openaq-data-fetch":
-            argv = [
-                "python3",
-                str(SCRIPT_DIR / "eco_council_orchestrate.py"),
+            argv = orchestrate_argv(
                 "collect-openaq",
                 "--run-dir",
                 str(run_dir),
@@ -1788,7 +1807,7 @@ def build_environmentalist_steps(
                 merged_task_scalar(role_tasks, "openaq_max_pages") or "5",
                 "--radius-meters",
                 merged_task_scalar(role_tasks, "openaq_radius_meters") or "25000",
-            ]
+            )
             for parameter_name in merged_task_string_list(role_tasks, "openaq_parameter_names") or DEFAULT_OPENAQ_PARAMETER_NAMES:
                 argv.extend(["--parameter-name", parameter_name])
             argv.append("--pretty")
@@ -1936,17 +1955,7 @@ def build_fetch_plan(
 def render_moderator_task_review_prompt(*, run_dir: Path, round_id: str) -> Path:
     mission_path = run_dir / "mission.json"
     tasks_path = round_dir(run_dir, round_id) / "moderator" / "tasks.json"
-    validate_command = shell_join(
-        [
-            "python3",
-            str(CONTRACT_SCRIPT),
-            "validate",
-            "--kind",
-            "round-task",
-            "--input",
-            str(tasks_path),
-        ]
-    )
+    validate_command = contract_command("validate", "--kind", "round-task", "--input", str(tasks_path))
     lines = [
         "Use the eco-council runtime contract validation command below.",
         f"Open mission at: {mission_path}",
@@ -2064,53 +2073,23 @@ def write_round_manifest(
     fetch_plan: Path | None,
     fetch_prompts: dict[str, str],
 ) -> Path:
-    prepare_command = shell_join(
-        [
-            "python3",
-            str(SCRIPT_DIR / "eco_council_orchestrate.py"),
-            "prepare-round",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    prepare_command = orchestrate_command("prepare-round", "--run-dir", str(run_dir), "--round-id", round_id, "--pretty")
+    data_plane_command = orchestrate_command("run-data-plane", "--run-dir", str(run_dir), "--round-id", round_id, "--pretty")
+    matching_command = orchestrate_command(
+        "run-matching-adjudication",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    data_plane_command = shell_join(
-        [
-            "python3",
-            str(SCRIPT_DIR / "eco_council_orchestrate.py"),
-            "run-data-plane",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
-    )
-    matching_command = shell_join(
-        [
-            "python3",
-            str(SCRIPT_DIR / "eco_council_orchestrate.py"),
-            "run-matching-adjudication",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
-    )
-    execute_fetch_command = shell_join(
-        [
-            "python3",
-            str(SCRIPT_DIR / "eco_council_orchestrate.py"),
-            "execute-fetch-plan",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    execute_fetch_command = orchestrate_command(
+        "execute-fetch-plan",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
     manifest = {
         "manifest_kind": "eco-council-round-manifest",
@@ -2619,197 +2598,114 @@ def build_reporting_handoff(*, run_dir: Path, round_id: str) -> Path:
     def existing_path(path: Path) -> str:
         return str(path) if path.exists() else ""
 
-    materialize_curations_command = shell_join(
-        [
-            "python3",
-            str(NORMALIZE_SCRIPT),
-            "materialize-curations",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    materialize_curations_command = normalize_command(
+        "materialize-curations",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    build_data_readiness_packets_command = shell_join(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "build-data-readiness-packets",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    build_data_readiness_packets_command = reporting_command(
+        "build-data-readiness-packets",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    promote_all_command = shell_join(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "promote-all",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    promote_all_command = reporting_command("promote-all", "--run-dir", str(run_dir), "--round-id", round_id, "--pretty")
+    validate_bundle_command = contract_command("validate-bundle", "--run-dir", str(run_dir), "--pretty")
+    build_decision_packet_command = reporting_command(
+        "build-decision-packet",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--prefer-draft-reports",
+        "--pretty",
     )
-    validate_bundle_command = shell_join(
-        [
-            "python3",
-            str(CONTRACT_SCRIPT),
-            "validate-bundle",
-            "--run-dir",
-            str(run_dir),
-            "--pretty",
-        ]
+    build_matching_authorization_packet_command = reporting_command(
+        "build-matching-authorization-packet",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    build_decision_packet_command = shell_join(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "build-decision-packet",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--prefer-draft-reports",
-            "--pretty",
-        ]
+    prepare_matching_adjudication_command = normalize_command(
+        "prepare-matching-adjudication",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    build_matching_authorization_packet_command = shell_join(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "build-matching-authorization-packet",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    build_matching_adjudication_packet_command = reporting_command(
+        "build-matching-adjudication-packet",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    prepare_matching_adjudication_command = shell_join(
-        [
-            "python3",
-            str(NORMALIZE_SCRIPT),
-            "prepare-matching-adjudication",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    build_investigation_review_packet_command = reporting_command(
+        "build-investigation-review-packet",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    build_matching_adjudication_packet_command = shell_join(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "build-matching-adjudication-packet",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    build_report_packets_command = reporting_command(
+        "build-report-packets",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    build_investigation_review_packet_command = shell_join(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "build-investigation-review-packet",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    render_openclaw_prompts_command = reporting_command(
+        "render-openclaw-prompts",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    build_report_packets_command = shell_join(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "build-report-packets",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    promote_matching_authorization_command = reporting_command(
+        "promote-matching-authorization-draft",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    render_openclaw_prompts_command = shell_join(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "render-openclaw-prompts",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    promote_matching_adjudication_command = reporting_command(
+        "promote-matching-adjudication-draft",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    promote_matching_authorization_command = shell_join(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "promote-matching-authorization-draft",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    promote_investigation_review_command = reporting_command(
+        "promote-investigation-review-draft",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    promote_matching_adjudication_command = shell_join(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "promote-matching-adjudication-draft",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+    run_matching_adjudication_command = orchestrate_command(
+        "run-matching-adjudication",
+        "--run-dir",
+        str(run_dir),
+        "--round-id",
+        round_id,
+        "--pretty",
     )
-    promote_investigation_review_command = shell_join(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "promote-investigation-review-draft",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
-    )
-    run_matching_adjudication_command = shell_join(
-        [
-            "python3",
-            str(SCRIPT_DIR / "eco_council_orchestrate.py"),
-            "run-matching-adjudication",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
-    )
-    advance_round_command = shell_join(
-        [
-            "python3",
-            str(SCRIPT_DIR / "eco_council_orchestrate.py"),
-            "advance-round",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
-    )
+    advance_round_command = orchestrate_command("advance-round", "--run-dir", str(run_dir), "--round-id", round_id, "--pretty")
     handoff = {
         "handoff_kind": "eco-council-reporting-handoff",
         "schema_version": "1.0.0",
@@ -2984,11 +2880,11 @@ def run_data_plane(*, run_dir: Path, round_id: str) -> dict[str, Any]:
     init_status, init_payload = run_data_plane_json_step(
         step_id="normalize-init-run",
         label="normalize init-run",
-        argv=["python3", str(NORMALIZE_SCRIPT), "init-run", "--run-dir", str(run_path), "--round-id", current_round_id],
+        argv=normalize_argv("init-run", "--run-dir", str(run_path), "--round-id", current_round_id),
     )
     init_payload = append_status_or_raise(init_status, init_payload)
 
-    normalize_public_cmd = ["python3", str(NORMALIZE_SCRIPT), "normalize-public", "--run-dir", str(run_path), "--round-id", current_round_id]
+    normalize_public_cmd = normalize_argv("normalize-public", "--run-dir", str(run_path), "--round-id", current_round_id)
     for input_spec in public_inputs:
         normalize_public_cmd.extend(["--input", input_spec])
     public_status, public_payload = run_data_plane_json_step(
@@ -2998,15 +2894,13 @@ def run_data_plane(*, run_dir: Path, round_id: str) -> dict[str, Any]:
     )
     public_payload = append_status_or_raise(public_status, public_payload)
 
-    normalize_environment_cmd = [
-        "python3",
-        str(NORMALIZE_SCRIPT),
+    normalize_environment_cmd = normalize_argv(
         "normalize-environment",
         "--run-dir",
         str(run_path),
         "--round-id",
         current_round_id,
-    ]
+    )
     for input_spec in environment_inputs:
         normalize_environment_cmd.extend(["--input", input_spec])
     environment_status, environment_payload = run_data_plane_json_step(
@@ -3019,44 +2913,28 @@ def run_data_plane(*, run_dir: Path, round_id: str) -> dict[str, Any]:
     context_status, context_payload = run_data_plane_json_step(
         step_id="build-round-context",
         label="build round context",
-        argv=["python3", str(NORMALIZE_SCRIPT), "build-round-context", "--run-dir", str(run_path), "--round-id", current_round_id],
+        argv=normalize_argv("build-round-context", "--run-dir", str(run_path), "--round-id", current_round_id),
     )
     context_payload = append_status_or_raise(context_status, context_payload)
 
     curation_status, curation_payload = run_data_plane_json_step(
         step_id="reporting-build-curation-packets",
         label="reporting build curation packets",
-        argv=[
-            "python3",
-            str(REPORTING_SCRIPT),
-            "build-curation-packets",
-            "--run-dir",
-            str(run_path),
-            "--round-id",
-            current_round_id,
-        ],
+        argv=reporting_argv("build-curation-packets", "--run-dir", str(run_path), "--round-id", current_round_id),
     )
     curation_payload = append_status_or_raise(curation_status, curation_payload)
 
     prompt_status, prompt_payload = run_data_plane_json_step(
         step_id="render-openclaw-prompts",
         label="render openclaw prompts",
-        argv=[
-            "python3",
-            str(REPORTING_SCRIPT),
-            "render-openclaw-prompts",
-            "--run-dir",
-            str(run_path),
-            "--round-id",
-            current_round_id,
-        ],
+        argv=reporting_argv("render-openclaw-prompts", "--run-dir", str(run_path), "--round-id", current_round_id),
     )
     prompt_payload = append_status_or_raise(prompt_status, prompt_payload)
 
     bundle_status, bundle_payload = run_data_plane_json_step(
         step_id="validate-bundle",
         label="validate bundle",
-        argv=["python3", str(CONTRACT_SCRIPT), "validate-bundle", "--run-dir", str(run_path)],
+        argv=contract_argv("validate-bundle", "--run-dir", str(run_path)),
     )
     bundle_payload = append_status_or_raise(bundle_status, bundle_payload)
 
@@ -3144,59 +3022,35 @@ def run_matching_adjudication(*, run_dir: Path, round_id: str) -> dict[str, Any]
     evidence_status, evidence_payload = run_data_plane_json_step(
         step_id="apply-matching-adjudication",
         label="apply matching adjudication",
-        argv=[
-            "python3",
-            str(NORMALIZE_SCRIPT),
-            "apply-matching-adjudication",
-            "--run-dir",
-            str(run_path),
-            "--round-id",
-            current_round_id,
-        ],
+        argv=normalize_argv("apply-matching-adjudication", "--run-dir", str(run_path), "--round-id", current_round_id),
     )
     evidence_payload = append_status_or_raise(evidence_status, evidence_payload)
 
     context_status, context_payload = run_data_plane_json_step(
         step_id="build-round-context",
         label="build round context",
-        argv=["python3", str(NORMALIZE_SCRIPT), "build-round-context", "--run-dir", str(run_path), "--round-id", current_round_id],
+        argv=normalize_argv("build-round-context", "--run-dir", str(run_path), "--round-id", current_round_id),
     )
     context_payload = append_status_or_raise(context_status, context_payload)
 
     reporting_status, reporting_payload = run_data_plane_json_step(
         step_id="reporting-build-investigation-review-packet",
         label="reporting build investigation review packet",
-        argv=[
-            "python3",
-            str(REPORTING_SCRIPT),
-            "build-investigation-review-packet",
-            "--run-dir",
-            str(run_path),
-            "--round-id",
-            current_round_id,
-        ],
+        argv=reporting_argv("build-investigation-review-packet", "--run-dir", str(run_path), "--round-id", current_round_id),
     )
     reporting_payload = append_status_or_raise(reporting_status, reporting_payload)
 
     prompt_status, prompt_payload = run_data_plane_json_step(
         step_id="render-openclaw-prompts",
         label="render openclaw prompts",
-        argv=[
-            "python3",
-            str(REPORTING_SCRIPT),
-            "render-openclaw-prompts",
-            "--run-dir",
-            str(run_path),
-            "--round-id",
-            current_round_id,
-        ],
+        argv=reporting_argv("render-openclaw-prompts", "--run-dir", str(run_path), "--round-id", current_round_id),
     )
     prompt_payload = append_status_or_raise(prompt_status, prompt_payload)
 
     bundle_status, bundle_payload = run_data_plane_json_step(
         step_id="validate-bundle",
         label="validate bundle",
-        argv=["python3", str(CONTRACT_SCRIPT), "validate-bundle", "--run-dir", str(run_path)],
+        argv=contract_argv("validate-bundle", "--run-dir", str(run_path)),
     )
     bundle_payload = append_status_or_raise(bundle_status, bundle_payload)
 
@@ -3226,15 +3080,13 @@ def command_bootstrap_run(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir).expanduser().resolve()
     if run_dir.exists() and any(run_dir.iterdir()) and not args.allow_existing:
         raise ValueError(f"Run directory already exists and is not empty: {run_dir}. Use --allow-existing to proceed.")
-    cmd = [
-        "python3",
-        str(CONTRACT_SCRIPT),
+    cmd = contract_argv(
         "scaffold-run-from-mission",
         "--run-dir",
         str(run_dir),
         "--mission-input",
         str(Path(args.mission_input).expanduser().resolve()),
-    ]
+    )
     if args.tasks_input:
         cmd.extend(["--tasks-input", str(Path(args.tasks_input).expanduser().resolve())])
     contract_payload = ensure_ok_envelope(run_json_cli(cmd), "scaffold-run-from-mission")
@@ -3249,7 +3101,7 @@ def command_bootstrap_run(args: argparse.Namespace) -> dict[str, Any]:
         fetch_prompts={},
     )
     bundle_payload = ensure_ok_envelope(
-        run_json_cli(["python3", str(CONTRACT_SCRIPT), "validate-bundle", "--run-dir", str(run_dir)]),
+        run_json_cli(contract_argv("validate-bundle", "--run-dir", str(run_dir))),
         "validate bundle",
     )
     return {
@@ -3525,19 +3377,7 @@ def command_advance_round(args: argparse.Namespace) -> dict[str, Any]:
     tasks_path = approved_next_round_tasks_path(run_dir, current_round_id)
     write_json(tasks_path, next_round_tasks, pretty=True)
     scaffold_payload = ensure_ok_envelope(
-        run_json_cli(
-            [
-                "python3",
-                str(CONTRACT_SCRIPT),
-                "scaffold-round",
-                "--run-dir",
-                str(run_dir),
-                "--round-id",
-                next_round_id_value,
-                "--tasks-input",
-                str(tasks_path),
-            ]
-        ),
+        run_json_cli(contract_argv("scaffold-round", "--run-dir", str(run_dir), "--round-id", next_round_id_value, "--tasks-input", str(tasks_path))),
         "scaffold-round",
     )
     task_prompt = render_moderator_task_review_prompt(run_dir=run_dir, round_id=next_round_id_value)
@@ -3550,7 +3390,7 @@ def command_advance_round(args: argparse.Namespace) -> dict[str, Any]:
         fetch_prompts={},
     )
     bundle_payload = ensure_ok_envelope(
-        run_json_cli(["python3", str(CONTRACT_SCRIPT), "validate-bundle", "--run-dir", str(run_dir)]),
+        run_json_cli(contract_argv("validate-bundle", "--run-dir", str(run_dir))),
         "validate bundle",
     )
     return {

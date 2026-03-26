@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import re
 import sqlite3
@@ -13,10 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.layout import PROJECT_DIR, SCRIPTS_DIR, SUPERVISOR_CASE_LIBRARY_DDL_PATH
+from eco_council_runtime.layout import SUPERVISOR_CASE_LIBRARY_DDL_PATH
 
-SCRIPT_DIR = SCRIPTS_DIR
-SKILL_DIR = PROJECT_DIR
 DDL_PATH = SUPERVISOR_CASE_LIBRARY_DDL_PATH
 SEARCH_TOKEN_RE = re.compile(r"[a-z0-9]{2,}")
 CASE_ID_SAFE_RE = re.compile(r"[^a-z0-9._-]+")

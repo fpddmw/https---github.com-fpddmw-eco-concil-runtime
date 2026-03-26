@@ -9,7 +9,6 @@ import csv
 import os
 import gzip
 import hashlib
-import importlib.util
 import io
 import json
 import math
@@ -25,17 +24,45 @@ from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlparse
 
+from eco_council_runtime.controller.paths import (
+    cards_active_path,
+    claim_candidates_path,
+    claim_curation_path,
+    claim_submissions_path,
+    claims_active_path,
+    data_readiness_report_path,
+    default_context_dir,
+    evidence_adjudication_path,
+    evidence_library_dir,
+    evidence_library_ledger_path,
+    investigation_plan_path,
+    isolated_active_path,
+    library_context_path,
+    matching_adjudication_draft_path,
+    matching_adjudication_path,
+    matching_authorization_path,
+    matching_candidate_set_path,
+    matching_result_path,
+    mission_path,
+    moderator_derived_dir,
+    observation_candidates_path,
+    observation_curation_path,
+    observation_submissions_path,
+    observations_active_path,
+    remands_open_path,
+    role_normalized_dir,
+    round_dir,
+    round_dir_name as round_directory_name,
+    shared_claims_path,
+    shared_evidence_path,
+    shared_observations_path,
+)
 from eco_council_runtime.layout import (
-    CONTRACT_SCRIPT_PATH,
     NORMALIZE_ASSETS_DIR,
     NORMALIZE_ENVIRONMENT_DDL_PATH,
     NORMALIZE_PUBLIC_DDL_PATH,
-    PROJECT_DIR,
-    SCRIPTS_DIR,
 )
 
-SCRIPT_DIR = SCRIPTS_DIR
-SKILL_DIR = PROJECT_DIR
 ASSETS_DIR = NORMALIZE_ASSETS_DIR
 PUBLIC_DDL_PATH = NORMALIZE_PUBLIC_DDL_PATH
 ENVIRONMENT_DDL_PATH = NORMALIZE_ENVIRONMENT_DDL_PATH
@@ -636,14 +663,6 @@ def round_sort_key(round_id: str) -> tuple[str, int, str]:
     return (prefix, number, round_id)
 
 
-def round_directory_name(round_id: str) -> str:
-    return round_id.replace("-", "_")
-
-
-def round_dir(run_dir: Path, round_id: str) -> Path:
-    return run_dir / round_directory_name(round_id)
-
-
 def discover_round_ids(run_dir: Path) -> list[str]:
     round_ids: list[str] = []
     for child in run_dir.iterdir():
@@ -670,10 +689,6 @@ def previous_round_id(run_dir: Path, round_id: str) -> str | None:
         if item_prefix == prefix and item_number < number:
             candidates.append(item)
     return candidates[-1] if candidates else None
-
-
-def mission_path(run_dir: Path) -> Path:
-    return run_dir / "mission.json"
 
 
 def load_mission(run_dir: Path) -> dict[str, Any]:
@@ -896,114 +911,6 @@ def default_public_db_path(run_dir: Path) -> Path:
 
 def default_environment_db_path(run_dir: Path) -> Path:
     return run_dir / "analytics" / "environment_signals.sqlite"
-
-
-def default_context_dir(run_dir: Path, round_id: str, role: str) -> Path:
-    return round_dir(run_dir, round_id) / role / "derived"
-
-
-def shared_claims_path(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "shared" / "claims.json"
-
-
-def shared_observations_path(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "shared" / "observations.json"
-
-
-def shared_evidence_path(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "shared" / "evidence_cards.json"
-
-
-def claim_curation_path(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "sociologist" / "claim_curation.json"
-
-
-def observation_curation_path(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "environmentalist" / "observation_curation.json"
-
-
-def claim_submissions_path(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "sociologist" / "claim_submissions.json"
-
-
-def observation_submissions_path(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "environmentalist" / "observation_submissions.json"
-
-
-def moderator_derived_dir(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "moderator" / "derived"
-
-
-def claim_candidates_path(run_dir: Path, round_id: str) -> Path:
-    return role_normalized_dir(run_dir, round_id, "sociologist") / "claim_candidates.json"
-
-
-def observation_candidates_path(run_dir: Path, round_id: str) -> Path:
-    return role_normalized_dir(run_dir, round_id, "environmentalist") / "observation_candidates.json"
-
-
-def data_readiness_report_path(run_dir: Path, round_id: str, role: str) -> Path:
-    return round_dir(run_dir, round_id) / role / "data_readiness_report.json"
-
-
-def matching_authorization_path(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "moderator" / "matching_authorization.json"
-
-
-def matching_candidate_set_path(run_dir: Path, round_id: str) -> Path:
-    return moderator_derived_dir(run_dir, round_id) / "matching_candidate_set.json"
-
-
-def matching_adjudication_draft_path(run_dir: Path, round_id: str) -> Path:
-    return moderator_derived_dir(run_dir, round_id) / "matching_adjudication_draft.json"
-
-
-def matching_adjudication_path(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "moderator" / "matching_adjudication.json"
-
-
-def matching_result_path(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "shared" / "matching_result.json"
-
-
-def evidence_adjudication_path(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "shared" / "evidence_adjudication.json"
-
-
-def evidence_library_dir(run_dir: Path, round_id: str) -> Path:
-    return round_dir(run_dir, round_id) / "shared" / "evidence-library"
-
-
-def evidence_library_ledger_path(run_dir: Path, round_id: str) -> Path:
-    return evidence_library_dir(run_dir, round_id) / "ledger.jsonl"
-
-
-def claims_active_path(run_dir: Path, round_id: str) -> Path:
-    return evidence_library_dir(run_dir, round_id) / "claims_active.json"
-
-
-def observations_active_path(run_dir: Path, round_id: str) -> Path:
-    return evidence_library_dir(run_dir, round_id) / "observations_active.json"
-
-
-def cards_active_path(run_dir: Path, round_id: str) -> Path:
-    return evidence_library_dir(run_dir, round_id) / "cards_active.json"
-
-
-def isolated_active_path(run_dir: Path, round_id: str) -> Path:
-    return evidence_library_dir(run_dir, round_id) / "isolated_active.json"
-
-
-def remands_open_path(run_dir: Path, round_id: str) -> Path:
-    return evidence_library_dir(run_dir, round_id) / "remands_open.json"
-
-
-def library_context_path(run_dir: Path, round_id: str, role: str) -> Path:
-    return evidence_library_dir(run_dir, round_id) / f"context_{role}.json"
-
-
-def role_normalized_dir(run_dir: Path, round_id: str, role: str) -> Path:
-    return round_dir(run_dir, round_id) / role / "normalized"
 
 
 def run_manifest_path(run_dir: Path) -> Path:

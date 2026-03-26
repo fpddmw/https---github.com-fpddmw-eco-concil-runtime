@@ -4,31 +4,32 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import json
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.layout import (
-    CONTRACT_SCRIPT_PATH,
-    NORMALIZE_SCRIPT_PATH,
-    PROJECT_DIR,
-    REPORTING_SCRIPT_PATH,
-    SCRIPTS_DIR,
-    SUPERVISOR_EVAL_CASES_DIR,
-)
+from eco_council_runtime.cli_invocation import runtime_module_argv
+from eco_council_runtime.layout import PROJECT_DIR, SUPERVISOR_EVAL_CASES_DIR
 
-SCRIPT_DIR = SCRIPTS_DIR
-SKILL_DIR = PROJECT_DIR
-NORMALIZE_SCRIPT = NORMALIZE_SCRIPT_PATH
-REPORTING_SCRIPT = REPORTING_SCRIPT_PATH
-CONTRACT_SCRIPT = CONTRACT_SCRIPT_PATH
+REPO_DIR = PROJECT_DIR
 DEFAULT_SUITE_DIR = SUPERVISOR_EVAL_CASES_DIR
 DEFAULT_OUTPUT_ROOT = Path("/tmp/eco-council-eval-runs")
 SCHEMA_VERSION = "1.0.0"
+
+
+def contract_argv(*args: object) -> list[str]:
+    return runtime_module_argv("contract", *args)
+
+
+def normalize_argv(*args: object) -> list[str]:
+    return runtime_module_argv("normalize", *args)
+
+
+def reporting_argv(*args: object) -> list[str]:
+    return runtime_module_argv("reporting", *args)
 
 
 def pretty_json(data: Any, *, pretty: bool) -> str:
@@ -129,23 +130,15 @@ def unique_strings(values: list[str]) -> list[str]:
     return output
 
 
-def load_python_module(module_path: Path, module_name: str) -> Any | None:
+def load_runtime_module(module_name: str) -> Any | None:
     try:
-        if module_name == "eco_council_contract_eval":
-            from eco_council_runtime import contract as contract_module
-
-            return contract_module
-        if module_name == "eco_council_normalize_eval":
-            from eco_council_runtime import normalize as normalize_module
-
-            return normalize_module
+        return importlib.import_module(f"eco_council_runtime.{module_name}")
     except Exception:
         return None
-    return None
 
 
-CONTRACT_MODULE = load_python_module(CONTRACT_SCRIPT, "eco_council_contract_eval")
-NORMALIZE_MODULE = load_python_module(NORMALIZE_SCRIPT, "eco_council_normalize_eval")
+CONTRACT_MODULE = load_runtime_module("contract")
+NORMALIZE_MODULE = load_runtime_module("normalize")
 if CONTRACT_MODULE is not None and hasattr(CONTRACT_MODULE, "SCHEMA_VERSION"):
     SCHEMA_VERSION = CONTRACT_MODULE.SCHEMA_VERSION
 
@@ -604,21 +597,10 @@ def run_case(case_path: Path, *, output_root: Path, pretty: bool, overwrite: boo
     run_dir_path.mkdir(parents=True, exist_ok=True)
 
     round_id = materialize_case(case, run_dir_path, pretty=pretty)
-    run_json_command(["python3", str(NORMALIZE_SCRIPT), "init-run", "--run-dir", str(run_dir_path), "--round-id", round_id, "--pretty"])
+    run_json_command(normalize_argv("init-run", "--run-dir", str(run_dir_path), "--round-id", round_id, "--pretty"))
     seed_library_state_from_case(case, run_dir_path, round_id, pretty=pretty)
-    run_json_command(["python3", str(NORMALIZE_SCRIPT), "build-round-context", "--run-dir", str(run_dir_path), "--round-id", round_id, "--pretty"])
-    run_json_command(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "build-data-readiness-packets",
-            "--run-dir",
-            str(run_dir_path),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
-    )
+    run_json_command(normalize_argv("build-round-context", "--run-dir", str(run_dir_path), "--round-id", round_id, "--pretty"))
+    run_json_command(reporting_argv("build-data-readiness-packets", "--run-dir", str(run_dir_path), "--round-id", round_id, "--pretty"))
     for role in ("sociologist", "environmentalist"):
         promote_json_artifact(
             source_path=data_readiness_draft_path(run_dir_path, round_id, role),
@@ -626,16 +608,7 @@ def run_case(case_path: Path, *, output_root: Path, pretty: bool, overwrite: boo
             pretty=pretty,
         )
     run_json_command(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "build-matching-authorization-packet",
-            "--run-dir",
-            str(run_dir_path),
-            "--round-id",
-            round_id,
-            "--pretty",
-        ]
+        reporting_argv("build-matching-authorization-packet", "--run-dir", str(run_dir_path), "--round-id", round_id, "--pretty")
     )
     promote_json_artifact(
         source_path=matching_authorization_draft_path(run_dir_path, round_id),
@@ -647,22 +620,9 @@ def run_case(case_path: Path, *, output_root: Path, pretty: bool, overwrite: boo
         or read_json(isolated_active_path(run_dir_path, round_id))
         or read_json(remands_open_path(run_dir_path, round_id))
     ):
-        run_json_command(
-            [
-                "python3",
-                str(REPORTING_SCRIPT),
-                "build-report-packets",
-                "--run-dir",
-                str(run_dir_path),
-                "--round-id",
-                round_id,
-                "--pretty",
-            ]
-        )
+        run_json_command(reporting_argv("build-report-packets", "--run-dir", str(run_dir_path), "--round-id", round_id, "--pretty"))
     run_json_command(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
+        reporting_argv(
             "build-decision-packet",
             "--run-dir",
             str(run_dir_path),
@@ -670,22 +630,12 @@ def run_case(case_path: Path, *, output_root: Path, pretty: bool, overwrite: boo
             round_id,
             "--prefer-draft-reports",
             "--pretty",
-        ]
+        )
     )
     run_json_command(
-        [
-            "python3",
-            str(REPORTING_SCRIPT),
-            "promote-all",
-            "--run-dir",
-            str(run_dir_path),
-            "--round-id",
-            round_id,
-            "--allow-overwrite",
-            "--pretty",
-        ]
+        reporting_argv("promote-all", "--run-dir", str(run_dir_path), "--round-id", round_id, "--allow-overwrite", "--pretty")
     )
-    bundle = run_json_command(["python3", str(CONTRACT_SCRIPT), "validate-bundle", "--run-dir", str(run_dir_path)])
+    bundle = run_json_command(contract_argv("validate-bundle", "--run-dir", str(run_dir_path)))
     issues = evaluate_expectations(case, run_dir_path, round_id)
     return {
         "case_id": case_id,

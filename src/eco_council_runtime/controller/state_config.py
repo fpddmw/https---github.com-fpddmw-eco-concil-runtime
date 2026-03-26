@@ -6,10 +6,11 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.cli_invocation import runtime_module_argv
 from eco_council_runtime.controller.constants import DEFAULT_HISTORY_TOP_K, MAX_HISTORY_TOP_K
 from eco_council_runtime.controller.io import load_json_if_exists, maybe_text, run_json_command, write_text
 from eco_council_runtime.controller.paths import history_context_path, mission_path
-from eco_council_runtime.layout import CASE_LIBRARY_SCRIPT_PATH, PROJECT_DIR, RUNS_ROOT
+from eco_council_runtime.layout import PROJECT_DIR, RUNS_ROOT
 
 DEFAULT_ARCHIVE_DIR = RUNS_ROOT / "archives"
 DEFAULT_CASE_LIBRARY_DB = DEFAULT_ARCHIVE_DIR / "eco_council_case_library.sqlite"
@@ -221,18 +222,17 @@ def write_history_context_file(run_dir: Path, state: dict[str, Any], round_id: s
 
     region = mission_payload.get("region") if isinstance(mission_payload.get("region"), dict) else {}
     query = maybe_text(mission_payload.get("topic"))
-    argv = [
-        "python3",
-        str(CASE_LIBRARY_SCRIPT_PATH),
+    argv = runtime_module_argv(
+        "case_library",
         "search-cases",
         "--db",
-        str(db_path),
+        db_path,
         "--exclude-case-id",
         maybe_text(mission_payload.get("run_id")),
         "--limit",
         str(normalize_history_top_k(history.get("top_k"))),
         "--pretty",
-    ]
+    )
     if query:
         argv.extend(["--query", query])
     if maybe_text(region.get("label")):
@@ -253,4 +253,3 @@ def write_history_context_file(run_dir: Path, state: dict[str, Any], round_id: s
 
     write_text(target, render_history_context_text(mission=mission_payload, search_payload=search_payload))
     return target
-
