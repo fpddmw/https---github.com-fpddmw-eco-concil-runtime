@@ -1,0 +1,20 @@
+{
+  "signal_id": "envsig-001",
+  "run_id": "eco-20260320-chiangmai-smoke",
+  "round_id": "round-001",
+  "source_skill": "open-meteo-air-quality-fetch",
+  "signal_kind": "hourly",
+  "metric": "pm2_5",
+  "value": 61.2,
+  "unit": "ug/m3",
+  "observed_at_utc": "2026-03-19T04:00:00Z",
+  "window_start_utc": "2026-03-18T00:00:00Z",
+  "window_end_utc": "2026-03-19T23:00:00Z",
+  "latitude": 18.7883,
+  "longitude": 98.9853,
+  "quality_flags": [
+    "modeled-background"
+  ],
+  "artifact_path": "runs/eco-20260320-chiangmai-smoke/round_001/environmentalist/raw/open-meteo-air-quality.json",
+  "record_locator": "$.records[0].hourly.pm2_5[5]"
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0.0",
+  "decision_id": "decision-round-001",
+  "run_id": "eco-20260320-chiangmai-smoke",
+  "round_id": "round-001",
+  "moderator_status": "continue",
+  "completion_score": 0.55,
+  "evidence_sufficiency": "partial",
+  "decision_summary": "The round produced plausible support for the main smoke claim, but station-grade corroboration remains incomplete.",
+  "next_round_required": true,
+  "missing_evidence_types": [
+    "station-air-quality"
+  ],
+  "next_round_tasks": [
+    {
+      "schema_version": "1.0.0",
+      "task_id": "task-environmentalist-round-002-01",
+      "run_id": "eco-20260320-chiangmai-smoke",
+      "round_id": "round-002",
+      "assigned_role": "environmentalist",
+      "objective": "Fetch station-based air-quality corroboration for the same window.",
+      "status": "planned",
+      "depends_on": [],
+      "expected_output_kinds": [
+        "source-selection",
+        "observation",
+        "expert-report"
+      ],
+      "inputs": {
+        "focus_claim_ids": [],
+        "evidence_requirements": [
+          {
+            "requirement_id": "req-environmentalist-round-002-station-air-quality",
+            "requirement_type": "station-air-quality",
+            "summary": "Add station-grade air-quality corroboration in the same mission window and geometry.",
+            "priority": "high",
+            "focus_claim_ids": [],
+            "anchor_refs": []
+          }
+        ]
+      },
+      "notes": "Keep the same mission geometry and UTC window."
+    }
+  ],
+  "override_requests": [],
+  "final_brief": ""
+}

@@ -1,0 +1,131 @@
+{
+  "schema_version": "1.0.0",
+  "observation_id": "obs-001",
+  "run_id": "eco-20260320-chiangmai-smoke",
+  "round_id": "round-001",
+  "agent_role": "environmentalist",
+  "source_skill": "open-meteo-air-quality-fetch",
+  "metric": "smoke-signal",
+  "aggregation": "composite",
+  "value": 0.76,
+  "unit": "index",
+  "statistics": {
+    "sample_count": 67,
+    "min": 12.4,
+    "p05": 16.8,
+    "p25": 28.5,
+    "mean": 42.7,
+    "median": 39.2,
+    "p75": 55.4,
+    "p95": 74.9,
+    "max": 91.6,
+    "stddev": 18.3
+  },
+  "distribution_summary": {
+    "signal_count": 67,
+    "distinct_day_count": 2,
+    "distinct_source_skill_count": 2,
+    "distinct_point_count": 1,
+    "time_bucket_counts": [
+      {
+        "value": "2026-03-18",
+        "count": 34
+      },
+      {
+        "value": "2026-03-19",
+        "count": 33
+      }
+    ],
+    "source_skill_counts": [
+      {
+        "value": "open-meteo-air-quality-fetch",
+        "count": 48
+      },
+      {
+        "value": "nasa-firms-fire-fetch",
+        "count": 19
+      }
+    ],
+    "metric_counts": [
+      {
+        "value": "pm2_5",
+        "count": 48
+      },
+      {
+        "value": "fire_detection_count",
+        "count": 19
+      }
+    ],
+    "point_bucket_counts": [
+      {
+        "value": "18.788,98.985",
+        "count": 67
+      }
+    ]
+  },
+  "time_window": {
+    "start_utc": "2026-03-18T00:00:00Z",
+    "end_utc": "2026-03-19T23:59:59Z"
+  },
+  "place_scope": {
+    "label": "Chiang Mai, Thailand",
+    "geometry": {
+      "type": "Point",
+      "latitude": 18.7883,
+      "longitude": 98.9853
+    }
+  },
+  "quality_flags": [
+    "modeled-background"
+  ],
+  "provenance": {
+    "source_skill": "open-meteo-air-quality-fetch",
+    "artifact_path": "runs/eco-20260320-chiangmai-smoke/round_001/environmentalist/raw/open-meteo-air-quality.json",
+    "record_locator": "$.records[0]"
+  },
+  "observation_mode": "composite",
+  "evidence_role": "mixed",
+  "source_skills": [
+    "open-meteo-air-quality-fetch",
+    "nasa-firms-fire-fetch"
+  ],
+  "metric_bundle": [
+    "pm2_5",
+    "fire_detection_count"
+  ],
+  "candidate_observation_ids": [
+    "obs-candidate-001",
+    "obs-candidate-002"
+  ],
+  "provenance_refs": [
+    {
+      "source_skill": "open-meteo-air-quality-fetch",
+      "artifact_path": "runs/eco-20260320-chiangmai-smoke/round_001/environmentalist/raw/open-meteo-air-quality.json",
+      "record_locator": "$.records[0]"
+    },
+    {
+      "source_skill": "nasa-firms-fire-fetch",
+      "artifact_path": "runs/eco-20260320-chiangmai-smoke/round_001/environmentalist/raw/nasa-firms-fire.json",
+      "record_locator": "$.features[0]"
+    }
+  ],
+  "selection_reason": "Collapsed correlated PM and hotspot candidates into one retained smoke indicator.",
+  "component_roles": [
+    {
+      "candidate_observation_id": "obs-candidate-001",
+      "role": "primary",
+      "metric": "pm2_5",
+      "value": 42.7,
+      "unit": "ug/m3",
+      "rationale": "Elevated PM is the main smoke indicator."
+    },
+    {
+      "candidate_observation_id": "obs-candidate-002",
+      "role": "contextual",
+      "metric": "fire_detection_count",
+      "value": 19,
+      "unit": "count",
+      "rationale": "Hotspots add source context for the same window."
+    }
+  ]
+}

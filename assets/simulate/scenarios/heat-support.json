@@ -1,0 +1,33 @@
+{
+  "scenario_kind": "eco-council-simulation-scenario",
+  "schema_version": "1.0.0",
+  "scenario_id": "heat-support",
+  "description": "Public heat concern plus meteorology values that should support a heat claim.",
+  "claim_type": "heat",
+  "mode": "support",
+  "seed": 202,
+  "public_topic": "extreme heat and heat stress",
+  "source_overrides": {
+    "gdelt-doc-search": {
+      "record_count": 4
+    },
+    "bluesky-cascade-fetch": {
+      "record_count": 5
+    },
+    "open-meteo-historical-fetch": {
+      "metric_values": {
+        "temperature_2m": [
+          36.0,
+          40.5,
+          43.0
+        ]
+      }
+    }
+  },
+  "fault_profile": {
+    "empty_sources": [],
+    "degrade_sources": [],
+    "time_shift_hours": 0,
+    "coordinate_offset_degrees": 0.0
+  }
+}

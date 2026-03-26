@@ -1,0 +1,27 @@
+{
+  "scenario_kind": "eco-council-simulation-scenario",
+  "schema_version": "1.0.0",
+  "scenario_id": "policy-reaction",
+  "description": "Policy-comment follow-up with deterministic Regulations.gov style payloads.",
+  "claim_type": "policy-reaction",
+  "mode": "support",
+  "seed": 303,
+  "public_topic": "environmental rulemaking and public comment",
+  "source_overrides": {
+    "regulationsgov-comments-fetch": {
+      "record_count": 5
+    },
+    "regulationsgov-comment-detail-fetch": {
+      "record_count": 3
+    },
+    "gdelt-doc-search": {
+      "record_count": 3
+    }
+  },
+  "fault_profile": {
+    "empty_sources": [],
+    "degrade_sources": [],
+    "time_shift_hours": 0,
+    "coordinate_offset_degrees": 0.0
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0.0",
+  "review_id": "investigation-review-round-001",
+  "run_id": "eco-20260320-chiangmai-smoke",
+  "round_id": "round-001",
+  "agent_role": "moderator",
+  "authorization_id": "matchauth-round-001",
+  "matching_result_id": "matchres-round-001",
+  "review_status": "partial",
+  "matching_reasonable": true,
+  "needs_additional_data": true,
+  "summary": "The current round supports the receptor impact and public-interpretation legs, but source-region and transport-mechanism coverage still need stronger corroboration.",
+  "hypothesis_reviews": [
+    {
+      "hypothesis_id": "hypothesis-001",
+      "statement": "Canadian wildfires plausibly drove the receptor-region smoke impacts discussed in the mission window.",
+      "overall_status": "partial",
+      "matched_card_ids": [
+        "evidence-001"
+      ],
+      "isolated_entry_ids": [
+        "isolated-001"
+      ],
+      "remand_ids": [
+        "remand-001"
+      ],
+      "leg_reviews": [
+        {
+          "leg_id": "source",
+          "status": "partial",
+          "summary": "Fire-detection evidence exists, but source-region coverage is still thin for a terminal causal judgment.",
+          "evidence_refs": [
+            "isolated:isolated-001",
+            "remand:remand-001"
+          ],
+          "notes": [
+            "Expand source-region fire corroboration if another round is allowed."
+          ]
+        },
+        {
+          "leg_id": "mechanism",
+          "status": "partial",
+          "summary": "Transport context is plausible but still under-corroborated.",
+          "evidence_refs": [
+            "remand:remand-001"
+          ],
+          "notes": []
+        },
+        {
+          "leg_id": "impact",
+          "status": "supported",
+          "summary": "Mission-region air-quality impacts are directly represented by the matched evidence card.",
+          "evidence_refs": [
+            "card:evidence-001"
+          ],
+          "notes": []
+        },
+        {
+          "leg_id": "public_interpretation",
+          "status": "supported",
+          "summary": "Public attribution narratives are represented in the matched claim set.",
+          "evidence_refs": [
+            "card:evidence-001"
+          ],
+          "notes": []
+        }
+      ],
+      "notes": [
+        "The round produced a usable but incomplete causal-chain picture."
+      ]
+    }
+  ],
+  "matched_card_ids": [
+    "evidence-001"
+  ],
+  "isolated_entry_ids": [
+    "isolated-001"
+  ],
+  "remand_ids": [
+    "remand-001"
+  ],
+  "open_questions": [
+    "Can the next round strengthen the source and transport legs enough for a final attribution call?"
+  ],
+  "recommended_next_actions": [
+    {
+      "assigned_role": "environmentalist",
+      "objective": "Collect stronger source-region fire and transport corroboration for the same mission window.",
+      "reason": "The causal chain is still partial because source and mechanism legs remain under-supported."
+    }
+  ]
+}

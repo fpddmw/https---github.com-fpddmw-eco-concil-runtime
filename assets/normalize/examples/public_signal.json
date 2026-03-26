@@ -1,0 +1,25 @@
+{
+  "signal_id": "pubsig-001",
+  "run_id": "eco-20260320-chiangmai-smoke",
+  "round_id": "round-001",
+  "source_skill": "youtube-comments-fetch",
+  "signal_kind": "comment",
+  "external_id": "Ugz123",
+  "title": "Smoke is getting worse today",
+  "text": "People in Chiang Mai say the smoke became much worse and mention nearby burning.",
+  "url": "https://www.youtube.com/watch?v=example&lc=Ugz123",
+  "author_name": "example-user",
+  "channel_name": "example-channel",
+  "language": "en",
+  "query_text": "Chiang Mai smoke",
+  "published_at_utc": "2026-03-19T07:20:00Z",
+  "captured_at_utc": "2026-03-21T09:00:00Z",
+  "engagement": {
+    "like_count": 12
+  },
+  "metadata": {
+    "comment_type": "top_level"
+  },
+  "artifact_path": "runs/eco-20260320-chiangmai-smoke/round_001/sociologist/raw/youtube-comments.jsonl",
+  "record_locator": "$[0]"
+}

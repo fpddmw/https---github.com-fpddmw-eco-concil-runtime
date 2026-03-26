@@ -1,0 +1,46 @@
+# OpenClaw Agents
+
+Use this note when working on the fixed moderator, sociologist, and environmentalist agents created by the supervisor.
+
+## What `init-run` now does
+
+- `init-run` scaffolds the run, writes supervisor/session prompt files, and provisions the three fixed OpenClaw agents by default.
+- During provisioning, the runtime also projects the detached eco-council skill directories into that OpenClaw profile's `managedSkillsDir`.
+- Use `--no-provision-openclaw` only when you intentionally want a scaffolded run without live agents.
+
+## Command ownership
+
+- Supervisor or human only:
+  - `init-run`
+  - `provision-openclaw-agents`
+  - `continue-run`
+  - `run-agent-step`
+  - `import-task-review`
+  - `import-source-selection`
+  - `import-report`
+  - `import-decision`
+  - `import-fetch-execution`
+- Role agent safe commands:
+  - `status`
+  - The explicit schema-validation command printed inside the active prompt or packet
+
+## Role-agent rule
+
+- A role agent owns only the current JSON artifact named by the turn prompt.
+- A role agent must not advance stages, import files, or trigger raw-data shell stages unless the human explicitly reassigns it to act as the supervisor operator.
+- Moderator tasks and decisions should express evidence needs, priorities, and claim focus only; they should not prescribe concrete source skills.
+- Sociologist and environmentalist source-selection turns own the translation from evidence needs into `family_plans`, `layer_plans`, anchors, and exact source skills, but only within the packet `governance` boundary.
+
+## Workspace files
+
+After provisioning, each OpenClaw workspace contains:
+
+- `IDENTITY.md`
+- `OPENCLAW_AGENT_GUIDE.md`
+
+The generated guide includes run-specific command examples, safe inspection commands, and commands reserved for the supervisor.
+
+## Detached skill root
+
+- When this runtime is extracted into its own repository, point provisioning at the external skills checkout with `--skills-root /path/to/skills` or `ECO_COUNCIL_SKILLS_ROOT=/path/to/skills`.
+- Do not rely on symlinks from OpenClaw `managedSkillsDir` back into the detached skills repository; the runtime projects real managed copies so OpenClaw can recognize them.

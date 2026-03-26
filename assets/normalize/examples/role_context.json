@@ -1,0 +1,30 @@
+{
+  "run": {
+    "run_id": "eco-20260320-chiangmai-smoke",
+    "round_id": "round-001",
+    "topic": "Chiang Mai smoke verification",
+    "objective": "Determine whether public smoke claims are supported by physical evidence."
+  },
+  "dataset": {
+    "generated_at_utc": "2026-03-21T09:30:00Z",
+    "claim_count": 2,
+    "observation_count": 4,
+    "evidence_count": 2
+  },
+  "aggregates": {
+    "claim_type_counts": {
+      "smoke": 2
+    },
+    "observation_metric_counts": {
+      "pm2_5": 1,
+      "fire_detection_count": 1
+    },
+    "evidence_verdict_counts": {
+      "supports": 1,
+      "insufficient": 1
+    }
+  },
+  "claims": [],
+  "observations": [],
+  "evidence_cards": []
+}
