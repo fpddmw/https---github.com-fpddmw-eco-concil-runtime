@@ -138,6 +138,7 @@ GENERIC_REGION_TOKENS = {
     "usa",
     "us",
 }
+PHYSICAL_LEG_ORDER = ("source", "mechanism", "impact")
 CLAIM_KEYWORDS = {
     "wildfire": ("wildfire", "fire", "burning", "burn", "forest fire", "bushfire"),
     "smoke": ("smoke", "haze", "smog", "ash"),
@@ -1455,6 +1456,189 @@ def direct_matching_gap_for_claim(claim: dict[str, Any]) -> str:
     if time_source == "mission-fallback":
         return "Claim lacks signal-local timing and cannot be treated as direct mission evidence yet."
     return ""
+
+
+def physical_investigation_leg_lookup(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    hypotheses = plan.get("hypotheses") if isinstance(plan.get("hypotheses"), list) else []
+    by_leg: dict[str, dict[str, Any]] = {}
+    for hypothesis in hypotheses:
+        if not isinstance(hypothesis, dict):
+            continue
+        for leg in hypothesis.get("chain_legs", []):
+            if not isinstance(leg, dict):
+                continue
+            leg_id = maybe_text(leg.get("leg_id"))
+            if not leg_id or leg_id == "public_interpretation" or leg_id in by_leg:
+                continue
+            by_leg[leg_id] = leg
+    return {leg_id: by_leg[leg_id] for leg_id in PHYSICAL_LEG_ORDER if leg_id in by_leg}
+
+
+def observation_overlaps_mission_scope(observation: dict[str, Any], mission_scope: dict[str, Any]) -> bool:
+    observation_scope = observation.get("place_scope") if isinstance(observation.get("place_scope"), dict) else {}
+    observation_geometry = observation_scope.get("geometry") if isinstance(observation_scope.get("geometry"), dict) else {}
+    mission_geometry = mission_scope.get("geometry") if isinstance(mission_scope.get("geometry"), dict) else {}
+    if not observation_geometry or not mission_geometry:
+        return False
+    return geometry_overlap(observation_geometry, mission_geometry)
+
+
+def score_observation_for_investigation_leg(
+    observation: dict[str, Any],
+    leg: dict[str, Any],
+    *,
+    mission_scope: dict[str, Any],
+) -> int:
+    metric = canonical_environment_metric(observation.get("metric"))
+    family = observation_metric_family(metric)
+    relevant_families = {
+        maybe_text(item)
+        for item in (leg.get("metric_families") if isinstance(leg.get("metric_families"), list) else [])
+        if maybe_text(item)
+    }
+    if family not in relevant_families:
+        return -1
+    overlaps_mission = observation_overlaps_mission_scope(observation, mission_scope)
+    leg_id = maybe_text(leg.get("leg_id"))
+    score = 3
+    scope_mode = maybe_text(leg.get("scope_mode"))
+    if scope_mode == "mission":
+        score += 2 if overlaps_mission else -1
+    elif scope_mode == "derived-region":
+        score += 2 if not overlaps_mission else 0
+
+    if leg_id == "source":
+        if family == "fire-detection":
+            score += 4
+        elif metric in {"precipitation", "precipitation_sum", "soil_moisture_0_to_7cm"}:
+            score += 3
+        elif family == "hydrology":
+            score += 1
+    elif leg_id == "mechanism":
+        if metric in {"wind_speed_10m", "relative_humidity_2m"}:
+            score += 4
+        elif family == "hydrology":
+            score += 3
+        elif family == "meteorology":
+            score += 1
+    elif leg_id == "impact":
+        if overlaps_mission:
+            score += 3
+        if family in {"air-quality", "hydrology", "soil"}:
+            score += 2
+        elif metric == "temperature_2m":
+            score += 2
+    return score
+
+
+def best_physical_observation_hypothesis_id(
+    plan: dict[str, Any],
+    *,
+    observation: dict[str, Any],
+    leg_id: str,
+) -> str:
+    hypotheses = plan.get("hypotheses") if isinstance(plan.get("hypotheses"), list) else []
+    if not hypotheses:
+        return ""
+    if len(hypotheses) == 1:
+        return maybe_text(hypotheses[0].get("hypothesis_id"))
+
+    metric = canonical_environment_metric(observation.get("metric"))
+    tokens = row_token_set(
+        metric,
+        observation_metric_family(metric),
+        maybe_text(observation.get("source_skill")),
+        maybe_text(((observation.get("place_scope") or {}).get("label"))),
+        leg_id.replace("_", " "),
+        minimum_length=3,
+    )
+    best_hypothesis_id = ""
+    best_score = -1
+    tied = False
+    for hypothesis in hypotheses:
+        if not isinstance(hypothesis, dict):
+            continue
+        hypothesis_id = maybe_text(hypothesis.get("hypothesis_id"))
+        if not hypothesis_id:
+            continue
+        hypothesis_tokens = row_token_set(
+            hypothesis.get("statement"),
+            hypothesis.get("summary"),
+            minimum_length=3,
+        )
+        score = len(tokens & hypothesis_tokens)
+        if score > best_score:
+            best_score = score
+            best_hypothesis_id = hypothesis_id
+            tied = False
+        elif score == best_score:
+            tied = True
+    if best_score <= 0 or tied:
+        return ""
+    return best_hypothesis_id
+
+
+def infer_observation_investigation_tags(
+    observation: dict[str, Any],
+    *,
+    plan: dict[str, Any],
+    mission_scope: dict[str, Any],
+) -> dict[str, str]:
+    legs_by_id = physical_investigation_leg_lookup(plan)
+    if not legs_by_id:
+        return {}
+    scored_legs: list[tuple[int, str]] = []
+    for leg_id, leg in legs_by_id.items():
+        score = score_observation_for_investigation_leg(
+            observation,
+            leg,
+            mission_scope=mission_scope,
+        )
+        if score > 0:
+            scored_legs.append((score, leg_id))
+    if not scored_legs:
+        return {}
+    scored_legs.sort(key=lambda item: (-item[0], PHYSICAL_LEG_ORDER.index(item[1]) if item[1] in PHYSICAL_LEG_ORDER else 99))
+    best_score = scored_legs[0][0]
+    best_leg_ids = [leg_id for score, leg_id in scored_legs if score == best_score]
+    payload: dict[str, str] = {}
+    if len(best_leg_ids) == 1:
+        payload["leg_id"] = best_leg_ids[0]
+        hypothesis_id = best_physical_observation_hypothesis_id(
+            plan,
+            observation=observation,
+            leg_id=best_leg_ids[0],
+        )
+        if hypothesis_id:
+            payload["hypothesis_id"] = hypothesis_id
+    return payload
+
+
+def consensus_nonempty_text(values: list[Any]) -> str:
+    unique = unique_strings([maybe_text(value) for value in values if maybe_text(value)])
+    if len(unique) == 1:
+        return unique[0]
+    return ""
+
+
+def enrich_component_roles_with_candidate_tags(
+    component_roles: list[dict[str, Any]],
+    *,
+    candidate_lookup: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    enriched: list[dict[str, Any]] = []
+    for component in component_roles:
+        if not isinstance(component, dict):
+            continue
+        item = copy.deepcopy(component)
+        candidate = candidate_lookup.get(maybe_text(component.get("candidate_observation_id")), {})
+        if isinstance(candidate, dict):
+            if not maybe_text(item.get("hypothesis_id")) and maybe_text(candidate.get("hypothesis_id")):
+                item["hypothesis_id"] = maybe_text(candidate.get("hypothesis_id"))
+            if not maybe_text(item.get("leg_id")) and maybe_text(candidate.get("leg_id")):
+                item["leg_id"] = maybe_text(candidate.get("leg_id"))
+        enriched.append(item)
+    return enriched
 
 
 def extract_value_for_metric(observation: dict[str, Any]) -> float | None:
@@ -3815,6 +3999,7 @@ def environment_signals_to_observations(
     run_id = mission_run_id(mission)
     mission_scope = mission_place_scope(mission)
     mission_time_window = mission_window(mission)
+    investigation_plan = build_investigation_plan(mission=mission, round_id=round_id)
     grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for signal in signals:
         grouped[observation_group_key(signal, mission_scope)].append(signal)
@@ -3859,6 +4044,13 @@ def environment_signals_to_observations(
             "compact_audit": observation_group_compact_audit(group, metric_override=output_metric),
             "distribution_summary": distribution_summary_from_environment_group(group, metric_override=output_metric),
         }
+        observation.update(
+            infer_observation_investigation_tags(
+                observation,
+                plan=investigation_plan,
+                mission_scope=mission_scope,
+            )
+        )
         validate_payload("observation", observation)
         observations.append(observation)
         counter += 1
@@ -3880,6 +4072,13 @@ def environment_signals_to_observations(
             ),
         )
         item.setdefault("distribution_summary", default_distribution_summary_from_observation(item))
+        item.update(
+            infer_observation_investigation_tags(
+                item,
+                plan=investigation_plan,
+                mission_scope=mission_scope,
+            )
+        )
         validate_payload("observation", item)
         observations.append(item)
         counter += 1
@@ -4039,6 +4238,8 @@ def observation_signature_payload(observation: dict[str, Any]) -> dict[str, Any]
         "aggregation": maybe_text(observation.get("aggregation")),
         "observation_mode": maybe_text(observation.get("observation_mode")),
         "evidence_role": maybe_text(observation.get("evidence_role")),
+        "hypothesis_id": maybe_text(observation.get("hypothesis_id")),
+        "leg_id": maybe_text(observation.get("leg_id")),
         "value": observation.get("value"),
         "unit": maybe_text(observation.get("unit")),
         "statistics": observation.get("statistics"),
@@ -4153,7 +4354,7 @@ def auditable_submission_list(current: Any, active: Any) -> list[dict[str, Any]]
     return []
 
 
-def observation_match_key(item: dict[str, Any]) -> str:
+def observation_match_key(item: dict[str, Any], *, include_investigation_tags: bool = True) -> str:
     provenance = item.get("provenance") if isinstance(item.get("provenance"), dict) else {}
     payload = {
         "source_skill": maybe_text(item.get("source_skill")),
@@ -4178,6 +4379,10 @@ def observation_match_key(item: dict[str, Any]) -> str:
             "sha256": maybe_text(provenance.get("sha256")),
         },
     }
+    if include_investigation_tags:
+        payload["hypothesis_id"] = maybe_text(item.get("hypothesis_id"))
+        payload["leg_id"] = maybe_text(item.get("leg_id"))
+        payload["component_roles"] = item.get("component_roles")
     return stable_hash(stable_json(payload))
 
 
@@ -4195,6 +4400,11 @@ def hydrate_observation_submissions_with_observations(
         for item in observations
         if isinstance(item, dict)
     }
+    observations_by_legacy_key = {
+        observation_match_key(item, include_investigation_tags=False): item
+        for item in observations
+        if isinstance(item, dict)
+    }
     hydrated: list[dict[str, Any]] = []
     for submission in submissions:
         if not isinstance(submission, dict):
@@ -4203,6 +4413,10 @@ def hydrate_observation_submissions_with_observations(
         observation = observations_by_id.get(maybe_text(item.get("observation_id")))
         if observation is None:
             observation = observations_by_key.get(observation_match_key(item))
+        if observation is None:
+            observation = observations_by_legacy_key.get(
+                observation_match_key(item, include_investigation_tags=False)
+            )
         if observation is not None:
             canonical_observation_id = maybe_text(observation.get("observation_id"))
             if canonical_observation_id and maybe_text(item.get("observation_id")) != canonical_observation_id:
@@ -4216,6 +4430,12 @@ def hydrate_observation_submissions_with_observations(
                 item["time_window"] = observation.get("time_window")
             if not maybe_text(item.get("unit")) and maybe_text(observation.get("unit")):
                 item["unit"] = maybe_text(observation.get("unit"))
+            if not maybe_text(item.get("hypothesis_id")) and maybe_text(observation.get("hypothesis_id")):
+                item["hypothesis_id"] = maybe_text(observation.get("hypothesis_id"))
+            if not maybe_text(item.get("leg_id")) and maybe_text(observation.get("leg_id")):
+                item["leg_id"] = maybe_text(observation.get("leg_id"))
+            if not isinstance(item.get("component_roles"), list) and isinstance(observation.get("component_roles"), list):
+                item["component_roles"] = copy.deepcopy(observation.get("component_roles"))
         hydrated.append(item)
     return hydrated
 
@@ -4505,7 +4725,7 @@ def compact_claim(claim: dict[str, Any]) -> dict[str, Any]:
 
 
 def compact_observation(observation: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "observation_id": maybe_text(observation.get("observation_id")),
         "source_skill": maybe_text(observation.get("source_skill")),
         "metric": maybe_text(observation.get("metric")),
@@ -4522,6 +4742,13 @@ def compact_observation(observation: dict[str, Any]) -> dict[str, Any]:
         "metric_bundle": [maybe_text(item) for item in observation.get("metric_bundle", []) if maybe_text(item)][:6],
         "quality_flags": [maybe_text(item) for item in observation.get("quality_flags", []) if maybe_text(item)][:4],
     }
+    hypothesis_id = maybe_text(observation.get("hypothesis_id"))
+    if hypothesis_id:
+        payload["hypothesis_id"] = hypothesis_id
+    leg_id = maybe_text(observation.get("leg_id"))
+    if leg_id:
+        payload["leg_id"] = leg_id
+    return payload
 
 
 def compact_evidence_card(card: dict[str, Any]) -> dict[str, Any]:
@@ -4834,6 +5061,22 @@ def observation_submission_from_observation(observation: dict[str, Any]) -> dict
             sampling_notes=[],
         ),
     }
+    for field_name in (
+        "observation_mode",
+        "evidence_role",
+        "hypothesis_id",
+        "leg_id",
+        "source_skills",
+        "metric_bundle",
+        "candidate_observation_ids",
+        "provenance_refs",
+        "component_roles",
+        "distribution_summary",
+    ):
+        value = canonical_observation.get(field_name)
+        if value is None:
+            continue
+        submission[field_name] = copy.deepcopy(value) if isinstance(value, (dict, list)) else value
     validate_payload("observation-submission", submission)
     return submission
 
@@ -4899,6 +5142,8 @@ def observations_from_submissions(submissions: list[dict[str, Any]]) -> list[dic
         for field_name in (
             "observation_mode",
             "evidence_role",
+            "hypothesis_id",
+            "leg_id",
             "source_skills",
             "metric_bundle",
             "candidate_observation_ids",
@@ -5560,6 +5805,10 @@ def materialize_observation_submission_from_curated_entry(
         if isinstance(entry.get("distribution_summary"), dict)
         else aggregate_candidate_distribution_summary(candidates, source_skills, metric_bundle)
     )
+    component_roles = enrich_component_roles_with_candidate_tags(
+        copy.deepcopy(entry.get("component_roles")) if isinstance(entry.get("component_roles"), list) else [],
+        candidate_lookup=candidate_lookup,
+    )
     compact_audit = compact_audit_from_curated_observation_candidates(candidates, source_skills, metric_bundle)
     if len(candidates) > 1 and not isinstance(entry.get("statistics"), dict):
         if candidate_statistics_comparable and isinstance(statistics_obj, dict):
@@ -5594,8 +5843,18 @@ def materialize_observation_submission_from_curated_entry(
         "candidate_observation_ids": candidate_observation_ids,
         "provenance_refs": provenance_refs,
         "selection_reason": maybe_text(entry.get("selection_reason")),
-        "component_roles": copy.deepcopy(entry.get("component_roles")) if isinstance(entry.get("component_roles"), list) else [],
+        "component_roles": component_roles,
     }
+    hypothesis_id = maybe_text(entry.get("hypothesis_id")) or consensus_nonempty_text(
+        [candidate.get("hypothesis_id") for candidate in candidates]
+    )
+    if hypothesis_id:
+        submission["hypothesis_id"] = hypothesis_id
+    leg_id = maybe_text(entry.get("leg_id")) or consensus_nonempty_text(
+        [candidate.get("leg_id") for candidate in candidates]
+    )
+    if leg_id:
+        submission["leg_id"] = leg_id
     validate_payload("observation-submission", submission)
     return submission
 

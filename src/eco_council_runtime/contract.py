@@ -1858,6 +1858,10 @@ def validate_observation_object(obj: Any, path: str, issues: IssueCollector) -> 
     validate_region_scope(record.get("place_scope"), f"{path}.place_scope", issues)
     validate_string_list(record.get("quality_flags"), f"{path}.quality_flags", issues)
     validate_artifact_ref(record.get("provenance"), f"{path}.provenance", issues)
+    if "hypothesis_id" in record and record["hypothesis_id"] is not None:
+        require_string(record, "hypothesis_id", path, issues)
+    if "leg_id" in record and record["leg_id"] is not None:
+        require_string(record, "leg_id", path, issues)
     if "observation_mode" in record:
         require_enum(record, "observation_mode", path, issues, allowed=OBSERVATION_MODES)
     if "evidence_role" in record:
@@ -1894,6 +1898,10 @@ def validate_observation_object(obj: Any, path: str, issues: IssueCollector) -> 
                     issues.add(f"{path}.component_roles[{index}].unit", "Expected a string when provided.", actual=component["unit"])
                 if "rationale" in component and component["rationale"] is not None and not isinstance(component["rationale"], str):
                     issues.add(f"{path}.component_roles[{index}].rationale", "Expected a string when provided.", actual=component["rationale"])
+                if "hypothesis_id" in component and component["hypothesis_id"] is not None:
+                    require_string(component, "hypothesis_id", f"{path}.component_roles[{index}]", issues)
+                if "leg_id" in component and component["leg_id"] is not None:
+                    require_string(component, "leg_id", f"{path}.component_roles[{index}]", issues)
 
 
 def validate_curated_observation_entry(value: Any, path: str, issues: IssueCollector) -> None:
@@ -1913,6 +1921,10 @@ def validate_curated_observation_entry(value: Any, path: str, issues: IssueColle
     require_bool(obj, "worth_storing", path, issues)
     require_enum(obj, "evidence_role", path, issues, allowed=EVIDENCE_ROLES)
     require_string(obj, "selection_reason", path, issues)
+    if "hypothesis_id" in obj and obj["hypothesis_id"] is not None:
+        require_string(obj, "hypothesis_id", path, issues)
+    if "leg_id" in obj and obj["leg_id"] is not None:
+        require_string(obj, "leg_id", path, issues)
     if "source_skills" in obj:
         source_skills = validate_string_list(obj.get("source_skills"), f"{path}.source_skills", issues, allow_empty=False)
         validate_unique_strings(source_skills, f"{path}.source_skills", issues)
@@ -1950,6 +1962,10 @@ def validate_curated_observation_entry(value: Any, path: str, issues: IssueColle
                     issues.add(f"{path}.component_roles[{index}].unit", "Expected a string when provided.", actual=component["unit"])
                 if "rationale" in component and component["rationale"] is not None and not isinstance(component["rationale"], str):
                     issues.add(f"{path}.component_roles[{index}].rationale", "Expected a string when provided.", actual=component["rationale"])
+                if "hypothesis_id" in component and component["hypothesis_id"] is not None:
+                    require_string(component, "hypothesis_id", f"{path}.component_roles[{index}]", issues)
+                if "leg_id" in component and component["leg_id"] is not None:
+                    require_string(component, "leg_id", f"{path}.component_roles[{index}]", issues)
 
 
 def validate_observation_curation_object(obj: Any, path: str, issues: IssueCollector) -> None:
@@ -2015,6 +2031,10 @@ def validate_observation_submission_object(obj: Any, path: str, issues: IssueCol
     validate_region_scope(record.get("place_scope"), f"{path}.place_scope", issues)
     validate_string_list(record.get("quality_flags"), f"{path}.quality_flags", issues)
     validate_artifact_ref(record.get("provenance"), f"{path}.provenance", issues)
+    if "hypothesis_id" in record and record["hypothesis_id"] is not None:
+        require_string(record, "hypothesis_id", path, issues)
+    if "leg_id" in record and record["leg_id"] is not None:
+        require_string(record, "leg_id", path, issues)
     if "statistics" in record and record["statistics"] is not None:
         validate_statistics(record["statistics"], f"{path}.statistics", issues)
     if "distribution_summary" in record and record["distribution_summary"] is not None:
@@ -2057,6 +2077,10 @@ def validate_observation_submission_object(obj: Any, path: str, issues: IssueCol
                     issues.add(f"{path}.component_roles[{index}].unit", "Expected a string when provided.", actual=component["unit"])
                 if "rationale" in component and component["rationale"] is not None and not isinstance(component["rationale"], str):
                     issues.add(f"{path}.component_roles[{index}].rationale", "Expected a string when provided.", actual=component["rationale"])
+                if "hypothesis_id" in component and component["hypothesis_id"] is not None:
+                    require_string(component, "hypothesis_id", f"{path}.component_roles[{index}]", issues)
+                if "leg_id" in component and component["leg_id"] is not None:
+                    require_string(component, "leg_id", f"{path}.component_roles[{index}]", issues)
 
 
 def validate_evidence_card_object(obj: Any, path: str, issues: IssueCollector) -> None:
