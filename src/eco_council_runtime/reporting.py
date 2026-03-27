@@ -702,6 +702,36 @@ def public_source_channels(claims: list[dict[str, Any]]) -> list[str]:
     return unique_strings(channels)
 
 
+def compact_claim_scope(scope: Any) -> dict[str, Any]:
+    if not isinstance(scope, dict):
+        return {}
+    payload: dict[str, Any] = {
+        "time_source": maybe_text(scope.get("time_source")),
+        "place_source": maybe_text(scope.get("place_source")),
+        "usable_for_matching": bool(scope.get("usable_for_matching")),
+    }
+    time_window = scope.get("time_window")
+    if isinstance(time_window, dict):
+        payload["time_window"] = {
+            "start_utc": maybe_text(time_window.get("start_utc")),
+            "end_utc": maybe_text(time_window.get("end_utc")),
+        }
+    place_scope = scope.get("place_scope")
+    if isinstance(place_scope, dict):
+        payload["place_scope"] = {
+            "label": maybe_text(place_scope.get("label")),
+            "geometry": copy.deepcopy(place_scope.get("geometry")) if isinstance(place_scope.get("geometry"), dict) else {},
+        }
+    notes = [
+        maybe_text(item)
+        for item in (scope.get("notes") if isinstance(scope.get("notes"), list) else [])
+        if maybe_text(item)
+    ]
+    if notes:
+        payload["notes"] = notes[:3]
+    return payload
+
+
 def compact_claim(claim: dict[str, Any]) -> dict[str, Any]:
     refs = claim.get("public_refs")
     source_skills = []
@@ -713,7 +743,7 @@ def compact_claim(claim: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(ref, dict) and maybe_text(ref.get("source_skill"))
             ]
         )
-    return {
+    payload = {
         "claim_id": maybe_text(claim.get("claim_id")),
         "claim_type": maybe_text(claim.get("claim_type")),
         "summary": truncate_text(maybe_text(claim.get("summary")), 180),
@@ -723,6 +753,16 @@ def compact_claim(claim: dict[str, Any]) -> dict[str, Any]:
         "candidate_claim_ids": [maybe_text(item) for item in claim.get("candidate_claim_ids", []) if maybe_text(item)][:6],
         "selection_reason": truncate_text(maybe_text(claim.get("selection_reason")), 160),
     }
+    hypothesis_id = maybe_text(claim.get("hypothesis_id"))
+    if hypothesis_id:
+        payload["hypothesis_id"] = hypothesis_id
+    leg_id = maybe_text(claim.get("leg_id"))
+    if leg_id:
+        payload["leg_id"] = leg_id
+    compact_scope = compact_claim_scope(claim.get("claim_scope"))
+    if compact_scope:
+        payload["claim_scope"] = compact_scope
+    return payload
 
 
 def compact_observation(observation: dict[str, Any]) -> dict[str, Any]:
@@ -758,7 +798,7 @@ def compact_evidence_card(card: dict[str, Any]) -> dict[str, Any]:
 
 
 def compact_claim_submission(submission: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "submission_id": maybe_text(submission.get("submission_id")),
         "claim_id": maybe_text(submission.get("claim_id")),
         "claim_type": maybe_text(submission.get("claim_type")),
@@ -769,6 +809,16 @@ def compact_claim_submission(submission: dict[str, Any]) -> dict[str, Any]:
         "candidate_claim_ids": [maybe_text(item) for item in submission.get("candidate_claim_ids", []) if maybe_text(item)][:6],
         "selection_reason": truncate_text(maybe_text(submission.get("selection_reason")), 160),
     }
+    hypothesis_id = maybe_text(submission.get("hypothesis_id"))
+    if hypothesis_id:
+        payload["hypothesis_id"] = hypothesis_id
+    leg_id = maybe_text(submission.get("leg_id"))
+    if leg_id:
+        payload["leg_id"] = leg_id
+    compact_scope = compact_claim_scope(submission.get("claim_scope"))
+    if compact_scope:
+        payload["claim_scope"] = compact_scope
+    return payload
 
 
 def compact_observation_submission(submission: dict[str, Any]) -> dict[str, Any]:
@@ -1003,7 +1053,7 @@ def ranked_claim_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, 
 
 
 def candidate_claim_entry_from_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "claim_id": maybe_text(candidate.get("claim_id")),
         "candidate_claim_ids": [maybe_text(candidate.get("claim_id"))],
         "claim_type": maybe_text(candidate.get("claim_type")),
@@ -1020,6 +1070,16 @@ def candidate_claim_entry_from_candidate(candidate: dict[str, Any]) -> dict[str,
         "time_window": candidate.get("time_window"),
         "place_scope": candidate.get("place_scope"),
     }
+    hypothesis_id = maybe_text(candidate.get("hypothesis_id"))
+    if hypothesis_id:
+        payload["hypothesis_id"] = hypothesis_id
+    leg_id = maybe_text(candidate.get("leg_id"))
+    if leg_id:
+        payload["leg_id"] = leg_id
+    compact_scope = compact_claim_scope(candidate.get("claim_scope"))
+    if compact_scope:
+        payload["claim_scope"] = compact_scope
+    return payload
 
 
 def guess_observation_candidate_evidence_role(observation: dict[str, Any], claims: list[dict[str, Any]]) -> str:
@@ -3157,11 +3217,22 @@ def investigation_review_overall_status(hypothesis_reviews: list[dict[str, Any]]
     return "unresolved"
 
 
+def record_matches_hypothesis_leg(record: dict[str, Any], *, hypothesis_id: str, leg_id: str) -> bool:
+    record_hypothesis_id = maybe_text(record.get("hypothesis_id"))
+    if hypothesis_id and record_hypothesis_id and record_hypothesis_id != hypothesis_id:
+        return False
+    record_leg_id = maybe_text(record.get("leg_id"))
+    if leg_id and record_leg_id and record_leg_id != leg_id:
+        return False
+    return True
+
+
 def build_leg_review_from_state(
     *,
     state: dict[str, Any],
     profile_id: str,
     leg: dict[str, Any],
+    hypothesis_id: str = "",
 ) -> dict[str, Any]:
     leg_id = maybe_text(leg.get("leg_id"))
     leg_label = maybe_text(leg.get("label")) or leg_id.replace("_", " ")
@@ -3202,7 +3273,10 @@ def build_leg_review_from_state(
             if not isinstance(card, dict):
                 continue
             claim_id = maybe_text(card.get("claim_id"))
-            claim_type = maybe_text(claim_lookup.get(claim_id, {}).get("claim_type"))
+            claim_record = claim_lookup.get(claim_id, {})
+            if not record_matches_hypothesis_leg(claim_record, hypothesis_id=hypothesis_id, leg_id=leg_id):
+                continue
+            claim_type = maybe_text(claim_record.get("claim_type"))
             if relevant_claim_types and claim_type and claim_type not in relevant_claim_types:
                 continue
             if claim_id and maybe_text(card.get("evidence_id")):
@@ -3212,7 +3286,10 @@ def build_leg_review_from_state(
                 continue
             if maybe_text(entry.get("entity_kind")) != "claim":
                 continue
-            claim_type = maybe_text(claim_lookup.get(maybe_text(entry.get("entity_id")), {}).get("claim_type"))
+            claim_record = claim_lookup.get(maybe_text(entry.get("entity_id")), {})
+            if not record_matches_hypothesis_leg(claim_record, hypothesis_id=hypothesis_id, leg_id=leg_id):
+                continue
+            claim_type = maybe_text(claim_record.get("claim_type"))
             if relevant_claim_types and claim_type and claim_type not in relevant_claim_types:
                 continue
             if maybe_text(entry.get("isolated_id")):
@@ -3222,13 +3299,18 @@ def build_leg_review_from_state(
                 continue
             if maybe_text(entry.get("entity_kind")) != "claim":
                 continue
-            claim_type = maybe_text(claim_lookup.get(maybe_text(entry.get("entity_id")), {}).get("claim_type"))
+            claim_record = claim_lookup.get(maybe_text(entry.get("entity_id")), {})
+            if not record_matches_hypothesis_leg(claim_record, hypothesis_id=hypothesis_id, leg_id=leg_id):
+                continue
+            claim_type = maybe_text(claim_record.get("claim_type"))
             if relevant_claim_types and claim_type and claim_type not in relevant_claim_types:
                 continue
             if maybe_text(entry.get("remand_id")):
                 remand_refs.append(f"remand:{maybe_text(entry.get('remand_id'))}")
         for submission in state_auditable_submissions(state, "sociologist"):
             claim_id = maybe_text(submission.get("claim_id"))
+            if not record_matches_hypothesis_leg(submission, hypothesis_id=hypothesis_id, leg_id=leg_id):
+                continue
             claim_type = maybe_text(submission.get("claim_type"))
             if relevant_claim_types and claim_type and claim_type not in relevant_claim_types:
                 continue
@@ -3238,6 +3320,8 @@ def build_leg_review_from_state(
         relevant_families = investigation_leg_metric_families(profile_id, leg_id, leg)
         for card in cards:
             if not isinstance(card, dict):
+                continue
+            if not record_matches_hypothesis_leg(card, hypothesis_id=hypothesis_id, leg_id=""):
                 continue
             observation_ids = [
                 maybe_text(item)
@@ -3312,7 +3396,12 @@ def build_leg_review_from_state(
 
 def build_hypothesis_review_from_state(*, state: dict[str, Any], hypothesis: dict[str, Any], profile_id: str) -> dict[str, Any]:
     leg_reviews = [
-        build_leg_review_from_state(state=state, profile_id=profile_id, leg=leg)
+        build_leg_review_from_state(
+            state=state,
+            profile_id=profile_id,
+            leg=leg,
+            hypothesis_id=maybe_text(hypothesis.get("hypothesis_id")),
+        )
         for leg in hypothesis.get("chain_legs", [])
         if isinstance(leg, dict) and maybe_text(leg.get("leg_id"))
     ]

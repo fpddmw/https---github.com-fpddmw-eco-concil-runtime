@@ -689,6 +689,23 @@ def validate_region_scope(value: Any, path: str, issues: IssueCollector) -> None
     validate_geometry(obj.get("geometry"), f"{path}.geometry", issues)
 
 
+def validate_claim_scope_object(value: Any, path: str, issues: IssueCollector) -> None:
+    obj = require_object(value, path, issues)
+    if obj is None:
+        return
+    validate_time_window(obj.get("time_window"), f"{path}.time_window", issues)
+    validate_region_scope(obj.get("place_scope"), f"{path}.place_scope", issues)
+    if "time_source" in obj and obj["time_source"] is not None and not isinstance(obj["time_source"], str):
+        issues.add(f"{path}.time_source", "Expected a string when provided.", actual=obj["time_source"])
+    if "place_source" in obj and obj["place_source"] is not None and not isinstance(obj["place_source"], str):
+        issues.add(f"{path}.place_source", "Expected a string when provided.", actual=obj["place_source"])
+    if "usable_for_matching" in obj:
+        require_bool(obj, "usable_for_matching", path, issues)
+    if "notes" in obj:
+        notes = validate_string_list(obj.get("notes"), f"{path}.notes", issues)
+        validate_unique_strings(notes, f"{path}.notes", issues)
+
+
 def family_catalog() -> list[dict[str, Any]]:
     return copy.deepcopy(DEFAULT_SOURCE_FAMILY_CATALOG)
 
@@ -1628,6 +1645,12 @@ def validate_claim_object(obj: Any, path: str, issues: IssueCollector) -> None:
     require_bool(record, "needs_physical_validation", path, issues)
     validate_time_window(record.get("time_window"), f"{path}.time_window", issues)
     validate_region_scope(record.get("place_scope"), f"{path}.place_scope", issues)
+    if "claim_scope" in record and record["claim_scope"] is not None:
+        validate_claim_scope_object(record.get("claim_scope"), f"{path}.claim_scope", issues)
+    if "hypothesis_id" in record and record["hypothesis_id"] is not None:
+        require_string(record, "hypothesis_id", path, issues)
+    if "leg_id" in record and record["leg_id"] is not None:
+        require_string(record, "leg_id", path, issues)
     public_refs = record.get("public_refs")
     if not isinstance(public_refs, list):
         issues.add(f"{path}.public_refs", "Expected a list.", actual=public_refs)
@@ -1660,6 +1683,12 @@ def validate_curated_claim_entry(value: Any, path: str, issues: IssueCollector) 
         validate_time_window(obj.get("time_window"), f"{path}.time_window", issues)
     if "place_scope" in obj and obj["place_scope"] is not None:
         validate_region_scope(obj.get("place_scope"), f"{path}.place_scope", issues)
+    if "claim_scope" in obj and obj["claim_scope"] is not None:
+        validate_claim_scope_object(obj.get("claim_scope"), f"{path}.claim_scope", issues)
+    if "hypothesis_id" in obj and obj["hypothesis_id"] is not None:
+        require_string(obj, "hypothesis_id", path, issues)
+    if "leg_id" in obj and obj["leg_id"] is not None:
+        require_string(obj, "leg_id", path, issues)
 
 
 def validate_claim_curation_object(obj: Any, path: str, issues: IssueCollector) -> None:
@@ -1722,6 +1751,12 @@ def validate_claim_submission_object(obj: Any, path: str, issues: IssueCollector
     require_int(record, "source_signal_count", path, issues, minimum=1)
     validate_time_window(record.get("time_window"), f"{path}.time_window", issues)
     validate_region_scope(record.get("place_scope"), f"{path}.place_scope", issues)
+    if "claim_scope" in record and record["claim_scope"] is not None:
+        validate_claim_scope_object(record.get("claim_scope"), f"{path}.claim_scope", issues)
+    if "hypothesis_id" in record and record["hypothesis_id"] is not None:
+        require_string(record, "hypothesis_id", path, issues)
+    if "leg_id" in record and record["leg_id"] is not None:
+        require_string(record, "leg_id", path, issues)
     public_refs = record.get("public_refs")
     if not isinstance(public_refs, list):
         issues.add(f"{path}.public_refs", "Expected a list.", actual=public_refs)
@@ -2036,6 +2071,12 @@ def validate_evidence_card_object(obj: Any, path: str, issues: IssueCollector) -
     require_enum(record, "verdict", path, issues, allowed=EVIDENCE_VERDICTS)
     require_enum(record, "confidence", path, issues, allowed=CONFIDENCE_VALUES)
     require_string(record, "summary", path, issues)
+    if "hypothesis_id" in record and record["hypothesis_id"] is not None:
+        require_string(record, "hypothesis_id", path, issues)
+    if "leg_id" in record and record["leg_id"] is not None:
+        require_string(record, "leg_id", path, issues)
+    if "matching_scope" in record and record["matching_scope"] is not None:
+        validate_claim_scope_object(record.get("matching_scope"), f"{path}.matching_scope", issues)
     public_refs = record.get("public_refs")
     if not isinstance(public_refs, list):
         issues.add(f"{path}.public_refs", "Expected a list.", actual=public_refs)
@@ -2151,6 +2192,12 @@ def validate_matching_pair(value: Any, path: str, issues: IssueCollector) -> Non
     require_number(obj, "support_score", path, issues, minimum=0.0)
     require_number(obj, "contradict_score", path, issues, minimum=0.0)
     validate_string_list(obj.get("notes"), f"{path}.notes", issues)
+    if "hypothesis_id" in obj and obj["hypothesis_id"] is not None:
+        require_string(obj, "hypothesis_id", path, issues)
+    if "leg_id" in obj and obj["leg_id"] is not None:
+        require_string(obj, "leg_id", path, issues)
+    if "matching_scope" in obj and obj["matching_scope"] is not None:
+        validate_claim_scope_object(obj.get("matching_scope"), f"{path}.matching_scope", issues)
 
 
 def validate_matching_result_object(obj: Any, path: str, issues: IssueCollector) -> None:

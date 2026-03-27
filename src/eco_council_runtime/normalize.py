@@ -62,7 +62,7 @@ from eco_council_runtime.layout import (
     NORMALIZE_ENVIRONMENT_DDL_PATH,
     NORMALIZE_PUBLIC_DDL_PATH,
 )
-from eco_council_runtime.investigation import causal_focus_for_role
+from eco_council_runtime.investigation import build_investigation_plan, causal_focus_for_role
 
 ASSETS_DIR = NORMALIZE_ASSETS_DIR
 PUBLIC_DDL_PATH = NORMALIZE_PUBLIC_DDL_PATH
@@ -122,6 +122,21 @@ STOPWORDS = {
     "was",
     "were",
     "with",
+}
+GENERIC_REGION_TOKENS = {
+    "area",
+    "city",
+    "country",
+    "county",
+    "district",
+    "metro",
+    "province",
+    "region",
+    "state",
+    "town",
+    "urban",
+    "usa",
+    "us",
 }
 CLAIM_KEYWORDS = {
     "wildfire": ("wildfire", "fire", "burning", "burn", "forest fire", "bushfire"),
@@ -826,6 +841,12 @@ def mission_region_tokens(mission: dict[str, Any]) -> list[str]:
     return text_tokens(mission_place_scope(mission).get("label"), minimum_length=3)
 
 
+def region_core_tokens(label: Any) -> list[str]:
+    tokens = text_tokens(label, minimum_length=3)
+    core = [token for token in tokens if token not in GENERIC_REGION_TOKENS]
+    return core or tokens[:3]
+
+
 def mission_topic_tokens(mission: dict[str, Any]) -> list[str]:
     ignored = set(mission_region_tokens(mission))
     values: list[Any] = [mission.get("topic"), mission.get("objective")]
@@ -1108,6 +1129,332 @@ def candidate_statement(title: str, text: str) -> str:
     if text:
         return truncate_text(text, 420)
     return truncate_text(title, 420)
+
+
+def best_public_claim_hypothesis_id(plan: dict[str, Any], claim_type: str, statement: str) -> str:
+    hypotheses = plan.get("hypotheses") if isinstance(plan.get("hypotheses"), list) else []
+    if not hypotheses:
+        return ""
+    if len(hypotheses) == 1:
+        return maybe_text(hypotheses[0].get("hypothesis_id"))
+    claim_tokens = row_token_set(statement, claim_type, minimum_length=4)
+    best_hypothesis_id = ""
+    best_score = -1
+    for hypothesis in hypotheses:
+        if not isinstance(hypothesis, dict):
+            continue
+        hypothesis_id = maybe_text(hypothesis.get("hypothesis_id"))
+        if not hypothesis_id:
+            continue
+        hypothesis_tokens = row_token_set(
+            hypothesis.get("statement"),
+            hypothesis.get("summary"),
+            minimum_length=4,
+        )
+        score = len(claim_tokens & hypothesis_tokens)
+        for leg in hypothesis.get("chain_legs", []):
+            if not isinstance(leg, dict):
+                continue
+            if maybe_text(leg.get("leg_id")) != "public_interpretation":
+                continue
+            claim_types = {
+                maybe_text(item)
+                for item in (leg.get("claim_types") if isinstance(leg.get("claim_types"), list) else [])
+                if maybe_text(item)
+            }
+            if claim_type in claim_types:
+                score += 1
+        if score > best_score:
+            best_score = score
+            best_hypothesis_id = hypothesis_id
+    return best_hypothesis_id if best_score > 0 else ""
+
+
+def public_signal_location_candidates(signal: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    metadata = signal.get("metadata") if isinstance(signal.get("metadata"), dict) else {}
+    raw_json = signal.get("raw_json") if isinstance(signal.get("raw_json"), dict) else {}
+
+    def append_candidate(label: Any, latitude: Any, longitude: Any) -> None:
+        name = maybe_text(label)
+        lat = maybe_number(latitude)
+        lon = maybe_number(longitude)
+        if not name and lat is None and lon is None:
+            return
+        candidates.append(
+            {
+                "label": name,
+                "latitude": lat,
+                "longitude": lon,
+            }
+        )
+
+    append_candidate(signal.get("location_name"), signal.get("latitude"), signal.get("longitude"))
+    append_candidate(raw_json.get("action_geo_name"), raw_json.get("action_geo_lat"), raw_json.get("action_geo_lon"))
+    append_candidate(metadata.get("action_geo_name"), metadata.get("action_geo_lat"), metadata.get("action_geo_lon"))
+
+    for collection in (raw_json.get("locations"), metadata.get("locations")):
+        if not isinstance(collection, list):
+            continue
+        for item in collection:
+            if isinstance(item, dict):
+                append_candidate(
+                    item.get("name") or item.get("label") or item.get("location"),
+                    item.get("latitude") or item.get("lat"),
+                    item.get("longitude") or item.get("lon") or item.get("lng"),
+                )
+            else:
+                append_candidate(item, None, None)
+
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = stable_json(
+            {
+                "label": maybe_text(candidate.get("label")).casefold(),
+                "latitude": candidate.get("latitude"),
+                "longitude": candidate.get("longitude"),
+            }
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(candidate)
+    return deduped
+
+
+def public_signal_mentions_mission_region(signals: list[dict[str, Any]], mission_scope: dict[str, Any]) -> bool:
+    required_tokens = region_core_tokens(mission_scope.get("label"))[:2]
+    if not required_tokens:
+        return False
+    token_set: set[str] = set()
+    for signal in signals:
+        if not isinstance(signal, dict):
+            continue
+        metadata = signal.get("metadata") if isinstance(signal.get("metadata"), dict) else {}
+        raw_json = signal.get("raw_json") if isinstance(signal.get("raw_json"), dict) else {}
+        token_set.update(
+            row_token_set(
+                signal.get("title"),
+                signal.get("text"),
+                signal.get("query_text"),
+                signal.get("channel_name"),
+                metadata.get("locations"),
+                raw_json.get("locations"),
+                raw_json.get("action_geo_name"),
+                minimum_length=3,
+            )
+        )
+    return all(token in token_set for token in required_tokens)
+
+
+def bbox_scope_from_location_candidates(
+    location_candidates: list[dict[str, Any]],
+    *,
+    label: str,
+) -> dict[str, Any] | None:
+    points = [
+        (float(candidate["latitude"]), float(candidate["longitude"]))
+        for candidate in location_candidates
+        if maybe_number(candidate.get("latitude")) is not None and maybe_number(candidate.get("longitude")) is not None
+    ]
+    if not points:
+        return None
+    latitudes = [point[0] for point in points]
+    longitudes = [point[1] for point in points]
+    if len(points) == 1:
+        latitude, longitude = points[0]
+        return {
+            "label": label,
+            "geometry": {"type": "Point", "latitude": latitude, "longitude": longitude},
+        }
+    return {
+        "label": label,
+        "geometry": {
+            "type": "BBox",
+            "west": min(longitudes),
+            "south": min(latitudes),
+            "east": max(longitudes),
+            "north": max(latitudes),
+        },
+    }
+
+
+def derive_public_claim_place_scope(
+    signals: list[dict[str, Any]],
+    *,
+    mission_scope: dict[str, Any],
+) -> tuple[dict[str, Any], str, list[str]]:
+    scope_fallback = copy.deepcopy(mission_scope)
+    location_candidates = [
+        candidate
+        for signal in signals
+        if isinstance(signal, dict)
+        for candidate in public_signal_location_candidates(signal)
+    ]
+    point_candidates = [
+        candidate
+        for candidate in location_candidates
+        if maybe_number(candidate.get("latitude")) is not None and maybe_number(candidate.get("longitude")) is not None
+    ]
+    if point_candidates:
+        mission_geometry = mission_scope.get("geometry") if isinstance(mission_scope.get("geometry"), dict) else {}
+        if mission_geometry and all(
+            point_matches_geometry(
+                maybe_number(candidate.get("latitude")),
+                maybe_number(candidate.get("longitude")),
+                mission_geometry,
+            )
+            for candidate in point_candidates
+        ):
+            return (
+                scope_fallback,
+                "signal-derived",
+                ["Public evidence locations fall inside the mission region."],
+            )
+        labels = unique_strings(candidate.get("label") for candidate in point_candidates if maybe_text(candidate.get("label")))
+        derived_scope = bbox_scope_from_location_candidates(
+            point_candidates,
+            label=labels[0] if labels else "Derived public-signal footprint",
+        )
+        if derived_scope is not None:
+            notes: list[str] = []
+            if maybe_text(derived_scope.get("geometry", {}).get("type")) == "BBox":
+                notes.append("Claim place scope comes from multiple public-signal locations.")
+            return derived_scope, "signal-derived", notes
+    if public_signal_mentions_mission_region(signals, mission_scope):
+        return (
+            scope_fallback,
+            "signal-text-mention",
+            ["Public evidence explicitly mentions the mission region."],
+        )
+    return (
+        scope_fallback,
+        "mission-fallback",
+        ["Public evidence lacked a signal-local geographic anchor; mission scope is retained only as a retrieval boundary."],
+    )
+
+
+def derive_public_claim_time_window(
+    signals: list[dict[str, Any]],
+    *,
+    mission_time_window: dict[str, Any],
+) -> tuple[dict[str, Any], str, list[str]]:
+    published = sorted(
+        parsed
+        for signal in signals
+        if isinstance(signal, dict)
+        for parsed in [parse_loose_datetime(signal.get("published_at_utc"))]
+        if parsed is not None
+    )
+    if not published:
+        return (
+            copy.deepcopy(mission_time_window),
+            "mission-fallback",
+            ["Public evidence lacked auditable publish timestamps; mission time is retained only as a retrieval boundary."],
+        )
+    return (
+        {
+            "start_utc": to_rfc3339_z(published[0]),
+            "end_utc": to_rfc3339_z(published[-1]),
+        },
+        "signal-derived",
+        [],
+    )
+
+
+def build_public_claim_scope(
+    *,
+    signals: list[dict[str, Any]],
+    mission_scope: dict[str, Any],
+    mission_time_window: dict[str, Any],
+) -> dict[str, Any]:
+    time_window, time_source, time_notes = derive_public_claim_time_window(
+        signals,
+        mission_time_window=mission_time_window,
+    )
+    place_scope, place_source, place_notes = derive_public_claim_place_scope(
+        signals,
+        mission_scope=mission_scope,
+    )
+    return {
+        "time_window": time_window,
+        "place_scope": place_scope,
+        "time_source": time_source,
+        "place_source": place_source,
+        "usable_for_matching": time_source != "mission-fallback" and place_source != "mission-fallback",
+        "notes": unique_strings(time_notes + place_notes),
+    }
+
+
+def compact_claim_scope(scope: Any) -> dict[str, Any]:
+    if not isinstance(scope, dict):
+        return {}
+    payload: dict[str, Any] = {
+        "time_source": maybe_text(scope.get("time_source")),
+        "place_source": maybe_text(scope.get("place_source")),
+        "usable_for_matching": bool(scope.get("usable_for_matching")),
+    }
+    time_window = scope.get("time_window")
+    if isinstance(time_window, dict):
+        payload["time_window"] = {
+            "start_utc": maybe_text(time_window.get("start_utc")),
+            "end_utc": maybe_text(time_window.get("end_utc")),
+        }
+    place_scope = scope.get("place_scope")
+    if isinstance(place_scope, dict):
+        payload["place_scope"] = {
+            "label": maybe_text(place_scope.get("label")),
+            "geometry": copy.deepcopy(place_scope.get("geometry")) if isinstance(place_scope.get("geometry"), dict) else {},
+        }
+    notes = [
+        maybe_text(item)
+        for item in (scope.get("notes") if isinstance(scope.get("notes"), list) else [])
+        if maybe_text(item)
+    ]
+    if notes:
+        payload["notes"] = notes[:3]
+    return payload
+
+
+def claim_matching_scope(claim: dict[str, Any]) -> dict[str, Any] | None:
+    claim_scope = claim.get("claim_scope")
+    if isinstance(claim_scope, dict):
+        if not bool(claim_scope.get("usable_for_matching")):
+            return None
+        time_window = claim_scope.get("time_window")
+        place_scope = claim_scope.get("place_scope")
+        if isinstance(time_window, dict) and isinstance(place_scope, dict):
+            return compact_claim_scope(claim_scope)
+        return None
+    time_window = claim.get("time_window")
+    place_scope = claim.get("place_scope")
+    if isinstance(time_window, dict) and isinstance(place_scope, dict):
+        return {
+            "time_window": copy.deepcopy(time_window),
+            "place_scope": copy.deepcopy(place_scope),
+            "time_source": "legacy-inline",
+            "place_source": "legacy-inline",
+            "usable_for_matching": True,
+        }
+    return None
+
+
+def direct_matching_gap_for_claim(claim: dict[str, Any]) -> str:
+    claim_scope = claim.get("claim_scope")
+    if not isinstance(claim_scope, dict):
+        return ""
+    if bool(claim_scope.get("usable_for_matching")):
+        return ""
+    place_source = maybe_text(claim_scope.get("place_source"))
+    time_source = maybe_text(claim_scope.get("time_source"))
+    if place_source == "mission-fallback" and time_source == "mission-fallback":
+        return "Claim lacks signal-local time and place scope and cannot be treated as direct mission evidence yet."
+    if place_source == "mission-fallback":
+        return "Claim lacks signal-local place scope and cannot be treated as direct mission evidence yet."
+    if time_source == "mission-fallback":
+        return "Claim lacks signal-local timing and cannot be treated as direct mission evidence yet."
+    return ""
 
 
 def extract_value_for_metric(observation: dict[str, Any]) -> float | None:
@@ -2646,6 +2993,9 @@ def public_signals_to_claims(
     max_claims: int,
 ) -> list[dict[str, Any]]:
     run_id = mission_run_id(mission)
+    mission_scope = mission_place_scope(mission)
+    mission_time_window = mission_window(mission)
+    investigation_plan = build_investigation_plan(mission=mission, round_id=round_id)
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for signal in signals:
         if maybe_text(signal.get("signal_kind")) in NON_CLAIM_PUBLIC_SIGNAL_KINDS:
@@ -2680,13 +3030,22 @@ def public_signals_to_claims(
     )
 
     claims: list[dict[str, Any]] = []
-    place_scope = mission_place_scope(mission)
-    time_window = mission_window(mission)
     for index, items in enumerate(ranked[:max_claims], start=1):
         lead = items[0]
         combined_text = maybe_text(lead.get("text")) or maybe_text(lead.get("title"))
         summary = truncate_text(maybe_text(lead.get("title")) or combined_text, 180)
         claim_type = claim_type_from_text(summary + " " + combined_text)
+        statement = candidate_statement(summary, combined_text or summary)
+        claim_scope = build_public_claim_scope(
+            signals=items,
+            mission_scope=mission_scope,
+            mission_time_window=mission_time_window,
+        )
+        hypothesis_id = best_public_claim_hypothesis_id(
+            investigation_plan,
+            claim_type,
+            statement,
+        )
         claim = {
             "schema_version": SCHEMA_VERSION,
             "claim_id": emit_row_id("claim", index),
@@ -2696,15 +3055,19 @@ def public_signals_to_claims(
             "claim_type": claim_type,
             "status": "candidate",
             "summary": summary or f"Candidate claim from {lead['source_skill']}",
-            "statement": candidate_statement(summary, combined_text or summary),
+            "statement": statement,
             "priority": min(index, 5),
             "needs_physical_validation": claim_type in PHYSICAL_CLAIM_TYPES,
-            "time_window": time_window,
-            "place_scope": place_scope,
+            "time_window": copy.deepcopy(claim_scope["time_window"]),
+            "place_scope": copy.deepcopy(claim_scope["place_scope"]),
+            "claim_scope": claim_scope,
+            "leg_id": "public_interpretation",
             "public_refs": [artifact_ref(item) for item in items[:8]],
             "source_signal_count": len(items),
             "compact_audit": public_group_compact_audit(items),
         }
+        if hypothesis_id:
+            claim["hypothesis_id"] = hypothesis_id
         validate_payload("claim", claim)
         claims.append(claim)
     return claims
@@ -4121,7 +4484,7 @@ def claim_source_skills(claim: dict[str, Any]) -> list[str]:
 
 
 def compact_claim(claim: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "claim_id": maybe_text(claim.get("claim_id")),
         "claim_type": maybe_text(claim.get("claim_type")),
         "summary": truncate_text(maybe_text(claim.get("summary")), 180),
@@ -4129,6 +4492,16 @@ def compact_claim(claim: dict[str, Any]) -> dict[str, Any]:
         "needs_physical_validation": bool(claim.get("needs_physical_validation")),
         "public_source_skills": claim_source_skills(claim),
     }
+    hypothesis_id = maybe_text(claim.get("hypothesis_id"))
+    if hypothesis_id:
+        payload["hypothesis_id"] = hypothesis_id
+    leg_id = maybe_text(claim.get("leg_id"))
+    if leg_id:
+        payload["leg_id"] = leg_id
+    compact_scope = compact_claim_scope(claim.get("claim_scope"))
+    if compact_scope:
+        payload["claim_scope"] = compact_scope
+    return payload
 
 
 def compact_observation(observation: dict[str, Any]) -> dict[str, Any]:
@@ -4164,7 +4537,7 @@ def compact_evidence_card(card: dict[str, Any]) -> dict[str, Any]:
 
 
 def compact_claim_submission(submission: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "submission_id": maybe_text(submission.get("submission_id")),
         "claim_id": maybe_text(submission.get("claim_id")),
         "claim_type": maybe_text(submission.get("claim_type")),
@@ -4175,6 +4548,16 @@ def compact_claim_submission(submission: dict[str, Any]) -> dict[str, Any]:
         "candidate_claim_ids": [maybe_text(item) for item in submission.get("candidate_claim_ids", []) if maybe_text(item)][:6],
         "selection_reason": truncate_text(maybe_text(submission.get("selection_reason")), 160),
     }
+    hypothesis_id = maybe_text(submission.get("hypothesis_id"))
+    if hypothesis_id:
+        payload["hypothesis_id"] = hypothesis_id
+    leg_id = maybe_text(submission.get("leg_id"))
+    if leg_id:
+        payload["leg_id"] = leg_id
+    compact_scope = compact_claim_scope(submission.get("claim_scope"))
+    if compact_scope:
+        payload["claim_scope"] = compact_scope
+    return payload
 
 
 def compact_observation_submission(submission: dict[str, Any]) -> dict[str, Any]:
@@ -4392,8 +4775,8 @@ def claim_submission_from_claim(claim: dict[str, Any]) -> dict[str, Any]:
         "needs_physical_validation": bool(claim.get("needs_physical_validation")),
         "worth_storing": True,
         "source_signal_count": int(claim.get("source_signal_count") or max(1, len(claim.get("public_refs", [])))),
-        "time_window": claim.get("time_window"),
-        "place_scope": claim.get("place_scope"),
+        "time_window": copy.deepcopy(claim.get("time_window")) if isinstance(claim.get("time_window"), dict) else claim.get("time_window"),
+        "place_scope": copy.deepcopy(claim.get("place_scope")) if isinstance(claim.get("place_scope"), dict) else claim.get("place_scope"),
         "public_refs": claim.get("public_refs", []),
         "compact_audit": claim.get("compact_audit")
         if isinstance(claim.get("compact_audit"), dict)
@@ -4405,6 +4788,14 @@ def claim_submission_from_claim(claim: dict[str, Any]) -> dict[str, Any]:
             sampling_notes=[],
         ),
     }
+    if isinstance(claim.get("claim_scope"), dict):
+        submission["claim_scope"] = copy.deepcopy(claim.get("claim_scope"))
+    hypothesis_id = maybe_text(claim.get("hypothesis_id"))
+    if hypothesis_id:
+        submission["hypothesis_id"] = hypothesis_id
+    leg_id = maybe_text(claim.get("leg_id"))
+    if leg_id:
+        submission["leg_id"] = leg_id
     validate_payload("claim-submission", submission)
     return submission
 
@@ -4462,10 +4853,18 @@ def claims_from_submissions(submissions: list[dict[str, Any]]) -> list[dict[str,
             "statement": maybe_text(submission.get("statement")),
             "priority": int(submission.get("priority") or 1),
             "needs_physical_validation": bool(submission.get("needs_physical_validation")),
-            "time_window": submission.get("time_window"),
-            "place_scope": submission.get("place_scope"),
+            "time_window": copy.deepcopy(submission.get("time_window")) if isinstance(submission.get("time_window"), dict) else submission.get("time_window"),
+            "place_scope": copy.deepcopy(submission.get("place_scope")) if isinstance(submission.get("place_scope"), dict) else submission.get("place_scope"),
             "public_refs": submission.get("public_refs", []),
         }
+        if isinstance(submission.get("claim_scope"), dict):
+            claim["claim_scope"] = copy.deepcopy(submission.get("claim_scope"))
+        hypothesis_id = maybe_text(submission.get("hypothesis_id"))
+        if hypothesis_id:
+            claim["hypothesis_id"] = hypothesis_id
+        leg_id = maybe_text(submission.get("leg_id"))
+        if leg_id:
+            claim["leg_id"] = leg_id
         candidate_claim_ids = submission.get("candidate_claim_ids")
         if isinstance(candidate_claim_ids, list) and candidate_claim_ids:
             claim["candidate_claim_ids"] = [maybe_text(item) for item in candidate_claim_ids if maybe_text(item)]
@@ -5003,6 +5402,38 @@ def materialize_claim_submission_from_curated_entry(
         candidate_scope = candidates[0].get("place_scope")
         if isinstance(candidate_scope, dict):
             place_scope = copy.deepcopy(candidate_scope)
+    claim_scope = (
+        copy.deepcopy(entry.get("claim_scope"))
+        if isinstance(entry.get("claim_scope"), dict)
+        else copy.deepcopy(candidates[0].get("claim_scope"))
+        if candidates and isinstance(candidates[0].get("claim_scope"), dict)
+        else {
+            "time_window": copy.deepcopy(time_window),
+            "place_scope": copy.deepcopy(place_scope),
+            "time_source": "curation-override" if isinstance(entry.get("time_window"), dict) else "candidate-merged",
+            "place_source": "curation-override" if isinstance(entry.get("place_scope"), dict) else "candidate-merged",
+            "usable_for_matching": True,
+            "notes": [],
+        }
+    )
+    if isinstance(entry.get("time_window"), dict):
+        claim_scope["time_window"] = copy.deepcopy(entry.get("time_window"))
+        claim_scope["time_source"] = "curation-override"
+    elif not isinstance(claim_scope.get("time_window"), dict):
+        claim_scope["time_window"] = copy.deepcopy(time_window)
+    if isinstance(entry.get("place_scope"), dict):
+        claim_scope["place_scope"] = copy.deepcopy(entry.get("place_scope"))
+        claim_scope["place_source"] = "curation-override"
+    elif not isinstance(claim_scope.get("place_scope"), dict):
+        claim_scope["place_scope"] = copy.deepcopy(place_scope)
+    if not maybe_text(claim_scope.get("time_source")):
+        claim_scope["time_source"] = "candidate-merged"
+    if not maybe_text(claim_scope.get("place_source")):
+        claim_scope["place_source"] = "candidate-merged"
+    claim_scope["usable_for_matching"] = (
+        maybe_text(claim_scope.get("time_source")) != "mission-fallback"
+        and maybe_text(claim_scope.get("place_source")) != "mission-fallback"
+    )
     submission = {
         "schema_version": SCHEMA_VERSION,
         "submission_id": f"claimsub-{maybe_text(entry.get('claim_id'))}",
@@ -5020,11 +5451,22 @@ def materialize_claim_submission_from_curated_entry(
         "source_signal_count": max(1, sum(candidate_claim_source_signal_count(item) for item in candidates)),
         "time_window": time_window,
         "place_scope": place_scope,
+        "claim_scope": claim_scope,
         "public_refs": public_refs,
         "compact_audit": compact_audit,
         "candidate_claim_ids": candidate_claim_ids,
         "selection_reason": maybe_text(entry.get("selection_reason")),
     }
+    hypothesis_id = maybe_text(entry.get("hypothesis_id")) or (
+        maybe_text(candidates[0].get("hypothesis_id")) if candidates else ""
+    )
+    if hypothesis_id:
+        submission["hypothesis_id"] = hypothesis_id
+    leg_id = maybe_text(entry.get("leg_id")) or (
+        maybe_text(candidates[0].get("leg_id")) if candidates else ""
+    )
+    if leg_id:
+        submission["leg_id"] = leg_id
     validate_payload("claim-submission", submission)
     return submission
 
@@ -5273,16 +5715,7 @@ def match_claims_to_observations(
 ) -> list[dict[str, Any]]:
     matches: list[dict[str, Any]] = []
     for claim in claims:
-        matching = [
-            observation
-            for observation in observations
-            if metric_relevant(maybe_text(claim.get("claim_type")), maybe_text(observation.get("metric")))
-            and time_windows_overlap(claim.get("time_window", {}), observation.get("time_window", {}))
-            and geometry_overlap(
-                claim.get("place_scope", {}).get("geometry", {}),
-                observation.get("place_scope", {}).get("geometry", {}),
-            )
-        ]
+        matching_scope = claim_matching_scope(claim)
         support_score = 0
         contradict_score = 0
         primary_support_hits = 0
@@ -5291,6 +5724,27 @@ def match_claims_to_observations(
         notes: list[str] = []
         gaps: list[str] = []
         observation_assessments: list[dict[str, Any]] = []
+        if matching_scope is None:
+            matching: list[dict[str, Any]] = []
+            scope_gap = direct_matching_gap_for_claim(claim)
+            if scope_gap:
+                gaps.append(scope_gap)
+        else:
+            notes.extend(
+                maybe_text(item)
+                for item in matching_scope.get("notes", [])
+                if maybe_text(item)
+            )
+            matching = [
+                observation
+                for observation in observations
+                if metric_relevant(maybe_text(claim.get("claim_type")), maybe_text(observation.get("metric")))
+                and time_windows_overlap(matching_scope.get("time_window", {}), observation.get("time_window", {}))
+                and geometry_overlap(
+                    (matching_scope.get("place_scope") or {}).get("geometry", {}),
+                    observation.get("place_scope", {}).get("geometry", {}),
+                )
+            ]
         for observation in matching:
             assessment = assess_observation_against_claim(
                 maybe_text(claim.get("claim_type")),
@@ -5316,7 +5770,8 @@ def match_claims_to_observations(
         if not matching:
             verdict = "insufficient"
             confidence = "low"
-            gaps.append("No mission-aligned observations matched the claim window and geometry.")
+            if matching_scope is not None:
+                gaps.append("No observations matched the claim's localized window and geometry.")
         elif support_score > 0 and contradict_score == 0 and primary_support_hits > 0:
             verdict = "supports"
             confidence = "high" if support_score >= 4 and primary_support_hits >= 2 else "medium"
@@ -5334,7 +5789,7 @@ def match_claims_to_observations(
             else:
                 gaps.append("Matched observations did not cross the direct support or contradiction thresholds.")
 
-        if maybe_text(claim.get("claim_type")) in {"smoke", "air-pollution"}:
+        if matching_scope is not None and maybe_text(claim.get("claim_type")) in {"smoke", "air-pollution"}:
             if not any(item.get("source_skill") == "openaq-data-fetch" for item in matching):
                 gaps.append("Station-grade corroboration is missing.")
             if any("modeled-background" in item.get("quality_flags", []) for item in matching):
@@ -5351,6 +5806,7 @@ def match_claims_to_observations(
                 "gaps": sorted(dict.fromkeys(gaps)),
                 "verdict": verdict,
                 "confidence": confidence,
+                "matching_scope": matching_scope,
             }
         )
     return matches
@@ -5370,6 +5826,9 @@ def build_matching_result(
             "support_score": float(match["support_score"]),
             "contradict_score": float(match["contradict_score"]),
             "notes": [maybe_text(item) for item in match["notes"] if maybe_text(item)],
+            "hypothesis_id": maybe_text(match["claim"].get("hypothesis_id")),
+            "leg_id": maybe_text(match["claim"].get("leg_id")),
+            "matching_scope": match.get("matching_scope"),
         }
         for match in matches
         if match["observations"]
@@ -5591,6 +6050,14 @@ def build_evidence_cards_from_matches(matches: list[dict[str, Any]]) -> list[dic
             "observation_ids": [item["observation_id"] for item in match["observations"]],
             "gaps": match["gaps"],
         }
+        hypothesis_id = maybe_text(claim.get("hypothesis_id"))
+        if hypothesis_id:
+            evidence["hypothesis_id"] = hypothesis_id
+        leg_id = maybe_text(claim.get("leg_id"))
+        if leg_id:
+            evidence["leg_id"] = leg_id
+        if isinstance(match.get("matching_scope"), dict):
+            evidence["matching_scope"] = match.get("matching_scope")
         validate_payload("evidence-card", evidence)
         evidence_cards.append(evidence)
     return evidence_cards
@@ -5649,6 +6116,7 @@ def build_matching_candidate_set(
                     for item in match.get("observations", [])
                     if isinstance(item, dict) and maybe_text(item.get("observation_id"))
                 ],
+                "matching_scope": match.get("matching_scope"),
                 "gaps": [maybe_text(item) for item in match.get("gaps", []) if maybe_text(item)][:6],
                 "notes": [maybe_text(item) for item in match.get("notes", []) if maybe_text(item)][:8],
                 "observation_candidates": observation_candidates[:12],
