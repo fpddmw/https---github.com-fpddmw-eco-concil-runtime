@@ -150,12 +150,16 @@
       - added `domain/normalize_semantics.py` as the shared home for public-claim scope shaping, observation leg tagging, metric-family semantics, and claim-vs-observation assessment rules
       - `normalize.py` now consumes and compatibility-reexports those semantics instead of keeping the primary implementation inline, removing a large pure-domain block from the monolith without changing public entrypoints
       - added direct regression coverage for the extracted domain module, and the repository test suite now passes with `51` tests
-    - `T06.3b Normalize Source Pipeline Extraction` (`planned`)
+    - `T06.3b Normalize Source Pipeline Extraction` (`completed`)
     - scope:
       - move public/environment source normalization pipelines and cached wrappers into `application/`
     - acceptance:
       - source normalization flows become application services rather than top-level monolith code
       - source normalization regressions stay green
+    - outcome:
+      - added `application/normalize_sources.py` as the shared home for public and environment source normalization pipelines plus their cached wrappers
+      - `normalize.py` now delegates public/environment source normalization to application services and no longer carries the primary source-parser implementation block
+      - added direct regression coverage for application source pipelines across public YouTube normalization, environment Open-Meteo normalization, and environment cache miss/hit behavior, and the repository test suite now passes with `54` tests
     - `T06.3c Normalize Storage And Match-Prep Extraction` (`planned`)
     - scope:
       - move normalize cache/db/manifest support and match-prep builders into `adapters/` plus `application/`
@@ -207,6 +211,6 @@
 
 ## Current Task Notes
 
-- Active task: `none`
-- Next planned task: `T06.3b Normalize Source Pipeline Extraction`
-- Working rule reaffirmed: structure first, then extraction; do not start another refactor slice until the active one is fully closed.
+- Active task: none
+- Next planned task: `T06.3c Normalize Storage And Match-Prep Extraction`
+- Working rule reaffirmed: structure first, then extraction; do not start another refactor slice until the next active refactor slice is explicitly opened.
