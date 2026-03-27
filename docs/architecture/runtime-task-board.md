@@ -160,12 +160,17 @@
       - added `application/normalize_sources.py` as the shared home for public and environment source normalization pipelines plus their cached wrappers
       - `normalize.py` now delegates public/environment source normalization to application services and no longer carries the primary source-parser implementation block
       - added direct regression coverage for application source pipelines across public YouTube normalization, environment Open-Meteo normalization, and environment cache miss/hit behavior, and the repository test suite now passes with `54` tests
-    - `T06.3c Normalize Storage And Match-Prep Extraction` (`planned`)
+    - `T06.3c Normalize Storage And Match-Prep Extraction` (`completed`)
     - scope:
       - move normalize cache/db/manifest support and match-prep builders into `adapters/` plus `application/`
     - acceptance:
       - storage/match-prep helpers stop living primarily in `normalize.py`
       - matching regressions stay green
+    - outcome:
+      - added `adapters/normalize_storage.py` as the shared adapter for normalize analytics DB paths, run manifest resolution, and public/environment SQLite writes
+      - `normalize.py` now delegates manifest and SQLite persistence to storage adapters, while `signal_corpus.py` reuses the same analytics path resolution instead of keeping a parallel copy
+      - added `application/normalize_matching.py` for matching candidate-set and adjudication-draft builders, so `normalize.py` no longer keeps the primary match-prep implementation block
+      - added direct regression coverage for normalize storage adapters and matching-prep builders, and the repository test suite now passes with `57` tests
     - `T06.3d Normalize Facade Cleanup` (`planned`)
     - scope:
       - reduce `normalize.py` to orchestration-level facade and CLI surface only
@@ -212,5 +217,5 @@
 ## Current Task Notes
 
 - Active task: none
-- Next planned task: `T06.3c Normalize Storage And Match-Prep Extraction`
+- Next planned task: `T06.3d Normalize Facade Cleanup`
 - Working rule reaffirmed: structure first, then extraction; do not start another refactor slice until the next active refactor slice is explicitly opened.

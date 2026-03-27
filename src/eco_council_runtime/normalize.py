@@ -7,13 +7,12 @@ import argparse
 import copy
 import json
 import math
-import sqlite3
 import statistics
 import sys
 from collections import Counter, defaultdict
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from eco_council_runtime.adapters.filesystem import (
     atomic_write_text_file,
@@ -28,6 +27,14 @@ from eco_council_runtime.adapters.filesystem import (
     write_json,
     write_jsonl,
 )
+from eco_council_runtime.adapters.normalize_storage import (
+    default_environment_db_path as adapter_default_environment_db_path,
+    default_public_db_path as adapter_default_public_db_path,
+    load_or_build_manifest as adapter_load_or_build_manifest,
+    run_manifest_path as adapter_run_manifest_path,
+    save_environment_db as adapter_save_environment_db,
+    save_public_db as adapter_save_public_db,
+)
 from eco_council_runtime.application.normalize_sources import (
     NORMALIZE_CACHE_VERSION,
     normalize_cache_dir,
@@ -35,6 +42,10 @@ from eco_council_runtime.application.normalize_sources import (
     normalize_environment_source_cached as application_normalize_environment_source_cached,
     normalize_public_source as application_normalize_public_source,
     normalize_public_source_cached as application_normalize_public_source_cached,
+)
+from eco_council_runtime.application.normalize_matching import (
+    build_matching_adjudication_draft as application_build_matching_adjudication_draft,
+    build_matching_candidate_set as application_build_matching_candidate_set,
 )
 from eco_council_runtime.adapters.run_paths import discover_round_ids, load_mission
 from eco_council_runtime.controller.audit_chain import ensure_audit_chain_ready, record_match_phase_receipt
@@ -136,16 +147,7 @@ from eco_council_runtime.domain.normalize_semantics import (
 )
 from eco_council_runtime.domain.rounds import parse_round_components, round_sort_key
 from eco_council_runtime.domain.text import maybe_text, normalize_space, truncate_text, unique_strings
-from eco_council_runtime.layout import (
-    NORMALIZE_ASSETS_DIR,
-    NORMALIZE_ENVIRONMENT_DDL_PATH,
-    NORMALIZE_PUBLIC_DDL_PATH,
-)
 from eco_council_runtime.investigation import build_investigation_plan, causal_focus_for_role
-
-ASSETS_DIR = NORMALIZE_ASSETS_DIR
-PUBLIC_DDL_PATH = NORMALIZE_PUBLIC_DDL_PATH
-ENVIRONMENT_DDL_PATH = NORMALIZE_ENVIRONMENT_DDL_PATH
 
 SCHEMA_VERSION = resolve_schema_version("1.0.0")
 MAX_CONTEXT_TASKS = 4
@@ -342,44 +344,22 @@ def top_counter_text(counter: Counter[str], limit: int = 3) -> str:
 
 
 def default_public_db_path(run_dir: Path) -> Path:
-    return run_dir / "analytics" / "public_signals.sqlite"
+    return adapter_default_public_db_path(run_dir)
 
 
 def default_environment_db_path(run_dir: Path) -> Path:
-    return run_dir / "analytics" / "environment_signals.sqlite"
+    return adapter_default_environment_db_path(run_dir)
 
 
 def run_manifest_path(run_dir: Path) -> Path:
-    return run_dir / "run_manifest.json"
+    return adapter_run_manifest_path(run_dir)
 
 
 def load_or_build_manifest(run_dir: Path, mission: dict[str, Any]) -> dict[str, Any]:
-    manifest_file = run_manifest_path(run_dir)
-    if manifest_file.exists():
-        payload = read_json(manifest_file)
-        if isinstance(payload, dict):
-            return payload
-    return {
-        "run_id": mission_run_id(mission),
-        "run_dir": str(run_dir),
-        "analytics_backend": "sqlite",
-        "databases": {
-            "public_signals": str(default_public_db_path(run_dir)),
-            "environment_signals": str(default_environment_db_path(run_dir)),
-        },
-    }
-
-
-def load_ddl(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
-
-
-def init_sqlite_db(path: Path, ddl_path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    ddl = load_ddl(ddl_path)
-    with sqlite3.connect(path) as conn:
-        conn.executescript(ddl)
-        conn.commit()
+    return adapter_load_or_build_manifest(
+        run_dir,
+        run_id=mission_run_id(mission),
+    )
 
 
 def emit_row_id(prefix: str, index: int) -> str:
@@ -418,12 +398,6 @@ def artifact_ref(signal: dict[str, Any]) -> dict[str, Any]:
     if signal.get("sha256"):
         ref["sha256"] = signal["sha256"]
     return ref
-def insert_many(conn: sqlite3.Connection, sql: str, rows: Iterable[tuple[Any, ...]]) -> None:
-    data = list(rows)
-    if not data:
-        return
-    conn.executemany(sql, data)
-    conn.commit()
 
 
 def parse_input_specs(values: list[str]) -> list[tuple[str, Path]]:
@@ -761,72 +735,7 @@ def public_signals_to_claims(
 
 
 def save_public_db(db_path: Path, signals: list[dict[str, Any]], claims: list[dict[str, Any]]) -> None:
-    init_sqlite_db(db_path, PUBLIC_DDL_PATH)
-    with sqlite3.connect(db_path) as conn:
-        insert_many(
-            conn,
-            """
-            INSERT OR REPLACE INTO public_signals (
-                signal_id, run_id, round_id, source_skill, signal_kind, external_id, title, text,
-                url, author_name, channel_name, language, query_text, published_at_utc,
-                captured_at_utc, engagement_json, metadata_json, artifact_path, record_locator,
-                sha256, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                (
-                    signal["signal_id"],
-                    signal["run_id"],
-                    signal["round_id"],
-                    signal["source_skill"],
-                    signal["signal_kind"],
-                    signal["external_id"],
-                    signal["title"],
-                    signal["text"],
-                    signal["url"],
-                    signal["author_name"],
-                    signal["channel_name"],
-                    signal["language"],
-                    signal["query_text"],
-                    signal["published_at_utc"],
-                    signal["captured_at_utc"],
-                    json.dumps(signal.get("engagement", {}), ensure_ascii=True, sort_keys=True),
-                    json.dumps(signal.get("metadata", {}), ensure_ascii=True, sort_keys=True),
-                    signal["artifact_path"],
-                    signal["record_locator"],
-                    signal["sha256"],
-                    json.dumps(signal.get("raw_json"), ensure_ascii=True, sort_keys=True),
-                )
-                for signal in signals
-            ),
-        )
-        insert_many(
-            conn,
-            """
-            INSERT OR REPLACE INTO claim_candidates (
-                claim_id, run_id, round_id, claim_type, priority, summary, statement,
-                source_signal_ids_json, claim_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                (
-                    claim["claim_id"],
-                    claim["run_id"],
-                    claim["round_id"],
-                    claim["claim_type"],
-                    claim["priority"],
-                    claim["summary"],
-                    claim["statement"],
-                    json.dumps(
-                        [ref.get("external_id") or ref.get("record_locator") for ref in claim.get("public_refs", [])],
-                        ensure_ascii=True,
-                        sort_keys=True,
-                    ),
-                    json.dumps(claim, ensure_ascii=True, sort_keys=True),
-                )
-                for claim in claims
-            ),
-        )
+    return adapter_save_public_db(db_path, signals, claims)
 
 
 def first_datetime_and_last(values: list[dict[str, Any]]) -> tuple[str, str] | None:
@@ -1029,63 +938,7 @@ def environment_signals_to_observations(
 
 
 def save_environment_db(db_path: Path, signals: list[dict[str, Any]], observations: list[dict[str, Any]]) -> None:
-    init_sqlite_db(db_path, ENVIRONMENT_DDL_PATH)
-    with sqlite3.connect(db_path) as conn:
-        insert_many(
-            conn,
-            """
-            INSERT OR REPLACE INTO environment_signals (
-                signal_id, run_id, round_id, source_skill, signal_kind, metric, value, unit,
-                observed_at_utc, window_start_utc, window_end_utc, latitude, longitude,
-                bbox_json, quality_flags_json, metadata_json, artifact_path, record_locator,
-                sha256, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                (
-                    signal["signal_id"],
-                    signal["run_id"],
-                    signal["round_id"],
-                    signal["source_skill"],
-                    signal["signal_kind"],
-                    signal["metric"],
-                    signal["value"],
-                    signal["unit"],
-                    signal["observed_at_utc"],
-                    signal["window_start_utc"],
-                    signal["window_end_utc"],
-                    signal["latitude"],
-                    signal["longitude"],
-                    json.dumps(signal.get("bbox"), ensure_ascii=True, sort_keys=True) if signal.get("bbox") is not None else None,
-                    json.dumps(signal.get("quality_flags", []), ensure_ascii=True, sort_keys=True),
-                    json.dumps(signal.get("metadata", {}), ensure_ascii=True, sort_keys=True),
-                    signal["artifact_path"],
-                    signal["record_locator"],
-                    signal["sha256"],
-                    json.dumps(signal.get("raw_json"), ensure_ascii=True, sort_keys=True),
-                )
-                for signal in signals
-            ),
-        )
-        insert_many(
-            conn,
-            """
-            INSERT OR REPLACE INTO observation_summaries (
-                observation_id, run_id, round_id, metric, source_skill, observation_json
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                (
-                    observation["observation_id"],
-                    observation["run_id"],
-                    observation["round_id"],
-                    observation["metric"],
-                    observation["source_skill"],
-                    json.dumps(observation, ensure_ascii=True, sort_keys=True),
-                )
-                for observation in observations
-            ),
-        )
+    return adapter_save_environment_db(db_path, signals, observations)
 def load_object_if_exists(path: Path) -> dict[str, Any] | None:
     payload = load_json_if_exists(path)
     if isinstance(payload, dict):
@@ -3076,70 +2929,14 @@ def build_matching_candidate_set(
     matches: list[dict[str, Any]],
     observations: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    matched_observation_ids = {
-        maybe_text(observation.get("observation_id"))
-        for match in matches
-        for observation in match.get("observations", [])
-        if isinstance(observation, dict) and maybe_text(observation.get("observation_id"))
-    }
-    claim_candidates: list[dict[str, Any]] = []
-    for match in matches:
-        claim = match.get("claim", {})
-        observation_candidates: list[dict[str, Any]] = []
-        for candidate in match.get("observation_assessments", []):
-            observation = candidate.get("observation", {}) if isinstance(candidate, dict) else {}
-            assessment = candidate.get("assessment", {}) if isinstance(candidate, dict) else {}
-            observation_candidates.append(
-                {
-                    "observation": compact_observation(observation if isinstance(observation, dict) else {}),
-                    "assessment": {
-                        "support_score": int(assessment.get("support_score") or 0),
-                        "contradict_score": int(assessment.get("contradict_score") or 0),
-                        "primary_support_hits": int(assessment.get("primary_support_hits") or 0),
-                        "contradict_hits": int(assessment.get("contradict_hits") or 0),
-                        "contextual_hits": int(assessment.get("contextual_hits") or 0),
-                    },
-                    "notes": [maybe_text(item) for item in assessment.get("notes", []) if maybe_text(item)][:6],
-                }
-            )
-        claim_candidates.append(
-            {
-                "claim": compact_claim(claim if isinstance(claim, dict) else {}),
-                "suggested_verdict": maybe_text(match.get("verdict")),
-                "suggested_confidence": maybe_text(match.get("confidence")),
-                "support_score": int(match.get("support_score") or 0),
-                "contradict_score": int(match.get("contradict_score") or 0),
-                "matched_observation_ids": [
-                    maybe_text(item.get("observation_id"))
-                    for item in match.get("observations", [])
-                    if isinstance(item, dict) and maybe_text(item.get("observation_id"))
-                ],
-                "matching_scope": match.get("matching_scope"),
-                "gaps": [maybe_text(item) for item in match.get("gaps", []) if maybe_text(item)][:6],
-                "notes": [maybe_text(item) for item in match.get("notes", []) if maybe_text(item)][:8],
-                "observation_candidates": observation_candidates[:12],
-            }
-        )
-    unpaired_observations = [
-        compact_observation(observation)
-        for observation in observations
-        if isinstance(observation, dict)
-        and maybe_text(observation.get("observation_id"))
-        and maybe_text(observation.get("observation_id")) not in matched_observation_ids
-    ]
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "candidate_set_id": f"matchcand-{maybe_text(authorization.get('round_id')) or 'round'}",
-        "run_id": maybe_text(authorization.get("run_id")),
-        "round_id": maybe_text(authorization.get("round_id")),
-        "authorization_id": maybe_text(authorization.get("authorization_id")),
-        "summary": (
-            f"Rule nomination produced {len(claim_candidates)} claim-side candidate clusters and "
-            f"{len(unpaired_observations)} currently unpaired observations."
-        ),
-        "claim_candidates": claim_candidates,
-        "unpaired_observation_candidates": unpaired_observations[:24],
-    }
+    return application_build_matching_candidate_set(
+        authorization=authorization,
+        matches=matches,
+        observations=observations,
+        schema_version=SCHEMA_VERSION,
+        compact_claim=compact_claim,
+        compact_observation=compact_observation,
+    )
 
 
 def build_matching_adjudication_draft(
@@ -3152,36 +2949,17 @@ def build_matching_adjudication_draft(
     remands: list[dict[str, Any]],
     evidence_adjudication: dict[str, Any],
 ) -> dict[str, Any]:
-    payload = {
-        "schema_version": SCHEMA_VERSION,
-        "adjudication_id": maybe_text(evidence_adjudication.get("adjudication_id")) or f"adjudication-{maybe_text(authorization.get('round_id')) or 'round'}",
-        "run_id": maybe_text(authorization.get("run_id")),
-        "round_id": maybe_text(authorization.get("round_id")),
-        "agent_role": "moderator",
-        "authorization_id": maybe_text(authorization.get("authorization_id")),
-        "candidate_set_id": maybe_text(candidate_set.get("candidate_set_id")),
-        "summary": (
-            f"Rule draft proposes {len(evidence_cards)} evidence cards, {len(isolated_entries)} isolated entries, "
-            f"and {len(remands)} remands for moderator review."
-        ),
-        "rationale": (
-            "This draft is rule-nominated only. The moderator should merge, prune, or reclassify matches "
-            "based on cross-source coherence, representativeness, and whether isolated evidence remains acceptable."
-        ),
-        "matching_result": matching_result,
-        "evidence_cards": evidence_cards,
-        "isolated_entries": isolated_entries,
-        "remand_entries": remands,
-        "evidence_adjudication": evidence_adjudication,
-        "open_questions": [
-            maybe_text(item)
-            for item in evidence_adjudication.get("open_questions", [])
-            if maybe_text(item)
-        ],
-        "recommended_next_actions": [],
-    }
-    validate_payload("matching-adjudication", payload)
-    return payload
+    return application_build_matching_adjudication_draft(
+        authorization=authorization,
+        candidate_set=candidate_set,
+        matching_result=matching_result,
+        evidence_cards=evidence_cards,
+        isolated_entries=isolated_entries,
+        remands=remands,
+        evidence_adjudication=evidence_adjudication,
+        schema_version=SCHEMA_VERSION,
+        validate_payload=validate_payload,
+    )
 
 
 def build_round_snapshot(
@@ -3383,8 +3161,8 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
         if args.environment_db
         else default_environment_db_path(run_dir_path)
     )
-    init_sqlite_db(public_db, PUBLIC_DDL_PATH)
-    init_sqlite_db(environment_db, ENVIRONMENT_DDL_PATH)
+    save_public_db(public_db, [], [])
+    save_environment_db(environment_db, [], [])
 
     for role in ("moderator", "sociologist", "environmentalist"):
         default_context_dir(run_dir_path, args.round_id, role).mkdir(parents=True, exist_ok=True)

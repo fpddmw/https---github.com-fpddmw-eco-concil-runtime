@@ -11,6 +11,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.adapters.normalize_storage import (
+    resolve_analytics_db_paths,
+)
 from eco_council_runtime.layout import SUPERVISOR_SIGNAL_CORPUS_DDL_PATH
 
 DDL_PATH = SUPERVISOR_SIGNAL_CORPUS_DDL_PATH
@@ -45,17 +48,6 @@ def bool_int(value: Any) -> int:
 
 def json_text(value: Any) -> str:
     return json.dumps(value, ensure_ascii=True, sort_keys=True)
-
-
-def read_json(path: Path) -> Any:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def load_json_if_exists(path: Path) -> Any | None:
-    if not path.exists():
-        return None
-    return read_json(path)
 
 
 def load_supervisor_module() -> Any:
@@ -108,40 +100,6 @@ def state_for_run(run_dir: Path) -> dict[str, Any]:
         "current_round_id": round_ids[-1] if round_ids else "",
         "stage": "",
     }
-
-
-def default_public_db_path(run_dir: Path) -> Path:
-    return run_dir / "analytics" / "public_signals.sqlite"
-
-
-def default_environment_db_path(run_dir: Path) -> Path:
-    return run_dir / "analytics" / "environment_signals.sqlite"
-
-
-def run_manifest_path(run_dir: Path) -> Path:
-    return run_dir / "run_manifest.json"
-
-
-def resolve_manifest_db_path(run_dir: Path, value: Any, fallback: Path) -> Path:
-    text = maybe_text(value)
-    if not text:
-        return fallback.expanduser().resolve()
-    candidate = Path(text).expanduser()
-    if not candidate.is_absolute():
-        candidate = run_dir / candidate
-    return candidate.resolve()
-
-
-def resolve_analytics_db_paths(run_dir: Path) -> tuple[Path, Path]:
-    manifest = load_json_if_exists(run_manifest_path(run_dir))
-    dbs = manifest.get("databases") if isinstance(manifest, dict) else {}
-    public_value = dbs.get("public_signals") if isinstance(dbs, dict) else ""
-    environment_value = dbs.get("environment_signals") if isinstance(dbs, dict) else ""
-    return (
-        resolve_manifest_db_path(run_dir, public_value, default_public_db_path(run_dir)),
-        resolve_manifest_db_path(run_dir, environment_value, default_environment_db_path(run_dir)),
-    )
-
 
 def collect_run_snapshot(run_dir: Path) -> dict[str, Any]:
     mission = SUP.read_json(SUP.mission_path(run_dir))
