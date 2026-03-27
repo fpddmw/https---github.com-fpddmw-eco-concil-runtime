@@ -138,8 +138,36 @@
     - transitional controller shims now point at the new shared foundations for IO and contract-policy bridging, reducing pressure to keep growing `controller/` as a second architecture
     - regression coverage now locks shared foundation behavior and compatibility shims, and the repository test suite passes with `48` tests
   - `T06.3 Normalize Domain And Application Split` (`planned`)
-  - scope:
-    - split `normalize.py` into source normalization, public-claim shaping, observation tagging, cache/db support, and match-prep/application services
+  - sub-slices:
+    - `T06.3a Normalize Domain Semantics Extraction` (`completed`)
+    - scope:
+      - move public-claim shaping, observation tagging, metric-family semantics, and shared normalization-domain helpers out of `normalize.py`
+      - land them in `domain/` and make `normalize.py` consume them as a facade dependency
+    - acceptance:
+      - domain-level normalize semantics become directly importable outside `normalize.py`
+      - existing normalization and benchmark regressions stay green
+    - outcome:
+      - added `domain/normalize_semantics.py` as the shared home for public-claim scope shaping, observation leg tagging, metric-family semantics, and claim-vs-observation assessment rules
+      - `normalize.py` now consumes and compatibility-reexports those semantics instead of keeping the primary implementation inline, removing a large pure-domain block from the monolith without changing public entrypoints
+      - added direct regression coverage for the extracted domain module, and the repository test suite now passes with `51` tests
+    - `T06.3b Normalize Source Pipeline Extraction` (`planned`)
+    - scope:
+      - move public/environment source normalization pipelines and cached wrappers into `application/`
+    - acceptance:
+      - source normalization flows become application services rather than top-level monolith code
+      - source normalization regressions stay green
+    - `T06.3c Normalize Storage And Match-Prep Extraction` (`planned`)
+    - scope:
+      - move normalize cache/db/manifest support and match-prep builders into `adapters/` plus `application/`
+    - acceptance:
+      - storage/match-prep helpers stop living primarily in `normalize.py`
+      - matching regressions stay green
+    - `T06.3d Normalize Facade Cleanup` (`planned`)
+    - scope:
+      - reduce `normalize.py` to orchestration-level facade and CLI surface only
+    - acceptance:
+      - `normalize.py` is no longer the main implementation home
+      - full repository tests pass
   - acceptance:
     - `normalize.py` becomes an orchestrating compatibility facade rather than the main implementation body
     - benchmark and normalization regressions stay green
@@ -179,6 +207,6 @@
 
 ## Current Task Notes
 
-- Active task: none
-- Next planned task: `T06.3 Normalize Domain And Application Split`
+- Active task: `none`
+- Next planned task: `T06.3b Normalize Source Pipeline Extraction`
 - Working rule reaffirmed: structure first, then extraction; do not start another refactor slice until the active one is fully closed.
