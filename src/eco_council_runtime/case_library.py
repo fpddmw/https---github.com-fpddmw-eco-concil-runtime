@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.investigation import infer_investigation_profile
 from eco_council_runtime.layout import SUPERVISOR_CASE_LIBRARY_DDL_PATH
 
 DDL_PATH = SUPERVISOR_CASE_LIBRARY_DDL_PATH
@@ -59,6 +60,62 @@ SEARCH_STOPWORDS = {
     "cleanly",
     "verification",
     "replay",
+}
+ENVIRONMENT_METRIC_ALIASES = {
+    "pm25": "pm2_5",
+    "pm2.5": "pm2_5",
+    "pm2_5": "pm2_5",
+    "pm10": "pm10",
+    "o3": "ozone",
+    "ozone": "ozone",
+    "no2": "nitrogen_dioxide",
+    "nitrogen_dioxide": "nitrogen_dioxide",
+    "so2": "sulphur_dioxide",
+    "sulphur_dioxide": "sulphur_dioxide",
+    "co": "carbon_monoxide",
+    "carbon_monoxide": "carbon_monoxide",
+    "us_aqi": "us_aqi",
+    "gage_height": "gage_height",
+}
+METRIC_FAMILY_GROUPS = {
+    "air-quality": {
+        "pm2_5",
+        "pm2_5_aqi",
+        "pm10",
+        "pm10_aqi",
+        "us_aqi",
+        "nitrogen_dioxide",
+        "nitrogen_dioxide_aqi",
+        "ozone",
+        "ozone_aqi",
+        "sulfur_dioxide",
+        "sulfur_dioxide_aqi",
+        "carbon_monoxide",
+        "carbon_monoxide_aqi",
+    },
+    "fire-detection": {
+        "fire_detection",
+        "fire_detection_count",
+    },
+    "meteorology": {
+        "temperature_2m",
+        "wind_speed_10m",
+        "relative_humidity_2m",
+        "precipitation",
+        "precipitation_sum",
+    },
+    "hydrology": {
+        "river_discharge",
+        "river_discharge_mean",
+        "river_discharge_max",
+        "river_discharge_min",
+        "river_discharge_p25",
+        "river_discharge_p75",
+        "gage_height",
+    },
+    "soil": {
+        "soil_moisture_0_to_7cm",
+    },
 }
 
 
@@ -171,6 +228,30 @@ def normalized_text(value: Any) -> str:
     return maybe_text(value).lower()
 
 
+def unique_strings(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    output: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        output.append(text)
+    return output
+
+
+def normalized_values(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    output: list[str] = []
+    for value in values:
+        text = normalized_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        output.append(text)
+    return output
+
+
 def search_terms(*values: Any) -> list[str]:
     tokens: set[str] = set()
     fallback: set[str] = set()
@@ -188,6 +269,25 @@ def search_terms(*values: Any) -> list[str]:
 def safe_case_filename(case_id: str) -> str:
     safe = CASE_ID_SAFE_RE.sub("-", maybe_text(case_id).lower()).strip("-")
     return safe or "eco-council-case"
+
+
+def canonical_environment_metric(value: Any) -> str:
+    text = maybe_text(value)
+    if not text:
+        return ""
+    lowered = text.casefold()
+    if lowered.endswith("_aqi"):
+        base_metric = ENVIRONMENT_METRIC_ALIASES.get(lowered[:-4], lowered[:-4])
+        return f"{base_metric}_aqi"
+    return ENVIRONMENT_METRIC_ALIASES.get(lowered, lowered)
+
+
+def observation_metric_family(metric: Any) -> str:
+    canonical = canonical_environment_metric(metric)
+    for family, metrics in METRIC_FAMILY_GROUPS.items():
+        if canonical in metrics:
+            return family
+    return "other"
 
 
 def sufficiency_rank(value: str) -> int:
@@ -555,6 +655,92 @@ def load_case_bundle(
     return result
 
 
+def empty_case_search_features() -> dict[str, Any]:
+    return {
+        "profile_id": "",
+        "claim_types": [],
+        "metric_families": [],
+        "source_skills": [],
+        "gap_types": [],
+    }
+
+
+def collect_case_search_features(conn: sqlite3.Connection, rows: list[sqlite3.Row]) -> dict[str, dict[str, Any]]:
+    feature_map: dict[str, dict[str, Any]] = {}
+    ordered_case_ids: list[str] = []
+    for row in rows:
+        case_id = maybe_text(row["case_id"])
+        ordered_case_ids.append(case_id)
+        mission = parse_json_text(row["mission_json"], default={})
+        feature_map[case_id] = {
+            "profile_id": infer_investigation_profile(mission) if isinstance(mission, dict) and mission else "",
+            "claim_types": [],
+            "metric_families": [],
+            "source_skills": [],
+            "gap_types": parse_json_text(row["final_missing_evidence_types_json"], default=[]),
+        }
+    if not ordered_case_ids:
+        return feature_map
+
+    placeholders = ", ".join("?" for _ in ordered_case_ids)
+    claim_rows = conn.execute(
+        f"""
+        SELECT case_id, claim_type, public_source_skills_json
+        FROM case_claims
+        WHERE case_id IN ({placeholders})
+        """,
+        ordered_case_ids,
+    ).fetchall()
+    for row in claim_rows:
+        case_id = maybe_text(row["case_id"])
+        features = feature_map.get(case_id)
+        if not isinstance(features, dict):
+            continue
+        features["claim_types"].append(maybe_text(row["claim_type"]).lower())
+        features["source_skills"].extend(parse_json_text(row["public_source_skills_json"], default=[]))
+
+    observation_rows = conn.execute(
+        f"""
+        SELECT case_id, metric, source_skill
+        FROM case_observations
+        WHERE case_id IN ({placeholders})
+        """,
+        ordered_case_ids,
+    ).fetchall()
+    for row in observation_rows:
+        case_id = maybe_text(row["case_id"])
+        features = feature_map.get(case_id)
+        if not isinstance(features, dict):
+            continue
+        features["metric_families"].append(observation_metric_family(row["metric"]))
+        features["source_skills"].append(maybe_text(row["source_skill"]).lower())
+
+    evidence_rows = conn.execute(
+        f"""
+        SELECT case_id, gaps_json
+        FROM case_evidence
+        WHERE case_id IN ({placeholders})
+        """,
+        ordered_case_ids,
+    ).fetchall()
+    for row in evidence_rows:
+        case_id = maybe_text(row["case_id"])
+        features = feature_map.get(case_id)
+        if not isinstance(features, dict):
+            continue
+        features["gap_types"].extend(parse_json_text(row["gaps_json"], default=[]))
+
+    for case_id, features in feature_map.items():
+        feature_map[case_id] = {
+            "profile_id": normalized_text(features.get("profile_id")),
+            "claim_types": normalized_values(features.get("claim_types", [])),
+            "metric_families": normalized_values(features.get("metric_families", [])),
+            "source_skills": normalized_values(features.get("source_skills", [])),
+            "gap_types": normalized_values(features.get("gap_types", [])),
+        }
+    return feature_map
+
+
 def score_case_row(
     row: sqlite3.Row,
     *,
@@ -562,15 +748,30 @@ def score_case_row(
     region_label: str,
     moderator_status: str,
     evidence_sufficiency: str,
-) -> tuple[float, list[str], bool]:
+    profile_id: str,
+    claim_types: list[str],
+    metric_families: list[str],
+    gap_types: list[str],
+    source_skills: list[str],
+    case_features: dict[str, Any],
+) -> tuple[float, list[str], bool, dict[str, Any]]:
     topic = normalized_text(row["topic"])
     objective = normalized_text(row["objective"])
     region = normalized_text(row["region_label"])
     final_summary = normalized_text(row["final_decision_summary"])
     final_brief = normalized_text(row["final_brief"])
     reasons: list[str] = []
+    matched_fields = {
+        "profile_id": "",
+        "claim_types": [],
+        "metric_families": [],
+        "gap_types": [],
+        "source_skills": [],
+    }
     score = 0.0
     core_match = False
+    strong_structured_match = False
+    weak_structured_match = False
 
     if query_terms_list:
         topic_hits = sorted({term for term in query_terms_list if term in topic})
@@ -613,12 +814,66 @@ def score_case_row(
         reasons.append(f"evidence:{evidence_sufficiency}")
         core_match = True
 
+    case_profile_id = normalized_text(case_features.get("profile_id"))
+    if profile_id and case_profile_id == normalized_text(profile_id):
+        score += 7.0
+        reasons.append(f"profile:{normalized_text(profile_id)}")
+        matched_fields["profile_id"] = case_profile_id
+        strong_structured_match = True
+
+    case_claim_types = set(normalized_values(case_features.get("claim_types", [])))
+    claim_overlap = sorted(case_claim_types & set(normalized_values(claim_types)))
+    if claim_overlap:
+        score += 4.0 + (2.5 * len(claim_overlap))
+        reasons.append("claim_types:" + ",".join(claim_overlap[:3]))
+        matched_fields["claim_types"] = claim_overlap
+        strong_structured_match = True
+
+    case_metric_families = set(normalized_values(case_features.get("metric_families", [])))
+    family_overlap = sorted(case_metric_families & set(normalized_values(metric_families)))
+    if family_overlap:
+        score += 3.0 + (2.0 * len(family_overlap))
+        reasons.append("metric_families:" + ",".join(family_overlap[:3]))
+        matched_fields["metric_families"] = family_overlap
+        weak_structured_match = True
+
+    case_gap_types = set(normalized_values(case_features.get("gap_types", [])))
+    gap_overlap = sorted(case_gap_types & set(normalized_values(gap_types)))
+    if gap_overlap:
+        score += 3.5 + (2.0 * len(gap_overlap))
+        reasons.append("gap_types:" + ",".join(gap_overlap[:3]))
+        matched_fields["gap_types"] = gap_overlap
+        strong_structured_match = True
+
+    case_source_skills = set(normalized_values(case_features.get("source_skills", [])))
+    source_overlap = sorted(case_source_skills & set(normalized_values(source_skills)))
+    if source_overlap:
+        score += 2.0 + (1.0 * len(source_overlap))
+        reasons.append("source_skills:" + ",".join(source_overlap[:3]))
+        matched_fields["source_skills"] = source_overlap
+        weak_structured_match = True
+
+    if strong_structured_match:
+        core_match = True
+    elif weak_structured_match and (query_terms_list or target_region or moderator_status or evidence_sufficiency):
+        core_match = True
+
     score += float(sufficiency_rank(sufficiency_value))
     score += 0.5 * float(moderator_status_rank(status_value))
 
-    if (query_terms_list or target_region or moderator_status or evidence_sufficiency) and not core_match:
-        return (0.0, [], False)
-    return (score, reasons, True)
+    if (
+        query_terms_list
+        or target_region
+        or moderator_status
+        or evidence_sufficiency
+        or normalized_text(profile_id)
+        or normalized_values(claim_types)
+        or normalized_values(metric_families)
+        or normalized_values(gap_types)
+        or normalized_values(source_skills)
+    ) and not core_match:
+        return (0.0, [], False, matched_fields)
+    return (score, reasons, True, matched_fields)
 
 
 def default_export_path(db_path: Path, case_id: str, lang: str) -> Path:
@@ -845,12 +1100,18 @@ def command_search_cases(args: argparse.Namespace) -> dict[str, Any]:
     moderator_status = maybe_text(args.moderator_status)
     evidence_sufficiency = maybe_text(args.evidence_sufficiency)
     exclude_case_id = maybe_text(args.exclude_case_id)
+    profile_id = maybe_text(getattr(args, "profile_id", ""))
+    claim_types = normalized_values(getattr(args, "claim_types", []) or [])
+    metric_families = normalized_values(getattr(args, "metric_families", []) or [])
+    gap_types = normalized_values(getattr(args, "gap_types", []) or [])
+    source_skills = normalized_values(getattr(args, "source_skills", []) or [])
     query_terms_list = search_terms(query)
 
     sql = """
         SELECT case_id, topic, objective, region_label, window_start_utc, window_end_utc,
                round_count, current_round_id, final_moderator_status, final_evidence_sufficiency,
-               final_decision_summary, final_brief, final_missing_evidence_types_json, imported_at_utc
+               final_decision_summary, final_brief, final_missing_evidence_types_json, imported_at_utc,
+               mission_json
         FROM cases
         WHERE 1 = 1
     """
@@ -867,15 +1128,23 @@ def command_search_cases(args: argparse.Namespace) -> dict[str, Any]:
 
     with connect_db(db_path) as conn:
         rows = conn.execute(sql, sql_args).fetchall()
+        feature_map = collect_case_search_features(conn, rows)
 
     results: list[dict[str, Any]] = []
     for row in rows:
-        score, reasons, matched = score_case_row(
+        case_features = feature_map.get(maybe_text(row["case_id"]), empty_case_search_features())
+        score, reasons, matched, matched_fields = score_case_row(
             row,
             query_terms_list=query_terms_list,
             region_label=region_label,
             moderator_status=moderator_status,
             evidence_sufficiency=evidence_sufficiency,
+            profile_id=profile_id,
+            claim_types=claim_types,
+            metric_families=metric_families,
+            gap_types=gap_types,
+            source_skills=source_skills,
+            case_features=case_features,
         )
         if not matched:
             continue
@@ -898,6 +1167,11 @@ def command_search_cases(args: argparse.Namespace) -> dict[str, Any]:
                 "final_brief": row["final_brief"],
                 "final_missing_evidence_types": missing_types,
                 "imported_at_utc": row["imported_at_utc"],
+                "case_profile_id": maybe_text(case_features.get("profile_id")),
+                "matched_claim_types": matched_fields.get("claim_types", []),
+                "matched_metric_families": matched_fields.get("metric_families", []),
+                "matched_gap_types": matched_fields.get("gap_types", []),
+                "matched_source_skills": matched_fields.get("source_skills", []),
             }
         )
 
@@ -920,6 +1194,11 @@ def command_search_cases(args: argparse.Namespace) -> dict[str, Any]:
         "moderator_status": moderator_status,
         "evidence_sufficiency": evidence_sufficiency,
         "exclude_case_id": exclude_case_id,
+        "profile_id": normalized_text(profile_id),
+        "claim_types": claim_types,
+        "metric_families": metric_families,
+        "gap_types": gap_types,
+        "source_skills": source_skills,
         "count": len(limited),
         "cases": limited,
     }
@@ -1000,6 +1279,11 @@ def build_parser() -> argparse.ArgumentParser:
     search_cases_cmd.add_argument("--moderator-status", default="", help="Optional final moderator status filter.")
     search_cases_cmd.add_argument("--evidence-sufficiency", default="", help="Optional evidence sufficiency filter.")
     search_cases_cmd.add_argument("--exclude-case-id", default="", help="Case id to exclude from search results.")
+    search_cases_cmd.add_argument("--profile-id", default="", help="Preferred investigation profile id.")
+    search_cases_cmd.add_argument("--claim-type", dest="claim_types", action="append", default=[], help="Preferred claim type. Repeat for multiple values.")
+    search_cases_cmd.add_argument("--metric-family", dest="metric_families", action="append", default=[], help="Preferred metric family. Repeat for multiple values.")
+    search_cases_cmd.add_argument("--gap-type", dest="gap_types", action="append", default=[], help="Preferred missing-evidence or gap type. Repeat for multiple values.")
+    search_cases_cmd.add_argument("--source-skill", dest="source_skills", action="append", default=[], help="Preferred source skill. Repeat for multiple values.")
     search_cases_cmd.add_argument("--limit", type=int, default=10, help="Maximum cases to return.")
     search_cases_cmd.add_argument("--pretty", action="store_true", help="Pretty-print JSON output.")
 

@@ -225,6 +225,21 @@ CLAIM_METRIC_RULES = {
         },
     },
 }
+METEOROLOGY_METRICS = {"temperature_2m", "wind_speed_10m", "relative_humidity_2m", "precipitation_sum", "precipitation"}
+PRECIPITATION_METRICS = {
+    "precipitation",
+    "precipitation_sum",
+    "soil_moisture_0_to_7cm",
+}
+HYDROLOGY_METRICS = {
+    "river_discharge",
+    "river_discharge_mean",
+    "river_discharge_max",
+    "river_discharge_min",
+    "river_discharge_p25",
+    "river_discharge_p75",
+    "gage_height",
+}
 METRIC_FAMILY_GROUPS = {
     "air-quality": {
         "pm2_5",
@@ -6295,6 +6310,8 @@ def build_evidence_adjudication(
 def build_evidence_cards_from_matches(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     evidence_cards: list[dict[str, Any]] = []
     for index, match in enumerate(matches, start=1):
+        if not isinstance(match.get("observations"), list) or not match.get("observations"):
+            continue
         claim = match["claim"]
         evidence = {
             "schema_version": SCHEMA_VERSION,

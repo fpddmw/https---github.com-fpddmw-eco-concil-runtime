@@ -2931,6 +2931,18 @@ def placeholder_investigation_plan(*, run_id: str, round_id: str) -> dict[str, A
         "mission_region": None,
         "mission_window": None,
         "hypotheses": [],
+        "fetch_intents": [],
+        "history_query": {
+            "query": "",
+            "region_label": "",
+            "profile_id": "local-event",
+            "claim_types": [],
+            "metric_families": [],
+            "gap_types": [],
+            "source_skills": [],
+            "priority_leg_ids": [],
+            "alternative_hypotheses": [],
+        },
         "open_questions": [],
         "notes": [
             "This placeholder plan was scaffolded without a mission payload.",

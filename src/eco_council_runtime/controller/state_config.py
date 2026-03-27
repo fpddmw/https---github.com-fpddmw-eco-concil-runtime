@@ -9,7 +9,8 @@ from typing import Any
 from eco_council_runtime.cli_invocation import runtime_module_argv
 from eco_council_runtime.controller.constants import DEFAULT_HISTORY_TOP_K, MAX_HISTORY_TOP_K
 from eco_council_runtime.controller.io import load_json_if_exists, maybe_text, run_json_command, write_text
-from eco_council_runtime.controller.paths import history_context_path, mission_path
+from eco_council_runtime.controller.paths import history_context_path, investigation_plan_path, mission_path
+from eco_council_runtime.investigation import build_investigation_plan
 from eco_council_runtime.layout import PROJECT_DIR, RUNS_ROOT
 
 DEFAULT_ARCHIVE_DIR = RUNS_ROOT / "archives"
@@ -163,9 +164,29 @@ def signal_corpus_cli_updates_requested(args: argparse.Namespace) -> bool:
     )
 
 
-def render_history_context_text(*, mission: dict[str, Any], search_payload: dict[str, Any]) -> str:
+def render_history_context_text(
+    *,
+    mission: dict[str, Any],
+    search_payload: dict[str, Any],
+    investigation_plan: dict[str, Any] | None = None,
+) -> str:
     cases = search_payload.get("cases") if isinstance(search_payload.get("cases"), list) else []
     region = mission.get("region") if isinstance(mission.get("region"), dict) else {}
+    plan = investigation_plan if isinstance(investigation_plan, dict) else {}
+    history_query = plan.get("history_query") if isinstance(plan.get("history_query"), dict) else {}
+    hypotheses = plan.get("hypotheses") if isinstance(plan.get("hypotheses"), list) else []
+    open_questions = plan.get("open_questions") if isinstance(plan.get("open_questions"), list) else []
+    retrieval_focus_parts = []
+    for field_name in ("claim_types", "metric_families", "gap_types", "source_skills"):
+        values = (
+            search_payload.get(field_name)
+            if isinstance(search_payload.get(field_name), list)
+            else history_query.get(field_name)
+        )
+        if isinstance(values, list):
+            text = ", ".join(maybe_text(item) for item in values if maybe_text(item))
+            if text:
+                retrieval_focus_parts.append(f"{field_name}={text}")
     lines = [
         "Compact historical-case context from the local eco-council case library.",
         "Use it only as planning guidance. Current-round evidence remains primary.",
@@ -174,9 +195,35 @@ def render_history_context_text(*, mission: dict[str, Any], search_payload: dict
         f"Current topic: {maybe_text(mission.get('topic'))}",
         f"Current objective: {maybe_text(mission.get('objective'))}",
         f"Current region: {maybe_text(region.get('label')) or 'n/a'}",
+        f"Current investigation profile: {maybe_text(history_query.get('profile_id')) or maybe_text(plan.get('profile_id')) or 'n/a'}",
         "",
         f"Retrieved similar cases: {len(cases)}",
     ]
+    if retrieval_focus_parts:
+        lines.extend(["Retrieval focus: " + "; ".join(retrieval_focus_parts)])
+    priority_legs = history_query.get("priority_leg_ids") if isinstance(history_query.get("priority_leg_ids"), list) else []
+    if priority_legs:
+        lines.append("Priority legs: " + ", ".join(maybe_text(item) for item in priority_legs if maybe_text(item)))
+    if hypotheses:
+        lines.extend(["", f"Primary hypotheses: {len(hypotheses)}"])
+        for index, hypothesis in enumerate(hypotheses[:3], start=1):
+            if not isinstance(hypothesis, dict):
+                continue
+            lines.append(f"{index}. {maybe_text(hypothesis.get('summary')) or maybe_text(hypothesis.get('statement'))}")
+            alternatives = hypothesis.get("alternative_hypotheses")
+            if isinstance(alternatives, list) and alternatives:
+                alt_text = "; ".join(
+                    maybe_text(item.get("summary")) or maybe_text(item.get("statement"))
+                    for item in alternatives[:2]
+                    if isinstance(item, dict) and (maybe_text(item.get("summary")) or maybe_text(item.get("statement")))
+                )
+                if alt_text:
+                    lines.append(f"   alternatives={alt_text}")
+    if open_questions:
+        lines.extend(["", "Open planning questions:"])
+        for question in open_questions[:4]:
+            if maybe_text(question):
+                lines.append(f"- {maybe_text(question)}")
     for index, case in enumerate(cases, start=1):
         if not isinstance(case, dict):
             continue
@@ -184,6 +231,16 @@ def render_history_context_text(*, mission: dict[str, Any], search_payload: dict
         missing_text = ", ".join(maybe_text(item) for item in missing if maybe_text(item)) if isinstance(missing, list) else ""
         reasons = case.get("match_reasons")
         reason_text = ", ".join(maybe_text(item) for item in reasons if maybe_text(item)) if isinstance(reasons, list) else ""
+        planning_overlap_parts = []
+        if maybe_text(case.get("case_profile_id")):
+            planning_overlap_parts.append(f"profile={maybe_text(case.get('case_profile_id'))}")
+        for field_name in ("matched_claim_types", "matched_metric_families", "matched_gap_types", "matched_source_skills"):
+            values = case.get(field_name)
+            if not isinstance(values, list):
+                continue
+            text = ", ".join(maybe_text(item) for item in values if maybe_text(item))
+            if text:
+                planning_overlap_parts.append(f"{field_name}={text}")
         lines.extend(
             [
                 "",
@@ -192,6 +249,8 @@ def render_history_context_text(*, mission: dict[str, Any], search_payload: dict
                 f"   decision_summary={maybe_text(case.get('final_decision_summary')) or maybe_text(case.get('final_brief')) or 'n/a'}",
             ]
         )
+        if planning_overlap_parts:
+            lines.append("   planning_overlap=" + "; ".join(planning_overlap_parts))
         if missing_text:
             lines.append(f"   missing_evidence_types={missing_text}")
         if reason_text:
@@ -220,8 +279,13 @@ def write_history_context_file(run_dir: Path, state: dict[str, Any], round_id: s
             target.unlink()
         return None
 
+    plan_payload = load_json_if_exists(investigation_plan_path(run_dir, round_id))
+    if not isinstance(plan_payload, dict) or not isinstance(plan_payload.get("history_query"), dict):
+        plan_payload = build_investigation_plan(mission=mission_payload, round_id=round_id)
+    history_query = plan_payload.get("history_query") if isinstance(plan_payload.get("history_query"), dict) else {}
     region = mission_payload.get("region") if isinstance(mission_payload.get("region"), dict) else {}
-    query = maybe_text(mission_payload.get("topic"))
+    query = maybe_text(history_query.get("query")) or maybe_text(mission_payload.get("topic"))
+    region_label = maybe_text(history_query.get("region_label")) or maybe_text(region.get("label"))
     argv = runtime_module_argv(
         "case_library",
         "search-cases",
@@ -235,8 +299,22 @@ def write_history_context_file(run_dir: Path, state: dict[str, Any], round_id: s
     )
     if query:
         argv.extend(["--query", query])
-    if maybe_text(region.get("label")):
-        argv.extend(["--region-label", maybe_text(region.get("label"))])
+    if region_label:
+        argv.extend(["--region-label", region_label])
+    if maybe_text(history_query.get("profile_id")):
+        argv.extend(["--profile-id", maybe_text(history_query.get("profile_id"))])
+    for field_name, flag in (
+        ("claim_types", "--claim-type"),
+        ("metric_families", "--metric-family"),
+        ("gap_types", "--gap-type"),
+        ("source_skills", "--source-skill"),
+    ):
+        values = history_query.get(field_name)
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            if maybe_text(value):
+                argv.extend([flag, maybe_text(value)])
 
     try:
         payload = run_json_command(argv, cwd=PROJECT_DIR)
@@ -251,5 +329,12 @@ def write_history_context_file(run_dir: Path, state: dict[str, Any], round_id: s
             target.unlink()
         return None
 
-    write_text(target, render_history_context_text(mission=mission_payload, search_payload=search_payload))
+    write_text(
+        target,
+        render_history_context_text(
+            mission=mission_payload,
+            search_payload=search_payload,
+            investigation_plan=plan_payload,
+        ),
+    )
     return target
