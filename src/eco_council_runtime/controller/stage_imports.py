@@ -20,6 +20,11 @@ from eco_council_runtime.controller.agent_ingest import (
     normalize_matching_authorization_payload,
     persist_override_requests_for_role,
 )
+from eco_council_runtime.controller.audit_chain import (
+    record_fetch_phase_receipt,
+    record_import_receipt,
+    record_normalize_phase_receipt,
+)
 from eco_council_runtime.controller.constants import (
     CURATION_ROLES,
     READINESS_ROLES,
@@ -93,6 +98,15 @@ def _state_result(
     status_builder: StatusBuilder,
     role: str = "",
 ) -> dict[str, Any]:
+    record_import_receipt(
+        run_dir=run_dir,
+        round_id=maybe_text(state.get("current_round_id")),
+        imported_kind=imported_kind,
+        source_path=source_path,
+        target_path=target_path,
+        role=role,
+        stage_after_import=maybe_text(state.get("stage")),
+    )
     result = {
         "imported_kind": imported_kind,
         "input_path": str(source_path),
@@ -565,7 +579,7 @@ def import_fetch_execution_payload(
     state["fetch_execution"] = "external-import"
     state["stage"] = STAGE_READY_DATA_PLANE
     save_state(run_dir, state)
-    return _state_result(
+    result = _state_result(
         imported_kind="fetch-execution",
         target_path=target,
         source_path=source_path,
@@ -573,6 +587,8 @@ def import_fetch_execution_payload(
         state=state,
         status_builder=status_builder,
     )
+    record_fetch_phase_receipt(run_dir=run_dir, round_id=round_id, payload=payload)
+    return result
 
 
 def import_data_plane_execution_payload(
@@ -611,6 +627,7 @@ def import_data_plane_execution_payload(
         state=state,
         status_builder=status_builder,
     )
+    record_normalize_phase_receipt(run_dir=run_dir, round_id=round_id, payload=payload)
     if signal_corpus_import is not None:
         result["signal_corpus_import"] = signal_corpus_import
     return result

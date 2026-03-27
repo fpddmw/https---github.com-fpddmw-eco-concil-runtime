@@ -5,18 +5,28 @@ from __future__ import annotations
 
 import argparse
 import copy
-import hashlib
 import json
-import os
 import re
 import sys
-import tempfile
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.adapters.filesystem import (
+    atomic_write_text_file,
+    load_canonical_list,
+    load_json_if_exists,
+    pretty_json,
+    read_json,
+    stable_hash,
+    stable_json,
+    utc_now_iso,
+    write_json,
+)
+from eco_council_runtime.adapters.run_paths import discover_round_ids, load_mission
 from eco_council_runtime.cli_invocation import runtime_module_command
+from eco_council_runtime.controller.audit_chain import record_decision_phase_receipt
 from eco_council_runtime.controller.paths import (
     cards_active_path,
     claim_candidates_path,
@@ -91,8 +101,17 @@ from eco_council_runtime.planning import (
     combine_recommendations,
     recommendation_key,
 )
+from eco_council_runtime.domain.contract_bridge import (
+    contract_call,
+    effective_matching_authorization,
+    resolve_schema_version,
+    validate_bundle,
+    validate_payload_or_raise as validate_payload,
+)
+from eco_council_runtime.domain.rounds import current_round_number, next_round_id_for, parse_round_components, round_sort_key
+from eco_council_runtime.domain.text import maybe_text, normalize_space, truncate_text, unique_strings
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = resolve_schema_version("1.0.0")
 REPORT_ROLES = ("sociologist", "environmentalist")
 READINESS_ROLES = ("sociologist", "environmentalist")
 PROMOTABLE_REPORT_ROLES = ("sociologist", "environmentalist", "historian")
@@ -188,101 +207,8 @@ INVESTIGATION_LEG_METRIC_FAMILIES: dict[str, dict[str, set[str]]] = {
         "public_interpretation": set(),
     },
 }
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def pretty_json(data: Any, *, pretty: bool) -> str:
-    if pretty:
-        return json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True)
-    return json.dumps(data, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
-
-
-def normalize_space(value: str) -> str:
-    return " ".join(str(value).split())
-
-
-def maybe_text(value: Any) -> str:
-    if value is None:
-        return ""
-    return normalize_space(str(value))
-
-
-def truncate_text(value: str, limit: int) -> str:
-    text = normalize_space(value)
-    if len(text) <= limit:
-        return text
-    if limit <= 3:
-        return text[:limit]
-    return text[: limit - 3].rstrip() + "..."
-
-
-def read_json(path: Path) -> Any:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def write_json(path: Path, payload: Any, *, pretty: bool) -> None:
-    atomic_write_text_file(path, pretty_json(payload, pretty=pretty) + "\n")
-
-
 def write_text(path: Path, text: str) -> None:
     atomic_write_text_file(path, text)
-
-
-def atomic_write_text_file(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_path = tempfile.mkstemp(prefix=f".{path.name}.tmp-", dir=str(path.parent))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp_path, path)
-    except Exception:
-        try:
-            os.unlink(temp_path)
-        except FileNotFoundError:
-            pass
-        raise
-
-
-def load_json_if_exists(path: Path) -> Any | None:
-    if not path.exists():
-        return None
-    return read_json(path)
-
-
-def load_canonical_list(path: Path) -> list[dict[str, Any]]:
-    payload = load_json_if_exists(path)
-    if payload is None:
-        return []
-    if not isinstance(payload, list):
-        raise ValueError(f"Expected list in {path}")
-    return [item for item in payload if isinstance(item, dict)]
-
-
-def stable_json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=True, sort_keys=True)
-
-
-def stable_hash(*parts: Any) -> str:
-    joined = "||".join(maybe_text(part) for part in parts)
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
-
-
-def unique_strings(values: list[str]) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for value in values:
-        text = maybe_text(value)
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        result.append(text)
-    return result
 
 
 def counter_dict(values: list[str]) -> dict[str, int]:
@@ -308,15 +234,6 @@ def sorted_counter_items(counter: Counter[str], limit: int = 8) -> list[dict[str
         if len(items) >= limit:
             break
     return items
-
-
-def load_mission(run_dir: Path) -> dict[str, Any]:
-    payload = read_json(mission_path(run_dir))
-    if not isinstance(payload, dict):
-        raise ValueError("mission.json must be an object.")
-    return payload
-
-
 def mission_run_id(mission: dict[str, Any]) -> str:
     run_id = mission.get("run_id")
     if not isinstance(run_id, str) or not run_id.strip():
@@ -344,98 +261,6 @@ def mission_policy_profile(mission: dict[str, Any]) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return {}
-
-
-def load_contract_module() -> Any | None:
-    try:
-        from eco_council_runtime import contract as contract_module
-    except Exception:
-        return None
-    return contract_module
-
-
-CONTRACT_MODULE = load_contract_module()
-if CONTRACT_MODULE is not None and hasattr(CONTRACT_MODULE, "SCHEMA_VERSION"):
-    SCHEMA_VERSION = CONTRACT_MODULE.SCHEMA_VERSION
-
-
-def contract_call(name: str, *args: Any) -> Any | None:
-    if CONTRACT_MODULE is None or not hasattr(CONTRACT_MODULE, name):
-        return None
-    helper = getattr(CONTRACT_MODULE, name)
-    return helper(*args)
-
-
-def effective_matching_authorization(*, mission: dict[str, Any], round_id: str, authorization: dict[str, Any] | None) -> dict[str, Any]:
-    if not isinstance(authorization, dict):
-        return {}
-    value = contract_call("apply_matching_authorization_policy", mission, round_id, authorization)
-    if isinstance(value, dict):
-        return value
-    return dict(authorization)
-
-
-def validate_payload(kind: str, payload: Any) -> None:
-    if CONTRACT_MODULE is None:
-        return
-    result = CONTRACT_MODULE.validate_payload(kind, payload)
-    validation = result.get("validation", {})
-    if validation.get("ok"):
-        return
-    issues = []
-    for issue in validation.get("issues", [])[:5]:
-        issues.append(f"{issue.get('path')}: {issue.get('message')}")
-    raise ValueError(f"Generated invalid {kind}: {'; '.join(issues)}")
-
-
-def validate_bundle(run_dir: Path) -> dict[str, Any] | None:
-    if CONTRACT_MODULE is None or not hasattr(CONTRACT_MODULE, "validate_bundle"):
-        return None
-    return CONTRACT_MODULE.validate_bundle(run_dir)
-
-
-def parse_round_components(round_id: str) -> tuple[str, int, int] | None:
-    match = re.match(r"^(.*?)(\d+)$", round_id)
-    if match is None:
-        return None
-    prefix, digits = match.groups()
-    return prefix, int(digits), len(digits)
-
-
-def next_round_id_for(round_id: str) -> str:
-    components = parse_round_components(round_id)
-    if components is None:
-        return f"{round_id}-next"
-    prefix, number, width = components
-    return f"{prefix}{number + 1:0{width}d}"
-
-
-def current_round_number(round_id: str) -> int | None:
-    components = parse_round_components(round_id)
-    if components is None:
-        return None
-    return components[1]
-
-
-def round_sort_key(round_id: str) -> tuple[str, int, str]:
-    components = parse_round_components(round_id)
-    if components is None:
-        return (round_id, 10**9, round_id)
-    prefix, number, _width = components
-    return (prefix, number, round_id)
-
-
-def discover_round_ids(run_dir: Path) -> list[str]:
-    round_ids: list[str] = []
-    for child in run_dir.iterdir():
-        if not child.is_dir():
-            continue
-        if not child.name.startswith("round_"):
-            continue
-        round_ids.append(child.name.replace("_", "-"))
-    return sorted(unique_strings(round_ids), key=round_sort_key)
-
-
 def round_ids_through(run_dir: Path, round_id: str) -> list[str]:
     current = parse_round_components(round_id)
     if current is None:
@@ -4592,7 +4417,7 @@ def promote_decision_draft(
     allow_overwrite: bool,
 ) -> dict[str, Any]:
     draft_path, payload = load_decision_draft_payload(run_dir, round_id, draft_path_text)
-    return promote_draft(
+    result = promote_draft(
         draft_path=draft_path,
         payload=payload,
         target_path=decision_target_path(run_dir, round_id),
@@ -4604,6 +4429,12 @@ def promote_decision_draft(
         load_json_if_exists=load_json_if_exists,
         write_json=lambda path, content, pretty_flag: write_json(path, content, pretty=pretty_flag),
     )
+    record_decision_phase_receipt(
+        run_dir=run_dir,
+        round_id=round_id,
+        decision_payload=payload,
+    )
+    return result
 
 
 def promote_matching_authorization_draft(

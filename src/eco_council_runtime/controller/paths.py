@@ -329,6 +329,18 @@ def evidence_library_ledger_path(run_dir: Path, round_id: str) -> Path:
     return evidence_library_dir(run_dir, round_id) / "ledger.jsonl"
 
 
+def audit_chain_dir(run_dir: Path, round_id: str) -> Path:
+    return evidence_library_dir(run_dir, round_id) / "audit-chain"
+
+
+def audit_chain_ledger_path(run_dir: Path, round_id: str) -> Path:
+    return audit_chain_dir(run_dir, round_id) / "receipts.jsonl"
+
+
+def audit_chain_objects_dir(run_dir: Path, round_id: str) -> Path:
+    return audit_chain_dir(run_dir, round_id) / "objects"
+
+
 def library_context_path(run_dir: Path, round_id: str, role: str) -> Path:
     return evidence_library_dir(run_dir, round_id) / f"context_{role}.json"
 

@@ -4,21 +4,39 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
-import hashlib
 import json
 import os
 import re
 import shlex
 import subprocess
 import sys
-import tempfile
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.adapters.filesystem import (
+    atomic_write_text_file,
+    exclusive_file_lock,
+    file_sha256,
+    file_snapshot,
+    load_json_if_exists,
+    pretty_json,
+    read_json,
+    utc_now_iso,
+    write_json,
+)
+from eco_council_runtime.adapters.run_paths import discover_round_ids, load_mission, round_dir
 from eco_council_runtime.cli_invocation import runtime_module_argv, runtime_module_command
+from eco_council_runtime.controller.audit_chain import record_fetch_phase_receipt, record_normalize_phase_receipt
+from eco_council_runtime.domain.contract_bridge import (
+    allowed_sources_for_role,
+    contract_call,
+    effective_constraints,
+    effective_matching_authorization,
+    policy_profile_summary,
+)
+from eco_council_runtime.domain.rounds import next_round_id, normalize_round_id, round_dir_name
+from eco_council_runtime.domain.text import maybe_text, normalize_space, text_truthy, truncate_text, unique_strings as shared_unique_strings
 from eco_council_runtime.external_skills import (
     default_env_file as detached_default_env_file,
     fetch_script_path,
@@ -155,17 +173,6 @@ DEFAULT_OPEN_METEO_HIST_HOURLY_VARS = [
     "wind_speed_10m",
     "soil_moisture_0_to_7cm",
 ]
-
-
-def load_contract_module() -> Any | None:
-    try:
-        from eco_council_runtime import contract as contract_module
-    except Exception:
-        return None
-    return contract_module
-
-
-CONTRACT_MODULE = load_contract_module()
 DEFAULT_OPEN_METEO_HIST_DAILY_VARS = [
     "precipitation_sum",
     "et0_fao_evapotranspiration",
@@ -181,109 +188,12 @@ DEFAULT_OPENAQ_PARAMETER_NAMES = [
     "o3",
     "no2",
 ]
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def pretty_json(data: Any, *, pretty: bool) -> str:
-    if pretty:
-        return json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True)
-    return json.dumps(data, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
-
-
-def read_json(path: Path) -> Any:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def write_json(path: Path, payload: Any, *, pretty: bool) -> None:
-    atomic_write_text_file(path, pretty_json(payload, pretty=pretty) + "\n")
-
-
 def write_text(path: Path, content: str) -> None:
     atomic_write_text_file(path, content.rstrip() + "\n")
 
 
-def atomic_write_text_file(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_path = tempfile.mkstemp(prefix=f".{path.name}.tmp-", dir=str(path.parent))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp_path, path)
-    except Exception:
-        try:
-            os.unlink(temp_path)
-        except FileNotFoundError:
-            pass
-        raise
-
-
-@contextmanager
-def exclusive_file_lock(path: Path) -> Any:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-
-
-def normalize_space(value: str) -> str:
-    return " ".join(str(value).split())
-
-
-def maybe_text(value: Any) -> str:
-    if value is None:
-        return ""
-    return normalize_space(str(value))
-
-
-def text_truthy(value: Any) -> bool:
-    return maybe_text(value).casefold() in {"1", "true", "yes", "on"}
-
-
-def truncate_text(value: str, limit: int) -> str:
-    text = normalize_space(value)
-    if len(text) <= limit:
-        return text
-    if limit <= 3:
-        return text[:limit]
-    return text[: limit - 3].rstrip() + "..."
-
-
 def unique_strings(values: list[str]) -> list[str]:
-    output: list[str] = []
-    seen: set[str] = set()
-    for value in values:
-        text = normalize_space(value)
-        if not text:
-            continue
-        key = text.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        output.append(text)
-    return output
-
-
-def contract_call(name: str, *args: Any, **kwargs: Any) -> Any | None:
-    if CONTRACT_MODULE is None or not hasattr(CONTRACT_MODULE, name):
-        return None
-    helper = getattr(CONTRACT_MODULE, name)
-    return helper(*args, **kwargs)
-
-
-def effective_matching_authorization(*, mission: dict[str, Any], round_id: str, authorization: dict[str, Any]) -> dict[str, Any]:
-    value = contract_call("apply_matching_authorization_policy", mission, round_id, authorization)
-    if isinstance(value, dict):
-        return value
-    return dict(authorization)
+    return shared_unique_strings(values, casefold=True)
 
 
 def ensure_object(value: Any, label: str) -> dict[str, Any]:
@@ -343,46 +253,6 @@ def firms_source_for_window(window: dict[str, Any], requested_source: str) -> st
         "VIIRS_SNPP_SP",
     }
     return archival_source if archival_source in known_archival else source
-
-
-def round_dir_name(round_id: str) -> str:
-    return normalize_round_id(round_id).replace("-", "_")
-
-
-def normalize_round_id(round_id: str) -> str:
-    text = round_id.strip()
-    match = ROUND_ID_INPUT_PATTERN.match(text)
-    if match is None:
-        raise ValueError(f"Unsupported round_id format: {round_id!r}. Expected round-001 or round_001 style.")
-    return f"round-{match.group(1)}"
-
-
-def round_id_from_dirname(dirname: str) -> str | None:
-    match = ROUND_DIR_PATTERN.match(dirname.strip())
-    if match is None:
-        return None
-    return f"round-{match.group(1)}"
-
-
-def round_number(round_id: str) -> int:
-    return int(normalize_round_id(round_id).split("-")[-1])
-
-
-def next_round_id(round_id: str) -> str:
-    return f"round-{round_number(round_id) + 1:03d}"
-
-
-def round_sort_key(round_id: str) -> tuple[int, str]:
-    try:
-        return (round_number(round_id), round_id)
-    except ValueError:
-        return (sys.maxsize, round_id)
-
-
-def round_dir(run_dir: Path, round_id: str) -> Path:
-    return run_dir / round_dir_name(round_id)
-
-
 def role_raw_dir(run_dir: Path, round_id: str, role: str) -> Path:
     return round_dir(run_dir, round_id) / role / "raw"
 
@@ -477,22 +347,6 @@ def default_step_stdout_path(run_dir: Path, round_id: str, role: str, source_ski
 
 def default_step_stderr_path(run_dir: Path, round_id: str, role: str, source_skill: str) -> Path:
     return role_meta_dir(run_dir, round_id, role) / f"{source_skill}.stderr.log"
-
-
-def discover_round_ids(run_dir: Path) -> list[str]:
-    output: list[str] = []
-    if not run_dir.exists():
-        return output
-    for child in run_dir.iterdir():
-        if not child.is_dir():
-            continue
-        round_id = round_id_from_dirname(child.name)
-        if round_id is not None:
-            output.append(round_id)
-    output.sort(key=round_sort_key)
-    return output
-
-
 def resolve_round_id(run_dir: Path, round_id: str) -> str:
     if round_id:
         return normalize_round_id(round_id)
@@ -500,12 +354,6 @@ def resolve_round_id(run_dir: Path, round_id: str) -> str:
     if not round_ids:
         raise ValueError(f"No round_* directories found in {run_dir}.")
     return round_ids[-1]
-
-
-def load_mission(run_dir: Path) -> dict[str, Any]:
-    return ensure_object(read_json(run_dir / "mission.json"), "mission.json")
-
-
 def load_tasks(run_dir: Path, round_id: str) -> list[dict[str, Any]]:
     tasks_path = round_dir(run_dir, round_id) / "moderator" / "tasks.json"
     return ensure_object_list(read_json(tasks_path), f"{tasks_path}")
@@ -516,31 +364,6 @@ def load_source_selection(run_dir: Path, round_id: str, role: str) -> dict[str, 
     if not path.exists():
         return None
     return ensure_object(read_json(path), f"{path}")
-
-
-def load_json_if_exists(path: Path) -> Any | None:
-    if not path.exists():
-        return None
-    return read_json(path)
-
-
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def file_snapshot(path: Path) -> dict[str, Any]:
-    exists = path.exists()
-    return {
-        "path": str(path),
-        "exists": exists,
-        "sha256": file_sha256(path) if exists else "",
-    }
-
-
 def fetch_plan_input_snapshot(
     *,
     run_dir: Path,
@@ -607,30 +430,6 @@ def mission_window(mission: dict[str, Any]) -> dict[str, str]:
 
 def mission_region(mission: dict[str, Any]) -> dict[str, Any]:
     return ensure_object(mission.get("region"), "mission.region")
-
-
-def allowed_sources_for_role(mission: dict[str, Any], role: str) -> list[str]:
-    values = contract_call("allowed_sources_for_role", mission, role)
-    if isinstance(values, list):
-        return [maybe_text(item) for item in values if maybe_text(item)]
-    return []
-
-
-def effective_constraints(mission: dict[str, Any]) -> dict[str, Any]:
-    value = contract_call("effective_constraints", mission)
-    if isinstance(value, dict):
-        return value
-    constraints = mission.get("constraints")
-    return constraints if isinstance(constraints, dict) else {}
-
-
-def policy_profile_summary(mission: dict[str, Any]) -> dict[str, Any]:
-    value = contract_call("policy_profile_summary", mission)
-    if isinstance(value, dict):
-        return value
-    return {}
-
-
 def task_inputs(task: dict[str, Any]) -> dict[str, Any]:
     value = task.get("inputs")
     if isinstance(value, dict):
@@ -2539,7 +2338,9 @@ def execute_fetch_plan(
             if not continue_on_error:
                 break
 
-        return snapshot()
+        final_payload = snapshot()
+        record_fetch_phase_receipt(run_dir=run_path, round_id=current_round_id, payload=final_payload)
+        return final_payload
 
 
 def fetch_status_role(status: dict[str, Any]) -> str:
@@ -2945,7 +2746,8 @@ def run_data_plane(*, run_dir: Path, round_id: str) -> dict[str, Any]:
     )
     handoff_payload = append_status_or_raise(handoff_status, handoff_payload)
     reporting_handoff = Path(maybe_text(handoff_payload.get("reporting_handoff_path"))).expanduser().resolve()
-    snapshot()
+    execution_payload = snapshot()
+    record_normalize_phase_receipt(run_dir=run_path, round_id=current_round_id, payload=execution_payload)
 
     return {
         "run_dir": str(run_path),

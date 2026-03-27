@@ -6,37 +6,15 @@ import json
 from typing import Any
 
 from eco_council_runtime.controller.constants import ROLES
-from eco_council_runtime.controller.io import load_json_if_exists, maybe_text
+from eco_council_runtime.controller.io import load_json_if_exists
 from eco_council_runtime.controller.paths import (
     fetch_execution_path,
     override_requests_path,
     prior_round_ids,
     source_selection_path,
 )
-
-
-def load_contract_module() -> Any | None:
-    try:
-        from eco_council_runtime import contract as contract_module
-    except Exception:
-        return None
-    return contract_module
-
-
-CONTRACT_MODULE = load_contract_module()
-
-
-def resolve_schema_version(default_version: str) -> str:
-    if CONTRACT_MODULE is not None and hasattr(CONTRACT_MODULE, "SCHEMA_VERSION"):
-        return maybe_text(getattr(CONTRACT_MODULE, "SCHEMA_VERSION")) or default_version
-    return default_version
-
-
-def contract_call(name: str, *args: Any, **kwargs: Any) -> Any | None:
-    if CONTRACT_MODULE is None or not hasattr(CONTRACT_MODULE, name):
-        return None
-    helper = getattr(CONTRACT_MODULE, name)
-    return helper(*args, **kwargs)
+from eco_council_runtime.domain.contract_bridge import contract_call, resolve_schema_version
+from eco_council_runtime.domain.text import maybe_text
 
 
 def effective_constraints(mission: dict[str, Any]) -> dict[str, Any]:

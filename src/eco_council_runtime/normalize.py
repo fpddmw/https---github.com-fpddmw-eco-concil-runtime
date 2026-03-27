@@ -6,9 +6,7 @@ from __future__ import annotations
 import argparse
 import copy
 import csv
-import os
 import gzip
-import hashlib
 import io
 import json
 import math
@@ -16,7 +14,6 @@ import re
 import sqlite3
 import statistics
 import sys
-import tempfile
 import zipfile
 from collections import Counter, defaultdict
 from datetime import date, datetime, timezone
@@ -24,6 +21,22 @@ from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlparse
 
+from eco_council_runtime.adapters.filesystem import (
+    atomic_write_text_file,
+    file_sha256,
+    load_canonical_list,
+    load_json_if_exists,
+    pretty_json,
+    read_json,
+    read_jsonl,
+    stable_hash,
+    stable_json,
+    utc_now_iso,
+    write_json,
+    write_jsonl,
+)
+from eco_council_runtime.adapters.run_paths import discover_round_ids, load_mission
+from eco_council_runtime.controller.audit_chain import ensure_audit_chain_ready, record_match_phase_receipt
 from eco_council_runtime.controller.paths import (
     cards_active_path,
     claim_candidates_path,
@@ -57,6 +70,15 @@ from eco_council_runtime.controller.paths import (
     shared_evidence_path,
     shared_observations_path,
 )
+from eco_council_runtime.domain.contract_bridge import (
+    contract_call,
+    effective_constraints as contract_effective_constraints,
+    effective_matching_authorization,
+    resolve_schema_version,
+    validate_payload_or_raise as validate_payload,
+)
+from eco_council_runtime.domain.rounds import parse_round_components, round_sort_key
+from eco_council_runtime.domain.text import maybe_text, normalize_space, truncate_text, unique_strings
 from eco_council_runtime.layout import (
     NORMALIZE_ASSETS_DIR,
     NORMALIZE_ENVIRONMENT_DDL_PATH,
@@ -68,7 +90,7 @@ ASSETS_DIR = NORMALIZE_ASSETS_DIR
 PUBLIC_DDL_PATH = NORMALIZE_PUBLIC_DDL_PATH
 ENVIRONMENT_DDL_PATH = NORMALIZE_ENVIRONMENT_DDL_PATH
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = resolve_schema_version("1.0.0")
 POINT_MATCH_EPSILON_DEGREES = 0.05
 NORMALIZE_CACHE_VERSION = "v3"
 MAX_CONTEXT_TASKS = 4
@@ -363,99 +385,6 @@ GDELT_GKG_INDEX = {
     "tone": 15,
     "all_names": 23,
 }
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def pretty_json(data: Any, *, pretty: bool) -> str:
-    if pretty:
-        return json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True)
-    return json.dumps(data, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
-
-
-def read_json(path: Path) -> Any:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def read_jsonl(path: Path) -> list[Any]:
-    records: list[Any] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            text = line.strip()
-            if not text:
-                continue
-            records.append(json.loads(text))
-    return records
-
-
-def write_json(path: Path, payload: Any, *, pretty: bool) -> None:
-    atomic_write_text_file(path, pretty_json(payload, pretty=pretty) + "\n")
-
-
-def atomic_write_text_file(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_path = tempfile.mkstemp(prefix=f".{path.name}.tmp-", dir=str(path.parent))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp_path, path)
-    except Exception:
-        try:
-            os.unlink(temp_path)
-        except FileNotFoundError:
-            pass
-        raise
-
-
-def load_json_if_exists(path: Path) -> Any | None:
-    if not path.exists():
-        return None
-    return read_json(path)
-
-
-def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lines = [json.dumps(record, ensure_ascii=True, sort_keys=True) for record in records]
-    atomic_write_text_file(path, "\n".join(lines) + ("\n" if lines else ""))
-
-
-def normalize_space(value: str) -> str:
-    return " ".join(str(value).split())
-
-
-def truncate_text(value: str, limit: int) -> str:
-    text = normalize_space(value)
-    if len(text) <= limit:
-        return text
-    if limit <= 3:
-        return text[:limit]
-    return text[: limit - 3].rstrip() + "..."
-
-
-def maybe_text(value: Any) -> str:
-    if value is None:
-        return ""
-    text = normalize_space(str(value))
-    return text
-
-
-def unique_strings(values: list[str]) -> list[str]:
-    output: list[str] = []
-    seen: set[str] = set()
-    for value in values:
-        text = maybe_text(value)
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        output.append(text)
-    return output
-
-
 def maybe_number(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
@@ -645,28 +574,6 @@ def parse_path_payload(path: Path) -> Any:
     if suffix == ".jsonl":
         return read_jsonl(path)
     raise ValueError(f"Unsupported JSON payload path: {path}")
-
-
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        while True:
-            chunk = handle.read(65536)
-            if not chunk:
-                break
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def stable_hash(*parts: Any) -> str:
-    joined = "||".join(maybe_text(part) for part in parts)
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
-
-
-def stable_json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=True, sort_keys=True)
-
-
 def text_tokens(value: Any, *, minimum_length: int = 4) -> list[str]:
     tokens = re.findall(r"[a-z0-9]+", maybe_text(value).casefold())
     output: list[str] = []
@@ -677,35 +584,6 @@ def text_tokens(value: Any, *, minimum_length: int = 4) -> list[str]:
         seen.add(token)
         output.append(token)
     return output
-
-
-def parse_round_components(round_id: str) -> tuple[str, int, int] | None:
-    match = re.match(r"^(.*?)(\d+)$", maybe_text(round_id))
-    if match is None:
-        return None
-    prefix, digits = match.groups()
-    return prefix, int(digits), len(digits)
-
-
-def round_sort_key(round_id: str) -> tuple[str, int, str]:
-    components = parse_round_components(round_id)
-    if components is None:
-        return (round_id, 10**9, round_id)
-    prefix, number, _width = components
-    return (prefix, number, round_id)
-
-
-def discover_round_ids(run_dir: Path) -> list[str]:
-    round_ids: list[str] = []
-    for child in run_dir.iterdir():
-        if not child.is_dir():
-            continue
-        if not child.name.startswith("round_"):
-            continue
-        round_ids.append(child.name.replace("_", "-"))
-    return sorted(dict.fromkeys(round_ids), key=round_sort_key)
-
-
 def previous_round_id(run_dir: Path, round_id: str) -> str | None:
     components = parse_round_components(round_id)
     if components is None:
@@ -721,15 +599,6 @@ def previous_round_id(run_dir: Path, round_id: str) -> str | None:
         if item_prefix == prefix and item_number < number:
             candidates.append(item)
     return candidates[-1] if candidates else None
-
-
-def load_mission(run_dir: Path) -> dict[str, Any]:
-    payload = read_json(mission_path(run_dir))
-    if not isinstance(payload, dict):
-        raise ValueError("mission.json must be an object.")
-    return payload
-
-
 def mission_run_id(mission: dict[str, Any]) -> str:
     run_id = mission.get("run_id")
     if not isinstance(run_id, str) or not run_id.strip():
@@ -760,10 +629,9 @@ def mission_place_scope(mission: dict[str, Any]) -> dict[str, Any]:
 
 
 def mission_constraints(mission: dict[str, Any]) -> dict[str, int]:
-    if CONTRACT_MODULE is not None and hasattr(CONTRACT_MODULE, "effective_constraints"):
-        values = CONTRACT_MODULE.effective_constraints(mission)
-        if isinstance(values, dict):
-            return {key: int(value) for key, value in values.items() if isinstance(value, int) and value > 0}
+    values = contract_effective_constraints(mission)
+    if isinstance(values, dict):
+        return {key: int(value) for key, value in values.items() if isinstance(value, int) and value > 0}
     constraints = mission.get("constraints")
     if not isinstance(constraints, dict):
         return {}
@@ -1050,48 +918,6 @@ def artifact_ref(signal: dict[str, Any]) -> dict[str, Any]:
     if signal.get("sha256"):
         ref["sha256"] = signal["sha256"]
     return ref
-
-
-def load_contract_module() -> Any | None:
-    try:
-        from eco_council_runtime import contract as contract_module
-    except Exception:
-        return None
-    return contract_module
-
-
-CONTRACT_MODULE = load_contract_module()
-if CONTRACT_MODULE is not None and hasattr(CONTRACT_MODULE, "SCHEMA_VERSION"):
-    SCHEMA_VERSION = CONTRACT_MODULE.SCHEMA_VERSION
-
-
-def contract_call(name: str, *args: Any, **kwargs: Any) -> Any | None:
-    if CONTRACT_MODULE is None or not hasattr(CONTRACT_MODULE, name):
-        return None
-    helper = getattr(CONTRACT_MODULE, name)
-    return helper(*args, **kwargs)
-
-
-def effective_matching_authorization(*, mission: dict[str, Any], round_id: str, authorization: dict[str, Any]) -> dict[str, Any]:
-    value = contract_call("apply_matching_authorization_policy", mission, round_id, authorization)
-    if isinstance(value, dict):
-        return value
-    return dict(authorization)
-
-
-def validate_payload(kind: str, payload: Any) -> None:
-    if CONTRACT_MODULE is None:
-        return
-    result = CONTRACT_MODULE.validate_payload(kind, payload)
-    validation = result.get("validation", {})
-    if validation.get("ok"):
-        return
-    issue_messages = []
-    for issue in validation.get("issues", [])[:5]:
-        issue_messages.append(f"{issue.get('path')}: {issue.get('message')}")
-    raise ValueError(f"Generated invalid {kind}: {'; '.join(issue_messages)}")
-
-
 def insert_many(conn: sqlite3.Connection, sql: str, rows: Iterable[tuple[Any, ...]]) -> None:
     data = list(rows)
     if not data:
@@ -4158,17 +3984,6 @@ def save_environment_db(db_path: Path, signals: list[dict[str, Any]], observatio
                 for observation in observations
             ),
         )
-
-
-def load_canonical_list(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    payload = read_json(path)
-    if not isinstance(payload, list):
-        raise ValueError(f"Expected list in {path}")
-    return [item for item in payload if isinstance(item, dict)]
-
-
 def load_object_if_exists(path: Path) -> dict[str, Any] | None:
     payload = load_json_if_exists(path)
     if isinstance(payload, dict):
@@ -6679,6 +6494,7 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
             write_json(path, payload, pretty=args.pretty)
     if not evidence_library_ledger_path(run_dir_path, args.round_id).exists():
         atomic_write_text_file(evidence_library_ledger_path(run_dir_path, args.round_id), "")
+    ensure_audit_chain_ready(run_dir_path, args.round_id)
 
     manifest = load_or_build_manifest(run_dir_path, mission)
     manifest["round_id_initialized"] = args.round_id
@@ -7044,6 +6860,13 @@ def command_apply_matching_adjudication(args: argparse.Namespace) -> dict[str, A
             {"object_kind": "matching-result", "payload": matching_result},
             {"object_kind": "evidence-adjudication", "payload": evidence_adjudication},
         ],
+    )
+    record_match_phase_receipt(
+        run_dir=run_dir_path,
+        round_id=args.round_id,
+        evidence_count=len(evidence_cards),
+        isolated_count=len(isolated_entries),
+        remand_count=len(remands),
     )
 
     return {

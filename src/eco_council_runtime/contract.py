@@ -6,16 +6,23 @@ from __future__ import annotations
 import argparse
 import copy
 import json
-import os
 import re
 import sqlite3
-import sys
-import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.adapters.filesystem import atomic_write_text_file, pretty_json, read_json, utc_now_iso, write_json
+from eco_council_runtime.domain.rounds import (
+    current_round_number,
+    normalize_round_id,
+    parse_round_components,
+    round_dir_name,
+    round_id_from_dirname,
+    strict_round_sort_key as round_sort_key,
+)
+from eco_council_runtime.domain.text import maybe_text, normalize_space
 from eco_council_runtime.investigation import build_investigation_plan
 from eco_council_runtime.layout import (
     CONTRACT_ASSETS_DIR,
@@ -409,54 +416,6 @@ DEFAULT_SOURCE_FAMILY_CATALOG: list[dict[str, Any]] = [
         ],
     },
 ]
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def pretty_json(data: Any, *, pretty: bool) -> str:
-    if pretty:
-        return json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True)
-    return json.dumps(data, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
-
-
-def read_json(path: Path) -> Any:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def write_json(path: Path, payload: Any, *, pretty: bool) -> None:
-    atomic_write_text_file(path, pretty_json(payload, pretty=pretty) + "\n")
-
-
-def atomic_write_text_file(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_path = tempfile.mkstemp(prefix=f".{path.name}.tmp-", dir=str(path.parent))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp_path, path)
-    except Exception:
-        try:
-            os.unlink(temp_path)
-        except FileNotFoundError:
-            pass
-        raise
-
-
-def normalize_space(value: Any) -> str:
-    return " ".join(str(value).split())
-
-
-def maybe_text(value: Any) -> str:
-    if value is None:
-        return ""
-    return normalize_space(value)
-
-
 def unique_strings(values: list[str]) -> list[str]:
     output: list[str] = []
     seen: set[str] = set()
@@ -790,24 +749,6 @@ def effective_constraints(mission: dict[str, Any]) -> dict[str, int]:
         if is_int_not_bool(value) and int(value) > 0:
             constraints[key] = int(value)
     return {key: int(value) for key, value in constraints.items() if is_int_not_bool(value) and int(value) > 0}
-
-
-def parse_round_components(round_id: str) -> tuple[str, int, int] | None:
-    text = maybe_text(round_id)
-    match = re.match(r"^(.*?)(\d+)$", text)
-    if match is None:
-        return None
-    prefix, digits = match.groups()
-    return prefix, int(digits), len(digits)
-
-
-def current_round_number(round_id: str) -> int | None:
-    components = parse_round_components(round_id)
-    if components is None:
-        return None
-    return components[1]
-
-
 def is_final_allowed_round(mission: dict[str, Any], round_id: str) -> bool:
     max_rounds = effective_constraints(mission).get("max_rounds")
     round_number = current_round_number(round_id)
@@ -2691,38 +2632,6 @@ def parse_bbox(raw: str) -> dict[str, Any]:
     if north <= south:
         raise ValueError("--bbox north must be greater than south.")
     return {"type": "BBox", "west": west, "south": south, "east": east, "north": north}
-
-
-def round_dir_name(round_id: str) -> str:
-    return normalize_round_id(round_id).replace("-", "_")
-
-
-def normalize_round_id(round_id: str) -> str:
-    value = round_id.strip()
-    match = ROUND_ID_INPUT_PATTERN.match(value)
-    if match is None:
-        raise ValueError(f"Unsupported round_id format: {round_id!r}. Expected round-001 or round_001 style.")
-    return f"round-{match.group(1)}"
-
-
-def round_id_from_dirname(dirname: str) -> str | None:
-    match = ROUND_DIR_PATTERN.match(dirname.strip())
-    if match is None:
-        return None
-    return f"round-{match.group(1)}"
-
-
-def round_number(round_id: str) -> int:
-    return int(normalize_round_id(round_id).split("-")[-1])
-
-
-def round_sort_key(round_id: str) -> tuple[int, str]:
-    try:
-        return (round_number(round_id), round_id)
-    except ValueError:
-        return (sys.maxsize, round_id)
-
-
 def allowed_sources_for_role(mission: dict[str, Any], role: str) -> list[str]:
     governance_families = source_governance_for_role(mission, role)
     values = [
@@ -3055,6 +2964,8 @@ def scaffold_round(
         round_path / "moderator" / "derived",
         round_path / "shared" / "contexts",
         round_path / "shared" / "evidence-library",
+        round_path / "shared" / "evidence-library" / "audit-chain",
+        round_path / "shared" / "evidence-library" / "audit-chain" / "objects",
     )
     for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
@@ -3075,11 +2986,22 @@ def scaffold_round(
     for path, payload in library_views.items():
         write_json(path, payload, pretty=pretty)
     atomic_write_text_file(round_path / "shared" / "evidence-library" / "ledger.jsonl", "")
+    atomic_write_text_file(round_path / "shared" / "evidence-library" / "audit-chain" / "receipts.jsonl", "")
 
     return {
         "round_id": round_id,
         "round_dir": str(round_path),
-        "files_written": [str(path) for path in sorted({*files_to_write, *library_views, round_path / "shared" / "evidence-library" / "ledger.jsonl"})],
+        "files_written": [
+            str(path)
+            for path in sorted(
+                {
+                    *files_to_write,
+                    *library_views,
+                    round_path / "shared" / "evidence-library" / "ledger.jsonl",
+                    round_path / "shared" / "evidence-library" / "audit-chain" / "receipts.jsonl",
+                }
+            )
+        ],
         "directories_ready": [str(path) for path in sorted(directories)],
     }
 
@@ -3243,6 +3165,16 @@ def validate_bundle(run_dir: Path) -> dict[str, Any]:
             result["path"] = str(path)
             round_results.append(result)
             results.append(result)
+
+        try:
+            from eco_council_runtime.controller.audit_chain import validate_round_audit_chain
+        except Exception:  # noqa: BLE001
+            validate_round_audit_chain = None
+        if validate_round_audit_chain is not None:
+            audit_result = validate_round_audit_chain(bundle_path, round_id, require_exists=False)
+            if audit_result.get("receipt_count") or Path(maybe_text(audit_result.get("path"))).exists():
+                round_results.append(audit_result)
+                results.append(audit_result)
 
         missing_required.extend(round_missing_required)
         missing_optional.extend(round_missing_optional)
