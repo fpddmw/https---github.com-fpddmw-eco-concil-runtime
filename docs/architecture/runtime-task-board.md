@@ -1,11 +1,19 @@
 # Runtime Task Board
 
+## Board Scope
+
+- Persist forward execution planning in this file.
+- Keep this board focused on open work only; do not keep old completed slice detail here.
+- Historical baseline for completed `T01` to `T06` now lives in `docs/architecture/runtime-task-board-history-t01-t06.md`.
+
 ## Working Rules
 
-- Persist all execution planning in this file.
-- Keep at most one task in `in_progress` at a time; if the next task has not started yet, leave it `planned`.
-- A task is only `completed` when code, schema/contract updates, tests, and a short outcome note all land together.
-- If a change is tightly coupled across `schema + runtime + tests`, treat it as one task and finish the whole slice before moving on.
+- Keep at most one sub-slice in `in_progress` at a time.
+- Finish one sub-slice end-to-end before opening the next one.
+- A sub-slice is only `completed` when code, schema or contract updates, tests, and a short outcome note land together.
+- If a change spans `schema + runtime + tests`, land it as one sub-slice rather than splitting it across partially merged tasks.
+- Any new investigation feature must declare its token budget, deterministic inputs, emitted artifacts, and audit boundary before implementation starts.
+- Any planner, retrieval, or review upgrade must remain replayable from canonical run artifacts; do not depend on hidden model-only memory.
 
 ## Status Legend
 
@@ -14,296 +22,257 @@
 - `planned`: approved backlog, not yet active
 - `blocked`: cannot proceed without a prior task or a design decision
 
+## Current Baseline
+
+- First-stage layered extraction is complete: `domain/`, `application/`, `adapters/`, and `cli/` all exist and are now the main long-lived destinations.
+- The current structure is materially better than the original monolith, but `application/` now contains second-generation hotspots:
+  - `application/simulation_workflow.py` (`2164` lines)
+  - `application/normalize_sources.py` (`2154` lines)
+  - `application/reporting_drafts.py` (`1677` lines)
+  - `application/reporting_artifacts.py` (`1644` lines)
+  - `application/orchestration_planning.py` (`1582` lines)
+- Legacy root facades are thinner but still not fully settled as final public API surfaces:
+  - `contract.py` (`2793` lines)
+  - `normalize.py` (`1502` lines)
+  - `reporting.py` (`902` lines)
+  - `supervisor.py` (`839` lines)
+  - `orchestrate.py` (`726` lines)
+  - `simulate.py` (`68` lines)
+- Strongest current capability: stage-machine discipline, run orchestration, and local tamper-evident audit flow.
+- Weakest current capability: investigation planning and reasoning still rely mainly on static profiles, fixed gap mappings, deterministic matching heuristics, and compact status aggregation.
+- Baseline regression note: the repository was green at `110` tests when this board was reset.
+
+## Execution Order
+
+- Recommended order:
+  - `T07.1`
+  - `T07.2`
+  - `T08.1`
+  - `T08.2`
+  - `T08.3`
+  - `T07.3`
+  - `T08.4`
+  - `T07.4`
+  - `T08.5`
+  - `T07.5`
+  - `T07.6`
+  - `T08.6`
+- Rationale:
+  - do the minimum structural cleanup first so new investigation work does not land in unstable module boundaries
+  - introduce deterministic investigation state before changing retrieval, review, or action selection
+  - keep benchmark and audit gates until the end of each major capability block
+
 ## Task List
 
-### T01 Claim-Local Scope And Public Claim Legging
-
-- Status: `completed`
-- Goal: separate `mission scope` from `claim-local scope` so public claims without signal-local anchors cannot be silently treated as direct local evidence.
-- Outcome:
-  - public claims now carry `claim_scope`
-  - matching refuses direct use of mission-fallback public claims
-  - `hypothesis_id` and `leg_id=public_interpretation` flow through claim-side artifacts
-  - regression tests cover false-localized and localized public claims
-
-### T02 Observation Leg Attribution And Physical-Leg Review Filtering
-
-- Status: `completed`
-- Goal: assign physical observations to `hypothesis_id` and `leg_id` when inferable, then make investigation review prefer those tags over raw metric-family fallback.
-- Scope:
-  - observation candidates
-  - observation curation entries and submissions
-  - shared observations and matching candidate views
-  - investigation review of `source / mechanism / impact`
-- Outcome:
-  - atomic smoke-transport observations now infer stable `hypothesis_id` and `leg_id` for `source`, `mechanism`, and `impact`
-  - curated observation submissions now preserve candidate-side tags conservatively and allow explicit top-level override without losing component attribution
-  - investigation review now prefers explicit observation `hypothesis_id` and `leg_id` over metric-family fallback for physical legs
-  - `normalize.py` and `reporting.py` now keep observation signature and hydration behavior aligned for tagged observations
-  - regression tests cover observation legging and the repository test suite now passes with `31` tests
-- Acceptance criteria:
-  - atomic observations receive stable `hypothesis_id` and `leg_id` when the investigation plan makes the mapping unambiguous
-  - curated observations preserve or intentionally override those tags
-  - investigation review does not count a physical observation toward the wrong leg when explicit leg tags exist
-  - smoke-transport tests cover `source`, `mechanism`, and `impact`
-  - all repository tests pass
-
-### T03 Benchmark Expansion For Investigation Quality
-
-- Status: `completed`
-- Goal: move from flow tests to scenario-level regression on smoke, flood, heat, policy, and negative-match cases.
-- Outcome:
-  - added a scenario-style benchmark matrix covering smoke, flood, heat, and policy cases across positive, contradiction, and no-match paths
-  - benchmark expectations now lock `profile_id`, `claim_type`, `hypothesis_id`, `leg_id`, match verdicts, selected observation leg tags, and selected investigation-review statuses
-  - benchmark rollout surfaced and fixed a latent flood-assessment bug in `normalize.py` where precipitation/hydrology metric sets were referenced but not defined
-  - benchmark rollout also fixed evidence-card generation so unmatched claims without any linked observations no longer create misleading `supported` review paths
-  - repository test suite now passes with `34` tests
-- Acceptance criteria:
-  - at least one positive and one false-match scenario per major profile
-  - expected `hypothesis / leg / match` outcomes encoded in tests or fixtures
-
-### T04 Investigation Planning And Retrieval Upgrade
-
-- Status: `completed`
-- Goal: replace shallow keyword routing with structured hypothesis-gap planning and stronger historical retrieval.
-- Outcome:
-  - investigation plans now emit explicit `fetch_intents`, leg-level `gap_types`, top-level `history_query`, and first-class `alternative_hypotheses` instead of only chain-leg scaffolding
-  - role-prioritized `causal_focus` now carries gap-aware and alternative-aware planning context, so roles no longer start from a purely linear hypothesis view
-  - case-library search now scores structured overlap across `profile_id`, `claim_type`, `metric_family`, `gap_type`, and `source_skill`, while preventing weak generic overlaps from dominating retrieval
-  - history-context generation now reuses the structured investigation query rather than only `topic + region`, and renders planning-relevant overlap from matched historical cases
-  - regression coverage now locks the new planner output, structured retrieval behavior, and history-context wiring, and the repository test suite passes with `37` tests
-- Acceptance criteria:
-  - planner emits gap-driven fetch intent
-  - historical retrieval uses structured fields beyond lexical overlap
-  - negative or alternative hypotheses become first-class planning inputs
-
-### T05 Tamper-Evident Audit Chain
-
-- Status: `completed`
-- Goal: upgrade traceability into append-only, tamper-evident auditability.
-- Scope for current slice:
-  - add a dedicated audit-chain ledger with content-addressed artifact snapshots
-  - record receipts at import, fetch, normalize, match, and decision phase boundaries
-  - validate chain continuity, snapshot digests, and latest canonical artifact integrity deterministically
-- Outcome:
-  - added a dedicated append-only audit chain under `shared/evidence-library/audit-chain` with chained receipts and content-addressed snapshot blobs
-  - import, fetch, normalize, match, and decision boundaries now emit immutable receipts, and import-driven fetch/data-plane flows now record `import` before phase receipts for clearer chronology
-  - bundle validation now checks chain continuity, receipt digests, snapshot digests, and latest canonical artifact integrity, and malformed tampering now fails deterministically instead of crashing validation
-  - regression coverage now locks full-phase receipt recording, import sequencing, latest-artifact tamper detection, and malformed-chain handling, and the repository test suite passes with `42` tests
-- Acceptance criteria:
-  - immutable receipts for import/fetch/normalize/match/decision
-  - artifact digests and chained ledger entries
-  - deterministic validation of chain integrity
-
-### T06 Structural Decomposition After Semantics Stabilize
+### T07 Structure Optimization And Second-Stage Decomposition
 
 - Status: `planned`
-- Goal: turn the current monolithic runtime into a layered, standalone-ready package structure with stable facades and clear ownership boundaries.
-- Assessment:
-  - do not attempt `T06` as a single cut
-  - only `supervisor.py` has been materially decomposed so far; `normalize.py`, `reporting.py`, `orchestrate.py`, and `simulate.py` remain large shells, and `contract.py` is still structurally overloaded
-  - current structural hotspot spans `normalize.py` (`7243` lines), `reporting.py` (`5484` lines), `orchestrate.py` (`3528` lines), `simulate.py` (`2217` lines), `supervisor.py` (`1326` lines), and `contract.py` (`3512` lines)
-  - continuing to split code without first fixing the target directory topology would likely turn `controller/` into a second monolith directory
-- Target structure for completion:
-  - `domain/` for investigation, matching, evidence, and stage-policy semantics
-  - `application/` for normalize/reporting/orchestration/simulation/supervisor use cases
-  - `adapters/` for filesystem, OpenClaw, fetch bridges, caches, and archive integrations
-  - `cli/` for thin command surfaces only
-  - root-level legacy modules kept temporarily as facades during migration, then reduced or removed
-- Refactor slices:
-  - `T06.1 Target Package Topology And Migration Guardrails` (`completed`)
-  - scope:
-    - finalize the target package layout and migration rules in architecture docs
-    - establish the rule that new long-lived refactor destinations are `domain/`, `application/`, `adapters/`, and `cli/`, not further expansion of `controller/`
-    - define which legacy root modules remain as temporary compatibility facades during migration
-  - acceptance:
-    - target structure and migration rules are documented clearly enough to guide all later slices
-    - next slices have explicit ownership and destination packages
-  - outcome:
-    - architecture docs now lock the target layered package layout, migration map, and the rule that `controller/` is transitional rather than permanent
-    - importable package skeletons now exist for `domain/`, `application/`, `adapters/`, and `cli/`, so later slices have concrete destinations instead of only planned directories
-    - `controller` package metadata now explicitly marks it as a transition zone, and topology regression coverage now locks these package boundaries
-    - repository test suite passes with `44` tests
-  - `T06.2 Shared Foundations And Adapter Base Extraction` (`completed`)
-  - scope:
-    - extract duplicated `json / hashing / round-id / mission / policy bridge / artifact / filesystem` helpers out of the large modules
-    - move them into stable shared modules under the target layered structure
-  - acceptance:
-    - public entrypoints stay stable
-    - duplicated helper families shrink materially
-    - full repository tests pass
-  - outcome:
-    - added stable shared foundations under `domain/` and `adapters/` for text normalization, round-id handling, contract bridging, filesystem/json I/O, hashing, and mission/run-path access
-    - `normalize.py`, `reporting.py`, `orchestrate.py`, and `contract.py` now consume those shared foundations instead of carrying their own duplicate low-level helper blocks
-    - transitional controller shims now point at the new shared foundations for IO and contract-policy bridging, reducing pressure to keep growing `controller/` as a second architecture
-    - regression coverage now locks shared foundation behavior and compatibility shims, and the repository test suite passes with `48` tests
-  - `T06.3 Normalize Domain And Application Split` (`planned`)
-  - sub-slices:
-    - `T06.3a Normalize Domain Semantics Extraction` (`completed`)
-    - scope:
-      - move public-claim shaping, observation tagging, metric-family semantics, and shared normalization-domain helpers out of `normalize.py`
-      - land them in `domain/` and make `normalize.py` consume them as a facade dependency
-    - acceptance:
-      - domain-level normalize semantics become directly importable outside `normalize.py`
-      - existing normalization and benchmark regressions stay green
-    - outcome:
-      - added `domain/normalize_semantics.py` as the shared home for public-claim scope shaping, observation leg tagging, metric-family semantics, and claim-vs-observation assessment rules
-      - `normalize.py` now consumes and compatibility-reexports those semantics instead of keeping the primary implementation inline, removing a large pure-domain block from the monolith without changing public entrypoints
-      - added direct regression coverage for the extracted domain module, and the repository test suite now passes with `51` tests
-    - `T06.3b Normalize Source Pipeline Extraction` (`completed`)
-    - scope:
-      - move public/environment source normalization pipelines and cached wrappers into `application/`
-    - acceptance:
-      - source normalization flows become application services rather than top-level monolith code
-      - source normalization regressions stay green
-    - outcome:
-      - added `application/normalize_sources.py` as the shared home for public and environment source normalization pipelines plus their cached wrappers
-      - `normalize.py` now delegates public/environment source normalization to application services and no longer carries the primary source-parser implementation block
-      - added direct regression coverage for application source pipelines across public YouTube normalization, environment Open-Meteo normalization, and environment cache miss/hit behavior, and the repository test suite now passes with `54` tests
-    - `T06.3c Normalize Storage And Match-Prep Extraction` (`completed`)
-    - scope:
-      - move normalize cache/db/manifest support and match-prep builders into `adapters/` plus `application/`
-    - acceptance:
-      - storage/match-prep helpers stop living primarily in `normalize.py`
-      - matching regressions stay green
-    - outcome:
-      - added `adapters/normalize_storage.py` as the shared adapter for normalize analytics DB paths, run manifest resolution, and public/environment SQLite writes
-      - `normalize.py` now delegates manifest and SQLite persistence to storage adapters, while `signal_corpus.py` reuses the same analytics path resolution instead of keeping a parallel copy
-      - added `application/normalize_matching.py` for matching candidate-set and adjudication-draft builders, so `normalize.py` no longer keeps the primary match-prep implementation block
-      - added direct regression coverage for normalize storage adapters and matching-prep builders, and the repository test suite now passes with `57` tests
-    - `T06.3d Normalize Facade Cleanup` (`planned`)
-    - scope:
-      - reduce `normalize.py` to orchestration-level facade and CLI surface only
-    - acceptance:
-      - `normalize.py` is no longer the main implementation home
-      - full repository tests pass
-    - sub-slices:
-      - `T06.3d.a Normalize Representation And Summary Extraction` (`completed`)
-      - scope:
-        - move compact payload builders, representative ordering helpers, and normalize summary builders into `application/`
-      - acceptance:
-        - normalize view/summary builders become directly importable outside `normalize.py`
-        - `normalize.py` delegates those builders instead of keeping the primary implementation inline
-        - full repository tests pass
-      - outcome:
-        - added `application/normalize_views.py` as the shared home for compact payload builders, representative observation ordering, submission-to-view reconstruction helpers, and normalize summary builders
-        - `normalize.py` now delegates normalize view/summary construction to application services instead of keeping the primary implementation inline for those blocks
-        - added direct regression coverage for normalize view builders and representative ordering, and the repository test suite now passes with `60` tests
-      - `T06.3d.b Normalize Library Materialization Extraction` (`completed`)
-      - scope:
-        - move library state loading, submission hydration/merge helpers, and curated materialization flows into `application/`
-      - acceptance:
-        - claim/observation materialization is no longer implemented primarily in `normalize.py`
-        - full repository tests pass
-      - outcome:
-        - added `application/normalize_library.py` as the shared home for library-state loading, active/auditable merge helpers, observation hydration, curated claim/observation materialization, and library-event append logic
-        - `normalize.py` now delegates library/materialization behavior to application services while preserving facade-level schema validation, mission resolution, and compatibility entrypoints, reducing the root module to `2244` lines
-        - added direct regression coverage for library-state inheritance/hydration, mixed curated observation materialization, and curated claim persistence/ledger merging, and the repository test suite now passes with `63` tests
-      - `T06.3d.c Normalize Matching And Evidence Service Extraction` (`completed`)
-      - scope:
-        - move match/evidence/remand/isolation builders and round snapshot assembly into `application/`
-      - acceptance:
-        - normalize-side matching/evidence orchestration stops living primarily in `normalize.py`
-        - full repository tests pass
-      - outcome:
-        - added `application/normalize_evidence.py` as the shared home for claim-observation matching, evidence-card assembly, isolated/remand builders, evidence adjudication, and round snapshot construction
-        - `normalize.py` now delegates matching/evidence orchestration to application services while preserving facade-level schema validation, mission resolution, and compatibility entrypoints
-        - added direct regression coverage for extracted evidence builders and round snapshot assembly, and the repository test suite passed with `65` tests at slice landing
-      - `T06.3d.d Normalize CLI And Facade Final Reduction` (`completed`)
-      - scope:
-        - collapse `normalize.py` to thin command wiring plus compatibility facade reexports only
-      - acceptance:
-        - `normalize.py` is no longer the main implementation home
-        - full repository tests pass
-      - outcome:
-        - added `application/normalize_candidates.py` as the shared home for public claim candidate grouping, environment observation aggregation, compact audits, and candidate-side statistical summaries
-        - `normalize.py` now delegates candidate construction and environment aggregation to application services while preserving CLI entrypoints and compatibility exports, reducing the root module from `1847` lines to `1518` lines
-        - added direct regression coverage for candidate grouping, fire-detection aggregation, mission-scope fallback grouping, and extra observation defaults, and the repository test suite now passes with `69` tests
-  - acceptance:
-    - `normalize.py` becomes an orchestrating compatibility facade rather than the main implementation body
-    - benchmark and normalization regressions stay green
-  - `T06.4 Reporting And Decision Pipeline Split` (`completed`)
-  - scope:
-    - split `reporting.py` into round-state aggregation, reporting view/support helpers, draft/decision builders, and artifact/promotion orchestration concerns while keeping contract validation at the boundary
-  - sub-slices:
-    - `T06.4a Reporting State And Phase Extraction` (`completed`)
-    - scope:
-      - move round-state aggregation, shared-library hydration, phase-state summaries, override loading, and context augmentation helpers into `application/`
-    - acceptance:
-      - reporting state assembly and phase gating become directly importable outside `reporting.py`
-      - `reporting.py` delegates state assembly instead of owning the primary implementation inline
-      - direct state-focused regression coverage lands and full repository tests pass
-    - outcome:
-      - added `application/reporting_state.py` as the shared home for round-state aggregation, phase-state summaries, library hydration, override loading, and matching-state augmentation
-      - `reporting.py` now delegates reporting state assembly through compatibility aliases instead of keeping the primary implementation inline
-      - added direct regression coverage for state hydration and phase-state assembly, and targeted reporting-state tests passed before continuing extraction
-    - `T06.4b Reporting View And Packet Support Extraction` (`completed`)
-    - scope:
-      - move compact renderers, candidate/submission summarizers, representative selection helpers, and packet-support view builders into `application/`
-    - acceptance:
-      - compact reporting views and packet-support helpers become directly importable
-      - packet builder prerequisites no longer live primarily in `reporting.py`
-      - direct view-focused regression coverage lands and full repository tests pass
-    - outcome:
-      - added `application/reporting_views.py` as the shared home for compact reporting renderers, candidate/submission summaries, representative selection, and fallback packet-context builders
-      - `reporting.py` now reexports those helpers through compatibility aliases, removing the duplicated inline implementations from the root facade
-      - added direct regression coverage for candidate-pool summaries, representative selection, candidate-entry builders, and fallback context assembly, and the extracted reporting view tests passed
-    - `T06.4c Reporting Draft And Decision Builder Extraction` (`completed`)
-    - scope:
-      - move readiness/report/investigation/decision draft builders, scoring helpers, and moderator decision assembly into `application/`
-    - acceptance:
-      - expert-report and council-decision assembly become directly testable outside `reporting.py`
-      - decision scoring, missing-evidence derivation, and report-draft logic stop living primarily inline
-      - direct draft/decision regression coverage lands and full repository tests pass
-    - outcome:
-      - added `application/reporting_drafts.py` as the shared home for readiness, expert-report, investigation-review, and council-decision draft builders plus their scoring, evidence-gap, and causal-leg review helpers
-      - `reporting.py` now reexports those builders through compatibility aliases, removing the primary inline implementations from the root facade while preserving existing command surfaces
-      - added direct regression coverage for readiness gating, expert-report drafting, investigation-review leg auditing, and council-decision blocking logic, and the full repository test suite now passes with `82` tests
-    - `T06.4d Reporting Artifact And Promotion Extraction` (`completed`)
-    - scope:
-      - move artifact orchestration, prompt rendering, draft-promotion flows, and final reporting/decision pipeline composition into `application/`, while keeping `validate_bundle` at the command boundary
-    - acceptance:
-      - artifact generation and promotion lifecycle become separately testable
-      - decision promotion keeps its audit-chain side effects and overwrite protections
-      - `reporting.py` becomes a thin CLI/facade module and full repository tests pass
-    - outcome:
-      - added `application/reporting_artifacts.py` as the shared home for curation/readiness/matching/report/decision packet builders, prompt renderers, artifact orchestration, and draft-promotion flows
-      - `reporting.py` now delegates those workflows through compatibility aliases while preserving command/bundle-validation entrypoints, reducing the root module to `902` lines instead of keeping the primary reporting implementation inline
-      - added direct regression coverage for curation packet/prompt generation, readiness gating, decision artifact report-source selection, and decision-promotion audit receipts, and the full repository test suite now passes with `86` tests
-  - acceptance:
-    - `reporting.py` is no longer the main implementation home for reporting/decision workflows
-    - round-state aggregation, packet rendering, and decision lifecycle are separately testable
-    - reporting regressions, decision/audit-chain regressions, and bundle validation regressions stay green
-  - `T06.5 Orchestration, Supervisor, And Simulation Application Split` (`in_progress`)
-  - scope:
-    - split fetch-plan/orchestration services away from adapters and CLI glue in `orchestrate.py`
-    - continue shrinking `supervisor.py` so it becomes a thin lifecycle facade over extracted services
-    - split `simulate.py` into application workflow plus thin command surface
-  - acceptance:
-    - orchestration, supervision, and simulation flows have clearer application-service boundaries
-    - root modules become visibly thinner
-    - full repository tests pass
-  - `T06.6 Contract, CLI, And Legacy Facade Cleanup` (`planned`)
-  - scope:
-    - separate schema validation, scaffolding, and command-surface concerns in `contract.py`
-    - finish CLI boundary cleanup and reduce root-level facades where safe
-    - normalize import paths so the final package layout is coherent for standalone extraction
-  - acceptance:
-    - controller lifecycle logic is clearer and extraction toward standalone `domain / application / adapters / cli` is materially easier
-    - remaining top-level modules are either thin facades or intentionally preserved public entrypoints
-    - full repository tests pass
-- Execution rule for `T06`:
-  - activate only one slice at a time
-  - each slice should first move boundaries, then perform only the minimum compatibility edits needed to keep behavior stable
-  - each slice must land with code changes, tests, and a short outcome note together
-  - full repository tests are the regression gate after every slice
+- Goal: move from first-stage extraction into a stable subdomain package layout, remove residual compatibility cycles, and prevent `application/` from becoming a new monolith layer.
+- Non-goals:
+  - dependency risk cleanup
+  - detached skills repository redesign
+  - major runtime behavior changes unless required to complete the structural split safely
+- Target end state:
+  - `src/eco_council_runtime/application/` gains subdomain ownership instead of flat file accumulation:
+    - `application/contract/`
+    - `application/normalize/`
+    - `application/reporting/`
+    - `application/orchestration/`
+    - `application/simulation/`
+    - `application/supervisor/`
+    - `application/archive/`
+    - `application/investigation/`
+  - `src/eco_council_runtime/domain/` grows explicit semantic homes where needed:
+    - `domain/investigation/`
+    - `domain/evidence/`
+    - `domain/matching/`
+    - `domain/mission/`
+  - `src/eco_council_runtime/adapters/` becomes the permanent home for audit, OpenClaw, storage, and archive bridges rather than leaving those responsibilities under `controller/`
+  - root modules become intentionally thin public facades or CLI entrypoints only
+  - `controller/` shrinks toward compatibility shims and narrow workflow internals instead of long-lived ownership
 - Acceptance criteria:
-  - clearer boundaries across `domain / application / adapters / cli`
-  - legacy monolith modules stop being the main implementation home
-  - no behavior regressions against the benchmark suite
+  - every remaining hotspot has an explicit destination and owner
+  - targeted compatibility cycles are removed
+  - no newly created extracted module should exceed roughly `1000` lines without an explicit exception note in this board
+  - public entrypoints and benchmarked behavior remain stable
+
+#### T07.1 Structural Target Map And Ownership Freeze
+
+- Status: `planned`
+- Scope:
+  - define the second-stage package map under `application/`, `domain/`, and `adapters/`
+  - assign each current hotspot file to concrete destination modules
+  - define which root modules remain public facades and which imports are transitional only
+  - define the controller exit map for `audit_chain`, OpenClaw helpers, archive import helpers, and supervisor internals
+- Acceptance:
+  - no hotspot remains without a target destination
+  - import ownership is unambiguous enough to guide later slices without re-planning
+
+#### T07.2 Compatibility-Cycle And Boundary Cleanup
+
+- Status: `planned`
+- Scope:
+  - remove or isolate remaining compatibility back-import patterns, especially:
+    - `application.contract_runtime -> contract`
+    - `contract -> application.contract_runtime`
+    - `signal_corpus -> supervisor`
+    - `case_library -> supervisor`
+  - clean stale README or architecture references that still describe transitional boundaries as final
+  - ensure new structural work does not need lazy root-module imports to function
+- Acceptance:
+  - targeted modules import final package homes instead of bouncing through root facades
+  - structural docs and runtime imports describe the same boundary model
+
+#### T07.3 Reporting And Orchestration Hotspot Split
+
+- Status: `planned`
+- Scope:
+  - split `application/reporting_drafts.py` into subdomain modules such as readiness, expert reports, investigation review, and council decision
+  - split `application/reporting_artifacts.py` into packet building, prompt rendering, artifact persistence, and promotion flows
+  - split `application/orchestration_planning.py` into governance checks, query builders, geometry or window helpers, and step synthesis
+- Acceptance:
+  - reporting and orchestration services stop depending on second-generation mega-modules
+  - direct regression coverage moves with the extracted submodules
+
+#### T07.4 Normalize, Simulation, And Archive Hotspot Split
+
+- Status: `planned`
+- Scope:
+  - split `application/normalize_sources.py` into public-source, environment-source, and cache-wrapper or ingestion helper modules
+  - split `application/simulation_workflow.py` into preset loading, raw artifact generation, synthetic payload builders, and workflow runners
+  - move cross-run archive responsibilities toward `application/archive/` plus dedicated archive adapters so `signal_corpus.py` and `case_library.py` stop depending on `supervisor.py`
+- Acceptance:
+  - normalize, simulation, and archive flows have stable subdomain boundaries
+  - archive import code no longer requires root `supervisor` module loading
+
+#### T07.5 Root Facade Contraction And Controller Retirement Pass
+
+- Status: `planned`
+- Scope:
+  - shrink root facades to intentional public API wrappers only
+  - reduce `controller/` to documented compatibility shims or clearly bounded workflow internals
+  - update README and architecture docs to reflect the final package layout after the second-stage split
+- Acceptance:
+  - root modules are visibly thin
+  - `controller/` is no longer treated as a permanent home for new work
+  - docs reflect the actual production boundaries
+
+#### T07.6 Structural Regression Gate
+
+- Status: `planned`
+- Scope:
+  - add topology or import-boundary regressions where useful
+  - lock compatibility entrypoints that must remain stable
+  - add guardrails against reintroducing the cleaned compatibility cycles
+- Acceptance:
+  - the second-stage structure is test-guarded rather than documented only
+  - future refactors cannot easily drift back into flat mega-modules
+
+### T08 Investigation Capability Upgrade Under Controlled Token And Auditable Flow
+
+- Status: `planned`
+- Goal: improve investigation quality from static heuristic routing toward evidence-state-guided planning, while keeping token use bounded and the full process replayable and auditable.
+- Hard constraints:
+  - deterministic state first, optional model assistance second
+  - every new investigation artifact must be persisted to canonical run paths before it can influence later stages
+  - every new planner or retrieval step must expose its inputs, selection reasons, and budget counters
+  - source governance remains authoritative; the planner may recommend only mission-governed families, layers, or explicitly permitted skills
+  - prompt-facing investigation context must be compact structured summaries rather than raw artifact dumps
+- Initial budget targets:
+  - max primary hypotheses materialized per round: `3`
+  - max alternative hypotheses per primary hypothesis: `2`
+  - max ranked next actions per planning pass: `6`
+  - max historical cases surfaced to a role in one pass: `3`
+  - max excerpt blocks per retrieved case: `2`
+  - new retrieval or planning packets must emit a bounded token estimate or size counter alongside content
+- Acceptance criteria:
+  - planning no longer depends only on fixed profile and gap mappings
+  - investigation review compares competing explanations rather than only aggregating leg statuses
+  - retrieval becomes more useful without allowing uncontrolled context growth
+  - all new state is auditable, replayable, and benchmarked
+
+#### T08.1 Investigation State Artifact And Replay Model
+
+- Status: `planned`
+- Scope:
+  - add a deterministic `shared/investigation_state.json`
+  - derive it from canonical artifacts such as `investigation_plan`, matching outputs, evidence adjudication, curated evidence, and moderator review artifacts
+  - track per hypothesis, per leg, and per alternative:
+    - support
+    - contradiction
+    - coverage
+    - remaining gaps
+    - uncertainty
+    - latest evidence refs
+    - last update stage or round
+- Acceptance:
+  - investigation state can be rebuilt from canonical artifacts without hidden memory
+  - later planners and reviews read this state instead of inferring everything from scratch each time
+
+#### T08.2 Budgeted Next-Action Planner
+
+- Status: `planned`
+- Scope:
+  - add a machine-readable `shared/investigation_actions.json`
+  - derive candidate actions from unresolved required legs, contradiction signals, alternative hypotheses, and governed source options
+  - score actions using explicit components such as:
+    - expected evidence gain
+    - contradiction resolution value
+    - coverage gain
+    - token or context cost penalty
+    - audit clarity
+  - keep the output bounded to the configured top actions only
+- Acceptance:
+  - the runtime can explain why one next action outranks another
+  - action selection becomes evidence-state-aware instead of only gap-template-driven
+
+#### T08.3 Retrieval V2 With Compact History Evidence
+
+- Status: `planned`
+- Scope:
+  - upgrade historical retrieval from case-level overlap scoring toward compact artifact-level support
+  - keep structured filters, but add bounded retrieval of report, decision, evidence-card, or curated-summary snippets
+  - persist a machine-readable retrieval snapshot alongside the current human-readable history context so retrieval remains auditable
+  - ensure weak lexical overlap cannot dominate retrieval when structured mismatch is strong
+- Acceptance:
+  - retrieved history is more directly useful for investigation planning
+  - retrieval remains compact, explainable, and safe under the budget caps
+
+#### T08.4 Competing-Hypothesis Review And Decision Gating
+
+- Status: `planned`
+- Scope:
+  - upgrade investigation review so it compares primary and alternative explanations explicitly
+  - surface contradiction paths, not just support paths
+  - make review outputs explain whether another round is needed because of unresolved required legs, unresolved alternatives, or contradictory evidence
+- Acceptance:
+  - moderator review becomes a comparative causal assessment rather than mostly a leg-status rollup
+  - decision drafting can consume clearer uncertainty and contradiction signals
+
+#### T08.5 Governance-Aware Discovery Or Probe Mode
+
+- Status: `planned`
+- Scope:
+  - allow limited exploratory investigation when current evidence is insufficient or atypical
+  - constrain exploration by mission governance, explicit budgets, and auditable reason codes
+  - keep discovery outputs as recommendations or probe requests rather than free-form uncontrolled source execution
+- Acceptance:
+  - recall improves on non-template missions without opening an unbounded fetch surface
+  - every exploratory step remains reviewable and replayable
+
+#### T08.6 Evaluation, Token-Budget, And Audit Regression Gate
+
+- Status: `planned`
+- Scope:
+  - expand benchmarks for ambiguous attribution, false causal chains, contradictory evidence, low-evidence rounds, and atypical missions
+  - add regression checks for token-budget envelopes, retrieval compactness, and deterministic replay of investigation artifacts
+  - ensure any new investigation artifacts are included in validation and audit-chain coverage where appropriate
+- Acceptance:
+  - new investigation behavior has scenario-level regression coverage
+  - budget drift and audit regressions fail deterministically
 
 ## Current Task Notes
 
-- Active task: `T06.5 Orchestration, Supervisor, And Simulation Application Split`
-- Next planned task: `T06.6 Contract, CLI, And Legacy Facade Cleanup`
-- Working rule reaffirmed: structure first, then extraction; do not start another refactor sub-slice until the next active one is explicitly opened.
+- Active task: none
+- Next planned task: `T07.1 Structural Target Map And Ownership Freeze`
+- Working rule reaffirmed: after a sub-slice passes acceptance, persist its outcome here and then explicitly open the next sub-slice before coding continues.
