@@ -26,6 +26,7 @@ from eco_council_runtime.controller.policy import (
     role_family_memory,
     role_source_governance,
 )
+from eco_council_runtime.investigation import causal_focus_for_role
 
 SCHEMA_VERSION = resolve_schema_version(DEFAULT_SCHEMA_VERSION)
 
@@ -43,6 +44,7 @@ def build_source_selection_packet(run_dir: Path, round_id: str, role: str) -> Pa
     role_tasks = [item for item in _tasks_for_role(tasks, role) if isinstance(item, dict)]
     governance = role_source_governance(mission_payload, role)
     profile = policy_profile_summary(mission_payload)
+    investigation_plan = load_json_if_exists(investigation_plan_path(run_dir, round_id))
     packet = {
         "schema_version": SCHEMA_VERSION,
         "packet_kind": "eco-council-source-selection-packet",
@@ -50,7 +52,8 @@ def build_source_selection_packet(run_dir: Path, round_id: str, role: str) -> Pa
         "round_id": round_id,
         "agent_role": role,
         "mission": mission_payload,
-        "investigation_plan": load_json_if_exists(investigation_plan_path(run_dir, round_id)),
+        "investigation_plan": investigation_plan,
+        "causal_focus": causal_focus_for_role(investigation_plan, role) if isinstance(investigation_plan, dict) else {},
         "policy_profile": profile,
         "effective_constraints": effective_constraints(mission_payload),
         "tasks": role_tasks,
@@ -86,6 +89,7 @@ def render_source_selection_prompt(run_dir: Path, round_id: str, role: str) -> P
         "Review whether your role needs any raw-data fetch sources before prepare-round.",
         "Treat moderator tasks as evidence-need statements only. Do not treat them as source commands.",
         "Use packet.governance as the authority boundary: only upstream-approved or policy-auto layers may be selected.",
+        "Start with packet.causal_focus as the role-prioritized causal summary before re-reading the full packet.investigation_plan.",
         "Use packet.investigation_plan as causal-chain context. If the round needs source, mechanism, impact, or public-interpretation coverage beyond the mission region, explain that need in family_plans or override_requests rather than ignoring it.",
         "Requirements:",
         "1. Return exactly one valid source-selection JSON object.",

@@ -160,6 +160,8 @@ class DraftHelpersTests(unittest.TestCase):
         self.assertIn("/tmp/report_packet.json", prompt)
         self.assertIn("/tmp/report_draft.json", prompt)
         self.assertIn("eco-council-reporting validate-report", prompt)
+        self.assertIn("context.causal_focus", prompt)
+        self.assertIn("investigation_review", prompt)
 
 
 if __name__ == "__main__":

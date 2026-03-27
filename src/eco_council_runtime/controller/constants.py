@@ -56,8 +56,9 @@ MATCHING_ADJUDICATION_STEP_IDS = (
     "apply-matching-adjudication",
     "build-round-context",
     "reporting-build-investigation-review-packet",
+    "reporting-promote-investigation-review-draft",
+    "reporting-build-report-packets",
     "render-openclaw-prompts",
     "validate-bundle",
     "build-reporting-handoff",
 )
-

@@ -82,6 +82,7 @@ from eco_council_runtime.drafts import (
     promote_draft,
     report_prompt_text,
 )
+from eco_council_runtime.investigation import causal_focus_for_role
 from eco_council_runtime.planning import (
     base_recommendations_from_missing_types,
     build_decision_override_requests,
@@ -1386,6 +1387,7 @@ def build_report_instructions(role: str) -> list[str]:
     instructions = [
         "Return one JSON object only, shaped like expert-report.",
         "Treat `context` as a compact summary layer first; only rely on `canonical_paths` when the summary is insufficient.",
+        "Start with `context.causal_focus` as the role-prioritized causal summary before re-reading the full `investigation_plan`.",
         "Use `investigation_plan` to describe which causal legs are supported, unresolved, or still isolated.",
         "Use only claim_ids, observation_ids, and evidence_ids already present in the packet context.",
         "Do not invent coordinates, timestamps, or raw-source facts outside the packet.",
@@ -2250,6 +2252,7 @@ def build_claim_curation_instructions() -> list[str]:
         "Review the full candidate public-claim pool before deciding what enters the auditable library.",
         "Treat draft_curation as a blank scaffold, not as a recommended shortlist.",
         "Use candidate_pool.summary to preserve claim-type, channel, source-skill, and time coverage instead of selecting only the most repeated narratives.",
+        "Use context.causal_focus as the role-prioritized causal summary before falling back to the full investigation_plan.",
         "Use investigation_plan to preserve causal-leg coverage; do not over-select one dominant narrative if it leaves other required legs unrepresented.",
         "You may merge multiple candidate_claim_ids into one curated claim when they express the same public narrative.",
         "Use only claim_ids and candidate_claim_ids already present in the packet.",
@@ -2267,6 +2270,7 @@ def build_observation_curation_instructions() -> list[str]:
         "Review the full candidate physical-observation pool before deciding what enters the auditable library.",
         "Treat draft_curation as a blank scaffold, not as a recommended shortlist.",
         "Use candidate_pool.summary to preserve metric-family, source-skill, time, and spatial coverage instead of retaining only repeated atomic observations.",
+        "Use context.causal_focus as the role-prioritized causal summary before falling back to the full investigation_plan.",
         "Use investigation_plan to preserve causal-leg coverage; composite observations may represent source, mechanism, impact, or contextual legs differently.",
         "You may keep observations atomic or combine multiple candidate_observation_ids into one composite observation.",
         "Composite observations must explicitly fill candidate_observation_ids, source_skills, metric_bundle, evidence_role, and component_roles.",
@@ -2408,7 +2412,7 @@ def claim_curation_prompt_text(*, packet_path: Path, packet: dict[str, Any]) -> 
         "",
         "Then follow these rules:",
         "1. Treat packet `instructions` as binding.",
-        "2. Review `task_scope`, `context`, `investigation_plan`, and `candidate_pool` before editing.",
+        "2. Review `task_scope`, `context` (especially `context.causal_focus`), `investigation_plan`, and `candidate_pool` before editing.",
         "3. Use `draft_curation` only as a scaffold; the final curated set must be chosen from the full candidate pool.",
         "4. Return only one JSON object shaped like claim-curation.",
         "5. Keep `schema_version`, `run_id`, `round_id`, and `agent_role` consistent with the packet.",
@@ -2439,7 +2443,7 @@ def observation_curation_prompt_text(*, packet_path: Path, packet: dict[str, Any
         "",
         "Then follow these rules:",
         "1. Treat packet `instructions` as binding.",
-        "2. Review `task_scope`, `context`, `investigation_plan`, and `candidate_pool` before editing.",
+        "2. Review `task_scope`, `context` (especially `context.causal_focus`), `investigation_plan`, and `candidate_pool` before editing.",
         "3. Use `draft_curation` only as a scaffold; the final curated set must be chosen from the full candidate pool.",
         "4. Return only one JSON object shaped like observation-curation.",
         "5. Keep `schema_version`, `run_id`, `round_id`, and `agent_role` consistent with the packet.",
@@ -2715,6 +2719,7 @@ def build_data_readiness_instructions(role: str) -> list[str]:
     instructions = [
         "Return one JSON object only, shaped like data-readiness-report.",
         "Judge whether the auditable submission library available in this round is sufficiently representative for a later matching pass.",
+        "Start with context.causal_focus as the role-prioritized causal summary before re-reading the full investigation_plan.",
         "Use investigation_plan to judge whether required causal legs are actually represented, not just whether counts look non-zero.",
         "Use submission_ids, claim_ids, and observation_ids already present in the packet context only.",
         "Do not invent raw-source facts outside the packet.",
@@ -2792,7 +2797,7 @@ def data_readiness_prompt_text(*, role: str, packet_path: Path, packet: dict[str
         "",
         "Then follow these rules:",
         "1. Treat packet `instructions` as binding.",
-        "2. Review `task_scope`, `context`, `investigation_plan`, and `investigation_review` before editing.",
+        "2. Review `task_scope`, `context` (especially `context.causal_focus`), and `investigation_plan` before editing.",
         "3. Start from `draft_report` inside the packet.",
         "4. Return only one JSON object shaped like data-readiness-report.",
         "5. Keep `schema_version`, `run_id`, `round_id`, and `agent_role` consistent with the packet.",
@@ -2898,6 +2903,7 @@ def build_matching_authorization_draft(
 def build_matching_authorization_instructions() -> list[str]:
     return [
         "Return one JSON object only, shaped like matching-authorization.",
+        "Start with context.causal_focus as the compact moderator view of the causal chain before re-reading the full investigation_plan.",
         "Authorize matching based on the auditable submission libraries and readiness reports, not on the presence of pre-existing evidence cards.",
         "If this is the final allowed round, the council must still run one terminal matching/adjudication pass and may end with matched, isolated, or remand evidence.",
         "Use only claim_ids and observation_ids already present in the packet.",
@@ -2939,6 +2945,7 @@ def build_matching_authorization_packet(
             "Authorize matching based on auditable submissions and readiness reports. Zero evidence cards before the first match is expected.",
             "If this is the final allowed round, the output must still permit one terminal matching/adjudication pass.",
             "Use the packet context and referenced readiness reports only; do not invent raw data or future rounds.",
+            "Use `context.causal_focus` as the compact moderator view of the causal chain before re-reading the full investigation_plan.",
             "Use investigation_plan as causal-chain context. Matching may be partial by leg, and isolated evidence is valid when some legs remain unresolved.",
             "If readiness is incomplete or blocked, use authorization_status=deferred or not-authorized and recommend the next data-preparation actions instead.",
             "Keep claim_ids and observation_ids restricted to canonical ids already present in the packet.",
@@ -2982,7 +2989,7 @@ def matching_authorization_prompt_text(*, packet_path: Path, packet: dict[str, A
         "",
         "Then follow these rules:",
         "1. Treat packet `instructions` as binding.",
-        "2. Review `context`, `investigation_plan`, and `readiness_reports` before editing.",
+        "2. Review `context` (especially `context.causal_focus`), `investigation_plan`, and `readiness_reports` before editing.",
         "3. Start from `draft_authorization` inside the packet.",
         "4. Return only one JSON object shaped like matching-authorization.",
         "5. Keep `schema_version`, `run_id`, `round_id`, and `agent_role` consistent with the packet.",
@@ -3008,6 +3015,7 @@ def build_matching_adjudication_instructions() -> list[str]:
     return [
         "Return one JSON object only, shaped like matching-adjudication.",
         "Treat packet.candidate_set and draft_adjudication as rule-nominated inputs, not as a binding final result.",
+        "Start with context.causal_focus as the compact moderator view of the causal chain before re-reading the full investigation_plan.",
         "Use investigation_plan to evaluate whether matched, isolated, and remand evidence sufficiently cover the causal legs under review.",
         "You may merge or prune nominated observation clusters as long as all claim_ids and observation_ids stay within the authorized packet scope.",
         "Use isolated_entries for acceptable but unmatched evidence; use remand_entries for evidence that still needs targeted follow-up.",
@@ -3087,7 +3095,7 @@ def matching_adjudication_prompt_text(*, packet_path: Path, packet: dict[str, An
         "",
         "Then follow these rules:",
         "1. Treat packet `instructions` as binding.",
-        "2. Review `context`, `investigation_plan`, `readiness_reports`, `matching_authorization`, and `candidate_set` before editing.",
+        "2. Review `context` (especially `context.causal_focus`), `investigation_plan`, `readiness_reports`, `matching_authorization`, and `candidate_set` before editing.",
         "3. Start from `draft_adjudication` inside the packet.",
         "4. Return only one JSON object shaped like matching-adjudication.",
         "5. Keep `schema_version`, `run_id`, `round_id`, `agent_role`, and `authorization_id` consistent with the packet.",
@@ -3110,7 +3118,15 @@ def matching_adjudication_prompt_text(*, packet_path: Path, packet: dict[str, An
     return "\n".join(lines)
 
 
-def investigation_leg_metric_families(profile_id: str, leg_id: str) -> set[str]:
+def investigation_leg_metric_families(profile_id: str, leg_id: str, leg: dict[str, Any] | None = None) -> set[str]:
+    if isinstance(leg, dict):
+        explicit = {
+            maybe_text(item)
+            for item in (leg.get("metric_families") if isinstance(leg.get("metric_families"), list) else [])
+            if maybe_text(item)
+        }
+        if explicit:
+            return explicit
     families = INVESTIGATION_LEG_METRIC_FAMILIES.get(profile_id, {})
     return set(families.get(leg_id, set()))
 
@@ -3149,10 +3165,27 @@ def build_leg_review_from_state(
 ) -> dict[str, Any]:
     leg_id = maybe_text(leg.get("leg_id"))
     leg_label = maybe_text(leg.get("label")) or leg_id.replace("_", " ")
+    region_hint = maybe_text(leg.get("region_hint"))
+    success_criteria = maybe_text(leg.get("success_criteria"))
+    evidence_focus = [maybe_text(item) for item in leg.get("evidence_focus", []) if maybe_text(item)] if isinstance(leg.get("evidence_focus"), list) else []
+    relevant_claim_types = {
+        maybe_text(item)
+        for item in (leg.get("claim_types") if isinstance(leg.get("claim_types"), list) else [])
+        if maybe_text(item)
+    }
     cards = state.get("cards_active", []) if isinstance(state.get("cards_active"), list) else []
     isolated_entries = state.get("isolated_active", []) if isinstance(state.get("isolated_active"), list) else []
     remand_entries = state.get("remands_open", []) if isinstance(state.get("remands_open"), list) else []
     observations = state.get("observations", []) if isinstance(state.get("observations"), list) else []
+    claim_lookup = {
+        maybe_text(item.get("claim_id")): item
+        for item in state.get("claims", [])
+        if isinstance(item, dict) and maybe_text(item.get("claim_id"))
+    }
+    for submission in state_auditable_submissions(state, "sociologist"):
+        claim_id = maybe_text(submission.get("claim_id"))
+        if claim_id:
+            claim_lookup.setdefault(claim_id, submission)
     observation_lookup = {
         maybe_text(item.get("observation_id")): item
         for item in observations
@@ -3166,20 +3199,43 @@ def build_leg_review_from_state(
 
     if leg_id == "public_interpretation":
         for card in cards:
-            if isinstance(card, dict) and maybe_text(card.get("claim_id")) and maybe_text(card.get("evidence_id")):
+            if not isinstance(card, dict):
+                continue
+            claim_id = maybe_text(card.get("claim_id"))
+            claim_type = maybe_text(claim_lookup.get(claim_id, {}).get("claim_type"))
+            if relevant_claim_types and claim_type and claim_type not in relevant_claim_types:
+                continue
+            if claim_id and maybe_text(card.get("evidence_id")):
                 matched_refs.append(f"card:{maybe_text(card.get('evidence_id'))}")
         for entry in isolated_entries:
-            if isinstance(entry, dict) and maybe_text(entry.get("entity_kind")) == "claim" and maybe_text(entry.get("isolated_id")):
+            if not isinstance(entry, dict):
+                continue
+            if maybe_text(entry.get("entity_kind")) != "claim":
+                continue
+            claim_type = maybe_text(claim_lookup.get(maybe_text(entry.get("entity_id")), {}).get("claim_type"))
+            if relevant_claim_types and claim_type and claim_type not in relevant_claim_types:
+                continue
+            if maybe_text(entry.get("isolated_id")):
                 isolated_refs.append(f"isolated:{maybe_text(entry.get('isolated_id'))}")
         for entry in remand_entries:
-            if isinstance(entry, dict) and maybe_text(entry.get("entity_kind")) == "claim" and maybe_text(entry.get("remand_id")):
+            if not isinstance(entry, dict):
+                continue
+            if maybe_text(entry.get("entity_kind")) != "claim":
+                continue
+            claim_type = maybe_text(claim_lookup.get(maybe_text(entry.get("entity_id")), {}).get("claim_type"))
+            if relevant_claim_types and claim_type and claim_type not in relevant_claim_types:
+                continue
+            if maybe_text(entry.get("remand_id")):
                 remand_refs.append(f"remand:{maybe_text(entry.get('remand_id'))}")
         for submission in state_auditable_submissions(state, "sociologist"):
             claim_id = maybe_text(submission.get("claim_id"))
+            claim_type = maybe_text(submission.get("claim_type"))
+            if relevant_claim_types and claim_type and claim_type not in relevant_claim_types:
+                continue
             if claim_id:
                 direct_refs.append(f"claim:{claim_id}")
     else:
-        relevant_families = investigation_leg_metric_families(profile_id, leg_id)
+        relevant_families = investigation_leg_metric_families(profile_id, leg_id, leg)
         for card in cards:
             if not isinstance(card, dict):
                 continue
@@ -3233,6 +3289,12 @@ def build_leg_review_from_state(
     notes: list[str] = []
     if status == "unresolved" and bool(leg.get("required")):
         notes.append(f"The required leg {leg_id} still lacks auditable coverage in this round.")
+    if status != "supported" and success_criteria:
+        notes.append(f"Success criterion: {success_criteria}")
+    if status == "unresolved" and evidence_focus:
+        notes.append(f"Evidence focus: {evidence_focus[0]}")
+    if status in {"partial", "unresolved"} and region_hint:
+        notes.append(f"Region hint: {region_hint}")
     evidence_refs = unique_strings(matched_refs + isolated_refs + remand_refs + direct_refs)[:8]
     return {
         "leg_id": leg_id,
@@ -3423,6 +3485,7 @@ def build_investigation_review_instructions() -> list[str]:
     return [
         "Return one JSON object only, shaped like investigation-review.",
         "Treat the packet draft as a rule-prepared starting point, not as a binding final answer.",
+        "Start with context.causal_focus as the compact moderator view of the causal chain before re-reading the full investigation_plan.",
         "Use investigation_plan to audit each hypothesis and each causal leg explicitly.",
         "Judge whether the current matching is reasonable enough for expert reporting or whether remands and isolated evidence still need more explanation.",
         "Keep matched_card_ids, isolated_entry_ids, remand_ids, and evidence_refs restricted to canonical ids already present in the packet.",
@@ -3502,7 +3565,7 @@ def investigation_review_prompt_text(*, packet_path: Path, packet: dict[str, Any
         "",
         "Then follow these rules:",
         "1. Treat packet `instructions` as binding.",
-        "2. Review `context`, `investigation_plan`, `matching_result`, `evidence_adjudication`, `cards_active`, `isolated_active`, and `remands_open` before editing.",
+        "2. Review `context` (especially `context.causal_focus`), `investigation_plan`, `matching_result`, `evidence_adjudication`, `cards_active`, `isolated_active`, and `remands_open` before editing.",
         "3. Start from `draft_review` inside the packet.",
         "4. Return only one JSON object shaped like investigation-review.",
         "5. Keep `schema_version`, `run_id`, `round_id`, `agent_role`, `authorization_id`, and `matching_result_id` consistent with the packet.",
@@ -3606,6 +3669,10 @@ def build_fallback_context_from_state(*, run_dir: Path, state: dict[str, Any], r
             "isolated_count": len(state.get("isolated_active", [])),
             "remand_count": len(state.get("remands_open", [])),
         },
+        "causal_focus": causal_focus_for_role(
+            state.get("investigation_plan", {}) if isinstance(state.get("investigation_plan"), dict) else {},
+            role,
+        ),
         "phase_state": state.get("phase_state", {}),
         "tasks": role_tasks,
         "claims": [compact_claim(item) for item in state.get("claims", [])[:6]],
@@ -4126,6 +4193,7 @@ def build_decision_packet_from_state(
             "Return one JSON object only, shaped like council-decision.",
             "Base the decision on readiness reports, matching authorization, matching/adjudication artifacts, and expert-report content, not on raw fetch artifacts.",
             "Treat `round_context` as a compact summary layer first and consult `canonical_paths` only if a summary detail is insufficient.",
+            "Use `round_context.causal_focus` as the moderator's compact causal summary before re-reading the full investigation_plan.",
             "Use `investigation_plan` to judge whether source, mechanism, impact, and public-interpretation legs are adequately covered or still need follow-up.",
             "Treat `investigation_review` as the moderator's explicit causal-leg audit before closure or another round.",
             "If another round is required, add new round-task objects for next_round_id instead of editing current tasks in place.",
@@ -4732,7 +4800,7 @@ def report_artifacts(*, run_dir: Path, round_id: str, pretty: bool) -> dict[str,
     if not isinstance(state.get("investigation_review"), dict) or not state.get("investigation_review"):
         raise ValueError(
             "Expert report packets require canonical moderator investigation_review.json. "
-            "Build and import the investigation review before generating expert-report packets."
+            "Normally run-matching-adjudication auto-materializes this review; otherwise build/promote it before generating expert-report packets."
         )
     mission = state["mission"]
     tasks = state.get("tasks", []) if isinstance(state.get("tasks"), list) else []
@@ -5081,7 +5149,10 @@ def build_parser() -> argparse.ArgumentParser:
     review_packet.add_argument("--round-id", required=True, help="Round identifier.")
     add_pretty_flag(review_packet)
 
-    report_packets = sub.add_parser("build-report-packets", help="Build expert report packets and draft expert reports after moderator investigation review.")
+    report_packets = sub.add_parser(
+        "build-report-packets",
+        help="Build expert report packets and draft expert reports after canonical moderator investigation review is available.",
+    )
     report_packets.add_argument("--run-dir", required=True, help="Eco-council run directory.")
     report_packets.add_argument("--round-id", required=True, help="Round identifier.")
     add_pretty_flag(report_packets)

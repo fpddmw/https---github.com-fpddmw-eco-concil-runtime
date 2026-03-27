@@ -62,6 +62,7 @@ from eco_council_runtime.layout import (
     NORMALIZE_ENVIRONMENT_DDL_PATH,
     NORMALIZE_PUBLIC_DDL_PATH,
 )
+from eco_council_runtime.investigation import causal_focus_for_role
 
 ASSETS_DIR = NORMALIZE_ASSETS_DIR
 PUBLIC_DDL_PATH = NORMALIZE_PUBLIC_DDL_PATH
@@ -5729,6 +5730,7 @@ def build_round_snapshot(
     role: str,
 ) -> dict[str, Any]:
     state = library_state(run_dir, round_id)
+    investigation_plan = load_object_if_exists(investigation_plan_path(run_dir, round_id)) or {}
     claim_candidates_current = state.get("claim_candidates_current", []) if isinstance(state.get("claim_candidates_current"), list) else []
     observation_candidates_current = (
         state.get("observation_candidates_current", [])
@@ -5823,6 +5825,7 @@ def build_round_snapshot(
         "context_layer": "evidence-library-v1",
         "run": run,
         "dataset": dataset,
+        "causal_focus": causal_focus_for_role(investigation_plan, role) if isinstance(investigation_plan, dict) else {},
         "phase_state": {
             "claim_curation_status": maybe_text(claim_curation.get("status")),
             "observation_curation_status": maybe_text(observation_curation.get("status")),

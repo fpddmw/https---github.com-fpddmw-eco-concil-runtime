@@ -2993,7 +2993,7 @@ def run_matching_adjudication(*, run_dir: Path, round_id: str) -> dict[str, Any]
     execution_path = matching_execution_path(run_path, current_round_id)
     reporting_handoff: Path | None = None
     statuses: list[dict[str, Any]] = []
-    step_count = 6
+    step_count = 8
 
     def snapshot() -> dict[str, Any]:
         return write_data_plane_execution_snapshot(
@@ -3040,6 +3040,20 @@ def run_matching_adjudication(*, run_dir: Path, round_id: str) -> dict[str, Any]
     )
     reporting_payload = append_status_or_raise(reporting_status, reporting_payload)
 
+    promote_review_status, promote_review_payload = run_data_plane_json_step(
+        step_id="reporting-promote-investigation-review-draft",
+        label="promote investigation review draft",
+        argv=reporting_argv("promote-investigation-review-draft", "--run-dir", str(run_path), "--round-id", current_round_id),
+    )
+    promote_review_payload = append_status_or_raise(promote_review_status, promote_review_payload)
+
+    report_status, report_payload = run_data_plane_json_step(
+        step_id="reporting-build-report-packets",
+        label="reporting build report packets",
+        argv=reporting_argv("build-report-packets", "--run-dir", str(run_path), "--round-id", current_round_id),
+    )
+    report_payload = append_status_or_raise(report_status, report_payload)
+
     prompt_status, prompt_payload = run_data_plane_json_step(
         step_id="render-openclaw-prompts",
         label="render openclaw prompts",
@@ -3069,6 +3083,8 @@ def run_matching_adjudication(*, run_dir: Path, round_id: str) -> dict[str, Any]
         "apply_matching_adjudication": evidence_payload,
         "build_context": context_payload,
         "investigation_review": reporting_payload,
+        "investigation_review_promotion": promote_review_payload,
+        "report_packets": report_payload,
         "prompt_render": prompt_payload,
         "bundle_validation": bundle_payload,
         "reporting_handoff_path": str(reporting_handoff),
@@ -3463,7 +3479,10 @@ def build_parser() -> argparse.ArgumentParser:
     data_plane.add_argument("--round-id", default="", help="Round identifier. Defaults to latest round.")
     add_pretty_flag(data_plane)
 
-    matching = sub.add_parser("run-matching-adjudication", help="Run authorized matching/adjudication plus post-match investigation-review packet generation.")
+    matching = sub.add_parser(
+        "run-matching-adjudication",
+        help="Run authorized matching/adjudication, auto-materialize investigation review, and prepare expert report packets.",
+    )
     matching.add_argument("--run-dir", required=True, help="Run directory.")
     matching.add_argument("--round-id", default="", help="Round identifier. Defaults to latest round.")
     add_pretty_flag(matching)

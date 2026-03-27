@@ -303,7 +303,7 @@ def session_prompt_text(*, run_dir: Path, state: dict[str, Any], role: str, agen
             "8. Never add markdown, prose, or code fences.",
             "9. Use the projected OpenClaw-managed eco-council skills in this profile; if one is missing, stop and ask the human to reprovision agents.",
             "10. If compact historical-case context is provided, use it only to prioritize work and avoid redundant fetch requests; never treat it as current-round evidence.",
-            "11. Describe evidence needs, claim focus, and priorities in tasks or decisions; do not prescribe exact source skills or source-family layer upgrades.",
+            "11. Use packet causal_focus summaries to prioritize evidence needs, claim focus, and leg coverage in tasks or decisions; do not prescribe exact source skills or source-family layer upgrades.",
             "12. If policy caps block necessary next steps, use the decision override_requests field to ask an upstream human/bot for envelope changes instead of applying them yourself.",
         ]
     else:
@@ -317,7 +317,7 @@ def session_prompt_text(*, run_dir: Path, state: dict[str, Any], role: str, agen
             "7. Do not invent new raw data fetch results in readiness or report stages.",
             "8. Use the projected OpenClaw-managed eco-council skills in this profile; if one is missing, stop and ask the human to reprovision agents.",
             "9. `recommended_next_actions` must be a list of objects with `assigned_role`, `objective`, and `reason`; use [] when there are no recommendations.",
-            "10. Treat moderator tasks as evidence needs only. Use governance, family layers, and anchors to decide exact source skills.",
+            "10. Treat moderator tasks as evidence needs only. Use packet causal_focus, governance, family layers, and anchors to decide exact source skills.",
             "11. Never self-apply profile or governance changes. If the current envelope is insufficient, keep work inside bounds and use override_requests so an upstream human/bot can decide.",
         ]
     command_notes = [

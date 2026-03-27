@@ -228,7 +228,7 @@ def stage_failure_notes(stage: str) -> list[str]:
         ]
     if stage == STAGE_READY_MATCHING_ADJUDICATION:
         return [
-            "Supervisor keeps the run at ready-to-run-matching-adjudication until the imported moderator adjudication is materialized and investigation-review packet generation completes.",
+            "Supervisor keeps the run at ready-to-run-matching-adjudication until the imported moderator adjudication is materialized and the post-match review/report artifacts are generated.",
             "continue-run will reuse an existing valid matching_adjudication_execution.json; otherwise it regenerates the stage.",
             "Inspect matching_adjudication_execution.json to find the failed substep, fix the local issue, then rerun continue-run.",
         ]
@@ -551,14 +551,14 @@ def build_current_step_text(run_dir: Path, state: dict[str, Any]) -> str:
     elif stage == STAGE_READY_MATCHING_ADJUDICATION:
         lines.extend(
             [
-                "Run the matching materialization stage and build the investigation-review packet:",
+                "Run the matching materialization stage, auto-materialize investigation review, and prepare report packets:",
                 supervisor_command("continue-run"),
             ]
         )
     elif stage == STAGE_AWAITING_INVESTIGATION_REVIEW:
         lines.extend(
             [
-                "Preferred: run the moderator investigation-review turn automatically:",
+                "Legacy path: run the moderator investigation-review turn automatically:",
                 supervisor_command("run-agent-step", "--role", "moderator"),
                 "",
                 *manual_agent_handoff_lines(

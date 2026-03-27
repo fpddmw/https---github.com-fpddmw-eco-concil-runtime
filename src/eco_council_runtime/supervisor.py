@@ -689,7 +689,7 @@ def continue_run_matching_adjudication(run_dir: Path, state: dict[str, Any]) -> 
         orchestrate_argv("run-matching-adjudication", "--run-dir", str(run_dir), "--round-id", round_id, "--pretty"),
         cwd=REPO_DIR,
     )
-    state["stage"] = STAGE_AWAITING_INVESTIGATION_REVIEW
+    state["stage"] = STAGE_AWAITING_REPORTS
     state["imports"] = {
         "task_review_received": True,
         "source_selection_roles_received": list(SOURCE_SELECTION_ROLES),
@@ -697,7 +697,7 @@ def continue_run_matching_adjudication(run_dir: Path, state: dict[str, Any]) -> 
         "data_readiness_roles_received": list(READINESS_ROLES),
         "matching_authorization_received": True,
         "matching_adjudication_received": True,
-        "investigation_review_received": False,
+        "investigation_review_received": True,
         "report_roles_received": [],
         "decision_received": False,
     }
@@ -712,7 +712,7 @@ def continue_recover_or_run_matching_adjudication(run_dir: Path, state: dict[str
         try:
             payload = read_json(canonical_execution_path)
             ensure_matching_execution_matches(payload, run_dir=run_dir, round_id=round_id, source_path=canonical_execution_path)
-            state["stage"] = STAGE_AWAITING_INVESTIGATION_REVIEW
+            state["stage"] = STAGE_AWAITING_REPORTS
             state["imports"] = {
                 "task_review_received": True,
                 "source_selection_roles_received": list(SOURCE_SELECTION_ROLES),
@@ -720,7 +720,7 @@ def continue_recover_or_run_matching_adjudication(run_dir: Path, state: dict[str
                 "data_readiness_roles_received": list(READINESS_ROLES),
                 "matching_authorization_received": True,
                 "matching_adjudication_received": True,
-                "investigation_review_received": False,
+                "investigation_review_received": True,
                 "report_roles_received": [],
                 "decision_received": False,
             }
