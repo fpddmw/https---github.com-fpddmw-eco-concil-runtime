@@ -20,10 +20,13 @@ class SupervisorFlowTests(unittest.TestCase):
         }
 
         with (
-            patch("eco_council_runtime.supervisor.run_json_command", return_value={"matching": "ok"}) as run_json_command,
-            patch("eco_council_runtime.supervisor.save_state") as save_state,
             patch(
-                "eco_council_runtime.supervisor.build_status_payload",
+                "eco_council_runtime.application.supervisor_lifecycle.run_json_command",
+                return_value={"matching": "ok"},
+            ) as run_json_command,
+            patch("eco_council_runtime.application.supervisor_lifecycle.save_state") as save_state,
+            patch(
+                "eco_council_runtime.application.supervisor_lifecycle.build_status_payload",
                 side_effect=lambda _run_dir, current_state: {"stage": current_state["stage"]},
             ),
         ):
