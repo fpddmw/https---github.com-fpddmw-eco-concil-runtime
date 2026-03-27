@@ -177,16 +177,104 @@
     - acceptance:
       - `normalize.py` is no longer the main implementation home
       - full repository tests pass
+    - sub-slices:
+      - `T06.3d.a Normalize Representation And Summary Extraction` (`completed`)
+      - scope:
+        - move compact payload builders, representative ordering helpers, and normalize summary builders into `application/`
+      - acceptance:
+        - normalize view/summary builders become directly importable outside `normalize.py`
+        - `normalize.py` delegates those builders instead of keeping the primary implementation inline
+        - full repository tests pass
+      - outcome:
+        - added `application/normalize_views.py` as the shared home for compact payload builders, representative observation ordering, submission-to-view reconstruction helpers, and normalize summary builders
+        - `normalize.py` now delegates normalize view/summary construction to application services instead of keeping the primary implementation inline for those blocks
+        - added direct regression coverage for normalize view builders and representative ordering, and the repository test suite now passes with `60` tests
+      - `T06.3d.b Normalize Library Materialization Extraction` (`completed`)
+      - scope:
+        - move library state loading, submission hydration/merge helpers, and curated materialization flows into `application/`
+      - acceptance:
+        - claim/observation materialization is no longer implemented primarily in `normalize.py`
+        - full repository tests pass
+      - outcome:
+        - added `application/normalize_library.py` as the shared home for library-state loading, active/auditable merge helpers, observation hydration, curated claim/observation materialization, and library-event append logic
+        - `normalize.py` now delegates library/materialization behavior to application services while preserving facade-level schema validation, mission resolution, and compatibility entrypoints, reducing the root module to `2244` lines
+        - added direct regression coverage for library-state inheritance/hydration, mixed curated observation materialization, and curated claim persistence/ledger merging, and the repository test suite now passes with `63` tests
+      - `T06.3d.c Normalize Matching And Evidence Service Extraction` (`completed`)
+      - scope:
+        - move match/evidence/remand/isolation builders and round snapshot assembly into `application/`
+      - acceptance:
+        - normalize-side matching/evidence orchestration stops living primarily in `normalize.py`
+        - full repository tests pass
+      - outcome:
+        - added `application/normalize_evidence.py` as the shared home for claim-observation matching, evidence-card assembly, isolated/remand builders, evidence adjudication, and round snapshot construction
+        - `normalize.py` now delegates matching/evidence orchestration to application services while preserving facade-level schema validation, mission resolution, and compatibility entrypoints
+        - added direct regression coverage for extracted evidence builders and round snapshot assembly, and the repository test suite passed with `65` tests at slice landing
+      - `T06.3d.d Normalize CLI And Facade Final Reduction` (`completed`)
+      - scope:
+        - collapse `normalize.py` to thin command wiring plus compatibility facade reexports only
+      - acceptance:
+        - `normalize.py` is no longer the main implementation home
+        - full repository tests pass
+      - outcome:
+        - added `application/normalize_candidates.py` as the shared home for public claim candidate grouping, environment observation aggregation, compact audits, and candidate-side statistical summaries
+        - `normalize.py` now delegates candidate construction and environment aggregation to application services while preserving CLI entrypoints and compatibility exports, reducing the root module from `1847` lines to `1518` lines
+        - added direct regression coverage for candidate grouping, fire-detection aggregation, mission-scope fallback grouping, and extra observation defaults, and the repository test suite now passes with `69` tests
   - acceptance:
     - `normalize.py` becomes an orchestrating compatibility facade rather than the main implementation body
     - benchmark and normalization regressions stay green
-  - `T06.4 Reporting And Decision Pipeline Split` (`planned`)
+  - `T06.4 Reporting And Decision Pipeline Split` (`completed`)
   - scope:
-    - split `reporting.py` into packet rendering, round-state aggregation, report drafting, decision promotion, and bundle-validation concerns
+    - split `reporting.py` into round-state aggregation, reporting view/support helpers, draft/decision builders, and artifact/promotion orchestration concerns while keeping contract validation at the boundary
+  - sub-slices:
+    - `T06.4a Reporting State And Phase Extraction` (`completed`)
+    - scope:
+      - move round-state aggregation, shared-library hydration, phase-state summaries, override loading, and context augmentation helpers into `application/`
+    - acceptance:
+      - reporting state assembly and phase gating become directly importable outside `reporting.py`
+      - `reporting.py` delegates state assembly instead of owning the primary implementation inline
+      - direct state-focused regression coverage lands and full repository tests pass
+    - outcome:
+      - added `application/reporting_state.py` as the shared home for round-state aggregation, phase-state summaries, library hydration, override loading, and matching-state augmentation
+      - `reporting.py` now delegates reporting state assembly through compatibility aliases instead of keeping the primary implementation inline
+      - added direct regression coverage for state hydration and phase-state assembly, and targeted reporting-state tests passed before continuing extraction
+    - `T06.4b Reporting View And Packet Support Extraction` (`completed`)
+    - scope:
+      - move compact renderers, candidate/submission summarizers, representative selection helpers, and packet-support view builders into `application/`
+    - acceptance:
+      - compact reporting views and packet-support helpers become directly importable
+      - packet builder prerequisites no longer live primarily in `reporting.py`
+      - direct view-focused regression coverage lands and full repository tests pass
+    - outcome:
+      - added `application/reporting_views.py` as the shared home for compact reporting renderers, candidate/submission summaries, representative selection, and fallback packet-context builders
+      - `reporting.py` now reexports those helpers through compatibility aliases, removing the duplicated inline implementations from the root facade
+      - added direct regression coverage for candidate-pool summaries, representative selection, candidate-entry builders, and fallback context assembly, and the extracted reporting view tests passed
+    - `T06.4c Reporting Draft And Decision Builder Extraction` (`completed`)
+    - scope:
+      - move readiness/report/investigation/decision draft builders, scoring helpers, and moderator decision assembly into `application/`
+    - acceptance:
+      - expert-report and council-decision assembly become directly testable outside `reporting.py`
+      - decision scoring, missing-evidence derivation, and report-draft logic stop living primarily inline
+      - direct draft/decision regression coverage lands and full repository tests pass
+    - outcome:
+      - added `application/reporting_drafts.py` as the shared home for readiness, expert-report, investigation-review, and council-decision draft builders plus their scoring, evidence-gap, and causal-leg review helpers
+      - `reporting.py` now reexports those builders through compatibility aliases, removing the primary inline implementations from the root facade while preserving existing command surfaces
+      - added direct regression coverage for readiness gating, expert-report drafting, investigation-review leg auditing, and council-decision blocking logic, and the full repository test suite now passes with `82` tests
+    - `T06.4d Reporting Artifact And Promotion Extraction` (`completed`)
+    - scope:
+      - move artifact orchestration, prompt rendering, draft-promotion flows, and final reporting/decision pipeline composition into `application/`, while keeping `validate_bundle` at the command boundary
+    - acceptance:
+      - artifact generation and promotion lifecycle become separately testable
+      - decision promotion keeps its audit-chain side effects and overwrite protections
+      - `reporting.py` becomes a thin CLI/facade module and full repository tests pass
+    - outcome:
+      - added `application/reporting_artifacts.py` as the shared home for curation/readiness/matching/report/decision packet builders, prompt renderers, artifact orchestration, and draft-promotion flows
+      - `reporting.py` now delegates those workflows through compatibility aliases while preserving command/bundle-validation entrypoints, reducing the root module to `902` lines instead of keeping the primary reporting implementation inline
+      - added direct regression coverage for curation packet/prompt generation, readiness gating, decision artifact report-source selection, and decision-promotion audit receipts, and the full repository test suite now passes with `86` tests
   - acceptance:
-    - packet rendering and decision lifecycle become separately testable
-    - reporting and bundle-validation regressions stay green
-  - `T06.5 Orchestration, Supervisor, And Simulation Application Split` (`planned`)
+    - `reporting.py` is no longer the main implementation home for reporting/decision workflows
+    - round-state aggregation, packet rendering, and decision lifecycle are separately testable
+    - reporting regressions, decision/audit-chain regressions, and bundle validation regressions stay green
+  - `T06.5 Orchestration, Supervisor, And Simulation Application Split` (`in_progress`)
   - scope:
     - split fetch-plan/orchestration services away from adapters and CLI glue in `orchestrate.py`
     - continue shrinking `supervisor.py` so it becomes a thin lifecycle facade over extracted services
@@ -216,6 +304,6 @@
 
 ## Current Task Notes
 
-- Active task: none
-- Next planned task: `T06.3d Normalize Facade Cleanup`
-- Working rule reaffirmed: structure first, then extraction; do not start another refactor slice until the next active refactor slice is explicitly opened.
+- Active task: `T06.5 Orchestration, Supervisor, And Simulation Application Split`
+- Next planned task: `T06.6 Contract, CLI, And Legacy Facade Cleanup`
+- Working rule reaffirmed: structure first, then extraction; do not start another refactor sub-slice until the next active one is explicitly opened.
