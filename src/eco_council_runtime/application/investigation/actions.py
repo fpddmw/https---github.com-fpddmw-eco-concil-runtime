@@ -18,6 +18,8 @@ SCHEMA_VERSION = "1.0.0"
 MAX_PRIMARY_HYPOTHESES = 3
 MAX_ALTERNATIVES_PER_HYPOTHESIS = 2
 MAX_RANKED_ACTIONS = 6
+MAX_DISCOVERY_PROBES = 2
+MAX_DISCOVERY_OPTIONS = 3
 
 AUTO_SELECTABLE_COST = 1
 APPROVED_LAYER_COST = 2
@@ -29,7 +31,27 @@ ACTION_KIND_PRIORITY = {
     "resolve-required-leg": 0,
     "resolve-contradiction": 1,
     "test-alternative-hypothesis": 2,
-    "expand-coverage": 3,
+    "governed-discovery-probe": 3,
+    "expand-coverage": 4,
+}
+
+DISCOVERY_PUBLIC_TOKENS = {"claim", "comment", "coverage", "discussion", "public", "social", "policy"}
+DISCOVERY_ENVIRONMENT_TOKENS = {
+    "air",
+    "fire",
+    "flood",
+    "heat",
+    "hydrology",
+    "meteorology",
+    "pm",
+    "precipitation",
+    "smoke",
+    "soil",
+    "station",
+    "temperature",
+    "water",
+    "weather",
+    "wind",
 }
 
 
@@ -150,6 +172,18 @@ def _gap_types_for_target(*, target: dict[str, Any], fallback_gap_types: list[st
     if gap_types:
         return unique_strings(gap_types)
     return unique_strings([maybe_text(item) for item in fallback_gap_types if maybe_text(item) in NEXT_ACTION_LIBRARY])
+
+
+def _unmapped_gap_types(*, target: dict[str, Any], fallback_gap_types: list[str]) -> list[str]:
+    raw_gap_types = unique_strings(
+        [
+            maybe_text(item)
+            for item in target.get("remaining_gaps", [])
+            if maybe_text(item)
+        ]
+        + [maybe_text(item) for item in fallback_gap_types if maybe_text(item)]
+    )
+    return [gap_type for gap_type in raw_gap_types if gap_type not in NEXT_ACTION_LIBRARY]
 
 
 def _template_for_gap_types(gap_types: list[str]) -> tuple[str, dict[str, Any] | None]:
@@ -359,6 +393,160 @@ def _alternative_target(
     }
 
 
+def _probe_role_candidates(gap_types: list[str]) -> list[str]:
+    probe_text = " ".join(maybe_text(item).lower() for item in gap_types if maybe_text(item))
+    if any(token in probe_text for token in DISCOVERY_PUBLIC_TOKENS):
+        return ["sociologist", "environmentalist"]
+    if any(token in probe_text for token in DISCOVERY_ENVIRONMENT_TOKENS):
+        return ["environmentalist", "sociologist"]
+    return ["environmentalist", "sociologist"]
+
+
+def _discovery_probe_target(
+    *,
+    mission: dict[str, Any],
+    round_id: str,
+    hypothesis: dict[str, Any],
+) -> dict[str, Any] | None:
+    remaining_gaps = [maybe_text(item) for item in hypothesis.get("remaining_gaps", []) if maybe_text(item)]
+    atypical_gap_types = _unmapped_gap_types(target=hypothesis, fallback_gap_types=[])
+    known_gap_types = [gap_type for gap_type in remaining_gaps if gap_type in NEXT_ACTION_LIBRARY]
+    evidence_refs = unique_strings(
+        [maybe_text(item) for item in hypothesis.get("latest_evidence_refs", []) if maybe_text(item)]
+    )
+    unresolved_required_leg_count = sum(
+        1
+        for leg in hypothesis.get("legs", [])
+        if isinstance(leg, dict) and bool(leg.get("required")) and maybe_text(leg.get("status")) != "supported"
+    )
+    contradiction_count = int(hypothesis.get("contradiction", {}).get("count") or 0) if isinstance(hypothesis.get("contradiction"), dict) else 0
+    low_evidence_density = len(evidence_refs) <= 1
+    if not atypical_gap_types and not (low_evidence_density and unresolved_required_leg_count > 0):
+        return None
+
+    assigned_role = ""
+    governed_options: list[dict[str, Any]] = []
+    probe_gap_types = atypical_gap_types or known_gap_types
+    for role in _probe_role_candidates(probe_gap_types):
+        options = _governed_source_options(mission=mission, role=role, gap_types=known_gap_types)[:MAX_DISCOVERY_OPTIONS]
+        if options:
+            assigned_role = role
+            governed_options = options
+            break
+    if not assigned_role:
+        assigned_role = _probe_role_candidates(probe_gap_types)[0]
+
+    selection_reason_codes = ["governed-discovery-probe", "budget-bounded"]
+    if atypical_gap_types:
+        selection_reason_codes.append("atypical-gap-types")
+    if low_evidence_density:
+        selection_reason_codes.append("low-evidence-density")
+    if contradiction_count > 0:
+        selection_reason_codes.append("contradiction-active")
+    if governed_options:
+        selection_reason_codes.append("governed-sources-available")
+
+    expected_evidence_gain = min(2.8, 1.3 + (0.5 * unresolved_required_leg_count) + (0.4 if low_evidence_density else 0.0))
+    contradiction_resolution_value = min(1.5, contradiction_count * 0.5)
+    coverage_gain = min(2.0, 0.8 + (0.3 * unresolved_required_leg_count) + (0.4 if atypical_gap_types else 0.0))
+    novelty_gain = 1.3 if atypical_gap_types else 0.8
+    audit_clarity = min(2.0, 0.9 + (0.4 if governed_options else 0.0) + (0.3 if evidence_refs else 0.0))
+    token_cost_penalty = (
+        float(governed_options[0].get("estimated_token_cost") or AUTO_SELECTABLE_COST) / 2.0
+        if governed_options
+        else 1.8
+    ) + max(0.0, (len(governed_options) - 1) * 0.2)
+    total = round(
+        expected_evidence_gain + contradiction_resolution_value + coverage_gain + novelty_gain + audit_clarity - token_cost_penalty,
+        3,
+    )
+
+    question_parts: list[str] = []
+    if atypical_gap_types:
+        question_parts.append(f"Which governed source family could best test atypical gaps: {', '.join(atypical_gap_types[:3])}?")
+    if low_evidence_density:
+        question_parts.append("Which bounded governed probe would add the most new auditable evidence with minimal token cost?")
+    question = " ".join(question_parts) or "Which bounded governed probe should run next?"
+    reason_fragments: list[str] = []
+    if atypical_gap_types:
+        reason_fragments.append(f"Atypical gaps remain unmapped to the standard action library: {', '.join(atypical_gap_types[:3])}.")
+    if low_evidence_density:
+        reason_fragments.append("Current evidence density is too low to rank only template-driven follow-up actions confidently.")
+    if contradiction_count > 0:
+        reason_fragments.append("Contradictory evidence remains active, so the next move should stay tightly governed and auditable.")
+    reason = " ".join(reason_fragments)
+
+    probe_request = {
+        "probe_id": f"probe-{round_id}-{maybe_text(hypothesis.get('hypothesis_id')) or 'hypothesis'}",
+        "mode": "governance-aware-discovery",
+        "assigned_role": assigned_role,
+        "question": question,
+        "reason_codes": selection_reason_codes,
+        "governance_envelope": {
+            "source_option_count": len(governed_options),
+            "source_options": [
+                {
+                    "family_id": maybe_text(option.get("family_id")),
+                    "layer_id": maybe_text(option.get("layer_id")),
+                    "approval_state": maybe_text(option.get("approval_state")),
+                    "requires_anchor": bool(option.get("requires_anchor")),
+                    "source_skills": [maybe_text(skill) for skill in option.get("source_skills", []) if maybe_text(skill)][:4],
+                }
+                for option in governed_options[:MAX_DISCOVERY_OPTIONS]
+                if isinstance(option, dict)
+            ],
+        },
+        "budget": {
+            "max_source_options": MAX_DISCOVERY_OPTIONS,
+            "estimated_token_cost": int(
+                sum(int(item.get("estimated_token_cost") or 0) for item in governed_options[:MAX_DISCOVERY_OPTIONS])
+                or UNKNOWN_OPTION_COST
+            ),
+            "requires_review": True,
+        },
+        "outputs": ["recommendation", "probe-request"],
+    }
+
+    return {
+        "candidate_kind": "governed-discovery-probe",
+        "assigned_role": assigned_role,
+        "priority": "high" if atypical_gap_types else "medium",
+        "objective": (
+            f"Draft a bounded governed discovery probe for {maybe_text(hypothesis.get('hypothesis_id'))} before selecting the next source family."
+        ),
+        "reason": reason,
+        "target": {
+            "hypothesis_id": maybe_text(hypothesis.get("hypothesis_id")),
+            "gap_types": known_gap_types[:4],
+            "atypical_gap_types": atypical_gap_types[:4],
+            "unresolved_required_leg_count": unresolved_required_leg_count,
+            "evidence_ref_count": len(evidence_refs),
+            "coverage_status": maybe_text(hypothesis.get("overall_status")),
+        },
+        "evidence_refs": evidence_refs[:6],
+        "anchor_refs": _anchor_refs(round_id, evidence_refs)[:6],
+        "governed_source_options": governed_options,
+        "selection_reason_codes": selection_reason_codes,
+        "probe_request": probe_request,
+        "score": {
+            "total": total,
+            "components": {
+                "expected_evidence_gain": round(expected_evidence_gain, 3),
+                "contradiction_resolution_value": round(contradiction_resolution_value, 3),
+                "coverage_gain": round(coverage_gain, 3),
+                "novelty_gain": round(novelty_gain, 3),
+                "audit_clarity": round(audit_clarity, 3),
+                "token_cost_penalty": round(token_cost_penalty, 3),
+            },
+        },
+        "budget": {
+            "token_cost_estimate": int(probe_request["budget"]["estimated_token_cost"]),
+            "governed_option_count": len(governed_options),
+            "max_source_options": MAX_DISCOVERY_OPTIONS,
+        },
+    }
+
+
 def _candidate_sort_key(candidate: dict[str, Any]) -> tuple[float, int, int, str, str]:
     score = candidate.get("score", {}) if isinstance(candidate.get("score"), dict) else {}
     total = float(score.get("total") or 0.0)
@@ -420,6 +608,24 @@ def recommendations_from_investigation_actions(payload: dict[str, Any], *, limit
     return recommendations
 
 
+def probe_requests_from_investigation_actions(payload: dict[str, Any], *, limit: int | None = None) -> list[dict[str, Any]]:
+    requests: list[dict[str, Any]] = []
+    probe_requests = payload.get("probe_requests") if isinstance(payload.get("probe_requests"), list) else []
+    if probe_requests:
+        requests = [item for item in probe_requests if isinstance(item, dict)]
+    else:
+        actions = payload.get("ranked_actions") if isinstance(payload.get("ranked_actions"), list) else []
+        for action in actions:
+            if not isinstance(action, dict):
+                continue
+            probe_request = action.get("probe_request")
+            if isinstance(probe_request, dict):
+                requests.append(probe_request)
+    if isinstance(limit, int):
+        return requests[:limit]
+    return requests
+
+
 def build_investigation_actions_from_round_state(state: dict[str, Any]) -> dict[str, Any]:
     mission = state["mission"]
     round_id = maybe_text(state.get("round_id"))
@@ -465,7 +671,23 @@ def build_investigation_actions_from_round_state(state: dict[str, Any]) -> dict[
             )
             if candidate is not None:
                 candidates.append(candidate)
+    discovery_probe_count = 0
+    for hypothesis in hypotheses[:MAX_PRIMARY_HYPOTHESES]:
+        if discovery_probe_count >= MAX_DISCOVERY_PROBES:
+            break
+        if not isinstance(hypothesis, dict):
+            continue
+        candidate = _discovery_probe_target(
+            mission=mission,
+            round_id=round_id,
+            hypothesis=hypothesis,
+        )
+        if candidate is None:
+            continue
+        candidates.append(candidate)
+        discovery_probe_count += 1
     ranked_actions = _ranked_actions(candidates, round_id=round_id)
+    probe_requests = probe_requests_from_investigation_actions({"ranked_actions": ranked_actions})
     estimated_token_cost = sum(
         int(item.get("budget", {}).get("token_cost_estimate") or 0)
         for item in ranked_actions
@@ -506,10 +728,12 @@ def build_investigation_actions_from_round_state(state: dict[str, Any]) -> dict[
             "max_primary_hypotheses": MAX_PRIMARY_HYPOTHESES,
             "max_alternatives_per_hypothesis": MAX_ALTERNATIVES_PER_HYPOTHESIS,
             "max_ranked_actions": MAX_RANKED_ACTIONS,
+            "max_discovery_probes": MAX_DISCOVERY_PROBES,
             "candidate_count": len(candidates),
             "returned_count": len(ranked_actions),
             "truncated_by_cap": len(candidates) > len(ranked_actions),
             "estimated_token_cost": estimated_token_cost,
+            "discovery_probe_count": len(probe_requests),
         },
         "summary": {
             "primary_hypothesis_count": min(
@@ -523,9 +747,11 @@ def build_investigation_actions_from_round_state(state: dict[str, Any]) -> dict[
             ),
             "required_leg_gap_count": required_leg_gap_count,
             "contradictory_leg_count": contradictory_leg_count,
+            "discovery_probe_count": len(probe_requests),
             "role_counts": role_counts,
         },
         "ranked_actions": ranked_actions,
+        "probe_requests": probe_requests,
     }
     return payload
 
@@ -563,5 +789,6 @@ __all__ = [
     "build_investigation_actions_from_round_state",
     "materialize_investigation_bundle",
     "materialize_investigation_actions",
+    "probe_requests_from_investigation_actions",
     "recommendations_from_investigation_actions",
 ]

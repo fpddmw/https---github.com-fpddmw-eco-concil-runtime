@@ -197,13 +197,15 @@ class InvestigationActionsTests(unittest.TestCase):
 
         self.assertEqual("investigation-actions-round-001", payload["actions_id"])
         self.assertEqual("investigation-state-round-001", payload["investigation_state_id"])
-        self.assertEqual(7, payload["budget"]["candidate_count"])
+        self.assertEqual(9, payload["budget"]["candidate_count"])
         self.assertEqual(6, payload["budget"]["returned_count"])
         self.assertTrue(payload["budget"]["truncated_by_cap"])
+        self.assertEqual(2, payload["budget"]["max_discovery_probes"])
         self.assertEqual(3, payload["summary"]["primary_hypothesis_count"])
         self.assertEqual(2, payload["summary"]["alternative_hypothesis_count"])
         self.assertEqual(5, payload["summary"]["required_leg_gap_count"])
         self.assertEqual(1, payload["summary"]["contradictory_leg_count"])
+        self.assertGreaterEqual(payload["summary"]["discovery_probe_count"], 1)
 
         ranked_actions = payload["ranked_actions"]
         self.assertEqual(6, len(ranked_actions))
@@ -230,12 +232,59 @@ class InvestigationActionsTests(unittest.TestCase):
         self.assertIn("round-001:card:evidence-003", ranked_actions[0]["anchor_refs"])
 
         action_kinds = {item["candidate_kind"] for item in ranked_actions}
+        self.assertIn("governed-discovery-probe", action_kinds)
         self.assertIn("test-alternative-hypothesis", action_kinds)
         self.assertIn("resolve-required-leg", action_kinds)
+        self.assertGreaterEqual(len(payload["probe_requests"]), 1)
 
         recommendations = recommendations_from_investigation_actions(payload, limit=3)
         self.assertEqual(3, len(recommendations))
         self.assertEqual(ranked_actions[0]["objective"], recommendations[0]["objective"])
+
+    def test_build_investigation_actions_emits_governed_probe_for_atypical_gaps(self) -> None:
+        state = {
+            "mission": example_mission(run_id="investigation-actions-run"),
+            "round_id": ROUND_ID,
+            "investigation_state": {
+                **investigation_state_payload(),
+                "hypotheses": [
+                    {
+                        "hypothesis_id": "hypothesis-probe",
+                        "overall_status": "unresolved",
+                        "contradiction": {"count": 0, "evidence_refs": []},
+                        "remaining_gaps": ["cross-border-attribution", "station-air-quality"],
+                        "latest_evidence_refs": [],
+                        "legs": [
+                            {
+                                "leg_id": "impact",
+                                "required": True,
+                                "status": "unresolved",
+                                "remaining_gaps": ["cross-border-attribution"],
+                                "contradiction": {"count": 0, "evidence_refs": []},
+                                "coverage": {"pending_ref_count": 0, "direct_ref_count": 0},
+                                "latest_evidence_refs": [],
+                                "uncertainty": {"level": "high"},
+                            }
+                        ],
+                        "alternative_hypotheses": [],
+                    }
+                ],
+            },
+        }
+
+        payload = build_investigation_actions_from_round_state(state)
+
+        self.assertEqual(1, payload["budget"]["discovery_probe_count"])
+        self.assertEqual(1, len(payload["probe_requests"]))
+        probe_request = payload["probe_requests"][0]
+        self.assertEqual("governance-aware-discovery", probe_request["mode"])
+        self.assertIn("atypical-gap-types", probe_request["reason_codes"])
+        probe_action = next(
+            item for item in payload["ranked_actions"] if item["candidate_kind"] == "governed-discovery-probe"
+        )
+        self.assertIn("cross-border-attribution", probe_action["target"]["atypical_gap_types"])
+        self.assertTrue(probe_action["governed_source_options"])
+        self.assertEqual(probe_request["question"], probe_action["probe_request"]["question"])
 
     def test_materialize_investigation_actions_writes_canonical_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

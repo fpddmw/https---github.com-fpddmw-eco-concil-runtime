@@ -19,6 +19,7 @@ _EXPORT_TO_MODULE = {
     "build_environmentalist_findings": "eco_council_runtime.application.reporting.expert_reports",
     "build_expert_report_draft_from_state": "eco_council_runtime.application.reporting.expert_reports",
     "build_final_brief": "eco_council_runtime.application.reporting.council_decision",
+    "build_hypothesis_review_from_state": "eco_council_runtime.application.reporting.investigation_review",
     "build_open_questions": "eco_council_runtime.application.reporting.expert_reports",
     "build_investigation_review_packet": "eco_council_runtime.application.reporting.packets",
     "build_matching_adjudication_packet": "eco_council_runtime.application.reporting.packets",
@@ -42,6 +43,7 @@ _EXPORT_TO_MODULE = {
     "evidence_sufficiency_for_round": "eco_council_runtime.application.reporting.council_decision",
     "expert_report_status_from_state": "eco_council_runtime.application.reporting.expert_reports",
     "generic_readiness_recommendations": "eco_council_runtime.application.reporting.readiness",
+    "hydrate_observation_submissions_with_observations": "eco_council_runtime.application.reporting_state",
     "investigation_review_artifacts": "eco_council_runtime.application.reporting.artifact_pipeline",
     "matching_adjudication_artifacts": "eco_council_runtime.application.reporting.artifact_pipeline",
     "matching_authorization_artifacts": "eco_council_runtime.application.reporting.artifact_pipeline",
@@ -60,6 +62,7 @@ _EXPORT_TO_MODULE = {
     "report_has_substance": "eco_council_runtime.application.reporting.common",
     "report_is_placeholder": "eco_council_runtime.application.reporting.common",
     "report_status_for_role": "eco_council_runtime.application.reporting.expert_reports",
+    "shared_observation_id": "eco_council_runtime.application.reporting_state",
 }
 
 __all__ = list(_EXPORT_TO_MODULE)

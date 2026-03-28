@@ -398,6 +398,84 @@ class ReportingExtractedModulesTests(unittest.TestCase):
         )
         self.assertIn("station-air-quality", missing_types)
 
+    def test_investigation_review_module_surfaces_governed_probe_requests(self) -> None:
+        state = competing_hypothesis_state(run_id="review-module-probe-run")
+        state["investigation_actions"] = {
+            "ranked_actions": [
+                {
+                    "assigned_role": "environmentalist",
+                    "objective": "Draft a bounded governed discovery probe before selecting the next source family.",
+                    "reason": "Current evidence is too thin for a confident template-only follow-up.",
+                    "candidate_kind": "governed-discovery-probe",
+                    "probe_request": {
+                        "probe_id": "probe-round-001-hypothesis-001",
+                        "mode": "governance-aware-discovery",
+                        "assigned_role": "environmentalist",
+                        "question": "Which bounded governed probe would add the most new auditable evidence with minimal token cost?",
+                        "reason_codes": ["governed-discovery-probe", "low-evidence-density"],
+                    },
+                }
+            ],
+            "probe_requests": [
+                {
+                    "probe_id": "probe-round-001-hypothesis-001",
+                    "mode": "governance-aware-discovery",
+                    "assigned_role": "environmentalist",
+                    "question": "Which bounded governed probe would add the most new auditable evidence with minimal token cost?",
+                    "reason_codes": ["governed-discovery-probe", "low-evidence-density"],
+                }
+            ],
+        }
+
+        payload = build_investigation_review_draft_from_state(state)
+
+        self.assertEqual(1, len(payload["probe_requests"]))
+        self.assertIn("governed-discovery-needed", payload["decision_gating"]["reason_codes"])
+        self.assertIn("Which bounded governed probe", " ".join(payload["open_questions"]))
+
+    def test_council_decision_module_carries_probe_requests_from_review(self) -> None:
+        state = competing_hypothesis_state(run_id="decision-module-probe-run")
+        state["investigation_actions"] = {
+            "ranked_actions": [
+                {
+                    "assigned_role": "environmentalist",
+                    "objective": "Draft a bounded governed discovery probe before selecting the next source family.",
+                    "reason": "Current evidence is too thin for a confident template-only follow-up.",
+                    "candidate_kind": "governed-discovery-probe",
+                    "probe_request": {
+                        "probe_id": "probe-round-001-hypothesis-001",
+                        "mode": "governance-aware-discovery",
+                        "assigned_role": "environmentalist",
+                        "question": "Which bounded governed probe would add the most new auditable evidence with minimal token cost?",
+                        "reason_codes": ["governed-discovery-probe", "low-evidence-density"],
+                    },
+                }
+            ],
+            "probe_requests": [
+                {
+                    "probe_id": "probe-round-001-hypothesis-001",
+                    "mode": "governance-aware-discovery",
+                    "assigned_role": "environmentalist",
+                    "question": "Which bounded governed probe would add the most new auditable evidence with minimal token cost?",
+                    "reason_codes": ["governed-discovery-probe", "low-evidence-density"],
+                }
+            ],
+        }
+        state["investigation_review"] = build_investigation_review_draft_from_state(state)
+
+        payload, next_round_tasks, _missing_types = build_decision_draft_from_state(
+            run_dir=Path("/tmp/eco-reporting-drafts"),
+            state=state,
+            next_round_id=NEXT_ROUND_ID,
+            reports={},
+            report_sources={},
+        )
+
+        self.assertEqual("continue", payload["moderator_status"])
+        self.assertEqual(1, len(payload["probe_requests"]))
+        self.assertEqual(1, payload["decision_gating"]["discovery_probe_count"])
+        self.assertTrue(next_round_tasks)
+
     def test_investigation_review_module_surfaces_competing_hypothesis_gating(self) -> None:
         payload = build_investigation_review_draft_from_state(
             competing_hypothesis_state(run_id="review-module-gating-run")

@@ -30,6 +30,8 @@ The causal-chain upgrade is started as an explicit investigation artifact:
 
 This repository copy is being reorganized as a future standalone council-controller project, not as a long-term in-repo skill.
 
+The root runtime modules `reporting.py`, `orchestrate.py`, and `supervisor.py` are now thin compatibility facades. Their owned implementations live under `src/eco_council_runtime/application/reporting/runtime_cli.py`, `src/eco_council_runtime/application/orchestration/runtime_cli.py`, and `src/eco_council_runtime/application/supervisor/runtime_cli.py`.
+
 The current controller-oriented modules live under `src/eco_council_runtime/controller/`:
 
 - `constants.py`: stable stage, role, and workflow constants
@@ -40,7 +42,7 @@ The current controller-oriented modules live under `src/eco_council_runtime/cont
 - `agent_turns.py`: turn resolution, prompt embedding, and OpenClaw turn execution
 - `cli.py`: compatibility wrapper that re-exports the supervisor parser from `src/eco_council_runtime/cli/supervisor_cli.py`
 
-When extending the control plane, prefer adding logic to these controller submodules or to future `domain/`, `application/`, and `adapters/` packages rather than expanding monolithic entry files.
+When extending the control plane, prefer adding logic to `application/`, `domain/`, and `adapters/` package homes rather than expanding root facades. Treat `controller/` as bounded workflow infrastructure and compatibility support, not the default destination for new business logic.
 
 ## CLI entrypoints
 

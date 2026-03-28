@@ -95,15 +95,18 @@ The goal is not another broad "move code somewhere under `application/`" phase. 
   - long-lived implementation target: `application/normalize/` and `domain/matching/`, `domain/evidence/`
 - `reporting.py`
   - remains a public facade only
+  - current implementation owner: `application/reporting/runtime_cli.py`
   - long-lived implementation target: `application/reporting/` and `application/investigation/`
 - `orchestrate.py`
   - remains a public facade only
+  - current implementation owner: `application/orchestration/runtime_cli.py`
   - long-lived implementation target: `application/orchestration/`
 - `simulate.py`
   - remains a thin public command surface only
   - long-lived implementation target: `application/simulation/`
 - `supervisor.py`
   - remains a public lifecycle facade only
+  - current implementation owner: `application/supervisor/runtime_cli.py`
   - long-lived implementation target: `application/supervisor/`
 - `investigation.py`
   - should stop being the main mixed home for profiles, planners, history-query assembly, and role focus
@@ -226,6 +229,7 @@ The following responsibilities should leave `controller/` over `T07` and later s
 - Supported public runtime module paths remain the current root modules and CLI entrypoints unless a later task explicitly changes them.
 - New internal code should import second-stage homes directly instead of routing through root facades.
 - Transitional imports through `controller/` or root facades are allowed only when no second-stage home exists yet.
+- For reporting, orchestration, and supervisor runtime behavior, the second-stage homes now exist and should be imported directly by new internal code.
 
 ## Done Condition For `T07.1`
 

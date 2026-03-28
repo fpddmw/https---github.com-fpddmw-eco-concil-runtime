@@ -262,7 +262,7 @@
 
 #### T07.5 Root Facade Contraction And Controller Retirement Pass
 
-- Status: `planned`
+- Status: `completed`
 - Scope:
   - shrink root facades to intentional public API wrappers only
   - reduce `controller/` to documented compatibility shims or clearly bounded workflow internals
@@ -271,6 +271,10 @@
   - root modules are visibly thin
   - `controller/` is no longer treated as a permanent home for new work
   - docs reflect the actual production boundaries
+- Outcome:
+  - moved the owned reporting, orchestration, and supervisor CLI implementations into `application/reporting/runtime_cli.py`, `application/orchestration/runtime_cli.py`, and `application/supervisor/runtime_cli.py`, leaving the root modules as thin compatibility wrappers that preserve the existing public imports and `python -m eco_council_runtime.<module>` entrypoints
+  - expanded package-surface exports and architecture docs so second-stage homes are discoverable without routing new internal code through root facades, and clarified that `controller/` is bounded workflow infrastructure rather than the default destination for new runtime logic
+  - structural compatibility remained stable for root-import consumers while the package map and README were updated to reflect the now-thin facade boundary
 
 #### T07.6 Structural Regression Gate
 
@@ -462,7 +466,7 @@
 
 #### T08.5 Governance-Aware Discovery Or Probe Mode
 
-- Status: `in_progress`
+- Status: `completed`
 - Scope:
   - allow limited exploratory investigation when current evidence is insufficient or atypical
   - constrain exploration by mission governance, explicit budgets, and auditable reason codes
@@ -470,6 +474,10 @@
 - Acceptance:
   - recall improves on non-template missions without opening an unbounded fetch surface
   - every exploratory step remains reviewable and replayable
+- Outcome:
+  - extended `application/investigation/actions.py` with bounded governance-aware discovery probes, persisted `probe_requests`, explicit discovery budgets, and a `governed-discovery-probe` action kind so atypical or under-mapped missions can surface controlled next steps without triggering unbounded fetch execution
+  - upgraded `application/investigation/review.py` and `application/reporting/council_decision.py` so review and decision payloads carry probe requests, expose `discovery_probe_count`, and gate another round with the auditable `governed-discovery-needed` reason code when exploratory investigation is still required
+  - added focused regressions across investigation and reporting flows, fixed the surfaced review import cycle and archive package initialization cycle, and confirmed the targeted `32`-test regression set stays green
 
 #### T08.6 Evaluation, Token-Budget, And Audit Regression Gate
 
@@ -484,6 +492,6 @@
 
 ## Current Task Notes
 
-- Active task: `T08.5 Governance-Aware Discovery Or Probe Mode`
-- Next planned task: `T07.5 Root Facade Contraction And Controller Retirement Pass`
+- Active task: `T07.6 Structural Regression Gate`
+- Next planned task: `T08.6 Evaluation, Token-Budget, And Audit Regression Gate`
 - Working rule reaffirmed: after a sub-slice passes acceptance, persist its outcome here and then explicitly open the next sub-slice before coding continues.

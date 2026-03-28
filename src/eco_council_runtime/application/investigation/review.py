@@ -666,6 +666,34 @@ def build_investigation_review_draft_from_state(state: dict[str, Any]) -> dict[s
     ]
     review_status = investigation_review_overall_status(hypothesis_reviews)
     decision_gating = build_investigation_review_gating(hypothesis_reviews)
+    from eco_council_runtime.application.investigation.actions import probe_requests_from_investigation_actions
+
+    investigation_actions = state.get("investigation_actions") if isinstance(state.get("investigation_actions"), dict) else {}
+    probe_requests = probe_requests_from_investigation_actions(investigation_actions, limit=3)
+    if probe_requests:
+        decision_gating = {
+            **decision_gating,
+            "another_round_required": True,
+            "reason_codes": unique_strings(
+                [
+                    maybe_text(item)
+                    for item in decision_gating.get("reason_codes", [])
+                    if maybe_text(item)
+                ]
+                + ["governed-discovery-needed"]
+            ),
+            "reasons": unique_strings(
+                [
+                    maybe_text(item)
+                    for item in decision_gating.get("reasons", [])
+                    if maybe_text(item)
+                ]
+                + [
+                    f"{len(probe_requests)} governance-aware discovery probe(s) remain recommended for atypical or thin evidence gaps."
+                ]
+            )[:6],
+            "discovery_probe_count": len(probe_requests),
+        }
     matched_card_ids = unique_strings(
         [
             maybe_text(item.get("evidence_id"))
@@ -763,6 +791,11 @@ def build_investigation_review_draft_from_state(state: dict[str, Any]) -> dict[s
         for item in state.get("remands_open", [])
         if isinstance(item, dict) and maybe_text(item.get("remand_id"))
     )
+    open_questions.extend(
+        maybe_text(item.get("question"))
+        for item in probe_requests
+        if isinstance(item, dict) and maybe_text(item.get("question"))
+    )
     matching_reasonable = bool(evidence_adjudication.get("matching_reasonable"))
     needs_additional_data = (
         bool(evidence_adjudication.get("needs_additional_data"))
@@ -801,6 +834,7 @@ def build_investigation_review_draft_from_state(state: dict[str, Any]) -> dict[s
         "another_round_required": bool(decision_gating.get("another_round_required")),
         "decision_gating": decision_gating,
         "contradiction_paths": decision_gating.get("contradiction_paths", []),
+        "probe_requests": probe_requests,
         "open_questions": unique_strings(open_questions)[:6],
         "recommended_next_actions": recommendations,
     }

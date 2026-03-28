@@ -52,14 +52,23 @@ def investigation_review_decision_gating(review: dict[str, Any]) -> dict[str, An
             "unresolved_required_leg_count": int(decision_gating.get("unresolved_required_leg_count") or 0),
             "contradiction_path_count": int(decision_gating.get("contradiction_path_count") or 0),
             "active_alternative_count": int(decision_gating.get("active_alternative_count") or 0),
+            "discovery_probe_count": int(decision_gating.get("discovery_probe_count") or 0),
         }
 
     hypothesis_reviews = review.get("hypothesis_reviews") if isinstance(review.get("hypothesis_reviews"), list) else []
     unresolved_required_leg_count = 0
     contradiction_path_count = 0
     active_alternative_count = 0
+    discovery_probe_count = 0
     reason_codes: list[str] = []
     reasons: list[str] = []
+    probe_requests = review.get("probe_requests") if isinstance(review.get("probe_requests"), list) else []
+    discovery_probe_count = len([item for item in probe_requests if isinstance(item, dict)])
+    if discovery_probe_count:
+        reason_codes.append("governed-discovery-needed")
+        reasons.append(
+            f"{discovery_probe_count} governance-aware discovery probe(s) remain recommended for atypical or thin evidence gaps."
+        )
     for hypothesis_review in hypothesis_reviews:
         if not isinstance(hypothesis_review, dict):
             continue
@@ -148,6 +157,7 @@ def investigation_review_decision_gating(review: dict[str, Any]) -> dict[str, An
         "unresolved_required_leg_count": unresolved_required_leg_count,
         "contradiction_path_count": contradiction_path_count,
         "active_alternative_count": active_alternative_count,
+        "discovery_probe_count": discovery_probe_count,
     }
 
 
@@ -163,12 +173,15 @@ def summarize_investigation_review_gating(gating: dict[str, Any]) -> str:
     unresolved_required_leg_count = int(gating.get("unresolved_required_leg_count") or 0)
     contradiction_path_count = int(gating.get("contradiction_path_count") or 0)
     active_alternative_count = int(gating.get("active_alternative_count") or 0)
+    discovery_probe_count = int(gating.get("discovery_probe_count") or 0)
     if unresolved_required_leg_count > 0:
         fragments.append(f"{unresolved_required_leg_count} required leg(s) remain unresolved")
     if contradiction_path_count > 0:
         fragments.append(f"{contradiction_path_count} contradiction path(s) remain active")
     if active_alternative_count > 0:
         fragments.append(f"{active_alternative_count} competing alternative(s) remain active")
+    if discovery_probe_count > 0:
+        fragments.append(f"{discovery_probe_count} governance-aware discovery probe(s) remain recommended")
     return "; ".join(fragments)
 
 
@@ -385,6 +398,7 @@ def build_decision_draft_from_state(
     authorization_status = maybe_text(state.get("matching_authorization", {}).get("authorization_status"))
     investigation_review = state.get("investigation_review", {}) if isinstance(state.get("investigation_review"), dict) else {}
     review_gating = investigation_review_decision_gating(investigation_review)
+    probe_requests = investigation_review.get("probe_requests") if isinstance(investigation_review.get("probe_requests"), list) else []
     review_requires_another_round = bool(review_gating.get("another_round_required"))
     blocked_reason = ""
     blocked_by_max_rounds = False
@@ -483,6 +497,7 @@ def build_decision_draft_from_state(
         "decision_summary": decision_summary,
         "next_round_required": next_round_required,
         "decision_gating": review_gating,
+        "probe_requests": [item for item in probe_requests if isinstance(item, dict)][:3],
         "missing_evidence_types": missing_types,
         "next_round_tasks": next_round_tasks,
         "override_requests": override_requests,

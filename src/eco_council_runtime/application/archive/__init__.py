@@ -1,21 +1,31 @@
 """Application services for cross-run archive workflows and imports."""
 
-from .importers import (
-	case_library_argv,
-	maybe_auto_import_case_library,
-	maybe_auto_import_signal_corpus,
-	signal_corpus_argv,
-)
-from .runtime_state import collect_run_snapshot, load_fetch_execution, load_state, round_payload_lists, state_for_run
+from __future__ import annotations
 
-__all__ = [
-	"case_library_argv",
-	"collect_run_snapshot",
-	"load_fetch_execution",
-	"load_state",
-	"maybe_auto_import_case_library",
-	"maybe_auto_import_signal_corpus",
-	"round_payload_lists",
-	"signal_corpus_argv",
-	"state_for_run",
-]
+from importlib import import_module
+from typing import Any
+
+_EXPORTS = {
+    "case_library_argv": "eco_council_runtime.application.archive.importers",
+    "maybe_auto_import_case_library": "eco_council_runtime.application.archive.importers",
+    "maybe_auto_import_signal_corpus": "eco_council_runtime.application.archive.importers",
+    "signal_corpus_argv": "eco_council_runtime.application.archive.importers",
+    "collect_run_snapshot": "eco_council_runtime.application.archive.runtime_state",
+    "load_fetch_execution": "eco_council_runtime.application.archive.runtime_state",
+    "load_state": "eco_council_runtime.application.archive.runtime_state",
+    "round_payload_lists": "eco_council_runtime.application.archive.runtime_state",
+    "state_for_run": "eco_council_runtime.application.archive.runtime_state",
+}
+
+
+def __getattr__(name: str) -> Any:
+    module_name = _EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = import_module(module_name)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
+
+
+__all__ = list(_EXPORTS)
