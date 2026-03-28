@@ -286,6 +286,66 @@ class InvestigationActionsTests(unittest.TestCase):
         self.assertTrue(probe_action["governed_source_options"])
         self.assertEqual(probe_request["question"], probe_action["probe_request"]["question"])
 
+    def test_governed_probe_budget_envelope_stays_bounded(self) -> None:
+        hypotheses = []
+        for index in range(1, 5):
+            hypotheses.append(
+                {
+                    "hypothesis_id": f"hypothesis-probe-{index:03d}",
+                    "overall_status": "unresolved",
+                    "contradiction": {"count": 0, "evidence_refs": []},
+                    "remaining_gaps": ["cross-border-attribution", "station-air-quality"],
+                    "latest_evidence_refs": [],
+                    "legs": [
+                        {
+                            "leg_id": "impact",
+                            "required": True,
+                            "status": "unresolved",
+                            "remaining_gaps": ["cross-border-attribution", "station-air-quality"],
+                            "contradiction": {"count": 0, "evidence_refs": []},
+                            "coverage": {"pending_ref_count": 0, "direct_ref_count": 0},
+                            "latest_evidence_refs": [],
+                            "uncertainty": {"level": "high"},
+                        }
+                    ],
+                    "alternative_hypotheses": [],
+                }
+            )
+        state = {
+            "mission": example_mission(run_id="investigation-actions-run"),
+            "round_id": ROUND_ID,
+            "investigation_state": {
+                **investigation_state_payload(),
+                "hypotheses": hypotheses,
+            },
+        }
+
+        payload = build_investigation_actions_from_round_state(state)
+
+        self.assertEqual(2, payload["budget"]["max_discovery_probes"])
+        self.assertEqual(2, payload["budget"]["discovery_probe_count"])
+        self.assertLessEqual(len(payload["probe_requests"]), 2)
+        self.assertLessEqual(len(payload["ranked_actions"]), 6)
+        for probe_request in payload["probe_requests"]:
+            self.assertLessEqual(probe_request["governance_envelope"]["source_option_count"], 3)
+            self.assertEqual(3, probe_request["budget"]["max_source_options"])
+        for action in payload["ranked_actions"]:
+            if action["candidate_kind"] != "governed-discovery-probe":
+                continue
+            self.assertLessEqual(len(action["governed_source_options"]), 3)
+
+    def test_build_investigation_actions_is_deterministic_for_same_state(self) -> None:
+        state = {
+            "mission": example_mission(run_id="investigation-actions-run"),
+            "round_id": ROUND_ID,
+            "investigation_state": investigation_state_payload(),
+        }
+
+        payload_one = build_investigation_actions_from_round_state(state)
+        payload_two = build_investigation_actions_from_round_state(state)
+
+        self.assertEqual(payload_one, payload_two)
+
     def test_materialize_investigation_actions_writes_canonical_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             run_dir = Path(temp_dir) / "investigation-actions-run"

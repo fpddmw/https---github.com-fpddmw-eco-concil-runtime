@@ -321,6 +321,99 @@ BENCHMARK_CASES: list[dict[str, Any]] = [
         },
     },
     {
+        "case_id": "smoke_ambiguous_attribution",
+        "mission": smoke_mission(),
+        "signals": [
+            localized_signal(
+                signal_id="pubsig-smoke-ambiguous",
+                source_skill="gdelt-gkg-fetch",
+                title="Smoke haze blankets New York City",
+                text="New York City residents reported dense smoke haze and degraded air quality during the event.",
+                latitude=40.7128,
+                longitude=-74.0060,
+                location_label="New York City",
+                published_at_utc="2023-06-07T13:30:00Z",
+            )
+        ],
+        "observations": [
+            observation_record(
+                mission=smoke_mission(),
+                observation_id="obs-smoke-ambiguous-impact",
+                metric="pm2_5",
+                value=61.0,
+                unit="ug/m3",
+                place_scope=smoke_mission()["region"],
+                source_skill="openaq-data-fetch",
+            )
+        ],
+        "expected": {
+            "profile_id": "smoke-transport",
+            "claim_type": "smoke",
+            "claim_scope_usable": True,
+            "match_verdict": "supports",
+            "result_status": "matched",
+            "matched_metrics": ["pm2_5"],
+            "expect_pair": True,
+            "observation_legs": {
+                "obs-smoke-ambiguous-impact": "impact",
+            },
+            "review_leg_statuses": {
+                "source": "unresolved",
+                "mechanism": "unresolved",
+                "impact": "supported",
+                "public_interpretation": "supported",
+            },
+            "review_overall_status": "partial",
+        },
+    },
+    {
+        "case_id": "smoke_irrelevant_hydrology",
+        "mission": smoke_mission(),
+        "signals": [
+            localized_signal(
+                signal_id="pubsig-smoke-irrelevant",
+                source_skill="gdelt-gkg-fetch",
+                title="Smoke haze worries New York City residents",
+                text="New York City residents described smoke haze and poor air quality during the episode.",
+                latitude=40.7128,
+                longitude=-74.0060,
+                location_label="New York City",
+                published_at_utc="2023-06-07T14:30:00Z",
+            )
+        ],
+        "observations": [
+            observation_record(
+                mission=smoke_mission(),
+                observation_id="obs-smoke-hydrology",
+                metric="river_discharge",
+                value=200.0,
+                unit="m3/s",
+                place_scope=smoke_mission()["region"],
+                source_skill="usgs-water-iv-fetch",
+            )
+        ],
+        "expected": {
+            "profile_id": "smoke-transport",
+            "claim_type": "smoke",
+            "claim_scope_usable": True,
+            "match_verdict": "insufficient",
+            "result_status": "unmatched",
+            "matched_metrics": [],
+            "expect_pair": False,
+            "gaps_contain": [
+                "No observations matched the claim's localized window and geometry.",
+                "Station-grade corroboration is missing.",
+            ],
+            "review_leg_statuses": {
+                "source": "unresolved",
+                "mechanism": "unresolved",
+                "impact": "unresolved",
+                "public_interpretation": "partial",
+            },
+            "review_overall_status": "unresolved",
+        },
+    },
+    {
         "case_id": "flood_support",
         "mission": flood_mission(),
         "signals": [

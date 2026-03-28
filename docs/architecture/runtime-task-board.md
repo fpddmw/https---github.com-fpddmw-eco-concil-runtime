@@ -278,7 +278,7 @@
 
 #### T07.6 Structural Regression Gate
 
-- Status: `planned`
+- Status: `completed`
 - Scope:
   - add topology or import-boundary regressions where useful
   - lock compatibility entrypoints that must remain stable
@@ -286,6 +286,10 @@
 - Acceptance:
   - the second-stage structure is test-guarded rather than documented only
   - future refactors cannot easily drift back into flat mega-modules
+- Outcome:
+  - extended `tests/test_import_boundaries.py` so the root `reporting.py`, `orchestrate.py`, and `supervisor.py` compatibility facades must remain thin wrapper files, their exported `main` entrypoints must continue to resolve to the second-stage runtime owners, and cycle-prone package surfaces stay lazy rather than drifting back to eager imports
+  - kept the existing topology, CLI import, and archive extraction regressions in place while adding direct guardrails against reintroducing the compatibility-shell and package-initialization cycles cleaned during `T07`
+  - focused structural regressions plus full `unittest` discovery stayed green, so the second-stage package boundary is now locked by tests rather than architecture notes only
 
 ### T08 Investigation Capability Upgrade Under Controlled Token And Auditable Flow
 
@@ -481,7 +485,7 @@
 
 #### T08.6 Evaluation, Token-Budget, And Audit Regression Gate
 
-- Status: `planned`
+- Status: `completed`
 - Scope:
   - expand benchmarks for ambiguous attribution, false causal chains, contradictory evidence, low-evidence rounds, and atypical missions
   - add regression checks for token-budget envelopes, retrieval compactness, and deterministic replay of investigation artifacts
@@ -489,9 +493,13 @@
 - Acceptance:
   - new investigation behavior has scenario-level regression coverage
   - budget drift and audit regressions fail deterministically
+- Outcome:
+  - expanded `tests/test_investigation_benchmarks.py` with ambiguous-attribution and false-causal-chain smoke cases, complementing the existing contradiction and low-evidence scenarios so investigation review behavior is exercised across a broader causal-failure surface
+  - extended `tests/test_investigation_actions.py` and `tests/test_investigation_retrieval_upgrade.py` so governed discovery probes must stay within their configured budgets, repeated action planning must stay deterministic, and repeated history-retrieval snapshot materialization must preserve bounded compact output under the same inputs
+  - existing audit-chain and packet regressions continued to cover persisted `investigation_state` and `investigation_actions` artifacts, and the combined focused regression batch plus full `160`-test `unittest` discovery pass both stayed green
 
 ## Current Task Notes
 
-- Active task: `T07.6 Structural Regression Gate`
-- Next planned task: `T08.6 Evaluation, Token-Budget, And Audit Regression Gate`
+- Active task: `none`
+- Next planned task: `not yet opened`
 - Working rule reaffirmed: after a sub-slice passes acceptance, persist its outcome here and then explicitly open the next sub-slice before coding continues.

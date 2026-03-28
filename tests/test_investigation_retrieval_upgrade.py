@@ -407,6 +407,16 @@ class InvestigationRetrievalUpgradeTests(unittest.TestCase):
                 {"decision-summary", "evidence-card", "curated-summary", "round-summary", "report-summary"},
             )
 
+            second_target = write_history_context_file(
+                run_dir,
+                {"history_context": {"db": str(db_path), "top_k": 5}},
+                "round-01",
+            )
+            self.assertEqual(target, second_target)
+            second_snapshot = json.loads(history_retrieval_path(run_dir, "round-01").read_text(encoding="utf-8"))
+            self.assertEqual(snapshot["budget"], second_snapshot["budget"])
+            self.assertEqual(snapshot["cases"], second_snapshot["cases"])
+
 
 if __name__ == "__main__":
     unittest.main()
