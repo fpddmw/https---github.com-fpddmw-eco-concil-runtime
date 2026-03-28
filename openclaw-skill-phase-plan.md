@@ -70,8 +70,10 @@
 - 新增 `eco-concil-runtime/` 最小内核包
 - 已落地 `run_manifest.json`、`round_cursor.json`、`skill_registry.json`、`audit_ledger.jsonl`、`receipts/`
 - 已落地 kernel CLI：`eco-concil-runtime/scripts/eco_runtime_kernel.py`
+- 已补齐第 2 阶段产物：`promotion_gate_<round_id>.json`、`round_controller_<round_id>.json`、`supervisor_state_<round_id>.json`
+- 已补齐 phase-2 CLI 入口：`apply-promotion-gate`、`run-phase2-round`、`supervise-round`
 
-这说明当前主链已经不只停留在“候选对象生成”，而是已经延伸到 evidence bridge、board organize / brief、investigation / readiness / promotion，以及第一阶段 runtime kernel。
+这说明当前主链已经不只停留在“候选对象生成”，而是已经延伸到 evidence bridge、board organize / brief、investigation / readiness / promotion，以及最小 runtime kernel 的第 2 阶段。
 
 ## 3. 分阶段目标
 
@@ -212,8 +214,15 @@ runtime 在当前阶段仍然不宜提前扩张，推荐按下面窗口动工：
 
 1. `next_actions_<round_id>.json`、`falsification_probes_<round_id>.json`、`round_readiness_<round_id>.json`、`promoted_evidence_basis_<round_id>.json` 的契约已经在本轮稳定下来。
 2. 最小 runtime kernel 第 1 阶段已经落地：负责 run manifest、artifact path resolver、receipt/event ledger、skill executor wrapper 和 round cursor。
-3. runtime 的下一步不是扩大业务逻辑，而是补第 2 阶段：把 promote/freeze gate、round controller、以及 supervisor 入口接回来。
+3. runtime 的第 2 阶段已经落地：promote/freeze gate、round controller、以及 supervisor 入口都已接回，而且仍保持在“编排与落盘”边界内。
 
-换句话说，runtime 现在已经开始动工，但仍只停留在“编排与落盘”这一层，不承载业务语义。
+换句话说，runtime 现在已经形成了一个最小可运行的 phase-2 闭环，但仍只停留在“编排与落盘”这一层，不承载业务语义。
+
+## 7. 当前补充状态
+
+- `run-phase2-round` 现在可以把 `board -> D1 -> D2 -> promotion` 串成单命令流程。
+- `supervise-round` 现在会在 controller 结果上额外落出 operator 视角的 `supervisor_state_<round_id>.json`。
+- `show-run-state` 现在会同时回显最新 round 的 gate / controller / supervisor 快照。
+- 当前完整 unittest 集已经扩展到 13 个测试，并覆盖 ready-promote 与 in-flight-freeze 两类 phase-2 回归场景。
 
 这份文档是当前蓝图下的执行型阶段计划，后续批次应在此基础上继续推进。

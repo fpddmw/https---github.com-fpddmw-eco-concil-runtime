@@ -31,6 +31,18 @@ def registry_path(run_dir: Path) -> Path:
     return runtime_dir(run_dir) / "skill_registry.json"
 
 
+def promotion_gate_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"promotion_gate_{round_id}.json"
+
+
+def controller_state_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"round_controller_{round_id}.json"
+
+
+def supervisor_state_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"supervisor_state_{round_id}.json"
+
+
 def receipt_path(run_dir: Path, receipt_id: str) -> Path:
     return receipts_dir(run_dir) / f"{receipt_id}.json"
 

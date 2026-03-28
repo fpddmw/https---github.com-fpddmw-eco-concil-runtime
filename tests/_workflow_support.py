@@ -60,6 +60,10 @@ def promotion_path(run_dir: Path, file_name: str) -> Path:
     return run_dir / "promotion" / file_name
 
 
+def runtime_path(run_dir: Path, file_name: str) -> Path:
+    return run_dir / "runtime" / file_name
+
+
 def kernel_script_path() -> Path:
     return WORKSPACE_ROOT / "eco-concil-runtime" / "scripts" / "eco_runtime_kernel.py"
 

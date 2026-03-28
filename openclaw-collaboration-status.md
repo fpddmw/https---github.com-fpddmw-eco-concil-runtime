@@ -6,7 +6,7 @@
 - Phase B：已完成，candidate -> evidence bridge 已经打通。
 - Phase C：已完成到 C2，board 已具备记录、整理、总结、brief 化能力。
 - Phase D：已完成 D1 + D2，next actions、probes、round readiness、promotion basis 已经落地。
-- runtime kernel：已完成第 1 阶段，manifest / cursor / registry / ledger / executor wrapper 已可运行。
+- runtime kernel：已完成到第 2 阶段，manifest / cursor / registry / ledger / executor wrapper、promotion gate、round controller、supervisor entry 已可运行。
 
 ## 2. 当前能力面
 
@@ -29,12 +29,12 @@
 - [x] round readiness 进入正式 gate。
 - [x] evidence basis 进入 promote / freeze。
 - [x] 最小 runtime kernel 重新建立。
-- [ ] runtime 第 2 阶段的 promote/freeze gate 与 supervisor 入口回接。
-- [ ] 全链路 supervisor / simulation 闭环回归。
+- [x] runtime 第 2 阶段的 promote/freeze gate 与 supervisor 入口回接。
+- [x] 全链路 supervisor / simulation 闭环回归。
 
-判断：如果只看主链能力面，当前仓库已经基本具备从 raw artifact 到 promote basis 的 skill-first 主链。
+判断：如果只看主链能力面，当前仓库已经具备从 raw artifact 到 promote basis，再到 minimal supervisor state 的 skill-first 主链。
 
-判断：如果看工程闭环而不只看 skill 面，则还差两个批次的工作：
+判断：如果看当前精简仓库的工程闭环，而不把 legacy 大 runtime 的全部外延一并算进来，那么本轮已经把原先缺失的两个批次补齐：
 
 - 一批是 runtime 第 2 阶段：promote/freeze gate、round controller、supervisor 入口。
 - 一批是全链路 supervisor / simulation 回归，把 skill-first 主链重新接成完整运行面。
@@ -51,7 +51,7 @@
 - runtime 只保留最小内核，不承载 claim / evidence / board / readiness 的业务判断。
 - runtime 第 1 层只负责 run manifest、路径解析、artifact registry、receipt/event ledger。
 - runtime 第 2 层只负责 skill executor wrapper，把一次 skill 调用落成稳定的 run event。
-- runtime 第 3 层才是可选的 round controller / supervisor CLI，而不是一开始就恢复完整旧框架。
+- runtime 第 3 层是最小 round controller / supervisor CLI，用于把既有 skills 串成稳定的运行面，而不是恢复完整旧框架。
 
 当前已完成：
 
@@ -62,16 +62,18 @@
 - `eco-concil-runtime/src/eco_council_runtime/kernel/ledger.py`
 - `eco-concil-runtime/src/eco_council_runtime/kernel/executor.py`
 - `eco-concil-runtime/src/eco_council_runtime/kernel/cli.py`
+- `eco-concil-runtime/src/eco_council_runtime/kernel/gate.py`
+- `eco-concil-runtime/src/eco_council_runtime/kernel/controller.py`
+- `eco-concil-runtime/src/eco_council_runtime/kernel/supervisor.py`
 
 ## 6. runtime 何时动工
 
-- 这一阶段已经开始动工，并且第 1 阶段已完成。
+- 这一阶段已经完成到第 2 阶段。
 - 当前 kernel 已能初始化 run、刷新 skill registry、执行 skill、记录 receipt、追加 audit ledger、推进 round cursor。
-- 下一阶段应在此基础上补 promote/freeze gate、round controller、以及 supervisor 入口。
-- `eco-summarize-round-readiness` 与 `eco-promote-evidence-basis` 现在已经是 kernel 第 2 阶段可直接接入的目标对象。
+- 当前 kernel 也已能对 readiness 落 promotion gate、以单命令跑完 board -> D1 -> D2 -> promotion，并额外写出 supervisor state。
+- `eco-summarize-round-readiness` 与 `eco-promote-evidence-basis` 现在已经接入 kernel phase-2 控制流，而没有把业务判断拉回 runtime。
 
 ## 7. 推荐的下一步
 
-1. 把 runtime 第 2 阶段补齐：promote/freeze gate、round controller、supervisor 入口。
-2. 在 kernel CLI 上接一条最小 end-to-end run 命令，把 board -> D1 -> D2 串成单命令流程。
-3. 再做 supervisor / simulation 回归，把 skill-first 主链恢复成完整运行闭环。
+1. 在 reporting / decision 侧继续消费 `promoted_evidence_basis_<round_id>.json`，把下游正式产物重新接回 skill-first 主链。
+2. 如果需要更接近 legacy 运行面，再单独补 richer simulation preset、archive / history context、以及更复杂的 supervisor operator 流程。
