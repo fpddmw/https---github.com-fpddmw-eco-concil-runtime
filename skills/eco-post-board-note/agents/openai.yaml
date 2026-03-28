@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Post Board Note"
+  short_description: "Append a compact note to the local board artifact"
+  default_prompt: "Use $eco-post-board-note to append a compact investigation note to the current round's board state, preserve linked evidence refs, and emit an auditable board event for downstream review."

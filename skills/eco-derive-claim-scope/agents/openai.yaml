@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Derive Claim Scope"
+  short_description: "Infer matching-oriented claim scopes from claim-side evidence"
+  default_prompt: "Use $eco-derive-claim-scope to read claim-side evidence objects, infer compact geographic and thematic scope proposals, persist the scope artifact, and return board-ready handoff hints for evidence coverage and challenge review."

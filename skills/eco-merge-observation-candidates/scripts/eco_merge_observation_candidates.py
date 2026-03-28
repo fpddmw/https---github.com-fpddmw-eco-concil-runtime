@@ -294,7 +294,7 @@ def merge_observation_candidates_skill(
             "evidence_refs": unique_refs(artifact_refs, 20),
             "gap_hints": gap_hints,
             "challenge_hints": ["Check whether nearby observations from different providers should still remain separate groups."] if merged_items else [],
-            "suggested_next_skills": ["eco-link-claims-to-observations", "eco-build-normalization-audit"],
+            "suggested_next_skills": ["eco-derive-observation-scope", "eco-link-claims-to-observations"],
         },
     }
 

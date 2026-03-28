@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Open Challenge Ticket"
+  short_description: "Open a challenge ticket on the local board"
+  default_prompt: "Use $eco-open-challenge-ticket to open a challenge ticket on the current round's board state, preserve target ids and linked evidence refs, and emit an auditable board event for challenger workflows."

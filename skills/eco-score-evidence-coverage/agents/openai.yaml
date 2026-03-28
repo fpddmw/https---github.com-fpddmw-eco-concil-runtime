@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Score Evidence Coverage"
+  short_description: "Score claim-side evidence coverage and readiness"
+  default_prompt: "Use $eco-score-evidence-coverage to read claim-observation links and available scope proposals, score claim-side evidence coverage and readiness, persist the compact coverage artifact, and return board-ready gap and challenge hints."

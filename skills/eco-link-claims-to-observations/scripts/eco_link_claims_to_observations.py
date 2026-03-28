@@ -388,7 +388,7 @@ def link_claims_to_observations_skill(
             "evidence_refs": unique_refs(artifact_refs, 20),
             "gap_hints": gap_hints,
             "challenge_hints": challenge_hints,
-            "suggested_next_skills": ["eco-build-normalization-audit"],
+            "suggested_next_skills": ["eco-derive-claim-scope", "eco-derive-observation-scope", "eco-score-evidence-coverage"],
         },
     }
 

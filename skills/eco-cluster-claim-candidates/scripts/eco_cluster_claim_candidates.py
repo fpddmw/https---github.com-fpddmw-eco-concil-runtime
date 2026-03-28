@@ -287,7 +287,7 @@ def cluster_claim_candidates_skill(
             "evidence_refs": unique_refs(artifact_refs, 20),
             "gap_hints": gap_hints,
             "challenge_hints": ["Check whether semantically close claims are still split across adjacent clusters."] if clusters else [],
-            "suggested_next_skills": ["eco-link-claims-to-observations", "eco-build-normalization-audit"],
+            "suggested_next_skills": ["eco-derive-claim-scope", "eco-link-claims-to-observations"],
         },
     }
 
