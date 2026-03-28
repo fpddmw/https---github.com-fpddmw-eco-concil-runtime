@@ -52,7 +52,7 @@ class SupervisorLifecycleTests(unittest.TestCase):
         }
 
         with patch(
-            "eco_council_runtime.application.supervisor_lifecycle.run_json_command",
+            "eco_council_runtime.application.archive.importers.run_json_command",
             return_value={"payload": {"imported_runs": 1}},
         ):
             result = maybe_auto_import_signal_corpus(Path("/tmp/eco-run"), state, "round-002")

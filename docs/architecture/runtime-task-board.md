@@ -202,7 +202,7 @@
 
 #### T07.4 Normalize, Simulation, And Archive Hotspot Split
 
-- Status: `planned`
+- Status: `completed`
 - Scope:
   - split `application/normalize_sources.py` into public-source, environment-source, and cache-wrapper or ingestion helper modules
   - split `application/simulation_workflow.py` into preset loading, raw artifact generation, synthetic payload builders, and workflow runners
@@ -210,6 +210,10 @@
 - Acceptance:
   - normalize, simulation, and archive flows have stable subdomain boundaries
   - archive import code no longer requires root `supervisor` module loading
+- Outcome:
+  - retired the remaining `T07.4` second-generation hotspots by completing normalize extraction, moving simulation ownership into `application/simulation/`, and shifting archive auto-import orchestration into `application/archive/`
+  - kept root and legacy entrypoints stable through compatibility shells and thin CLI surfaces while adding direct extracted-module regressions for both simulation and archive package homes
+  - targeted `20`-test structure regressions passed, and `python3 -m unittest discover -s tests` advanced the full repository baseline to a green `150` tests
 
 ##### T07.4a Normalize Source Pipeline Split
 
@@ -228,7 +232,7 @@
 
 ##### T07.4b Simulation Workflow Split
 
-- Status: `in_progress`
+- Status: `completed`
 - Scope:
   - move scenario loading and preset resolution from `application/simulation_workflow.py` into owned `application/simulation/` module homes
   - move raw artifact builders and payload synthesis into owned `application/simulation/` module homes
@@ -236,6 +240,25 @@
 - Acceptance:
   - simulation workflow ownership no longer depends on a single second-generation mega-module
   - extracted simulation package homes are exercised directly while legacy imports remain stable
+- Outcome:
+  - added `application/simulation/common.py`, `application/simulation/presets.py`, `application/simulation/raw_artifacts.py`, `application/simulation/payload_synthesis.py`, and `application/simulation/workflow_runner.py`, moving scenario loading, raw artifact generation, payload synthesis, and workflow execution into owned second-stage package homes
+  - reduced `application/simulation_workflow.py` to a compatibility shell, rewired `application/simulation/__init__.py` plus root `simulate.py` to load the new package home directly, and added `tests/test_simulation_extracted_modules.py` so both extracted and compatibility import surfaces stay covered
+  - simulation-focused regressions remained green alongside CLI and package-topology checks, then stayed green in the later full `150`-test discovery pass
+
+##### T07.4c Archive Boundary Split
+
+- Status: `completed`
+- Scope:
+  - move archive auto-import orchestration from `application/supervisor_lifecycle.py` into owned `application/archive/` module homes
+  - keep root `case_library.py`, `signal_corpus.py`, and supervisor-facing compatibility surfaces stable while shifting ownership to the archive package
+  - add direct regressions for the extracted archive package home rather than relying only on supervisor lifecycle coverage
+- Acceptance:
+  - archive import orchestration now lives under `application/archive/`
+  - supervisor lifecycle continues to work through stable compatibility re-exports
+- Outcome:
+  - added `application/archive/importers.py` and updated `application/archive/__init__.py`, so case-library and signal-corpus auto-import command assembly plus state mutation now live in the archive package instead of the supervisor mega-module
+  - trimmed `application/supervisor_lifecycle.py` to reuse the archive-owned import helpers, preserving the existing public symbols while aligning code ownership with the second-stage package map
+  - added `tests/test_archive_extracted_modules.py` and updated lifecycle regressions to patch the new owner module directly; the combined `20`-test structural regression set and full `150`-test discovery pass both stayed green
 
 #### T07.5 Root Facade Contraction And Controller Retirement Pass
 
@@ -439,7 +462,7 @@
 
 #### T08.5 Governance-Aware Discovery Or Probe Mode
 
-- Status: `planned`
+- Status: `in_progress`
 - Scope:
   - allow limited exploratory investigation when current evidence is insufficient or atypical
   - constrain exploration by mission governance, explicit budgets, and auditable reason codes
@@ -461,6 +484,6 @@
 
 ## Current Task Notes
 
-- Active task: `T07.4b Simulation Workflow Split`
-- Next planned task: `T07.4c Archive Boundary Split`
+- Active task: `T08.5 Governance-Aware Discovery Or Probe Mode`
+- Next planned task: `T07.5 Root Facade Contraction And Controller Retirement Pass`
 - Working rule reaffirmed: after a sub-slice passes acceptance, persist its outcome here and then explicitly open the next sub-slice before coding continues.

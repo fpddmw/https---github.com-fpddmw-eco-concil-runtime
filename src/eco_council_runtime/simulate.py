@@ -5,13 +5,13 @@ from __future__ import annotations
 
 import argparse
 
-from eco_council_runtime.application import simulation_workflow as application_simulation_workflow
+from eco_council_runtime.application import simulation as application_simulation
 
-MODE_VALUES = application_simulation_workflow.MODE_VALUES
-pretty_json = application_simulation_workflow.pretty_json
-command_list_presets = application_simulation_workflow.command_list_presets
-command_write_preset = application_simulation_workflow.command_write_preset
-command_simulate_round = application_simulation_workflow.command_simulate_round
+MODE_VALUES = application_simulation.MODE_VALUES
+pretty_json = application_simulation.pretty_json
+command_list_presets = application_simulation.command_list_presets
+command_write_preset = application_simulation.command_write_preset
+command_simulate_round = application_simulation.command_simulate_round
 
 
 def build_parser() -> argparse.ArgumentParser:
