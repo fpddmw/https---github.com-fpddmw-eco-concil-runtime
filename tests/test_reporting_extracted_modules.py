@@ -56,6 +56,105 @@ def example_investigation_actions(*actions: dict[str, object]) -> dict[str, obje
     }
 
 
+def competing_hypothesis_state(*, run_id: str) -> dict[str, object]:
+    mission = example_mission(run_id=run_id)
+    return {
+        "mission": mission,
+        "round_id": ROUND_ID,
+        "matching_authorization": {
+            "authorization_id": "auth-001",
+            "authorization_status": "authorized",
+        },
+        "matching_result": {
+            "result_id": "matchres-001",
+            "authorization_id": "auth-001",
+            "summary": "Source support exists, but impact evidence is contradictory.",
+        },
+        "matching_adjudication": {},
+        "evidence_adjudication": {
+            "summary": "Transport source evidence is present, but the impact leg remains contradictory.",
+            "matching_reasonable": True,
+            "needs_additional_data": False,
+        },
+        "claims": [
+            {
+                "claim_id": "claim-001",
+                "claim_type": "smoke",
+                "summary": "Smoke plume reached Chiang Mai.",
+                "hypothesis_id": "hypothesis-001",
+            }
+        ],
+        "observations": [
+            {
+                "observation_id": "obs-source",
+                "source_skill": "nasa-firms-fire-fetch",
+                "metric": "fire_detection_count",
+                "hypothesis_id": "hypothesis-001",
+                "leg_id": "source",
+            },
+            {
+                "observation_id": "obs-impact",
+                "source_skill": "openaq-data-fetch",
+                "metric": "pm2_5",
+                "hypothesis_id": "hypothesis-001",
+                "leg_id": "impact",
+            },
+        ],
+        "cards_active": [
+            {
+                "evidence_id": "evidence-001",
+                "claim_id": "claim-001",
+                "verdict": "supports",
+                "confidence": "medium",
+                "summary": "Upwind fire detections support the source leg.",
+                "observation_ids": ["obs-source"],
+                "gaps": [],
+            },
+            {
+                "evidence_id": "evidence-002",
+                "claim_id": "claim-001",
+                "verdict": "contradicts",
+                "confidence": "medium",
+                "summary": "Direct impact corroboration still points away from the transported-smoke framing.",
+                "observation_ids": ["obs-impact"],
+                "gaps": ["Station signal weak."],
+            },
+        ],
+        "isolated_active": [],
+        "remands_open": [],
+        "investigation_plan": {
+            "profile_id": "smoke-transport",
+            "hypotheses": [
+                {
+                    "hypothesis_id": "hypothesis-001",
+                    "statement": "Smoke was transported from upwind fires into Chiang Mai.",
+                    "chain_legs": [
+                        {"leg_id": "source", "label": "Source fires", "required": True},
+                        {"leg_id": "mechanism", "label": "Transport winds", "required": True},
+                        {"leg_id": "impact", "label": "Local impact", "required": True},
+                    ],
+                    "alternative_hypotheses": [
+                        {
+                            "alternative_id": "alt-001",
+                            "summary": "Local pollution explains the AQ spike.",
+                            "statement": "Local pollution or weather trapping, not transported smoke, drove the AQ spike.",
+                            "priority": "high",
+                            "gap_types": ["station-air-quality", "meteorology-background"],
+                        }
+                    ],
+                }
+            ],
+        },
+        "investigation_actions": example_investigation_actions(
+            {
+                "assigned_role": "environmentalist",
+                "objective": "Fetch station-based air-quality corroboration for the same mission window and geometry.",
+                "reason": "Impact contradiction and the local-pollution alternative both remain active.",
+            }
+        ),
+    }
+
+
 class ReportingExtractedModulesTests(unittest.TestCase):
     def test_expert_reports_module_prefers_investigation_actions_before_readiness_fallback(self) -> None:
         mission = example_mission(run_id="expert-module-run")
@@ -298,6 +397,42 @@ class ReportingExtractedModulesTests(unittest.TestCase):
             next_round_tasks[1]["objective"],
         )
         self.assertIn("station-air-quality", missing_types)
+
+    def test_investigation_review_module_surfaces_competing_hypothesis_gating(self) -> None:
+        payload = build_investigation_review_draft_from_state(
+            competing_hypothesis_state(run_id="review-module-gating-run")
+        )
+
+        self.assertTrue(payload["another_round_required"])
+        self.assertIn("required-leg-unresolved", payload["decision_gating"]["reason_codes"])
+        self.assertIn("contradiction-active", payload["decision_gating"]["reason_codes"])
+        self.assertIn("alternative-still-active", payload["decision_gating"]["reason_codes"])
+        self.assertEqual("impact", payload["contradiction_paths"][0]["leg_id"])
+        hypothesis_review = payload["hypothesis_reviews"][0]
+        self.assertEqual("alternative-pressure", hypothesis_review["comparison_outcome"])
+        self.assertEqual("active", hypothesis_review["alternative_reviews"][0]["status"])
+        self.assertIn("mechanism", hypothesis_review["unresolved_required_leg_ids"])
+
+    def test_council_decision_module_uses_review_gating_without_remands(self) -> None:
+        state = competing_hypothesis_state(run_id="decision-module-gating-run")
+        state["investigation_review"] = build_investigation_review_draft_from_state(state)
+
+        payload, next_round_tasks, missing_types = build_decision_draft_from_state(
+            run_dir=Path("/tmp/eco-reporting-drafts"),
+            state=state,
+            next_round_id=NEXT_ROUND_ID,
+            reports={},
+            report_sources={},
+        )
+
+        self.assertEqual("continue", payload["moderator_status"])
+        self.assertTrue(payload["next_round_required"])
+        self.assertEqual("partial", payload["evidence_sufficiency"])
+        self.assertEqual([], missing_types)
+        self.assertEqual("environmentalist", next_round_tasks[0]["assigned_role"])
+        self.assertIn("contradiction", payload["decision_summary"].lower())
+        self.assertIn("alternative", payload["decision_summary"].lower())
+        self.assertIn("contradiction-active", payload["decision_gating"]["reason_codes"])
 
 
 if __name__ == "__main__":

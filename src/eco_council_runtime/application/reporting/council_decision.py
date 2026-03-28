@@ -34,6 +34,144 @@ from eco_council_runtime.planning import (
 SCHEMA_VERSION = resolve_schema_version("1.0.0")
 
 
+def investigation_review_decision_gating(review: dict[str, Any]) -> dict[str, Any]:
+    decision_gating = review.get("decision_gating") if isinstance(review.get("decision_gating"), dict) else {}
+    if decision_gating:
+        return {
+            "another_round_required": bool(decision_gating.get("another_round_required")),
+            "reason_codes": [
+                maybe_text(item)
+                for item in (decision_gating.get("reason_codes") if isinstance(decision_gating.get("reason_codes"), list) else [])
+                if maybe_text(item)
+            ],
+            "reasons": [
+                maybe_text(item)
+                for item in (decision_gating.get("reasons") if isinstance(decision_gating.get("reasons"), list) else [])
+                if maybe_text(item)
+            ],
+            "unresolved_required_leg_count": int(decision_gating.get("unresolved_required_leg_count") or 0),
+            "contradiction_path_count": int(decision_gating.get("contradiction_path_count") or 0),
+            "active_alternative_count": int(decision_gating.get("active_alternative_count") or 0),
+        }
+
+    hypothesis_reviews = review.get("hypothesis_reviews") if isinstance(review.get("hypothesis_reviews"), list) else []
+    unresolved_required_leg_count = 0
+    contradiction_path_count = 0
+    active_alternative_count = 0
+    reason_codes: list[str] = []
+    reasons: list[str] = []
+    for hypothesis_review in hypothesis_reviews:
+        if not isinstance(hypothesis_review, dict):
+            continue
+        unresolved_required = [
+            maybe_text(item)
+            for item in (
+                hypothesis_review.get("unresolved_required_leg_ids")
+                if isinstance(hypothesis_review.get("unresolved_required_leg_ids"), list)
+                else []
+            )
+            if maybe_text(item)
+        ]
+        if not unresolved_required:
+            unresolved_required = [
+                maybe_text(item.get("leg_id"))
+                for item in (
+                    hypothesis_review.get("leg_reviews") if isinstance(hypothesis_review.get("leg_reviews"), list) else []
+                )
+                if isinstance(item, dict) and bool(item.get("status") != "supported") and maybe_text(item.get("leg_id"))
+            ]
+        unresolved_required_leg_count += len(unresolved_required)
+        if unresolved_required:
+            reason_codes.append("required-leg-unresolved")
+        contradiction_items = [
+            item
+            for item in (
+                hypothesis_review.get("contradiction_paths")
+                if isinstance(hypothesis_review.get("contradiction_paths"), list)
+                else []
+            )
+            if isinstance(item, dict) and maybe_text(item.get("leg_id"))
+        ]
+        if not contradiction_items:
+            contradiction_items = [
+                item
+                for item in (
+                    hypothesis_review.get("leg_reviews") if isinstance(hypothesis_review.get("leg_reviews"), list) else []
+                )
+                if isinstance(item, dict) and maybe_text(item.get("status")) == "contradicted"
+            ]
+        contradiction_path_count += len(contradiction_items)
+        if contradiction_items:
+            reason_codes.append("contradiction-active")
+        active_alternatives = [
+            maybe_text(item.get("alternative_id"))
+            for item in (
+                hypothesis_review.get("alternative_reviews")
+                if isinstance(hypothesis_review.get("alternative_reviews"), list)
+                else []
+            )
+            if isinstance(item, dict)
+            and maybe_text(item.get("alternative_id"))
+            and maybe_text(item.get("status")) != "deprioritized"
+        ]
+        active_alternative_count += len(active_alternatives)
+        if active_alternatives:
+            reason_codes.append("alternative-still-active")
+        reasons.extend(
+            maybe_text(item)
+            for item in (
+                hypothesis_review.get("another_round_reasons")
+                if isinstance(hypothesis_review.get("another_round_reasons"), list)
+                else []
+            )
+            if maybe_text(item)
+        )
+
+    if not reasons:
+        if unresolved_required_leg_count > 0:
+            reasons.append(
+                f"{unresolved_required_leg_count} required leg(s) remain unresolved in the moderator review."
+            )
+        if contradiction_path_count > 0:
+            reasons.append(
+                f"{contradiction_path_count} contradiction path(s) remain active in the moderator review."
+            )
+        if active_alternative_count > 0:
+            reasons.append(
+                f"{active_alternative_count} competing alternative(s) remain active in the moderator review."
+            )
+
+    return {
+        "another_round_required": bool(reason_codes),
+        "reason_codes": sorted({code for code in reason_codes if code}),
+        "reasons": list(dict.fromkeys(reason for reason in reasons if reason))[:6],
+        "unresolved_required_leg_count": unresolved_required_leg_count,
+        "contradiction_path_count": contradiction_path_count,
+        "active_alternative_count": active_alternative_count,
+    }
+
+
+def summarize_investigation_review_gating(gating: dict[str, Any]) -> str:
+    reasons = [
+        maybe_text(item)
+        for item in (gating.get("reasons") if isinstance(gating.get("reasons"), list) else [])
+        if maybe_text(item)
+    ]
+    if reasons:
+        return "; ".join(reasons)
+    fragments: list[str] = []
+    unresolved_required_leg_count = int(gating.get("unresolved_required_leg_count") or 0)
+    contradiction_path_count = int(gating.get("contradiction_path_count") or 0)
+    active_alternative_count = int(gating.get("active_alternative_count") or 0)
+    if unresolved_required_leg_count > 0:
+        fragments.append(f"{unresolved_required_leg_count} required leg(s) remain unresolved")
+    if contradiction_path_count > 0:
+        fragments.append(f"{contradiction_path_count} contradiction path(s) remain active")
+    if active_alternative_count > 0:
+        fragments.append(f"{active_alternative_count} competing alternative(s) remain active")
+    return "; ".join(fragments)
+
+
 def readiness_score(state: dict[str, Any]) -> float:
     readiness_reports = state.get("readiness_reports", {}) if isinstance(state.get("readiness_reports"), dict) else {}
     if not readiness_reports:
@@ -98,6 +236,7 @@ def build_decision_summary_from_state(
     evidence_sufficiency: str,
     report_sources: dict[str, str],
     blocked_reason: str,
+    review_gating: dict[str, Any] | None = None,
 ) -> str:
     if moderator_status == "blocked" and blocked_reason:
         return blocked_reason
@@ -108,10 +247,12 @@ def build_decision_summary_from_state(
         moderator_adjudication = state.get("matching_adjudication", {})
         adjudication = state.get("evidence_adjudication", {})
         investigation_review = state.get("investigation_review", {})
+        gating_summary = summarize_investigation_review_gating(review_gating or {})
         if moderator_status == "continue":
             return (
                 f"Matching/adjudication produced {cards} cards, {isolated} isolated entries, and {remands} remands. "
-                f"Another round is required before closure. Report sources used: "
+                f"Another round is required before closure"
+                f"{f' because {gating_summary}' if gating_summary else ''}. Report sources used: "
                 f"{', '.join(f'{role}:{source}' for role, source in sorted(report_sources.items()))}."
             )
         return truncate_text(
@@ -242,6 +383,9 @@ def build_decision_draft_from_state(
     current_number = current_round_number(round_id)
     next_number = current_round_number(next_round_id)
     authorization_status = maybe_text(state.get("matching_authorization", {}).get("authorization_status"))
+    investigation_review = state.get("investigation_review", {}) if isinstance(state.get("investigation_review"), dict) else {}
+    review_gating = investigation_review_decision_gating(investigation_review)
+    review_requires_another_round = bool(review_gating.get("another_round_required"))
     blocked_reason = ""
     blocked_by_max_rounds = False
     if (
@@ -271,7 +415,7 @@ def build_decision_draft_from_state(
             moderator_status = "blocked"
             next_round_required = False
             blocked_reason = "Matching was not authorized and no concrete next-round tasks could be derived."
-    elif state.get("remands_open") or missing_types:
+    elif state.get("remands_open") or missing_types or review_requires_another_round:
         if max_rounds is not None and current_number is not None and next_number is not None and next_number > max_rounds and next_round_tasks:
             moderator_status = "blocked"
             next_round_required = False
@@ -284,13 +428,18 @@ def build_decision_draft_from_state(
         else:
             moderator_status = "blocked"
             next_round_required = False
-            blocked_reason = "The round still has unresolved evidence issues, but no materially different next-round task could be derived."
+            if review_requires_another_round:
+                blocked_reason = (
+                    "The moderator review still requires another round, but no materially different next-round task could be derived."
+                )
+            else:
+                blocked_reason = "The round still has unresolved evidence issues, but no materially different next-round task could be derived."
     else:
         moderator_status = "complete"
         next_round_required = False
         next_round_tasks = []
     if matching_executed_for_state(state):
-        if state.get("remands_open"):
+        if state.get("remands_open") or review_requires_another_round:
             evidence_sufficiency = "partial"
         elif state.get("cards_active") or state.get("isolated_active"):
             evidence_sufficiency = "sufficient"
@@ -320,6 +469,7 @@ def build_decision_draft_from_state(
         evidence_sufficiency=evidence_sufficiency,
         report_sources=report_sources,
         blocked_reason=blocked_reason,
+        review_gating=review_gating,
     )
     final_brief = build_final_brief(moderator_status=moderator_status, decision_summary=decision_summary, reports=reports)
     payload = {
@@ -332,6 +482,7 @@ def build_decision_draft_from_state(
         "evidence_sufficiency": evidence_sufficiency,
         "decision_summary": decision_summary,
         "next_round_required": next_round_required,
+        "decision_gating": review_gating,
         "missing_evidence_types": missing_types,
         "next_round_tasks": next_round_tasks,
         "override_requests": override_requests,
@@ -349,7 +500,9 @@ __all__ = [
     "completion_score_for_round",
     "evidence_resolution_score",
     "evidence_sufficiency_for_round",
+    "investigation_review_decision_gating",
     "missing_types_from_reason_texts",
     "readiness_score",
     "report_completion_score",
+    "summarize_investigation_review_gating",
 ]

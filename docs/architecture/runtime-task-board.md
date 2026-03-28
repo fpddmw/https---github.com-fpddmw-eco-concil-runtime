@@ -398,7 +398,7 @@
 
 #### T08.4 Competing-Hypothesis Review And Decision Gating
 
-- Status: `planned`
+- Status: `completed`
 - Scope:
   - upgrade investigation review so it compares primary and alternative explanations explicitly
   - surface contradiction paths, not just support paths
@@ -406,6 +406,10 @@
 - Acceptance:
   - moderator review becomes a comparative causal assessment rather than mostly a leg-status rollup
   - decision drafting can consume clearer uncertainty and contradiction signals
+- Outcome:
+  - upgraded `application/investigation/review.py` so hypothesis review now emits comparative assessment fields, contradiction paths, alternative-review state, and explicit `decision_gating` / `another_round_required` signals instead of relying only on causal-leg status rollups
+  - updated `application/reporting/council_decision.py` so moderator decisions now honor persisted review gating when deciding whether another round is required, including contradiction and alternative-pressure cases that do not surface as remands or flat missing-type lists
+  - fixed the latent `application/investigation/state.py` compatibility-shell import cycle while keeping review/state semantics aligned, and added focused regressions in `tests/test_reporting_drafts.py` plus `tests/test_reporting_extracted_modules.py` for competing-hypothesis review and no-remand decision gating; targeted `20`-test regressions and full `142`-test `unittest` discovery both passed
 
 #### T08.5 Governance-Aware Discovery Or Probe Mode
 
@@ -432,5 +436,5 @@
 ## Current Task Notes
 
 - Active task: none
-- Next planned task: `T07.3 Reporting And Orchestration Hotspot Split`
+- Next planned task: `T07.4 Normalize, Simulation, And Archive Hotspot Split`
 - Working rule reaffirmed: after a sub-slice passes acceptance, persist its outcome here and then explicitly open the next sub-slice before coding continues.

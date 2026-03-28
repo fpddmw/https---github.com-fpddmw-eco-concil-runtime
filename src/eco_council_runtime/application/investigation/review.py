@@ -172,6 +172,11 @@ def build_leg_review_from_state(
     isolated_refs: list[str] = []
     remand_refs: list[str] = []
     direct_refs: list[str] = []
+    cards_by_id = {
+        maybe_text(item.get("evidence_id")): item
+        for item in cards
+        if isinstance(item, dict) and maybe_text(item.get("evidence_id"))
+    }
 
     if leg_id == "public_interpretation":
         for card in cards:
@@ -287,9 +292,25 @@ def build_leg_review_from_state(
             ):
                 direct_refs.append(f"observation:{observation_id}")
 
+    support_match_count = 0
+    contradiction_match_count = 0
+    for ref in matched_refs:
+        text = maybe_text(ref)
+        if not text.startswith("card:"):
+            continue
+        card = cards_by_id.get(text.split(":", 1)[1], {})
+        verdict = maybe_text(card.get("verdict"))
+        if verdict in {"supports", "mixed"}:
+            support_match_count += 1
+        if verdict in {"contradicts", "mixed"}:
+            contradiction_match_count += 1
     matched_count = len(matched_refs)
     pending_count = len(isolated_refs) + len(remand_refs)
-    if matched_count > 0:
+    if contradiction_match_count > 0 and support_match_count == 0:
+        status = "contradicted"
+    elif support_match_count > 0:
+        status = "supported"
+    elif matched_count > 0:
         status = "supported"
     elif pending_count > 0 or direct_refs:
         status = "partial"
@@ -320,12 +341,13 @@ def build_leg_review_from_state(
 
 
 def build_hypothesis_review_from_state(*, state: dict[str, Any], hypothesis: dict[str, Any], profile_id: str) -> dict[str, Any]:
+    hypothesis_id = maybe_text(hypothesis.get("hypothesis_id")) or "hypothesis-001"
     leg_reviews = [
         build_leg_review_from_state(
             state=state,
             profile_id=profile_id,
             leg=leg,
-            hypothesis_id=maybe_text(hypothesis.get("hypothesis_id")),
+            hypothesis_id=hypothesis_id,
         )
         for leg in hypothesis.get("chain_legs", [])
         if isinstance(leg, dict) and maybe_text(leg.get("leg_id"))
@@ -347,6 +369,12 @@ def build_hypothesis_review_from_state(*, state: dict[str, Any], hypothesis: dic
     else:
         overall_status = "unresolved"
 
+    cards_by_id = {
+        maybe_text(item.get("evidence_id")): item
+        for item in state.get("cards_active", [])
+        if isinstance(item, dict) and maybe_text(item.get("evidence_id"))
+    }
+
     matched_card_ids: list[str] = []
     isolated_entry_ids: list[str] = []
     remand_ids: list[str] = []
@@ -365,18 +393,248 @@ def build_hypothesis_review_from_state(*, state: dict[str, Any], hypothesis: dic
         for leg_id in required_leg_ids
         if statuses_by_leg.get(leg_id) not in {"supported"}
     ]
+
+    contradiction_paths: list[dict[str, Any]] = []
+    for leg_review in leg_reviews:
+        if not isinstance(leg_review, dict):
+            continue
+        leg_id = maybe_text(leg_review.get("leg_id"))
+        if not leg_id:
+            continue
+        evidence_refs = unique_strings(
+            leg_review.get("evidence_refs", []) if isinstance(leg_review.get("evidence_refs"), list) else []
+        )[:6]
+        has_contradiction = False
+        for ref in evidence_refs:
+            text = maybe_text(ref)
+            if not text.startswith("card:"):
+                continue
+            card = cards_by_id.get(text.split(":", 1)[1], {})
+            if maybe_text(card.get("verdict")) in {"contradicts", "mixed"}:
+                has_contradiction = True
+                break
+        if has_contradiction:
+            contradiction_paths.append(
+                {
+                    "leg_id": leg_id,
+                    "summary": maybe_text(leg_review.get("summary")),
+                    "evidence_refs": evidence_refs,
+                }
+            )
+    contradiction_leg_ids = [
+        maybe_text(item.get("leg_id"))
+        for item in contradiction_paths
+        if maybe_text(item.get("leg_id"))
+    ]
+
+    alternative_reviews: list[dict[str, Any]] = []
+    for alternative in (
+        hypothesis.get("alternative_hypotheses") if isinstance(hypothesis.get("alternative_hypotheses"), list) else []
+    ):
+        if not isinstance(alternative, dict):
+            continue
+        alternative_id = maybe_text(alternative.get("alternative_id"))
+        if not alternative_id:
+            continue
+        if overall_status == "supported" and not contradiction_leg_ids and not unresolved_required:
+            alternative_status = "deprioritized"
+        elif contradiction_leg_ids:
+            alternative_status = "active"
+        elif unresolved_required:
+            alternative_status = "needs-testing"
+        else:
+            alternative_status = "tracked"
+        reason_codes: list[str] = []
+        reasons: list[str] = []
+        if contradiction_leg_ids:
+            reason_codes.append("contradiction-active")
+            reasons.append(
+                "Primary hypothesis still has contradiction paths on legs: " + ", ".join(sorted(contradiction_leg_ids)) + "."
+            )
+        if unresolved_required:
+            reason_codes.append("required-leg-unresolved")
+            reasons.append(
+                "Primary hypothesis still has unresolved required legs: " + ", ".join(sorted(unresolved_required)) + "."
+            )
+        if alternative_status == "deprioritized":
+            reason_codes.append("primary-supported")
+            reasons.append("Primary hypothesis is currently fully supported without active contradiction paths.")
+        elif not reasons:
+            reason_codes.append("primary-not-settled")
+            reasons.append("Primary hypothesis is not fully settled, so this competing explanation remains in scope.")
+        alternative_reviews.append(
+            {
+                "alternative_id": alternative_id,
+                "summary": maybe_text(alternative.get("summary")) or maybe_text(alternative.get("statement")),
+                "statement": maybe_text(alternative.get("statement")) or maybe_text(alternative.get("summary")),
+                "priority": maybe_text(alternative.get("priority")) or "medium",
+                "status": alternative_status,
+                "reason_codes": unique_strings(reason_codes),
+                "reasons": unique_strings(reasons)[:4],
+                "remaining_gaps": unique_strings(
+                    alternative.get("gap_types", []) if isinstance(alternative.get("gap_types"), list) else []
+                )[:6],
+            }
+        )
+
+    active_alternative_ids = [
+        maybe_text(item.get("alternative_id"))
+        for item in alternative_reviews
+        if isinstance(item, dict)
+        and maybe_text(item.get("alternative_id"))
+        and maybe_text(item.get("status")) != "deprioritized"
+    ]
+    comparison_outcome = "primary-leading"
+    if contradiction_leg_ids:
+        comparison_outcome = "alternative-pressure"
+    elif unresolved_required or active_alternative_ids:
+        comparison_outcome = "indeterminate"
+
+    another_round_reason_codes: list[str] = []
+    another_round_reasons: list[str] = []
+    if unresolved_required:
+        another_round_reason_codes.append("required-leg-unresolved")
+        another_round_reasons.append(
+            f"{hypothesis_id} still has unresolved required legs: " + ", ".join(sorted(unresolved_required)) + "."
+        )
+    if contradiction_leg_ids:
+        another_round_reason_codes.append("contradiction-active")
+        another_round_reasons.append(
+            f"{hypothesis_id} still has contradiction paths on legs: " + ", ".join(sorted(contradiction_leg_ids)) + "."
+        )
+    if active_alternative_ids:
+        another_round_reason_codes.append("alternative-still-active")
+        another_round_reasons.append(
+            f"Competing alternatives remain active for {hypothesis_id}: " + ", ".join(active_alternative_ids) + "."
+        )
+
     notes: list[str] = []
     if unresolved_required:
         notes.append("Required legs still unresolved or partial: " + ", ".join(sorted(unresolved_required)) + ".")
+    if contradiction_leg_ids:
+        notes.append("Contradiction paths remain active on legs: " + ", ".join(sorted(contradiction_leg_ids)) + ".")
+    if active_alternative_ids:
+        notes.append("Competing alternatives remain active: " + ", ".join(active_alternative_ids) + ".")
+
+    if comparison_outcome == "primary-leading":
+        comparison_summary = "Primary hypothesis currently leads and competing alternatives are not materially active."
+    elif comparison_outcome == "alternative-pressure":
+        comparison_summary = (
+            "Primary hypothesis faces active contradiction paths, so competing explanations remain materially plausible."
+        )
+    else:
+        comparison_summary = (
+            "Primary hypothesis remains only partially resolved, and competing alternatives still need explicit review."
+        )
+
     return {
-        "hypothesis_id": maybe_text(hypothesis.get("hypothesis_id")) or "hypothesis-001",
+        "hypothesis_id": hypothesis_id,
         "statement": maybe_text(hypothesis.get("statement")) or maybe_text(hypothesis.get("summary")) or "Mission hypothesis",
         "overall_status": overall_status,
         "matched_card_ids": unique_strings(matched_card_ids),
         "isolated_entry_ids": unique_strings(isolated_entry_ids),
         "remand_ids": unique_strings(remand_ids),
         "leg_reviews": leg_reviews,
+        "unresolved_required_leg_ids": sorted(unresolved_required),
+        "contradiction_paths": contradiction_paths,
+        "alternative_reviews": alternative_reviews,
+        "comparison_outcome": comparison_outcome,
+        "comparison_summary": comparison_summary,
+        "another_round_required": bool(another_round_reason_codes),
+        "another_round_reason_codes": unique_strings(another_round_reason_codes),
+        "another_round_reasons": unique_strings(another_round_reasons)[:4],
         "notes": unique_strings(notes),
+    }
+
+
+def build_investigation_review_gating(hypothesis_reviews: list[dict[str, Any]]) -> dict[str, Any]:
+    unresolved_required_leg_count = 0
+    contradiction_paths: list[dict[str, Any]] = []
+    active_alternative_ids: list[str] = []
+    reason_codes: list[str] = []
+    reasons: list[str] = []
+
+    for hypothesis_review in hypothesis_reviews:
+        if not isinstance(hypothesis_review, dict):
+            continue
+        unresolved_required = [
+            maybe_text(item)
+            for item in (
+                hypothesis_review.get("unresolved_required_leg_ids")
+                if isinstance(hypothesis_review.get("unresolved_required_leg_ids"), list)
+                else []
+            )
+            if maybe_text(item)
+        ]
+        unresolved_required_leg_count += len(unresolved_required)
+        if unresolved_required:
+            reason_codes.append("required-leg-unresolved")
+        contradiction_items = [
+            {
+                "hypothesis_id": maybe_text(hypothesis_review.get("hypothesis_id")),
+                "leg_id": maybe_text(item.get("leg_id")),
+                "summary": maybe_text(item.get("summary")),
+                "evidence_refs": unique_strings(
+                    item.get("evidence_refs", []) if isinstance(item.get("evidence_refs"), list) else []
+                )[:6],
+            }
+            for item in (
+                hypothesis_review.get("contradiction_paths")
+                if isinstance(hypothesis_review.get("contradiction_paths"), list)
+                else []
+            )
+            if isinstance(item, dict) and maybe_text(item.get("leg_id"))
+        ]
+        if contradiction_items:
+            reason_codes.append("contradiction-active")
+            contradiction_paths.extend(contradiction_items)
+        active_alternatives = [
+            maybe_text(item.get("alternative_id"))
+            for item in (
+                hypothesis_review.get("alternative_reviews")
+                if isinstance(hypothesis_review.get("alternative_reviews"), list)
+                else []
+            )
+            if isinstance(item, dict)
+            and maybe_text(item.get("alternative_id"))
+            and maybe_text(item.get("status")) != "deprioritized"
+        ]
+        if active_alternatives:
+            reason_codes.append("alternative-still-active")
+            active_alternative_ids.extend(active_alternatives)
+        reasons.extend(
+            maybe_text(item)
+            for item in (
+                hypothesis_review.get("another_round_reasons")
+                if isinstance(hypothesis_review.get("another_round_reasons"), list)
+                else []
+            )
+            if maybe_text(item)
+        )
+
+    if not reasons:
+        if unresolved_required_leg_count > 0:
+            reasons.append(
+                f"Another round is needed because {unresolved_required_leg_count} required leg(s) remain unresolved."
+            )
+        if contradiction_paths:
+            reasons.append(
+                f"Another round is needed because contradiction paths remain on {len(contradiction_paths)} leg(s)."
+            )
+        if active_alternative_ids:
+            reasons.append(
+                f"Another round is needed because {len(unique_strings(active_alternative_ids))} competing alternative(s) remain active."
+            )
+
+    return {
+        "another_round_required": bool(reason_codes),
+        "reason_codes": unique_strings(reason_codes),
+        "reasons": unique_strings(reasons)[:6],
+        "unresolved_required_leg_count": unresolved_required_leg_count,
+        "contradiction_path_count": len(contradiction_paths),
+        "active_alternative_count": len(unique_strings(active_alternative_ids)),
+        "contradiction_paths": contradiction_paths[:8],
+        "active_alternative_ids": unique_strings(active_alternative_ids)[:8],
     }
 
 
@@ -407,6 +665,7 @@ def build_investigation_review_draft_from_state(state: dict[str, Any]) -> dict[s
         if isinstance(hypothesis, dict)
     ]
     review_status = investigation_review_overall_status(hypothesis_reviews)
+    decision_gating = build_investigation_review_gating(hypothesis_reviews)
     matched_card_ids = unique_strings(
         [
             maybe_text(item.get("evidence_id"))
@@ -459,13 +718,45 @@ def build_investigation_review_draft_from_state(state: dict[str, Any]) -> dict[s
         if not isinstance(hypothesis_review, dict):
             continue
         unresolved_legs = [
-            maybe_text(item.get("leg_id"))
-            for item in hypothesis_review.get("leg_reviews", [])
-            if isinstance(item, dict) and maybe_text(item.get("status")) != "supported" and maybe_text(item.get("leg_id"))
+            maybe_text(item)
+            for item in (
+                hypothesis_review.get("unresolved_required_leg_ids")
+                if isinstance(hypothesis_review.get("unresolved_required_leg_ids"), list)
+                else []
+            )
+            if maybe_text(item)
         ]
         if unresolved_legs:
             open_questions.append(
                 f"Does {maybe_text(hypothesis_review.get('hypothesis_id'))} need another round for these legs: {', '.join(unresolved_legs)}?"
+            )
+        contradiction_legs = [
+            maybe_text(item.get("leg_id"))
+            for item in (
+                hypothesis_review.get("contradiction_paths")
+                if isinstance(hypothesis_review.get("contradiction_paths"), list)
+                else []
+            )
+            if isinstance(item, dict) and maybe_text(item.get("leg_id"))
+        ]
+        if contradiction_legs:
+            open_questions.append(
+                f"What evidence resolves the contradiction paths on {maybe_text(hypothesis_review.get('hypothesis_id'))}: {', '.join(contradiction_legs)}?"
+            )
+        active_alternatives = [
+            maybe_text(item.get("alternative_id"))
+            for item in (
+                hypothesis_review.get("alternative_reviews")
+                if isinstance(hypothesis_review.get("alternative_reviews"), list)
+                else []
+            )
+            if isinstance(item, dict)
+            and maybe_text(item.get("alternative_id"))
+            and maybe_text(item.get("status")) != "deprioritized"
+        ]
+        if active_alternatives:
+            open_questions.append(
+                f"Which signals would distinguish {maybe_text(hypothesis_review.get('hypothesis_id'))} from alternatives: {', '.join(active_alternatives)}?"
             )
     open_questions.extend(
         f"How should the council resolve remand {maybe_text(item.get('remand_id'))}?"
@@ -473,12 +764,22 @@ def build_investigation_review_draft_from_state(state: dict[str, Any]) -> dict[s
         if isinstance(item, dict) and maybe_text(item.get("remand_id"))
     )
     matching_reasonable = bool(evidence_adjudication.get("matching_reasonable"))
-    needs_additional_data = bool(evidence_adjudication.get("needs_additional_data")) or bool(remand_ids) or review_status != "supported"
+    needs_additional_data = (
+        bool(evidence_adjudication.get("needs_additional_data"))
+        or bool(remand_ids)
+        or review_status != "supported"
+        or bool(decision_gating.get("another_round_required"))
+    )
+    gating_reason_summary = "; ".join(
+        maybe_text(item) for item in decision_gating.get("reasons", []) if maybe_text(item)
+    )
     summary = (
         f"Investigation review is {review_status}. "
         f"Matched cards={len(matched_card_ids)}, isolated entries={len(isolated_entry_ids)}, remands={len(remand_ids)}. "
         f"{maybe_text(evidence_adjudication.get('summary')) or maybe_text(matching_result.get('summary'))}"
     ).strip()
+    if gating_reason_summary:
+        summary = truncate_text(f"{summary} Comparative gating: {gating_reason_summary}", 400)
     payload = {
         "schema_version": SCHEMA_VERSION,
         "review_id": f"investigation-review-{round_id}",
@@ -497,6 +798,9 @@ def build_investigation_review_draft_from_state(state: dict[str, Any]) -> dict[s
         "matched_card_ids": matched_card_ids,
         "isolated_entry_ids": isolated_entry_ids,
         "remand_ids": remand_ids,
+        "another_round_required": bool(decision_gating.get("another_round_required")),
+        "decision_gating": decision_gating,
+        "contradiction_paths": decision_gating.get("contradiction_paths", []),
         "open_questions": unique_strings(open_questions)[:6],
         "recommended_next_actions": recommendations,
     }
@@ -507,6 +811,7 @@ def build_investigation_review_draft_from_state(state: dict[str, Any]) -> dict[s
 __all__ = [
     "INVESTIGATION_LEG_METRIC_FAMILIES",
     "build_hypothesis_review_from_state",
+    "build_investigation_review_gating",
     "build_investigation_review_draft_from_state",
     "build_leg_review_from_state",
     "investigation_leg_metric_families",

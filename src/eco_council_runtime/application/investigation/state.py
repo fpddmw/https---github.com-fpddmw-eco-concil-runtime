@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from eco_council_runtime.adapters.filesystem import write_json
-from eco_council_runtime.application.reporting_drafts import (
+from eco_council_runtime.application.investigation.review import (
     build_hypothesis_review_from_state,
-    infer_missing_evidence_types,
     investigation_review_overall_status,
 )
+from eco_council_runtime.application.reporting.common import infer_missing_evidence_types
 from eco_council_runtime.controller.paths import investigation_state_path
 from eco_council_runtime.domain.text import maybe_text, unique_strings
 
