@@ -66,7 +66,7 @@
 
 ### T07 Structure Optimization And Second-Stage Decomposition
 
-- Status: `planned`
+- Status: `in_progress`
 - Goal: move from first-stage extraction into a stable subdomain package layout, remove residual compatibility cycles, and prevent `application/` from becoming a new monolith layer.
 - Non-goals:
   - dependency risk cleanup
@@ -98,7 +98,7 @@
 
 #### T07.1 Structural Target Map And Ownership Freeze
 
-- Status: `planned`
+- Status: `completed`
 - Scope:
   - define the second-stage package map under `application/`, `domain/`, and `adapters/`
   - assign each current hotspot file to concrete destination modules
@@ -107,6 +107,11 @@
 - Acceptance:
   - no hotspot remains without a target destination
   - import ownership is unambiguous enough to guide later slices without re-planning
+- Outcome:
+  - added `docs/architecture/second-stage-package-map.md` as the concrete `T07.1` ownership freeze for second-stage extraction, including hotspot-to-target mapping, public-facade policy, and controller exit mapping
+  - updated `docs/architecture/standalone-controller-target.md` and `src/eco_council_runtime/controller/__init__.py` so the structural target is no longer described as a `T06`-only transitional state
+  - added importable second-stage package skeletons under `application/`, `domain/`, and `adapters/`, giving later `T07` slices concrete destinations instead of ad hoc flat-file growth
+  - extended package-topology regression coverage to lock the new second-stage package skeleton and keep `controller/` explicitly transitional, and targeted `unittest` regressions passed with `4` tests
 
 #### T07.2 Compatibility-Cycle And Boundary Cleanup
 
@@ -274,5 +279,5 @@
 ## Current Task Notes
 
 - Active task: none
-- Next planned task: `T07.1 Structural Target Map And Ownership Freeze`
+- Next planned task: `T07.2 Compatibility-Cycle And Boundary Cleanup`
 - Working rule reaffirmed: after a sub-slice passes acceptance, persist its outcome here and then explicitly open the next sub-slice before coding continues.

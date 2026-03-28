@@ -15,7 +15,14 @@ Prefer structures that will survive extraction with minimal rewrite:
 
 ## Target package layout
 
-The intended end state for controller-side code is:
+The intended end state for controller-side code is a two-stage structure:
+
+1. first-stage layered ownership across `domain/`, `application/`, `adapters/`, and `cli/`
+2. second-stage subdomain ownership inside those layers so extracted code does not collect into new flat hotspot modules
+
+The detailed second-stage ownership freeze for `T07.1` lives in `docs/architecture/second-stage-package-map.md`.
+
+The high-level end state remains:
 
 - `src/eco_council_runtime/domain/`
   - mission/stage policy
@@ -47,7 +54,7 @@ Root-level legacy modules should eventually become thin compatibility facades or
 
 ## Migration map
 
-During `T06`, treat the current large modules as migration shells, not the final home for new logic:
+After `T06`, treat the current large modules and flat first-stage extracted hotspot modules as migration shells, not the final home for new logic:
 
 - `normalize.py`
   - move source normalization, claim shaping, observation tagging, cache/db helpers, and match-prep helpers into `domain/`, `application/`, and `adapters/`
@@ -72,10 +79,11 @@ During `T06`, treat the current large modules as migration shells, not the final
 
 `src/eco_council_runtime/controller/` is a useful intermediate extraction zone, but it is not the final architecture.
 
-For the remainder of `T06`:
+For `T07` and later structural work:
 
 - do not keep growing `controller/` as a new catch-all directory
 - new long-lived structural code should land in `domain/`, `application/`, `adapters/`, or `cli/`
+- when a second-stage owned subpackage exists, prefer that owned subpackage over adding another flat file to the parent layer
 - existing `controller/` modules may remain temporarily as compatibility shims or already-extracted internals until they are migrated into the target package layout
 
 ## Anti-patterns
@@ -87,3 +95,4 @@ Avoid reintroducing these patterns:
 - coupling new control logic to the legacy in-repo eco-council control directories
 - using skills-repo conventions as the main architectural constraint for controller code
 - treating `controller/` as the permanent substitute for the intended layered package structure
+- treating flat first-stage `application/*.py` hotspot files as final subdomain boundaries
