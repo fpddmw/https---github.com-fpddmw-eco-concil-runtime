@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import tempfile
 import unittest
 from pathlib import Path
 
-from tests._workflow_support import board_path, load_json, run_script, script_path, seed_analysis_chain
+from _workflow_support import board_path, load_json, run_script, script_path, seed_analysis_chain
 
 RUN_ID = "run-board-001"
 ROUND_ID = "round-board-001"
@@ -302,6 +303,41 @@ class BoardWorkflowTests(unittest.TestCase):
                 first_event_id,
             )
             self.assertEqual(1, delta_payload["result_count"])
+
+    def test_concurrent_board_writes_preserve_both_updates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+
+            def post_note(note_text: str) -> dict[str, object]:
+                return run_script(
+                    script_path("eco-post-board-note"),
+                    "--run-dir",
+                    str(run_dir),
+                    "--run-id",
+                    RUN_ID,
+                    "--round-id",
+                    ROUND_ID,
+                    "--author-role",
+                    "moderator",
+                    "--note-text",
+                    note_text,
+                )
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                first_future = executor.submit(post_note, "Concurrent note A.")
+                second_future = executor.submit(post_note, "Concurrent note B.")
+                first_payload = first_future.result()
+                second_payload = second_future.result()
+
+            board = load_json(board_path(run_dir))
+            rounds = board.get("rounds", {})
+            assert isinstance(rounds, dict)
+            round_state = rounds[ROUND_ID]
+            self.assertEqual(2, len(round_state["notes"]))
+            self.assertEqual(2, len(board["events"]))
+            self.assertGreaterEqual(int(board.get("board_revision") or 0), 2)
+            self.assertNotEqual(first_payload["canonical_ids"][0], second_payload["canonical_ids"][0])
 
 
 if __name__ == "__main__":

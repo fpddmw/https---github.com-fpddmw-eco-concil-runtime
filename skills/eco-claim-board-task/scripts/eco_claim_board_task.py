@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
+import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -69,7 +72,14 @@ def load_or_init_board(path: Path, run_id: str) -> dict[str, Any]:
         payload = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(payload, dict):
             return payload
-    return {"schema_version": "board-v1", "run_id": run_id, "updated_at_utc": utc_now_iso(), "events": [], "rounds": {}}
+    return {"schema_version": "board-v1", "run_id": run_id, "board_revision": 0, "updated_at_utc": utc_now_iso(), "events": [], "rounds": {}}
+
+
+def board_revision(board: dict[str, Any]) -> int:
+    try:
+        return max(0, int(board.get("board_revision") or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def ensure_round(board: dict[str, Any], round_id: str) -> dict[str, Any]:
@@ -101,9 +111,24 @@ def append_event(board: dict[str, Any], run_id: str, round_id: str, event_type: 
     return event
 
 
-def write_board(path: Path, board: dict[str, Any]) -> None:
+def write_board(path: Path, board: dict[str, Any], next_revision: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(board, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    board["board_revision"] = next_revision
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.{next_revision}.tmp")
+    temp_path.write_text(json.dumps(board, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temp_path, path)
+
+
+@contextmanager
+def locked_board(path: Path, run_id: str):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_name(path.name + ".lock")
+    with lock_path.open("a+", encoding="utf-8") as lock_handle:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield load_or_init_board(path, run_id)
+        finally:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
 
 def keep_existing_text(new_value: str, existing_value: Any) -> str:
@@ -141,74 +166,75 @@ def claim_board_task_skill(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
-    board = load_or_init_board(board_file, run_id)
-    round_state = ensure_round(board, round_id)
-    tasks = round_state["tasks"] if isinstance(round_state.get("tasks"), list) else []
-    round_state["tasks"] = tasks
-    resolved_task_id = maybe_text(task_id) or ("boardtask-" + stable_hash(run_id, round_id, title, task_text, len(tasks))[:12])
-    existing = next((item for item in tasks if isinstance(item, dict) and maybe_text(item.get("task_id")) == resolved_task_id), None)
-    timestamp = utc_now_iso()
-    resolved_status = maybe_text(status) or "claimed"
-    operation = "claimed"
-    if existing is None:
-        payload = {
-            "task_id": resolved_task_id,
-            "run_id": run_id,
-            "round_id": round_id,
-            "title": maybe_text(title),
-            "task_text": maybe_text(task_text),
-            "task_type": maybe_text(task_type) or "board-follow-up",
-            "status": resolved_status,
-            "owner_role": maybe_text(owner_role) or "moderator",
-            "priority": maybe_text(priority) or "medium",
-            "source_ticket_id": maybe_text(source_ticket_id),
-            "source_hypothesis_id": maybe_text(source_hypothesis_id),
-            "linked_artifact_refs": unique_texts(linked_artifact_refs),
-            "related_ids": unique_texts(related_ids),
-            "created_at_utc": timestamp,
-            "updated_at_utc": timestamp,
-            "history": [{"status": resolved_status, "owner_role": maybe_text(owner_role) or "moderator", "updated_at_utc": timestamp, "operation": "created"}],
-        }
-        if resolved_status in {"claimed", "in_progress"}:
-            payload["claimed_at_utc"] = timestamp
-        tasks.append(payload)
-        existing = payload
-        operation = "created"
-    else:
-        existing["title"] = keep_existing_text(title, existing.get("title"))
-        existing["task_text"] = keep_existing_text(task_text, existing.get("task_text"))
-        existing["task_type"] = keep_existing_text(task_type, existing.get("task_type")) or "board-follow-up"
-        existing["status"] = resolved_status or maybe_text(existing.get("status")) or "claimed"
-        existing["owner_role"] = keep_existing_text(owner_role, existing.get("owner_role")) or "moderator"
-        existing["priority"] = keep_existing_text(priority, existing.get("priority")) or "medium"
-        existing["source_ticket_id"] = keep_existing_text(source_ticket_id, existing.get("source_ticket_id"))
-        existing["source_hypothesis_id"] = keep_existing_text(source_hypothesis_id, existing.get("source_hypothesis_id"))
-        existing["linked_artifact_refs"] = keep_existing_list(linked_artifact_refs, existing.get("linked_artifact_refs"))
-        existing["related_ids"] = keep_existing_list(related_ids, existing.get("related_ids"))
-        existing["updated_at_utc"] = timestamp
-        if maybe_text(existing.get("status")) in {"claimed", "in_progress"} and not maybe_text(existing.get("claimed_at_utc")):
-            existing["claimed_at_utc"] = timestamp
-        history = existing.get("history") if isinstance(existing.get("history"), list) else []
-        history.append({"status": maybe_text(existing.get("status")), "owner_role": maybe_text(existing.get("owner_role")), "updated_at_utc": timestamp, "operation": "claimed"})
-        existing["history"] = history
+    with locked_board(board_file, run_id) as board:
+        next_revision = board_revision(board) + 1
+        round_state = ensure_round(board, round_id)
+        tasks = round_state["tasks"] if isinstance(round_state.get("tasks"), list) else []
+        round_state["tasks"] = tasks
+        resolved_task_id = maybe_text(task_id) or ("boardtask-" + stable_hash(run_id, round_id, title, task_text, len(tasks), next_revision)[:12])
+        existing = next((item for item in tasks if isinstance(item, dict) and maybe_text(item.get("task_id")) == resolved_task_id), None)
+        timestamp = utc_now_iso()
+        resolved_status = maybe_text(status) or "claimed"
         operation = "claimed"
+        if existing is None:
+            payload = {
+                "task_id": resolved_task_id,
+                "run_id": run_id,
+                "round_id": round_id,
+                "title": maybe_text(title),
+                "task_text": maybe_text(task_text),
+                "task_type": maybe_text(task_type) or "board-follow-up",
+                "status": resolved_status,
+                "owner_role": maybe_text(owner_role) or "moderator",
+                "priority": maybe_text(priority) or "medium",
+                "source_ticket_id": maybe_text(source_ticket_id),
+                "source_hypothesis_id": maybe_text(source_hypothesis_id),
+                "linked_artifact_refs": unique_texts(linked_artifact_refs),
+                "related_ids": unique_texts(related_ids),
+                "created_at_utc": timestamp,
+                "updated_at_utc": timestamp,
+                "history": [{"status": resolved_status, "owner_role": maybe_text(owner_role) or "moderator", "updated_at_utc": timestamp, "operation": "created"}],
+            }
+            if resolved_status in {"claimed", "in_progress"}:
+                payload["claimed_at_utc"] = timestamp
+            tasks.append(payload)
+            existing = payload
+            operation = "created"
+        else:
+            existing["title"] = keep_existing_text(title, existing.get("title"))
+            existing["task_text"] = keep_existing_text(task_text, existing.get("task_text"))
+            existing["task_type"] = keep_existing_text(task_type, existing.get("task_type")) or "board-follow-up"
+            existing["status"] = resolved_status or maybe_text(existing.get("status")) or "claimed"
+            existing["owner_role"] = keep_existing_text(owner_role, existing.get("owner_role")) or "moderator"
+            existing["priority"] = keep_existing_text(priority, existing.get("priority")) or "medium"
+            existing["source_ticket_id"] = keep_existing_text(source_ticket_id, existing.get("source_ticket_id"))
+            existing["source_hypothesis_id"] = keep_existing_text(source_hypothesis_id, existing.get("source_hypothesis_id"))
+            existing["linked_artifact_refs"] = keep_existing_list(linked_artifact_refs, existing.get("linked_artifact_refs"))
+            existing["related_ids"] = keep_existing_list(related_ids, existing.get("related_ids"))
+            existing["updated_at_utc"] = timestamp
+            if maybe_text(existing.get("status")) in {"claimed", "in_progress"} and not maybe_text(existing.get("claimed_at_utc")):
+                existing["claimed_at_utc"] = timestamp
+            history = existing.get("history") if isinstance(existing.get("history"), list) else []
+            history.append({"status": maybe_text(existing.get("status")), "owner_role": maybe_text(existing.get("owner_role")), "updated_at_utc": timestamp, "operation": "claimed"})
+            existing["history"] = history
+            operation = "claimed"
 
-    task_index = next(index for index, item in enumerate(tasks) if isinstance(item, dict) and maybe_text(item.get("task_id")) == resolved_task_id)
-    event = append_event(
-        board,
-        run_id,
-        round_id,
-        "task-claimed",
-        {
-            "task_id": resolved_task_id,
-            "status": maybe_text(existing.get("status")),
-            "owner_role": maybe_text(existing.get("owner_role")),
-            "source_ticket_id": maybe_text(existing.get("source_ticket_id")),
-            "source_hypothesis_id": maybe_text(existing.get("source_hypothesis_id")),
-            "operation": operation,
-        },
-    )
-    write_board(board_file, board)
+        task_index = next(index for index, item in enumerate(tasks) if isinstance(item, dict) and maybe_text(item.get("task_id")) == resolved_task_id)
+        event = append_event(
+            board,
+            run_id,
+            round_id,
+            "task-claimed",
+            {
+                "task_id": resolved_task_id,
+                "status": maybe_text(existing.get("status")),
+                "owner_role": maybe_text(existing.get("owner_role")),
+                "source_ticket_id": maybe_text(existing.get("source_ticket_id")),
+                "source_hypothesis_id": maybe_text(existing.get("source_hypothesis_id")),
+                "operation": operation,
+            },
+        )
+        write_board(board_file, board, next_revision)
     artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": f"$.rounds.{round_id}.tasks[{task_index}]", "artifact_ref": f"{board_file}:$.rounds.{round_id}.tasks[{task_index}]"}]
     challenge_hints: list[str] = []
     if maybe_text(existing.get("source_ticket_id")) and maybe_text(existing.get("status")) not in {"completed", "closed"}:
@@ -218,7 +244,7 @@ def claim_board_task_skill(
         gap_hints.append("This claimed task still has no detail text describing the expected follow-up.")
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "board_path": str(board_file), "event_id": event["event_id"], "task_id": resolved_task_id, "operation": operation},
+        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "board_path": str(board_file), "board_revision": next_revision, "event_id": event["event_id"], "task_id": resolved_task_id, "operation": operation},
         "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, resolved_task_id)[:20],
         "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event["event_id"])[:16],
         "artifact_refs": artifact_refs,

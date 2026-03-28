@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .controller import run_phase2_round
-from .executor import SkillExecutionError, run_skill, stable_hash, utc_now_iso
+from .executor import SkillExecutionError, new_runtime_event_id, run_skill
 from .gate import apply_promotion_gate
 from .ledger import append_ledger_event, load_ledger_tail
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists
@@ -146,8 +146,8 @@ def main(argv: list[str] | None = None) -> int:
         append_ledger_event(
             run_dir,
             {
-                "schema_version": "runtime-event-v1",
-                "event_id": "runtimeevt-" + stable_hash(args.run_id, args.round_id, "promotion-gate", utc_now_iso())[:12],
+                "schema_version": "runtime-event-v2",
+                "event_id": new_runtime_event_id("runtimeevt", args.run_id, args.round_id, "promotion-gate", payload.get("generated_at_utc")),
                 "event_type": "promotion-gate",
                 "run_id": args.run_id,
                 "round_id": args.round_id,

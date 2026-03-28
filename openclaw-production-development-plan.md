@@ -8,11 +8,16 @@
 
 - raw artifact -> normalize -> evidence -> board -> investigation -> readiness -> promotion -> reporting handoff -> expert report / canonical decision 主链
 - 最小 runtime kernel phase-2：manifest、cursor、registry、ledger、executor、promotion gate、round controller、supervisor state
+- board 写入的单机多进程安全：filesystem lock + atomic replace + `board_revision`
+- 更强的 runtime 审计元数据：命令快照、skill_args、契约声明、解析路径、输入/输出哈希
 - 本地确定性 workflow 回归
 
 当前系统尚不具备：
 
 - final publication artifact
+- distributed board coordination 或跨主机锁语义
+- contract-aware / permission-aware runtime enforcement
+- board-driven、agent-decided orchestration
 - 真实 orchestration / fetch-plan / execution 闭环
 - archive、history context、rich simulation、生产级观测与容错
 
@@ -103,13 +108,14 @@
 交付项：
 
 1. artifact schema versioning 与兼容策略
-2. idempotency / retry / lock / partial rerun 语义
+2. distributed-safe idempotency / retry / lock / partial rerun 语义
 3. observability：run summary、structured logs、failure surface
-4. 配置、超时、预算、权限边界
+4. contract-aware / permission-aware execution enforcement
+5. 配置、超时、预算、权限边界
 
 完成条件：
 
-- 失败可定位、可重跑、可防止 canonical artifact 被错误覆写
+- 失败可定位、可重跑、可防止 canonical artifact 被错误覆写，并且 runtime 能按 declared contract 治理 skill 执行
 
 ### P5 shadow test 与 pilot 发布
 
@@ -138,8 +144,10 @@
 
 - 契约漂移：上下游 artifact 字段如果频繁变化，会直接打断 runtime、reporting 和 decision。
 - 控制面语义不足：当前 runtime 还不是生产级调度器，重复执行、失败恢复与部分重跑仍需加固。
+- 并发边界风险：当前 board 写入只保证单机文件系统上的多进程安全，还不是跨主机或分布式协调方案。
 - 真实外部依赖风险：真实 fetch、第三方 API、网络与认证问题尚未纳入当前主链验证。
 - 审计链完整性风险：如果 publish 阶段未强制绑定上游 refs，就会出现“结果存在、来源不清”的问题。
+- 治理面风险：runtime 虽然已经读取 contract metadata，但尚未真正按 contract 做 allow/deny、权限边界和 side-effect enforcement。
 - 运行成本风险：多 agent、历史上下文、长链 reporting 可能显著提高 token 和运行成本，需要预算边界。
 
 ## 7. 环境准入标准
@@ -168,4 +176,6 @@
 - `eco-publish-expert-report`
 - `eco-publish-council-decision`
 
-所以下一个最合适的代码批次是：final publication artifact，把 canonical reports 与 canonical decision 收敛成最终发布对象，而不是继续扩大 runtime。
+同时已经完成一轮 control-plane hardening：board 单机锁语义、registry metadata snapshot、ledger 审计增强。
+
+所以下一个最合适的代码批次是：final publication artifact 与 contract-aware execution enforcement 并行推进，而不是继续扩大 runtime 的业务面。

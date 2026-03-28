@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from typing import Any
 
-from .executor import maybe_text, run_skill, utc_now_iso
+from .executor import maybe_text, new_runtime_event_id, run_skill, utc_now_iso
 from .gate import apply_promotion_gate
 from .ledger import append_ledger_event
 from .manifest import init_round_cursor, init_run_manifest, write_json
@@ -18,13 +17,6 @@ PHASE2_STAGES: list[tuple[str, str]] = [
     ("falsification-probes", "eco-open-falsification-probe"),
     ("round-readiness", "eco-summarize-round-readiness"),
 ]
-
-
-def stable_hash(*parts: Any) -> str:
-    joined = "||".join(maybe_text(part) for part in parts)
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
-
-
 def phase2_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
     return {
         "board_summary_path": str((run_dir / "board" / f"board_state_summary_{round_id}.json").resolve()),
@@ -66,11 +58,11 @@ def run_phase2_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, 
         steps.append(summarize_skill_step(stage_name, result))
 
     gate_payload = apply_promotion_gate(run_dir, run_id=run_id, round_id=round_id)
-    gate_event_id = "runtimeevt-" + stable_hash(run_id, round_id, "promotion-gate", started_at, gate_payload.get("generated_at_utc"))[:12]
+    gate_event_id = new_runtime_event_id("runtimeevt", run_id, round_id, "promotion-gate", started_at, gate_payload.get("generated_at_utc"))
     append_ledger_event(
         run_dir,
         {
-            "schema_version": "runtime-event-v1",
+            "schema_version": "runtime-event-v2",
             "event_id": gate_event_id,
             "event_type": "promotion-gate",
             "run_id": run_id,
@@ -120,11 +112,11 @@ def run_phase2_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, 
     }
     write_json(controller_state_path(run_dir, round_id), controller_payload)
 
-    controller_event_id = "runtimeevt-" + stable_hash(run_id, round_id, "round-controller", started_at, finished_at)[:12]
+    controller_event_id = new_runtime_event_id("runtimeevt", run_id, round_id, "round-controller", started_at, finished_at)
     append_ledger_event(
         run_dir,
         {
-            "schema_version": "runtime-event-v1",
+            "schema_version": "runtime-event-v2",
             "event_id": controller_event_id,
             "event_type": "round-controller",
             "run_id": run_id,

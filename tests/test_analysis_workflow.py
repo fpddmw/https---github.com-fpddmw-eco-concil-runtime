@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._workflow_support import analytics_path, load_json, run_script, script_path, seed_analysis_chain
+from _workflow_support import analytics_path, load_json, run_script, script_path, seed_analysis_chain
 
 RUN_ID = "run-analysis-001"
 ROUND_ID = "round-analysis-001"

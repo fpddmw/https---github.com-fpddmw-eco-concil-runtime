@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._workflow_support import run_script, script_path, seed_signal_plane, write_json
+from _workflow_support import run_script, script_path, seed_signal_plane, write_json
 
 RUN_ID = "run-signal-001"
 ROUND_ID = "round-signal-001"

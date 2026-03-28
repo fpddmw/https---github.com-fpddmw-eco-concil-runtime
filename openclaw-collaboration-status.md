@@ -13,7 +13,7 @@
 - Phase C：已完成到 C2，board 已具备记录、整理、总结、brief 化能力。
 - Phase D：已完成 D1 + D2，next actions、probes、round readiness、promotion basis 已经落地。
 - Phase E：已完成前两批，reporting handoff、council decision draft、expert report draft、canonical report publish、canonical decision publish 已经落地。
-- runtime kernel：已完成到第 2 阶段，manifest / cursor / registry / ledger / executor wrapper、promotion gate、round controller、supervisor entry 已可运行。
+- runtime kernel：已完成到第 2 阶段，manifest / cursor / registry / ledger / executor wrapper、promotion gate、round controller、supervisor entry 已可运行，但当前仍是 deterministic phase-2 pipeline，不是 board-driven orchestration runtime。
 
 ## 2. 当前能力面
 
@@ -25,6 +25,8 @@
 - 其中 4 个属于 investigation / readiness / promotion 层，已经覆盖 next actions、probe、readiness、promotion basis。
 - 其中 5 个属于 reporting / decision 层，已经覆盖 reporting handoff、council decision draft、expert report draft、canonical expert report publish、canonical decision publish。
 - 此外已经新增 1 个最小 runtime kernel 包，用于 manifest、cursor、registry、ledger 与 skill execution。
+- board 写入当前已具备单机多进程安全：filesystem lock + atomic replace + `board_revision`。
+- runtime registry 当前已能快照 skill contract 与 agent metadata，但 contract-aware / permission-aware enforcement 仍未完成。
 
 ## 3. 距离全流程议会协作还差什么
 
@@ -42,11 +44,13 @@
 - [x] runtime 第 2 阶段的 promote/freeze gate 与 supervisor 入口回接。
 - [x] 全链路 supervisor / simulation 闭环回归。
 - [ ] final publication artifact 闭环。
+- [ ] contract-aware / permission-aware skill execution。
+- [ ] board-driven、agent-decided orchestration。
 - [ ] real orchestration / archive / history-context 闭环。
 
 判断：如果只看主链能力面，当前仓库已经具备从 raw artifact 到 promote basis、reporting handoff、role report、canonical decision，再到 minimal supervisor state 的 skill-first 主链。
 
-判断：如果看当前精简仓库的工程闭环，而不把 legacy 大 runtime 的全部外延一并算进来，那么目前已经补齐 raw -> promotion -> canonical decision 的主链，但还没有补齐 final publication、真实 orchestration、archive/history-context 这些外层能力：
+判断：如果看当前精简仓库的工程闭环，而不把 legacy 大 runtime 的全部外延一并算进来，那么目前更准确的表述是：已经补齐 raw -> promotion -> canonical decision 的 skill-first deterministic pipeline，并补上了单机 board 并发写和更强的 runtime 审计元数据；但还没有补齐 final publication、contract-aware runtime 治理、board-driven orchestration、真实 orchestration、archive/history-context 这些外层能力：
 
 - 一批是 runtime 第 2 阶段：promote/freeze gate、round controller、supervisor 入口。
 - 一批是全链路 supervisor / simulation 回归，把 skill-first 主链重新接成完整运行面。
@@ -91,6 +95,8 @@
 - 当前 kernel 已能初始化 run、刷新 skill registry、执行 skill、记录 receipt、追加 audit ledger、推进 round cursor。
 - 当前 kernel 也已能对 readiness 落 promotion gate、以单命令跑完 board -> D1 -> D2 -> promotion，并额外写出 supervisor state。
 - `eco-summarize-round-readiness` 与 `eco-promote-evidence-basis` 现在已经接入 kernel phase-2 控制流，而没有把业务判断拉回 runtime。
+- runtime registry 现在会读取 `SKILL.md` 和 `agents/openai.yaml` 里的基础元数据，但当前仍只是 metadata-aware，不是 contract-enforcing runtime。
+- runtime ledger 现在会记录 skill args、命令快照、声明式 read/write contract、解析后的路径与输入/输出哈希，但离完整回放和法证复核仍有距离。
 
 ## 7. 推荐的下一步
 

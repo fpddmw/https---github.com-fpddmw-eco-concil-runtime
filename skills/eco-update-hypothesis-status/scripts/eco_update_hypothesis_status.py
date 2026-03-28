@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
+import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -66,7 +69,14 @@ def load_or_init_board(path: Path, run_id: str) -> dict[str, Any]:
         payload = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(payload, dict):
             return payload
-    return {"schema_version": "board-v1", "run_id": run_id, "updated_at_utc": utc_now_iso(), "events": [], "rounds": {}}
+    return {"schema_version": "board-v1", "run_id": run_id, "board_revision": 0, "updated_at_utc": utc_now_iso(), "events": [], "rounds": {}}
+
+
+def board_revision(board: dict[str, Any]) -> int:
+    try:
+        return max(0, int(board.get("board_revision") or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def ensure_round(board: dict[str, Any], round_id: str) -> dict[str, Any]:
@@ -98,9 +108,24 @@ def append_event(board: dict[str, Any], run_id: str, round_id: str, event_type: 
     return event
 
 
-def write_board(path: Path, board: dict[str, Any]) -> None:
+def write_board(path: Path, board: dict[str, Any], next_revision: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(board, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    board["board_revision"] = next_revision
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.{next_revision}.tmp")
+    temp_path.write_text(json.dumps(board, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temp_path, path)
+
+
+@contextmanager
+def locked_board(path: Path, run_id: str):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_name(path.name + ".lock")
+    with lock_path.open("a+", encoding="utf-8") as lock_handle:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield load_or_init_board(path, run_id)
+        finally:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
 
 def update_hypothesis_status_skill(
@@ -118,44 +143,45 @@ def update_hypothesis_status_skill(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
-    board = load_or_init_board(board_file, run_id)
-    round_state = ensure_round(board, round_id)
-    hypotheses = round_state["hypotheses"] if isinstance(round_state.get("hypotheses"), list) else []
-    round_state["hypotheses"] = hypotheses
-    resolved_hypothesis_id = maybe_text(hypothesis_id) or ("hypothesis-" + stable_hash(run_id, round_id, title, statement)[:12])
-    existing = next((item for item in hypotheses if isinstance(item, dict) and maybe_text(item.get("hypothesis_id")) == resolved_hypothesis_id), None)
-    timestamp = utc_now_iso()
-    payload = {
-        "hypothesis_id": resolved_hypothesis_id,
-        "run_id": run_id,
-        "round_id": round_id,
-        "title": maybe_text(title),
-        "statement": maybe_text(statement),
-        "status": maybe_text(status),
-        "owner_role": maybe_text(owner_role),
-        "linked_claim_ids": [maybe_text(item) for item in linked_claim_ids if maybe_text(item)],
-        "confidence": maybe_number(confidence),
-        "updated_at_utc": timestamp,
-    }
-    operation = "updated"
-    if existing is None:
-        payload["created_at_utc"] = timestamp
-        payload["history"] = [{"status": payload["status"], "updated_at_utc": timestamp, "confidence": payload["confidence"]}]
-        hypotheses.append(payload)
-        existing = payload
-        operation = "created"
-    else:
-        existing.update(payload)
-        history = existing.get("history") if isinstance(existing.get("history"), list) else []
-        history.append({"status": payload["status"], "updated_at_utc": timestamp, "confidence": payload["confidence"]})
-        existing["history"] = history
-    hypothesis_index = next(index for index, item in enumerate(hypotheses) if isinstance(item, dict) and maybe_text(item.get("hypothesis_id")) == resolved_hypothesis_id)
-    event = append_event(board, run_id, round_id, "hypothesis-updated", {"hypothesis_id": resolved_hypothesis_id, "status": maybe_text(status), "operation": operation})
-    write_board(board_file, board)
+    with locked_board(board_file, run_id) as board:
+        next_revision = board_revision(board) + 1
+        round_state = ensure_round(board, round_id)
+        hypotheses = round_state["hypotheses"] if isinstance(round_state.get("hypotheses"), list) else []
+        round_state["hypotheses"] = hypotheses
+        resolved_hypothesis_id = maybe_text(hypothesis_id) or ("hypothesis-" + stable_hash(run_id, round_id, title, statement, next_revision)[:12])
+        existing = next((item for item in hypotheses if isinstance(item, dict) and maybe_text(item.get("hypothesis_id")) == resolved_hypothesis_id), None)
+        timestamp = utc_now_iso()
+        payload = {
+            "hypothesis_id": resolved_hypothesis_id,
+            "run_id": run_id,
+            "round_id": round_id,
+            "title": maybe_text(title),
+            "statement": maybe_text(statement),
+            "status": maybe_text(status),
+            "owner_role": maybe_text(owner_role),
+            "linked_claim_ids": [maybe_text(item) for item in linked_claim_ids if maybe_text(item)],
+            "confidence": maybe_number(confidence),
+            "updated_at_utc": timestamp,
+        }
+        operation = "updated"
+        if existing is None:
+            payload["created_at_utc"] = timestamp
+            payload["history"] = [{"status": payload["status"], "updated_at_utc": timestamp, "confidence": payload["confidence"]}]
+            hypotheses.append(payload)
+            existing = payload
+            operation = "created"
+        else:
+            existing.update(payload)
+            history = existing.get("history") if isinstance(existing.get("history"), list) else []
+            history.append({"status": payload["status"], "updated_at_utc": timestamp, "confidence": payload["confidence"]})
+            existing["history"] = history
+        hypothesis_index = next(index for index, item in enumerate(hypotheses) if isinstance(item, dict) and maybe_text(item.get("hypothesis_id")) == resolved_hypothesis_id)
+        event = append_event(board, run_id, round_id, "hypothesis-updated", {"hypothesis_id": resolved_hypothesis_id, "status": maybe_text(status), "operation": operation})
+        write_board(board_file, board, next_revision)
     artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": f"$.rounds.{round_id}.hypotheses[{hypothesis_index}]", "artifact_ref": f"{board_file}:$.rounds.{round_id}.hypotheses[{hypothesis_index}]"}]
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "board_path": str(board_file), "event_id": event["event_id"], "hypothesis_id": resolved_hypothesis_id, "operation": operation},
+        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "board_path": str(board_file), "board_revision": next_revision, "event_id": event["event_id"], "hypothesis_id": resolved_hypothesis_id, "operation": operation},
         "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, resolved_hypothesis_id)[:20],
         "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event["event_id"])[:16],
         "artifact_refs": artifact_refs,

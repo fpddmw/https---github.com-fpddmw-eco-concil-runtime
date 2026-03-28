@@ -215,7 +215,7 @@
    - 输出：`council_decision_draft_<round_id>.json`
    - 作用：把当前轮次显式落成 `finalize` 或 `continue` 的决策草案
 
-### E2：下一批
+### E2：当前对话已完成
 
 3. `eco-draft-expert-report`
    - 输入：reporting handoff + council decision draft + board brief
@@ -236,35 +236,61 @@
 
 6. final publication artifact
 
+## Phase F：control-plane hardening
+
+目标：把当前 skill-first deterministic pipeline 补成更可信的单机协作与审计底座，同时明确它还不是 board-driven orchestration runtime。
+
+### F1：当前对话已完成
+
+1. board 单机并发写入安全
+   - `eco-post-board-note`、`eco-update-hypothesis-status`、`eco-open-challenge-ticket`、`eco-claim-board-task`、`eco-close-challenge-ticket` 现在统一使用 filesystem lock + atomic replace + `board_revision`
+   - 作用：避免同机多进程写 `investigation_board.json` 时静默丢更新
+
+2. runtime 审计链增强
+   - runtime event id 已从低熵时间片拼接改成低碰撞事件标识
+   - ledger 现在记录 `skill_args`、命令快照、registry entry、声明式 read/write contract、解析后的路径、输入哈希与 payload 哈希
+
+3. registry metadata snapshot
+   - runtime registry 现在会消费 `SKILL.md` 的 read/write contract 与 `agents/openai.yaml` 的 interface 元数据
+   - 作用：为下一步 contract-aware / permission-aware 执行治理打基础
+
+### F2：下一批
+
+1. contract-aware execution enforcement
+2. final publication artifact
+3. board-driven orchestration planner
+
 ## 4. 本批次交付标准
 
-本轮 reporting publish 批次必须满足：
+当前阶段交付必须满足：
 
 1. 每个 skill 仍然是目录内自包含实现。
-2. D1 / D2 默认继续读取现有 board、investigation、analytics 产物，不把业务判断塞回 runtime。
-3. runtime 只允许承接 manifest、cursor、registry、ledger、receipt 和 skill executor wrapper。
-4. 输出继续保持 compact artifact + receipt + board handoff 的风格，其中 reporting publish 允许落成 canonical report / decision JSON artifact。
-5. 必须补上脚本级集成测试，验证 role draft、canonical publish、overwrite guard 与 ready/hold 两条路径。
-6. expert report draft、canonical expert report、canonical council decision 的路径约定必须稳定下来，供后续 final publication 使用。
+2. board 写入路径至少要保证同机多进程下的 filesystem lock + atomic replace，不再允许静默丢更新。
+3. runtime 只允许承接 manifest、cursor、registry、ledger、receipt、executor 与治理逻辑，不把业务判断塞回 runtime。
+4. ledger 至少记录命令快照、skill_args、声明式 contract、解析后的路径和输入/输出哈希，不能只做“结果日志”。
+5. registry 至少消费 `SKILL.md` 与 `agents/openai.yaml` 的可机读元数据，为 contract-aware 执行做准备。
+6. 必须补上脚本级集成测试，覆盖并发 board 写入、reporting publish 与 runtime 审计链回归。
 
 ## 5. 从当前状态继续推进的顺序
 
 从当前状态到更完整的可运行系统，建议按下面顺序推进：
 
-1. 补齐 reporting / decision 第三批
-2. 把 orchestration / contract scaffold 接回新主链
-3. 恢复 archive / history context / richer simulation
-4. 做 runtime hardening 与生产前准入验证
+1. 补齐 reporting / decision 第三批：final publication artifact
+2. 把 runtime 从 metadata-aware 推进到 contract-aware / permission-aware 执行
+3. 设计 board-driven orchestration planner，逐步替换固定 phase-2 pipeline
+4. 把 orchestration / contract scaffold 接回新主链
+5. 恢复 archive / history context / richer simulation
+6. 做剩余 runtime hardening 与生产前准入验证
 
 ## 6. runtime 当前边界
 
 runtime 在当前阶段仍不应承担新的业务推理，推荐继续维持下面边界：
 
 1. `next_actions_<round_id>.json`、`falsification_probes_<round_id>.json`、`round_readiness_<round_id>.json`、`promoted_evidence_basis_<round_id>.json`、`reporting_handoff_<round_id>.json`、`council_decision_draft_<round_id>.json`、`expert_report_draft_<role>_<round_id>.json`、`expert_report_<role>_<round_id>.json`、`council_decision_<round_id>.json` 的契约应继续保持稳定。
-2. 最小 runtime kernel 负责 run manifest、artifact path resolver、receipt/event ledger、skill executor wrapper、round cursor、promotion gate、round controller、supervisor state。
+2. 最小 runtime kernel 负责 run manifest、artifact path resolver、receipt/event ledger、skill executor wrapper、round cursor、promotion gate、round controller、supervisor state，以及后续 contract-aware / permission-aware 治理。
 3. reporting / decision 仍然优先以 atomic skill 方式推进，而不是把新业务逻辑塞回 runtime。
 
-换句话说，runtime 现在已经形成了一个最小可运行的 phase-2 闭环，但仍只停留在“编排与落盘”这一层，不承载业务语义。
+换句话说，runtime 现在已经形成了一个最小可运行的 phase-2 deterministic pipeline，但仍不是蓝图里的 board-driven、agent-decided orchestration runtime。
 
 ## 7. 当前补充状态
 
@@ -273,7 +299,9 @@ runtime 在当前阶段仍不应承担新的业务推理，推荐继续维持下
 - `show-run-state` 现在会同时回显最新 round 的 gate / controller / supervisor 快照。
 - `eco-materialize-reporting-handoff` 与 `eco-draft-council-decision` 已经把 promotion basis 接到 reporting / decision 第一批下游对象。
 - `eco-draft-expert-report`、`eco-publish-expert-report`、`eco-publish-council-decision` 已经把 role draft、canonical report 与 canonical decision 接回 skill-first 主链。
-- 当前完整 unittest 集已扩展到 18 个测试，用于覆盖 reporting publish 与既有主链回归。
+- board 写入路径现在已切到 filesystem lock + atomic replace + `board_revision`，当前目标是先保证同机多进程安全，而不是宣称分布式协作已经完成。
+- runtime registry 现在会快照 skill contract 与 agent metadata，ledger 也会记录命令快照、skill_args、解析路径和输入/输出哈希。
+- 当前完整 unittest 集会继续扩展，用于覆盖并发写、reporting publish 与审计链回归。
 
 ## 8. 面向生产的开发指引
 

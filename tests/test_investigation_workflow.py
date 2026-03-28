@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._workflow_support import (
+from _workflow_support import (
     analytics_path,
     investigation_path,
     load_json,

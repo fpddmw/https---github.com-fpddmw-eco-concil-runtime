@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
+import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -57,7 +60,14 @@ def load_or_init_board(path: Path, run_id: str) -> dict[str, Any]:
         payload = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(payload, dict):
             return payload
-    return {"schema_version": "board-v1", "run_id": run_id, "updated_at_utc": utc_now_iso(), "events": [], "rounds": {}}
+    return {"schema_version": "board-v1", "run_id": run_id, "board_revision": 0, "updated_at_utc": utc_now_iso(), "events": [], "rounds": {}}
+
+
+def board_revision(board: dict[str, Any]) -> int:
+    try:
+        return max(0, int(board.get("board_revision") or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def ensure_round(board: dict[str, Any], round_id: str) -> dict[str, Any]:
@@ -89,9 +99,24 @@ def append_event(board: dict[str, Any], run_id: str, round_id: str, event_type: 
     return event
 
 
-def write_board(path: Path, board: dict[str, Any]) -> None:
+def write_board(path: Path, board: dict[str, Any], next_revision: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(board, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    board["board_revision"] = next_revision
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.{next_revision}.tmp")
+    temp_path.write_text(json.dumps(board, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temp_path, path)
+
+
+@contextmanager
+def locked_board(path: Path, run_id: str):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_name(path.name + ".lock")
+    with lock_path.open("a+", encoding="utf-8") as lock_handle:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield load_or_init_board(path, run_id)
+        finally:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
 
 def post_board_note_skill(
@@ -108,32 +133,33 @@ def post_board_note_skill(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
-    board = load_or_init_board(board_file, run_id)
-    round_state = ensure_round(board, round_id)
-    notes = round_state["notes"] if isinstance(round_state.get("notes"), list) else []
-    round_state["notes"] = notes
-    created_at = utc_now_iso()
-    note_id = "boardnote-" + stable_hash(run_id, round_id, author_role, note_text, len(notes))[:12]
-    note = {
-        "note_id": note_id,
-        "run_id": run_id,
-        "round_id": round_id,
-        "created_at_utc": created_at,
-        "author_role": maybe_text(author_role),
-        "category": maybe_text(category) or "analysis",
-        "note_text": maybe_text(note_text),
-        "tags": [maybe_text(tag) for tag in tags if maybe_text(tag)],
-        "linked_artifact_refs": [maybe_text(ref) for ref in linked_artifact_refs if maybe_text(ref)],
-        "related_ids": [maybe_text(item) for item in related_ids if maybe_text(item)],
-    }
-    notes.append(note)
-    event = append_event(board, run_id, round_id, "note-posted", {"note_id": note_id, "category": note["category"], "author_role": note["author_role"]})
-    write_board(board_file, board)
-    note_index = len(notes) - 1
+    with locked_board(board_file, run_id) as board:
+        next_revision = board_revision(board) + 1
+        round_state = ensure_round(board, round_id)
+        notes = round_state["notes"] if isinstance(round_state.get("notes"), list) else []
+        round_state["notes"] = notes
+        created_at = utc_now_iso()
+        note_id = "boardnote-" + stable_hash(run_id, round_id, author_role, note_text, len(notes), next_revision)[:12]
+        note = {
+            "note_id": note_id,
+            "run_id": run_id,
+            "round_id": round_id,
+            "created_at_utc": created_at,
+            "author_role": maybe_text(author_role),
+            "category": maybe_text(category) or "analysis",
+            "note_text": maybe_text(note_text),
+            "tags": [maybe_text(tag) for tag in tags if maybe_text(tag)],
+            "linked_artifact_refs": [maybe_text(ref) for ref in linked_artifact_refs if maybe_text(ref)],
+            "related_ids": [maybe_text(item) for item in related_ids if maybe_text(item)],
+        }
+        notes.append(note)
+        event = append_event(board, run_id, round_id, "note-posted", {"note_id": note_id, "category": note["category"], "author_role": note["author_role"]})
+        write_board(board_file, board, next_revision)
+        note_index = len(notes) - 1
     artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": f"$.rounds.{round_id}.notes[{note_index}]", "artifact_ref": f"{board_file}:$.rounds.{round_id}.notes[{note_index}]"}]
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "board_path": str(board_file), "event_id": event["event_id"], "note_id": note_id},
+        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "board_path": str(board_file), "board_revision": next_revision, "event_id": event["event_id"], "note_id": note_id},
         "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, note_id)[:20],
         "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event["event_id"])[:16],
         "artifact_refs": artifact_refs,
