@@ -27,7 +27,7 @@ from eco_council_runtime.adapters.normalize_storage import (
     save_environment_db as adapter_save_environment_db,
     save_public_db as adapter_save_public_db,
 )
-from eco_council_runtime.application.normalize_sources import (
+from eco_council_runtime.application.normalize import (
     NORMALIZE_CACHE_VERSION,
     normalize_cache_dir,
     normalize_environment_source as application_normalize_environment_source,

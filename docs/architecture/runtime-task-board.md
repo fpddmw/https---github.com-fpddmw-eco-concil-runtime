@@ -211,6 +211,32 @@
   - normalize, simulation, and archive flows have stable subdomain boundaries
   - archive import code no longer requires root `supervisor` module loading
 
+##### T07.4a Normalize Source Pipeline Split
+
+- Status: `completed`
+- Scope:
+  - move public-source normalization logic from `application/normalize_sources.py` into owned `application/normalize/` module homes
+  - move environment-source normalization and cache wrappers into owned `application/normalize/` module homes
+  - reduce `application/normalize_sources.py` to a compatibility shell and add direct regressions for the extracted normalize package homes
+- Acceptance:
+  - public and environment normalization stop depending on a single second-generation mega-module
+  - extracted normalize package homes are exercised directly while legacy imports remain stable
+- Outcome:
+  - added `application/normalize/public_sources.py`, `application/normalize/public_gdelt.py`, `application/normalize/environment_sources.py`, `application/normalize/source_cache.py`, and `application/normalize/public_common.py`, moving owned normalize-source logic into second-stage package homes while keeping the new files below the hotspot scale that `T07.4` is meant to retire
+  - reduced `application/normalize_sources.py` to a compatibility shell, rewired `application/normalize/__init__.py` and root `normalize.py` to import the new package homes directly, and added `tests/test_normalize_extracted_modules.py` so normalize behavior is covered both through the extracted module surface and the legacy import path
+  - targeted normalize/import-boundary regressions passed with `13` tests, and `python3 -m unittest discover -s tests` passed with a green `145`-test repository baseline
+
+##### T07.4b Simulation Workflow Split
+
+- Status: `in_progress`
+- Scope:
+  - move scenario loading and preset resolution from `application/simulation_workflow.py` into owned `application/simulation/` module homes
+  - move raw artifact builders and payload synthesis into owned `application/simulation/` module homes
+  - reduce `application/simulation_workflow.py` to a compatibility shell and add direct regressions for the extracted simulation package homes
+- Acceptance:
+  - simulation workflow ownership no longer depends on a single second-generation mega-module
+  - extracted simulation package homes are exercised directly while legacy imports remain stable
+
 #### T07.5 Root Facade Contraction And Controller Retirement Pass
 
 - Status: `planned`
@@ -435,6 +461,6 @@
 
 ## Current Task Notes
 
-- Active task: none
-- Next planned task: `T07.4 Normalize, Simulation, And Archive Hotspot Split`
+- Active task: `T07.4b Simulation Workflow Split`
+- Next planned task: `T07.4c Archive Boundary Split`
 - Working rule reaffirmed: after a sub-slice passes acceptance, persist its outcome here and then explicitly open the next sub-slice before coding continues.
