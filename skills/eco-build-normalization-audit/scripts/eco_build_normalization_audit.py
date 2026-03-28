@@ -117,6 +117,11 @@ def build_normalization_audit_skill(
     if not observations:
         warnings.append({"code": "no-observation-candidates", "message": f"No observation candidate artifact was available at {observation_path}."})
     canonical_ids = [maybe_text(item.get("claim_id") or item.get("observation_id")) for item in list(claims) + list(observations) if maybe_text(item.get("claim_id") or item.get("observation_id"))]
+    gap_hints = []
+    if claims:
+        gap_hints.append("Some claim candidates still need scope derivation before direct matching.")
+    if observations:
+        gap_hints.append("Some observation candidates still need spatial refinement.")
     return {
         "status": "completed",
         "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "claim_candidate_count": len(claims), "observation_candidate_count": len(observations), "output_path": str(audit_path)},
@@ -125,7 +130,7 @@ def build_normalization_audit_skill(
         "artifact_refs": artifact_refs,
         "canonical_ids": canonical_ids,
         "warnings": warnings,
-        "board_handoff": {"candidate_ids": canonical_ids, "evidence_refs": artifact_refs, "gap_hints": ["Some claim candidates still need scope derivation before direct matching."] if claims else [] + (["Some observation candidates still need spatial refinement."] if observations else []), "challenge_hints": ["Compare claim-type diversity and observation-metric diversity before promotion."] if claims or observations else [], "suggested_next_skills": ["eco-link-claims-to-observations"]},
+        "board_handoff": {"candidate_ids": canonical_ids, "evidence_refs": artifact_refs, "gap_hints": gap_hints, "challenge_hints": ["Compare claim-type diversity and observation-metric diversity before promotion."] if claims or observations else [], "suggested_next_skills": ["eco-cluster-claim-candidates", "eco-merge-observation-candidates", "eco-link-claims-to-observations"]},
     }
 
 

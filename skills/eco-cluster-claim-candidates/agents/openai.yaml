@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Cluster Claim Candidates"
+  short_description: "Group repeated claim candidates into compact claim clusters"
+  default_prompt: "Use $eco-cluster-claim-candidates to read the current round's claim candidates, cluster repeated or highly similar claims into compact board-reviewable groups, persist the cluster artifact, and return provenance-aware handoff refs."

@@ -252,7 +252,7 @@ def extract_claim_candidates_skill(
         "artifact_refs": artifact_refs[:40],
         "canonical_ids": [candidate["claim_id"] for candidate in candidates],
         "warnings": warnings,
-        "board_handoff": {"candidate_ids": [candidate["claim_id"] for candidate in candidates], "evidence_refs": artifact_refs[:20], "gap_hints": ["Claim candidates still need scope derivation before direct matching."] if candidates else [], "challenge_hints": ["Check whether repeated public narratives are still collapsing distinct sub-claims."] if candidates else [], "suggested_next_skills": ["eco-build-normalization-audit"]},
+        "board_handoff": {"candidate_ids": [candidate["claim_id"] for candidate in candidates], "evidence_refs": artifact_refs[:20], "gap_hints": ["Claim candidates still need scope derivation before direct matching."] if candidates else [], "challenge_hints": ["Check whether repeated public narratives are still collapsing distinct sub-claims."] if candidates else [], "suggested_next_skills": ["eco-cluster-claim-candidates", "eco-build-normalization-audit"]},
     }
 
 

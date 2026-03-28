@@ -217,7 +217,7 @@ def extract_observation_candidates_skill(
         "artifact_refs": artifact_refs[:40],
         "canonical_ids": [candidate["observation_id"] for candidate in candidates],
         "warnings": warnings,
-        "board_handoff": {"candidate_ids": [candidate["observation_id"] for candidate in candidates], "evidence_refs": artifact_refs[:20], "gap_hints": ["Observation candidates without stable coordinates still need spatial refinement."] if candidates else [], "challenge_hints": ["Check whether provider-specific clusters should be merged before matching."] if candidates else [], "suggested_next_skills": ["eco-build-normalization-audit"]},
+        "board_handoff": {"candidate_ids": [candidate["observation_id"] for candidate in candidates], "evidence_refs": artifact_refs[:20], "gap_hints": ["Observation candidates without stable coordinates still need spatial refinement."] if candidates else [], "challenge_hints": ["Check whether provider-specific clusters should be merged before matching."] if candidates else [], "suggested_next_skills": ["eco-merge-observation-candidates", "eco-build-normalization-audit"]},
     }
 
 
