@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "run_id": "eco-20260327-nyc-smoke-canada-20230606",
+  "topic": "New York City air quality discussion and Canadian wildfire smoke verification",
+  "objective": "Verify or falsify the causal chain from Canadian wildfire source activity, through smoke transport, to New York City metro air-quality impact and public interpretation during 2023-06-06 to 2023-06-08.",
+  "policy_profile": "standard",
+  "window": {
+    "start_utc": "2023-06-06T00:00:00Z",
+    "end_utc": "2023-06-08T23:59:59Z"
+  },
+  "region": {
+    "label": "New York City metro area, USA",
+    "geometry": {
+      "type": "BBox",
+      "west": -74.30,
+      "south": 40.45,
+      "east": -73.65,
+      "north": 40.95
+    }
+  },
+  "hypotheses": [
+    "Canadian wildfire activity north of New York generated smoke that was transported into the New York City metro area and drove the local PM2.5 and AQI spike.",
+    "Public air-quality concern in New York during the mission window tracks the wildfire-smoke impact rather than a purely local emissions explanation."
+  ],
+  "constraints": {
+    "max_rounds": 3,
+    "max_claims_per_round": 3,
+    "max_tasks_per_round": 4
+  },
+  "source_governance": {
+    "allow_cross_round_anchors": true,
+    "max_selected_sources_per_role": 5,
+    "max_active_families_per_role": 4,
+    "max_non_entry_layers_per_role": 1,
+    "approved_layers": [
+      {
+        "family_id": "gdelt",
+        "layer_id": "bulk",
+        "approved_by": "human",
+        "reason": "This run may use one anchored GDELT bulk layer after article recon if public attribution remains diffuse."
+      }
+    ]
+  }
+}
