@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Normalize Open Meteo Historical Signals"
+  short_description: "Normalize Open-Meteo historical series into unified environment signals"
+  default_prompt: "Use $eco-normalize-open-meteo-historical-signals to normalize one open-meteo-historical-fetch artifact into canonical environment-signal rows in the unified signal plane and return compact receipts, artifact refs, signal ids, and board-ready hints."

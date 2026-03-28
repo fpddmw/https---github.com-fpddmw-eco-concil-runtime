@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Extract Claim Candidates"
+  short_description: "Build compact public claim candidates from normalized signals"
+  default_prompt: "Use $eco-extract-claim-candidates to read normalized public signals from the unified signal plane, collapse repeated narratives into compact claim candidates, persist the analytics artifact, and return provenance-aware evidence refs with board handoff hints."
