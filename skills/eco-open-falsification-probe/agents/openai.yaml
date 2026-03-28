@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Open Falsification Probe"
+  short_description: "Open compact falsification probes from the next-action queue"
+  default_prompt: "Use $eco-open-falsification-probe to convert contradiction-heavy or low-confidence next actions into explicit falsification probes with target ids, evidence refs, and requested follow-up skills."

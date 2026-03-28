@@ -48,6 +48,38 @@ def board_path(run_dir: Path) -> Path:
     return run_dir / "board" / "investigation_board.json"
 
 
+def investigation_path(run_dir: Path, file_name: str) -> Path:
+    return run_dir / "investigation" / file_name
+
+
+def reporting_path(run_dir: Path, file_name: str) -> Path:
+    return run_dir / "reporting" / file_name
+
+
+def promotion_path(run_dir: Path, file_name: str) -> Path:
+    return run_dir / "promotion" / file_name
+
+
+def kernel_script_path() -> Path:
+    return WORKSPACE_ROOT / "eco-concil-runtime" / "scripts" / "eco_runtime_kernel.py"
+
+
+def run_kernel(*args: str) -> dict[str, Any]:
+    completed = subprocess.run(
+        [sys.executable, str(kernel_script_path()), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise AssertionError(
+            f"Kernel failed\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
+        )
+    payload = json.loads(completed.stdout)
+    assert isinstance(payload, dict)
+    return payload
+
+
 def seed_signal_plane(
     run_dir: Path,
     root: Path,

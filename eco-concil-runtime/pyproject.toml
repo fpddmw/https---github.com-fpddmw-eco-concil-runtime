@@ -1,0 +1,12 @@
+[project]
+name = "eco-council-runtime-kernel"
+version = "0.1.0"
+description = "Minimal runtime kernel for skill-first OpenClaw investigation runs"
+requires-python = ">=3.12"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

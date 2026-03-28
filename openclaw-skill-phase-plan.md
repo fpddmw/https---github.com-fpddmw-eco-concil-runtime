@@ -58,7 +58,20 @@
 - `eco-summarize-board-state`
 - `eco-materialize-board-brief`
 
-这说明当前主链已经不只停留在“候选对象生成”，而是已经延伸到 evidence bridge、board working-state，以及 board organize / brief 这一层。
+### 2.7 investigation / promotion 层
+
+- `eco-propose-next-actions`
+- `eco-open-falsification-probe`
+- `eco-summarize-round-readiness`
+- `eco-promote-evidence-basis`
+
+### 2.8 最小 runtime kernel
+
+- 新增 `eco-concil-runtime/` 最小内核包
+- 已落地 `run_manifest.json`、`round_cursor.json`、`skill_registry.json`、`audit_ledger.jsonl`、`receipts/`
+- 已落地 kernel CLI：`eco-concil-runtime/scripts/eco_runtime_kernel.py`
+
+这说明当前主链已经不只停留在“候选对象生成”，而是已经延伸到 evidence bridge、board organize / brief、investigation / readiness / promotion，以及第一阶段 runtime kernel。
 
 ## 3. 分阶段目标
 
@@ -147,7 +160,7 @@
 
 因此，Phase D 的工作重点不是“发明全新概念”，而是把这些旧 runtime 原型重新切成 skill-first 交付面，并只把真正需要的调度与状态保持收回最小 runtime 内核。
 
-### D1：investigation 行动层
+### D1：当前对话已完成
 
 1. `eco-propose-next-actions`
    - 输入：board summary / board brief + evidence coverage + challenge state
@@ -159,7 +172,7 @@
    - 输出：`falsification_probes_<round_id>.json`
    - 作用：把“需要继续挑战”落成显式 probe 对象，而不是继续停留在 note 或 ticket 层
 
-### D2：readiness / promotion 层
+### D2：当前对话已完成
 
 3. `eco-summarize-round-readiness`
    - 输入：board brief + next action queue + evidence coverage
@@ -173,34 +186,34 @@
 
 ## 4. 本批次交付标准
 
-本轮 C2 批次必须满足：
+本轮 D + kernel 批次必须满足：
 
 1. 每个 skill 仍然是目录内自包含实现。
-2. 继续默认从现有 board JSON 产物读取，不要求引入新的共享 runtime。
-3. 新增对象只允许扩展 `investigation_board.json`，不能把 board 业务逻辑回塞到 runtime。
-4. 输出继续保持 compact artifact + receipt + board handoff 的风格，其中 summary 与 brief 允许分别落成 JSON / Markdown。
-5. 必须补上脚本级集成测试，验证 challenge -> task -> close -> summary -> brief 可以串联。
-6. 现有 C1 board skill 的 `suggested_next_skills` 要衔接到本轮新增 skill。
+2. D1 / D2 默认继续读取现有 board、investigation、analytics 产物，不把业务判断塞回 runtime。
+3. runtime 只允许承接 manifest、cursor、registry、ledger、receipt 和 skill executor wrapper。
+4. 输出继续保持 compact artifact + receipt + board handoff 的风格，其中 readiness / promotion 允许落成 reporting / promotion JSON artifact。
+5. 必须补上脚本级集成测试，验证 board -> D1 -> D2 串联，以及 kernel manifest / ledger / cursor 可工作。
+6. board brief、next actions、probes、round readiness、promotion basis 的路径约定必须稳定下来，供 kernel 与后续 supervisor 使用。
 
 ## 5. 当前执行顺序
 
 本次对话的延续顺序按下面推进：
 
-1. 新增 C2 的 4 个 board organize skill
-2. 调整现有 C1 board handoff
-3. 补充 board workflow 集成测试
-4. 对 D 层做 skill-first 规划
-5. 生成当前仓库状态清单
+1. 新增 D1 的 2 个 investigation skill
+2. 启动最小 runtime kernel 第 1 阶段
+3. 继续补齐 D2 的 2 个 readiness / promotion skill
+4. 新增 investigation workflow 与 runtime kernel 测试
+5. 更新计划文档与状态清单
 6. 运行测试并确认当前 skill 面可用
 
 ## 6. runtime 动工窗口
 
 runtime 在当前阶段仍然不宜提前扩张，推荐按下面窗口动工：
 
-1. C2 完成后，不立即重建完整 runtime，只继续推进 D1 skill，把 `next_actions` 和 `falsification_probes` 的 artifact 契约先稳定下来。
-2. 当 D1 交付并经过一轮脚本级集成测试后，再启动最小 runtime kernel：只负责 run manifest、artifact path resolver、receipt/event ledger、skill executor wrapper 和 round cursor。
-3. 等 D2 的 readiness / promotion skill 落地后，runtime 才补第 2 步：把 promote/freeze 命令、round gate、以及 supervisor 入口接回来。
+1. `next_actions_<round_id>.json`、`falsification_probes_<round_id>.json`、`round_readiness_<round_id>.json`、`promoted_evidence_basis_<round_id>.json` 的契约已经在本轮稳定下来。
+2. 最小 runtime kernel 第 1 阶段已经落地：负责 run manifest、artifact path resolver、receipt/event ledger、skill executor wrapper 和 round cursor。
+3. runtime 的下一步不是扩大业务逻辑，而是补第 2 阶段：把 promote/freeze gate、round controller、以及 supervisor 入口接回来。
 
-换句话说，runtime 不是当前批次的主战场；它应该在 D1 稳定之后动工，而且只做“编排与落盘”，不再承载业务语义。
+换句话说，runtime 现在已经开始动工，但仍只停留在“编排与落盘”这一层，不承载业务语义。
 
 这份文档是当前蓝图下的执行型阶段计划，后续批次应在此基础上继续推进。
