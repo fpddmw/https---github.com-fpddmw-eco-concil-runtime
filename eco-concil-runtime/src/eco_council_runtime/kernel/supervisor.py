@@ -26,6 +26,7 @@ def top_actions(next_actions: dict[str, Any]) -> list[dict[str, str]]:
             {
                 "action_id": maybe_text(action.get("action_id")),
                 "action_kind": maybe_text(action.get("action_kind")),
+                "assigned_role": maybe_text(action.get("assigned_role")),
                 "priority": maybe_text(action.get("priority")),
                 "objective": maybe_text(action.get("objective")),
             }

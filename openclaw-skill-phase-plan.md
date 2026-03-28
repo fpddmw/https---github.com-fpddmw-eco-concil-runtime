@@ -9,6 +9,12 @@
 - 数据主链继续沿用 `raw artifact -> source normalize -> signal plane -> candidate/evidence -> board -> promote`
 - 所有新增 skill 必须保持自包含，不允许重新引入根级共享 runtime 包装层
 
+文档分工补充：
+
+- 本文件只描述阶段性交付面与下一步开发顺序。
+- 当前完成度见 [openclaw-collaboration-status.md](openclaw-collaboration-status.md)。
+- 到生产环境的开发路线见 [openclaw-production-development-plan.md](openclaw-production-development-plan.md)。
+
 ## 2. 当前完成面
 
 当前已交付的 skill 面可分为数层：
@@ -74,6 +80,13 @@
 - 已补齐 phase-2 CLI 入口：`apply-promotion-gate`、`run-phase2-round`、`supervise-round`
 
 这说明当前主链已经不只停留在“候选对象生成”，而是已经延伸到 evidence bridge、board organize / brief、investigation / readiness / promotion，以及最小 runtime kernel 的第 2 阶段。
+
+### 2.9 reporting / decision 第一批
+
+- `eco-materialize-reporting-handoff`
+- `eco-draft-council-decision`
+
+这说明当前主链已经开始消费 `promoted_evidence_basis_<round_id>.json`，而不是把下游 reporting / decision 永久留在 legacy runtime 里。
 
 ## 3. 分阶段目标
 
@@ -186,6 +199,28 @@
    - 输出：`promoted_evidence_basis_<round_id>.json`
    - 作用：把 working-state 冻结成可被后续报告与 decision 层消费的正式 basis artifact
 
+## Phase E：reporting / decision 层
+
+目标：把 promotion 后的 basis artifact 接成可被下游消费的 reporting / decision 对象，而不是继续依赖 legacy runtime 的大 reporting 模块。
+
+### E1：当前对话已完成
+
+1. `eco-materialize-reporting-handoff`
+   - 输入：promotion basis + readiness + board brief + supervisor state
+   - 输出：`reporting_handoff_<round_id>.json`
+   - 作用：把 promotion 阶段的分散 artifact 整成一个紧凑、可审计、可下游消费的 reporting handoff
+
+2. `eco-draft-council-decision`
+   - 输入：reporting handoff + promotion basis
+   - 输出：`council_decision_draft_<round_id>.json`
+   - 作用：把当前轮次显式落成 `finalize` 或 `continue` 的决策草案
+
+### E2：下一批
+
+3. expert report draft
+4. final publication artifact
+5. canonical decision publish
+
 ## 4. 本批次交付标准
 
 本轮 D + kernel 批次必须满足：
@@ -197,24 +232,22 @@
 5. 必须补上脚本级集成测试，验证 board -> D1 -> D2 串联，以及 kernel manifest / ledger / cursor 可工作。
 6. board brief、next actions、probes、round readiness、promotion basis 的路径约定必须稳定下来，供 kernel 与后续 supervisor 使用。
 
-## 5. 当前执行顺序
+## 5. 从当前状态继续推进的顺序
 
-本次对话的延续顺序按下面推进：
+从当前状态到更完整的可运行系统，建议按下面顺序推进：
 
-1. 新增 D1 的 2 个 investigation skill
-2. 启动最小 runtime kernel 第 1 阶段
-3. 继续补齐 D2 的 2 个 readiness / promotion skill
-4. 新增 investigation workflow 与 runtime kernel 测试
-5. 更新计划文档与状态清单
-6. 运行测试并确认当前 skill 面可用
+1. 补齐 reporting / decision 第二批
+2. 把 orchestration / contract scaffold 接回新主链
+3. 恢复 archive / history context / richer simulation
+4. 做 runtime hardening 与生产前准入验证
 
-## 6. runtime 动工窗口
+## 6. runtime 当前边界
 
-runtime 在当前阶段仍然不宜提前扩张，推荐按下面窗口动工：
+runtime 在当前阶段仍不应承担新的业务推理，推荐继续维持下面边界：
 
-1. `next_actions_<round_id>.json`、`falsification_probes_<round_id>.json`、`round_readiness_<round_id>.json`、`promoted_evidence_basis_<round_id>.json` 的契约已经在本轮稳定下来。
-2. 最小 runtime kernel 第 1 阶段已经落地：负责 run manifest、artifact path resolver、receipt/event ledger、skill executor wrapper 和 round cursor。
-3. runtime 的第 2 阶段已经落地：promote/freeze gate、round controller、以及 supervisor 入口都已接回，而且仍保持在“编排与落盘”边界内。
+1. `next_actions_<round_id>.json`、`falsification_probes_<round_id>.json`、`round_readiness_<round_id>.json`、`promoted_evidence_basis_<round_id>.json`、`reporting_handoff_<round_id>.json`、`council_decision_draft_<round_id>.json` 的契约应继续保持稳定。
+2. 最小 runtime kernel 负责 run manifest、artifact path resolver、receipt/event ledger、skill executor wrapper、round cursor、promotion gate、round controller、supervisor state。
+3. reporting / decision 仍然优先以 atomic skill 方式推进，而不是把新业务逻辑塞回 runtime。
 
 换句话说，runtime 现在已经形成了一个最小可运行的 phase-2 闭环，但仍只停留在“编排与落盘”这一层，不承载业务语义。
 
@@ -223,6 +256,12 @@ runtime 在当前阶段仍然不宜提前扩张，推荐按下面窗口动工：
 - `run-phase2-round` 现在可以把 `board -> D1 -> D2 -> promotion` 串成单命令流程。
 - `supervise-round` 现在会在 controller 结果上额外落出 operator 视角的 `supervisor_state_<round_id>.json`。
 - `show-run-state` 现在会同时回显最新 round 的 gate / controller / supervisor 快照。
-- 当前完整 unittest 集已经扩展到 13 个测试，并覆盖 ready-promote 与 in-flight-freeze 两类 phase-2 回归场景。
+- `eco-materialize-reporting-handoff` 与 `eco-draft-council-decision` 已经把 promotion basis 接到 reporting / decision 第一批下游对象。
+- 当前完整 unittest 集将继续扩展，用于覆盖 reporting / decision 第一批与后续生产化路径。
+
+## 8. 面向生产的开发指引
+
+- 生产路线、环境准入条件、shadow test 与 pilot 条件统一收敛在 [openclaw-production-development-plan.md](openclaw-production-development-plan.md)。
+- 本计划只继续追踪“做哪一批能力”，不重复维护生产准入细则。
 
 这份文档是当前蓝图下的执行型阶段计划，后续批次应在此基础上继续推进。

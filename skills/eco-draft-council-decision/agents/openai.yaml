@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Draft Council Decision"
+  short_description: "Draft one compact council decision from the reporting handoff"
+  default_prompt: "Use $eco-draft-council-decision to turn the current round's reporting handoff into one compact council decision draft that either finalizes the round or explicitly keeps investigation open."

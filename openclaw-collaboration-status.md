@@ -2,20 +2,28 @@
 
 ## 1. 当前定位
 
+- 文档分工：
+- `openclaw-first-refactor-blueprint.md` 保留为唯一架构基线。
+- `openclaw-skill-phase-plan.md` 保留为交付阶段计划。
+- `openclaw-collaboration-status.md` 只保留当前完成度、现状判断与最近建议。
+- `openclaw-production-development-plan.md` 负责从当前状态推进到生产环境的开发计划与准入标准。
+
 - Phase A：部分完成，主要是返回契约与测试收口持续进行中。
 - Phase B：已完成，candidate -> evidence bridge 已经打通。
 - Phase C：已完成到 C2，board 已具备记录、整理、总结、brief 化能力。
 - Phase D：已完成 D1 + D2，next actions、probes、round readiness、promotion basis 已经落地。
+- Phase E：已完成第一批，reporting handoff 与 council decision draft 已经落地。
 - runtime kernel：已完成到第 2 阶段，manifest / cursor / registry / ledger / executor wrapper、promotion gate、round controller、supervisor entry 已可运行。
 
 ## 2. 当前能力面
 
-- 已交付 31 个 skill。
+- 已交付 33 个 skill。
 - 其中 10 个属于 signal normalize / query / lookup。
 - 其中 3 个属于 candidate / audit。
 - 其中 6 个属于 evidence 中间层。
 - 其中 8 个属于 board 层，已经覆盖 delta、note、hypothesis、challenge、task、summary、brief。
 - 其中 4 个属于 investigation / readiness / promotion 层，已经覆盖 next actions、probe、readiness、promotion basis。
+- 其中 2 个属于 reporting / decision 层，已经覆盖 reporting handoff 与 council decision draft。
 - 此外已经新增 1 个最小 runtime kernel 包，用于 manifest、cursor、registry、ledger 与 skill execution。
 
 ## 3. 距离全流程议会协作还差什么
@@ -28,16 +36,21 @@
 - [x] falsification probe 进入显式生命周期。
 - [x] round readiness 进入正式 gate。
 - [x] evidence basis 进入 promote / freeze。
+- [x] promotion basis 进入 compact reporting handoff。
+- [x] reporting handoff 进入 compact council decision draft。
 - [x] 最小 runtime kernel 重新建立。
 - [x] runtime 第 2 阶段的 promote/freeze gate 与 supervisor 入口回接。
 - [x] 全链路 supervisor / simulation 闭环回归。
+- [ ] expert report / final publication / canonical decision publish 闭环。
+- [ ] real orchestration / archive / history-context 闭环。
 
-判断：如果只看主链能力面，当前仓库已经具备从 raw artifact 到 promote basis，再到 minimal supervisor state 的 skill-first 主链。
+判断：如果只看主链能力面，当前仓库已经具备从 raw artifact 到 promote basis、reporting handoff、council decision draft，再到 minimal supervisor state 的 skill-first 主链。
 
-判断：如果看当前精简仓库的工程闭环，而不把 legacy 大 runtime 的全部外延一并算进来，那么本轮已经把原先缺失的两个批次补齐：
+判断：如果看当前精简仓库的工程闭环，而不把 legacy 大 runtime 的全部外延一并算进来，那么目前已经补齐 raw -> promotion -> decision draft 的主链，但还没有补齐 final publication、真实 orchestration、archive/history-context 这些外层能力：
 
 - 一批是 runtime 第 2 阶段：promote/freeze gate、round controller、supervisor 入口。
 - 一批是全链路 supervisor / simulation 回归，把 skill-first 主链重新接成完整运行面。
+- 一批是 reporting / decision 第一批：reporting handoff、council decision draft。
 
 ## 4. D 与旧 runtime 的关系
 
@@ -65,6 +78,8 @@
 - `eco-concil-runtime/src/eco_council_runtime/kernel/gate.py`
 - `eco-concil-runtime/src/eco_council_runtime/kernel/controller.py`
 - `eco-concil-runtime/src/eco_council_runtime/kernel/supervisor.py`
+- `skills/eco-materialize-reporting-handoff/`
+- `skills/eco-draft-council-decision/`
 
 ## 6. runtime 何时动工
 
@@ -75,5 +90,6 @@
 
 ## 7. 推荐的下一步
 
-1. 在 reporting / decision 侧继续消费 `promoted_evidence_basis_<round_id>.json`，把下游正式产物重新接回 skill-first 主链。
-2. 如果需要更接近 legacy 运行面，再单独补 richer simulation preset、archive / history context、以及更复杂的 supervisor operator 流程。
+1. 继续补 reporting / decision 第二批：expert report draft、final publication artifact、canonical decision publish。
+2. 把 orchestration / contract scaffold 接回 skill-first 主链，形成真实 mission -> prepare -> fetch -> normalize 的运行闭环。
+3. 把 archive、history context、richer simulation 与 runtime hardening 接回，为 shadow test 和 production pilot 做准备。
