@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Open challenge tickets on a local board artifact."""
+"""Close challenge tickets on a local board artifact."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SKILL_NAME = "eco-open-challenge-ticket"
+SKILL_NAME = "eco-close-challenge-ticket"
 
 
 def normalize_space(value: Any) -> str:
@@ -21,6 +21,18 @@ def maybe_text(value: Any) -> str:
     if value is None:
         return ""
     return normalize_space(value)
+
+
+def unique_texts(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -94,18 +106,35 @@ def write_board(path: Path, board: dict[str, Any]) -> None:
     path.write_text(json.dumps(board, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def open_challenge_ticket_skill(
+def missing_ticket_payload(run_id: str, round_id: str, board_file: Path, ticket_id: str) -> dict[str, Any]:
+    return {
+        "status": "completed",
+        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "board_path": str(board_file), "ticket_id": ticket_id, "operation": "missing-ticket"},
+        "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, ticket_id, "missing")[:20],
+        "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, ticket_id, "missing")[:16],
+        "artifact_refs": [],
+        "canonical_ids": [],
+        "warnings": [{"code": "missing-ticket", "message": f"Challenge ticket `{ticket_id}` was not found on the board."}],
+        "board_handoff": {
+            "candidate_ids": [],
+            "evidence_refs": [],
+            "gap_hints": ["The requested challenge ticket could not be closed because it does not exist on the board."],
+            "challenge_hints": [],
+            "suggested_next_skills": ["eco-read-board-delta", "eco-summarize-board-state"],
+        },
+    }
+
+
+def close_challenge_ticket_skill(
     run_dir: str,
     run_id: str,
     round_id: str,
     board_path: str,
-    title: str,
-    challenge_statement: str,
-    target_claim_id: str,
-    target_hypothesis_id: str,
-    priority: str,
-    owner_role: str,
-    linked_artifact_refs: list[str],
+    ticket_id: str,
+    resolution: str,
+    resolution_note: str,
+    closing_role: str,
+    related_task_ids: list[str],
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
@@ -113,76 +142,78 @@ def open_challenge_ticket_skill(
     round_state = ensure_round(board, round_id)
     tickets = round_state["challenge_tickets"] if isinstance(round_state.get("challenge_tickets"), list) else []
     round_state["challenge_tickets"] = tickets
-    created_at = utc_now_iso()
-    ticket_id = "challenge-" + stable_hash(run_id, round_id, title, challenge_statement, len(tickets))[:12]
-    ticket = {
-        "ticket_id": ticket_id,
-        "run_id": run_id,
-        "round_id": round_id,
-        "created_at_utc": created_at,
-        "status": "open",
-        "priority": maybe_text(priority) or "medium",
-        "owner_role": maybe_text(owner_role) or "challenger",
-        "title": maybe_text(title),
-        "challenge_statement": maybe_text(challenge_statement),
-        "target_claim_id": maybe_text(target_claim_id),
-        "target_hypothesis_id": maybe_text(target_hypothesis_id),
-        "linked_artifact_refs": [maybe_text(ref) for ref in linked_artifact_refs if maybe_text(ref)],
-    }
-    tickets.append(ticket)
-    event = append_event(board, run_id, round_id, "challenge-opened", {"ticket_id": ticket_id, "priority": ticket["priority"], "target_claim_id": ticket["target_claim_id"], "target_hypothesis_id": ticket["target_hypothesis_id"]})
+    resolved_ticket_id = maybe_text(ticket_id)
+    ticket = next((item for item in tickets if isinstance(item, dict) and maybe_text(item.get("ticket_id")) == resolved_ticket_id), None)
+    if ticket is None:
+        return missing_ticket_payload(run_id, round_id, board_file, resolved_ticket_id)
+
+    timestamp = utc_now_iso()
+    previous_status = maybe_text(ticket.get("status")) or "open"
+    ticket["status"] = "closed"
+    ticket["closed_at_utc"] = timestamp
+    ticket["closed_by_role"] = maybe_text(closing_role) or "moderator"
+    ticket["resolution"] = maybe_text(resolution) or "resolved"
+    ticket["resolution_note"] = maybe_text(resolution_note)
+    ticket["related_task_ids"] = unique_texts(related_task_ids + (ticket.get("related_task_ids") if isinstance(ticket.get("related_task_ids"), list) else []))
+    history = ticket.get("history") if isinstance(ticket.get("history"), list) else []
+    history.append({"status": "closed", "updated_at_utc": timestamp, "closing_role": ticket["closed_by_role"], "resolution": ticket["resolution"]})
+    ticket["history"] = history
+
+    ticket_index = next(index for index, item in enumerate(tickets) if isinstance(item, dict) and maybe_text(item.get("ticket_id")) == resolved_ticket_id)
+    event = append_event(
+        board,
+        run_id,
+        round_id,
+        "challenge-closed",
+        {"ticket_id": resolved_ticket_id, "resolution": ticket["resolution"], "closed_by_role": ticket["closed_by_role"], "previous_status": previous_status},
+    )
     write_board(board_file, board)
-    ticket_index = len(tickets) - 1
     artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": f"$.rounds.{round_id}.challenge_tickets[{ticket_index}]", "artifact_ref": f"{board_file}:$.rounds.{round_id}.challenge_tickets[{ticket_index}]"}]
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "board_path": str(board_file), "event_id": event["event_id"], "ticket_id": ticket_id},
-        "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, ticket_id)[:20],
+        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "board_path": str(board_file), "event_id": event["event_id"], "ticket_id": resolved_ticket_id, "operation": "closed"},
+        "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, resolved_ticket_id)[:20],
         "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event["event_id"])[:16],
         "artifact_refs": artifact_refs,
-        "canonical_ids": [ticket_id],
+        "canonical_ids": [resolved_ticket_id],
         "warnings": [],
         "board_handoff": {
-            "candidate_ids": [ticket_id],
+            "candidate_ids": unique_texts([resolved_ticket_id] + ticket.get("related_task_ids", [])),
             "evidence_refs": artifact_refs,
             "gap_hints": [],
-            "challenge_hints": ["This challenge ticket should be assigned a follow-up note or hypothesis update."],
-            "suggested_next_skills": ["eco-claim-board-task", "eco-post-board-note", "eco-summarize-board-state"],
+            "challenge_hints": [],
+            "suggested_next_skills": ["eco-summarize-board-state", "eco-materialize-board-brief", "eco-post-board-note"],
         },
     }
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Open challenge tickets on a local board artifact.")
+    parser = argparse.ArgumentParser(description="Close challenge tickets on a local board artifact.")
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--board-path", default="")
-    parser.add_argument("--title", required=True)
-    parser.add_argument("--challenge-statement", required=True)
-    parser.add_argument("--target-claim-id", default="")
-    parser.add_argument("--target-hypothesis-id", default="")
-    parser.add_argument("--priority", default="medium")
-    parser.add_argument("--owner-role", default="challenger")
-    parser.add_argument("--linked-artifact-ref", action="append", default=[])
+    parser.add_argument("--ticket-id", required=True)
+    parser.add_argument("--resolution", default="resolved")
+    parser.add_argument("--resolution-note", default="")
+    parser.add_argument("--closing-role", default="moderator")
+    parser.add_argument("--related-task-id", action="append", default=[])
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    payload = open_challenge_ticket_skill(
+    payload = close_challenge_ticket_skill(
         run_dir=args.run_dir,
         run_id=args.run_id,
         round_id=args.round_id,
         board_path=args.board_path,
-        title=args.title,
-        challenge_statement=args.challenge_statement,
-        target_claim_id=args.target_claim_id,
-        target_hypothesis_id=args.target_hypothesis_id,
-        priority=args.priority,
-        owner_role=args.owner_role,
-        linked_artifact_refs=args.linked_artifact_ref,
+        ticket_id=args.ticket_id,
+        resolution=args.resolution,
+        resolution_note=args.resolution_note,
+        closing_role=args.closing_role,
+        related_task_ids=args.related_task_id,
     )
     print(pretty_json(payload, args.pretty))
     return 0

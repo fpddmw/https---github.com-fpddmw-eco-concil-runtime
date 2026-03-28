@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Close Challenge Ticket"
+  short_description: "Close a challenge ticket on the local board"
+  default_prompt: "Use $eco-close-challenge-ticket to close a challenge ticket on the current round's board state, preserve a compact resolution trail, and emit an auditable board closure event."

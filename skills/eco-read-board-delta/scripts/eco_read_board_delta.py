@@ -87,9 +87,11 @@ def read_board_delta_skill(
     notes = round_state.get("notes", []) if isinstance(round_state.get("notes"), list) else []
     challenge_tickets = round_state.get("challenge_tickets", []) if isinstance(round_state.get("challenge_tickets"), list) else []
     hypotheses = round_state.get("hypotheses", []) if isinstance(round_state.get("hypotheses"), list) else []
+    tasks = round_state.get("tasks", []) if isinstance(round_state.get("tasks"), list) else []
     if not include_closed:
         challenge_tickets = [ticket for ticket in challenge_tickets if isinstance(ticket, dict) and maybe_text(ticket.get("status")) != "closed"]
         hypotheses = [hypothesis for hypothesis in hypotheses if isinstance(hypothesis, dict) and maybe_text(hypothesis.get("status")) not in {"closed", "rejected"}]
+        tasks = [task for task in tasks if isinstance(task, dict) and maybe_text(task.get("status")) not in {"completed", "closed", "cancelled"}]
     artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": "$.events", "artifact_ref": f"{board_file}:$.events"}]
     event_cursor = maybe_text(limited_events[-1].get("event_id")) if limited_events else ""
     return {
@@ -102,9 +104,9 @@ def read_board_delta_skill(
         "board_handoff": {
             "candidate_ids": [maybe_text(event.get("event_id")) for event in limited_events if maybe_text(event.get("event_id"))],
             "evidence_refs": artifact_refs,
-            "gap_hints": [] if limited_events or notes or hypotheses or challenge_tickets else ["Board exists but no round activity has been recorded yet."],
-            "challenge_hints": [f"{len(challenge_tickets)} open challenge tickets need review."] if challenge_tickets else [],
-            "suggested_next_skills": ["eco-post-board-note", "eco-update-hypothesis-status", "eco-open-challenge-ticket"],
+            "gap_hints": [] if limited_events or notes or hypotheses or challenge_tickets or tasks else ["Board exists but no round activity has been recorded yet."],
+            "challenge_hints": [f"{len(challenge_tickets)} open challenge tickets need review."] if challenge_tickets else ([f"{len(tasks)} claimed or open tasks are still in flight."] if tasks else []),
+            "suggested_next_skills": ["eco-claim-board-task", "eco-close-challenge-ticket", "eco-summarize-board-state"],
         },
     }
 

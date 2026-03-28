@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Claim Board Task"
+  short_description: "Claim or upsert a board follow-up task"
+  default_prompt: "Use $eco-claim-board-task to claim or upsert a follow-up task on the current round's board state, preserve task ownership and source ids, and emit an auditable board event for organization workflows."

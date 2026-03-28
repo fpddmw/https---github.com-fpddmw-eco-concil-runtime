@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Materialize Board Brief"
+  short_description: "Materialize a round's board state into a markdown brief"
+  default_prompt: "Use $eco-materialize-board-brief to materialize the current round's board state into a compact markdown brief that highlights active hypotheses, open challenges, tasks, and immediate next moves."

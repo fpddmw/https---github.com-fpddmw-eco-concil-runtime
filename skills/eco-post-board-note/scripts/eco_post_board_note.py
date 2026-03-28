@@ -65,13 +65,14 @@ def ensure_round(board: dict[str, Any], round_id: str) -> dict[str, Any]:
     if not isinstance(rounds, dict):
         rounds = {}
         board["rounds"] = rounds
-    round_state = rounds.setdefault(round_id, {"notes": [], "challenge_tickets": [], "hypotheses": []})
+    round_state = rounds.setdefault(round_id, {"notes": [], "challenge_tickets": [], "hypotheses": [], "tasks": []})
     if not isinstance(round_state, dict):
-        round_state = {"notes": [], "challenge_tickets": [], "hypotheses": []}
+        round_state = {"notes": [], "challenge_tickets": [], "hypotheses": [], "tasks": []}
         rounds[round_id] = round_state
     round_state.setdefault("notes", [])
     round_state.setdefault("challenge_tickets", [])
     round_state.setdefault("hypotheses", [])
+    round_state.setdefault("tasks", [])
     return round_state
 
 
@@ -143,7 +144,7 @@ def post_board_note_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [],
             "challenge_hints": [],
-            "suggested_next_skills": ["eco-read-board-delta", "eco-update-hypothesis-status", "eco-open-challenge-ticket"],
+            "suggested_next_skills": ["eco-update-hypothesis-status", "eco-open-challenge-ticket", "eco-claim-board-task"],
         },
     }
 

@@ -74,13 +74,14 @@ def ensure_round(board: dict[str, Any], round_id: str) -> dict[str, Any]:
     if not isinstance(rounds, dict):
         rounds = {}
         board["rounds"] = rounds
-    round_state = rounds.setdefault(round_id, {"notes": [], "challenge_tickets": [], "hypotheses": []})
+    round_state = rounds.setdefault(round_id, {"notes": [], "challenge_tickets": [], "hypotheses": [], "tasks": []})
     if not isinstance(round_state, dict):
-        round_state = {"notes": [], "challenge_tickets": [], "hypotheses": []}
+        round_state = {"notes": [], "challenge_tickets": [], "hypotheses": [], "tasks": []}
         rounds[round_id] = round_state
     round_state.setdefault("notes", [])
     round_state.setdefault("challenge_tickets", [])
     round_state.setdefault("hypotheses", [])
+    round_state.setdefault("tasks", [])
     return round_state
 
 
@@ -165,7 +166,7 @@ def update_hypothesis_status_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [],
             "challenge_hints": ["Hypotheses with low confidence should usually be paired with a challenge ticket."] if maybe_number(confidence) is not None and float(maybe_number(confidence) or 0.0) < 0.6 else [],
-            "suggested_next_skills": ["eco-read-board-delta", "eco-open-challenge-ticket", "eco-post-board-note"],
+            "suggested_next_skills": ["eco-open-challenge-ticket", "eco-claim-board-task", "eco-summarize-board-state"],
         },
     }
 
