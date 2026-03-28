@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Publish Expert Report"
+  short_description: "Publish a canonical expert report from a role-specific draft"
+  default_prompt: "Use $eco-publish-expert-report to publish a canonical expert report from a role-specific draft with overwrite protection."

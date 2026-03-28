@@ -217,26 +217,41 @@
 
 ### E2：下一批
 
-3. expert report draft
-4. final publication artifact
-5. canonical decision publish
+3. `eco-draft-expert-report`
+   - 输入：reporting handoff + council decision draft + board brief
+   - 输出：`expert_report_draft_<role>_<round_id>.json`
+   - 作用：把 reporting handoff 落成 role-specific expert report draft，并保持 reporting 语义留在 skill 面
+
+4. `eco-publish-expert-report`
+   - 输入：expert report draft
+   - 输出：`expert_report_<role>_<round_id>.json`
+   - 作用：把 role-specific draft 提升为 canonical expert report，并显式加入 overwrite guard
+
+5. `eco-publish-council-decision`
+   - 输入：council decision draft + canonical expert reports
+   - 输出：`council_decision_<round_id>.json`
+   - 作用：把 decision draft 提升为 canonical decision，并在 ready 路径上要求 canonical expert report 先存在
+
+### E3：下一批
+
+6. final publication artifact
 
 ## 4. 本批次交付标准
 
-本轮 D + kernel 批次必须满足：
+本轮 reporting publish 批次必须满足：
 
 1. 每个 skill 仍然是目录内自包含实现。
 2. D1 / D2 默认继续读取现有 board、investigation、analytics 产物，不把业务判断塞回 runtime。
 3. runtime 只允许承接 manifest、cursor、registry、ledger、receipt 和 skill executor wrapper。
-4. 输出继续保持 compact artifact + receipt + board handoff 的风格，其中 readiness / promotion 允许落成 reporting / promotion JSON artifact。
-5. 必须补上脚本级集成测试，验证 board -> D1 -> D2 串联，以及 kernel manifest / ledger / cursor 可工作。
-6. board brief、next actions、probes、round readiness、promotion basis 的路径约定必须稳定下来，供 kernel 与后续 supervisor 使用。
+4. 输出继续保持 compact artifact + receipt + board handoff 的风格，其中 reporting publish 允许落成 canonical report / decision JSON artifact。
+5. 必须补上脚本级集成测试，验证 role draft、canonical publish、overwrite guard 与 ready/hold 两条路径。
+6. expert report draft、canonical expert report、canonical council decision 的路径约定必须稳定下来，供后续 final publication 使用。
 
 ## 5. 从当前状态继续推进的顺序
 
 从当前状态到更完整的可运行系统，建议按下面顺序推进：
 
-1. 补齐 reporting / decision 第二批
+1. 补齐 reporting / decision 第三批
 2. 把 orchestration / contract scaffold 接回新主链
 3. 恢复 archive / history context / richer simulation
 4. 做 runtime hardening 与生产前准入验证
@@ -245,7 +260,7 @@
 
 runtime 在当前阶段仍不应承担新的业务推理，推荐继续维持下面边界：
 
-1. `next_actions_<round_id>.json`、`falsification_probes_<round_id>.json`、`round_readiness_<round_id>.json`、`promoted_evidence_basis_<round_id>.json`、`reporting_handoff_<round_id>.json`、`council_decision_draft_<round_id>.json` 的契约应继续保持稳定。
+1. `next_actions_<round_id>.json`、`falsification_probes_<round_id>.json`、`round_readiness_<round_id>.json`、`promoted_evidence_basis_<round_id>.json`、`reporting_handoff_<round_id>.json`、`council_decision_draft_<round_id>.json`、`expert_report_draft_<role>_<round_id>.json`、`expert_report_<role>_<round_id>.json`、`council_decision_<round_id>.json` 的契约应继续保持稳定。
 2. 最小 runtime kernel 负责 run manifest、artifact path resolver、receipt/event ledger、skill executor wrapper、round cursor、promotion gate、round controller、supervisor state。
 3. reporting / decision 仍然优先以 atomic skill 方式推进，而不是把新业务逻辑塞回 runtime。
 
@@ -257,7 +272,8 @@ runtime 在当前阶段仍不应承担新的业务推理，推荐继续维持下
 - `supervise-round` 现在会在 controller 结果上额外落出 operator 视角的 `supervisor_state_<round_id>.json`。
 - `show-run-state` 现在会同时回显最新 round 的 gate / controller / supervisor 快照。
 - `eco-materialize-reporting-handoff` 与 `eco-draft-council-decision` 已经把 promotion basis 接到 reporting / decision 第一批下游对象。
-- 当前完整 unittest 集将继续扩展，用于覆盖 reporting / decision 第一批与后续生产化路径。
+- `eco-draft-expert-report`、`eco-publish-expert-report`、`eco-publish-council-decision` 已经把 role draft、canonical report 与 canonical decision 接回 skill-first 主链。
+- 当前完整 unittest 集已扩展到 18 个测试，用于覆盖 reporting publish 与既有主链回归。
 
 ## 8. 面向生产的开发指引
 

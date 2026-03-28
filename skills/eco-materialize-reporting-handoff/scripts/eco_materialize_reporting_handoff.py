@@ -206,7 +206,7 @@ def build_recommended_next_actions(supervisor_state: dict[str, Any]) -> list[dic
 
 def recommended_sections(handoff_status: str) -> list[str]:
     if handoff_status == "ready-for-reporting":
-        return ["executive-summary", "evidence-basis", "residual-risks", "audit-trace"]
+        return ["executive-summary", "role-reports", "evidence-basis", "residual-risks", "audit-trace"]
     return ["gating-status", "open-risks", "next-round-plan", "audit-trace"]
 
 
@@ -276,7 +276,7 @@ def materialize_reporting_handoff_skill(
         "open_risks": open_risks,
         "recommended_next_actions": next_actions,
         "recommended_sections": recommended_sections(handoff_status),
-        "report_targets": ["council-decision-draft"] if handoff_status == "ready-for-reporting" else ["another-round-decision"],
+        "report_targets": ["expert-report-draft", "council-decision-draft"] if handoff_status == "ready-for-reporting" else ["expert-report-draft", "another-round-decision"],
     }
     write_json_file(output_file, wrapper)
 
@@ -302,7 +302,7 @@ def materialize_reporting_handoff_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [item.get("summary", "") for item in open_risks[:3] if maybe_text(item.get("summary"))] if handoff_status != "ready-for-reporting" else [],
             "challenge_hints": [item.get("summary", "") for item in open_risks[:2] if maybe_text(item.get("summary"))],
-            "suggested_next_skills": ["eco-draft-council-decision"] if handoff_status == "ready-for-reporting" else ["eco-draft-council-decision", "eco-propose-next-actions", "eco-open-falsification-probe"],
+            "suggested_next_skills": ["eco-draft-expert-report", "eco-draft-council-decision"] if handoff_status == "ready-for-reporting" else ["eco-draft-expert-report", "eco-draft-council-decision", "eco-propose-next-actions", "eco-open-falsification-probe"],
         },
     }
 

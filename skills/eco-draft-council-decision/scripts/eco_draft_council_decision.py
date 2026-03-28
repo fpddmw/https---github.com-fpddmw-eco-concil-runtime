@@ -209,7 +209,7 @@ def draft_council_decision_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [maybe_text(item.get("summary")) for item in open_risks[:3] if maybe_text(item.get("summary"))] if moderator_status != "finalize" else [],
             "challenge_hints": [summary_text] if moderator_status != "finalize" else [],
-            "suggested_next_skills": ["eco-post-board-note"] if moderator_status == "finalize" else ["eco-post-board-note", "eco-propose-next-actions", "eco-open-falsification-probe"],
+            "suggested_next_skills": ["eco-draft-expert-report", "eco-publish-expert-report", "eco-publish-council-decision"] if moderator_status == "finalize" else ["eco-draft-expert-report", "eco-post-board-note", "eco-propose-next-actions", "eco-open-falsification-probe"],
         },
     }
 

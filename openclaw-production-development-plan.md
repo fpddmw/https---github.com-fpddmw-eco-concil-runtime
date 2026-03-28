@@ -6,13 +6,13 @@
 
 当前系统已经具备：
 
-- raw artifact -> normalize -> evidence -> board -> investigation -> readiness -> promotion -> reporting handoff -> council decision draft 主链
+- raw artifact -> normalize -> evidence -> board -> investigation -> readiness -> promotion -> reporting handoff -> expert report / canonical decision 主链
 - 最小 runtime kernel phase-2：manifest、cursor、registry、ledger、executor、promotion gate、round controller、supervisor state
 - 本地确定性 workflow 回归
 
 当前系统尚不具备：
 
-- final publication artifact 与 canonical decision publish
+- final publication artifact
 - 真实 orchestration / fetch-plan / execution 闭环
 - archive、history context、rich simulation、生产级观测与容错
 
@@ -58,9 +58,10 @@
 交付项：
 
 1. expert report draft skills
-2. final publication artifact skill
+2. canonical expert report publish skill
 3. canonical decision publish skill
-4. reporting / decision 回归测试
+4. final publication artifact skill
+5. reporting / decision 回归测试
 
 完成条件：
 
@@ -159,9 +160,12 @@
 
 ## 8. 当前最近一步
 
-当前已经完成 reporting / decision 第一批：
+当前已经完成 reporting / decision 前两批：
 
 - `eco-materialize-reporting-handoff`
 - `eco-draft-council-decision`
+- `eco-draft-expert-report`
+- `eco-publish-expert-report`
+- `eco-publish-council-decision`
 
-所以下一个最合适的代码批次是：expert report draft 与 final publication artifact，而不是继续扩大 runtime。
+所以下一个最合适的代码批次是：final publication artifact，把 canonical reports 与 canonical decision 收敛成最终发布对象，而不是继续扩大 runtime。
