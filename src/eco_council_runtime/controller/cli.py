@@ -1,4 +1,4 @@
-"""Compatibility wrapper for supervisor CLI assembly during T06 migration."""
+"""Compatibility wrapper re-exporting the supervisor CLI builder."""
 
 from __future__ import annotations
 

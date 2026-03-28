@@ -8,20 +8,37 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime import contract as contract_module
+from eco_council_runtime.application.contract.runtime_support import (
+    DDL_PATH,
+    EXAMPLES,
+    OBJECT_KINDS,
+    SCHEMA_PATH,
+    SCHEMA_VERSION,
+    parse_utc_datetime,
+    source_governance_for_role,
+    validate_payload,
+)
+from eco_council_runtime.application.investigation import materialize_investigation_bundle
 from eco_council_runtime.adapters.filesystem import atomic_write_text_file, read_json, utc_now_iso, write_json
+from eco_council_runtime.domain.rounds import (
+    normalize_round_id,
+    round_dir_name,
+    round_id_from_dirname,
+    strict_round_sort_key as round_sort_key,
+)
+from eco_council_runtime.domain.text import maybe_text, unique_strings
 from eco_council_runtime.investigation import build_investigation_plan
 
 
 def validate_payload_or_raise(kind: str, payload: Any, *, label: str) -> dict[str, Any]:
-    result = contract_module.validate_payload(kind, payload)
+    result = validate_payload(kind, payload)
     if not result["validation"]["ok"]:
         raise ValueError(f"{label} failed validation: {result['validation']['issues']}")
     return result
 
 
 def load_ddl() -> str:
-    return contract_module.DDL_PATH.read_text(encoding="utf-8")
+    return DDL_PATH.read_text(encoding="utf-8")
 
 
 def parse_point(raw: str) -> dict[str, Any]:
@@ -63,14 +80,14 @@ def parse_bbox(raw: str) -> dict[str, Any]:
 
 
 def allowed_sources_for_role(mission: dict[str, Any], role: str) -> list[str]:
-    governance_families = contract_module.source_governance_for_role(mission, role)
+    governance_families = source_governance_for_role(mission, role)
     values = [
-        contract_module.maybe_text(skill)
+        maybe_text(skill)
         for family in governance_families
         for skill in family.get("skills", [])
-        if contract_module.maybe_text(skill)
+        if maybe_text(skill)
     ]
-    return contract_module.unique_strings(values)
+    return unique_strings(values, casefold=True)
 
 
 def expected_output_kinds_for_role(role: str) -> list[str]:
@@ -92,7 +109,7 @@ def investigation_leg_ids(mission: dict[str, Any], round_id: str) -> set[str]:
         for leg in hypothesis.get("chain_legs", []):
             if not isinstance(leg, dict):
                 continue
-            leg_id = contract_module.maybe_text(leg.get("leg_id"))
+            leg_id = maybe_text(leg.get("leg_id"))
             if leg_id:
                 leg_ids.add(leg_id)
     return leg_ids
@@ -132,7 +149,7 @@ def default_round_tasks(*, mission: dict[str, Any], round_id: str) -> list[dict[
     mission_window = mission.get("window") if isinstance(mission.get("window"), dict) else {}
     leg_ids = investigation_leg_ids(mission, round_id)
 
-    sociologist_task = copy.deepcopy(contract_module.EXAMPLES["round-task"])
+    sociologist_task = copy.deepcopy(EXAMPLES["round-task"])
     sociologist_task["task_id"] = f"task-sociologist-{round_id}-01"
     sociologist_task["run_id"] = run_id
     sociologist_task["round_id"] = round_id
@@ -156,7 +173,7 @@ def default_round_tasks(*, mission: dict[str, Any], round_id: str) -> list[dict[
         ],
     }
 
-    environmental_task = copy.deepcopy(contract_module.EXAMPLES["round-task"])
+    environmental_task = copy.deepcopy(EXAMPLES["round-task"])
     environmental_task["task_id"] = f"task-environmentalist-{round_id}-01"
     environmental_task["run_id"] = run_id
     environmental_task["round_id"] = round_id
@@ -192,7 +209,7 @@ def placeholder_source_selection(
     allowed_sources: list[str],
 ) -> dict[str, Any]:
     return {
-        "schema_version": contract_module.SCHEMA_VERSION,
+        "schema_version": SCHEMA_VERSION,
         "selection_id": f"source-selection-{role}-{round_id}",
         "run_id": run_id,
         "round_id": round_id,
@@ -210,7 +227,7 @@ def placeholder_source_selection(
 
 def placeholder_claim_curation(*, run_id: str, round_id: str) -> dict[str, Any]:
     return {
-        "schema_version": contract_module.SCHEMA_VERSION,
+        "schema_version": SCHEMA_VERSION,
         "curation_id": f"claim-curation-{round_id}",
         "run_id": run_id,
         "round_id": round_id,
@@ -227,7 +244,7 @@ def placeholder_claim_curation(*, run_id: str, round_id: str) -> dict[str, Any]:
 
 def placeholder_observation_curation(*, run_id: str, round_id: str) -> dict[str, Any]:
     return {
-        "schema_version": contract_module.SCHEMA_VERSION,
+        "schema_version": SCHEMA_VERSION,
         "curation_id": f"observation-curation-{round_id}",
         "run_id": run_id,
         "round_id": round_id,
@@ -244,7 +261,7 @@ def placeholder_observation_curation(*, run_id: str, round_id: str) -> dict[str,
 
 def placeholder_report(*, run_id: str, round_id: str, role: str) -> dict[str, Any]:
     return {
-        "schema_version": contract_module.SCHEMA_VERSION,
+        "schema_version": SCHEMA_VERSION,
         "report_id": f"report-{role}-{round_id}",
         "run_id": run_id,
         "round_id": round_id,
@@ -260,7 +277,7 @@ def placeholder_report(*, run_id: str, round_id: str, role: str) -> dict[str, An
 
 def placeholder_investigation_plan(*, run_id: str, round_id: str) -> dict[str, Any]:
     return {
-        "schema_version": contract_module.SCHEMA_VERSION,
+        "schema_version": SCHEMA_VERSION,
         "plan_id": f"investigation-plan-{round_id}",
         "run_id": run_id,
         "round_id": round_id,
@@ -320,8 +337,8 @@ def scaffold_round(
     pretty: bool,
 ) -> dict[str, Any]:
     run_path = run_dir.expanduser().resolve()
-    normalized_round_id = contract_module.normalize_round_id(round_id)
-    round_path = run_path / contract_module.round_dir_name(normalized_round_id)
+    normalized_round_id = normalize_round_id(round_id)
+    round_path = run_path / round_dir_name(normalized_round_id)
     normalized_tasks = normalize_round_tasks(tasks=tasks, run_id=run_id, round_id=normalized_round_id)
     investigation_plan = (
         build_investigation_plan(mission=mission, round_id=normalized_round_id)
@@ -414,6 +431,7 @@ def scaffold_round(
         write_json(path, payload, pretty=pretty)
     atomic_write_text_file(round_path / "shared" / "evidence-library" / "ledger.jsonl", "")
     atomic_write_text_file(round_path / "shared" / "evidence-library" / "audit-chain" / "receipts.jsonl", "")
+    investigation_bundle = materialize_investigation_bundle(run_path, normalized_round_id, pretty=pretty)
 
     return {
         "round_id": normalized_round_id,
@@ -426,10 +444,13 @@ def scaffold_round(
                     *library_views,
                     round_path / "shared" / "evidence-library" / "ledger.jsonl",
                     round_path / "shared" / "evidence-library" / "audit-chain" / "receipts.jsonl",
+                    Path(investigation_bundle["investigation_state"]["investigation_state_path"]),
+                    Path(investigation_bundle["investigation_actions"]["investigation_actions_path"]),
                 }
             )
         ],
         "directories_ready": [str(path) for path in sorted(directories)],
+        "investigation": investigation_bundle,
     }
 
 
@@ -464,7 +485,7 @@ def scaffold_run_from_mission(
         "round_id": round_id,
         "mission_path": str(mission_path),
         "round": round_result,
-        "schema_path": str(contract_module.SCHEMA_PATH),
+        "schema_path": str(SCHEMA_PATH),
     }
 
 
@@ -480,8 +501,8 @@ def scaffold_run(
     geometry: dict[str, Any],
     pretty: bool,
 ) -> dict[str, Any]:
-    start_dt = contract_module.parse_utc_datetime(start_utc)
-    end_dt = contract_module.parse_utc_datetime(end_utc)
+    start_dt = parse_utc_datetime(start_utc)
+    end_dt = parse_utc_datetime(end_utc)
     if start_dt is None:
         raise ValueError("--start-utc must be RFC3339 UTC with trailing Z.")
     if end_dt is None:
@@ -489,7 +510,7 @@ def scaffold_run(
     if end_dt < start_dt:
         raise ValueError("--end-utc must be >= --start-utc.")
 
-    mission = copy.deepcopy(contract_module.EXAMPLES["mission"])
+    mission = copy.deepcopy(EXAMPLES["mission"])
     mission["run_id"] = run_id
     mission["topic"] = topic
     mission["objective"] = objective
@@ -517,7 +538,7 @@ def validate_bundle(run_dir: Path) -> dict[str, Any]:
         missing_required.append(str(mission_path))
     else:
         mission_payload = read_json(mission_path)
-        mission_result = contract_module.validate_payload("mission", mission_payload)
+        mission_result = validate_payload("mission", mission_payload)
         mission_result["path"] = str(mission_path)
         results.append(mission_result)
 
@@ -525,15 +546,15 @@ def validate_bundle(run_dir: Path) -> dict[str, Any]:
     for child in sorted(bundle_path.iterdir(), key=lambda item: item.name):
         if not child.is_dir():
             continue
-        round_id = contract_module.round_id_from_dirname(child.name)
+        round_id = round_id_from_dirname(child.name)
         if round_id:
             round_ids.append(round_id)
-    round_ids.sort(key=contract_module.round_sort_key)
+    round_ids.sort(key=round_sort_key)
     if not round_ids:
         missing_required.append(str(bundle_path / "round_001"))
 
     for round_id in round_ids:
-        round_path = bundle_path / contract_module.round_dir_name(round_id)
+        round_path = bundle_path / round_dir_name(round_id)
         round_required = {
             round_path / "moderator" / "tasks.json": "round-task",
             round_path / "shared" / "claims.json": "claim",
@@ -578,7 +599,7 @@ def validate_bundle(run_dir: Path) -> dict[str, Any]:
                 round_missing_required.append(str(path))
                 continue
             payload = read_json(path)
-            result = contract_module.validate_payload(kind, payload)
+            result = validate_payload(kind, payload)
             result["path"] = str(path)
             round_results.append(result)
             results.append(result)
@@ -588,7 +609,7 @@ def validate_bundle(run_dir: Path) -> dict[str, Any]:
                 round_missing_optional.append(str(path))
                 continue
             payload = read_json(path)
-            result = contract_module.validate_payload(kind, payload)
+            result = validate_payload(kind, payload)
             result["path"] = str(path)
             round_results.append(result)
             results.append(result)
@@ -599,7 +620,7 @@ def validate_bundle(run_dir: Path) -> dict[str, Any]:
             validate_round_audit_chain = None
         if validate_round_audit_chain is not None:
             audit_result = validate_round_audit_chain(bundle_path, round_id, require_exists=False)
-            if audit_result.get("receipt_count") or Path(contract_module.maybe_text(audit_result.get("path"))).exists():
+            if audit_result.get("receipt_count") or Path(maybe_text(audit_result.get("path"))).exists():
                 round_results.append(audit_result)
                 results.append(audit_result)
 
@@ -629,14 +650,14 @@ def validate_bundle(run_dir: Path) -> dict[str, Any]:
 
 def command_list_kinds(_: argparse.Namespace) -> dict[str, Any]:
     return {
-        "kinds": list(contract_module.OBJECT_KINDS),
-        "schema_path": str(contract_module.SCHEMA_PATH),
-        "ddl_path": str(contract_module.DDL_PATH),
+        "kinds": list(OBJECT_KINDS),
+        "schema_path": str(SCHEMA_PATH),
+        "ddl_path": str(DDL_PATH),
     }
 
 
 def command_write_example(args: argparse.Namespace) -> dict[str, Any]:
-    payload = copy.deepcopy(contract_module.EXAMPLES[args.kind])
+    payload = copy.deepcopy(EXAMPLES[args.kind])
     output_path = Path(args.output).expanduser().resolve()
     write_json(output_path, payload, pretty=args.pretty)
     return {"kind": args.kind, "output": str(output_path)}
@@ -645,7 +666,7 @@ def command_write_example(args: argparse.Namespace) -> dict[str, Any]:
 def command_validate(args: argparse.Namespace) -> dict[str, Any]:
     input_path = Path(args.input).expanduser().resolve()
     payload = read_json(input_path)
-    result = contract_module.validate_payload(args.kind, payload)
+    result = validate_payload(args.kind, payload)
     result["input"] = str(input_path)
     return result
 
@@ -659,7 +680,7 @@ def command_init_db(args: argparse.Namespace) -> dict[str, Any]:
         conn.commit()
     return {
         "db": str(db_path),
-        "ddl_path": str(contract_module.DDL_PATH),
+        "ddl_path": str(DDL_PATH),
         "initialized_at": utc_now_iso(),
     }
 

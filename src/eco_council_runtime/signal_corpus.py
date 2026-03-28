@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.application.archive.runtime_state import collect_run_snapshot, load_fetch_execution
 from eco_council_runtime.adapters.normalize_storage import (
     resolve_analytics_db_paths,
 )
@@ -50,15 +51,6 @@ def json_text(value: Any) -> str:
     return json.dumps(value, ensure_ascii=True, sort_keys=True)
 
 
-def load_supervisor_module() -> Any:
-    from eco_council_runtime import supervisor as supervisor_module
-
-    return supervisor_module
-
-
-SUP = load_supervisor_module()
-
-
 def read_ddl() -> str:
     return DDL_PATH.read_text(encoding="utf-8")
 
@@ -89,36 +81,6 @@ def insert_many(conn: sqlite3.Connection, sql: str, rows: list[tuple[Any, ...]])
     if not rows:
         return
     conn.executemany(sql, rows)
-
-
-def state_for_run(run_dir: Path) -> dict[str, Any]:
-    state_path = SUP.supervisor_state_path(run_dir)
-    if state_path.exists():
-        return SUP.load_state(run_dir)
-    round_ids = SUP.discover_round_ids(run_dir)
-    return {
-        "current_round_id": round_ids[-1] if round_ids else "",
-        "stage": "",
-    }
-
-def collect_run_snapshot(run_dir: Path) -> dict[str, Any]:
-    mission = SUP.read_json(SUP.mission_path(run_dir))
-    if not isinstance(mission, dict):
-        raise ValueError(f"Invalid mission.json in {run_dir}")
-    state = state_for_run(run_dir)
-    round_ids = SUP.discover_round_ids(run_dir)
-    round_summaries = [SUP.collect_round_summary(run_dir, state, round_id) for round_id in round_ids]
-    current_round_id = maybe_text(state.get("current_round_id")) or (round_ids[-1] if round_ids else "")
-    current_summary = next((item for item in round_summaries if item.get("round_id") == current_round_id), None)
-    if current_summary is None and round_summaries:
-        current_summary = round_summaries[-1]
-    return {
-        "mission": mission,
-        "state": state,
-        "round_ids": round_ids,
-        "round_summaries": round_summaries,
-        "current_summary": current_summary if isinstance(current_summary, dict) else {},
-    }
 
 
 def load_rows_for_run(db_path: Path, table_name: str, *, run_id: str, order_by: str) -> list[sqlite3.Row]:
@@ -247,8 +209,8 @@ def insert_round_summaries(conn: sqlite3.Connection, *, run_id: str, snapshot: d
 def insert_artifact_inventory(conn: sqlite3.Connection, *, run_dir: Path, run_id: str, round_ids: list[str], imported_at_utc: str) -> int:
     rows: list[tuple[Any, ...]] = []
     for round_id in round_ids:
-        fetch_payload = SUP.load_json_if_exists(SUP.fetch_execution_path(run_dir, round_id))
-        if not isinstance(fetch_payload, dict):
+        fetch_payload = load_fetch_execution(run_dir, round_id)
+        if not fetch_payload:
             continue
         statuses = fetch_payload.get("statuses")
         if not isinstance(statuses, list):

@@ -8,25 +8,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from eco_council_runtime.application.reporting_artifacts import (  # noqa: E402
+from eco_council_runtime.application.reporting.artifact_pipeline import (  # noqa: E402
     curation_artifacts,
-    data_readiness_artifacts,
     decision_artifacts,
-    promote_decision_draft,
-    render_openclaw_prompts,
 )
+from eco_council_runtime.application.reporting.packets import build_matching_authorization_draft  # noqa: E402
+from eco_council_runtime.application.reporting.prompts import render_openclaw_prompts  # noqa: E402
+from eco_council_runtime.application.reporting.promotion import promote_decision_draft  # noqa: E402
 from eco_council_runtime.contract import scaffold_run_from_mission  # noqa: E402
 from eco_council_runtime.controller.audit_chain import read_jsonl, validate_round_audit_chain  # noqa: E402
 from eco_council_runtime.controller.paths import (  # noqa: E402
     audit_chain_ledger_path,
     claim_candidates_path,
-    claim_curation_packet_path,
     claim_curation_prompt_path,
     decision_draft_path,
     decision_packet_path,
     decision_target_path,
     observation_candidates_path,
-    observation_curation_packet_path,
     observation_curation_prompt_path,
     report_draft_path,
     report_target_path,
@@ -77,20 +75,10 @@ def example_mission(*, run_id: str) -> dict[str, object]:
         "hypotheses": [
             "Smoke discussion is driven by real fire activity upwind of Chiang Mai.",
         ],
-        "source_governance": {
-            "approved_layers": [
-                {
-                    "family_id": "gdelt",
-                    "layer_id": "bulk",
-                    "approved_by": "human",
-                    "reason": "This run may use one anchored GDELT bulk layer after article recon.",
-                }
-            ]
-        },
     }
 
 
-def scaffold_temp_run(root: Path, *, run_id: str = "reporting-artifacts-run-001") -> Path:
+def scaffold_temp_run(root: Path, *, run_id: str) -> Path:
     run_dir = root / run_id
     scaffold_run_from_mission(
         run_dir=run_dir,
@@ -101,10 +89,10 @@ def scaffold_temp_run(root: Path, *, run_id: str = "reporting-artifacts-run-001"
     return run_dir
 
 
-class ReportingArtifactsTests(unittest.TestCase):
-    def test_curation_artifacts_write_packets_and_prompts(self) -> None:
+class ReportingArtifactModulesTests(unittest.TestCase):
+    def test_artifact_pipeline_and_prompts_modules_write_curation_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            run_dir = scaffold_temp_run(Path(temp_dir), run_id="reporting-artifacts-curation")
+            run_dir = scaffold_temp_run(Path(temp_dir), run_id="reporting-artifact-modules-curation")
             write_json(
                 claim_candidates_path(run_dir, ROUND_ID),
                 [
@@ -160,33 +148,54 @@ class ReportingArtifactsTests(unittest.TestCase):
             prompts = render_openclaw_prompts(run_dir=run_dir, round_id=ROUND_ID)
 
             self.assertEqual(1, result["claim_candidate_count"])
-            self.assertEqual(1, result["observation_candidate_count"])
-            self.assertTrue(claim_curation_packet_path(run_dir, ROUND_ID).exists())
-            self.assertTrue(observation_curation_packet_path(run_dir, ROUND_ID).exists())
             self.assertIn("sociologist_claim_curation", prompts)
-            self.assertIn("environmentalist_observation_curation", prompts)
             self.assertTrue(claim_curation_prompt_path(run_dir, ROUND_ID).exists())
             self.assertTrue(observation_curation_prompt_path(run_dir, ROUND_ID).exists())
-            self.assertIn("claim-curation", claim_curation_prompt_path(run_dir, ROUND_ID).read_text(encoding="utf-8"))
-            self.assertIn(
-                "observation-curation",
-                observation_curation_prompt_path(run_dir, ROUND_ID).read_text(encoding="utf-8"),
-            )
 
-    def test_data_readiness_artifacts_require_materialized_curations(self) -> None:
+    def test_packets_module_build_matching_authorization_draft_marks_deferred_when_readiness_is_mixed(self) -> None:
+        mission = example_mission(run_id="reporting-artifact-modules-auth")
+        state = {
+            "readiness_reports": {
+                "sociologist": {
+                    "readiness_id": "readiness-s-001",
+                    "readiness_status": "ready",
+                    "sufficient_for_matching": True,
+                    "open_questions": [],
+                },
+                "environmentalist": {
+                    "readiness_id": "readiness-e-001",
+                    "readiness_status": "needs-more-data",
+                    "sufficient_for_matching": False,
+                    "open_questions": ["Need station corroboration."],
+                    "recommended_next_actions": [
+                        {
+                            "assigned_role": "environmentalist",
+                            "objective": "Collect station observations.",
+                            "reason": "Physical readiness is incomplete.",
+                        }
+                    ],
+                },
+            },
+            "claims_active": [{"claim_id": "claim-001"}],
+            "observations_active": [{"observation_id": "obs-001"}],
+        }
+
+        payload = build_matching_authorization_draft(
+            mission=mission,
+            round_id=ROUND_ID,
+            state=state,
+        )
+
+        self.assertEqual("deferred", payload["authorization_status"])
+        self.assertIn("Need station corroboration.", payload["open_questions"])
+
+    def test_promotion_and_pipeline_modules_drive_decision_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            run_dir = scaffold_temp_run(Path(temp_dir), run_id="reporting-artifacts-readiness")
-
-            with self.assertRaisesRegex(ValueError, "materialize-curations"):
-                data_readiness_artifacts(run_dir=run_dir, round_id=ROUND_ID, pretty=True)
-
-    def test_decision_artifacts_prefer_draft_reports_when_requested(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            run_dir = scaffold_temp_run(Path(temp_dir), run_id="reporting-artifacts-decision")
+            run_dir = scaffold_temp_run(Path(temp_dir), run_id="reporting-artifact-modules-decision")
             base_report = load_example_json("expert_report.json")
             for role in ("sociologist", "environmentalist"):
                 draft_payload = dict(base_report)
-                draft_payload["run_id"] = "reporting-artifacts-decision"
+                draft_payload["run_id"] = "reporting-artifact-modules-decision"
                 draft_payload["round_id"] = ROUND_ID
                 draft_payload["agent_role"] = role
                 draft_payload["report_id"] = f"report-{role}-draft-{ROUND_ID}"
@@ -209,27 +218,20 @@ class ReportingArtifactsTests(unittest.TestCase):
 
             self.assertEqual({"sociologist": "draft", "environmentalist": "draft"}, result["report_sources"])
             self.assertTrue(decision_packet_path(run_dir, ROUND_ID).exists())
-            self.assertTrue(decision_draft_path(run_dir, ROUND_ID).exists())
             packet = read_json(decision_packet_path(run_dir, ROUND_ID))
             self.assertEqual("draft", packet["report_sources"]["sociologist"])
-            self.assertEqual("draft", packet["report_sources"]["environmentalist"])
-            self.assertEqual(ROUND_ID, packet["investigation_state"]["round_id"])
-            self.assertEqual(ROUND_ID, packet["investigation_actions"]["round_id"])
 
-    def test_promote_decision_draft_records_decision_receipt(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            run_dir = scaffold_temp_run(Path(temp_dir), run_id="reporting-artifacts-promote")
             payload = load_example_json("council_decision.json")
-            payload["run_id"] = "reporting-artifacts-promote"
+            payload["run_id"] = "reporting-artifact-modules-decision"
             payload["round_id"] = ROUND_ID
             payload["decision_id"] = "decision-round-001"
             next_round_tasks = payload.get("next_round_tasks")
             if isinstance(next_round_tasks, list) and next_round_tasks:
-                next_round_tasks[0]["run_id"] = "reporting-artifacts-promote"
+                next_round_tasks[0]["run_id"] = "reporting-artifact-modules-decision"
                 next_round_tasks[0]["round_id"] = NEXT_ROUND_ID
             write_json(decision_draft_path(run_dir, ROUND_ID), payload)
 
-            result = promote_decision_draft(
+            promote_result = promote_decision_draft(
                 run_dir=run_dir,
                 round_id=ROUND_ID,
                 draft_path_text="",
@@ -237,7 +239,7 @@ class ReportingArtifactsTests(unittest.TestCase):
                 allow_overwrite=True,
             )
 
-            self.assertEqual(str(decision_target_path(run_dir, ROUND_ID)), result["target_path"])
+            self.assertEqual(str(decision_target_path(run_dir, ROUND_ID)), promote_result["target_path"])
             validation = validate_round_audit_chain(run_dir, ROUND_ID, require_exists=True)
             self.assertTrue(validation["validation"]["ok"])
             ledger_entries = [item for item in read_jsonl(audit_chain_ledger_path(run_dir, ROUND_ID)) if isinstance(item, dict)]

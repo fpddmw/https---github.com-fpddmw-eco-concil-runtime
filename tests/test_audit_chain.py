@@ -31,6 +31,8 @@ from eco_council_runtime.controller.paths import (  # noqa: E402
     evidence_adjudication_path,
     fetch_execution_path,
     fetch_plan_path,
+    investigation_actions_path,
+    investigation_state_path,
     isolated_active_path,
     matching_adjudication_path,
     matching_result_path,
@@ -46,7 +48,10 @@ from eco_council_runtime.controller.paths import (  # noqa: E402
     shared_observations_path,
     tasks_path,
 )
-from eco_council_runtime.controller.stage_imports import import_fetch_execution_payload  # noqa: E402
+from eco_council_runtime.controller.stage_imports import (  # noqa: E402
+    import_fetch_execution_payload,
+    import_investigation_review_payload,
+)
 from eco_council_runtime.reporting import promote_decision_draft  # noqa: E402
 
 EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "assets" / "contract" / "examples"
@@ -231,6 +236,10 @@ class AuditChainTests(unittest.TestCase):
                 ["import", "fetch", "normalize", "match", "decision"],
                 [item["phase_kind"] for item in ledger_entries],
             )
+            self.assertIn("investigation-state", [item["label"] for item in ledger_entries[2]["artifact_refs"]])
+            self.assertIn("investigation-actions", [item["label"] for item in ledger_entries[2]["artifact_refs"]])
+            self.assertIn("investigation-state", [item["label"] for item in ledger_entries[3]["artifact_refs"]])
+            self.assertIn("investigation-actions", [item["label"] for item in ledger_entries[3]["artifact_refs"]])
 
             bundle_validation = validate_bundle(run_dir)
             audit_results = [item for item in bundle_validation["results"] if item.get("kind") == "audit-chain"]
@@ -311,6 +320,46 @@ class AuditChainTests(unittest.TestCase):
             self.assertEqual(2, validation["receipt_count"])
             ledger_entries = [item for item in read_jsonl(audit_chain_ledger_path(run_dir, ROUND_ID)) if isinstance(item, dict)]
             self.assertEqual(["import", "fetch"], [item["phase_kind"] for item in ledger_entries])
+
+    def test_import_investigation_review_payload_records_derived_investigation_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = scaffold_temp_run(Path(temp_dir), run_id="audit-run-investigation-review")
+            matching_result = load_example_json("matching_result.json")
+            matching_result["run_id"] = "audit-run-investigation-review"
+            matching_result["round_id"] = ROUND_ID
+            evidence_adjudication = load_example_json("evidence_adjudication.json")
+            evidence_adjudication["run_id"] = "audit-run-investigation-review"
+            evidence_adjudication["round_id"] = ROUND_ID
+            review_payload = load_example_json("investigation_review.json")
+            review_payload["run_id"] = "audit-run-investigation-review"
+            review_payload["round_id"] = ROUND_ID
+            source_path = run_dir / "imports" / "investigation_review_input.json"
+
+            write_json(matching_result_path(run_dir, ROUND_ID), matching_result)
+            write_json(evidence_adjudication_path(run_dir, ROUND_ID), evidence_adjudication)
+            write_json(source_path, review_payload)
+
+            result = import_investigation_review_payload(
+                run_dir=run_dir,
+                state={"current_round_id": ROUND_ID, "stage": "awaiting-investigation-review", "imports": {}},
+                payload=review_payload,
+                source_path=source_path,
+                save_state=lambda _run_dir, _state: None,
+                status_builder=lambda _run_dir, state: {"stage": state.get("stage")},
+                build_report_artifacts=lambda _run_dir, _round_id: None,
+            )
+
+            self.assertEqual("investigation-review", result["imported_kind"])
+            self.assertTrue(investigation_state_path(run_dir, ROUND_ID).exists())
+            self.assertTrue(investigation_actions_path(run_dir, ROUND_ID).exists())
+            validation = validate_round_audit_chain(run_dir, ROUND_ID, require_exists=True)
+            self.assertTrue(validation["validation"]["ok"])
+            ledger_entries = [item for item in read_jsonl(audit_chain_ledger_path(run_dir, ROUND_ID)) if isinstance(item, dict)]
+            self.assertEqual(1, len(ledger_entries))
+            self.assertEqual("investigation-review-import", ledger_entries[0]["event_kind"])
+            self.assertEqual(2, ledger_entries[0]["details"]["derived_artifact_count"])
+            self.assertIn("investigation-state", [item["label"] for item in ledger_entries[0]["artifact_refs"]])
+            self.assertIn("investigation-actions", [item["label"] for item in ledger_entries[0]["artifact_refs"]])
 
     def test_validate_round_audit_chain_reports_malformed_chain_index(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

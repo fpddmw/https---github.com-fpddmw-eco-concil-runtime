@@ -58,6 +58,7 @@ from eco_council_runtime.controller.paths import (
     fetch_execution_path,
     fetch_plan_path,
     history_context_path,
+    history_retrieval_path,
     investigation_review_path,
     investigation_review_prompt_path,
     matching_adjudication_path,
@@ -739,6 +740,7 @@ def build_status_payload(run_dir: Path, state: dict[str, Any]) -> dict[str, Any]
     case_library_archive = ensure_case_library_archive_config(state)
     signal_corpus = ensure_signal_corpus_config(state)
     history_file = history_context_path(run_dir, round_id) if round_id else None
+    history_snapshot = history_retrieval_path(run_dir, round_id) if round_id else None
     return {
         "schema_version": SCHEMA_VERSION,
         "run_dir": str(run_dir),
@@ -822,6 +824,7 @@ def build_status_payload(run_dir: Path, state: dict[str, Any]) -> dict[str, Any]
             "db": maybe_text(history.get("db")),
             "top_k": normalize_history_top_k(history.get("top_k")),
             "context_path": str(history_file) if history_file is not None and history_file.exists() else "",
+            "snapshot_path": str(history_snapshot) if history_snapshot is not None and history_snapshot.exists() else "",
         },
         "case_library_archive": {
             "db": maybe_text(case_library_archive.get("db")),

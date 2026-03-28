@@ -6,12 +6,15 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from eco_council_runtime.case_library import command_search_cases, connect_db, init_db  # noqa: E402
-from eco_council_runtime.controller.paths import history_context_path, investigation_plan_path  # noqa: E402
+from eco_council_runtime.controller.paths import (  # noqa: E402
+    history_context_path,
+    history_retrieval_path,
+    investigation_plan_path,
+)
 from eco_council_runtime.controller.state_config import write_history_context_file  # noqa: E402
 from eco_council_runtime.investigation import build_investigation_plan, causal_focus_for_role  # noqa: E402
 
@@ -237,6 +240,79 @@ class InvestigationRetrievalUpgradeTests(unittest.TestCase):
             self.assertIn("profile:smoke-transport", payload["cases"][0]["match_reasons"])
             self.assertIn("station-air-quality", payload["cases"][0]["matched_gap_types"])
             self.assertIn("air-quality", payload["cases"][0]["matched_metric_families"])
+            self.assertEqual("structured-strong", payload["cases"][0]["score_components"]["match_tier"])
+
+    def test_case_library_search_prefers_strong_structured_match_over_lexical_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "case-library.sqlite"
+            init_db(db_path)
+            structured_mission = {
+                "run_id": "case-structured",
+                "topic": "Transport attribution archive",
+                "objective": "Resolve the smoke transport chain with direct evidence.",
+                "hypotheses": ["Canadian wildfire smoke drove a New York air-quality event."],
+            }
+            lexical_only_mission = {
+                "run_id": "case-lexical-only",
+                "topic": "Mississippi flood archive",
+                "objective": "Narrative archive about downstream flooding without aligned physical support.",
+                "hypotheses": ["Downstream flooding remained the main issue."],
+            }
+            with connect_db(db_path) as conn:
+                insert_case(
+                    conn,
+                    case_id="case-structured",
+                    topic="Transport attribution archive",
+                    objective="Resolve the smoke transport chain with direct evidence.",
+                    region_label="New York, USA",
+                    final_missing_evidence_types=["station-air-quality", "fire-detection"],
+                    claim_types=["smoke", "wildfire"],
+                    observations=[
+                        ("pm2_5", "openaq-data-fetch"),
+                        ("fire_detection_count", "nasa-firms-fire-fetch"),
+                        ("wind_speed_10m", "open-meteo-historical-fetch"),
+                    ],
+                    evidence_gaps=[["station-air-quality", "fire-detection"]],
+                    mission=structured_mission,
+                )
+                insert_case(
+                    conn,
+                    case_id="case-lexical-only",
+                    topic="New York smoke episode and Canadian wildfire discussion archive",
+                    objective="Narrative archive about smoke without aligned physical support.",
+                    region_label="New York, USA",
+                    final_missing_evidence_types=["precipitation-hydrology"],
+                    claim_types=["flood"],
+                    observations=[
+                        ("river_discharge", "usgs-water-fetch"),
+                    ],
+                    evidence_gaps=[["precipitation-hydrology"]],
+                    mission=lexical_only_mission,
+                )
+                conn.commit()
+
+            payload = command_search_cases(
+                argparse.Namespace(
+                    db=str(db_path),
+                    query="New York smoke episode",
+                    region_label="New York, USA",
+                    moderator_status="",
+                    evidence_sufficiency="",
+                    exclude_case_id="",
+                    profile_id="smoke-transport",
+                    claim_types=["smoke", "wildfire"],
+                    metric_families=["air-quality", "fire-detection", "meteorology"],
+                    gap_types=["station-air-quality", "fire-detection"],
+                    source_skills=["openaq-data-fetch", "nasa-firms-fire-fetch"],
+                    limit=10,
+                    pretty=False,
+                )
+            )
+
+            self.assertEqual(2, payload["count"])
+            self.assertEqual("case-structured", payload["cases"][0]["case_id"])
+            self.assertEqual("structured-strong", payload["cases"][0]["score_components"]["match_tier"])
+            self.assertEqual("region", payload["cases"][1]["score_components"]["match_tier"])
 
     def test_write_history_context_file_uses_plan_driven_structured_search(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -256,67 +332,80 @@ class InvestigationRetrievalUpgradeTests(unittest.TestCase):
             plan_path.parent.mkdir(parents=True, exist_ok=True)
             plan_path.write_text(json.dumps(plan), encoding="utf-8")
             db_path = Path(temp_dir) / "history.sqlite"
-            db_path.write_text("", encoding="utf-8")
-            captured: dict[str, object] = {}
-
-            def fake_run_json_command(argv: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> dict[str, object]:
-                captured["argv"] = list(argv)
-                captured["cwd"] = cwd
-                _ = env
-                return {
-                    "payload": {
-                        "cases": [
-                            {
-                                "case_id": "case-smoke",
-                                "score": 29.0,
-                                "match_reasons": ["profile:smoke-transport", "gap_types:station-air-quality"],
-                                "topic": "Historic smoke case",
-                                "objective": "Historic objective",
-                                "region_label": "New York, USA",
-                                "round_count": 2,
-                                "final_moderator_status": "supported",
-                                "final_evidence_sufficiency": "partial",
-                                "final_decision_summary": "Historic summary",
-                                "final_brief": "",
-                                "final_missing_evidence_types": ["station-air-quality"],
-                                "case_profile_id": "smoke-transport",
-                                "matched_claim_types": ["smoke", "wildfire"],
-                                "matched_metric_families": ["air-quality", "fire-detection"],
-                                "matched_gap_types": ["station-air-quality"],
-                                "matched_source_skills": ["openaq-data-fetch"],
-                            }
-                        ],
-                        "profile_id": "smoke-transport",
-                        "claim_types": ["smoke", "wildfire", "air-pollution"],
-                        "metric_families": ["fire-detection", "meteorology", "air-quality"],
-                        "gap_types": ["fire-detection", "meteorology-background", "station-air-quality"],
-                        "source_skills": ["nasa-firms-fire-fetch", "open-meteo-historical-fetch", "openaq-data-fetch"],
-                    }
-                }
-
-            with patch("eco_council_runtime.controller.state_config.run_json_command", side_effect=fake_run_json_command):
-                target = write_history_context_file(
-                    run_dir,
-                    {"history_context": {"db": str(db_path), "top_k": 3}},
-                    "round-01",
+            init_db(db_path)
+            with connect_db(db_path) as conn:
+                insert_case(
+                    conn,
+                    case_id="case-smoke",
+                    topic="Historic smoke case",
+                    objective="Historic objective",
+                    region_label="New York, USA",
+                    final_missing_evidence_types=["station-air-quality", "fire-detection"],
+                    claim_types=["smoke", "wildfire"],
+                    observations=[
+                        ("pm2_5", "openaq-data-fetch"),
+                        ("fire_detection_count", "nasa-firms-fire-fetch"),
+                        ("wind_speed_10m", "open-meteo-historical-fetch"),
+                    ],
+                    evidence_gaps=[["station-air-quality", "fire-detection"], ["meteorology-background"]],
+                    mission={
+                        "run_id": "case-smoke",
+                        "topic": "Historic smoke case",
+                        "objective": "Historic objective",
+                        "hypotheses": ["Canadian wildfire smoke caused a New York AQI surge."],
+                    },
                 )
+                insert_case(
+                    conn,
+                    case_id="case-flood",
+                    topic="Historic flood case",
+                    objective="Historic flood objective",
+                    region_label="Mississippi Basin, USA",
+                    final_missing_evidence_types=["precipitation-hydrology"],
+                    claim_types=["flood"],
+                    observations=[
+                        ("river_discharge", "open-meteo-flood-fetch"),
+                        ("precipitation_sum", "open-meteo-historical-fetch"),
+                    ],
+                    evidence_gaps=[["precipitation-hydrology"]],
+                    mission={
+                        "run_id": "case-flood",
+                        "topic": "Historic flood case",
+                        "objective": "Historic flood objective",
+                        "hypotheses": ["Upstream rainfall caused downstream flooding."],
+                    },
+                )
+                conn.commit()
+
+            target = write_history_context_file(
+                run_dir,
+                {"history_context": {"db": str(db_path), "top_k": 5}},
+                "round-01",
+            )
 
             self.assertIsNotNone(target)
             self.assertEqual(history_context_path(run_dir, "round-01"), target)
-            argv = captured["argv"]
-            self.assertIn("--profile-id", argv)
-            self.assertIn("smoke-transport", argv)
-            self.assertIn("--claim-type", argv)
-            self.assertIn("--metric-family", argv)
-            self.assertIn("--gap-type", argv)
-            self.assertIn("--source-skill", argv)
-
             content = target.read_text(encoding="utf-8")
+            snapshot = json.loads(history_retrieval_path(run_dir, "round-01").read_text(encoding="utf-8"))
+
             self.assertIn("Current investigation profile: smoke-transport", content)
             self.assertIn("Retrieval focus:", content)
             self.assertIn("Open planning questions:", content)
             self.assertIn("alternatives=", content)
             self.assertIn("case_id=case-smoke", content)
+            self.assertIn("excerpt_1=", content)
+            self.assertEqual(3, snapshot["budget"]["max_cases"])
+            self.assertEqual(2, snapshot["budget"]["max_excerpts_per_case"])
+            self.assertGreaterEqual(snapshot["budget"]["selected_case_count"], 1)
+            self.assertGreaterEqual(snapshot["budget"]["candidate_case_count"], 1)
+            self.assertGreater(snapshot["budget"]["estimated_token_cost"], 0)
+            self.assertEqual("case-smoke", snapshot["cases"][0]["case_id"])
+            self.assertLessEqual(len(snapshot["cases"][0]["excerpts"]), 2)
+            self.assertTrue(snapshot["cases"][0]["excerpt_budget"]["truncated_by_cap"])
+            self.assertIn(
+                snapshot["cases"][0]["excerpts"][0]["artifact_kind"],
+                {"decision-summary", "evidence-card", "curated-summary", "round-summary", "report-summary"},
+            )
 
 
 if __name__ == "__main__":

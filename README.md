@@ -38,7 +38,7 @@ The current controller-oriented modules live under `src/eco_council_runtime/cont
 - `state_config.py`: historical-context and archive configuration
 - `openclaw.py`: OpenClaw workspace/provisioning adapter
 - `agent_turns.py`: turn resolution, prompt embedding, and OpenClaw turn execution
-- `cli.py`: thin supervisor CLI assembly
+- `cli.py`: compatibility wrapper that re-exports the supervisor parser from `src/eco_council_runtime/cli/supervisor_cli.py`
 
 When extending the control plane, prefer adding logic to these controller submodules or to future `domain/`, `application/`, and `adapters/` packages rather than expanding monolithic entry files.
 

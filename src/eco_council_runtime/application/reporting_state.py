@@ -21,7 +21,9 @@ from eco_council_runtime.controller.paths import (
     claims_active_path,
     data_readiness_report_path,
     evidence_adjudication_path,
+    investigation_actions_path,
     investigation_plan_path,
+    investigation_state_path,
     investigation_review_path,
     isolated_active_path,
     matching_adjudication_path,
@@ -334,6 +336,74 @@ def compact_investigation_review_summary(review: dict[str, Any]) -> dict[str, An
     }
 
 
+def compact_investigation_state_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    hypotheses = payload.get("hypotheses") if isinstance(payload.get("hypotheses"), list) else []
+    compact_hypotheses: list[dict[str, Any]] = []
+    for hypothesis in hypotheses[:3]:
+        if not isinstance(hypothesis, dict):
+            continue
+        legs = hypothesis.get("legs") if isinstance(hypothesis.get("legs"), list) else []
+        unresolved_leg_ids = [
+            maybe_text(leg.get("leg_id"))
+            for leg in legs
+            if isinstance(leg, dict) and maybe_text(leg.get("status")) != "supported" and maybe_text(leg.get("leg_id"))
+        ]
+        compact_hypotheses.append(
+            {
+                "hypothesis_id": maybe_text(hypothesis.get("hypothesis_id")),
+                "overall_status": maybe_text(hypothesis.get("overall_status")),
+                "unresolved_leg_ids": unresolved_leg_ids[:4],
+            }
+        )
+    return {
+        "overall_status": maybe_text(payload.get("overall_status")),
+        "last_update_stage": maybe_text(payload.get("last_update_stage")),
+        "hypothesis_count": int(summary.get("hypothesis_count") or len(hypotheses)),
+        "supported_hypothesis_count": int(summary.get("supported_hypothesis_count") or 0),
+        "partial_hypothesis_count": int(summary.get("partial_hypothesis_count") or 0),
+        "unresolved_hypothesis_count": int(summary.get("unresolved_hypothesis_count") or 0),
+        "alternative_count": int(summary.get("alternative_count") or 0),
+        "remaining_gaps": [maybe_text(item) for item in payload.get("remaining_gaps", []) if maybe_text(item)][:6],
+        "open_questions": [maybe_text(item) for item in payload.get("open_questions", []) if maybe_text(item)][:6],
+        "hypotheses": compact_hypotheses,
+    }
+
+
+def compact_investigation_actions_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    budget = payload.get("budget") if isinstance(payload.get("budget"), dict) else {}
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    ranked_actions = payload.get("ranked_actions") if isinstance(payload.get("ranked_actions"), list) else []
+    compact_actions: list[dict[str, Any]] = []
+    for action in ranked_actions[:3]:
+        if not isinstance(action, dict):
+            continue
+        score = action.get("score") if isinstance(action.get("score"), dict) else {}
+        compact_actions.append(
+            {
+                "action_id": maybe_text(action.get("action_id")),
+                "candidate_kind": maybe_text(action.get("candidate_kind")),
+                "assigned_role": maybe_text(action.get("assigned_role")),
+                "priority": maybe_text(action.get("priority")),
+                "objective": maybe_text(action.get("objective")),
+                "total_score": float(score.get("total") or 0.0),
+            }
+        )
+    return {
+        "candidate_count": int(budget.get("candidate_count") or 0),
+        "returned_count": int(budget.get("returned_count") or len(ranked_actions)),
+        "truncated_by_cap": bool(budget.get("truncated_by_cap")),
+        "estimated_token_cost": int(budget.get("estimated_token_cost") or 0),
+        "required_leg_gap_count": int(summary.get("required_leg_gap_count") or 0),
+        "contradictory_leg_count": int(summary.get("contradictory_leg_count") or 0),
+        "top_actions": compact_actions,
+    }
+
+
 def augment_context_with_matching_state(*, run_dir: Path, state: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     merged = copy.deepcopy(context)
     round_id = state["round_id"]
@@ -347,6 +417,8 @@ def augment_context_with_matching_state(*, run_dir: Path, state: dict[str, Any],
             "matching_result": str(matching_result_path(run_dir, round_id)),
             "evidence_adjudication": str(evidence_adjudication_path(run_dir, round_id)),
             "investigation_review": str(investigation_review_path(run_dir, round_id)),
+            "investigation_state": str(investigation_state_path(run_dir, round_id)),
+            "investigation_actions": str(investigation_actions_path(run_dir, round_id)),
         }
     )
     merged["canonical_paths"] = canonical_paths
@@ -372,6 +444,12 @@ def augment_context_with_matching_state(*, run_dir: Path, state: dict[str, Any],
             state.get("investigation_review", {}) if isinstance(state.get("investigation_review"), dict) else {}
         ),
     }
+    merged["investigation_state"] = compact_investigation_state_summary(
+        state.get("investigation_state", {}) if isinstance(state.get("investigation_state"), dict) else {}
+    )
+    merged["investigation_actions"] = compact_investigation_actions_summary(
+        state.get("investigation_actions", {}) if isinstance(state.get("investigation_actions"), dict) else {}
+    )
     return merged
 
 
@@ -546,6 +624,8 @@ def collect_round_state(
         "matching_result": load_dict_if_exists(matching_result_path(run_dir, round_id)),
         "evidence_adjudication": load_dict_if_exists(evidence_adjudication_path(run_dir, round_id)),
         "investigation_review": load_dict_if_exists(investigation_review_path(run_dir, round_id)),
+        "investigation_state": load_dict_if_exists(investigation_state_path(run_dir, round_id)),
+        "investigation_actions": load_dict_if_exists(investigation_actions_path(run_dir, round_id)),
     }
     state["phase_state"] = phase_state_from_round_state(state)
     return state
@@ -592,7 +672,9 @@ __all__ = [
     "active_library_list",
     "augment_context_with_matching_state",
     "collect_round_state",
+    "compact_investigation_actions_summary",
     "compact_evidence_adjudication_summary",
+    "compact_investigation_state_summary",
     "compact_investigation_review_summary",
     "compact_matching_adjudication_summary",
     "compact_matching_authorization_summary",

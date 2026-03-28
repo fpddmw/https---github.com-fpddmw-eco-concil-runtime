@@ -66,7 +66,7 @@
 
 ### T07 Structure Optimization And Second-Stage Decomposition
 
-- Status: `in_progress`
+- Status: `planned`
 - Goal: move from first-stage extraction into a stable subdomain package layout, remove residual compatibility cycles, and prevent `application/` from becoming a new monolith layer.
 - Non-goals:
   - dependency risk cleanup
@@ -115,7 +115,7 @@
 
 #### T07.2 Compatibility-Cycle And Boundary Cleanup
 
-- Status: `planned`
+- Status: `completed`
 - Scope:
   - remove or isolate remaining compatibility back-import patterns, especially:
     - `application.contract_runtime -> contract`
@@ -127,10 +127,14 @@
 - Acceptance:
   - targeted modules import final package homes instead of bouncing through root facades
   - structural docs and runtime imports describe the same boundary model
+- Outcome:
+  - added `application/archive/runtime_state.py` as the shared archive snapshot helper and rewired `signal_corpus.py` plus `case_library.py` to stop loading the root `supervisor.py` facade for run state, round summaries, and shared payload access
+  - added `application/contract/runtime_support.py` so `application/contract_runtime.py` now owns contract assets and round helpers through final package homes, while the remaining root `contract.py` dependency is isolated to narrow lazy validation and source-governance bridge functions
+  - cleaned stale CLI boundary wording in `README.md` and `controller/cli.py`, added `tests/test_import_boundaries.py`, and passed targeted `unittest` regressions with `13` tests covering contract runtime, CLI imports, package topology, and the new boundary guards
 
 #### T07.3 Reporting And Orchestration Hotspot Split
 
-- Status: `planned`
+- Status: `completed`
 - Scope:
   - split `application/reporting_drafts.py` into subdomain modules such as readiness, expert reports, investigation review, and council decision
   - split `application/reporting_artifacts.py` into packet building, prompt rendering, artifact persistence, and promotion flows
@@ -138,6 +142,63 @@
 - Acceptance:
   - reporting and orchestration services stop depending on second-generation mega-modules
   - direct regression coverage moves with the extracted submodules
+- Outcome:
+  - `application/reporting_drafts.py`, `application/reporting_artifacts.py`, and `application/orchestration_planning.py` were all reduced to compatibility shells, with owned logic moved into `application/reporting/`, `application/investigation/`, and `application/orchestration/`
+  - `T07.3` now validates both extracted-module homes and legacy entrypoints, and the full repository regression baseline advanced from the earlier `130`-test pass to a green `138`-test discovery pass
+
+##### T07.3a Reporting Readiness Extraction
+
+- Status: `completed`
+- Scope:
+  - move readiness-specific helpers and draft construction out of `application/reporting_drafts.py` into `application/reporting/readiness.py`
+  - keep `application/reporting_drafts.py` as a compatibility shell for the extracted readiness entrypoints
+  - add direct regressions for the new readiness submodule rather than testing only through the old mega-module
+- Acceptance:
+  - readiness flows no longer require ownership by `reporting_drafts.py`
+  - at least one focused test module imports the new readiness package home directly
+- Outcome:
+  - added `application/reporting/readiness.py` as the owned readiness home, rewired `application/reporting_drafts.py` to import those builders instead of defining duplicate implementations, and promoted the readiness exports through `application/reporting/__init__.py`
+  - added `tests/test_reporting_readiness.py` so readiness flows are now exercised directly through `eco_council_runtime.application.reporting` instead of only through the old mega-module
+  - targeted `unittest` regressions for readiness/reporting compatibility stayed green, and the later full `130`-test discovery pass remained green after the follow-on `T07.3b` extraction
+
+##### T07.3b Expert Report, Investigation Review, And Decision Split
+
+- Status: `completed`
+- Scope:
+  - move expert-report, investigation-review, and council-decision builders from `application/reporting_drafts.py` into owned `application/reporting/` or `application/investigation/` modules
+  - keep compatibility re-exports in the old file until downstream imports have settled
+- Acceptance:
+  - `application/reporting_drafts.py` shrinks to a thin compatibility shell over extracted reporting builders
+- Outcome:
+  - added `application/reporting/common.py`, `application/reporting/recommendations.py`, `application/reporting/expert_reports.py`, `application/reporting/council_decision.py`, and `application/investigation/review.py` so expert reporting, review, and decision logic now live in owned second-stage module homes
+  - reduced `application/reporting_drafts.py` to a `111`-line compatibility shell, and updated `application/reporting/__init__.py` plus `application/investigation/__init__.py` so callers can use the new package homes directly
+  - added `tests/test_reporting_extracted_modules.py`; a focused `39`-test `unittest` regression set passed, and `python3 -m unittest discover -s tests` passed with `130` tests
+
+##### T07.3c Reporting Artifact Pipeline Split
+
+- Status: `completed`
+- Scope:
+  - split `application/reporting_artifacts.py` into packet loading, prompt rendering, artifact persistence, and promotion flows under `application/reporting/`
+  - move direct regressions with those extracted homes
+- Acceptance:
+  - packet or prompt services stop depending on a single reporting-artifacts mega-module
+- Outcome:
+  - added `application/reporting/artifact_support.py`, `application/reporting/packets.py`, `application/reporting/prompts.py`, `application/reporting/promotion.py`, and `application/reporting/artifact_pipeline.py`, then reduced `application/reporting_artifacts.py` to a thin compatibility shell while moving owned logic into second-stage package homes
+  - added `tests/test_reporting_artifact_modules.py` and kept `tests/test_reporting_artifacts.py` as the compatibility regression surface so packet, prompt, promotion, and artifact-pipeline behavior are now exercised both directly and through the legacy entrypoint
+  - reporting-focused `unittest` regressions passed with `20` tests, and the later combined `53`-test `T07.3` regression set plus full `138`-test discovery pass stayed green
+
+##### T07.3d Orchestration Planning Split
+
+- Status: `completed`
+- Scope:
+  - split `application/orchestration_planning.py` into governance checks, query builders, geometry helpers, and step synthesis under `application/orchestration/`
+  - keep fetch-plan behavior stable while moving ownership to second-stage package homes
+- Acceptance:
+  - orchestration planning no longer depends on a single second-generation mega-module
+- Outcome:
+  - added `application/orchestration/governance.py`, `application/orchestration/query_builders.py`, `application/orchestration/geometry.py`, `application/orchestration/step_synthesis.py`, and `application/orchestration/fetch_plan_builder.py`, then reduced `application/orchestration_planning.py` to a compatibility shell and rewired `application/orchestration_execution.py` to import second-stage package homes directly
+  - added `tests/test_orchestration_extracted_modules.py` and updated planning regressions so the extracted orchestration modules are tested directly while legacy import surfaces remain covered
+  - resolved the post-split `application.reporting` package import cycle by converting `application/reporting/__init__.py` to lazy exports, after which orchestration-focused `unittest` regressions passed with `15` tests, the combined `T07.3` regression set passed with `53` tests, and `python3 -m unittest discover -s tests` passed with `138` tests
 
 #### T07.4 Normalize, Simulation, And Archive Hotspot Split
 
@@ -198,7 +259,7 @@
 
 #### T08.1 Investigation State Artifact And Replay Model
 
-- Status: `planned`
+- Status: `completed`
 - Scope:
   - add a deterministic `shared/investigation_state.json`
   - derive it from canonical artifacts such as `investigation_plan`, matching outputs, evidence adjudication, curated evidence, and moderator review artifacts
@@ -213,10 +274,15 @@
 - Acceptance:
   - investigation state can be rebuilt from canonical artifacts without hidden memory
   - later planners and reviews read this state instead of inferring everything from scratch each time
+- Outcome:
+  - added `application/investigation/state.py` plus canonical `controller.paths.investigation_state_path`, and scaffold or runtime refresh paths now materialize `shared/investigation_state.json` deterministically from canonical round artifacts
+  - round-state loading, compact context views, investigation-review packets, and decision packets now read the persisted investigation state first instead of relying only on ad hoc recomputation
+  - import, normalize, and match audit receipts now snapshot `investigation_state` at the points where it becomes materially influential for later review or planning
+  - added focused regression coverage for scaffold persistence, investigation-state assembly, reporting-state exposure, packet loading, and audit-chain coverage; targeted `unittest` regressions passed with `29` tests
 
 #### T08.2 Budgeted Next-Action Planner
 
-- Status: `planned`
+- Status: `completed`
 - Scope:
   - add a machine-readable `shared/investigation_actions.json`
   - derive candidate actions from unresolved required legs, contradiction signals, alternative hypotheses, and governed source options
@@ -230,10 +296,52 @@
 - Acceptance:
   - the runtime can explain why one next action outranks another
   - action selection becomes evidence-state-aware instead of only gap-template-driven
+- Outcome:
+  - added deterministic `investigation_actions` planning, canonical persistence, receipt or packet exposure, and recommendation-flow migration so review, expert-report, and decision drafting now prefer persisted ranked actions before falling back to flat gap templates
+  - completed focused plus cross-module regressions for planner scoring, runtime materialization, report or decision consumption, audit coverage, import boundaries, and CLI stability; final `unittest` regression passed with `41` tests
+
+##### T08.2a Action Artifact Contract And Deterministic Scoring
+
+- Status: `completed`
+- Scope:
+  - define the canonical `shared/investigation_actions.json` structure and `controller.paths` home
+  - build a deterministic planner that consumes `investigation_state` plus mission governance and emits at most `6` ranked actions with explicit score components and compact budget counters
+  - keep the first slice read-only with respect to later runtime behavior: produce the planner artifact and focused tests before replacing existing recommendation flows
+- Acceptance:
+  - one pure planner path can be exercised from local test fixtures without OpenClaw or hidden state
+  - every returned action includes enough fields to audit ranking inputs, governed source options, and budget penalties
+- Outcome:
+  - added `application/investigation/actions.py`, canonical `controller.paths.investigation_actions_path`, deterministic ranking logic, governed source-option expansion, and focused planner regressions for scoring, truncation, governance, and budget counters
+
+##### T08.2b Runtime And Packet Integration
+
+- Status: `completed`
+- Scope:
+  - materialize `investigation_actions.json` at the canonical round write points that already refresh `investigation_state`
+  - expose compact action summaries through round context and relevant review or decision packets
+  - keep packet-facing action context bounded and source-governed
+- Acceptance:
+  - later planners, moderator review, and decision drafting can read the persisted action artifact without re-ranking from scratch
+- Outcome:
+  - scaffold, normalize refresh, stage imports, audit receipts, reporting state or views, and reporting artifacts now materialize or expose `investigation_actions` alongside `investigation_state` so later stages consume the persisted artifact rather than recomputing hidden planning state
+
+##### T08.2c Recommendation-Flow Migration And Regression Gate
+
+- Status: `completed`
+- Scope:
+  - replace the most important `combine_recommendations`-only fallbacks with action-artifact consumption where appropriate
+  - add regression coverage for ranking explanations, top-k truncation, governance filtering, and budget counters
+  - ensure audit-chain coverage remains valid when `investigation_actions.json` becomes influential
+- Acceptance:
+  - the runtime no longer depends only on flat missing-type templates when proposing next actions
+  - ranking drift, governance drift, or budget drift fail deterministically in tests
+- Outcome:
+  - `application/reporting_drafts.py` now prioritizes persisted `investigation_actions` for investigation review, expert reports, and decision next-round planning, while keeping report-derived and missing-type recommendations as auditable fallback layers
+  - added regression coverage in `tests/test_reporting_drafts.py` for review, report, and decision consumption of persisted actions, and confirmed the broader `41`-test `unittest` regression set remains green
 
 #### T08.3 Retrieval V2 With Compact History Evidence
 
-- Status: `planned`
+- Status: `completed`
 - Scope:
   - upgrade historical retrieval from case-level overlap scoring toward compact artifact-level support
   - keep structured filters, but add bounded retrieval of report, decision, evidence-card, or curated-summary snippets
@@ -242,6 +350,51 @@
 - Acceptance:
   - retrieved history is more directly useful for investigation planning
   - retrieval remains compact, explainable, and safe under the budget caps
+- Outcome:
+  - added `application/investigation/history_context.py` as the snapshot-backed retrieval service, with canonical `shared/history_retrieval.json`, bounded case or excerpt budgets, and compact moderator-facing rendering built from persisted retrieval state rather than an ephemeral CLI response
+  - upgraded case-library search ranking so structured overlap tiers are explicit and strong structured matches outrank weak lexical matches, then added artifact-level excerpt selection for decision, round, report, evidence-card, and curated-summary snippets
+  - routed supervisor history-context generation through the new service, exposed the snapshot path in operator status, and passed focused plus cross-module `unittest` regressions with `51` tests
+
+##### T08.3a Retrieval Snapshot Contract And Budget Counters
+
+- Status: `completed`
+- Scope:
+  - define a canonical machine-readable retrieval snapshot for each round alongside the human-readable history context output
+  - record deterministic query inputs, selected cases, selection reasons, per-case rank or score, and bounded size or token counters
+  - keep the first slice read-only with respect to downstream prompt wording beyond switching the writer to the new snapshot-backed path
+- Acceptance:
+  - retrieval decisions become replayable from persisted artifacts instead of only a rendered text file
+  - size, count, and truncation behavior are explicit in the emitted snapshot
+- Outcome:
+  - added canonical `shared/history_retrieval.json` with deterministic query inputs, case ranking details, per-case excerpt budgets, and snapshot-level token or size counters, plus round-path support in `controller.paths`
+
+##### T08.3b Artifact-Level Excerpt Retrieval
+
+- Status: `completed`
+- Scope:
+  - add bounded retrieval of compact decision, report, evidence, or round-summary excerpts for each matched historical case
+  - cap surfaced cases to `3` and excerpt blocks per case to `2`, with explicit relevance reasons
+  - make structured overlap outweigh weak lexical similarity when selecting both cases and excerpts
+- Acceptance:
+  - retrieved history includes directly useful artifact snippets rather than only case-level metadata
+  - irrelevant lexical matches cannot dominate strong structured matches
+- Outcome:
+  - added deterministic excerpt candidate assembly and ranking for decision summaries, round summaries, report summaries, evidence cards, and curated claim summaries, with at most `2` excerpts per case and explicit relevance reasons or token estimates
+  - strengthened case-ranking output with `score_components.match_tier` and structured-score-first ordering so weak lexical overlap no longer outranks materially stronger structured matches
+
+##### T08.3c Runtime Integration And Regression Gate
+
+- Status: `completed`
+- Scope:
+  - route supervisor history-context generation through the new snapshot-backed retrieval service
+  - keep moderator prompt context compact while preserving the machine-readable snapshot for audit and replay
+  - add regression coverage for snapshot persistence, excerpt bounding, and degraded-match filtering
+- Acceptance:
+  - history context and audit snapshot stay consistent
+  - retrieval regressions fail deterministically in local tests
+- Outcome:
+  - rewired `controller/state_config.write_history_context_file` and `controller/operator_surface` to materialize and expose the snapshot-backed history context, while keeping moderator prompt ingestion unchanged at the text-file boundary
+  - extended `tests/test_investigation_retrieval_upgrade.py` to cover structured-overlap ranking, snapshot persistence, excerpt caps, and rendered context output, and confirmed the broader `51`-test regression set stays green
 
 #### T08.4 Competing-Hypothesis Review And Decision Gating
 
@@ -279,5 +432,5 @@
 ## Current Task Notes
 
 - Active task: none
-- Next planned task: `T07.2 Compatibility-Cycle And Boundary Cleanup`
+- Next planned task: `T07.3 Reporting And Orchestration Hotspot Split`
 - Working rule reaffirmed: after a sub-slice passes acceptance, persist its outcome here and then explicitly open the next sub-slice before coding continues.

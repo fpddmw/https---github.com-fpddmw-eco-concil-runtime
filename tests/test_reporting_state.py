@@ -19,6 +19,8 @@ from eco_council_runtime.contract import scaffold_run_from_mission  # noqa: E402
 from eco_council_runtime.controller.paths import (  # noqa: E402
     claims_active_path,
     claim_submissions_path,
+    investigation_actions_path,
+    investigation_state_path,
     matching_adjudication_path,
     matching_authorization_path,
     matching_result_path,
@@ -238,6 +240,75 @@ class ReportingStateTests(unittest.TestCase):
         self.assertEqual("complete", context["matching"]["investigation_review"]["review_status"])
         self.assertTrue(context["phase_state"]["matching_executed"])
         self.assertIn("matching_result", context["canonical_paths"])
+
+    def test_collect_round_state_and_context_surface_persisted_investigation_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = scaffold_temp_run(Path(temp_dir), run_id="reporting-state-investigation")
+            persisted_state = {
+                "overall_status": "partial",
+                "last_update_stage": "match",
+                "summary": {
+                    "hypothesis_count": 4,
+                    "supported_hypothesis_count": 1,
+                    "partial_hypothesis_count": 2,
+                    "unresolved_hypothesis_count": 1,
+                    "alternative_count": 3,
+                },
+                "remaining_gaps": ["station-air-quality", "meteorology-background"],
+                "open_questions": ["Should the local-source alternative stay active?"],
+                "hypotheses": [
+                    {"hypothesis_id": "hypothesis-001", "overall_status": "partial", "legs": [{"leg_id": "source", "status": "supported"}]},
+                    {"hypothesis_id": "hypothesis-002", "overall_status": "supported", "legs": [{"leg_id": "impact", "status": "supported"}]},
+                    {"hypothesis_id": "hypothesis-003", "overall_status": "unresolved", "legs": [{"leg_id": "mechanism", "status": "unresolved"}]},
+                    {"hypothesis_id": "hypothesis-004", "overall_status": "partial", "legs": [{"leg_id": "impact", "status": "partial"}]},
+                ],
+            }
+            persisted_actions = {
+                "budget": {
+                    "candidate_count": 7,
+                    "returned_count": 6,
+                    "truncated_by_cap": True,
+                    "estimated_token_cost": 9,
+                },
+                "summary": {
+                    "required_leg_gap_count": 5,
+                    "contradictory_leg_count": 1,
+                },
+                "ranked_actions": [
+                    {
+                        "action_id": "investigation-action-round-001-01",
+                        "candidate_kind": "resolve-contradiction",
+                        "assigned_role": "environmentalist",
+                        "priority": "high",
+                        "objective": "Fetch station-based air-quality corroboration for the same mission window and geometry.",
+                        "score": {"total": 6.4},
+                    },
+                    {
+                        "action_id": "investigation-action-round-001-02",
+                        "candidate_kind": "resolve-required-leg",
+                        "assigned_role": "environmentalist",
+                        "priority": "medium",
+                        "objective": "Add meteorology background such as wind, humidity, and precipitation for the same mission window.",
+                        "score": {"total": 6.1},
+                    },
+                ],
+            }
+            write_json(investigation_state_path(run_dir, ROUND_ID), persisted_state)
+            write_json(investigation_actions_path(run_dir, ROUND_ID), persisted_actions)
+
+            state = collect_round_state(run_dir, ROUND_ID)
+            context = augment_context_with_matching_state(run_dir=run_dir, state=state, context={"phase_state": {}})
+
+        self.assertEqual("partial", state["investigation_state"]["overall_status"])
+        self.assertEqual("match", state["investigation_state"]["last_update_stage"])
+        self.assertEqual(7, state["investigation_actions"]["budget"]["candidate_count"])
+        self.assertEqual(4, context["investigation_state"]["hypothesis_count"])
+        self.assertEqual(3, len(context["investigation_state"]["hypotheses"]))
+        self.assertEqual(["station-air-quality", "meteorology-background"], context["investigation_state"]["remaining_gaps"])
+        self.assertEqual(7, context["investigation_actions"]["candidate_count"])
+        self.assertEqual("investigation-action-round-001-01", context["investigation_actions"]["top_actions"][0]["action_id"])
+        self.assertIn("investigation_state", context["canonical_paths"])
+        self.assertIn("investigation_actions", context["canonical_paths"])
 
 
 if __name__ == "__main__":

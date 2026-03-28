@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+from eco_council_runtime.application.investigation import materialize_investigation_bundle
 from eco_council_runtime.controller.agent_ingest import (
     ensure_claim_curation_matches,
     ensure_data_readiness_matches,
@@ -49,19 +50,28 @@ from eco_council_runtime.controller.execution_artifacts import (
 )
 from eco_council_runtime.controller.io import load_json_if_exists, maybe_text, write_json
 from eco_council_runtime.controller.paths import (
+    claim_submissions_path,
     claim_curation_path,
+    claims_active_path,
     current_run_id,
     data_plane_execution_path,
     data_readiness_report_path,
     decision_draft_path,
     evidence_adjudication_path,
     fetch_execution_path,
+    investigation_actions_path,
+    investigation_review_path,
+    investigation_state_path,
     load_mission,
     matching_adjudication_path,
     matching_authorization_path,
     matching_result_path,
+    observation_submissions_path,
     observation_curation_path,
+    observations_active_path,
     report_draft_path,
+    shared_claims_path,
+    shared_observations_path,
     source_selection_path,
     tasks_path,
 )
@@ -97,6 +107,7 @@ def _state_result(
     state: dict[str, Any],
     status_builder: StatusBuilder,
     role: str = "",
+    derived_artifact_specs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     record_import_receipt(
         run_dir=run_dir,
@@ -106,6 +117,7 @@ def _state_result(
         target_path=target_path,
         role=role,
         stage_after_import=maybe_text(state.get("stage")),
+        derived_artifact_specs=derived_artifact_specs,
     )
     result = {
         "imported_kind": imported_kind,
@@ -192,6 +204,67 @@ def import_source_selection_payload(
     )
 
 
+def _investigation_state_artifact_spec(run_dir: Path, round_id: str) -> dict[str, Any]:
+    return {
+        "path": investigation_state_path(run_dir, round_id),
+        "label": "investigation-state",
+        "artifact_kind": "derived-state",
+        "required_current": True,
+    }
+
+
+def _investigation_actions_artifact_spec(run_dir: Path, round_id: str) -> dict[str, Any]:
+    return {
+        "path": investigation_actions_path(run_dir, round_id),
+        "label": "investigation-actions",
+        "artifact_kind": "derived-state",
+        "required_current": True,
+    }
+
+
+def _curation_derived_artifact_specs(run_dir: Path, round_id: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "path": claim_submissions_path(run_dir, round_id),
+            "label": "claim-submissions",
+            "artifact_kind": "canonical",
+            "required_current": True,
+        },
+        {
+            "path": observation_submissions_path(run_dir, round_id),
+            "label": "observation-submissions",
+            "artifact_kind": "canonical",
+            "required_current": True,
+        },
+        {
+            "path": shared_claims_path(run_dir, round_id),
+            "label": "shared-claims",
+            "artifact_kind": "canonical",
+            "required_current": True,
+        },
+        {
+            "path": shared_observations_path(run_dir, round_id),
+            "label": "shared-observations",
+            "artifact_kind": "canonical",
+            "required_current": True,
+        },
+        {
+            "path": claims_active_path(run_dir, round_id),
+            "label": "claims-active",
+            "artifact_kind": "library-view",
+            "required_current": True,
+        },
+        {
+            "path": observations_active_path(run_dir, round_id),
+            "label": "observations-active",
+            "artifact_kind": "library-view",
+            "required_current": True,
+        },
+        _investigation_state_artifact_spec(run_dir, round_id),
+        _investigation_actions_artifact_spec(run_dir, round_id),
+    ]
+
+
 def _complete_curation_import(
     *,
     run_dir: Path,
@@ -207,6 +280,7 @@ def _complete_curation_import(
     imported_kind: str,
 ) -> dict[str, Any]:
     round_id = maybe_text(state.get("current_round_id"))
+    derived_artifact_specs: list[dict[str, Any]] | None = None
     write_json(target, payload, pretty=True)
     persist_override_requests_for_role(
         run_dir=run_dir,
@@ -229,7 +303,9 @@ def _complete_curation_import(
         imports["report_roles_received"] = []
         imports["decision_received"] = False
         materialize_curations(run_dir, round_id)
+        materialize_investigation_bundle(run_dir, round_id, pretty=True)
         build_data_readiness_artifacts(run_dir, round_id)
+        derived_artifact_specs = _curation_derived_artifact_specs(run_dir, round_id)
         state["stage"] = STAGE_AWAITING_DATA_READINESS
     else:
         state["stage"] = STAGE_AWAITING_EVIDENCE_CURATION
@@ -241,6 +317,7 @@ def _complete_curation_import(
         run_dir=run_dir,
         state=state,
         status_builder=status_builder,
+        derived_artifact_specs=derived_artifact_specs,
     )
 
 
@@ -542,6 +619,7 @@ def import_investigation_review_payload(
         raise ValueError("Investigation-review matching_result_id does not match shared matching_result.json.")
     target = investigation_review_path(run_dir, round_id)
     write_json(target, payload, pretty=True)
+    materialize_investigation_bundle(run_dir, round_id, pretty=True)
 
     imports = state.get("imports", {}) if isinstance(state.get("imports"), dict) else {}
     imports["matching_authorization_received"] = True
@@ -560,6 +638,10 @@ def import_investigation_review_payload(
         run_dir=run_dir,
         state=state,
         status_builder=status_builder,
+        derived_artifact_specs=[
+            _investigation_state_artifact_spec(run_dir, round_id),
+            _investigation_actions_artifact_spec(run_dir, round_id),
+        ],
     )
 
 

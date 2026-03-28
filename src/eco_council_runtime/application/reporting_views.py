@@ -10,6 +10,8 @@ from typing import Any
 from eco_council_runtime.adapters.filesystem import load_json_if_exists, utc_now_iso
 from eco_council_runtime.application.reporting_state import (
     augment_context_with_matching_state,
+    compact_investigation_actions_summary,
+    compact_investigation_state_summary,
     mission_run_id,
     state_auditable_submissions,
     state_current_submissions,
@@ -19,6 +21,8 @@ from eco_council_runtime.controller.paths import (
     claim_curation_path,
     claim_submissions_path,
     evidence_adjudication_path,
+    investigation_actions_path,
+    investigation_state_path,
     matching_authorization_path,
     matching_result_path,
     observation_candidates_path,
@@ -1068,6 +1072,12 @@ def build_fallback_context_from_state(*, run_dir: Path, state: dict[str, Any], r
             state.get("investigation_plan", {}) if isinstance(state.get("investigation_plan"), dict) else {},
             role,
         ),
+        "investigation_state": compact_investigation_state_summary(
+            state.get("investigation_state", {}) if isinstance(state.get("investigation_state"), dict) else {}
+        ),
+        "investigation_actions": compact_investigation_actions_summary(
+            state.get("investigation_actions", {}) if isinstance(state.get("investigation_actions"), dict) else {}
+        ),
         "phase_state": state.get("phase_state", {}),
         "tasks": role_tasks,
         "claims": [compact_claim(item) for item in state.get("claims", [])[:6]],
@@ -1124,6 +1134,8 @@ def build_fallback_context_from_state(*, run_dir: Path, state: dict[str, Any], r
             "matching_authorization": str(matching_authorization_path(run_dir, round_id)),
             "matching_result": str(matching_result_path(run_dir, round_id)),
             "evidence_adjudication": str(evidence_adjudication_path(run_dir, round_id)),
+            "investigation_state": str(investigation_state_path(run_dir, round_id)),
+            "investigation_actions": str(investigation_actions_path(run_dir, round_id)),
         },
     }
 

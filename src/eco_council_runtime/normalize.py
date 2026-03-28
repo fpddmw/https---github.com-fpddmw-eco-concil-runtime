@@ -35,6 +35,7 @@ from eco_council_runtime.application.normalize_sources import (
     normalize_public_source as application_normalize_public_source,
     normalize_public_source_cached as application_normalize_public_source_cached,
 )
+from eco_council_runtime.application.investigation import materialize_investigation_bundle
 from eco_council_runtime.application.normalize_matching import (
     build_matching_adjudication_draft as application_build_matching_adjudication_draft,
     build_matching_candidate_set as application_build_matching_candidate_set,
@@ -953,12 +954,14 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
     }
     manifest["initialized_at_utc"] = utc_now_iso()
     write_json(run_manifest_path(run_dir_path), manifest, pretty=args.pretty)
+    investigation_bundle = materialize_investigation_bundle(run_dir_path, args.round_id, pretty=args.pretty)
 
     return {
         "run_dir": str(run_dir_path),
         "public_db": str(public_db),
         "environment_db": str(environment_db),
         "manifest_path": str(run_manifest_path(run_dir_path)),
+        **investigation_bundle,
     }
 
 
@@ -1020,6 +1023,7 @@ def command_normalize_public(args: argparse.Namespace) -> dict[str, Any]:
     write_json(claim_submissions_path(run_dir_path, args.round_id), [], pretty=args.pretty)
     write_json(claims_active_path(run_dir_path, args.round_id), [], pretty=args.pretty)
     write_json(shared_claims_path(run_dir_path, args.round_id), [], pretty=args.pretty)
+    investigation_bundle = materialize_investigation_bundle(run_dir_path, args.round_id, pretty=args.pretty)
 
     return {
         "public_db": str(public_db),
@@ -1030,6 +1034,7 @@ def command_normalize_public(args: argparse.Namespace) -> dict[str, Any]:
         "signals_path": str(public_signals_file),
         "signal_summary_path": str(summary_file),
         "claim_candidates_path": str(claims_file),
+        **investigation_bundle,
     }
 
 
@@ -1082,6 +1087,7 @@ def command_normalize_environment(args: argparse.Namespace) -> dict[str, Any]:
     write_json(observation_submissions_path(run_dir_path, args.round_id), [], pretty=args.pretty)
     write_json(observations_active_path(run_dir_path, args.round_id), [], pretty=args.pretty)
     write_json(shared_observations_path(run_dir_path, args.round_id), [], pretty=args.pretty)
+    investigation_bundle = materialize_investigation_bundle(run_dir_path, args.round_id, pretty=args.pretty)
 
     return {
         "environment_db": str(environment_db),
@@ -1092,6 +1098,7 @@ def command_normalize_environment(args: argparse.Namespace) -> dict[str, Any]:
         "signals_path": str(signals_file),
         "signal_summary_path": str(summary_file),
         "observation_candidates_path": str(observations_file),
+        **investigation_bundle,
     }
 
 
@@ -1110,11 +1117,13 @@ def command_materialize_curations(args: argparse.Namespace) -> dict[str, Any]:
         mission=mission,
         pretty=args.pretty,
     )
+    investigation_bundle = materialize_investigation_bundle(run_dir_path, args.round_id, pretty=args.pretty)
     return {
         "run_id": mission_run_id(mission),
         "round_id": args.round_id,
         "claim_materialization": claim_result,
         "observation_materialization": observation_result,
+        **investigation_bundle,
     }
 
 
@@ -1306,6 +1315,7 @@ def command_apply_matching_adjudication(args: argparse.Namespace) -> dict[str, A
             {"object_kind": "evidence-adjudication", "payload": evidence_adjudication},
         ],
     )
+    investigation_bundle = materialize_investigation_bundle(run_dir_path, args.round_id, pretty=args.pretty)
     record_match_phase_receipt(
         run_dir=run_dir_path,
         round_id=args.round_id,
@@ -1323,6 +1333,7 @@ def command_apply_matching_adjudication(args: argparse.Namespace) -> dict[str, A
         "shared_evidence_path": str(shared_evidence_path(run_dir_path, args.round_id)),
         "matching_result_path": str(matching_result_path(run_dir_path, args.round_id)),
         "evidence_adjudication_path": str(evidence_adjudication_path(run_dir_path, args.round_id)),
+        **investigation_bundle,
     }
 
 
@@ -1334,6 +1345,7 @@ def command_link_evidence(args: argparse.Namespace) -> dict[str, Any]:
 
 def command_build_round_context(args: argparse.Namespace) -> dict[str, Any]:
     run_dir_path = Path(args.run_dir).expanduser().resolve()
+    investigation_bundle = materialize_investigation_bundle(run_dir_path, args.round_id, pretty=args.pretty)
     mission = load_mission(run_dir_path)
     tasks_path = round_dir(run_dir_path, args.round_id) / "moderator" / "tasks.json"
     tasks = load_canonical_list(tasks_path)
@@ -1378,6 +1390,7 @@ def command_build_round_context(args: argparse.Namespace) -> dict[str, Any]:
         "evidence_count": len(evidence_cards),
         "cards_active_count": len(library_state(run_dir_path, args.round_id)["cards_active"]),
         "outputs": outputs,
+        **investigation_bundle,
     }
 
 

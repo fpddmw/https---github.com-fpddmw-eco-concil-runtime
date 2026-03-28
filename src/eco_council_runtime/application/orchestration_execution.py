@@ -17,7 +17,21 @@ from eco_council_runtime.adapters.filesystem import (
     write_json,
 )
 from eco_council_runtime.adapters.run_paths import load_mission
-from eco_council_runtime.application import orchestration_planning, orchestration_prepare
+from eco_council_runtime.application import orchestration_prepare
+from eco_council_runtime.application.orchestration.fetch_plan_builder import ensure_fetch_plan_inputs_match
+from eco_council_runtime.application.orchestration.governance import ENVIRONMENT_SOURCES, PUBLIC_SOURCES
+from eco_council_runtime.application.orchestration.step_synthesis import (
+    REPO_DIR,
+    contract_argv,
+    contract_command,
+    normalize_argv,
+    normalize_command,
+    orchestrate_command,
+    reporting_argv,
+    reporting_command,
+    shell_join,
+    skill_workdir,
+)
 from eco_council_runtime.controller.audit_chain import record_fetch_phase_receipt, record_normalize_phase_receipt
 from eco_council_runtime.controller.paths import (
     claim_curation_draft_path,
@@ -53,24 +67,11 @@ from eco_council_runtime.domain.text import maybe_text, truncate_text
 
 ENV_ASSIGNMENT_PATTERN = re.compile(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 
-REPO_DIR = orchestration_planning.REPO_DIR
-PUBLIC_SOURCES = orchestration_planning.PUBLIC_SOURCES
-ENVIRONMENT_SOURCES = orchestration_planning.ENVIRONMENT_SOURCES
-shell_join = orchestration_planning.shell_join
-contract_argv = orchestration_planning.contract_argv
-contract_command = orchestration_planning.contract_command
-normalize_argv = orchestration_planning.normalize_argv
-normalize_command = orchestration_planning.normalize_command
-reporting_argv = orchestration_planning.reporting_argv
-reporting_command = orchestration_planning.reporting_command
-orchestrate_command = orchestration_planning.orchestrate_command
 resolve_round_id = orchestration_prepare.resolve_round_id
 load_tasks = orchestration_prepare.load_tasks
 tasks_for_role = orchestration_prepare.tasks_for_role
 ensure_object = orchestration_prepare.ensure_object
 ensure_object_list = orchestration_prepare.ensure_object_list
-ensure_fetch_plan_inputs_match = orchestration_planning.ensure_fetch_plan_inputs_match
-skill_workdir = orchestration_planning.skill_workdir
 
 
 def strip_inline_comment(text: str) -> str:

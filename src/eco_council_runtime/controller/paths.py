@@ -145,6 +145,14 @@ def investigation_plan_path(run_dir: Path, round_id: str) -> Path:
     return round_dir(run_dir, round_id) / "shared" / "investigation_plan.json"
 
 
+def investigation_state_path(run_dir: Path, round_id: str) -> Path:
+    return round_dir(run_dir, round_id) / "shared" / "investigation_state.json"
+
+
+def investigation_actions_path(run_dir: Path, round_id: str) -> Path:
+    return round_dir(run_dir, round_id) / "shared" / "investigation_actions.json"
+
+
 def claim_curation_path(run_dir: Path, round_id: str) -> Path:
     return round_dir(run_dir, round_id) / "sociologist" / "claim_curation.json"
 
@@ -411,6 +419,10 @@ def supervisor_context_dir(run_dir: Path) -> Path:
 
 def history_context_path(run_dir: Path, round_id: str) -> Path:
     return supervisor_context_dir(run_dir) / f"{round_id}_historical_cases.txt"
+
+
+def history_retrieval_path(run_dir: Path, round_id: str) -> Path:
+    return round_dir(run_dir, round_id) / "shared" / "history_retrieval.json"
 
 
 def response_base_path(run_dir: Path, round_id: str, role: str, kind: str) -> Path:

@@ -25,6 +25,8 @@ from eco_council_runtime.controller.paths import (
     evidence_adjudication_path,
     fetch_execution_path,
     fetch_plan_path,
+    investigation_actions_path,
+    investigation_state_path,
     isolated_active_path,
     matching_adjudication_path,
     matching_result_path,
@@ -258,32 +260,37 @@ def record_import_receipt(
     target_path: Path,
     role: str = "",
     stage_after_import: str = "",
+    derived_artifact_specs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     source_required = path_is_within(run_dir.expanduser().resolve(), source_path.expanduser().resolve())
+    artifact_specs: list[dict[str, Any]] = [
+        {
+            "path": source_path,
+            "label": "import-source",
+            "artifact_kind": "input",
+            "required_current": source_required,
+        },
+        {
+            "path": target_path,
+            "label": "canonical-target",
+            "artifact_kind": "canonical",
+            "required_current": True,
+        },
+    ]
+    if isinstance(derived_artifact_specs, list):
+        artifact_specs.extend(item for item in derived_artifact_specs if isinstance(item, dict))
     return append_audit_receipt(
         run_dir=run_dir,
         round_id=round_id,
         phase_kind="import",
         event_kind=f"{maybe_text(imported_kind)}-import",
         actor_role=role,
-        artifact_specs=[
-            {
-                "path": source_path,
-                "label": "import-source",
-                "artifact_kind": "input",
-                "required_current": source_required,
-            },
-            {
-                "path": target_path,
-                "label": "canonical-target",
-                "artifact_kind": "canonical",
-                "required_current": True,
-            },
-        ],
+        artifact_specs=artifact_specs,
         details={
             "imported_kind": maybe_text(imported_kind),
             "stage_after_import": maybe_text(stage_after_import),
             "source_equals_target": source_path.expanduser().resolve() == target_path.expanduser().resolve(),
+            "derived_artifact_count": len(artifact_specs) - 2,
         },
     )
 
@@ -387,6 +394,18 @@ def record_normalize_phase_receipt(*, run_dir: Path, round_id: str, payload: dic
                 "artifact_kind": "library-view",
                 "required_current": True,
             },
+            {
+                "path": investigation_state_path(run_dir, round_id),
+                "label": "investigation-state",
+                "artifact_kind": "derived-state",
+                "required_current": True,
+            },
+            {
+                "path": investigation_actions_path(run_dir, round_id),
+                "label": "investigation-actions",
+                "artifact_kind": "derived-state",
+                "required_current": True,
+            },
         ],
         details={
             "step_count": int(payload.get("step_count") or 0),
@@ -432,6 +451,18 @@ def record_match_phase_receipt(
                 "required_current": True,
             },
             {"path": remands_open_path(run_dir, round_id), "label": "remands-open", "artifact_kind": "library-view", "required_current": True},
+            {
+                "path": investigation_state_path(run_dir, round_id),
+                "label": "investigation-state",
+                "artifact_kind": "derived-state",
+                "required_current": True,
+            },
+            {
+                "path": investigation_actions_path(run_dir, round_id),
+                "label": "investigation-actions",
+                "artifact_kind": "derived-state",
+                "required_current": True,
+            },
         ],
         details={
             "evidence_count": int(evidence_count),

@@ -12,6 +12,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.application.archive.runtime_state import (
+    collect_run_snapshot,
+    mission_constraints,
+    round_payload_lists,
+    source_governance_payload,
+)
 from eco_council_runtime.investigation import infer_investigation_profile
 from eco_council_runtime.layout import SUPERVISOR_CASE_LIBRARY_DDL_PATH
 
@@ -151,15 +157,6 @@ def write_json(path: Path, payload: Any, *, pretty: bool) -> None:
     path.write_text(pretty_json(payload, pretty=pretty) + "\n", encoding="utf-8")
 
 
-def load_supervisor_module() -> Any:
-    from eco_council_runtime import supervisor as supervisor_module
-
-    return supervisor_module
-
-
-SUP = load_supervisor_module()
-
-
 def read_ddl() -> str:
     return DDL_PATH.read_text(encoding="utf-8")
 
@@ -193,17 +190,6 @@ def init_db(path: Path) -> None:
         conn.executescript(read_ddl())
         migrate_db(conn)
         conn.commit()
-
-
-def state_for_run(run_dir: Path) -> dict[str, Any]:
-    state_path = SUP.supervisor_state_path(run_dir)
-    if state_path.exists():
-        return SUP.load_state(run_dir)
-    round_ids = SUP.discover_round_ids(run_dir)
-    return {
-        "current_round_id": round_ids[-1] if round_ids else "",
-        "stage": "",
-    }
 
 
 def json_text(value: Any) -> str:
@@ -298,14 +284,6 @@ def moderator_status_rank(value: str) -> int:
     return {"complete": 3, "supported": 2, "blocked": 1}.get(maybe_text(value), 0)
 
 
-def mission_constraints(mission: dict[str, Any]) -> dict[str, Any]:
-    values = SUP.contract_call("effective_constraints", mission)
-    if isinstance(values, dict):
-        return values
-    constraints = mission.get("constraints")
-    return constraints if isinstance(constraints, dict) else {}
-
-
 def public_source_skills(claim: dict[str, Any]) -> list[str]:
     refs = claim.get("public_refs")
     if not isinstance(refs, list):
@@ -317,46 +295,6 @@ def public_source_skills(claim: dict[str, Any]) -> list[str]:
             if text:
                 values.append(text)
     return sorted(set(values))
-
-
-def round_payload_lists(run_dir: Path, round_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-    claims = SUP.load_json_if_exists(SUP.shared_claims_path(run_dir, round_id))
-    observations = SUP.load_json_if_exists(SUP.shared_observations_path(run_dir, round_id))
-    evidence = SUP.load_json_if_exists(SUP.shared_evidence_cards_path(run_dir, round_id))
-    return (
-        claims if isinstance(claims, list) else [],
-        observations if isinstance(observations, list) else [],
-        evidence if isinstance(evidence, list) else [],
-    )
-
-
-def collect_run_snapshot(run_dir: Path) -> dict[str, Any]:
-    mission = SUP.read_json(SUP.mission_path(run_dir))
-    if not isinstance(mission, dict):
-        raise ValueError(f"Invalid mission.json in {run_dir}")
-    state = state_for_run(run_dir)
-    round_ids = SUP.discover_round_ids(run_dir)
-    round_summaries = [SUP.collect_round_summary(run_dir, state, round_id) for round_id in round_ids]
-    current_round_id = maybe_text(state.get("current_round_id")) or (round_ids[-1] if round_ids else "")
-    current_summary = next((item for item in round_summaries if item.get("round_id") == current_round_id), None)
-    if current_summary is None and round_summaries:
-        current_summary = round_summaries[-1]
-
-    latest_decision_round = next(
-        (item for item in reversed(round_summaries) if isinstance(item.get("decision"), dict)),
-        None,
-    )
-    latest_decision = latest_decision_round.get("decision") if isinstance(latest_decision_round, dict) else None
-
-    return {
-        "mission": mission,
-        "state": state,
-        "round_ids": round_ids,
-        "round_summaries": round_summaries,
-        "current_summary": current_summary if isinstance(current_summary, dict) else {},
-        "latest_decision_round": latest_decision_round if isinstance(latest_decision_round, dict) else {},
-        "latest_decision": latest_decision if isinstance(latest_decision, dict) else {},
-    }
 
 
 def insert_case(conn: sqlite3.Connection, snapshot: dict[str, Any], run_dir: Path) -> str:
@@ -372,7 +310,7 @@ def insert_case(conn: sqlite3.Connection, snapshot: dict[str, Any], run_dir: Pat
     if not case_id:
         raise ValueError("mission.run_id is required")
 
-    governance_json = json_text(SUP.contract_call("source_governance", mission) or {})
+    governance_json = json_text(source_governance_payload(mission))
     case_values = {
         "case_id": case_id,
         "run_dir": str(run_dir),
@@ -754,7 +692,7 @@ def score_case_row(
     gap_types: list[str],
     source_skills: list[str],
     case_features: dict[str, Any],
-) -> tuple[float, list[str], bool, dict[str, Any]]:
+) -> tuple[float, list[str], bool, dict[str, Any], dict[str, Any]]:
     topic = normalized_text(row["topic"])
     objective = normalized_text(row["objective"])
     region = normalized_text(row["region_label"])
@@ -769,6 +707,10 @@ def score_case_row(
         "source_skills": [],
     }
     score = 0.0
+    lexical_score = 0.0
+    structured_score = 0.0
+    region_score = 0.0
+    filter_score = 0.0
     core_match = False
     strong_structured_match = False
     weak_structured_match = False
@@ -778,15 +720,21 @@ def score_case_row(
         objective_hits = sorted({term for term in query_terms_list if term in objective})
         summary_hits = sorted({term for term in query_terms_list if term in final_summary or term in final_brief})
         if topic_hits:
-            score += 6.0 + (3.0 * len(topic_hits))
+            topic_score = 6.0 + (3.0 * len(topic_hits))
+            score += topic_score
+            lexical_score += topic_score
             reasons.append("topic:" + ",".join(topic_hits[:3]))
             core_match = True
         if objective_hits:
-            score += 2.0 * len(objective_hits)
+            objective_score = 2.0 * len(objective_hits)
+            score += objective_score
+            lexical_score += objective_score
             reasons.append("objective:" + ",".join(objective_hits[:3]))
             core_match = True
         if summary_hits:
-            score += 1.5 * len(summary_hits)
+            summary_score = 1.5 * len(summary_hits)
+            score += summary_score
+            lexical_score += summary_score
             reasons.append("decision:" + ",".join(summary_hits[:3]))
             core_match = True
 
@@ -794,12 +742,15 @@ def score_case_row(
     if target_region:
         if region == target_region:
             score += 8.0
+            region_score += 8.0
             reasons.append("region:exact")
             core_match = True
         else:
             overlap = sorted(set(search_terms(target_region)) & set(search_terms(region)))
             if overlap:
-                score += 2.0 * len(overlap)
+                overlap_score = 2.0 * len(overlap)
+                score += overlap_score
+                region_score += overlap_score
                 reasons.append("region:" + ",".join(overlap[:3]))
                 core_match = True
 
@@ -807,16 +758,19 @@ def score_case_row(
     sufficiency_value = maybe_text(row["final_evidence_sufficiency"])
     if moderator_status and status_value == moderator_status:
         score += 1.5
+        filter_score += 1.5
         reasons.append(f"status:{moderator_status}")
         core_match = True
     if evidence_sufficiency and sufficiency_value == evidence_sufficiency:
         score += 1.5
+        filter_score += 1.5
         reasons.append(f"evidence:{evidence_sufficiency}")
         core_match = True
 
     case_profile_id = normalized_text(case_features.get("profile_id"))
     if profile_id and case_profile_id == normalized_text(profile_id):
         score += 7.0
+        structured_score += 7.0
         reasons.append(f"profile:{normalized_text(profile_id)}")
         matched_fields["profile_id"] = case_profile_id
         strong_structured_match = True
@@ -824,7 +778,9 @@ def score_case_row(
     case_claim_types = set(normalized_values(case_features.get("claim_types", [])))
     claim_overlap = sorted(case_claim_types & set(normalized_values(claim_types)))
     if claim_overlap:
-        score += 4.0 + (2.5 * len(claim_overlap))
+        claim_score = 4.0 + (2.5 * len(claim_overlap))
+        score += claim_score
+        structured_score += claim_score
         reasons.append("claim_types:" + ",".join(claim_overlap[:3]))
         matched_fields["claim_types"] = claim_overlap
         strong_structured_match = True
@@ -832,7 +788,9 @@ def score_case_row(
     case_metric_families = set(normalized_values(case_features.get("metric_families", [])))
     family_overlap = sorted(case_metric_families & set(normalized_values(metric_families)))
     if family_overlap:
-        score += 3.0 + (2.0 * len(family_overlap))
+        family_score = 3.0 + (2.0 * len(family_overlap))
+        score += family_score
+        structured_score += family_score
         reasons.append("metric_families:" + ",".join(family_overlap[:3]))
         matched_fields["metric_families"] = family_overlap
         weak_structured_match = True
@@ -840,7 +798,9 @@ def score_case_row(
     case_gap_types = set(normalized_values(case_features.get("gap_types", [])))
     gap_overlap = sorted(case_gap_types & set(normalized_values(gap_types)))
     if gap_overlap:
-        score += 3.5 + (2.0 * len(gap_overlap))
+        gap_score = 3.5 + (2.0 * len(gap_overlap))
+        score += gap_score
+        structured_score += gap_score
         reasons.append("gap_types:" + ",".join(gap_overlap[:3]))
         matched_fields["gap_types"] = gap_overlap
         strong_structured_match = True
@@ -848,7 +808,9 @@ def score_case_row(
     case_source_skills = set(normalized_values(case_features.get("source_skills", [])))
     source_overlap = sorted(case_source_skills & set(normalized_values(source_skills)))
     if source_overlap:
-        score += 2.0 + (1.0 * len(source_overlap))
+        source_score = 2.0 + (1.0 * len(source_overlap))
+        score += source_score
+        structured_score += source_score
         reasons.append("source_skills:" + ",".join(source_overlap[:3]))
         matched_fields["source_skills"] = source_overlap
         weak_structured_match = True
@@ -858,8 +820,8 @@ def score_case_row(
     elif weak_structured_match and (query_terms_list or target_region or moderator_status or evidence_sufficiency):
         core_match = True
 
-    score += float(sufficiency_rank(sufficiency_value))
-    score += 0.5 * float(moderator_status_rank(status_value))
+    outcome_score = float(sufficiency_rank(sufficiency_value)) + (0.5 * float(moderator_status_rank(status_value)))
+    score += outcome_score
 
     if (
         query_terms_list
@@ -872,8 +834,31 @@ def score_case_row(
         or normalized_values(gap_types)
         or normalized_values(source_skills)
     ) and not core_match:
-        return (0.0, [], False, matched_fields)
-    return (score, reasons, True, matched_fields)
+        return (0.0, [], False, matched_fields, {})
+
+    match_tier = "lexical"
+    if strong_structured_match:
+        match_tier = "structured-strong"
+    elif weak_structured_match:
+        match_tier = "structured-weak"
+    elif region_score > 0.0:
+        match_tier = "region"
+
+    return (
+        score,
+        reasons,
+        True,
+        matched_fields,
+        {
+            "match_tier": match_tier,
+            "lexical_score": round(lexical_score, 3),
+            "structured_score": round(structured_score, 3),
+            "region_score": round(region_score, 3),
+            "filter_score": round(filter_score, 3),
+            "outcome_score": round(outcome_score, 3),
+            "total_score": round(score, 3),
+        },
+    )
 
 
 def default_export_path(db_path: Path, case_id: str, lang: str) -> Path:
@@ -1133,7 +1118,7 @@ def command_search_cases(args: argparse.Namespace) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     for row in rows:
         case_features = feature_map.get(maybe_text(row["case_id"]), empty_case_search_features())
-        score, reasons, matched, matched_fields = score_case_row(
+        score, reasons, matched, matched_fields, score_components = score_case_row(
             row,
             query_terms_list=query_terms_list,
             region_label=region_label,
@@ -1172,11 +1157,17 @@ def command_search_cases(args: argparse.Namespace) -> dict[str, Any]:
                 "matched_metric_families": matched_fields.get("metric_families", []),
                 "matched_gap_types": matched_fields.get("gap_types", []),
                 "matched_source_skills": matched_fields.get("source_skills", []),
+                "score_components": score_components,
             }
         )
 
     results.sort(
         key=lambda item: (
+            {"structured-strong": 3, "structured-weak": 2, "region": 1, "lexical": 0}.get(
+                maybe_text((item.get("score_components") or {}).get("match_tier")),
+                0,
+            ),
+            float((item.get("score_components") or {}).get("structured_score") or 0.0),
             item["score"],
             sufficiency_rank(maybe_text(item.get("final_evidence_sufficiency"))),
             moderator_status_rank(maybe_text(item.get("final_moderator_status"))),

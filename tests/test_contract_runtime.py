@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import tempfile
 import unittest
@@ -15,6 +16,7 @@ from eco_council_runtime.application.contract_runtime import (  # noqa: E402
     scaffold_run_from_mission,
     validate_bundle,
 )
+from eco_council_runtime.controller.paths import investigation_actions_path, investigation_state_path  # noqa: E402
 
 
 def example_mission(*, run_id: str) -> dict[str, object]:
@@ -68,6 +70,16 @@ class ContractRuntimeTests(unittest.TestCase):
             self.assertEqual("round-001", result["round_id"])
             self.assertTrue((run_dir / "mission.json").exists())
             self.assertTrue((run_dir / "round_001" / "moderator" / "tasks.json").exists())
+            state_path = investigation_state_path(run_dir, "round-001")
+            actions_path = investigation_actions_path(run_dir, "round-001")
+            self.assertTrue(state_path.exists())
+            self.assertTrue(actions_path.exists())
+            investigation_state = json.loads(state_path.read_text(encoding="utf-8"))
+            investigation_actions = json.loads(actions_path.read_text(encoding="utf-8"))
+            self.assertEqual("round-001", investigation_state["round_id"])
+            self.assertGreaterEqual(investigation_state["summary"]["hypothesis_count"], 1)
+            self.assertEqual("round-001", investigation_actions["round_id"])
+            self.assertIn("ranked_actions", investigation_actions)
 
             bundle = validate_bundle(run_dir)
             self.assertTrue(bundle["ok"])

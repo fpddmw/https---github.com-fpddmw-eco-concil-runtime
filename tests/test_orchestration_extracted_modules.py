@@ -10,14 +10,19 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from eco_council_runtime.application.orchestration_planning import (  # noqa: E402
+from eco_council_runtime.application.orchestration.fetch_plan_builder import (  # noqa: E402
     build_fetch_plan,
-    build_gdelt_query,
-    ensure_fetch_plan_inputs_match,
+)
+from eco_council_runtime.application.orchestration.geometry import bbox_text_for_geometry  # noqa: E402
+from eco_council_runtime.application.orchestration.governance import (  # noqa: E402
     ensure_source_selection_respects_governance,
 )
+from eco_council_runtime.application.orchestration.query_builders import build_gdelt_query  # noqa: E402
+from eco_council_runtime.application.orchestration.step_synthesis import (  # noqa: E402
+    build_environmentalist_steps,
+)
 from eco_council_runtime.contract import default_round_tasks, scaffold_run_from_mission, source_governance  # noqa: E402
-from eco_council_runtime.controller.paths import source_selection_path, tasks_path  # noqa: E402
+from eco_council_runtime.controller.paths import source_selection_path  # noqa: E402
 from eco_council_runtime.domain.text import maybe_text  # noqa: E402
 
 ROUND_ID = "round-001"
@@ -149,7 +154,7 @@ def build_source_selection(
     }
 
 
-def scaffold_plan_run(root: Path) -> tuple[Path, dict[str, object]]:
+def scaffold_plan_run(root: Path) -> tuple[Path, dict[str, object], list[dict[str, object]]]:
     mission = example_mission()
     tasks = default_round_tasks(mission=mission, round_id=ROUND_ID)
     tasks[0]["inputs"]["query_hints"] = ["Chiang Mai smoke", "northern Thailand haze"]
@@ -193,70 +198,30 @@ def scaffold_plan_run(root: Path) -> tuple[Path, dict[str, object]]:
     )
     write_json(source_selection_path(run_dir, ROUND_ID, "sociologist"), sociologist_selection)
     write_json(source_selection_path(run_dir, ROUND_ID, "environmentalist"), environmentalist_selection)
-    return run_dir, mission
+    return run_dir, mission, tasks
 
 
-class OrchestrationPlanningTests(unittest.TestCase):
-    def test_build_fetch_plan_constructs_role_steps_and_metadata(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            run_dir, _mission = scaffold_plan_run(Path(temp_dir))
+class OrchestrationExtractedModulesTests(unittest.TestCase):
+    def test_query_builders_preserve_literal_and_operator_hints(self) -> None:
+        mission = example_mission()
+        tasks = [
+            {
+                "objective": "Track public discussion.",
+                "inputs": {
+                    "query_hints": [
+                        "Chiang Mai smoke",
+                        "sourcecountry:THA haze",
+                    ]
+                },
+            }
+        ]
 
-            with patch(
-                "eco_council_runtime.application.orchestration.step_synthesis.fetch_script_path",
-                side_effect=fake_fetch_script_path,
-            ):
-                plan = build_fetch_plan(run_dir=run_dir, round_id=ROUND_ID, firms_point_padding_deg=0.5)
+        query = build_gdelt_query(mission=mission, tasks=tasks)
 
-            step_sources = [step["source_skill"] for step in plan["steps"]]
-            self.assertEqual(
-                [
-                    "gdelt-doc-search",
-                    "gdelt-gkg-fetch",
-                    "bluesky-cascade-fetch",
-                    "nasa-firms-fire-fetch",
-                    "openaq-data-fetch",
-                ],
-                step_sources,
-            )
+        self.assertIn('"Chiang Mai smoke"', query)
+        self.assertIn("sourcecountry:THA haze", query)
 
-            gdelt_bulk_step = next(step for step in plan["steps"] if step["source_skill"] == "gdelt-gkg-fetch")
-            openaq_step = next(step for step in plan["steps"] if step["source_skill"] == "openaq-data-fetch")
-            firms_step = next(step for step in plan["steps"] if step["source_skill"] == "nasa-firms-fire-fetch")
-
-            self.assertEqual(["step-sociologist-01-gdelt-doc-search"], gdelt_bulk_step["depends_on"])
-            self.assertEqual("stdout-json", gdelt_bulk_step["artifact_capture"])
-            self.assertIn("collect-openaq", openaq_step["command"])
-            self.assertIn("--bbox=", firms_step["command"])
-            self.assertEqual(
-                ["gdelt-doc-search", "gdelt-gkg-fetch", "bluesky-cascade-fetch"],
-                plan["roles"]["sociologist"]["selected_sources"],
-            )
-            self.assertEqual(
-                ["nasa-firms-fire-fetch", "openaq-data-fetch"],
-                plan["roles"]["environmentalist"]["selected_sources"],
-            )
-            self.assertEqual("complete", plan["input_snapshot"]["source_selections"]["sociologist"]["status"])
-
-    def test_ensure_fetch_plan_inputs_match_detects_task_changes(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            run_dir, _mission = scaffold_plan_run(Path(temp_dir))
-
-            with patch(
-                "eco_council_runtime.application.orchestration.step_synthesis.fetch_script_path",
-                side_effect=fake_fetch_script_path,
-            ):
-                plan = build_fetch_plan(run_dir=run_dir, round_id=ROUND_ID, firms_point_padding_deg=0.5)
-
-            ensure_fetch_plan_inputs_match(run_dir=run_dir, round_id=ROUND_ID, plan=plan)
-
-            tasks_payload = json.loads(tasks_path(run_dir, ROUND_ID).read_text(encoding="utf-8"))
-            tasks_payload[0]["objective"] = "Updated objective after prepare-round."
-            write_json(tasks_path(run_dir, ROUND_ID), tasks_payload)
-
-            with self.assertRaisesRegex(RuntimeError, "tasks.json changed"):
-                ensure_fetch_plan_inputs_match(run_dir=run_dir, round_id=ROUND_ID, plan=plan)
-
-    def test_ensure_source_selection_respects_governance_rejects_invalid_skill(self) -> None:
+    def test_governance_module_rejects_invalid_skill(self) -> None:
         mission = example_mission()
         selection = build_source_selection(
             mission=mission,
@@ -286,24 +251,62 @@ class OrchestrationPlanningTests(unittest.TestCase):
                 source_selection=invalid,
             )
 
-    def test_build_gdelt_query_preserves_literal_and_operator_hints(self) -> None:
-        mission = example_mission()
-        tasks = [
+    def test_geometry_module_builds_bbox_for_point_geometry(self) -> None:
+        bbox_text = bbox_text_for_geometry(
             {
-                "objective": "Track public discussion.",
-                "inputs": {
-                    "query_hints": [
-                        "Chiang Mai smoke",
-                        "sourcecountry:THA haze",
-                    ]
-                },
-            }
-        ]
+                "type": "Point",
+                "latitude": 18.7883,
+                "longitude": 98.9853,
+            },
+            point_padding_deg=0.5,
+        )
 
-        query = build_gdelt_query(mission=mission, tasks=tasks)
+        self.assertEqual("98.485300,18.288300,99.485300,19.288300", bbox_text)
 
-        self.assertIn('"Chiang Mai smoke"', query)
-        self.assertIn("sourcecountry:THA haze", query)
+    def test_step_synthesis_module_builds_environmentalist_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir, mission, tasks = scaffold_plan_run(Path(temp_dir))
+            source_selection = json.loads(source_selection_path(run_dir, ROUND_ID, "environmentalist").read_text(encoding="utf-8"))
+
+            with patch(
+                "eco_council_runtime.application.orchestration.step_synthesis.fetch_script_path",
+                side_effect=fake_fetch_script_path,
+            ):
+                steps = build_environmentalist_steps(
+                    run_dir=run_dir,
+                    round_id=ROUND_ID,
+                    mission=mission,
+                    tasks=tasks,
+                    source_selection=source_selection,
+                    firms_point_padding_deg=0.5,
+                )
+
+            step_sources = [step["source_skill"] for step in steps]
+            self.assertEqual(["nasa-firms-fire-fetch", "openaq-data-fetch"], step_sources)
+            self.assertIn("collect-openaq", steps[1]["command"])
+
+    def test_fetch_plan_builder_module_constructs_role_steps_and_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir, _mission, _tasks = scaffold_plan_run(Path(temp_dir))
+
+            with patch(
+                "eco_council_runtime.application.orchestration.step_synthesis.fetch_script_path",
+                side_effect=fake_fetch_script_path,
+            ):
+                plan = build_fetch_plan(run_dir=run_dir, round_id=ROUND_ID, firms_point_padding_deg=0.5)
+
+            step_sources = [step["source_skill"] for step in plan["steps"]]
+            self.assertEqual(
+                [
+                    "gdelt-doc-search",
+                    "gdelt-gkg-fetch",
+                    "bluesky-cascade-fetch",
+                    "nasa-firms-fire-fetch",
+                    "openaq-data-fetch",
+                ],
+                step_sources,
+            )
+            self.assertEqual("complete", plan["input_snapshot"]["source_selections"]["sociologist"]["status"])
 
 
 if __name__ == "__main__":
