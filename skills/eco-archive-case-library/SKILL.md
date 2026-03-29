@@ -57,7 +57,7 @@ description: Archive one run's canonical board, reporting, and promotion artifac
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-full-development-report.md`
+- `../../openclaw-runtime-mode-development-flow.md`
 
 ## Scripts
 - `scripts/eco_archive_case_library.py`
