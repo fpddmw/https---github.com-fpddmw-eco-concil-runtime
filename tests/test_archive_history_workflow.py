@@ -227,6 +227,58 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
 
 
 class ArchiveHistoryWorkflowTests(unittest.TestCase):
+    def test_close_round_runtime_command_archives_terminal_round_and_exposes_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "historical-run"
+
+            prepare_ready_round(
+                run_dir,
+                root / "historical-fixtures",
+                HISTORICAL_RUN_ID,
+                HISTORICAL_ROUND_ID,
+                publish=True,
+            )
+
+            close_payload = run_kernel(
+                "close-round",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+                "--contract-mode",
+                "strict",
+            )
+            state_payload = run_kernel(
+                "show-run-state",
+                "--run-dir",
+                str(run_dir),
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+                "--tail",
+                "20",
+            )
+
+            close_artifact = load_json(run_dir / "runtime" / f"round_close_{HISTORICAL_ROUND_ID}.json")
+            final_publication = load_json(run_dir / "reporting" / f"final_publication_{HISTORICAL_ROUND_ID}.json")
+            expected_close_posture = "published-release" if final_publication["publication_posture"] == "release" else "published-withhold"
+
+            self.assertEqual("completed", close_payload["status"])
+            self.assertEqual("completed", close_payload["round_close"]["close_status"])
+            self.assertEqual("completed", close_artifact["archive_status"])
+            self.assertEqual(expected_close_posture, close_artifact["close_posture"])
+            self.assertIn("eco-materialize-history-context", close_artifact["recommended_next_skills"])
+            self.assertEqual(
+                ["archive-signal-corpus", "archive-case-library"],
+                [item["stage"] for item in close_artifact["steps"]],
+            )
+            self.assertEqual("completed", state_payload["post_round"]["round_close"]["close_status"])
+            self.assertEqual("completed", state_payload["post_round"]["operator"]["round_close_status"])
+            self.assertTrue(Path(close_artifact["artifacts"]["signal_archive_db_path"]).exists())
+            self.assertTrue(Path(close_artifact["artifacts"]["case_archive_db_path"]).exists())
+
     def test_archive_skills_support_strict_runtime_and_structured_query(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -330,6 +382,72 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertIn("air-quality", first_case["matched_metric_families"])
             self.assertEqual(HISTORICAL_RUN_ID, first_signal["run_id"])
             self.assertEqual("air-quality", first_signal["metric_family"])
+
+    def test_runtime_history_bootstrap_materializes_archive_backed_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            historical_run_dir = root / "historical-run"
+            current_run_dir = root / "current-run"
+
+            prepare_ready_round(
+                historical_run_dir,
+                root / "historical-fixtures",
+                HISTORICAL_RUN_ID,
+                HISTORICAL_ROUND_ID,
+                publish=True,
+            )
+            run_kernel(
+                "close-round",
+                "--run-dir",
+                str(historical_run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+                "--contract-mode",
+                "strict",
+            )
+
+            prepare_ready_round(
+                current_run_dir,
+                root / "current-fixtures",
+                CURRENT_RUN_ID,
+                CURRENT_ROUND_ID,
+                publish=False,
+            )
+
+            history_payload = run_kernel(
+                "bootstrap-history-context",
+                "--run-dir",
+                str(current_run_dir),
+                "--run-id",
+                CURRENT_RUN_ID,
+                "--round-id",
+                CURRENT_ROUND_ID,
+                "--contract-mode",
+                "strict",
+            )
+            state_payload = run_kernel(
+                "show-run-state",
+                "--run-dir",
+                str(current_run_dir),
+                "--round-id",
+                CURRENT_ROUND_ID,
+                "--tail",
+                "20",
+            )
+
+            bootstrap_artifact = load_json(current_run_dir / "runtime" / f"history_bootstrap_{CURRENT_ROUND_ID}.json")
+            retrieval_artifact = load_json(current_run_dir / "investigation" / f"history_retrieval_{CURRENT_ROUND_ID}.json")
+
+            self.assertEqual("completed", history_payload["status"])
+            self.assertEqual("completed", bootstrap_artifact["bootstrap_status"])
+            self.assertGreaterEqual(bootstrap_artifact["selected_case_count"], 1)
+            self.assertGreaterEqual(bootstrap_artifact["selected_signal_count"], 1)
+            self.assertEqual("completed", state_payload["post_round"]["history_bootstrap"]["bootstrap_status"])
+            self.assertEqual("completed", state_payload["post_round"]["operator"]["history_bootstrap_status"])
+            self.assertEqual(bootstrap_artifact["selected_case_count"], retrieval_artifact["budget"]["selected_case_count"])
+            self.assertEqual("smoke-transport", retrieval_artifact["history_query"]["profile_id"])
 
     def test_history_context_materialization_reuses_archived_cases_and_signals(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

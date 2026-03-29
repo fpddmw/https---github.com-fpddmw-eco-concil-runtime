@@ -5,22 +5,39 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .benchmark import (
+    compare_benchmark_manifests,
+    materialize_benchmark_manifest,
+    materialize_scenario_fixture,
+    replay_runtime_scenario,
+)
 from .controller import run_phase2_round, run_phase2_round_with_contract_mode
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill
 from .governance import CONTRACT_MODES, preflight_skill_execution
 from .gate import apply_promotion_gate
 from .ledger import append_ledger_event, load_ledger_tail
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists
+from .post_round import (
+    ARCHIVE_FAILURE_POLICIES,
+    bootstrap_history_context_with_contract_mode,
+    close_round_with_contract_mode,
+)
 from .paths import (
+    benchmark_compare_path,
+    benchmark_manifest_path,
     controller_state_path,
     cursor_path,
     ensure_runtime_dirs,
+    history_bootstrap_state_path,
     ledger_path,
     manifest_path,
     orchestration_plan_path,
     promotion_gate_path,
+    replay_report_path,
     registry_path,
     resolve_run_dir,
+    round_close_state_path,
+    scenario_fixture_path,
     supervisor_state_path,
 )
 from .registry import write_registry
@@ -119,6 +136,68 @@ def phase2_operator_view(run_dir: Path, round_id: str, phase2_state: dict[str, A
     }
 
 
+def post_round_operator_view(run_dir: Path, round_id: str, post_round_state: dict[str, Any]) -> dict[str, Any]:
+    round_close = post_round_state.get("round_close", {}) if isinstance(post_round_state.get("round_close"), dict) else {}
+    history_bootstrap = post_round_state.get("history_bootstrap", {}) if isinstance(post_round_state.get("history_bootstrap"), dict) else {}
+    run_id = maybe_text(round_close.get("run_id")) or maybe_text(history_bootstrap.get("run_id"))
+    return {
+        "round_close_status": maybe_text(round_close.get("close_status")),
+        "archive_status": maybe_text(round_close.get("archive_status")),
+        "close_posture": maybe_text(round_close.get("close_posture")),
+        "history_bootstrap_status": maybe_text(history_bootstrap.get("bootstrap_status")),
+        "selected_case_count": int(history_bootstrap.get("selected_case_count") or 0),
+        "selected_signal_count": int(history_bootstrap.get("selected_signal_count") or 0),
+        "close_command": f"close-round --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if run_id and round_id else "",
+        "history_command": f"bootstrap-history-context --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if run_id and round_id else "",
+        "round_close_path": str(round_close_state_path(run_dir, round_id).resolve()) if round_id else "",
+        "history_bootstrap_path": str(history_bootstrap_state_path(run_dir, round_id).resolve()) if round_id else "",
+    }
+
+
+def benchmark_operator_view(run_dir: Path, round_id: str, benchmark_state: dict[str, Any]) -> dict[str, Any]:
+    fixture = benchmark_state.get("scenario_fixture", {}) if isinstance(benchmark_state.get("scenario_fixture"), dict) else {}
+    manifest = benchmark_state.get("benchmark_manifest", {}) if isinstance(benchmark_state.get("benchmark_manifest"), dict) else {}
+    compare = benchmark_state.get("benchmark_compare", {}) if isinstance(benchmark_state.get("benchmark_compare"), dict) else {}
+    replay = benchmark_state.get("replay_report", {}) if isinstance(benchmark_state.get("replay_report"), dict) else {}
+    run_id = (
+        maybe_text(manifest.get("run_id"))
+        or maybe_text(fixture.get("run_id"))
+        or maybe_text(replay.get("run_id"))
+    )
+    fixture_path = str(scenario_fixture_path(run_dir, round_id).resolve()) if round_id else ""
+    benchmark_path = str(benchmark_manifest_path(run_dir, round_id).resolve()) if round_id else ""
+    compare_path = str(benchmark_compare_path(run_dir, round_id).resolve()) if round_id else ""
+    replay_path = str(replay_report_path(run_dir, round_id).resolve()) if round_id else ""
+    baseline_manifest_path = maybe_text(fixture.get("baseline_manifest", {}).get("path")) if isinstance(fixture.get("baseline_manifest"), dict) else ""
+    compare_command = ""
+    replay_command = ""
+    if round_id and run_id and baseline_manifest_path:
+        compare_command = (
+            f"compare-benchmark-manifests --run-dir {run_dir} --run-id {run_id} --round-id {round_id} "
+            f"--left-manifest-path {baseline_manifest_path} --right-manifest-path {benchmark_path}"
+        )
+        replay_command = (
+            f"replay-runtime-scenario --run-dir {run_dir} --run-id {run_id} --round-id {round_id} "
+            f"--fixture-path {fixture_path}"
+        )
+    return {
+        "scenario_id": maybe_text(fixture.get("scenario_id")),
+        "scenario_fingerprint": maybe_text(manifest.get("scenario_fingerprint")) or maybe_text(fixture.get("scenario_fingerprint")),
+        "fixture_materialized": bool(fixture),
+        "benchmark_materialized": bool(manifest),
+        "compare_verdict": maybe_text(compare.get("verdict")),
+        "replay_verdict": maybe_text(replay.get("replay_verdict")),
+        "fixture_command": f"materialize-scenario-fixture --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if run_id and round_id else "",
+        "benchmark_command": f"materialize-benchmark-manifest --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if run_id and round_id else "",
+        "compare_command": compare_command,
+        "replay_command": replay_command,
+        "fixture_path": fixture_path,
+        "benchmark_manifest_path": benchmark_path,
+        "benchmark_compare_path": compare_path,
+        "replay_report_path": replay_path,
+    }
+
+
 def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, Any]:
     manifest = load_json_if_exists(manifest_path(run_dir)) or {}
     cursor = load_json_if_exists(cursor_path(run_dir)) or {}
@@ -126,6 +205,8 @@ def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, An
     current_round_id = str(cursor.get("current_round_id") or "")
     selected_round_id = maybe_text(round_id) or current_round_id
     phase2_state: dict[str, Any] = {}
+    post_round_state: dict[str, Any] = {}
+    benchmark_state: dict[str, Any] = {}
     if selected_round_id:
         phase2_state = {
             "plan": load_json_if_exists(orchestration_plan_path(run_dir, selected_round_id)) or {},
@@ -134,6 +215,18 @@ def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, An
             "supervisor": load_json_if_exists(supervisor_state_path(run_dir, selected_round_id)) or {},
         }
         phase2_state["operator"] = phase2_operator_view(run_dir, selected_round_id, phase2_state)
+        post_round_state = {
+            "round_close": load_json_if_exists(round_close_state_path(run_dir, selected_round_id)) or {},
+            "history_bootstrap": load_json_if_exists(history_bootstrap_state_path(run_dir, selected_round_id)) or {},
+        }
+        post_round_state["operator"] = post_round_operator_view(run_dir, selected_round_id, post_round_state)
+        benchmark_state = {
+            "scenario_fixture": load_json_if_exists(scenario_fixture_path(run_dir, selected_round_id)) or {},
+            "benchmark_manifest": load_json_if_exists(benchmark_manifest_path(run_dir, selected_round_id)) or {},
+            "benchmark_compare": load_json_if_exists(benchmark_compare_path(run_dir, selected_round_id)) or {},
+            "replay_report": load_json_if_exists(replay_report_path(run_dir, selected_round_id)) or {},
+        }
+        benchmark_state["operator"] = benchmark_operator_view(run_dir, selected_round_id, benchmark_state)
     return {
         "status": "completed",
         "summary": {
@@ -146,6 +239,8 @@ def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, An
         "cursor": cursor,
         "registry": registry,
         "phase2": phase2_state,
+        "post_round": post_round_state,
+        "benchmark": benchmark_state,
         "ledger_tail": load_ledger_tail(run_dir, tail),
     }
 
@@ -208,6 +303,53 @@ def build_parser() -> argparse.ArgumentParser:
     restart_phase2_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     restart_phase2_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(restart_phase2_cmd)
+
+    close_round_cmd = sub.add_parser("close-round", help="Run the standard post-round archive closeout for one terminal round.")
+    close_round_cmd.add_argument("--run-dir", required=True)
+    close_round_cmd.add_argument("--run-id", required=True)
+    close_round_cmd.add_argument("--round-id", required=True)
+    close_round_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    close_round_cmd.add_argument("--archive-failure-policy", default="block", choices=ARCHIVE_FAILURE_POLICIES)
+    close_round_cmd.add_argument("--pretty", action="store_true")
+    add_execution_policy_args(close_round_cmd)
+
+    bootstrap_history_cmd = sub.add_parser("bootstrap-history-context", help="Materialize one runtime-managed history context bundle for the selected round.")
+    bootstrap_history_cmd.add_argument("--run-dir", required=True)
+    bootstrap_history_cmd.add_argument("--run-id", required=True)
+    bootstrap_history_cmd.add_argument("--round-id", required=True)
+    bootstrap_history_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    bootstrap_history_cmd.add_argument("--pretty", action="store_true")
+    add_execution_policy_args(bootstrap_history_cmd)
+
+    scenario_fixture_cmd = sub.add_parser("materialize-scenario-fixture", help="Freeze one benchmarkable scenario contract for the selected round.")
+    scenario_fixture_cmd.add_argument("--run-dir", required=True)
+    scenario_fixture_cmd.add_argument("--run-id", required=True)
+    scenario_fixture_cmd.add_argument("--round-id", required=True)
+    scenario_fixture_cmd.add_argument("--scenario-id", default="")
+    scenario_fixture_cmd.add_argument("--baseline-manifest-path", default="")
+    scenario_fixture_cmd.add_argument("--pretty", action="store_true")
+
+    benchmark_manifest_cmd = sub.add_parser("materialize-benchmark-manifest", help="Write one stable runtime benchmark manifest for the selected round.")
+    benchmark_manifest_cmd.add_argument("--run-dir", required=True)
+    benchmark_manifest_cmd.add_argument("--run-id", required=True)
+    benchmark_manifest_cmd.add_argument("--round-id", required=True)
+    benchmark_manifest_cmd.add_argument("--pretty", action="store_true")
+
+    compare_manifest_cmd = sub.add_parser("compare-benchmark-manifests", help="Compare two benchmark manifests and materialize one drift report.")
+    compare_manifest_cmd.add_argument("--run-dir", required=True)
+    compare_manifest_cmd.add_argument("--run-id", required=True)
+    compare_manifest_cmd.add_argument("--round-id", required=True)
+    compare_manifest_cmd.add_argument("--left-manifest-path", required=True)
+    compare_manifest_cmd.add_argument("--right-manifest-path", required=True)
+    compare_manifest_cmd.add_argument("--pretty", action="store_true")
+
+    replay_cmd = sub.add_parser("replay-runtime-scenario", help="Materialize a candidate benchmark manifest and compare it against one frozen scenario fixture.")
+    replay_cmd.add_argument("--run-dir", required=True)
+    replay_cmd.add_argument("--run-id", required=True)
+    replay_cmd.add_argument("--round-id", required=True)
+    replay_cmd.add_argument("--fixture-path", default="")
+    replay_cmd.add_argument("--baseline-manifest-path", default="")
+    replay_cmd.add_argument("--pretty", action="store_true")
 
     supervisor_cmd = sub.add_parser("supervise-round", help="Run the phase-2 controller and materialize a compact supervisor state.")
     supervisor_cmd.add_argument("--run-dir", required=True)
@@ -386,6 +528,107 @@ def main(argv: list[str] | None = None) -> int:
             )
         except SkillExecutionError as exc:
             failure = exc.payload or {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode}, "message": str(exc)}
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "close-round":
+        try:
+            payload = close_round_with_contract_mode(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                contract_mode=args.contract_mode,
+                timeout_seconds=args.timeout_seconds,
+                retry_budget=args.retry_budget,
+                retry_backoff_ms=args.retry_backoff_ms,
+                allow_side_effects=args.allow_side_effect,
+                archive_failure_policy=args.archive_failure_policy,
+            )
+        except SkillExecutionError as exc:
+            failure = exc.payload or {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode}, "message": str(exc)}
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "bootstrap-history-context":
+        try:
+            payload = bootstrap_history_context_with_contract_mode(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                contract_mode=args.contract_mode,
+                timeout_seconds=args.timeout_seconds,
+                retry_budget=args.retry_budget,
+                retry_backoff_ms=args.retry_backoff_ms,
+                allow_side_effects=args.allow_side_effect,
+            )
+        except SkillExecutionError as exc:
+            failure = exc.payload or {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode}, "message": str(exc)}
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "materialize-scenario-fixture":
+        try:
+            payload = materialize_scenario_fixture(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                scenario_id=args.scenario_id,
+                baseline_manifest_override=args.baseline_manifest_path,
+            )
+        except Exception as exc:
+            failure = {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id}, "message": str(exc)}
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "materialize-benchmark-manifest":
+        try:
+            payload = materialize_benchmark_manifest(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+            )
+        except Exception as exc:
+            failure = {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id}, "message": str(exc)}
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "compare-benchmark-manifests":
+        try:
+            payload = compare_benchmark_manifests(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                left_manifest_path=args.left_manifest_path,
+                right_manifest_path=args.right_manifest_path,
+            )
+        except Exception as exc:
+            failure = {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id}, "message": str(exc)}
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "replay-runtime-scenario":
+        try:
+            payload = replay_runtime_scenario(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                fixture_path_override=args.fixture_path,
+                baseline_manifest_override=args.baseline_manifest_path,
+            )
+        except Exception as exc:
+            failure = {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id}, "message": str(exc)}
             print(pretty_json(failure, args.pretty))
             return 1
         print(pretty_json(payload, args.pretty))

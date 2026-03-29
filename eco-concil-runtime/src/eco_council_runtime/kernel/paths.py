@@ -51,6 +51,30 @@ def supervisor_state_path(run_dir: Path, round_id: str) -> Path:
     return runtime_dir(run_dir) / f"supervisor_state_{round_id}.json"
 
 
+def round_close_state_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"round_close_{round_id}.json"
+
+
+def history_bootstrap_state_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"history_bootstrap_{round_id}.json"
+
+
+def scenario_fixture_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"scenario_fixture_{round_id}.json"
+
+
+def benchmark_manifest_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"benchmark_manifest_{round_id}.json"
+
+
+def replay_report_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"replay_report_{round_id}.json"
+
+
+def benchmark_compare_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"benchmark_compare_{round_id}.json"
+
+
 def receipt_path(run_dir: Path, receipt_id: str) -> Path:
     return receipts_dir(run_dir) / f"{receipt_id}.json"
 

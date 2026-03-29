@@ -214,7 +214,7 @@
 
 ### 阶段 R4: archive / history 纳入正式 runtime 流程
 
-状态：`技能已完成，调度未完全收口`
+状态：`已完成`
 
 目标：
 
@@ -228,14 +228,20 @@
 3. `eco-query-case-library`
 4. `eco-query-signal-corpus`
 5. `eco-materialize-history-context`
-6. `tests/test_archive_history_workflow.py`
+6. `kernel/post_round.py`
+7. `kernel/cli.py`
+8. `tests/test_archive_history_workflow.py`
+9. `tests/test_runtime_kernel.py`
 
-仍需完成的工作：
+本轮已交付：
 
-1. 规定 archive write 的标准触发时机
-2. 把 history context 纳入 replay / next-round bootstrap
-3. 明确 archive 失败是否阻塞 round close
-4. 为 nightly / benchmark 场景增加 archive compaction 策略
+1. 增加 `close-round`，将 archive write 固定为 runtime 的标准 post-round closeout 入口
+2. 增加 `bootstrap-history-context`，将 history context 正式纳入 runtime 的 next-round bootstrap 路径
+3. 为 round close 增加显式 state artifact、ledger event、step 状态与失败语义
+4. 明确 archive failure policy：默认 `block`，并支持 `warn` 退化关闭
+5. 明确 archive compaction policy：以 `replace-per-run-snapshot` 作为 nightly / benchmark 的稳定替换策略
+6. 将 `show-run-state` 扩展到 post-round 状态面，可直接查看 round close 与 history bootstrap 结果
+7. 补齐 R4 workflow / kernel 回归；截至 `2026-03-29`，全量 `60` 项测试通过
 
 完成判据：
 
@@ -244,27 +250,41 @@
 
 ### 阶段 R5: replay / benchmark / nightly tooling
 
-状态：`未开始`
+状态：`已完成`
 
 目标：
 
 1. 让 runtime route 真正承担第二编排面职责
 2. 让它能用于回放、基准对比、固定数据集验证
 
-必须实现：
+当前已有产物：
+
+1. `kernel/benchmark.py`
+2. `kernel/cli.py`
+3. `tests/test_benchmark_replay_workflow.py`
+4. `tests/test_runtime_kernel.py`
+
+本轮已交付：
 
 1. benchmark run manifest
-2. replay command
-3. scenario fixture contract
+2. scenario fixture contract
+3. replay command
 4. stable output comparison
 5. per-skill / per-round timing and failure summary
+6. `show-run-state` benchmark state 面板
+7. 基于 runtime artifacts 的 compare / replay / regression report 落盘
+8. 补齐 R5 workflow / kernel 回归；截至 `2026-03-29`，全量 `63` 项测试通过
 
-建议新增能力：
+当前实现形态：
 
-1. round template
-2. regression corpus
-3. archive snapshot pinning
-4. diffable summary export
+1. `materialize-benchmark-manifest`
+2. `materialize-scenario-fixture`
+3. `compare-benchmark-manifests`
+4. `replay-runtime-scenario`
+5. `scenario_fixture_<round_id>.json`
+6. `benchmark_manifest_<round_id>.json`
+7. `benchmark_compare_<round_id>.json`
+8. `replay_report_<round_id>.json`
 
 完成判据：
 
@@ -298,9 +318,7 @@
 
 接下来应按下面顺序推进：
 
-1. 把 R4 调度化
-2. 落 R5 replay / benchmark tooling
-3. 最后做 R6 生产化边界
+1. 做 R6 生产化边界
 
 不要反过来做。  
 如果先做 R6，会把一条尚未稳定的路线过早固化。
@@ -319,17 +337,17 @@
 2. 增加 credential mount / env policy
 3. 增加 quarantine / checksum / provenance 扩展
 
-### Backlog C: archive / history
+### Backlog C: archive / history maintenance（R4 已交付）
 
-1. 定义 round close 后的 archive pipeline
-2. 定义 next-round bootstrap 如何读取 history context
-3. 给 history retrieval 增加更强检索策略的替换点
+1. 继续增强 history retrieval 的检索策略，但保持它是分析辅助层而不是主调查面
+2. 如果后续需要多轮同 run 复用历史，可再补 case_id / round_id 级索引拆分
+3. 保持 archive schema 演进与 close-round state artifact 同步
 
-### Backlog D: benchmark / replay
+### Backlog D: benchmark / replay maintenance（R5 已交付）
 
-1. 定义 scenario fixture 目录协议
-2. 定义 canonical output comparison 规则
-3. 输出 per-run regression summary
+1. 如果要做 nightly corpus，继续补 round template 与 regression corpus 编排
+2. 如果要跨机器复放，补更强的 fixture dataset pinning 和 archive snapshot pinning
+3. 如果要做趋势分析，再补 diffable summary export 与 timing trend report
 
 ## 8. 路线风险
 

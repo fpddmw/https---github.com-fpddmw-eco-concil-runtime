@@ -871,6 +871,63 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertIn("resume-phase2-round", supervisor_artifact["resume_command"])
             self.assertEqual("controller-failed", raised.exception.payload["supervisor"]["supervisor_status"])
 
+    def test_close_round_blocks_on_archive_failure_by_default_and_persists_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.executor import SkillExecutionError
+            from eco_council_runtime.kernel.post_round import close_round_with_contract_mode
+
+            runtime_dir = run_dir / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            (runtime_dir / f"supervisor_state_{ROUND_ID}.json").write_text(
+                json.dumps(
+                    {
+                        "run_id": RUN_ID,
+                        "round_id": ROUND_ID,
+                        "supervisor_status": "ready-for-reporting",
+                        "readiness_status": "ready",
+                        "promotion_status": "promoted",
+                    },
+                    ensure_ascii=True,
+                ),
+                encoding="utf-8",
+            )
+
+            signal_archive_result = {
+                "summary": {"skill_name": "eco-archive-signal-corpus", "event_id": "evt-archive-signal", "receipt_id": "receipt-archive-signal"},
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "signal_archive.json")}},
+            }
+            case_archive_failure = SkillExecutionError(
+                "case archive failed",
+                {
+                    "status": "failed",
+                    "message": "case archive failed",
+                    "summary": {"skill_name": "eco-archive-case-library", "run_id": RUN_ID, "round_id": ROUND_ID},
+                    "failure": {"error_code": "skill-exit-nonzero", "retryable": False},
+                },
+            )
+
+            with (
+                mock.patch("eco_council_runtime.kernel.post_round.write_registry"),
+                mock.patch(
+                    "eco_council_runtime.kernel.post_round.run_skill",
+                    side_effect=[signal_archive_result, case_archive_failure],
+                ),
+            ):
+                with self.assertRaises(SkillExecutionError) as raised:
+                    close_round_with_contract_mode(run_dir, run_id=RUN_ID, round_id=ROUND_ID, contract_mode="warn")
+
+            close_artifact = load_json(run_dir / "runtime" / f"round_close_{ROUND_ID}.json")
+            self.assertEqual("failed", close_artifact["close_status"])
+            self.assertEqual("failed", close_artifact["archive_status"])
+            self.assertEqual("archive-case-library", close_artifact["failed_stage"])
+            self.assertEqual("block", close_artifact["archive_failure_policy"])
+            self.assertEqual("failed", raised.exception.payload["round_close"]["close_status"])
+
     def test_cli_run_skill_forwards_execution_policy_args(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -922,6 +979,188 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(50, run_skill_mock.call_args.kwargs["retry_backoff_ms"])
             self.assertEqual(["network-external", "destructive-write"], run_skill_mock.call_args.kwargs["allow_side_effects"])
             self.assertEqual(["--author-role", "moderator"], run_skill_mock.call_args.kwargs["skill_args"])
+            self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
+
+    def test_cli_close_round_and_history_bootstrap_forward_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.cli import main
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.close_round_with_contract_mode",
+                    return_value={"status": "completed", "summary": {"round_id": ROUND_ID}},
+                ) as close_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "close-round",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        RUN_ID,
+                        "--round-id",
+                        ROUND_ID,
+                        "--archive-failure-policy",
+                        "warn",
+                        "--timeout-seconds",
+                        "6",
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual("warn", close_mock.call_args.kwargs["archive_failure_policy"])
+            self.assertEqual(6.0, close_mock.call_args.kwargs["timeout_seconds"])
+            self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.bootstrap_history_context_with_contract_mode",
+                    return_value={"status": "completed", "summary": {"round_id": ROUND_ID}},
+                ) as history_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "bootstrap-history-context",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        RUN_ID,
+                        "--round-id",
+                        ROUND_ID,
+                        "--retry-budget",
+                        "2",
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(2, history_mock.call_args.kwargs["retry_budget"])
+            self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
+
+    def test_cli_benchmark_commands_forward_arguments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.cli import main
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.materialize_scenario_fixture",
+                    return_value={"status": "completed", "summary": {"round_id": ROUND_ID}},
+                ) as fixture_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "materialize-scenario-fixture",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        RUN_ID,
+                        "--round-id",
+                        ROUND_ID,
+                        "--scenario-id",
+                        "scenario-fixed-001",
+                        "--baseline-manifest-path",
+                        str(root / "baseline.json"),
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual("scenario-fixed-001", fixture_mock.call_args.kwargs["scenario_id"])
+            self.assertEqual(str(root / "baseline.json"), fixture_mock.call_args.kwargs["baseline_manifest_override"])
+            self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.materialize_benchmark_manifest",
+                    return_value={"status": "completed", "summary": {"round_id": ROUND_ID}},
+                ) as manifest_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "materialize-benchmark-manifest",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        RUN_ID,
+                        "--round-id",
+                        ROUND_ID,
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            manifest_mock.assert_called_once()
+            self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.compare_benchmark_manifests",
+                    return_value={"status": "completed", "summary": {"round_id": ROUND_ID}},
+                ) as compare_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "compare-benchmark-manifests",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        RUN_ID,
+                        "--round-id",
+                        ROUND_ID,
+                        "--left-manifest-path",
+                        str(root / "left.json"),
+                        "--right-manifest-path",
+                        str(root / "right.json"),
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(str(root / "left.json"), compare_mock.call_args.kwargs["left_manifest_path"])
+            self.assertEqual(str(root / "right.json"), compare_mock.call_args.kwargs["right_manifest_path"])
+            self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.replay_runtime_scenario",
+                    return_value={"status": "completed", "summary": {"round_id": ROUND_ID}},
+                ) as replay_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "replay-runtime-scenario",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        RUN_ID,
+                        "--round-id",
+                        ROUND_ID,
+                        "--fixture-path",
+                        str(root / "fixture.json"),
+                        "--baseline-manifest-path",
+                        str(root / "baseline.json"),
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(str(root / "fixture.json"), replay_mock.call_args.kwargs["fixture_path_override"])
+            self.assertEqual(str(root / "baseline.json"), replay_mock.call_args.kwargs["baseline_manifest_override"])
             self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
 
     def test_cli_resume_and_restart_phase2_round_forward_flags(self) -> None:
