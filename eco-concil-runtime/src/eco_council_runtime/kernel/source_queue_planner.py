@@ -233,7 +233,12 @@ def build_fetch_plan(
                 "fetch_argv": fetch_argv,
                 "fetch_cwd": maybe_text(item.get("fetch_cwd")) or str(WORKSPACE_ROOT),
                 "fetch_execution_policy": item.get("fetch_execution_policy", {}) if isinstance(item.get("fetch_execution_policy"), dict) else {},
-                "allow_side_effects": item.get("allow_side_effects", []) if isinstance(item.get("allow_side_effects"), list) else [],
+                "declared_side_effects": item.get("declared_side_effects", []) if isinstance(item.get("declared_side_effects"), list) else [],
+                "requested_side_effect_approvals": (
+                    item.get("requested_side_effect_approvals", [])
+                    if isinstance(item.get("requested_side_effect_approvals"), list)
+                    else []
+                ),
                 "normalizer_args": normalizer_args_for(source_skill, item),
                 "notes": [
                     f"Execute detached-fetch request for {source_skill} before normalization.",
@@ -252,7 +257,7 @@ def build_fetch_plan(
     plan_id = "fetch-plan-" + stable_hash(run_id, round_id, len(steps), mission_path, tasks_path)[:12]
     plan = {
         "plan_kind": "eco-council-fetch-plan",
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "generated_at_utc": utc_now_iso(),
         "policy_profile": policy_profile_summary(mission),
         "effective_constraints": effective_constraints(mission),

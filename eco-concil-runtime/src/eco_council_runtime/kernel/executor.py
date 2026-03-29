@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import shlex
 import subprocess
 import sys
 import time
@@ -12,6 +14,7 @@ from .governance import CONTRACT_MODES, postflight_skill_execution, preflight_sk
 from .ledger import append_ledger_event, write_receipt
 from .locking import exclusive_runtime_lock
 from .manifest import update_after_run
+from .operations import admission_error_code, evaluate_execution_admission, materialize_dead_letter, refresh_runtime_surfaces
 from .registry import resolve_skill_entry, workspace_root
 
 
@@ -78,6 +81,52 @@ def structured_failure(
     }
 
 
+DEAD_LETTER_ID_PATTERN = re.compile(r"(deadletter-[0-9a-f]{20})")
+
+
+def skill_command_hint(
+    command_name: str,
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    skill_name: str,
+    contract_mode: str,
+    skill_args: list[str],
+) -> str:
+    command = [
+        command_name,
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--skill-name",
+        skill_name,
+        "--contract-mode",
+        contract_mode,
+    ]
+    if skill_args:
+        command.extend(["--", *skill_args])
+    return shlex.join(command)
+
+
+def extract_dead_letter_id(*texts: str) -> str:
+    for text in texts:
+        match = DEAD_LETTER_ID_PATTERN.search(maybe_text(text))
+        if match:
+            return match.group(1)
+    return ""
+
+
+def refresh_runtime_surfaces_safely(run_dir: Path, *, round_id: str) -> dict[str, Any]:
+    try:
+        return refresh_runtime_surfaces(run_dir, round_id=round_id)
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def run_skill(
     run_dir: Path,
     *,
@@ -125,6 +174,24 @@ def run_skill(
         "workspace_root": str(root),
         "script_path": str(script_path),
     }
+    run_command_hint = skill_command_hint(
+        "run-skill",
+        run_dir=run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        skill_name=skill_name,
+        contract_mode=contract_mode,
+        skill_args=skill_args,
+    )
+    preflight_command_hint = skill_command_hint(
+        "preflight-skill",
+        run_dir=run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        skill_name=skill_name,
+        contract_mode=contract_mode,
+        skill_args=skill_args,
+    )
     execution_input_hash = json_hash(
         {
             "run_id": run_id,
@@ -140,6 +207,20 @@ def run_skill(
             "declared_side_effects": declared_side_effects,
             "allowed_side_effects": allowed_side_effects,
         }
+    )
+    runtime_admission = evaluate_execution_admission(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        actor_kind="skill",
+        actor_name=skill_name,
+        declared_side_effects=declared_side_effects,
+        requested_side_effect_approvals=allowed_side_effects,
+        execution_policy=execution_policy,
+        resolved_read_paths=preflight.get("resolved_read_paths", []),
+        resolved_write_paths=preflight.get("resolved_write_paths", []),
+        cwd_path=str(root),
+        workspace=root,
     )
     started_at = utc_now_iso()
     with exclusive_runtime_lock(run_dir) as lock_path:
@@ -173,19 +254,116 @@ def run_skill(
                 "declared_side_effects": declared_side_effects,
                 "allowed_side_effects": allowed_side_effects,
                 "execution_policy": execution_policy,
+                "runtime_admission": runtime_admission,
                 "lock_path": str(lock_path),
                 "preflight": preflight,
                 "failure": failure,
                 "attempts": [],
                 "attempt_count": 0,
             }
+            dead_letter = materialize_dead_letter(
+                run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                source_type="skill-preflight",
+                source_name=skill_name,
+                message=failure["message"],
+                failure=failure,
+                summary={"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
+                related_paths={
+                    "policy_path": runtime_admission.get("policy_path", ""),
+                    "script_path": str(script_path),
+                    "workspace_root": str(root),
+                    "lock_path": str(lock_path),
+                },
+                command_hint=preflight_command_hint,
+            )
+            event["dead_letter_id"] = dead_letter["dead_letter_id"]
             append_ledger_event(run_dir, event)
+            operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
             failure_payload = {
                 "status": "failed",
                 "summary": {"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
                 "message": failure["message"],
                 "failure": failure,
                 "preflight": preflight,
+                "runtime_admission": runtime_admission,
+                "dead_letter": dead_letter,
+                "operator_surface": operator_surface,
+            }
+            raise SkillExecutionError(failure_payload["message"], failure_payload)
+
+        if bool(runtime_admission.get("block_execution")):
+            finished_at = utc_now_iso()
+            error_code = admission_error_code(runtime_admission)
+            failure = structured_failure(
+                error_code=error_code,
+                message=f"Runtime admission blocked execution for {skill_name}.",
+                retryable=False,
+                attempts=[],
+                execution_policy=execution_policy,
+                recovery_hints=[
+                    maybe_text(issue.get("message"))
+                    for issue in runtime_admission.get("issues", [])
+                    if isinstance(issue, dict) and maybe_text(issue.get("message"))
+                ]
+                or ["Adjust the admission policy or requested approvals before retrying."],
+            )
+            event = {
+                "schema_version": "runtime-event-v3",
+                "event_id": new_runtime_event_id("runtimeevt", run_id, round_id, skill_name, execution_input_hash, started_at, finished_at, "admission"),
+                "event_type": "skill-admission",
+                "run_id": run_id,
+                "round_id": round_id,
+                "skill_name": skill_name,
+                "started_at_utc": started_at,
+                "completed_at_utc": finished_at,
+                "status": "blocked",
+                "contract_mode": contract_mode,
+                "skill_args": skill_args,
+                "skill_options": skill_options,
+                "command_snapshot": command_snapshot,
+                "execution_input_hash": execution_input_hash,
+                "skill_registry_entry": skill_entry,
+                "declared_side_effects": declared_side_effects,
+                "allowed_side_effects": allowed_side_effects,
+                "execution_policy": execution_policy,
+                "lock_path": str(lock_path),
+                "preflight": preflight,
+                "runtime_admission": runtime_admission,
+                "failure": failure,
+                "attempts": [],
+                "attempt_count": 0,
+            }
+            dead_letter = materialize_dead_letter(
+                run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                source_type="skill-admission",
+                source_name=skill_name,
+                message=failure["message"],
+                failure={**failure, "runtime_admission": runtime_admission},
+                summary={"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
+                related_paths={
+                    "policy_path": runtime_admission.get("policy_path", ""),
+                    "script_path": str(script_path),
+                    "workspace_root": str(root),
+                    "lock_path": str(lock_path),
+                },
+                command_hint=preflight_command_hint,
+            )
+            event["dead_letter_id"] = dead_letter["dead_letter_id"]
+            append_ledger_event(run_dir, event)
+            operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
+            failure_payload = {
+                "status": "failed",
+                "summary": {"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
+                "message": failure["message"],
+                "failure": failure,
+                "preflight": preflight,
+                "runtime_admission": runtime_admission,
+                "dead_letter": dead_letter,
+                "operator_surface": operator_surface,
             }
             raise SkillExecutionError(failure_payload["message"], failure_payload)
 
@@ -341,6 +519,7 @@ def run_skill(
             "resolved_read_paths": preflight.get("resolved_read_paths", []),
             "resolved_write_paths": preflight.get("resolved_write_paths", []),
             "preflight": preflight,
+            "runtime_admission": runtime_admission,
             "stdout_hash": stable_hash(final_stdout),
             "stderr_hash": stable_hash(final_stderr),
             "lock_path": str(lock_path),
@@ -366,7 +545,32 @@ def run_skill(
                 "stderr": final_stderr,
                 "failure": failure,
             }
+            existing_dead_letter_id = extract_dead_letter_id(final_error_message, final_stdout, final_stderr)
+            dead_letter = {}
+            if existing_dead_letter_id:
+                event["dead_letter_id"] = existing_dead_letter_id
+                dead_letter = {"dead_letter_id": existing_dead_letter_id, "status": "reused"}
+            else:
+                dead_letter = materialize_dead_letter(
+                    run_dir,
+                    run_id=run_id,
+                    round_id=round_id,
+                    source_type="skill-execution",
+                    source_name=skill_name,
+                    message=failure["message"],
+                    failure=failure,
+                    summary={"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
+                    related_paths={
+                        "policy_path": runtime_admission.get("policy_path", ""),
+                        "script_path": str(script_path),
+                        "workspace_root": str(root),
+                        "lock_path": str(lock_path),
+                    },
+                    command_hint=run_command_hint,
+                )
+                event["dead_letter_id"] = dead_letter["dead_letter_id"]
             append_ledger_event(run_dir, event)
+            operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
             raise SkillExecutionError(
                 failure["message"],
                 {
@@ -375,6 +579,9 @@ def run_skill(
                     "message": failure["message"],
                     "failure": failure,
                     "preflight": preflight,
+                    "runtime_admission": runtime_admission,
+                    "dead_letter": dead_letter,
+                    "operator_surface": operator_surface,
                 },
             )
 
@@ -410,7 +617,26 @@ def run_skill(
             "postflight": postflight,
             "failure": failure,
         }
+        dead_letter = materialize_dead_letter(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            source_type="skill-postflight",
+            source_name=skill_name,
+            message=failure["message"],
+            failure=failure,
+            summary={"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
+            related_paths={
+                "policy_path": runtime_admission.get("policy_path", ""),
+                "receipt_path": str(receipt_file),
+                "script_path": str(script_path),
+                "workspace_root": str(root),
+            },
+            command_hint=run_command_hint,
+        )
+        event["dead_letter_id"] = dead_letter["dead_letter_id"]
         append_ledger_event(run_dir, event)
+        operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
         failure_payload = {
             "status": "failed",
             "summary": {"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
@@ -418,8 +644,11 @@ def run_skill(
             "failure": failure,
             "preflight": preflight,
             "postflight": postflight,
+            "runtime_admission": runtime_admission,
             "receipt_id": receipt_id,
             "receipt_path": str(receipt_file),
+            "dead_letter": dead_letter,
+            "operator_surface": operator_surface,
         }
         raise SkillExecutionError(failure_payload["message"], failure_payload)
 
@@ -437,6 +666,7 @@ def run_skill(
         "postflight": postflight,
     }
     append_ledger_event(run_dir, event)
+    operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
     manifest, cursor = update_after_run(run_dir, run_id=run_id, round_id=round_id, skill_name=skill_name, receipt_id=receipt_id, event_id=event_id)
     return {
         "status": "completed",
@@ -456,5 +686,6 @@ def run_skill(
         "manifest": manifest,
         "cursor": cursor,
         "skill_payload": payload,
-        "governance": {"preflight": preflight, "postflight": postflight},
+        "governance": {"preflight": preflight, "postflight": postflight, "runtime_admission": runtime_admission},
+        "operator_surface": operator_surface,
     }

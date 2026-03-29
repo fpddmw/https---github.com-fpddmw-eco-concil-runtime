@@ -27,6 +27,7 @@ from eco_council_runtime.kernel.source_queue_contract import (  # noqa: E402
     write_json_file,
 )
 from eco_council_runtime.kernel.source_queue_execution import (  # noqa: E402
+    DetachedFetchExecutionError,
     copy_import_artifact,
     execute_detached_fetch_step,
     resolved_artifact_path,
@@ -127,6 +128,37 @@ def execute_import_step(
     return status, payload
 
 
+def build_execution_payload(
+    *,
+    run_id: str,
+    round_id: str,
+    plan_path: Path,
+    plan_sha256: str,
+    statuses: list[dict[str, Any]],
+    normalized_receipt_ids: list[str],
+    normalized_artifact_refs: list[dict[str, Any]],
+    failure: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = {
+        "schema_version": "ingress-import-v2",
+        "generated_at_utc": utc_now_iso(),
+        "run_id": run_id,
+        "round_id": round_id,
+        "execution_id": "import-execution-" + stable_hash(run_id, round_id, plan_sha256, len(statuses))[:12],
+        "plan_path": str(plan_path),
+        "plan_sha256": plan_sha256,
+        "step_count": len(statuses),
+        "completed_count": len([item for item in statuses if maybe_text(item.get("status")) == "completed"]),
+        "failed_count": len([item for item in statuses if maybe_text(item.get("status")) == "failed"]),
+        "statuses": statuses,
+        "normalized_receipt_ids": unique_texts(normalized_receipt_ids),
+        "normalized_artifact_refs": normalized_artifact_refs,
+    }
+    if failure is not None:
+        payload["failure"] = failure
+    return payload
+
+
 def import_fetch_execution_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     plan_path = (run_dir_path / "runtime" / f"fetch_plan_{round_id}.json").resolve()
@@ -153,34 +185,45 @@ def import_fetch_execution_skill(run_dir: str, run_id: str, round_id: str) -> di
                 warnings.extend(item for item in payload["warnings"] if isinstance(item, dict) and maybe_text(item.get("message")))
         except Exception as exc:  # noqa: BLE001
             step_id = maybe_text(step.get("step_id")) or "unknown-step"
-            statuses.append(
-                {
-                    "step_id": step_id,
-                    "step_kind": maybe_text(step.get("step_kind")) or "import",
-                    "status": "failed",
-                    "role": maybe_text(step.get("role")),
-                    "source_skill": maybe_text(step.get("source_skill")),
-                    "normalizer_skill": maybe_text(step.get("normalizer_skill")),
-                    "reason": str(exc),
-                }
+            failed_status = {
+                "step_id": step_id,
+                "step_kind": maybe_text(step.get("step_kind")) or "import",
+                "status": "failed",
+                "role": maybe_text(step.get("role")),
+                "source_skill": maybe_text(step.get("source_skill")),
+                "normalizer_skill": maybe_text(step.get("normalizer_skill")),
+                "reason": str(exc),
+            }
+            failure_payload: dict[str, Any] = {
+                "step_id": step_id,
+                "message": str(exc),
+            }
+            if isinstance(exc, DetachedFetchExecutionError):
+                failed_status["detached_fetch"] = exc.payload
+                failure_payload["detached_fetch"] = exc.payload
+            statuses.append(failed_status)
+            partial_payload = build_execution_payload(
+                run_id=run_id,
+                round_id=round_id,
+                plan_path=plan_path,
+                plan_sha256=plan_sha256,
+                statuses=statuses,
+                normalized_receipt_ids=normalized_receipt_ids,
+                normalized_artifact_refs=normalized_artifact_refs,
+                failure=failure_payload,
             )
+            write_json_file(output_path, partial_payload)
             raise RuntimeError(f"Import execution failed at {step_id}: {exc}") from exc
 
-    payload = {
-        "schema_version": "ingress-import-v2",
-        "generated_at_utc": utc_now_iso(),
-        "run_id": run_id,
-        "round_id": round_id,
-        "execution_id": "import-execution-" + stable_hash(run_id, round_id, plan_sha256, len(statuses))[:12],
-        "plan_path": str(plan_path),
-        "plan_sha256": plan_sha256,
-        "step_count": len(steps),
-        "completed_count": len([item for item in statuses if maybe_text(item.get("status")) == "completed"]),
-        "failed_count": len([item for item in statuses if maybe_text(item.get("status")) == "failed"]),
-        "statuses": statuses,
-        "normalized_receipt_ids": unique_texts(normalized_receipt_ids),
-        "normalized_artifact_refs": normalized_artifact_refs,
-    }
+    payload = build_execution_payload(
+        run_id=run_id,
+        round_id=round_id,
+        plan_path=plan_path,
+        plan_sha256=plan_sha256,
+        statuses=statuses,
+        normalized_receipt_ids=normalized_receipt_ids,
+        normalized_artifact_refs=normalized_artifact_refs,
+    )
     write_json_file(output_path, payload)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_path), "record_locator": "$", "artifact_ref": f"{output_path}:$"}]

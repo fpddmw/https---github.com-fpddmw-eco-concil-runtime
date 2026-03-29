@@ -15,6 +15,10 @@ def receipts_dir(run_dir: Path) -> Path:
     return runtime_dir(run_dir) / "receipts"
 
 
+def dead_letters_dir(run_dir: Path) -> Path:
+    return runtime_dir(run_dir) / "dead_letters"
+
+
 def manifest_path(run_dir: Path) -> Path:
     return runtime_dir(run_dir) / "run_manifest.json"
 
@@ -75,6 +79,24 @@ def benchmark_compare_path(run_dir: Path, round_id: str) -> Path:
     return runtime_dir(run_dir) / f"benchmark_compare_{round_id}.json"
 
 
+def admission_policy_path(run_dir: Path) -> Path:
+    return runtime_dir(run_dir) / "admission_policy.json"
+
+
+def runtime_health_path(run_dir: Path) -> Path:
+    return runtime_dir(run_dir) / "runtime_health.json"
+
+
+def operator_runbook_path(run_dir: Path, round_id: str = "") -> Path:
+    if round_id:
+        return runtime_dir(run_dir) / f"operator_runbook_{round_id}.md"
+    return runtime_dir(run_dir) / "operator_runbook.md"
+
+
+def dead_letter_path(run_dir: Path, dead_letter_id: str) -> Path:
+    return dead_letters_dir(run_dir) / f"{dead_letter_id}.json"
+
+
 def receipt_path(run_dir: Path, receipt_id: str) -> Path:
     return receipts_dir(run_dir) / f"{receipt_id}.json"
 
@@ -82,3 +104,4 @@ def receipt_path(run_dir: Path, receipt_id: str) -> Path:
 def ensure_runtime_dirs(run_dir: Path) -> None:
     runtime_dir(run_dir).mkdir(parents=True, exist_ok=True)
     receipts_dir(run_dir).mkdir(parents=True, exist_ok=True)
+    dead_letters_dir(run_dir).mkdir(parents=True, exist_ok=True)

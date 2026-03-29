@@ -490,6 +490,110 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("skill-timeout", ledger_event["failure"]["error_code"])
             self.assertEqual(1, ledger_event["attempt_count"])
 
+    def test_run_skill_blocks_when_runtime_admission_rejects_execution_limits(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.executor import SkillExecutionError, run_skill
+            from eco_council_runtime.kernel.ledger import load_ledger_tail
+            from eco_council_runtime.kernel.operations import load_dead_letters, materialize_admission_policy
+
+            fake_skill_entry = {
+                "skill_name": "eco-fake-admission-blocked",
+                "script_path": str(root / "fake_blocked.py"),
+                "declared_contract": {"reads": [], "writes": []},
+                "declared_inputs": {"required": [], "optional": []},
+                "declared_side_effects": [],
+                "execution_policy": {},
+                "agent": {},
+            }
+            materialize_admission_policy(run_dir, run_id=RUN_ID, max_timeout_seconds=1.0)
+
+            with (
+                mock.patch("eco_council_runtime.kernel.governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.executor.subprocess.run") as subprocess_run_mock,
+            ):
+                with self.assertRaises(SkillExecutionError) as raised:
+                    run_skill(
+                        run_dir,
+                        run_id=RUN_ID,
+                        round_id=ROUND_ID,
+                        skill_name="eco-fake-admission-blocked",
+                        skill_args=[],
+                        contract_mode="warn",
+                        timeout_seconds=2.5,
+                    )
+
+            payload = raised.exception.payload
+            ledger_event = load_ledger_tail(run_dir, 1)[0]
+            dead_letters = load_dead_letters(run_dir, round_id=ROUND_ID, limit=5)
+            self.assertEqual("failed", payload["status"])
+            self.assertTrue(payload["runtime_admission"]["block_execution"])
+            self.assertEqual("timeout-exceeds-admission-limit", payload["failure"]["error_code"])
+            self.assertEqual("blocked", ledger_event["status"])
+            self.assertEqual("skill-admission", ledger_event["event_type"])
+            self.assertTrue(payload["dead_letter"]["dead_letter_id"].startswith("deadletter-"))
+            self.assertEqual(payload["dead_letter"]["dead_letter_id"], ledger_event["dead_letter_id"])
+            self.assertEqual(1, len(dead_letters))
+            subprocess_run_mock.assert_not_called()
+
+    def test_show_run_state_surfaces_operations_control_plane(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.cli import init_run, show_run_state
+            from eco_council_runtime.kernel.operations import materialize_dead_letter
+
+            init_run(run_dir, RUN_ID)
+            materialize_dead_letter(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                source_type="skill-execution",
+                source_name="eco-test-skill",
+                message="Synthetic runtime failure for operator surface coverage.",
+                failure={"error_code": "skill-timeout", "message": "timed out", "retryable": False},
+                summary={"skill_name": "eco-test-skill", "run_id": RUN_ID, "round_id": ROUND_ID},
+            )
+
+            payload = show_run_state(run_dir, tail=5, round_id=ROUND_ID)
+
+            self.assertIn("operations", payload)
+            self.assertEqual("red", payload["operations"]["runtime_health"]["alert_status"])
+            self.assertEqual(1, payload["summary"]["open_dead_letter_count"])
+            self.assertTrue(payload["operations"]["operator"]["admission_policy_path"].endswith("admission_policy.json"))
+            self.assertTrue(payload["operations"]["operator"]["operator_runbook_path"].endswith(f"operator_runbook_{ROUND_ID}.md"))
+            self.assertEqual("eco-test-skill", payload["operations"]["dead_letters"][0]["source_name"])
+
+    def test_default_admission_policy_keeps_writes_inside_run_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.operations import default_admission_policy
+
+            policy = default_admission_policy(run_dir, run_id=RUN_ID)
+            sandbox = policy["sandbox_boundary"]
+
+            self.assertEqual(
+                ["<run_dir>", "<run_parent>/archives", "<workspace_root>"],
+                sandbox["allowed_read_roots"],
+            )
+            self.assertEqual(
+                ["<run_dir>", "<run_parent>/archives"],
+                sandbox["allowed_write_roots"],
+            )
+            self.assertEqual(
+                ["<workspace_root>", "<run_dir>"],
+                sandbox["allowed_cwd_roots"],
+            )
+
     def test_controller_forwards_execution_policy_and_records_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1224,6 +1328,116 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(0, exit_code)
             self.assertTrue(controller_mock.call_args.kwargs["force_restart"])
             self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
+
+    def test_cli_operations_commands_forward_arguments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.cli import main
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.materialize_admission_policy",
+                    return_value={"schema_version": "runtime-admission-policy-v1", "permission_profile": "restricted"},
+                ) as policy_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "materialize-admission-policy",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        RUN_ID,
+                        "--permission-profile",
+                        "restricted",
+                        "--max-timeout-seconds",
+                        "12",
+                        "--approval-required-side-effect",
+                        "network-external",
+                        "--allowed-write-root",
+                        "<run_dir>",
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual("restricted", policy_mock.call_args.kwargs["permission_profile"])
+            self.assertEqual(12.0, policy_mock.call_args.kwargs["max_timeout_seconds"])
+            self.assertEqual(["network-external"], policy_mock.call_args.kwargs["approval_required_side_effects"])
+            self.assertEqual(["<run_dir>"], policy_mock.call_args.kwargs["allowed_write_roots"])
+            self.assertEqual("runtime-admission-policy-v1", json.loads(stdout.getvalue())["schema_version"])
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.materialize_runtime_health",
+                    return_value={"schema_version": "runtime-health-v1", "alert_status": "green"},
+                ) as health_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "materialize-runtime-health",
+                        "--run-dir",
+                        str(run_dir),
+                        "--round-id",
+                        ROUND_ID,
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(ROUND_ID, health_mock.call_args.kwargs["round_id"])
+            self.assertEqual("runtime-health-v1", json.loads(stdout.getvalue())["schema_version"])
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.materialize_operator_runbook",
+                    return_value=str(run_dir / "runtime" / "operator_runbook.md"),
+                ) as runbook_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "materialize-operator-runbook",
+                        "--run-dir",
+                        str(run_dir),
+                        "--round-id",
+                        ROUND_ID,
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(ROUND_ID, runbook_mock.call_args.kwargs["round_id"])
+            self.assertTrue(json.loads(stdout.getvalue())["operator_runbook_path"].endswith("operator_runbook.md"))
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.load_dead_letters",
+                    return_value=[{"dead_letter_id": "deadletter-1234567890abcdef1234"}],
+                ) as dead_letters_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "show-dead-letters",
+                        "--run-dir",
+                        str(run_dir),
+                        "--round-id",
+                        ROUND_ID,
+                        "--limit",
+                        "5",
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(1, dead_letters_mock.call_count)
+            self.assertEqual(5, dead_letters_mock.call_args.kwargs["limit"])
+            self.assertEqual(1, json.loads(stdout.getvalue())["summary"]["dead_letter_count"])
 
 
 if __name__ == "__main__":

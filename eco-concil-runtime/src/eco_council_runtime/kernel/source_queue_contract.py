@@ -217,12 +217,34 @@ def normalize_fetch_execution_policy(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def normalize_fetch_side_effects(payload: dict[str, Any]) -> list[str]:
-    requested = normalize_text_list(payload.get("allow_side_effects"))
-    invalid = [value for value in requested if value not in KNOWN_FETCH_SIDE_EFFECTS]
+def validate_fetch_side_effects(values: list[str], *, field_name: str) -> list[str]:
+    invalid = [value for value in values if value not in KNOWN_FETCH_SIDE_EFFECTS]
     if invalid:
-        raise ValueError(f"Unsupported fetch side effects: {', '.join(invalid)}")
-    return unique_texts(["writes-artifacts", *requested])
+        raise ValueError(f"Unsupported fetch side effects in {field_name}: {', '.join(invalid)}")
+    return unique_texts(values)
+
+
+def normalize_fetch_declared_side_effects(payload: dict[str, Any]) -> list[str]:
+    declared = normalize_text_list(payload.get("declared_side_effects"))
+    if not declared:
+        # Backward-compatible fallback for older mission contracts.
+        declared = normalize_text_list(payload.get("allow_side_effects"))
+    validated = validate_fetch_side_effects(declared, field_name="declared_side_effects")
+    return unique_texts(["writes-artifacts", *validated])
+
+
+def normalize_fetch_requested_side_effect_approvals(payload: dict[str, Any], declared_side_effects: list[str]) -> list[str]:
+    requested = validate_fetch_side_effects(
+        normalize_text_list(payload.get("requested_side_effect_approvals")),
+        field_name="requested_side_effect_approvals",
+    )
+    undeclared = [value for value in requested if value not in declared_side_effects]
+    if undeclared:
+        raise ValueError(
+            "requested_side_effect_approvals must be a subset of declared_side_effects: "
+            + ", ".join(undeclared)
+        )
+    return requested
 
 
 def allowed_sources_for_role(mission: dict[str, Any], role: str) -> list[str]:
@@ -375,6 +397,7 @@ def normalize_source_requests(mission: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         config = source_config(source_skill)
         fetch_argv = item.get("fetch_argv") if isinstance(item.get("fetch_argv"), list) else []
+        declared_side_effects = normalize_fetch_declared_side_effects(item)
         normalized.append(
             {
                 **item,
@@ -387,7 +410,8 @@ def normalize_source_requests(mission: dict[str, Any]) -> list[dict[str, Any]]:
                 "fetch_cwd": maybe_text(item.get("fetch_cwd")),
                 "fetch_argv": [maybe_text(arg) for arg in fetch_argv if maybe_text(arg)],
                 "fetch_execution_policy": normalize_fetch_execution_policy(item),
-                "allow_side_effects": normalize_fetch_side_effects(item),
+                "declared_side_effects": declared_side_effects,
+                "requested_side_effect_approvals": normalize_fetch_requested_side_effect_approvals(item, declared_side_effects),
                 "notes": [maybe_text(note) for note in item.get("notes", []) if maybe_text(note)] if isinstance(item.get("notes"), list) else [],
             }
         )
@@ -409,7 +433,8 @@ __all__ = [
     "normalize_artifact_capture",
     "normalize_artifact_imports",
     "normalize_fetch_execution_policy",
-    "normalize_fetch_side_effects",
+    "normalize_fetch_declared_side_effects",
+    "normalize_fetch_requested_side_effect_approvals",
     "normalize_source_requests",
     "normalize_text_list",
     "policy_profile_summary",

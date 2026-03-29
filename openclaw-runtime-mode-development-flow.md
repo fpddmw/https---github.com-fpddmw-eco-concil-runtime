@@ -63,18 +63,18 @@
 4. `fetch plan input snapshot`
 5. `drift detection`
 6. `detached fetch execution policy`
-7. `allow_side_effects`
-8. `registry + source_queue_profile`
+7. `declared_side_effects / requested_side_effect_approvals`
+8. `runtime admission / dead-letter / operator surface`
+9. `registry + source_queue_profile`
 
-### 2.3 当前还不完整的部分
+### 2.3 R6 之后剩余的维护项
 
-当前还没有完成的不是“能不能跑”，而是“能不能稳定长期运转”：
+当前缺的已经不是新的 runtime 大阶段，而是少量生产维护项：
 
-1. detached fetch 仍以本地脚本 / 受控子进程为主，缺少更真实的 credential / admission / sandbox 方案
-2. phase-2 controller / supervisor 的基础控制面已完成，但还没有进入 R6 的生产化执行边界
-3. history retrieval 仍是规则打分，不是更强的调查型检索
-4. operator 面已具备 round inspect / resume / restart，但还缺少系统化 replay / benchmark tooling
-5. archive 与 nightly / benchmark 的编排还没有统一 runbook
+1. detached fetch 仍缺少更正式的 credential / env 注入策略
+2. detached fetch artifact 还缺少 quarantine / provenance 扩展
+3. history retrieval 仍是辅助检索层，不是更强的调查型检索层
+4. replay / benchmark / nightly 的 corpus 编排仍可继续完善，但已经不再是阻塞主链的缺口
 
 ## 3. 路线完成定义
 
@@ -85,6 +85,8 @@
 3. replay / benchmark / nightly run 有统一入口
 4. 所有关键状态物都有 ledger、gate、archive 对应物
 5. route 明确保持“治理执行面”，不再重新吞回业务推理
+
+截至 `2026-03-29`，这条路线的主完成条件已经基本满足；后续工作应视为维护与交接，而不是继续扩张新的 runtime 阶段。
 
 ## 4. 开发原则
 
@@ -167,10 +169,10 @@
 
 下一步要补的不是更多字段，而是更硬的执行控制：
 
-1. credential 注入策略
-2. side-effect 白名单细化
-3. timeout / retry / failure class 标准化
-4. detached fetch artifact quarantine 规则
+1. credential / env 注入策略
+2. detached fetch request contract 的 provider 级标准化
+3. detached fetch artifact quarantine / provenance 规则
+4. 更多 admission negative tests 与 provider fixture coverage
 
 完成判据：
 
@@ -293,13 +295,23 @@
 
 ### 阶段 R6: 生产化执行边界
 
-状态：`未开始`
+状态：`已完成`
 
 目标：
 
 1. 把当前 preview route 提升为可长期运行的受控系统
 
-必须实现：
+当前已有产物：
+
+1. `kernel/operations.py`
+2. `kernel/executor.py`
+3. `kernel/source_queue_execution.py`
+4. `kernel/cli.py`
+5. `skills/eco-import-fetch-execution`
+6. `tests/test_runtime_kernel.py`
+7. `tests/test_source_queue_rebuild.py`
+
+本轮已交付：
 
 1. permission model
 2. sandbox boundary
@@ -307,6 +319,13 @@
 4. rollback / retry / dead-letter policy
 5. operator runbook
 6. alert / observability surface
+7. `run-skill` runtime admission、dead-letter、health / runbook surface 自动接线
+8. detached fetch admission、ledger event、dead-letter、失败状态物落盘
+9. `show-run-state` 扩展为包含 operations control plane 的运维视图
+10. 新增 `materialize-admission-policy` / `materialize-runtime-health` / `materialize-operator-runbook` / `show-dead-letters`
+11. detached fetch side-effect contract 拆分为 `declared_side_effects / requested_side_effect_approvals`
+12. 默认 sandbox root 收紧为“读可到 workspace，写只限 run_dir / archives”
+13. 补齐 R6 回归；截至 `2026-03-29`，全量 `69` 项测试通过
 
 完成判据：
 
@@ -314,14 +333,15 @@
 2. 任何失败类型都有确定处理策略
 3. operator 不依赖读代码就能处理常见故障
 
-## 6. 近期编码顺序
+## 6. 当前维护顺序
 
-接下来应按下面顺序推进：
+接下来不再继续新增 runtime 大阶段，而按下面顺序做维护收口：
 
-1. 做 R6 生产化边界
+1. 完成 `R6.1`：credential / env policy、artifact quarantine / provenance、detached fetch provider contract 细化
+2. 只在需要 benchmark / nightly corpus 时继续补 replay fixture 与 archive pinning
+3. runtime 收口后，把主要研发重心切换到 agent 松绑与 OpenClaw 主调查路线
 
-不要反过来做。  
-如果先做 R6，会把一条尚未稳定的路线过早固化。
+不要再把新的业务推理能力塞进 runtime。
 
 ## 7. 当前建议的具体 backlog
 
@@ -333,9 +353,10 @@
 
 ### Backlog B: detached fetch 生产化
 
-1. 把 detached fetch 的执行输入从 ad hoc argv 收敛成正式 request contract
+1. 把 detached fetch 的执行输入从 ad hoc argv 继续收敛成 provider-aware request contract
 2. 增加 credential mount / env policy
 3. 增加 quarantine / checksum / provenance 扩展
+4. 保持 `declared_side_effects / requested_side_effect_approvals` 语义稳定，不再退回单字段混用
 
 ### Backlog C: archive / history maintenance（R4 已交付）
 

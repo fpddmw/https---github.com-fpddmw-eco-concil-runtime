@@ -137,7 +137,8 @@ class SourceQueueRebuildTests(unittest.TestCase):
                         "retry_budget": 1,
                         "retry_backoff_ms": 25,
                     },
-                    "allow_side_effects": ["reads-shared-state"],
+                    "declared_side_effects": ["reads-shared-state"],
+                    "requested_side_effect_approvals": [],
                 },
             )
 
@@ -165,10 +166,57 @@ class SourceQueueRebuildTests(unittest.TestCase):
             plan = load_json(runtime_path(run_dir, f"fetch_plan_{ROUND_ID}.json"))
             detached_step = next(step for step in plan["steps"] if step["step_kind"] == "detached-fetch")
 
+            self.assertEqual("1.2.0", plan["schema_version"])
             self.assertEqual(9.0, detached_step["fetch_execution_policy"]["timeout_seconds"])
             self.assertEqual(1, detached_step["fetch_execution_policy"]["retry_budget"])
             self.assertEqual(25, detached_step["fetch_execution_policy"]["retry_backoff_ms"])
-            self.assertEqual(["writes-artifacts", "reads-shared-state"], detached_step["allow_side_effects"])
+            self.assertEqual(["writes-artifacts", "reads-shared-state"], detached_step["declared_side_effects"])
+            self.assertEqual([], detached_step["requested_side_effect_approvals"])
+
+    def test_prepare_round_rejects_detached_fetch_approvals_outside_declared_effects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            mission_path = build_mixed_queue_mission(
+                root,
+                build_openaq_artifact(root),
+                build_detached_fetch_script(root),
+                request_overrides={
+                    "declared_side_effects": ["reads-shared-state"],
+                    "requested_side_effect_approvals": ["network-external"],
+                },
+            )
+
+            run_script(
+                script_path("eco-scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+            )
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(script_path("eco-prepare-round")),
+                    "--run-dir",
+                    str(run_dir),
+                    "--run-id",
+                    RUN_ID,
+                    "--round-id",
+                    ROUND_ID,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn("requested_side_effect_approvals must be a subset of declared_side_effects", completed.stderr)
 
     def test_prepare_round_materializes_source_selection_snapshots_and_mixed_steps(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -268,7 +316,8 @@ class SourceQueueRebuildTests(unittest.TestCase):
                         "retry_budget": 1,
                         "retry_backoff_ms": 1,
                     },
-                    "allow_side_effects": ["reads-shared-state"],
+                    "declared_side_effects": ["reads-shared-state"],
+                    "requested_side_effect_approvals": [],
                 },
             )
 
@@ -310,8 +359,78 @@ class SourceQueueRebuildTests(unittest.TestCase):
             self.assertTrue(detached_meta["recovered_after_retry"])
             self.assertEqual(5.0, detached_meta["execution_policy"]["timeout_seconds"])
             self.assertEqual(1, detached_meta["execution_policy"]["retry_budget"])
+            self.assertEqual(["writes-artifacts", "reads-shared-state"], detached_meta["declared_side_effects"])
+            self.assertEqual([], detached_meta["requested_side_effect_approvals"])
             self.assertEqual(["writes-artifacts", "reads-shared-state"], detached_meta["allow_side_effects"])
             self.assertTrue(marker_path.exists())
+
+    def test_import_execution_blocks_detached_fetch_outside_sandbox_and_materializes_dead_letter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            mission_path = build_mixed_queue_mission(
+                root,
+                build_openaq_artifact(root),
+                build_detached_fetch_script(root),
+                request_overrides={
+                    "artifact_path": str(root / "outside-runtime.json"),
+                },
+            )
+
+            run_script(
+                script_path("eco-scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+            )
+            run_script(
+                script_path("eco-prepare-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(script_path("eco-import-fetch-execution")),
+                    "--run-dir",
+                    str(run_dir),
+                    "--run-id",
+                    RUN_ID,
+                    "--round-id",
+                    ROUND_ID,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(0, completed.returncode)
+            execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
+            detached_status = next(status for status in execution["statuses"] if status["step_kind"] == "detached-fetch")
+            dead_letters = list((run_dir / "runtime" / "dead_letters").glob("*.json"))
+            ledger_lines = (run_dir / "runtime" / "audit_ledger.jsonl").read_text(encoding="utf-8").splitlines()
+            last_event = json.loads(ledger_lines[-1])
+
+            self.assertEqual(1, execution["failed_count"])
+            self.assertEqual("failed", detached_status["status"])
+            self.assertTrue(detached_status["detached_fetch"]["runtime_admission"]["block_execution"])
+            self.assertIn(
+                detached_status["detached_fetch"]["failure"]["error_code"],
+                {"sandbox-read-boundary-violation", "sandbox-write-boundary-violation"},
+            )
+            self.assertEqual("detached-fetch-execution", last_event["event_type"])
+            self.assertEqual("blocked", last_event["status"])
+            self.assertEqual(1, len(dead_letters))
 
     def test_import_execution_detects_source_selection_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

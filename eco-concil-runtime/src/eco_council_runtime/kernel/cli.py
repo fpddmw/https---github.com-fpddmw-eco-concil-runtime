@@ -17,12 +17,22 @@ from .governance import CONTRACT_MODES, preflight_skill_execution
 from .gate import apply_promotion_gate
 from .ledger import append_ledger_event, load_ledger_tail
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists
+from .operations import (
+    PERMISSION_PROFILES,
+    load_admission_policy,
+    load_dead_letters,
+    materialize_admission_policy,
+    materialize_operator_runbook,
+    materialize_runtime_health,
+    runtime_health_payload,
+)
 from .post_round import (
     ARCHIVE_FAILURE_POLICIES,
     bootstrap_history_context_with_contract_mode,
     close_round_with_contract_mode,
 )
 from .paths import (
+    admission_policy_path,
     benchmark_compare_path,
     benchmark_manifest_path,
     controller_state_path,
@@ -32,11 +42,13 @@ from .paths import (
     ledger_path,
     manifest_path,
     orchestration_plan_path,
+    operator_runbook_path,
     promotion_gate_path,
     replay_report_path,
     registry_path,
     resolve_run_dir,
     round_close_state_path,
+    runtime_health_path,
     scenario_fixture_path,
     supervisor_state_path,
 )
@@ -57,11 +69,30 @@ def add_execution_policy_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--allow-side-effect", action="append", default=[])
 
 
+def add_admission_policy_args(command: argparse.ArgumentParser) -> None:
+    command.add_argument("--permission-profile", default="standard", choices=PERMISSION_PROFILES)
+    command.add_argument("--max-timeout-seconds", type=float, default=None)
+    command.add_argument("--max-retry-budget", type=int, default=None)
+    command.add_argument("--max-retry-backoff-ms", type=int, default=None)
+    command.add_argument("--default-allow-side-effect", action="append", default=[])
+    command.add_argument("--approval-required-side-effect", action="append", default=[])
+    command.add_argument("--blocked-side-effect", action="append", default=[])
+    command.add_argument("--allowed-read-root", action="append", default=[])
+    command.add_argument("--allowed-write-root", action="append", default=[])
+    command.add_argument("--allowed-cwd-root", action="append", default=[])
+
+
 def init_run(run_dir: Path, run_id: str) -> dict[str, Any]:
     ensure_runtime_dirs(run_dir)
     registry = write_registry(run_dir)
     manifest = init_run_manifest(run_dir, run_id)
     cursor = init_round_cursor(run_dir, run_id)
+    if not admission_policy_path(run_dir).exists():
+        materialize_admission_policy(run_dir, run_id=run_id)
+    if not runtime_health_path(run_dir).exists():
+        materialize_runtime_health(run_dir)
+    if not operator_runbook_path(run_dir).exists():
+        materialize_operator_runbook(run_dir)
     return {
         "status": "completed",
         "summary": {"run_id": run_id, "run_dir": str(run_dir), "skill_count": int(registry.get("skill_count") or 0)},
@@ -73,6 +104,9 @@ def init_run(run_dir: Path, run_id: str) -> dict[str, Any]:
             "cursor_path": str(cursor_path(run_dir)),
             "ledger_path": str(ledger_path(run_dir)),
             "registry_path": str(registry_path(run_dir)),
+            "admission_policy_path": str(admission_policy_path(run_dir)),
+            "runtime_health_path": str(runtime_health_path(run_dir)),
+            "operator_runbook_path": str(operator_runbook_path(run_dir)),
         },
     }
 
@@ -198,6 +232,36 @@ def benchmark_operator_view(run_dir: Path, round_id: str, benchmark_state: dict[
     }
 
 
+def operations_state(run_dir: Path, selected_round_id: str) -> dict[str, Any]:
+    admission_policy = load_admission_policy(run_dir)
+    runtime_health = runtime_health_payload(run_dir, round_id=selected_round_id)
+    dead_letters = load_dead_letters(run_dir, round_id=selected_round_id, limit=20)
+    runbook_path = operator_runbook_path(run_dir, selected_round_id) if selected_round_id else operator_runbook_path(run_dir)
+    run_id = maybe_text(admission_policy.get("run_id"))
+    materialize_policy_command = (
+        f"materialize-admission-policy --run-dir {run_dir} --run-id {run_id}"
+        if run_id
+        else ""
+    )
+    return {
+        "admission_policy": admission_policy,
+        "runtime_health": runtime_health,
+        "dead_letters": dead_letters,
+        "operator": {
+            "permission_profile": maybe_text(admission_policy.get("permission_profile")) or "standard",
+            "alert_status": maybe_text(runtime_health.get("alert_status")) or "green",
+            "admission_policy_path": str(admission_policy_path(run_dir).resolve()),
+            "runtime_health_path": str(runtime_health_path(run_dir).resolve()),
+            "operator_runbook_path": str(runbook_path.resolve()),
+            "materialize_admission_policy_command": materialize_policy_command,
+            "materialize_runtime_health_command": f"materialize-runtime-health --run-dir {run_dir}{f' --round-id {selected_round_id}' if selected_round_id else ''}",
+            "materialize_operator_runbook_command": f"materialize-operator-runbook --run-dir {run_dir}{f' --round-id {selected_round_id}' if selected_round_id else ''}",
+            "show_dead_letters_command": f"show-dead-letters --run-dir {run_dir}{f' --round-id {selected_round_id}' if selected_round_id else ''}",
+            "open_dead_letter_count": int(runtime_health.get("summary", {}).get("open_dead_letter_count") or 0),
+        },
+    }
+
+
 def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, Any]:
     manifest = load_json_if_exists(manifest_path(run_dir)) or {}
     cursor = load_json_if_exists(cursor_path(run_dir)) or {}
@@ -227,6 +291,7 @@ def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, An
             "replay_report": load_json_if_exists(replay_report_path(run_dir, selected_round_id)) or {},
         }
         benchmark_state["operator"] = benchmark_operator_view(run_dir, selected_round_id, benchmark_state)
+    operations = operations_state(run_dir, selected_round_id)
     return {
         "status": "completed",
         "summary": {
@@ -234,10 +299,15 @@ def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, An
             "current_round_id": current_round_id,
             "selected_round_id": selected_round_id,
             "ledger_events": len(load_ledger_tail(run_dir, 1000000)) if ledger_path(run_dir).exists() else 0,
+            "alert_status": maybe_text(operations.get("runtime_health", {}).get("alert_status")) if isinstance(operations.get("runtime_health"), dict) else "",
+            "open_dead_letter_count": int(operations.get("runtime_health", {}).get("summary", {}).get("open_dead_letter_count") or 0)
+            if isinstance(operations.get("runtime_health"), dict)
+            else 0,
         },
         "manifest": manifest,
         "cursor": cursor,
         "registry": registry,
+        "operations": operations,
         "phase2": phase2_state,
         "post_round": post_round_state,
         "benchmark": benchmark_state,
@@ -358,6 +428,28 @@ def build_parser() -> argparse.ArgumentParser:
     supervisor_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     supervisor_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(supervisor_cmd)
+
+    admission_policy_cmd = sub.add_parser("materialize-admission-policy", help="Write one runtime admission policy for permission and sandbox enforcement.")
+    admission_policy_cmd.add_argument("--run-dir", required=True)
+    admission_policy_cmd.add_argument("--run-id", required=True)
+    admission_policy_cmd.add_argument("--pretty", action="store_true")
+    add_admission_policy_args(admission_policy_cmd)
+
+    runtime_health_cmd = sub.add_parser("materialize-runtime-health", help="Write one runtime health and alert snapshot.")
+    runtime_health_cmd.add_argument("--run-dir", required=True)
+    runtime_health_cmd.add_argument("--round-id", default="")
+    runtime_health_cmd.add_argument("--pretty", action="store_true")
+
+    operator_runbook_cmd = sub.add_parser("materialize-operator-runbook", help="Write one operator runbook markdown surface for the runtime.")
+    operator_runbook_cmd.add_argument("--run-dir", required=True)
+    operator_runbook_cmd.add_argument("--round-id", default="")
+    operator_runbook_cmd.add_argument("--pretty", action="store_true")
+
+    dead_letters_cmd = sub.add_parser("show-dead-letters", help="Show open runtime dead letters for the selected run or round.")
+    dead_letters_cmd.add_argument("--run-dir", required=True)
+    dead_letters_cmd.add_argument("--round-id", default="")
+    dead_letters_cmd.add_argument("--limit", type=int, default=20)
+    dead_letters_cmd.add_argument("--pretty", action="store_true")
 
     show_cmd = sub.add_parser("show-run-state", help="Show manifest, cursor, registry, and a tail of runtime ledger events.")
     show_cmd.add_argument("--run-dir", required=True)
@@ -650,6 +742,55 @@ def main(argv: list[str] | None = None) -> int:
             failure = exc.payload or {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode}, "message": str(exc)}
             print(pretty_json(failure, args.pretty))
             return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "materialize-admission-policy":
+        payload = materialize_admission_policy(
+            run_dir,
+            run_id=args.run_id,
+            permission_profile=args.permission_profile,
+            max_timeout_seconds=args.max_timeout_seconds,
+            max_retry_budget=args.max_retry_budget,
+            max_retry_backoff_ms=args.max_retry_backoff_ms,
+            default_allow_side_effects=args.default_allow_side_effect,
+            approval_required_side_effects=args.approval_required_side_effect,
+            blocked_side_effects=args.blocked_side_effect,
+            allowed_read_roots=args.allowed_read_root,
+            allowed_write_roots=args.allowed_write_root,
+            allowed_cwd_roots=args.allowed_cwd_root,
+        )
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "materialize-runtime-health":
+        payload = materialize_runtime_health(run_dir, round_id=args.round_id)
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "materialize-operator-runbook":
+        payload = {
+            "status": "completed",
+            "summary": {
+                "run_dir": str(run_dir),
+                "round_id": args.round_id,
+            },
+            "operator_runbook_path": materialize_operator_runbook(run_dir, round_id=args.round_id),
+        }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "show-dead-letters":
+        dead_letters = load_dead_letters(run_dir, round_id=args.round_id, limit=args.limit)
+        payload = {
+            "status": "completed",
+            "summary": {
+                "run_dir": str(run_dir),
+                "round_id": args.round_id,
+                "dead_letter_count": len(dead_letters),
+            },
+            "dead_letters": dead_letters,
+        }
         print(pretty_json(payload, args.pretty))
         return 0
 
