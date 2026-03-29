@@ -156,6 +156,33 @@ def build_mission_file(root: Path, artifacts: dict[str, Path]) -> Path:
 
 
 class OrchestrationIngressWorkflowTests(unittest.TestCase):
+    def test_scaffold_agent_mode_updates_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            artifacts = build_raw_artifacts(root)
+            mission_path = build_mission_file(root, artifacts)
+
+            scaffold_payload = run_script(
+                script_path("eco-scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+                "--orchestration-mode",
+                "openclaw-agent",
+            )
+
+            scaffold_artifact = load_json(runtime_path(run_dir, f"mission_scaffold_{ROUND_ID}.json"))
+
+            self.assertEqual("openclaw-agent", scaffold_payload["summary"]["orchestration_mode"])
+            self.assertEqual("openclaw-agent", scaffold_artifact["orchestration_mode"])
+            self.assertIn("eco-read-board-delta", scaffold_payload["board_handoff"]["suggested_next_skills"])
+
     def test_scaffold_and_prepare_round_materialize_fetch_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

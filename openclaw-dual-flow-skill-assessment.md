@@ -23,6 +23,11 @@
 
 runtime registry 现在会为所有活跃 skills 导出 source_queue_profile。后续 queue planner、OpenClaw adapter 和 operator surface 都应复用这份元数据，而不是再写一套人工判断。
 
+另外，两个 runtime-priority skill 已做轻量修正：
+
+- `eco-scaffold-mission-run` 保留 bridge 角色，但已补 openclaw-agent handoff。
+- `eco-plan-round-orchestration` 保留 advisory planner 角色，但已补 agent-advisory mode。
+
 ## 5. 继续阅读
 
 1. [openclaw-runtime-source-queue-rebuild.md](openclaw-runtime-source-queue-rebuild.md)

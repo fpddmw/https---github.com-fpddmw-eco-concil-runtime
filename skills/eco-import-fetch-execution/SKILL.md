@@ -1,19 +1,19 @@
 ---
 name: eco-import-fetch-execution
-description: Execute one local fetch-plan by copying raw artifacts into the run, calling the mapped normalizer skills, and writing an import execution snapshot.
+description: Execute one prepared fetch-plan by running mixed local-import and detached-fetch steps, invoking the mapped normalizer skills, and writing an execution snapshot.
 ---
 
 # Eco Import Fetch Execution
 
 ## Core Goal
 - Read the prepared fetch plan for the current round.
-- Copy local raw artifacts into the current run raw store.
+- Execute mixed import and detached-fetch steps into the current run raw store.
 - Invoke the matching normalizer skills.
-- Write one auditable import execution snapshot.
+- Write one auditable execution snapshot.
 
 ## Triggering Conditions
 - `eco-prepare-round` already wrote `fetch_plan_<round_id>.json`.
-- The current ingress path is local artifact import rather than remote fetch execution.
+- The current ingress path may contain both local artifact imports and detached fetch requests.
 - Downstream extraction should start from normalized signal-plane data rather than direct seed helpers.
 
 ## Read/Write Contract

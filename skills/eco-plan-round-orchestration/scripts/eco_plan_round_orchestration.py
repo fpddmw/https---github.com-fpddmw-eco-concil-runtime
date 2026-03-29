@@ -309,6 +309,7 @@ def plan_round_orchestration_skill(
     probes_path: str,
     readiness_path: str,
     output_path: str,
+    planner_mode: str,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_path(run_dir_path, board_path, "board/investigation_board.json")
@@ -406,11 +407,17 @@ def plan_round_orchestration_skill(
         "run_id": run_id,
         "round_id": round_id,
         "plan_id": plan_id,
-        "planning_status": "ready-for-controller",
-        "planning_mode": "planner-backed-phase2",
+        "planning_status": "advisory-plan-ready" if planner_mode == "agent-advisory" else "ready-for-controller",
+        "planning_mode": "agent-advisory" if planner_mode == "agent-advisory" else "planner-backed-phase2",
+        "controller_authority": "advisory-only" if planner_mode == "agent-advisory" else "queue-owner",
         "probe_stage_included": probe_stage_included,
         "downstream_posture": posture,
         "assigned_role_hints": role_hints,
+        "agent_turn_hints": {
+            "primary_role": primary_action_role or "moderator",
+            "support_roles": unique_texts(["moderator", primary_action_role, "challenger" if probe_stage_included else ""]),
+            "recommended_skill_sequence": [step["skill_name"] for step in execution_queue],
+        },
         "observed_state": {
             "board_present": isinstance(board, dict),
             "board_summary_present": isinstance(board_summary, dict),
@@ -495,6 +502,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--probes-path", default="")
     parser.add_argument("--readiness-path", default="")
     parser.add_argument("--output-path", default="")
+    parser.add_argument("--planner-mode", choices=["runtime-phase2", "agent-advisory"], default="runtime-phase2")
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
@@ -512,6 +520,7 @@ def main() -> int:
         probes_path=args.probes_path,
         readiness_path=args.readiness_path,
         output_path=args.output_path,
+        planner_mode=args.planner_mode,
     )
     print(pretty_json(payload, args.pretty))
     return 0

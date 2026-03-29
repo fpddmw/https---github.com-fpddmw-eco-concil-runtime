@@ -303,6 +303,7 @@ def scaffold_mission_run_skill(
     round_id: str,
     mission_path: str,
     hypothesis_confidence: float | None,
+    orchestration_mode: str,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     mission_file = resolve_input_path(run_dir_path, mission_path)
@@ -336,6 +337,7 @@ def scaffold_mission_run_skill(
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
+        "orchestration_mode": orchestration_mode,
         "scaffold_id": scaffold_id,
         "mission_path": str(mission_output_path),
         "task_path": str(task_output_path),
@@ -359,12 +361,21 @@ def scaffold_mission_run_skill(
         {"signal_id": "", "artifact_path": str(task_output_path), "record_locator": "$", "artifact_ref": f"{task_output_path}:$"},
         {"signal_id": "", "artifact_path": str(board_output_path), "record_locator": f"$.rounds.{round_id}", "artifact_ref": f"{board_output_path}:$.rounds.{round_id}"},
     ]
+    suggested_next_skills = ["eco-prepare-round", "eco-summarize-board-state"]
+    if orchestration_mode == "openclaw-agent":
+        suggested_next_skills = [
+            "eco-read-board-delta",
+            "eco-materialize-history-context",
+            "eco-summarize-board-state",
+            "eco-prepare-round",
+        ]
     return {
         "status": "completed",
         "summary": {
             "skill": SKILL_NAME,
             "run_id": run_id,
             "round_id": round_id,
+            "orchestration_mode": orchestration_mode,
             "output_path": str(summary_output_path),
             "scaffold_id": scaffold_id,
             "import_source_count": len(imports),
@@ -382,7 +393,7 @@ def scaffold_mission_run_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [item["message"] for item in warnings if item.get("code") in {"no-artifact-imports", "no-hypotheses"}],
             "challenge_hints": [],
-            "suggested_next_skills": ["eco-prepare-round", "eco-summarize-board-state"],
+            "suggested_next_skills": suggested_next_skills,
         },
     }
 
@@ -394,6 +405,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--mission-path", required=True)
     parser.add_argument("--hypothesis-confidence", type=float)
+    parser.add_argument("--orchestration-mode", choices=["runtime-source-queue", "openclaw-agent"], default="runtime-source-queue")
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
@@ -406,6 +418,7 @@ def main() -> int:
         round_id=args.round_id,
         mission_path=args.mission_path,
         hypothesis_confidence=args.hypothesis_confidence,
+        orchestration_mode=args.orchestration_mode,
     )
     print(pretty_json(payload, args.pretty))
     return 0

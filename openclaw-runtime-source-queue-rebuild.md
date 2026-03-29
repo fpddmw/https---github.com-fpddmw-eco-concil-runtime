@@ -122,6 +122,8 @@ mission
 
 1. runtime registry 为所有活跃 skills 导出 source_queue_profile。
 2. source_queue_profile 区分 bridge、direct、advisory 三类 queue 角色。
+3. `eco-scaffold-mission-run` 现在支持 `orchestration_mode=openclaw-agent`，可以作为 moderator 的 run bootstrap，而不再只服务固定 queue。
+4. `eco-plan-round-orchestration` 现在支持 `planner_mode=agent-advisory`，在 OpenClaw agent mode 下退化为建议器，而不是唯一控制器。
 
 ### 6.2 接下来要做的 active modules
 

@@ -9,6 +9,7 @@ description: Build one runtime orchestration plan from the current board, D1/D2 
 - Materialize one explicit orchestration plan artifact before controller execution.
 - Turn board state, D1 actions, and readiness posture into a stable skill queue.
 - Keep planning semantics in a skill instead of hardcoding all phase-2 flow in runtime.
+- In OpenClaw agent mode, downgrade this plan to an advisory planner rather than the only controller authority.
 
 ## Triggering Conditions
 - A round is ready for phase-2 controller execution.
@@ -36,6 +37,7 @@ description: Build one runtime orchestration plan from the current board, D1/D2 
   - `probes_path`
   - `readiness_path`
   - `output_path`
+  - `planner_mode`
 
 ## Output Contract
 - `status`

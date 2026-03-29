@@ -30,6 +30,7 @@ description: Scaffold one mission-driven run by materializing mission.json, firs
 - `mission_path`
 - Optional:
   - `hypothesis_confidence`
+  - `orchestration_mode`
 
 ## Output Contract
 - `status`

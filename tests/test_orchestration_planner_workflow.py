@@ -109,6 +109,30 @@ def prepare_hold_board_state(run_dir: Path, root: Path) -> None:
 
 
 class OrchestrationPlannerWorkflowTests(unittest.TestCase):
+    def test_agent_advisory_mode_marks_plan_as_advisory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_board_state(run_dir, root)
+
+            payload = run_script(
+                script_path("eco-plan-round-orchestration"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--planner-mode",
+                "agent-advisory",
+            )
+            plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
+
+            self.assertEqual("agent-advisory", payload["summary"]["planning_mode"])
+            self.assertEqual("agent-advisory", plan["planning_mode"])
+            self.assertEqual("advisory-only", plan["controller_authority"])
+            self.assertIn("recommended_skill_sequence", plan["agent_turn_hints"])
+
     def test_ready_round_planner_skips_probe_stage(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
