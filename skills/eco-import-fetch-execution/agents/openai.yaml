@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Import Fetch Execution"
+  short_description: "Copy local raw artifacts into the run and invoke the mapped normalizer skills"
+  default_prompt: "Use $eco-import-fetch-execution to execute one prepared import plan, copy raw artifacts into the run, and call the matching normalizer skills before extraction starts."
