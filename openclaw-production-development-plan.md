@@ -14,4 +14,4 @@
 
 当前的生产化结论可以压缩成一句话：
 
-当前系统已经具备 skill-first 主链、最小 ingress contract loop、archive/history context 主链回接，以及 single-host runtime hardening baseline（timeout/retry/backoff、high-risk side-effect approval、exclusive execution lock、structured failure）；但还没有到 production-ready，后续仍需 detached fetch integration、simulation/benchmark 扩展、OS-level sandbox / operator approval plane 与 shadow/pilot runbook。
+当前系统已经具备 skill-first 主链、最小 ingress contract loop、archive/history context 主链回接，以及 single-host runtime hardening baseline（timeout/retry/backoff、high-risk side-effect approval、exclusive execution lock、structured failure）；但当前第一优先级仍是完成 OpenClaw skill integration 与多 agent 协作基础框架，而不是直接进入生产化。只有在 agent-native 主框架跑通后，detached fetch integration、benchmark、OS-level sandbox、operator approval plane 与 shadow/pilot runbook 才能进入正确的生产准入节奏。

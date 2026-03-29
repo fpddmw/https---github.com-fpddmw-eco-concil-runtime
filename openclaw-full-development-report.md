@@ -69,6 +69,8 @@
 
 它已经能完成 planner-backed 的 phase-2 preview，但仍然不是 full board-driven、agent-decided orchestration runtime。
 
+同时要明确：当前活跃 runtime 里还没有真正启用的 OpenClaw provisioning、managed skill projection 或 role-agent turn loop；registry 目前只负责读取 skill metadata，controller 仍然通过 `run_skill()` 串行执行 skill 脚本。
+
 ### 2.4 本批次新增的关键闭环
 
 本批次补入了此前最缺的 ingress 面：
@@ -108,9 +110,23 @@
 
 ### 3.2 当前仍然缺失的能力
 
-当前距离最终交付，仍然还缺 3 组能力，另有 1 组能力已经完成主链回接但还可以继续扩展。
+当前距离最终交付，核心还缺 4 组能力；其中第一优先级已经从“继续加固 runtime 队列”转为“恢复 OpenClaw agent-native 工作框架”。
 
-#### A. detached fetch integration 仍未补齐
+#### A. OpenClaw skill integration 与 multi-agent framework 仍未补齐
+
+当前最大的缺口，不是 skill 数量不足，而是 skill 还没有真正回到 OpenClaw agent 手里。
+
+还缺：
+
+- active `adapters/openclaw/` 实现
+- 当前仓库 `skills/` 与 detached `/home/fpddmw/projects/skills` 的统一 managed skill surface
+- moderator、sociologist、environmentalist、challenger、archivist 的 role workspace / session provisioning
+- board-driven turn loop
+- agent-native 的 skill 调用与 handoff 记录面
+
+这意味着当前系统虽然已经 skill-first，但还不是 agent-first。
+
+#### B. detached fetch integration 仍未补齐
 
 当前 ingress 仍是“本地 artifact import 驱动的最小 contract 闭环”，而不是完整的 mission-driven external collection。
 
@@ -124,7 +140,7 @@
 - remote dependency / credential surface handling
 - 非本地 fixture 的 mission-driven collection
 
-#### B. archive / history context 已接回主链基线
+#### C. archive / history context 已接回主链基线
 
 本批次已经补齐：
 
@@ -138,7 +154,7 @@
 - richer simulation / benchmark surface
 - 跨轮次对照预设与更细粒度历史证据复用
 
-#### C. runtime hardening 基线已补齐
+#### D. runtime hardening 基线已补齐，但更强控制面不再是先手工作
 
 本批次已经把 runtime 从 contract-aware baseline 推进到 governed single-host kernel：
 
@@ -150,13 +166,15 @@
 - controller / supervisor / CLI execution-policy plumbing
 - runtime hardening regression coverage
 
-仍未补齐的更高阶项已经不再单独归类为“本批次 runtime hardening blocker”，而是并入生产化准入面：
+但这些能力的优先级已经后移。因为在 OpenClaw agent-native 基础框架未形成之前，继续加重 runtime 控制面，只会把过渡态实现固化得更深。
+
+仍未补齐的更高阶项应并入后续生产化准入面：
 
 - OS-level sandbox / permission boundary
 - distributed-safe coordination
 - richer observability / operator-facing runbook surface
 
-#### D. 生产化准入面仍未到位
+#### E. 生产化准入面仍未到位
 
 还缺：
 
@@ -179,11 +197,13 @@
 - 已经具备最小 ingress contract loop
 - 已经具备 archive / history context 的主链回接与历史证据复用基线
 - 已经具备 single-host runtime hardening baseline
+- 但当前活跃 workflow 仍主要是 runtime/controller 顺序调 skill，而不是 OpenClaw 多 agent 自主协作
 - 但仍处于 pre-production integration 阶段
 
 当前不能宣称的内容包括：
 
 - full board-driven runtime 已完成
+- OpenClaw multi-agent work framework 已完成
 - 真正远程 fetch execution 已完成
 - 生产级 sandbox / permission boundary 已完成
 - 分布式或跨主机控制面已完成
@@ -203,7 +223,20 @@
 
 ### 5.2 后续建议按 4 个工作流推进
 
-#### 工作流 1：detached fetch integration
+#### 工作流 1：OpenClaw skill integration 与 multi-agent framework
+
+目标：让 OpenClaw 成为主调查执行面，而不是让 runtime 长期扮演顺序编排器。
+
+交付顺序建议：
+
+1. 两仓 skill 的统一 projection / install 方案
+2. role-agent workspace / session provisioning
+3. board-driven turn loop
+4. agent-native handoff / import surface
+
+完成标志：至少一个 round 可以由多个 OpenClaw role agent 在统一 skill surface 上自主调用 skill 完成。
+
+#### 工作流 2：detached fetch integration
 
 目标：把当前“本地 artifact import”推进成“detached fetch skills 驱动的 mission-driven collection”。
 
@@ -216,7 +249,7 @@
 
 完成标志：真实任务不再依赖本地 fixture 文件，就能从 mission 进入 signal plane。
 
-#### 工作流 2：simulation / benchmark 扩展
+#### 工作流 3：simulation / benchmark 扩展
 
 目标：在已完成的 archive / history context 基线上，继续补 richer benchmark 与跨轮次对照能力。
 
@@ -231,9 +264,9 @@
 
 完成标志：至少两类真实任务能稳定复用历史上下文，并且 benchmark 有独立回归面。
 
-#### 工作流 3：production admission control plane
+#### 工作流 4：production admission control plane
 
-目标：把当前“单机可控”推进成“可上线审阅”。
+目标：在 agent-native 框架稳定后，把当前“单机可控”推进成“可上线审阅”。
 
 交付顺序建议：
 
@@ -245,28 +278,16 @@
 
 完成标志：operator 可以安全阻断、审批、回滚并重放真实任务。
 
-#### 工作流 4：shadow test 与 pilot
-
-目标：把系统从集成态推进到受控发布态。
-
-交付顺序建议：
-
-1. shadow test runbook
-2. approval / rollback 机制
-3. task-domain 限定与验收标准
-4. pilot retrospective 模板
-
-完成标志：至少两轮 shadow test 和一轮 pilot 可被人工审阅并回放。
-
 ## 6. 推荐的下一批编码重点
 
 在本批次完成 ingress 最小闭环后，下一批不应再继续把业务判断塞回 runtime，也不应继续只优化 phase-2 controller 内部排队。
 
 更合适的优先级是：
 
-1. 把当前 local artifact import 扩成 detached fetch skill 驱动的真实 external execution
-2. 补 simulation / benchmark 与跨轮次对照扩展
-3. 补 production admission control plane，尤其是 sandbox、approval / rollback 与 shadow / pilot
+1. 先补 `adapters/openclaw/` 与统一 managed skill surface，让多个 OpenClaw agent 能自主调用 skill
+2. 再把 detached fetch skills 接回当前 run / round 主链
+3. 再补 simulation / benchmark 与跨轮次对照扩展
+4. 最后补更强的 production admission control plane
 
 ## 7. 文档收敛后的使用方式
 

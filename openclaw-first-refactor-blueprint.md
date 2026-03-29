@@ -78,6 +78,7 @@ tests/
 解释如下：
 
 - `skills/` 是主要业务能力层，也是 OpenClaw 真正工作的接口面。
+- 当前仓库 `skills/` 与 detached `/home/fpddmw/projects/skills` 中的技能，最终都应被投影到 OpenClaw 的统一 managed skill surface，而不是长期分裂成“runtime 直调本地脚本”和“外部仓库孤立 skill”两套面。
 - `eco-concil-runtime/` 是最小运行时内核，只保留系统不变式。
 - 旧的 `controller/application/...` 结构不再作为目标形态描述，只能作为迁移来源、兼容层或 legacy fallback。
 
@@ -92,6 +93,12 @@ runtime 只保留以下能力：
 - agent 权限、预算、并发和锁
 - promotion gate、快照冻结、canonical artifact materialize
 - 与 OpenClaw 的最小适配层
+
+这里的“与 OpenClaw 的最小适配层”应优先包括：
+
+- role-agent workspace / session provisioning
+- managed skill projection / refresh
+- board-driven turn orchestration 接口
 
 凡是“具体调查业务判断”，都不应继续堆在 runtime 内核里。
 
