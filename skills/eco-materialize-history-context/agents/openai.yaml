@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Materialize History Context"
+  short_description: "Assemble archived case and signal context for the current round"
+  default_prompt: "Use $eco-materialize-history-context to retrieve archived cases and historical signals, then render one compact history context for the current round."

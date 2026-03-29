@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Archive Case Library"
+  short_description: "Archive one run's canonical artifacts into the shared case library"
+  default_prompt: "Use $eco-archive-case-library to compress the current run's board, promotion, and reporting artifacts into the shared case library archive."

@@ -14,4 +14,4 @@
 
 当前的生产化结论可以压缩成一句话：
 
-当前系统已经具备 skill-first 主链和最小 ingress contract loop，但还没有到 production-ready；后续仍需真实 external fetch、archive/history context、sandboxed enforcement、recovery 语义与 shadow/pilot runbook。
+当前系统已经具备 skill-first 主链、最小 ingress contract loop，以及 archive/history context 主链回接，但还没有到 production-ready；后续仍需真实 external fetch、sandboxed enforcement、recovery 语义、simulation/benchmark 扩展与 shadow/pilot runbook。

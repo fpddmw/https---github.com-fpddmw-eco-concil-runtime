@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Query Case Library"
+  short_description: "Search archived historical cases across prior runs"
+  default_prompt: "Use $eco-query-case-library to retrieve archived analogous investigations from the shared case library."

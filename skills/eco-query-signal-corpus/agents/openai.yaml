@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Query Signal Corpus"
+  short_description: "Search archived historical signals across prior runs"
+  default_prompt: "Use $eco-query-signal-corpus to search historical signal matches from the shared signal corpus archive."

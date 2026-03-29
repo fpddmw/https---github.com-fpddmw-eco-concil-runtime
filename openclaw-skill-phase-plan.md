@@ -17,7 +17,7 @@
 1. normalize -> evidence -> board -> promotion -> reporting 主链已经完成。
 2. phase-2 controller 已经切到 planner-backed preview。
 3. 本批次已经补入 mission scaffold、prepare-round、fetch-plan、import execution 的最小 ingress 闭环。
-4. 下一批优先级应转向真实 external fetch、archive/history context 和 runtime hardening，而不是继续扩大 runtime 业务面。
+4. archive/history context 已经交付；下一批优先级应转向真实 external fetch、simulation/benchmark 和 runtime hardening，而不是继续扩大 runtime 业务面。
 
 ### 5.2 下一批验收条件
 
@@ -26,7 +26,7 @@
 1. 真实 mission 输入至少能落成 prepare/fetch/import 所需 contract artifact
 2. 最小真实 orchestration 链路能接到现有 normalize / phase-2 / reporting 主链
 3. planner-backed controller 继续保持 preview 状态，不在这一批次扩张成 full board-driven runtime
-4. unittest 需要新增 orchestration integration regression，而不是只更新文档口径
+4. unittest 需要新增 external fetch 或 simulation/benchmark integration regression，而不是只更新文档口径
 
 ## 6. runtime 当前边界
 

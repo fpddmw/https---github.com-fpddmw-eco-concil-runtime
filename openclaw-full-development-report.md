@@ -107,7 +107,7 @@
 
 ### 3.2 当前仍然缺失的能力
 
-当前距离最终交付，仍然还缺 4 组能力。
+当前距离最终交付，仍然还缺 3 组能力，另有 1 组能力已经完成主链回接但还可以继续扩展。
 
 #### A. 真实外部 orchestration 仍未补齐
 
@@ -120,14 +120,19 @@
 - 真实 fetch command 调度与失败恢复
 - 非本地 fixture 的 mission-driven collection
 
-#### B. archive / history context 仍未接回主链
+#### B. archive / history context 已接回主链基线
 
-还缺：
+本批次已经补齐：
 
+- signal corpus 回接
 - case library 回接
-- history context 注入 moderator / investigator 工作流
+- history context query / materialization
+- strict runtime contract + archive/history integration regression
+
+后续在这一条线上仍可继续扩展：
+
 - richer simulation / benchmark surface
-- 跨轮次对照与历史证据复用
+- 跨轮次对照预设与更细粒度历史证据复用
 
 #### C. runtime hardening 仍处于 baseline
 
@@ -158,6 +163,7 @@
 - 已经具备从 normalize 一路走到 final publication 的正式产物链
 - 已经具备最小 runtime kernel 与 phase-2 planner-backed preview
 - 已经具备最小 ingress contract loop
+- 已经具备 archive / history context 的主链回接与历史证据复用基线
 - 但仍处于 pre-production integration 阶段
 
 当前不能宣称的内容包括：
@@ -195,16 +201,18 @@
 
 完成标志：真实任务不再依赖本地 fixture 文件，就能从 mission 进入 signal plane。
 
-#### 工作流 2：archive / history context / simulation
+#### 工作流 2：simulation / benchmark 扩展
 
-目标：恢复跨轮次、跨案例和 richer benchmark 能力。
+目标：在已完成的 archive / history context 基线上，继续补 richer benchmark 与跨轮次对照能力。
 
 交付顺序建议：
 
-1. archive query surface
-2. history context assembly
-3. benchmark / simulation presets
-4. cross-round comparison regression
+1. benchmark / simulation presets
+2. cross-round comparison regression
+3. richer archive reuse presets
+4. task-domain benchmark pack
+
+当前状态：archive query surface 与 history context assembly 已完成。
 
 完成标志：至少两类真实任务能稳定复用历史上下文，并且 benchmark 有独立回归面。
 
@@ -242,8 +250,8 @@
 更合适的优先级是：
 
 1. 把当前 local artifact import 扩成真实 external fetch execution
-2. 接回 archive / history context
-3. 继续做 runtime hardening，尤其是 permission boundary 与 recovery
+2. 继续做 runtime hardening，尤其是 permission boundary 与 recovery
+3. 补 simulation / benchmark 与跨轮次对照扩展
 
 ## 7. 文档收敛后的使用方式
 
