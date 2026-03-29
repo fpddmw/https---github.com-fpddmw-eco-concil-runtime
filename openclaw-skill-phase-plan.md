@@ -232,9 +232,15 @@
    - 输出：`council_decision_<round_id>.json`
    - 作用：把 decision draft 提升为 canonical decision，并在 ready 路径上要求 canonical expert report 先存在
 
-### E3：下一批
+### E3：当前对话已完成
 
-6. final publication artifact
+6. `eco-materialize-final-publication`
+   - 输入：`reporting_handoff_<round_id>.json`、`expert_report_<role>_<round_id>.json`、`council_decision_<round_id>.json`、`promoted_evidence_basis_<round_id>.json`、`supervisor_state_<round_id>.json`
+   - 输出：`final_publication_<round_id>.json`
+   - 作用：把 canonical report / decision 收敛成一个最终发布对象，固定 publication summary、published sections、upstream audit refs、release posture 与 operator review hints
+
+7. final publication regression
+   - 目标：覆盖 promoted / withheld 两条路径、缺失 canonical inputs 的阻断行为，以及 publication artifact 对上游 audit refs 的绑定完整性
 
 ## Phase F：control-plane hardening
 
@@ -254,11 +260,25 @@
    - runtime registry 现在会消费 `SKILL.md` 的 read/write contract 与 `agents/openai.yaml` 的 interface 元数据
    - 作用：为下一步 contract-aware / permission-aware 执行治理打基础
 
-### F2：下一批
+### F2：当前对话已完成
 
-1. contract-aware execution enforcement
-2. final publication artifact
+1. contract-aware execution preflight
+   - 第一步只做 metadata-to-runtime 的 preflight，不立即假装已经具备完整 enforcement
+   - `run-skill` 在执行前对 declared inputs、declared reads / writes、CLI args、artifact_refs 进行预解析与一致性检查
+   - 初始阶段至少支持 `warn` 与 `strict` 两种模式
+
+2. contract-aware execution enforcement
+   - 在 preflight 成立后，再逐步把未声明输出、越界写路径、缺失 required input 变成真正的 allow/deny 决策
+   - 这一阶段要区分 `runtime governance` 与 `business semantics`，不能把业务判断塞回 kernel
+
+### F3：下一批
+
 3. board-driven orchestration planner
+   - 第一阶段不直接替换现有 phase-2 controller，而是先产出 `orchestration_plan_<round_id>.json`
+   - planner 读取 board summary、board brief、challenge state、next actions、readiness，并显式给出下一步 skill queue、角色建议、停止条件和 fallback path
+
+4. planner-backed controller cutover
+   - 只有在 planner artifact 稳定后，才允许逐步把固定 phase-2 pipeline 切成 planner-backed controller
 
 ## 4. 本批次交付标准
 
@@ -275,12 +295,35 @@
 
 从当前状态到更完整的可运行系统，建议按下面顺序推进：
 
-1. 补齐 reporting / decision 第三批：final publication artifact
-2. 把 runtime 从 metadata-aware 推进到 contract-aware / permission-aware 执行
-3. 设计 board-driven orchestration planner，逐步替换固定 phase-2 pipeline
-4. 把 orchestration / contract scaffold 接回新主链
-5. 恢复 archive / history context / richer simulation
-6. 做剩余 runtime hardening 与生产前准入验证
+1. 设计 board-driven orchestration planner artifact，但先与现有 phase-2 controller 并存，不立即切主路径
+2. 在 planner artifact 稳定后，再评估 planner-backed controller cutover
+3. 把 orchestration / contract scaffold 接回新主链
+4. 恢复 archive / history context / richer simulation
+5. 做剩余 runtime hardening 与生产前准入验证
+
+### 5.1 直接下一批的交付清单
+
+如果只看“下一次编码批次”，建议严格收敛成下面 3 项：
+
+1. planner artifact 设计稿
+   - 先交付 `orchestration_plan_<round_id>.json` schema 与最小 planner skill 设计，不急于替换 controller
+
+2. minimal planner skill
+   - 输入：board summary、board brief、challenge state、next actions、readiness
+   - 输出：`orchestration_plan_<round_id>.json`
+   - 作用：显式给出 next skill queue、assigned role hints、stop conditions、fallback path
+
+3. planner regression
+   - 覆盖 ready / hold 两类 round 下的 queue 生成、stop condition 与 fallback path 稳定性
+
+### 5.2 下一批验收条件
+
+下一批如果要算完成，至少要满足：
+
+1. `orchestration_plan_<round_id>.json` 至少能稳定表达 next skill queue、assigned role hints、stop conditions、fallback path
+2. planner 在 ready 与 hold 两类 round 下都能给出可解释的 queue 或明确的 stop decision
+3. planner-backed controller 仍保持 preview 状态，不得在本批次直接替换现有 deterministic phase-2 controller
+4. unittest 需要新增 planner regression，而不是只更新文档口径
 
 ## 6. runtime 当前边界
 
@@ -299,8 +342,10 @@ runtime 在当前阶段仍不应承担新的业务推理，推荐继续维持下
 - `show-run-state` 现在会同时回显最新 round 的 gate / controller / supervisor 快照。
 - `eco-materialize-reporting-handoff` 与 `eco-draft-council-decision` 已经把 promotion basis 接到 reporting / decision 第一批下游对象。
 - `eco-draft-expert-report`、`eco-publish-expert-report`、`eco-publish-council-decision` 已经把 role draft、canonical report 与 canonical decision 接回 skill-first 主链。
+- `eco-materialize-final-publication` 已经把 reporting 主链从 canonical report / decision 收敛到最终发布对象。
 - board 写入路径现在已切到 filesystem lock + atomic replace + `board_revision`，当前目标是先保证同机多进程安全，而不是宣称分布式协作已经完成。
 - runtime registry 现在会快照 skill contract 与 agent metadata，ledger 也会记录命令快照、skill_args、解析路径和输入/输出哈希。
+- runtime 现在已经具备 contract-aware preflight 与 enforcement baseline：支持 `preflight-skill`、`run-skill --contract-mode off|warn|strict`，并能阻断缺失 required inputs、未声明 path override、undeclared summary path 与 artifact_ref mismatch。
 - 当前完整 unittest 集会继续扩展，用于覆盖并发写、reporting publish 与审计链回归。
 
 ## 8. 面向生产的开发指引

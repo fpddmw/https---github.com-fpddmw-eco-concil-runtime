@@ -5,8 +5,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .controller import run_phase2_round
+from .controller import run_phase2_round, run_phase2_round_with_contract_mode
 from .executor import SkillExecutionError, new_runtime_event_id, run_skill
+from .governance import CONTRACT_MODES, preflight_skill_execution
 from .gate import apply_promotion_gate
 from .ledger import append_ledger_event, load_ledger_tail
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists
@@ -22,7 +23,7 @@ from .paths import (
     supervisor_state_path,
 )
 from .registry import write_registry
-from .supervisor import supervise_round
+from .supervisor import supervise_round, supervise_round_with_contract_mode
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -88,8 +89,18 @@ def build_parser() -> argparse.ArgumentParser:
     run_cmd.add_argument("--run-id", required=True)
     run_cmd.add_argument("--round-id", required=True)
     run_cmd.add_argument("--skill-name", required=True)
+    run_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     run_cmd.add_argument("--pretty", action="store_true")
     run_cmd.add_argument("skill_args", nargs=argparse.REMAINDER)
+
+    preflight_cmd = sub.add_parser("preflight-skill", help="Resolve one skill contract and report governance issues without executing the skill.")
+    preflight_cmd.add_argument("--run-dir", required=True)
+    preflight_cmd.add_argument("--run-id", required=True)
+    preflight_cmd.add_argument("--round-id", required=True)
+    preflight_cmd.add_argument("--skill-name", required=True)
+    preflight_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    preflight_cmd.add_argument("--pretty", action="store_true")
+    preflight_cmd.add_argument("skill_args", nargs=argparse.REMAINDER)
 
     gate_cmd = sub.add_parser("apply-promotion-gate", help="Evaluate round readiness and write a promote-or-freeze gate artifact.")
     gate_cmd.add_argument("--run-dir", required=True)
@@ -101,12 +112,14 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_cmd.add_argument("--run-dir", required=True)
     phase2_cmd.add_argument("--run-id", required=True)
     phase2_cmd.add_argument("--round-id", required=True)
+    phase2_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     phase2_cmd.add_argument("--pretty", action="store_true")
 
     supervisor_cmd = sub.add_parser("supervise-round", help="Run the phase-2 controller and materialize a compact supervisor state.")
     supervisor_cmd.add_argument("--run-dir", required=True)
     supervisor_cmd.add_argument("--run-id", required=True)
     supervisor_cmd.add_argument("--round-id", required=True)
+    supervisor_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     supervisor_cmd.add_argument("--pretty", action="store_true")
 
     show_cmd = sub.add_parser("show-run-state", help="Show manifest, cursor, registry, and a tail of runtime ledger events.")
@@ -132,13 +145,55 @@ def main(argv: list[str] | None = None) -> int:
         if skill_args and skill_args[0] == "--":
             skill_args = skill_args[1:]
         try:
-            payload = run_skill(run_dir, run_id=args.run_id, round_id=args.round_id, skill_name=args.skill_name, skill_args=skill_args)
+            payload = run_skill(run_dir, run_id=args.run_id, round_id=args.round_id, skill_name=args.skill_name, skill_args=skill_args, contract_mode=args.contract_mode)
         except SkillExecutionError as exc:
-            failure = {"status": "failed", "summary": {"skill_name": args.skill_name, "run_id": args.run_id, "round_id": args.round_id}, "message": str(exc)}
+            failure = exc.payload or {"status": "failed", "summary": {"skill_name": args.skill_name, "run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode}, "message": str(exc)}
             print(pretty_json(failure, args.pretty))
             return 1
         print(pretty_json(payload, args.pretty))
         return 0
+
+    if args.command == "preflight-skill":
+        init_run(run_dir, args.run_id)
+        skill_args = list(args.skill_args or [])
+        if skill_args and skill_args[0] == "--":
+            skill_args = skill_args[1:]
+        preflight = preflight_skill_execution(
+            run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+            skill_name=args.skill_name,
+            skill_args=skill_args,
+            contract_mode=args.contract_mode,
+        )
+        payload = {
+            "status": "blocked" if bool(preflight.get("block_execution")) else "completed",
+            "summary": {
+                "skill_name": args.skill_name,
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "contract_mode": args.contract_mode,
+                "issue_count": preflight.get("issue_count", 0),
+                "blocking_issue_count": preflight.get("blocking_issue_count", 0),
+            },
+            "preflight": preflight,
+        }
+        append_ledger_event(
+            run_dir,
+            {
+                "schema_version": "runtime-event-v3",
+                "event_id": new_runtime_event_id("runtimeevt", args.run_id, args.round_id, args.skill_name, "preflight-only", args.contract_mode),
+                "event_type": "skill-preflight",
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "skill_name": args.skill_name,
+                "status": payload["status"],
+                "contract_mode": args.contract_mode,
+                "preflight": preflight,
+            },
+        )
+        print(pretty_json(payload, args.pretty))
+        return 0 if payload["status"] != "blocked" else 1
 
     if args.command == "apply-promotion-gate":
         init_run(run_dir, args.run_id)
@@ -165,9 +220,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "run-phase2-round":
         try:
-            payload = run_phase2_round(run_dir, run_id=args.run_id, round_id=args.round_id)
+            payload = run_phase2_round_with_contract_mode(run_dir, run_id=args.run_id, round_id=args.round_id, contract_mode=args.contract_mode)
         except SkillExecutionError as exc:
-            failure = {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id}, "message": str(exc)}
+            failure = exc.payload or {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode}, "message": str(exc)}
             print(pretty_json(failure, args.pretty))
             return 1
         print(pretty_json(payload, args.pretty))
@@ -175,9 +230,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "supervise-round":
         try:
-            payload = supervise_round(run_dir, run_id=args.run_id, round_id=args.round_id)
+            payload = supervise_round_with_contract_mode(run_dir, run_id=args.run_id, round_id=args.round_id, contract_mode=args.contract_mode)
         except SkillExecutionError as exc:
-            failure = {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id}, "message": str(exc)}
+            failure = exc.payload or {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode}, "message": str(exc)}
             print(pretty_json(failure, args.pretty))
             return 1
         print(pretty_json(payload, args.pretty))

@@ -183,7 +183,7 @@ def publish_council_decision_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [],
             "challenge_hints": [],
-            "suggested_next_skills": ["eco-post-board-note"] if publication_readiness == "ready" else ["eco-post-board-note", "eco-propose-next-actions", "eco-open-falsification-probe"],
+            "suggested_next_skills": ["eco-materialize-final-publication"] if publication_readiness == "ready" else ["eco-materialize-final-publication", "eco-post-board-note", "eco-propose-next-actions", "eco-open-falsification-probe"],
         },
     }
 

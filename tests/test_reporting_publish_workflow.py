@@ -128,6 +128,50 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("blocked", second_publish["status"])
             self.assertTrue(any(item["code"] == "overwrite-blocked" for item in second_publish["warnings"]))
 
+    def test_final_publication_ready_round_collects_reports_and_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_round(run_dir, root)
+
+            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+
+            publication_payload = run_script(script_path("eco-materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            publication_noop = run_script(script_path("eco-materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            publication = load_json(reporting_path(run_dir, f"final_publication_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", publication_payload["status"])
+            self.assertEqual("ready-for-release", publication_payload["summary"]["publication_status"])
+            self.assertEqual("noop", publication_noop["summary"]["operation"])
+            self.assertEqual("release", publication["publication_posture"])
+            self.assertEqual(2, len(publication["role_reports"]))
+            self.assertIn("role-reports", publication["published_sections"])
+            self.assertEqual(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json").resolve().as_posix(), Path(publication["audit_refs"]["decision_path"]).resolve().as_posix())
+
+    def test_final_publication_hold_round_materializes_hold_artifact_and_guards_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_hold_round(run_dir, root)
+
+            run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            first_publication = run_script(script_path("eco-materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+
+            publication_path = reporting_path(run_dir, f"final_publication_{ROUND_ID}.json")
+            modified = load_json(publication_path)
+            modified["publication_summary"] = modified["publication_summary"] + " Changed after first publish."
+            write_json(publication_path, modified)
+            second_publication = run_script(script_path("eco-materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+
+            self.assertEqual("hold-release", first_publication["summary"]["publication_status"])
+            self.assertEqual("withhold", load_json(publication_path)["publication_posture"])
+            self.assertEqual("blocked", second_publication["status"])
+            self.assertTrue(any(item["code"] == "overwrite-blocked" for item in second_publication["warnings"]))
+
 
 if __name__ == "__main__":
     unittest.main()

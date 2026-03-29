@@ -4,8 +4,8 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from .controller import run_phase2_round
-from .executor import maybe_text, utc_now_iso
+from .controller import run_phase2_round, run_phase2_round_with_contract_mode
+from .executor import maybe_text, new_runtime_event_id, utc_now_iso
 from .ledger import append_ledger_event
 from .manifest import load_json_if_exists, write_json
 from .paths import supervisor_state_path
@@ -49,8 +49,12 @@ def operator_notes(*, promotion_status: str, gate_status: str, gate_reasons: lis
 
 
 def supervise_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any]:
+    return supervise_round_with_contract_mode(run_dir, run_id=run_id, round_id=round_id, contract_mode="warn")
+
+
+def supervise_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id: str, contract_mode: str) -> dict[str, Any]:
     started_at = utc_now_iso()
-    controller_result = run_phase2_round(run_dir, run_id=run_id, round_id=round_id)
+    controller_result = run_phase2_round_with_contract_mode(run_dir, run_id=run_id, round_id=round_id, contract_mode=contract_mode)
     controller = controller_result.get("controller", {}) if isinstance(controller_result.get("controller"), dict) else {}
     artifacts = controller.get("artifacts", {}) if isinstance(controller.get("artifacts"), dict) else {}
     next_actions_path = maybe_text(artifacts.get("next_actions_path"))
@@ -87,11 +91,11 @@ def supervise_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, A
     output_file = supervisor_state_path(run_dir, round_id)
     write_json(output_file, payload)
 
-    event_id = "runtimeevt-" + stable_hash(run_id, round_id, "supervisor", started_at, finished_at)[:12]
+    event_id = new_runtime_event_id("runtimeevt", run_id, round_id, "supervisor", started_at, finished_at, contract_mode)
     append_ledger_event(
         run_dir,
         {
-            "schema_version": "runtime-event-v1",
+            "schema_version": "runtime-event-v3",
             "event_id": event_id,
             "event_type": "supervisor",
             "run_id": run_id,
@@ -99,6 +103,7 @@ def supervise_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, A
             "started_at_utc": started_at,
             "completed_at_utc": finished_at,
             "status": "completed",
+            "contract_mode": contract_mode,
             "supervisor_status": supervisor_status,
             "readiness_status": payload["readiness_status"],
             "gate_status": gate_status,

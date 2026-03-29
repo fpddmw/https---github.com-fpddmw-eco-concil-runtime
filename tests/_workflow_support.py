@@ -68,13 +68,21 @@ def kernel_script_path() -> Path:
     return WORKSPACE_ROOT / "eco-concil-runtime" / "scripts" / "eco_runtime_kernel.py"
 
 
-def run_kernel(*args: str) -> dict[str, Any]:
-    completed = subprocess.run(
+def runtime_src_path() -> Path:
+    return WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+
+
+def run_kernel_process(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
         [sys.executable, str(kernel_script_path()), *args],
         capture_output=True,
         text=True,
         check=False,
     )
+
+
+def run_kernel(*args: str) -> dict[str, Any]:
+    completed = run_kernel_process(*args)
     if completed.returncode != 0:
         raise AssertionError(
             f"Kernel failed\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"

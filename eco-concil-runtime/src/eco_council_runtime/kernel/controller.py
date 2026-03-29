@@ -46,6 +46,10 @@ def summarize_skill_step(stage_name: str, result: dict[str, Any]) -> dict[str, A
 
 
 def run_phase2_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any]:
+    return run_phase2_round_with_contract_mode(run_dir, run_id=run_id, round_id=round_id, contract_mode="warn")
+
+
+def run_phase2_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id: str, contract_mode: str) -> dict[str, Any]:
     ensure_runtime_dirs(run_dir)
     write_registry(run_dir)
     init_run_manifest(run_dir, run_id)
@@ -54,7 +58,7 @@ def run_phase2_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, 
     started_at = utc_now_iso()
     steps: list[dict[str, Any]] = []
     for stage_name, skill_name in PHASE2_STAGES:
-        result = run_skill(run_dir, run_id=run_id, round_id=round_id, skill_name=skill_name, skill_args=[])
+        result = run_skill(run_dir, run_id=run_id, round_id=round_id, skill_name=skill_name, skill_args=[], contract_mode=contract_mode)
         steps.append(summarize_skill_step(stage_name, result))
 
     gate_payload = apply_promotion_gate(run_dir, run_id=run_id, round_id=round_id)
@@ -89,7 +93,7 @@ def run_phase2_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, 
         }
     )
 
-    promotion_result = run_skill(run_dir, run_id=run_id, round_id=round_id, skill_name="eco-promote-evidence-basis", skill_args=[])
+    promotion_result = run_skill(run_dir, run_id=run_id, round_id=round_id, skill_name="eco-promote-evidence-basis", skill_args=[], contract_mode=contract_mode)
     steps.append(summarize_skill_step("promotion-basis", promotion_result))
 
     promotion_payload = promotion_result.get("skill_payload", {}) if isinstance(promotion_result.get("skill_payload"), dict) else {}
