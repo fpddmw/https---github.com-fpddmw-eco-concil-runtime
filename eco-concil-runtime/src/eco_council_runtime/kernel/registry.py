@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .paths import registry_path
+from .source_queue_profile import source_queue_profile, source_queue_profile_summary
 
 
 def workspace_root() -> Path:
@@ -197,6 +198,7 @@ def build_skill_entry(skill_dir: Path) -> dict[str, object] | None:
         "declared_side_effects": parse_side_effects(skill_doc_text, contract),
         "execution_policy": parse_execution_policy(skill_doc_text),
         "agent": parse_agent_metadata(agent_config_path),
+        "source_queue_profile": source_queue_profile(skill_name),
     }
 
 
@@ -222,6 +224,7 @@ def registry_snapshot(root: Path | None = None) -> dict[str, object]:
         "schema_version": "runtime-registry-v2",
         "workspace_root": str(resolved_root),
         "skill_count": len(skills),
+        "source_queue_profile_summary": source_queue_profile_summary(skills),
         "skills": skills,
     }
 
