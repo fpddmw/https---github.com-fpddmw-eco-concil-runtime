@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +25,11 @@ from eco_council_runtime.kernel.source_queue_contract import (  # noqa: E402
     unique_texts,
     utc_now_iso,
     write_json_file,
+)
+from eco_council_runtime.kernel.source_queue_execution import (  # noqa: E402
+    copy_import_artifact,
+    execute_detached_fetch_step,
+    resolved_artifact_path,
 )
 from eco_council_runtime.kernel.source_queue_planner import ensure_fetch_plan_inputs_match  # noqa: E402
 
@@ -60,48 +64,6 @@ def run_json_script(script_path: Path, *args: str) -> dict[str, Any]:
     return payload
 
 
-def render_fetch_argv(step: dict[str, Any], *, run_dir: Path, run_id: str, round_id: str) -> list[str]:
-    artifact_path = maybe_text(step.get("artifact_path"))
-    substitutions = {
-        "artifact_path": artifact_path,
-        "run_dir": str(run_dir),
-        "run_id": run_id,
-        "round_id": round_id,
-        "source_skill": maybe_text(step.get("source_skill")),
-    }
-    argv = step.get("fetch_argv") if isinstance(step.get("fetch_argv"), list) else []
-    return [maybe_text(arg).format(**substitutions) for arg in argv if maybe_text(arg)]
-
-
-def materialize_detached_fetch_artifact(step: dict[str, Any], *, run_dir: Path, run_id: str, round_id: str) -> Path:
-    artifact_path = Path(maybe_text(step.get("artifact_path"))).expanduser().resolve()
-    artifact_path.parent.mkdir(parents=True, exist_ok=True)
-    argv = render_fetch_argv(step, run_dir=run_dir, run_id=run_id, round_id=round_id)
-    if not argv:
-        raise RuntimeError(f"Detached fetch step has no fetch_argv: {maybe_text(step.get('step_id'))}")
-    fetch_cwd = Path(maybe_text(step.get("fetch_cwd")) or str(WORKSPACE_ROOT)).expanduser().resolve()
-    completed = subprocess.run(argv, cwd=str(fetch_cwd), capture_output=True, text=True, check=False)
-    if completed.returncode != 0:
-        detail = completed.stderr.strip() or completed.stdout.strip() or f"exit={completed.returncode}"
-        raise RuntimeError(f"Detached fetch command failed: {detail}")
-
-    capture_mode = maybe_text(step.get("artifact_capture")) or "stdout-json"
-    if capture_mode == "stdout-json":
-        try:
-            payload = json.loads(completed.stdout)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("Detached fetch stdout was not valid JSON.") from exc
-        artifact_path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    elif capture_mode == "stdout-text":
-        artifact_path.write_text(completed.stdout, encoding="utf-8")
-    elif capture_mode == "direct-file":
-        if not artifact_path.exists():
-            raise RuntimeError(f"Detached fetch expected a direct-file artifact at {artifact_path}")
-    else:
-        raise RuntimeError(f"Unsupported detached fetch artifact_capture: {capture_mode}")
-    return artifact_path
-
-
 def execute_import_step(
     *,
     run_dir: Path,
@@ -113,17 +75,15 @@ def execute_import_step(
     step_kind = maybe_text(step.get("step_kind")) or "import"
     source_skill = maybe_text(step.get("source_skill"))
     normalizer_skill = maybe_text(step.get("normalizer_skill"))
-    raw_artifact_path = Path(maybe_text(step.get("artifact_path"))).expanduser().resolve()
+    raw_artifact_path = resolved_artifact_path(step)
+    fetch_details: dict[str, Any] | None = None
 
     if step_kind == "import":
-        source_artifact_path = Path(maybe_text(step.get("source_artifact_path"))).expanduser().resolve()
-        if not source_artifact_path.exists():
-            raise FileNotFoundError(f"Source artifact is missing for {step_id}: {source_artifact_path}")
-        raw_artifact_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_artifact_path, raw_artifact_path)
-    elif step_kind == "detached-fetch":
-        source_artifact_path = materialize_detached_fetch_artifact(step, run_dir=run_dir, run_id=run_id, round_id=round_id)
+        source_artifact_path = copy_import_artifact(step)
         raw_artifact_path = source_artifact_path
+    elif step_kind == "detached-fetch":
+        raw_artifact_path, fetch_details = execute_detached_fetch_step(step, run_dir=run_dir, run_id=run_id, round_id=round_id)
+        source_artifact_path = raw_artifact_path
     else:
         raise RuntimeError(f"Unsupported step_kind: {step_kind}")
 
@@ -162,6 +122,8 @@ def execute_import_step(
     }
     if step_kind == "import":
         status["source_artifact_path"] = maybe_text(step.get("source_artifact_path"))
+    if fetch_details is not None:
+        status["detached_fetch"] = fetch_details
     return status, payload
 
 

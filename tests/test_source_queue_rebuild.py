@@ -44,8 +44,32 @@ def build_detached_fetch_script(root: Path) -> Path:
     return path
 
 
-def build_mixed_queue_mission(root: Path, openaq_path: Path, fetch_script: Path) -> Path:
+def build_retrying_detached_fetch_script(root: Path, marker_path: Path) -> Path:
+    path = root / "emit_youtube_retry_fixture.py"
+    path.write_text(
+        "import json, pathlib, sys\n"
+        f"marker = pathlib.Path({str(marker_path)!r})\n"
+        "if not marker.exists():\n"
+        "    marker.write_text('first-attempt', encoding='utf-8')\n"
+        "    print('transient fetch failure', file=sys.stderr)\n"
+        "    raise SystemExit(75)\n"
+        "payload=[{\"query\":\"nyc smoke wildfire\",\"video_id\":\"vid-detached-002\",\"video\":{\"id\":\"vid-detached-002\",\"title\":\"Smoke over New York City retry\",\"description\":\"Second attempt succeeded.\",\"channel_title\":\"City Desk\",\"published_at\":\"2023-06-07T13:05:00Z\",\"default_language\":\"en\",\"statistics\":{\"view_count\":980}}}]\n"
+        "print(json.dumps(payload))\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def build_mixed_queue_mission(root: Path, openaq_path: Path, fetch_script: Path, *, request_overrides: dict[str, object] | None = None) -> Path:
     mission_path = root / "mission.json"
+    source_request = {
+        "source_skill": "youtube-video-search",
+        "query_text": "nyc smoke wildfire",
+        "artifact_capture": "stdout-json",
+        "fetch_argv": [sys.executable, str(fetch_script)],
+    }
+    if request_overrides:
+        source_request.update(request_overrides)
     write_json(
         mission_path,
         {
@@ -81,12 +105,7 @@ def build_mixed_queue_mission(root: Path, openaq_path: Path, fetch_script: Path)
                 }
             ],
             "source_requests": [
-                {
-                    "source_skill": "youtube-video-search",
-                    "query_text": "nyc smoke wildfire",
-                    "artifact_capture": "stdout-json",
-                    "fetch_argv": [sys.executable, str(fetch_script)],
-                }
+                source_request
             ],
             "source_selections": {
                 "sociologist": {
@@ -104,6 +123,53 @@ def build_mixed_queue_mission(root: Path, openaq_path: Path, fetch_script: Path)
 
 
 class SourceQueueRebuildTests(unittest.TestCase):
+    def test_prepare_round_materializes_detached_fetch_governance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            mission_path = build_mixed_queue_mission(
+                root,
+                build_openaq_artifact(root),
+                build_detached_fetch_script(root),
+                request_overrides={
+                    "fetch_execution_policy": {
+                        "timeout_seconds": 9.0,
+                        "retry_budget": 1,
+                        "retry_backoff_ms": 25,
+                    },
+                    "allow_side_effects": ["reads-shared-state"],
+                },
+            )
+
+            run_script(
+                script_path("eco-scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+            )
+            run_script(
+                script_path("eco-prepare-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            plan = load_json(runtime_path(run_dir, f"fetch_plan_{ROUND_ID}.json"))
+            detached_step = next(step for step in plan["steps"] if step["step_kind"] == "detached-fetch")
+
+            self.assertEqual(9.0, detached_step["fetch_execution_policy"]["timeout_seconds"])
+            self.assertEqual(1, detached_step["fetch_execution_policy"]["retry_budget"])
+            self.assertEqual(25, detached_step["fetch_execution_policy"]["retry_backoff_ms"])
+            self.assertEqual(["writes-artifacts", "reads-shared-state"], detached_step["allow_side_effects"])
+
     def test_prepare_round_materializes_source_selection_snapshots_and_mixed_steps(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -186,6 +252,66 @@ class SourceQueueRebuildTests(unittest.TestCase):
             self.assertEqual(0, execution["failed_count"])
             self.assertEqual({"import", "detached-fetch"}, {status["step_kind"] for status in execution["statuses"]})
             self.assertEqual(2, len(execution["normalized_receipt_ids"]))
+
+    def test_import_execution_retries_detached_fetch_and_records_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            marker_path = root / "retry.marker"
+            mission_path = build_mixed_queue_mission(
+                root,
+                build_openaq_artifact(root),
+                build_retrying_detached_fetch_script(root, marker_path),
+                request_overrides={
+                    "fetch_execution_policy": {
+                        "timeout_seconds": 5.0,
+                        "retry_budget": 1,
+                        "retry_backoff_ms": 1,
+                    },
+                    "allow_side_effects": ["reads-shared-state"],
+                },
+            )
+
+            run_script(
+                script_path("eco-scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+            )
+            run_script(
+                script_path("eco-prepare-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-import-fetch-execution"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
+            detached_status = next(status for status in execution["statuses"] if status["step_kind"] == "detached-fetch")
+            detached_meta = detached_status["detached_fetch"]
+
+            self.assertEqual(2, detached_meta["attempt_count"])
+            self.assertTrue(detached_meta["recovered_after_retry"])
+            self.assertEqual(5.0, detached_meta["execution_policy"]["timeout_seconds"])
+            self.assertEqual(1, detached_meta["execution_policy"]["retry_budget"])
+            self.assertEqual(["writes-artifacts", "reads-shared-state"], detached_meta["allow_side_effects"])
+            self.assertTrue(marker_path.exists())
 
     def test_import_execution_detects_source_selection_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

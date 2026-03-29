@@ -232,6 +232,8 @@ def build_fetch_plan(
                 "artifact_capture": maybe_text(item.get("artifact_capture")) or "stdout-json",
                 "fetch_argv": fetch_argv,
                 "fetch_cwd": maybe_text(item.get("fetch_cwd")) or str(WORKSPACE_ROOT),
+                "fetch_execution_policy": item.get("fetch_execution_policy", {}) if isinstance(item.get("fetch_execution_policy"), dict) else {},
+                "allow_side_effects": item.get("allow_side_effects", []) if isinstance(item.get("allow_side_effects"), list) else [],
                 "normalizer_args": normalizer_args_for(source_skill, item),
                 "notes": [
                     f"Execute detached-fetch request for {source_skill} before normalization.",

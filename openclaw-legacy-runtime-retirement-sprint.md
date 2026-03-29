@@ -43,7 +43,7 @@
 
 ### 第 2 轮：detached fetch 治理边界迁移
 
-状态：`下一轮主任务`
+状态：`已完成`
 
 目标：
 
@@ -62,9 +62,16 @@
 - detached fetch 的执行参数和治理边界不再散落在 skill 脚本里
 - 旧版 fetch-plan / step-synthesis 的剩余参考价值被大幅压缩
 
+当前结果：
+
+1. active kernel 已新增 detached fetch execution helper
+2. `eco-import-fetch-execution` 已改为调用 kernel helper
+3. `fetch_plan` 已显式携带 `fetch_execution_policy` 与 `allow_side_effects`
+4. 已补 retry / governance 测试并通过全量回归
+
 ### 第 3 轮：最终退役审计
 
-状态：`待开始`
+状态：`已完成`
 
 目标：
 
@@ -83,6 +90,13 @@
 - 旧版只剩历史参考价值，不再是开发依赖
 - 删除判据有文档和测试支撑
 
+当前结果：
+
+1. 已核查 archive / query / history context 链路，确认执行逻辑位于当前技能组而非旧 runtime。
+2. 已新增最终审计文档：[openclaw-legacy-runtime-final-audit.md](openclaw-legacy-runtime-final-audit.md)。
+3. 已形成旧目录的最终 keep / rewrite / drop 结论。
+4. 结论已更新为：`eco-concil-runtime(abandoned)` 可以从工作目录删除。
+
 ## 3. 旧代码参考价值分级
 
 ### A. 高价值，必须迁入 active kernel
@@ -90,15 +104,15 @@
 1. `eco-concil-runtime(abandoned)/src/eco_council_runtime/controller/policy.py`
    - 价值：policy summary、allowed sources、evidence requirements、family memory
    - 处理：拆散后迁入 `kernel/source_queue_*`
-   - 当前状态：`部分已迁`
+   - 当前状态：`已迁移完成`
 2. `eco-concil-runtime(abandoned)/src/eco_council_runtime/application/orchestration/fetch_plan_builder.py`
    - 价值：input snapshot、fetch plan 组装思路
    - 处理：保留骨架，不回收旧依赖
-   - 当前状态：`部分已迁`
+   - 当前状态：`已迁移完成`
 3. `eco-concil-runtime(abandoned)/src/eco_council_runtime/application/orchestration/governance.py`
    - 价值：source-selection 治理校验
    - 处理：迁入当前 selection validation
-   - 当前状态：`已大部迁入`
+   - 当前状态：`已迁移完成`
 
 ### B. 有参考价值，但只保留概念
 
@@ -119,6 +133,12 @@
 
 ## 4. 当前判断
 
-现在还不能删除 `eco-concil-runtime(abandoned)`。
+现在可以删除 `eco-concil-runtime(abandoned)`。
 
-但只要三轮冲刺按计划完成，旧版就应当从“运行逻辑来源”退化为“纯历史参考”。届时应优先删除，而不是继续拖着它并行存在。
+更准确地说：
+
+1. active runtime 已经完成对旧版高价值 runtime 能力的吸收。
+2. 旧目录现在只剩历史参考价值，不再承担待迁移执行逻辑。
+3. 如果还需要人工对照，应通过 `git history`、tag 或压缩归档保留，而不是继续把旧目录放在主工作树里并行开发。
+
+最终证据链见 [openclaw-legacy-runtime-final-audit.md](openclaw-legacy-runtime-final-audit.md)。

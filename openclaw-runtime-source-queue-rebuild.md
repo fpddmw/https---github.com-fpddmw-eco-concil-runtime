@@ -2,6 +2,8 @@
 
 执行顺序、旧版取舍和删除判据请同步参见 [openclaw-runtime-mode-development-flow.md](openclaw-runtime-mode-development-flow.md)。
 
+说明：这份文档保留为“重建设计记录”。Round 1 / Round 2 的治理记忆与 detached fetch 边界已经落地，当前实际迁移状态和旧目录删除结论应以 [openclaw-legacy-runtime-final-audit.md](openclaw-legacy-runtime-final-audit.md) 为准。
+
 ## 1. 目标
 
 把 runtime source-queue 重建成第二编排面，而不是继续维护一个 import-only 过渡层。

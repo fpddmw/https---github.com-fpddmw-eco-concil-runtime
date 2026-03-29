@@ -7,6 +7,15 @@ from pathlib import Path
 from typing import Any
 
 SOURCE_SELECTION_ROLES = ("sociologist", "environmentalist")
+SUPPORTED_ARTIFACT_CAPTURE_MODES = ("stdout-json", "stdout-text", "direct-file")
+KNOWN_FETCH_SIDE_EFFECTS = (
+    "reads-artifacts",
+    "writes-artifacts",
+    "reads-shared-state",
+    "writes-shared-state",
+    "network-external",
+    "destructive-write",
+)
 
 SOURCE_CATALOG: dict[str, dict[str, str]] = {
     "bluesky-cascade-fetch": {
@@ -91,6 +100,15 @@ def coerce_int(value: Any) -> int | None:
         return None
 
 
+def coerce_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def unique_texts(values: list[Any]) -> list[str]:
     seen: set[str] = set()
     results: list[str] = []
@@ -166,6 +184,45 @@ def source_config(source_skill: str) -> dict[str, str]:
 
 def source_role(source_skill: str) -> str:
     return maybe_text(source_config(source_skill).get("role"))
+
+
+def normalize_text_list(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    return unique_texts([maybe_text(value) for value in values if maybe_text(value)])
+
+
+def normalize_artifact_capture(value: Any) -> str:
+    capture_mode = maybe_text(value) or "stdout-json"
+    if capture_mode not in SUPPORTED_ARTIFACT_CAPTURE_MODES:
+        raise ValueError(f"Unsupported artifact_capture: {capture_mode}")
+    return capture_mode
+
+
+def normalize_fetch_execution_policy(payload: dict[str, Any]) -> dict[str, Any]:
+    execution_policy = payload.get("fetch_execution_policy") if isinstance(payload.get("fetch_execution_policy"), dict) else {}
+    timeout_seconds = coerce_float(execution_policy.get("timeout_seconds"))
+    if timeout_seconds is None:
+        timeout_seconds = coerce_float(payload.get("timeout_seconds"))
+    retry_budget = coerce_int(execution_policy.get("retry_budget"))
+    if retry_budget is None:
+        retry_budget = coerce_int(payload.get("retry_budget"))
+    retry_backoff_ms = coerce_int(execution_policy.get("retry_backoff_ms"))
+    if retry_backoff_ms is None:
+        retry_backoff_ms = coerce_int(payload.get("retry_backoff_ms"))
+    return {
+        "timeout_seconds": max(0.0, float(timeout_seconds if timeout_seconds is not None else 300.0)),
+        "retry_budget": max(0, int(retry_budget if retry_budget is not None else 0)),
+        "retry_backoff_ms": max(0, int(retry_backoff_ms if retry_backoff_ms is not None else 250)),
+    }
+
+
+def normalize_fetch_side_effects(payload: dict[str, Any]) -> list[str]:
+    requested = normalize_text_list(payload.get("allow_side_effects"))
+    invalid = [value for value in requested if value not in KNOWN_FETCH_SIDE_EFFECTS]
+    if invalid:
+        raise ValueError(f"Unsupported fetch side effects: {', '.join(invalid)}")
+    return unique_texts(["writes-artifacts", *requested])
 
 
 def allowed_sources_for_role(mission: dict[str, Any], role: str) -> list[str]:
@@ -325,10 +382,12 @@ def normalize_source_requests(mission: dict[str, Any]) -> list[dict[str, Any]]:
                 "role": maybe_text(config.get("role")),
                 "query_text": maybe_text(item.get("query_text")),
                 "source_mode": maybe_text(item.get("source_mode")),
-                "artifact_capture": maybe_text(item.get("artifact_capture")) or "stdout-json",
+                "artifact_capture": normalize_artifact_capture(item.get("artifact_capture")),
                 "artifact_path": maybe_text(item.get("artifact_path")),
                 "fetch_cwd": maybe_text(item.get("fetch_cwd")),
                 "fetch_argv": [maybe_text(arg) for arg in fetch_argv if maybe_text(arg)],
+                "fetch_execution_policy": normalize_fetch_execution_policy(item),
+                "allow_side_effects": normalize_fetch_side_effects(item),
                 "notes": [maybe_text(note) for note in item.get("notes", []) if maybe_text(note)] if isinstance(item.get("notes"), list) else [],
             }
         )
@@ -336,15 +395,23 @@ def normalize_source_requests(mission: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 __all__ = [
+    "coerce_float",
+    "coerce_int",
+    "KNOWN_FETCH_SIDE_EFFECTS",
     "SOURCE_CATALOG",
     "SOURCE_SELECTION_ROLES",
+    "SUPPORTED_ARTIFACT_CAPTURE_MODES",
     "allowed_sources_for_role",
     "effective_constraints",
     "file_sha256",
     "file_snapshot",
     "maybe_text",
+    "normalize_artifact_capture",
     "normalize_artifact_imports",
+    "normalize_fetch_execution_policy",
+    "normalize_fetch_side_effects",
     "normalize_source_requests",
+    "normalize_text_list",
     "policy_profile_summary",
     "read_json_list",
     "read_json_object",

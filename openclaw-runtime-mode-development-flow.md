@@ -15,6 +15,8 @@
 
 近期 `2-3` 次对话内的 legacy runtime 退役任务板见 [openclaw-legacy-runtime-retirement-sprint.md](openclaw-legacy-runtime-retirement-sprint.md)。
 
+最终删除结论与证据链见 [openclaw-legacy-runtime-final-audit.md](openclaw-legacy-runtime-final-audit.md)。
+
 ## 2. 当前 runtime-mode 的真实状态
 
 当前 runtime-mode 已经不是空壳。它已经具备一条可运行的受控主链：
@@ -52,8 +54,11 @@
 
 - `tests/test_orchestration_ingress_workflow.py`
 - `tests/test_source_queue_rebuild.py`
+- `tests/test_source_queue_governance.py`
+- `tests/test_source_queue_family_memory.py`
 - `tests/test_runtime_source_queue_profiles.py`
 - `tests/test_runtime_kernel.py`
+- `tests/test_archive_history_workflow.py`
 - `tests/test_supervisor_simulation_regression.py`
 
 结论：
@@ -273,24 +278,30 @@ runtime-mode 不应该再承担：
 
 ## 8. 现在能不能删旧版仓库
 
-结论：现在还不能删。
+结论：现在可以删。
 
-原因不是“旧版还有很多代码”，而是这三类信息还没有完全收口到当前主链：
+但这个“可以删”有一个前提语义：
 
-1. 旧版里部分值得保留的治理能力还未全部迁完
-2. 删除判据还没有全部被测试覆盖锁死
-3. 旧版仍然承担“迁移参考库”的角色，而不是纯历史存档
+1. 指的是可以从当前工作目录删除 `eco-concil-runtime(abandoned)`。
+2. 不是说旧设计从此毫无参考价值，而是说这些参考价值已经不应该再以“并列活跃代码目录”的形式存在。
 
-更实际的判断标准是：
+当前之所以可以删除，是因为：
 
-当你能把旧版只当文献，不再当“待抄回来的代码仓”时，就可以删。
+1. source-selection governance、family memory、fetch-plan snapshot、detached fetch 边界都已有 active 归宿。
+2. archive / query / history context 主链已经由当前技能组闭环。
+3. active 代码、skills、tests 不再直接依赖旧目录。
+4. 删除判据已有文档与测试证据链支撑。
+
+更实际的判断标准已经从“旧版还有没有可看代码”变成：
+
+当旧版只剩历史对照价值，而不再承担待迁移执行逻辑时，就应当删除。
 
 ## 9. 当前执行建议
 
-下一批工作应聚焦三件事：
+legacy runtime 退役完成后，下一批工作不应继续围绕旧目录迁移，而应转向 active 架构本身：
 
-1. 继续把旧版 `source-selection` 治理逻辑迁入当前 kernel
-2. 把 detached fetch 的真实治理边界补齐
-3. 为“可删除旧仓库”建立明确测试与文档清单
+1. 把 runtime-mode 从“受控 preview 主链”继续推进到更稳的生产化边界。
+2. 把当前 skill surface 进一步做成 OpenClaw agent-first 的执行面，而不是 planner/controller-first。
+3. 加强 history retrieval、admission policy、permission boundary、ledger replay 等 active 能力。
 
-这三件事完成后，旧版仓库就会从“运行逻辑来源”降级成“历史参考”，那时才适合彻底删除。
+换句话说，后续重点已经不再是“旧版还能抄什么”，而是“active runtime 还缺什么”。
