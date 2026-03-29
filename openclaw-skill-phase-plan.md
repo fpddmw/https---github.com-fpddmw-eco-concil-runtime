@@ -17,7 +17,8 @@
 1. normalize -> evidence -> board -> promotion -> reporting 主链已经完成。
 2. phase-2 controller 已经切到 planner-backed preview。
 3. 本批次已经补入 mission scaffold、prepare-round、fetch-plan、import execution 的最小 ingress 闭环。
-4. archive/history context 已经交付；下一批优先级应转向真实 external fetch、simulation/benchmark 和 runtime hardening，而不是继续扩大 runtime 业务面。
+4. sibling detached skills 仓库已经具备 atomic data-source fetch skills；当前仓库剩余的是 detached fetch integration，而不是继续补 fetcher 本体。
+5. archive/history context 与 single-host runtime hardening baseline 已经交付；下一批优先级应转向 detached fetch integration、simulation/benchmark 和 production admission，而不是继续扩大 runtime 业务面。
 
 ### 5.2 下一批验收条件
 
@@ -33,7 +34,7 @@
 runtime 在当前阶段仍不应承担新的业务推理，推荐继续维持下面边界：
 
 1. `next_actions_<round_id>.json`、`falsification_probes_<round_id>.json`、`round_readiness_<round_id>.json`、`promoted_evidence_basis_<round_id>.json`、`reporting_handoff_<round_id>.json`、`council_decision_draft_<round_id>.json`、`expert_report_draft_<role>_<round_id>.json`、`expert_report_<role>_<round_id>.json`、`council_decision_<round_id>.json` 的契约应继续保持稳定。
-2. 最小 runtime kernel 负责 run manifest、artifact path resolver、receipt/event ledger、skill executor wrapper、round cursor、promotion gate、round controller、supervisor state，以及后续 contract-aware / permission-aware 治理。
+2. 最小 runtime kernel 负责 run manifest、artifact path resolver、receipt/event ledger、skill executor wrapper、round cursor、promotion gate、round controller、supervisor state，以及当前已经落地的 contract-aware / permission-aware 治理。
 3. reporting / decision 仍然优先以 atomic skill 方式推进，而不是把新业务逻辑塞回 runtime。
 
 换句话说，runtime 现在已经形成了一个 planner-backed 的 phase-2 preview，但仍不是蓝图里的 full board-driven、agent-decided orchestration runtime。
@@ -51,7 +52,8 @@ runtime 在当前阶段仍不应承担新的业务推理，推荐继续维持下
 - board 写入路径现在已切到 filesystem lock + atomic replace + `board_revision`，当前目标是先保证同机多进程安全，而不是宣称分布式协作已经完成。
 - runtime registry 现在会快照 skill contract 与 agent metadata，ledger 也会记录命令快照、skill_args、解析路径和输入/输出哈希。
 - runtime 现在已经具备 contract-aware preflight 与 enforcement baseline：支持 `preflight-skill`、`run-skill --contract-mode off|warn|strict`，并能阻断缺失 required inputs、未声明 path override、undeclared summary path 与 artifact_ref mismatch。
-- 当前完整 unittest 集会继续扩展，用于覆盖并发写、reporting publish、planner cutover 与后续 orchestration integration 回归。
+- runtime 现在已经补上 timeout budget、retry/backoff、high-risk side-effect approval、exclusive execution lock 和 structured failure payload；controller、supervisor 与 CLI 也会透传 execution policy。
+- 当前完整 unittest 集已经覆盖 runtime timeout、retry、side-effect approval、planner cutover 与后续 orchestration integration 回归，并会继续扩展到 detached fetch integration 与 benchmark。
 
 ## 8. 面向生产的开发指引
 

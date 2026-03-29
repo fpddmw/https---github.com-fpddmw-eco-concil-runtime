@@ -41,7 +41,7 @@
 
 ### 2.2 当前已交付能力面
 
-当前仓库在本批次之后共有 41 个活跃 skill，覆盖如下能力面：
+当前仓库在本批次之后共有 46 个活跃 skill，覆盖如下能力面；此外，sibling detached skills 仓库已经提供 atomic external fetch skill families：
 
 1. source-specific normalize
 2. shared query / lookup
@@ -50,8 +50,9 @@
 5. board working-state / summary / brief
 6. investigation / readiness / promotion
 7. reporting / decision / final publication
-8. orchestration planning
-9. mission scaffold / prepare-round / import execution ingress
+8. archive / history context
+9. orchestration planning
+10. mission scaffold / prepare-round / import execution ingress
 
 ### 2.3 当前最小 runtime 内核
 
@@ -109,15 +110,18 @@
 
 当前距离最终交付，仍然还缺 3 组能力，另有 1 组能力已经完成主链回接但还可以继续扩展。
 
-#### A. 真实外部 orchestration 仍未补齐
+#### A. detached fetch integration 仍未补齐
 
-当前 ingress 是“本地 artifact import 驱动的最小 contract 闭环”，而不是完整的远程抓取执行面。
+当前 ingress 仍是“本地 artifact import 驱动的最小 contract 闭环”，而不是完整的 mission-driven external collection。
+
+但这里需要明确纠偏：原子数据源 fetch skill 并不是缺失状态。它们已经在 sibling detached skills 仓库中存在，当前仓库剩余的是把这些 fetchers 接入当前 runtime / mission surface。
 
 还缺：
 
-- 真正的 external fetcher skill
 - source-family / layer governance 的活跃执行面
-- 真实 fetch command 调度与失败恢复
+- detached fetch skill 的运行时接线
+- fetch execution snapshot / retry / overwrite guard
+- remote dependency / credential surface handling
 - 非本地 fixture 的 mission-driven collection
 
 #### B. archive / history context 已接回主链基线
@@ -134,23 +138,33 @@
 - richer simulation / benchmark surface
 - 跨轮次对照预设与更细粒度历史证据复用
 
-#### C. runtime hardening 仍处于 baseline
+#### C. runtime hardening 基线已补齐
 
-虽然 runtime 已经有 contract-aware baseline，但还缺：
+本批次已经把 runtime 从 contract-aware baseline 推进到 governed single-host kernel：
 
-- full permission-aware / sandboxed execution
-- 更完整的 side-effect allow/deny enforcement
+- timeout budget
+- retry budget 与 backoff
+- high-risk side-effect explicit approval
+- exclusive runtime execution lock
+- structured failure payload / attempts surface
+- controller / supervisor / CLI execution-policy plumbing
+- runtime hardening regression coverage
+
+仍未补齐的更高阶项已经不再单独归类为“本批次 runtime hardening blocker”，而是并入生产化准入面：
+
+- OS-level sandbox / permission boundary
 - distributed-safe coordination
-- partial rerun / retry / recovery 语义
-- structured observability 与 production-facing failure surface
+- richer observability / operator-facing runbook surface
 
 #### D. 生产化准入面仍未到位
 
 还缺：
 
+- detached fetch integration 的真实任务验收
+- OS-level sandbox / operator approval 流程
 - shadow test playbook
 - pilot runbook
-- rollback / operator approval 流程
+- rollback / manual recovery 流程
 - 真实任务域验收标准
 
 ## 4. 对“最终交付”的更准确判断
@@ -164,6 +178,7 @@
 - 已经具备最小 runtime kernel 与 phase-2 planner-backed preview
 - 已经具备最小 ingress contract loop
 - 已经具备 archive / history context 的主链回接与历史证据复用基线
+- 已经具备 single-host runtime hardening baseline
 - 但仍处于 pre-production integration 阶段
 
 当前不能宣称的内容包括：
@@ -183,21 +198,21 @@
 2. C 层 board working-state：note、hypothesis、challenge、task、summary、brief
 3. D 层 investigation / promotion：next actions、probe、readiness、promotion basis
 4. E 层 reporting / decision：handoff、expert report、decision、final publication
-5. F 层 control-plane baseline：board lock、registry metadata、ledger hardening、contract-aware execution baseline、planner-backed phase-2 preview
+5. F 层 control-plane baseline：board lock、registry metadata、ledger hardening、contract-aware execution、timeout/retry/backoff、side-effect approval、exclusive execution lock、planner-backed phase-2 preview
 6. ingress 最小闭环：mission scaffold、prepare-round、fetch-plan、import execution
 
 ### 5.2 后续建议按 4 个工作流推进
 
-#### 工作流 1：真实 external orchestration
+#### 工作流 1：detached fetch integration
 
-目标：把当前“本地 artifact import”推进成“真实 mission-driven collection”。
+目标：把当前“本地 artifact import”推进成“detached fetch skills 驱动的 mission-driven collection”。
 
 交付顺序建议：
 
 1. source-family / layer selection contract
-2. real fetcher skill 对接
+2. detached fetch skill 对接
 3. fetch execution snapshot / retry / overwrite guard
-4. remote dependency failure handling
+4. remote dependency / credential failure handling
 
 完成标志：真实任务不再依赖本地 fixture 文件，就能从 mission 进入 signal plane。
 
@@ -216,19 +231,19 @@
 
 完成标志：至少两类真实任务能稳定复用历史上下文，并且 benchmark 有独立回归面。
 
-#### 工作流 3：runtime hardening
+#### 工作流 3：production admission control plane
 
-目标：把当前“可运行”补成“可控”。
+目标：把当前“单机可控”推进成“可上线审阅”。
 
 交付顺序建议：
 
-1. stricter path / side-effect governance
-2. sandbox / permission boundary
-3. retry / partial rerun / recovery 语义
-4. structured logs / observability
-5. operator-facing failure summary
+1. OS-level sandbox / permission boundary
+2. operator approval / rollback / manual recovery
+3. structured logs / observability
+4. production-facing failure summary
+5. runbook-ready audit surface
 
-完成标志：失败可定位、可阻断越界 side effect、可安全重跑。
+完成标志：operator 可以安全阻断、审批、回滚并重放真实任务。
 
 #### 工作流 4：shadow test 与 pilot
 
@@ -249,9 +264,9 @@
 
 更合适的优先级是：
 
-1. 把当前 local artifact import 扩成真实 external fetch execution
-2. 继续做 runtime hardening，尤其是 permission boundary 与 recovery
-3. 补 simulation / benchmark 与跨轮次对照扩展
+1. 把当前 local artifact import 扩成 detached fetch skill 驱动的真实 external execution
+2. 补 simulation / benchmark 与跨轮次对照扩展
+3. 补 production admission control plane，尤其是 sandbox、approval / rollback 与 shadow / pilot
 
 ## 7. 文档收敛后的使用方式
 

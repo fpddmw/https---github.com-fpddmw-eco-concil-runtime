@@ -8,6 +8,16 @@ from .registry import resolve_skill_entry, workspace_root
 
 CONTRACT_MODES = ("off", "warn", "strict")
 BUILTIN_REQUIRED_INPUTS = {"run_dir", "run_id", "round_id"}
+DEFAULT_TIMEOUT_SECONDS = 300.0
+DEFAULT_RETRY_BUDGET = 0
+DEFAULT_RETRY_BACKOFF_MS = 250
+DEFAULT_ALLOWED_SIDE_EFFECTS = {
+    "reads-artifacts",
+    "writes-artifacts",
+    "reads-shared-state",
+    "writes-shared-state",
+}
+APPROVAL_REQUIRED_SIDE_EFFECTS = {"network-external", "destructive-write"}
 
 
 def maybe_text(value: Any) -> str:
@@ -121,6 +131,65 @@ def issue(code: str, message: str, *, severity: str = "error", field: str = "") 
     return payload
 
 
+def path_within_run_dir(run_dir: Path, candidate_path: str) -> bool:
+    run_dir_text = str(run_dir.resolve())
+    return candidate_path == run_dir_text or candidate_path.startswith(run_dir_text + "/")
+
+
+def normalize_side_effects(run_dir: Path, declared_side_effects: list[Any], resolved_read_paths: list[str], resolved_write_paths: list[str]) -> list[str]:
+    values = [maybe_text(item) for item in declared_side_effects if maybe_text(item)]
+    if any(not path_within_run_dir(run_dir, maybe_text(path)) for path in resolved_read_paths if maybe_text(path)):
+        values.append("reads-shared-state")
+    if any(not path_within_run_dir(run_dir, maybe_text(path)) for path in resolved_write_paths if maybe_text(path)):
+        values.append("writes-shared-state")
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        deduped.append(value)
+    return deduped
+
+
+def normalize_allowed_side_effects(values: list[str] | None) -> list[str]:
+    results: list[str] = []
+    seen: set[str] = set()
+    for value in [*DEFAULT_ALLOWED_SIDE_EFFECTS, *(values or [])]:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
+
+
+def normalize_execution_policy(
+    declared_policy: dict[str, Any],
+    *,
+    timeout_seconds: float | None,
+    retry_budget: int | None,
+    retry_backoff_ms: int | None,
+) -> dict[str, Any]:
+    resolved_timeout = timeout_seconds
+    if resolved_timeout is None:
+        declared_timeout = declared_policy.get("timeout_seconds")
+        resolved_timeout = float(declared_timeout) if isinstance(declared_timeout, (int, float)) else DEFAULT_TIMEOUT_SECONDS
+    resolved_retry_budget = retry_budget
+    if resolved_retry_budget is None:
+        declared_budget = declared_policy.get("retry_budget")
+        resolved_retry_budget = int(declared_budget) if isinstance(declared_budget, (int, float)) else DEFAULT_RETRY_BUDGET
+    resolved_retry_backoff_ms = retry_backoff_ms
+    if resolved_retry_backoff_ms is None:
+        declared_backoff = declared_policy.get("retry_backoff_ms")
+        resolved_retry_backoff_ms = int(declared_backoff) if isinstance(declared_backoff, (int, float)) else DEFAULT_RETRY_BACKOFF_MS
+    return {
+        "timeout_seconds": max(0.0, float(resolved_timeout or 0.0)),
+        "retry_budget": max(0, int(resolved_retry_budget or 0)),
+        "retry_backoff_ms": max(0, int(resolved_retry_backoff_ms or 0)),
+    }
+
+
 def build_contract_context(
     run_dir: Path,
     *,
@@ -129,6 +198,10 @@ def build_contract_context(
     skill_name: str,
     skill_args: list[str],
     workspace: Path | None = None,
+    timeout_seconds: float | None = None,
+    retry_budget: int | None = None,
+    retry_backoff_ms: int | None = None,
+    allow_side_effects: list[str] | None = None,
 ) -> dict[str, Any]:
     root = workspace or workspace_root()
     skill_entry = resolve_skill_entry(skill_name, root)
@@ -142,6 +215,8 @@ def build_contract_context(
     substitutions = {"run_id": run_id, "round_id": round_id, "skill_name": skill_name, **skill_options}
     resolved_read_paths = resolve_contract_paths(declared_reads, run_dir, substitutions)
     resolved_write_paths = resolve_contract_paths(declared_writes, run_dir, substitutions)
+    declared_side_effects = skill_entry.get("declared_side_effects", []) if isinstance(skill_entry.get("declared_side_effects"), list) else []
+    execution_policy = skill_entry.get("execution_policy", {}) if isinstance(skill_entry.get("execution_policy"), dict) else {}
     return {
         "workspace_root": str(root),
         "skill_entry": skill_entry,
@@ -150,6 +225,14 @@ def build_contract_context(
         "optional_inputs": optional_inputs,
         "declared_reads": declared_reads,
         "declared_writes": declared_writes,
+        "declared_side_effects": normalize_side_effects(run_dir, declared_side_effects, resolved_read_paths, resolved_write_paths),
+        "execution_policy": normalize_execution_policy(
+            execution_policy,
+            timeout_seconds=timeout_seconds,
+            retry_budget=retry_budget,
+            retry_backoff_ms=retry_backoff_ms,
+        ),
+        "allowed_side_effects": normalize_allowed_side_effects(allow_side_effects),
         "resolved_read_paths": resolved_read_paths,
         "resolved_write_paths": resolved_write_paths,
         "substitutions": substitutions,
@@ -166,6 +249,10 @@ def preflight_skill_execution(
     skill_args: list[str],
     contract_mode: str = "warn",
     workspace: Path | None = None,
+    timeout_seconds: float | None = None,
+    retry_budget: int | None = None,
+    retry_backoff_ms: int | None = None,
+    allow_side_effects: list[str] | None = None,
 ) -> dict[str, Any]:
     context = build_contract_context(
         run_dir,
@@ -174,6 +261,10 @@ def preflight_skill_execution(
         skill_name=skill_name,
         skill_args=skill_args,
         workspace=workspace,
+        timeout_seconds=timeout_seconds,
+        retry_budget=retry_budget,
+        retry_backoff_ms=retry_backoff_ms,
+        allow_side_effects=allow_side_effects,
     )
     issues: list[dict[str, str]] = []
 
@@ -221,6 +312,17 @@ def preflight_skill_execution(
                     )
                 )
 
+    allowed_side_effects = set(context["allowed_side_effects"])
+    for side_effect in context["declared_side_effects"]:
+        if side_effect in APPROVAL_REQUIRED_SIDE_EFFECTS and side_effect not in allowed_side_effects:
+            issues.append(
+                issue(
+                    "missing-side-effect-approval",
+                    f"Side effect `{side_effect}` requires explicit approval before {skill_name} can run in strict mode.",
+                    field=side_effect,
+                )
+            )
+
     blocking_issue_count = len([item for item in issues if item.get("severity") == "error"])
     block_execution = contract_mode == "strict" and blocking_issue_count > 0
     return {
@@ -236,6 +338,9 @@ def preflight_skill_execution(
         "optional_inputs": context["optional_inputs"],
         "declared_reads": context["declared_reads"],
         "declared_writes": context["declared_writes"],
+        "declared_side_effects": context["declared_side_effects"],
+        "allowed_side_effects": context["allowed_side_effects"],
+        "execution_policy": context["execution_policy"],
         "resolved_read_paths": context["resolved_read_paths"],
         "resolved_write_paths": context["resolved_write_paths"],
         "path_options": context["path_options"],

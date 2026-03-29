@@ -160,15 +160,45 @@ def run_phase2_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, 
     return run_phase2_round_with_contract_mode(run_dir, run_id=run_id, round_id=round_id, contract_mode="warn")
 
 
-def run_phase2_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id: str, contract_mode: str) -> dict[str, Any]:
+def run_phase2_round_with_contract_mode(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    contract_mode: str,
+    timeout_seconds: float | None = None,
+    retry_budget: int | None = None,
+    retry_backoff_ms: int | None = None,
+    allow_side_effects: list[str] | None = None,
+) -> dict[str, Any]:
     ensure_runtime_dirs(run_dir)
     write_registry(run_dir)
     init_run_manifest(run_dir, run_id)
     init_round_cursor(run_dir, run_id)
+    execution_policy = {
+        "timeout_seconds": timeout_seconds,
+        "retry_budget": retry_budget,
+        "retry_backoff_ms": retry_backoff_ms,
+        "allow_side_effects": allow_side_effects or [],
+    }
+    execution_kwargs = {
+        "timeout_seconds": timeout_seconds,
+        "retry_budget": retry_budget,
+        "retry_backoff_ms": retry_backoff_ms,
+        "allow_side_effects": allow_side_effects,
+    }
 
     started_at = utc_now_iso()
     steps: list[dict[str, Any]] = []
-    planner_result = run_skill(run_dir, run_id=run_id, round_id=round_id, skill_name=PLANNER_SKILL_NAME, skill_args=[], contract_mode=contract_mode)
+    planner_result = run_skill(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        skill_name=PLANNER_SKILL_NAME,
+        skill_args=[],
+        contract_mode=contract_mode,
+        **execution_kwargs,
+    )
     steps.append(summarize_skill_step("orchestration-planner", planner_result))
     planning = planning_bundle(run_dir, round_id, planner_result)
 
@@ -180,6 +210,7 @@ def run_phase2_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id:
             skill_name=planned_step["skill_name"],
             skill_args=planned_step["skill_args"],
             contract_mode=contract_mode,
+            **execution_kwargs,
         )
         steps.append(apply_planning_metadata(summarize_skill_step(planned_step["stage_name"], result), planned_step))
 
@@ -229,13 +260,22 @@ def run_phase2_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id:
             skill_name=planned_step["skill_name"],
             skill_args=planned_step["skill_args"],
             contract_mode=contract_mode,
+            **execution_kwargs,
         )
         steps.append(apply_planning_metadata(summarize_skill_step(planned_step["stage_name"], result), planned_step))
         if maybe_text(planned_step.get("stage_name")) == "promotion-basis" or maybe_text(planned_step.get("skill_name")) == "eco-promote-evidence-basis":
             promotion_result = result
 
     if not isinstance(promotion_result, dict):
-        promotion_result = run_skill(run_dir, run_id=run_id, round_id=round_id, skill_name="eco-promote-evidence-basis", skill_args=[], contract_mode=contract_mode)
+        promotion_result = run_skill(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="eco-promote-evidence-basis",
+            skill_args=[],
+            contract_mode=contract_mode,
+            **execution_kwargs,
+        )
         steps.append(summarize_skill_step("promotion-basis", promotion_result))
 
     promotion_payload = promotion_result.get("skill_payload", {}) if isinstance(promotion_result.get("skill_payload"), dict) else {}
@@ -257,6 +297,7 @@ def run_phase2_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id:
         "round_id": round_id,
         "controller_status": "completed",
         "contract_mode": contract_mode,
+        "execution_policy": execution_policy,
         "planning_mode": planning["planning_mode"],
         "readiness_status": maybe_text(gate_payload.get("readiness_status")) or "blocked",
         "gate_status": maybe_text(gate_payload.get("gate_status")) or "freeze-withheld",
@@ -292,6 +333,7 @@ def run_phase2_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id:
             "completed_at_utc": finished_at,
             "status": "completed",
             "contract_mode": contract_mode,
+            "execution_policy": execution_policy,
             "planning_mode": planning["planning_mode"],
             "plan_id": planning["plan_id"],
             "plan_path": planning["plan_path"],

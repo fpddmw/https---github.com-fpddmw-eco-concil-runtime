@@ -52,9 +52,34 @@ def supervise_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, A
     return supervise_round_with_contract_mode(run_dir, run_id=run_id, round_id=round_id, contract_mode="warn")
 
 
-def supervise_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id: str, contract_mode: str) -> dict[str, Any]:
+def supervise_round_with_contract_mode(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    contract_mode: str,
+    timeout_seconds: float | None = None,
+    retry_budget: int | None = None,
+    retry_backoff_ms: int | None = None,
+    allow_side_effects: list[str] | None = None,
+) -> dict[str, Any]:
     started_at = utc_now_iso()
-    controller_result = run_phase2_round_with_contract_mode(run_dir, run_id=run_id, round_id=round_id, contract_mode=contract_mode)
+    execution_policy = {
+        "timeout_seconds": timeout_seconds,
+        "retry_budget": retry_budget,
+        "retry_backoff_ms": retry_backoff_ms,
+        "allow_side_effects": allow_side_effects or [],
+    }
+    controller_result = run_phase2_round_with_contract_mode(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        contract_mode=contract_mode,
+        timeout_seconds=timeout_seconds,
+        retry_budget=retry_budget,
+        retry_backoff_ms=retry_backoff_ms,
+        allow_side_effects=allow_side_effects,
+    )
     controller = controller_result.get("controller", {}) if isinstance(controller_result.get("controller"), dict) else {}
     artifacts = controller.get("artifacts", {}) if isinstance(controller.get("artifacts"), dict) else {}
     next_actions_path = maybe_text(artifacts.get("next_actions_path"))
@@ -76,6 +101,7 @@ def supervise_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id: 
         "readiness_status": maybe_text(controller.get("readiness_status")) or "blocked",
         "gate_status": gate_status,
         "promotion_status": promotion_status,
+        "execution_policy": execution_policy,
         "planning_mode": maybe_text(controller.get("planning_mode")) or maybe_text(controller.get("planning", {}).get("planning_mode") if isinstance(controller.get("planning"), dict) else "") or "planner-backed",
         "orchestration_plan_path": artifacts.get("orchestration_plan_path", ""),
         "controller_path": artifacts.get("controller_state_path", ""),
@@ -106,6 +132,7 @@ def supervise_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id: 
             "completed_at_utc": finished_at,
             "status": "completed",
             "contract_mode": contract_mode,
+            "execution_policy": execution_policy,
             "planning_mode": payload["planning_mode"],
             "supervisor_status": supervisor_status,
             "readiness_status": payload["readiness_status"],

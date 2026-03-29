@@ -27,6 +27,10 @@ def ledger_path(run_dir: Path) -> Path:
     return runtime_dir(run_dir) / "audit_ledger.jsonl"
 
 
+def execution_lock_path(run_dir: Path) -> Path:
+    return runtime_dir(run_dir) / "execution.lock"
+
+
 def registry_path(run_dir: Path) -> Path:
     return runtime_dir(run_dir) / "skill_registry.json"
 
