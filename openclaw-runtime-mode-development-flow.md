@@ -71,9 +71,9 @@
 当前还没有完成的不是“能不能跑”，而是“能不能稳定长期运转”：
 
 1. detached fetch 仍以本地脚本 / 受控子进程为主，缺少更真实的 credential / admission / sandbox 方案
-2. controller / supervisor 虽可用，但仍偏轻量，距离生产控制面还有差距
+2. phase-2 controller / supervisor 的基础控制面已完成，但还没有进入 R6 的生产化执行边界
 3. history retrieval 仍是规则打分，不是更强的调查型检索
-4. operator 面还很薄，缺少系统化 replay / resume / benchmark tooling
+4. operator 面已具备 round inspect / resume / restart，但还缺少系统化 replay / benchmark tooling
 5. archive 与 nightly / benchmark 的编排还没有统一 runbook
 
 ## 3. 路线完成定义
@@ -180,7 +180,7 @@
 
 ### 阶段 R3: phase-2 控制面硬化
 
-状态：`部分完成`
+状态：`已完成`
 
 目标：
 
@@ -192,15 +192,19 @@
 1. `eco-plan-round-orchestration`
 2. `controller.py`
 3. `supervisor.py`
-4. `tests/test_orchestration_planner_workflow.py`
-5. `tests/test_supervisor_simulation_regression.py`
+4. `phase2_contract.py`
+5. `tests/test_orchestration_planner_workflow.py`
+6. `tests/test_supervisor_simulation_regression.py`
+7. `tests/test_runtime_kernel.py`
 
-仍需完成的工作：
+本轮已交付：
 
-1. 为 controller 引入明确的 stage contract，而不是只靠 skill sequence
-2. 为 supervisor 增加更强的 freeze / promote / hold 分类
-3. 把 `show-run-state` 提升为更可靠的 round 运维入口
-4. 补 controller 失败恢复与 resume 策略
+1. 为 controller 引入明确的 phase-2 stage contract，并对 planner queue 做顺序和 skill 绑定校验
+2. 将 `round_controller_<round_id>.json` 升级为增量写入的控制面状态物，而不是仅最终摘要
+3. 为 controller 增加失败快照、resume / restart 语义，以及基于已完成 stage 的跳过恢复
+4. 为 supervisor 增加更清晰的 promote / hold / failed 终态分类和 operator action 提示
+5. 将 `show-run-state` 提升为 round 运维入口，并补充 `resume-phase2-round` / `restart-phase2-round`
+6. 补齐 R3 回归测试；截至 `2026-03-29`，全量 `56` 项测试通过
 
 完成判据：
 
@@ -294,21 +298,20 @@
 
 接下来应按下面顺序推进：
 
-1. 完成 R3
-2. 把 R4 调度化
-3. 落 R5 replay / benchmark tooling
-4. 最后做 R6 生产化边界
+1. 把 R4 调度化
+2. 落 R5 replay / benchmark tooling
+3. 最后做 R6 生产化边界
 
 不要反过来做。  
 如果先做 R6，会把一条尚未稳定的路线过早固化。
 
 ## 7. 当前建议的具体 backlog
 
-### Backlog A: runtime 控制面
+### Backlog A: phase-2 maintenance（R3 已交付）
 
-1. 给 controller 增加 round resume contract
-2. 给 supervisor 增加更清晰的 terminal states
-3. 给 CLI 增加 replay / rerun / inspect 子命令
+1. 如果 planner queue schema 继续扩展，保持 `phase2_contract.py` 与 planner skill 同步
+2. 继续补 controller / supervisor 的 negative tests，尤其是更复杂的 gate / resume 失败场景
+3. 保持 operator hints 与真实 CLI 子命令一致，避免文档与运行面脱节
 
 ### Backlog B: detached fetch 生产化
 

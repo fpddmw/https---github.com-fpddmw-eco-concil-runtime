@@ -503,10 +503,25 @@ class RuntimeKernelTests(unittest.TestCase):
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": []},
             }
-            step_result = {
-                "summary": {"skill_name": "eco-fake-step", "event_id": "evt-step", "receipt_id": "receipt-step"},
+            board_summary_result = {
+                "summary": {"skill_name": "eco-summarize-board-state", "event_id": "evt-step", "receipt_id": "receipt-step"},
                 "event": {"status": "completed"},
-                "skill_payload": {"artifact_refs": [], "canonical_ids": []},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "board_summary.json")}},
+            }
+            board_brief_result = {
+                "summary": {"skill_name": "eco-materialize-board-brief", "event_id": "evt-brief", "receipt_id": "receipt-brief"},
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "board_brief.md")}},
+            }
+            next_actions_result = {
+                "summary": {"skill_name": "eco-propose-next-actions", "event_id": "evt-next", "receipt_id": "receipt-next"},
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "next_actions.json")}},
+            }
+            readiness_result = {
+                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"}},
             }
             promotion_result = {
                 "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
@@ -522,7 +537,38 @@ class RuntimeKernelTests(unittest.TestCase):
                 "probe_stage_included": False,
                 "assigned_role_hints": [],
                 "execution_queue": [
-                    {"stage_name": "fake-stage", "skill_name": "eco-fake-step", "skill_args": [], "assigned_role_hint": "moderator", "reason": "test"}
+                    {
+                        "stage_name": "board-summary",
+                        "skill_name": "eco-summarize-board-state",
+                        "skill_args": [],
+                        "assigned_role_hint": "moderator",
+                        "reason": "test",
+                        "expected_output_path": str(root / "board_summary.json"),
+                    },
+                    {
+                        "stage_name": "board-brief",
+                        "skill_name": "eco-materialize-board-brief",
+                        "skill_args": [],
+                        "assigned_role_hint": "moderator",
+                        "reason": "test",
+                        "expected_output_path": str(root / "board_brief.md"),
+                    },
+                    {
+                        "stage_name": "next-actions",
+                        "skill_name": "eco-propose-next-actions",
+                        "skill_args": [],
+                        "assigned_role_hint": "moderator",
+                        "reason": "test",
+                        "expected_output_path": str(root / "next_actions.json"),
+                    },
+                    {
+                        "stage_name": "round-readiness",
+                        "skill_name": "eco-summarize-round-readiness",
+                        "skill_args": [],
+                        "assigned_role_hint": "moderator",
+                        "reason": "test",
+                        "expected_output_path": str(root / "readiness.json"),
+                    },
                 ],
                 "post_gate_steps": [
                     {"stage_name": "promotion-basis", "skill_name": "eco-promote-evidence-basis", "skill_args": [], "assigned_role_hint": "moderator", "reason": "test"}
@@ -547,7 +593,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 mock.patch("eco_council_runtime.kernel.controller.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
-                    side_effect=[planner_result, step_result, promotion_result],
+                    side_effect=[planner_result, board_summary_result, board_brief_result, next_actions_result, readiness_result, promotion_result],
                 ) as run_skill_mock,
             ):
                 payload = run_phase2_round_with_contract_mode(
@@ -561,7 +607,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     allow_side_effects=["network-external"],
                 )
 
-            self.assertEqual(3, run_skill_mock.call_count)
+            self.assertEqual(6, run_skill_mock.call_count)
             for call in run_skill_mock.call_args_list:
                 self.assertEqual(12.5, call.kwargs["timeout_seconds"])
                 self.assertEqual(2, call.kwargs["retry_budget"])
@@ -570,6 +616,145 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(12.5, payload["controller"]["execution_policy"]["timeout_seconds"])
             self.assertEqual(2, payload["controller"]["execution_policy"]["retry_budget"])
             self.assertEqual(["network-external"], payload["controller"]["execution_policy"]["allow_side_effects"])
+            self.assertEqual("runtime-controller-v3", payload["controller"]["schema_version"])
+            self.assertEqual("fresh-run", payload["controller"]["resume_status"])
+            self.assertEqual("eco-summarize-board-state", payload["controller"]["stage_contracts"]["board-summary"]["expected_skill_name"])
+
+    def test_controller_resume_skips_completed_stages_after_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+            from eco_council_runtime.kernel.executor import SkillExecutionError
+
+            planner_result = {
+                "summary": {"skill_name": "eco-plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": []},
+            }
+            board_summary_result = {
+                "summary": {"skill_name": "eco-summarize-board-state", "event_id": "evt-summary", "receipt_id": "receipt-summary"},
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "board_summary.json")}},
+            }
+            board_brief_result = {
+                "summary": {"skill_name": "eco-materialize-board-brief", "event_id": "evt-brief", "receipt_id": "receipt-brief"},
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "board_brief.md")}},
+            }
+            next_actions_result = {
+                "summary": {"skill_name": "eco-propose-next-actions", "event_id": "evt-next", "receipt_id": "receipt-next"},
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "next_actions.json")}},
+            }
+            readiness_result = {
+                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
+                "event": {"status": "completed"},
+                "skill_payload": {
+                    "artifact_refs": [],
+                    "canonical_ids": [],
+                    "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"},
+                },
+            }
+            promotion_result = {
+                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"}},
+            }
+            planning = {
+                "plan_id": "plan-resume-001",
+                "plan_path": str(root / "plan.json"),
+                "planning_status": "ready-for-controller",
+                "planning_mode": "planner-backed",
+                "planner_skill_name": "eco-plan-round-orchestration",
+                "probe_stage_included": False,
+                "assigned_role_hints": ["moderator"],
+                "execution_queue": [
+                    {"stage_name": "board-summary", "skill_name": "eco-summarize-board-state", "skill_args": [], "assigned_role_hint": "moderator", "reason": "refresh board"},
+                    {"stage_name": "board-brief", "skill_name": "eco-materialize-board-brief", "skill_args": [], "assigned_role_hint": "moderator", "reason": "refresh brief"},
+                    {"stage_name": "next-actions", "skill_name": "eco-propose-next-actions", "skill_args": [], "assigned_role_hint": "moderator", "reason": "rank next actions"},
+                    {"stage_name": "round-readiness", "skill_name": "eco-summarize-round-readiness", "skill_args": [], "assigned_role_hint": "moderator", "reason": "refresh readiness"},
+                ],
+                "post_gate_steps": [
+                    {"stage_name": "promotion-basis", "skill_name": "eco-promote-evidence-basis", "skill_args": [], "assigned_role_hint": "moderator", "reason": "freeze promotion basis"}
+                ],
+                "stop_conditions": [],
+                "fallback_path": [],
+                "fallback_suggested_next_skills": ["eco-post-board-note"],
+            }
+            gate_payload = {
+                "generated_at_utc": "2024-01-01T00:00:00Z",
+                "gate_status": "allow-promote",
+                "readiness_status": "ready",
+                "promote_allowed": True,
+                "output_path": str(root / "promotion_gate.json"),
+                "gate_reasons": [],
+                "recommended_next_skills": [],
+            }
+            board_brief_failure = SkillExecutionError(
+                "board brief failed",
+                {
+                    "status": "failed",
+                    "message": "board brief failed",
+                    "summary": {"skill_name": "eco-materialize-board-brief", "run_id": RUN_ID, "round_id": ROUND_ID},
+                    "failure": {"error_code": "skill-exit-nonzero", "retryable": True},
+                },
+            )
+
+            with (
+                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
+                mock.patch("eco_council_runtime.kernel.controller.apply_promotion_gate", return_value=gate_payload),
+                mock.patch(
+                    "eco_council_runtime.kernel.controller.run_skill",
+                    side_effect=[planner_result, board_summary_result, board_brief_failure],
+                ),
+            ):
+                with self.assertRaises(SkillExecutionError):
+                    run_phase2_round_with_contract_mode(run_dir, run_id=RUN_ID, round_id=ROUND_ID, contract_mode="warn")
+
+            controller_artifact = load_json(run_dir / "runtime" / f"round_controller_{ROUND_ID}.json")
+            self.assertEqual("failed", controller_artifact["controller_status"])
+            self.assertEqual("board-brief", controller_artifact["failed_stage"])
+            self.assertEqual(["orchestration-planner", "board-summary"], controller_artifact["completed_stage_names"])
+            self.assertIn("board-brief", controller_artifact["pending_stage_names"])
+            self.assertTrue(controller_artifact["resume_recommended"])
+
+            state_payload = run_kernel(
+                "show-run-state",
+                "--run-dir",
+                str(run_dir),
+                "--round-id",
+                ROUND_ID,
+                "--tail",
+                "5",
+            )
+            self.assertEqual("failed", state_payload["phase2"]["operator"]["controller_status"])
+            self.assertEqual("board-brief", state_payload["phase2"]["operator"]["failed_stage"])
+            self.assertIn("resume-phase2-round", state_payload["phase2"]["operator"]["resume_command"])
+
+            with (
+                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.controller.planning_bundle") as planning_bundle_mock,
+                mock.patch("eco_council_runtime.kernel.controller.apply_promotion_gate", return_value=gate_payload),
+                mock.patch(
+                    "eco_council_runtime.kernel.controller.run_skill",
+                    side_effect=[board_brief_result, next_actions_result, readiness_result, promotion_result],
+                ) as run_skill_mock,
+            ):
+                payload = run_phase2_round_with_contract_mode(run_dir, run_id=RUN_ID, round_id=ROUND_ID, contract_mode="warn")
+
+            planning_bundle_mock.assert_not_called()
+            self.assertEqual(
+                ["eco-materialize-board-brief", "eco-propose-next-actions", "eco-summarize-round-readiness", "eco-promote-evidence-basis"],
+                [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
+            )
+            self.assertEqual("completed", payload["controller"]["controller_status"])
+            self.assertEqual("resumed", payload["controller"]["resume_status"])
+            self.assertEqual("promoted", payload["controller"]["promotion_status"])
+            self.assertFalse(payload["controller"]["resume_recommended"])
 
     def test_supervisor_forwards_execution_policy_and_records_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -582,6 +767,13 @@ class RuntimeKernelTests(unittest.TestCase):
             controller_result = {
                 "controller": {
                     "planning_mode": "planner-backed",
+                    "controller_status": "completed",
+                    "resume_status": "fresh-run",
+                    "current_stage": "",
+                    "failed_stage": "",
+                    "resume_recommended": False,
+                    "restart_recommended": False,
+                    "recovery": {"resume_from_stage": ""},
                     "readiness_status": "ready",
                     "gate_status": "promote-ready",
                     "promotion_status": "promoted",
@@ -625,6 +817,59 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(8.0, payload["supervisor"]["execution_policy"]["timeout_seconds"])
             self.assertEqual(1, payload["supervisor"]["execution_policy"]["retry_budget"])
             self.assertEqual(["destructive-write"], payload["supervisor"]["execution_policy"]["allow_side_effects"])
+            self.assertEqual("reporting-ready", payload["supervisor"]["phase2_posture"])
+            self.assertEqual("handoff-reporting", payload["supervisor"]["operator_action"])
+            self.assertIn("resume-phase2-round", payload["supervisor"]["resume_command"])
+
+    def test_supervisor_materializes_failed_state_when_controller_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.executor import SkillExecutionError
+            from eco_council_runtime.kernel.supervisor import supervise_round_with_contract_mode
+
+            controller_failure = SkillExecutionError(
+                "phase-2 failed",
+                {
+                    "status": "failed",
+                    "message": "phase-2 failed",
+                    "controller": {
+                        "planning_mode": "planner-backed",
+                        "controller_status": "failed",
+                        "resume_status": "fresh-run",
+                        "current_stage": "board-brief",
+                        "failed_stage": "board-brief",
+                        "resume_recommended": True,
+                        "restart_recommended": False,
+                        "recovery": {"resume_from_stage": "board-brief"},
+                        "readiness_status": "pending",
+                        "gate_status": "not-evaluated",
+                        "promotion_status": "not-evaluated",
+                        "recommended_next_skills": ["eco-materialize-board-brief"],
+                        "artifacts": {
+                            "orchestration_plan_path": str(root / "plan.json"),
+                            "controller_state_path": str(root / "controller.json"),
+                            "promotion_gate_path": str(root / "gate.json"),
+                        },
+                    },
+                },
+            )
+
+            with mock.patch(
+                "eco_council_runtime.kernel.supervisor.run_phase2_round_with_contract_mode",
+                side_effect=controller_failure,
+            ):
+                with self.assertRaises(SkillExecutionError) as raised:
+                    supervise_round_with_contract_mode(run_dir, run_id=RUN_ID, round_id=ROUND_ID, contract_mode="warn")
+
+            supervisor_artifact = load_json(run_dir / "runtime" / f"supervisor_state_{ROUND_ID}.json")
+            self.assertEqual("controller-failed", supervisor_artifact["supervisor_status"])
+            self.assertEqual("board-brief", supervisor_artifact["failed_stage"])
+            self.assertTrue(supervisor_artifact["resume_recommended"])
+            self.assertIn("resume-phase2-round", supervisor_artifact["resume_command"])
+            self.assertEqual("controller-failed", raised.exception.payload["supervisor"]["supervisor_status"])
 
     def test_cli_run_skill_forwards_execution_policy_args(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -677,6 +922,68 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(50, run_skill_mock.call_args.kwargs["retry_backoff_ms"])
             self.assertEqual(["network-external", "destructive-write"], run_skill_mock.call_args.kwargs["allow_side_effects"])
             self.assertEqual(["--author-role", "moderator"], run_skill_mock.call_args.kwargs["skill_args"])
+            self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
+
+    def test_cli_resume_and_restart_phase2_round_forward_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.cli import main
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.run_phase2_round_with_contract_mode",
+                    return_value={"status": "completed", "summary": {"round_id": ROUND_ID}},
+                ) as controller_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "resume-phase2-round",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        RUN_ID,
+                        "--round-id",
+                        ROUND_ID,
+                        "--timeout-seconds",
+                        "7",
+                        "--retry-budget",
+                        "1",
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertFalse(controller_mock.call_args.kwargs["force_restart"])
+            self.assertEqual(7.0, controller_mock.call_args.kwargs["timeout_seconds"])
+            self.assertEqual(1, controller_mock.call_args.kwargs["retry_budget"])
+            self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
+
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "eco_council_runtime.kernel.cli.run_phase2_round_with_contract_mode",
+                    return_value={"status": "completed", "summary": {"round_id": ROUND_ID}},
+                ) as controller_mock,
+                redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "restart-phase2-round",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        RUN_ID,
+                        "--round-id",
+                        ROUND_ID,
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertTrue(controller_mock.call_args.kwargs["force_restart"])
             self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
 
 

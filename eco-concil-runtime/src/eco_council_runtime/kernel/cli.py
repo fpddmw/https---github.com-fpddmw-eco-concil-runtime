@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .controller import run_phase2_round, run_phase2_round_with_contract_mode
-from .executor import SkillExecutionError, new_runtime_event_id, run_skill
+from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill
 from .governance import CONTRACT_MODES, preflight_skill_execution
 from .gate import apply_promotion_gate
 from .ledger import append_ledger_event, load_ledger_tail
@@ -60,22 +60,88 @@ def init_run(run_dir: Path, run_id: str) -> dict[str, Any]:
     }
 
 
-def show_run_state(run_dir: Path, tail: int) -> dict[str, Any]:
+def phase2_operator_view(run_dir: Path, round_id: str, phase2_state: dict[str, Any]) -> dict[str, Any]:
+    plan = phase2_state.get("plan", {}) if isinstance(phase2_state.get("plan"), dict) else {}
+    gate = phase2_state.get("promotion_gate", {}) if isinstance(phase2_state.get("promotion_gate"), dict) else {}
+    controller = phase2_state.get("controller", {}) if isinstance(phase2_state.get("controller"), dict) else {}
+    supervisor = phase2_state.get("supervisor", {}) if isinstance(phase2_state.get("supervisor"), dict) else {}
+    run_id = (
+        maybe_text(supervisor.get("run_id"))
+        or maybe_text(controller.get("run_id"))
+        or maybe_text(plan.get("run_id"))
+        or maybe_text(gate.get("run_id"))
+    )
+    resume_command = maybe_text(supervisor.get("resume_command")) or (
+        f"resume-phase2-round --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if round_id and run_id else ""
+    )
+    restart_command = maybe_text(supervisor.get("restart_command")) or (
+        f"restart-phase2-round --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if round_id and run_id else ""
+    )
+    inspect_command = maybe_text(supervisor.get("inspect_command")) or (
+        f"show-run-state --run-dir {run_dir} --round-id {round_id} --tail 20" if round_id else ""
+    )
+    return {
+        "round_id": round_id,
+        "planning_mode": maybe_text(controller.get("planning_mode")) or maybe_text(supervisor.get("planning_mode")),
+        "controller_status": maybe_text(controller.get("controller_status")) or "missing",
+        "supervisor_status": maybe_text(supervisor.get("supervisor_status")),
+        "supervisor_substatus": maybe_text(supervisor.get("supervisor_substatus")),
+        "phase2_posture": maybe_text(supervisor.get("phase2_posture")),
+        "terminal_state": maybe_text(supervisor.get("terminal_state")),
+        "readiness_status": maybe_text(controller.get("readiness_status")) or maybe_text(supervisor.get("readiness_status")),
+        "gate_status": maybe_text(controller.get("gate_status")) or maybe_text(gate.get("gate_status")),
+        "promotion_status": maybe_text(controller.get("promotion_status")) or maybe_text(supervisor.get("promotion_status")),
+        "current_stage": maybe_text(controller.get("current_stage")),
+        "failed_stage": maybe_text(controller.get("failed_stage")),
+        "completed_stage_names": controller.get("completed_stage_names", []) if isinstance(controller.get("completed_stage_names"), list) else [],
+        "pending_stage_names": controller.get("pending_stage_names", []) if isinstance(controller.get("pending_stage_names"), list) else [],
+        "resume_recommended": bool(controller.get("resume_recommended")) or bool(supervisor.get("resume_recommended")),
+        "restart_recommended": bool(controller.get("restart_recommended")) or bool(supervisor.get("restart_recommended")),
+        "resume_from_stage": maybe_text(controller.get("recovery", {}).get("resume_from_stage"))
+        if isinstance(controller.get("recovery"), dict)
+        else maybe_text(supervisor.get("resume_from_stage")),
+        "resume_command": resume_command,
+        "restart_command": restart_command,
+        "inspect_command": inspect_command,
+        "inspection_paths": {
+            "plan_path": maybe_text(controller.get("artifacts", {}).get("orchestration_plan_path"))
+            if isinstance(controller.get("artifacts"), dict)
+            else maybe_text(supervisor.get("orchestration_plan_path")),
+            "controller_path": maybe_text(controller.get("artifacts", {}).get("controller_state_path"))
+            if isinstance(controller.get("artifacts"), dict)
+            else maybe_text(supervisor.get("controller_path")),
+            "gate_path": maybe_text(controller.get("artifacts", {}).get("promotion_gate_path"))
+            if isinstance(controller.get("artifacts"), dict)
+            else maybe_text(supervisor.get("promotion_gate_path")),
+            "supervisor_path": str(supervisor_state_path(run_dir, round_id).resolve()) if round_id else "",
+        },
+        "operator_notes": supervisor.get("operator_notes", []) if isinstance(supervisor.get("operator_notes"), list) else [],
+    }
+
+
+def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, Any]:
     manifest = load_json_if_exists(manifest_path(run_dir)) or {}
     cursor = load_json_if_exists(cursor_path(run_dir)) or {}
     registry = load_json_if_exists(registry_path(run_dir)) or {}
     current_round_id = str(cursor.get("current_round_id") or "")
+    selected_round_id = maybe_text(round_id) or current_round_id
     phase2_state: dict[str, Any] = {}
-    if current_round_id:
+    if selected_round_id:
         phase2_state = {
-            "plan": load_json_if_exists(orchestration_plan_path(run_dir, current_round_id)) or {},
-            "promotion_gate": load_json_if_exists(promotion_gate_path(run_dir, current_round_id)) or {},
-            "controller": load_json_if_exists(controller_state_path(run_dir, current_round_id)) or {},
-            "supervisor": load_json_if_exists(supervisor_state_path(run_dir, current_round_id)) or {},
+            "plan": load_json_if_exists(orchestration_plan_path(run_dir, selected_round_id)) or {},
+            "promotion_gate": load_json_if_exists(promotion_gate_path(run_dir, selected_round_id)) or {},
+            "controller": load_json_if_exists(controller_state_path(run_dir, selected_round_id)) or {},
+            "supervisor": load_json_if_exists(supervisor_state_path(run_dir, selected_round_id)) or {},
         }
+        phase2_state["operator"] = phase2_operator_view(run_dir, selected_round_id, phase2_state)
     return {
         "status": "completed",
-        "summary": {"run_dir": str(run_dir), "ledger_events": len(load_ledger_tail(run_dir, 1000000)) if ledger_path(run_dir).exists() else 0},
+        "summary": {
+            "run_dir": str(run_dir),
+            "current_round_id": current_round_id,
+            "selected_round_id": selected_round_id,
+            "ledger_events": len(load_ledger_tail(run_dir, 1000000)) if ledger_path(run_dir).exists() else 0,
+        },
         "manifest": manifest,
         "cursor": cursor,
         "registry": registry,
@@ -127,6 +193,22 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(phase2_cmd)
 
+    resume_phase2_cmd = sub.add_parser("resume-phase2-round", help="Resume one interrupted phase-2 round from the persisted controller state.")
+    resume_phase2_cmd.add_argument("--run-dir", required=True)
+    resume_phase2_cmd.add_argument("--run-id", required=True)
+    resume_phase2_cmd.add_argument("--round-id", required=True)
+    resume_phase2_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    resume_phase2_cmd.add_argument("--pretty", action="store_true")
+    add_execution_policy_args(resume_phase2_cmd)
+
+    restart_phase2_cmd = sub.add_parser("restart-phase2-round", help="Force a fresh phase-2 controller run and overwrite any resumable state.")
+    restart_phase2_cmd.add_argument("--run-dir", required=True)
+    restart_phase2_cmd.add_argument("--run-id", required=True)
+    restart_phase2_cmd.add_argument("--round-id", required=True)
+    restart_phase2_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    restart_phase2_cmd.add_argument("--pretty", action="store_true")
+    add_execution_policy_args(restart_phase2_cmd)
+
     supervisor_cmd = sub.add_parser("supervise-round", help="Run the phase-2 controller and materialize a compact supervisor state.")
     supervisor_cmd.add_argument("--run-dir", required=True)
     supervisor_cmd.add_argument("--run-id", required=True)
@@ -137,6 +219,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     show_cmd = sub.add_parser("show-run-state", help="Show manifest, cursor, registry, and a tail of runtime ledger events.")
     show_cmd.add_argument("--run-dir", required=True)
+    show_cmd.add_argument("--round-id", default="")
     show_cmd.add_argument("--tail", type=int, default=10)
     show_cmd.add_argument("--pretty", action="store_true")
     return parser
@@ -268,6 +351,46 @@ def main(argv: list[str] | None = None) -> int:
         print(pretty_json(payload, args.pretty))
         return 0
 
+    if args.command == "resume-phase2-round":
+        try:
+            payload = run_phase2_round_with_contract_mode(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                contract_mode=args.contract_mode,
+                timeout_seconds=args.timeout_seconds,
+                retry_budget=args.retry_budget,
+                retry_backoff_ms=args.retry_backoff_ms,
+                allow_side_effects=args.allow_side_effect,
+                force_restart=False,
+            )
+        except SkillExecutionError as exc:
+            failure = exc.payload or {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode}, "message": str(exc)}
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "restart-phase2-round":
+        try:
+            payload = run_phase2_round_with_contract_mode(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                contract_mode=args.contract_mode,
+                timeout_seconds=args.timeout_seconds,
+                retry_budget=args.retry_budget,
+                retry_backoff_ms=args.retry_backoff_ms,
+                allow_side_effects=args.allow_side_effect,
+                force_restart=True,
+            )
+        except SkillExecutionError as exc:
+            failure = exc.payload or {"status": "failed", "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode}, "message": str(exc)}
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
     if args.command == "supervise-round":
         try:
             payload = supervise_round_with_contract_mode(
@@ -288,7 +411,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "show-run-state":
-        payload = show_run_state(run_dir, args.tail)
+        payload = show_run_state(run_dir, args.tail, args.round_id)
         print(pretty_json(payload, args.pretty))
         return 0
 
