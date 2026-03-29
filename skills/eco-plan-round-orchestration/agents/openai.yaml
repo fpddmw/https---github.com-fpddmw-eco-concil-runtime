@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Plan Round Orchestration"
+  short_description: "Build one auditable orchestration plan for phase-2 controller execution"
+  default_prompt: "Use $eco-plan-round-orchestration to build one orchestration plan artifact from the current board, next actions, probes, and readiness posture before controller execution."

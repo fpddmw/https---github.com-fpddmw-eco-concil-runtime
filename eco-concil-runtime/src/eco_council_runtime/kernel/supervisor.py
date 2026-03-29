@@ -68,7 +68,7 @@ def supervise_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id: 
     finished_at = utc_now_iso()
 
     payload = {
-        "schema_version": "runtime-supervisor-v1",
+        "schema_version": "runtime-supervisor-v2",
         "generated_at_utc": finished_at,
         "run_id": run_id,
         "round_id": round_id,
@@ -76,6 +76,8 @@ def supervise_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id: 
         "readiness_status": maybe_text(controller.get("readiness_status")) or "blocked",
         "gate_status": gate_status,
         "promotion_status": promotion_status,
+        "planning_mode": maybe_text(controller.get("planning_mode")) or maybe_text(controller.get("planning", {}).get("planning_mode") if isinstance(controller.get("planning"), dict) else "") or "planner-backed",
+        "orchestration_plan_path": artifacts.get("orchestration_plan_path", ""),
         "controller_path": artifacts.get("controller_state_path", ""),
         "promotion_gate_path": artifacts.get("promotion_gate_path", ""),
         "promotion_basis_path": artifacts.get("promotion_basis_path", ""),
@@ -104,6 +106,7 @@ def supervise_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id: 
             "completed_at_utc": finished_at,
             "status": "completed",
             "contract_mode": contract_mode,
+            "planning_mode": payload["planning_mode"],
             "supervisor_status": supervisor_status,
             "readiness_status": payload["readiness_status"],
             "gate_status": gate_status,
@@ -117,6 +120,7 @@ def supervise_round_with_contract_mode(run_dir: Path, *, run_id: str, round_id: 
             "run_id": run_id,
             "round_id": round_id,
             "supervisor_status": supervisor_status,
+            "planning_mode": payload["planning_mode"],
             "supervisor_path": str(output_file),
             "promotion_status": promotion_status,
         },

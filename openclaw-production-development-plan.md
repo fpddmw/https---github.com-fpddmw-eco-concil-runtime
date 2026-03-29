@@ -12,13 +12,13 @@
 - 更强的 runtime 审计元数据：命令快照、skill_args、契约声明、解析路径、输入/输出哈希
 - contract-aware runtime baseline：`preflight-skill`、`run-skill --contract-mode off|warn|strict`、missing required input / undeclared path override / artifact_ref mismatch 阻断
 - final publication artifact：`final_publication_<round_id>.json`
+- planner-backed phase-2 controller preview：`orchestration_plan_<round_id>.json` + runtime cutover
 - 本地确定性 workflow 回归
 
 当前系统尚不具备：
 
 - distributed board coordination 或跨主机锁语义
 - full permission-aware / sandboxed runtime enforcement
-- planner-backed controller 与 board-driven orchestration
 - board-driven、agent-decided orchestration
 - 真实 orchestration / fetch-plan / execution 闭环
 - archive、history context、rich simulation、生产级观测与容错
@@ -79,7 +79,7 @@
 
 - `expert report draft`、`canonical expert report publish`、`canonical decision publish`、`final publication artifact` 已完成
 - P1 已完成，reporting / decision 主链现在已经能从 promotion basis 稳定收敛到 `final_publication_<round_id>.json`
-- 因此后续编码批次不应再扩张新的 reporting 分支，而应转向 planner artifact、真实 orchestration scaffold 与更强的 runtime hardening
+- 因此后续编码批次不应再扩张新的 reporting 分支，而应转向真实 orchestration scaffold 与更强的 runtime hardening
 
 ### P2 orchestration / contract 闭环
 
@@ -128,7 +128,7 @@
 推进顺序补充：
 
 - P4 的 preflight 与 baseline enforcement 已经落地，后续重点应转向更强的 permission boundary、sandboxed side-effect governance 和 distributed-safe control plane
-- planner-backed controller cutover 应放在 planner artifact 稳定之后，而不是和 governance 同时硬切
+- planner-backed controller preview 已完成，后续重点不再是 controller 内部队列重构，而是把真实 mission/fetch/import 闭环接回主链
 
 ### P5 shadow test 与 pilot 发布
 
@@ -148,7 +148,7 @@
 
 ## 5. 推荐执行顺序
 
-1. P1 已完成；下一步先做 planner artifact 与 P2，把真实 mission 输入重新接回 skill-first 主链。
+1. P1 已完成，planner-backed phase-2 preview 也已落地；下一步直接做 P2，把真实 mission 输入重新接回 skill-first 主链。
 2. 然后做 P3，因为 archive / history / simulation 会显著提高任务质量和回归信心。
 3. 再推进 P4，把系统从“能跑”补到“可控”。
 4. 最后完成 P5，把系统从 pre-production 推进到受控 pilot 发布。
@@ -181,7 +181,7 @@
 
 ## 8. 当前最近一步
 
-当前已经完成 reporting / decision 前三批：
+当前已经完成 reporting / decision 前三批，以及 planner-backed phase-2 cutover：
 
 - `eco-materialize-reporting-handoff`
 - `eco-draft-council-decision`
@@ -189,12 +189,13 @@
 - `eco-publish-expert-report`
 - `eco-publish-council-decision`
 - `eco-materialize-final-publication`
+- `eco-plan-round-orchestration`
 
-同时已经完成一轮 control-plane hardening：board 单机锁语义、registry metadata snapshot、ledger 审计增强。
+同时已经完成一轮 control-plane hardening：board 单机锁语义、registry metadata snapshot、ledger 审计增强，以及 planner-backed controller preview。
 
 所以下一个最合适的代码批次是：
 
-1. planner artifact schema / minimal planner design
-2. mission scaffold / prepare / fetch-plan / import execution 的最小 contract 闭环
+1. mission scaffold / prepare / fetch-plan / import execution 的最小 contract 闭环
+2. archive / history context / richer simulation 的最小回接面
 
 这两项应并行规划、顺序落地，而不是继续扩大 runtime 的业务面。

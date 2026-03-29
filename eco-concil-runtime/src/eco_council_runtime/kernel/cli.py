@@ -17,6 +17,7 @@ from .paths import (
     ensure_runtime_dirs,
     ledger_path,
     manifest_path,
+    orchestration_plan_path,
     promotion_gate_path,
     registry_path,
     resolve_run_dir,
@@ -60,6 +61,7 @@ def show_run_state(run_dir: Path, tail: int) -> dict[str, Any]:
     phase2_state: dict[str, Any] = {}
     if current_round_id:
         phase2_state = {
+            "plan": load_json_if_exists(orchestration_plan_path(run_dir, current_round_id)) or {},
             "promotion_gate": load_json_if_exists(promotion_gate_path(run_dir, current_round_id)) or {},
             "controller": load_json_if_exists(controller_state_path(run_dir, current_round_id)) or {},
             "supervisor": load_json_if_exists(supervisor_state_path(run_dir, current_round_id)) or {},

@@ -35,6 +35,10 @@ def promotion_gate_path(run_dir: Path, round_id: str) -> Path:
     return runtime_dir(run_dir) / f"promotion_gate_{round_id}.json"
 
 
+def orchestration_plan_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"orchestration_plan_{round_id}.json"
+
+
 def controller_state_path(run_dir: Path, round_id: str) -> Path:
     return runtime_dir(run_dir) / f"round_controller_{round_id}.json"
 

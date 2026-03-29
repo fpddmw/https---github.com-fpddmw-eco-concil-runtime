@@ -88,6 +88,12 @@
 
 这说明当前主链已经开始消费 `promoted_evidence_basis_<round_id>.json`，而不是把下游 reporting / decision 永久留在 legacy runtime 里。
 
+### 2.10 orchestration / planning
+
+- `eco-plan-round-orchestration`
+
+这说明当前 phase-2 controller 已经不再只依赖固定硬编码队列，而是先落出 `orchestration_plan_<round_id>.json` 再执行 controller queue。
+
 ## 3. 分阶段目标
 
 ## Phase A：收紧现有 contract
@@ -271,14 +277,15 @@
    - 在 preflight 成立后，再逐步把未声明输出、越界写路径、缺失 required input 变成真正的 allow/deny 决策
    - 这一阶段要区分 `runtime governance` 与 `business semantics`，不能把业务判断塞回 kernel
 
-### F3：下一批
+### F3：当前对话已完成
 
 3. board-driven orchestration planner
    - 第一阶段不直接替换现有 phase-2 controller，而是先产出 `orchestration_plan_<round_id>.json`
    - planner 读取 board summary、board brief、challenge state、next actions、readiness，并显式给出下一步 skill queue、角色建议、停止条件和 fallback path
 
 4. planner-backed controller cutover
-   - 只有在 planner artifact 稳定后，才允许逐步把固定 phase-2 pipeline 切成 planner-backed controller
+   - 当前已完成 phase-2 preview cutover：controller 先执行 planner skill，再按 plan queue 执行 stage
+   - 这一版仍只覆盖 phase-2 内部调度，不应被等同于 full board-driven、agent-decided runtime 已完成
 
 ## 4. 本批次交付标准
 
@@ -295,35 +302,31 @@
 
 从当前状态到更完整的可运行系统，建议按下面顺序推进：
 
-1. 设计 board-driven orchestration planner artifact，但先与现有 phase-2 controller 并存，不立即切主路径
-2. 在 planner artifact 稳定后，再评估 planner-backed controller cutover
-3. 把 orchestration / contract scaffold 接回新主链
-4. 恢复 archive / history context / richer simulation
-5. 做剩余 runtime hardening 与生产前准入验证
+1. 把 orchestration / contract scaffold 接回新主链
+2. 恢复 archive / history context / richer simulation
+3. 做剩余 runtime hardening 与生产前准入验证
 
 ### 5.1 直接下一批的交付清单
 
 如果只看“下一次编码批次”，建议严格收敛成下面 3 项：
 
-1. planner artifact 设计稿
-   - 先交付 `orchestration_plan_<round_id>.json` schema 与最小 planner skill 设计，不急于替换 controller
+1. mission scaffold / prepare-round 最小闭环
+   - 先把真实任务入口重新接回 run contract，而不是继续停留在 seeded local workflow
 
-2. minimal planner skill
-   - 输入：board summary、board brief、challenge state、next actions、readiness
-   - 输出：`orchestration_plan_<round_id>.json`
-   - 作用：显式给出 next skill queue、assigned role hints、stop conditions、fallback path
+2. fetch-plan / import execution 最小闭环
+   - 输出真实 fetch / import artifact，而不是只在 phase-2 内部继续优化 controller queue
 
-3. planner regression
-   - 覆盖 ready / hold 两类 round 下的 queue 生成、stop condition 与 fallback path 稳定性
+3. orchestration integration regression
+   - 覆盖 mission -> prepare -> fetch/import -> normalize -> phase-2 -> reporting 的最小集成链路
 
 ### 5.2 下一批验收条件
 
 下一批如果要算完成，至少要满足：
 
-1. `orchestration_plan_<round_id>.json` 至少能稳定表达 next skill queue、assigned role hints、stop conditions、fallback path
-2. planner 在 ready 与 hold 两类 round 下都能给出可解释的 queue 或明确的 stop decision
-3. planner-backed controller 仍保持 preview 状态，不得在本批次直接替换现有 deterministic phase-2 controller
-4. unittest 需要新增 planner regression，而不是只更新文档口径
+1. 真实 mission 输入至少能落成 prepare/fetch/import 所需 contract artifact
+2. 最小真实 orchestration 链路能接到现有 normalize / phase-2 / reporting 主链
+3. planner-backed controller 继续保持 preview 状态，不在这一批次扩张成 full board-driven runtime
+4. unittest 需要新增 orchestration integration regression，而不是只更新文档口径
 
 ## 6. runtime 当前边界
 
@@ -333,20 +336,22 @@ runtime 在当前阶段仍不应承担新的业务推理，推荐继续维持下
 2. 最小 runtime kernel 负责 run manifest、artifact path resolver、receipt/event ledger、skill executor wrapper、round cursor、promotion gate、round controller、supervisor state，以及后续 contract-aware / permission-aware 治理。
 3. reporting / decision 仍然优先以 atomic skill 方式推进，而不是把新业务逻辑塞回 runtime。
 
-换句话说，runtime 现在已经形成了一个最小可运行的 phase-2 deterministic pipeline，但仍不是蓝图里的 board-driven、agent-decided orchestration runtime。
+换句话说，runtime 现在已经形成了一个 planner-backed 的 phase-2 preview，但仍不是蓝图里的 full board-driven、agent-decided orchestration runtime。
 
 ## 7. 当前补充状态
 
 - `run-phase2-round` 现在可以把 `board -> D1 -> D2 -> promotion` 串成单命令流程。
 - `supervise-round` 现在会在 controller 结果上额外落出 operator 视角的 `supervisor_state_<round_id>.json`。
 - `show-run-state` 现在会同时回显最新 round 的 gate / controller / supervisor 快照。
+- `show-run-state` 现在也会回显最新 round 的 `orchestration_plan_<round_id>.json`。
 - `eco-materialize-reporting-handoff` 与 `eco-draft-council-decision` 已经把 promotion basis 接到 reporting / decision 第一批下游对象。
 - `eco-draft-expert-report`、`eco-publish-expert-report`、`eco-publish-council-decision` 已经把 role draft、canonical report 与 canonical decision 接回 skill-first 主链。
 - `eco-materialize-final-publication` 已经把 reporting 主链从 canonical report / decision 收敛到最终发布对象。
+- `eco-plan-round-orchestration` 已经把 phase-2 controller 先前的固定 queue 显式化为一个 planner artifact，并驱动 planner-backed cutover。
 - board 写入路径现在已切到 filesystem lock + atomic replace + `board_revision`，当前目标是先保证同机多进程安全，而不是宣称分布式协作已经完成。
 - runtime registry 现在会快照 skill contract 与 agent metadata，ledger 也会记录命令快照、skill_args、解析路径和输入/输出哈希。
 - runtime 现在已经具备 contract-aware preflight 与 enforcement baseline：支持 `preflight-skill`、`run-skill --contract-mode off|warn|strict`，并能阻断缺失 required inputs、未声明 path override、undeclared summary path 与 artifact_ref mismatch。
-- 当前完整 unittest 集会继续扩展，用于覆盖并发写、reporting publish 与审计链回归。
+- 当前完整 unittest 集会继续扩展，用于覆盖并发写、reporting publish、planner cutover 与后续 orchestration integration 回归。
 
 ## 8. 面向生产的开发指引
 
