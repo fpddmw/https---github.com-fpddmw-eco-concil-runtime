@@ -279,6 +279,7 @@ def build_fetch_plan(
                 "selection_status": maybe_text((selections.get(role) or {}).get("status")) if isinstance(selections.get(role), dict) else "",
                 "allowed_sources": (selections.get(role) or {}).get("allowed_sources", []) if isinstance(selections.get(role), dict) else [],
                 "evidence_requirements": role_evidence_requirements(tasks, role),
+                "family_memory": (selections.get(role) or {}).get("family_memory", []) if isinstance(selections.get(role), dict) else [],
                 "source_selection_path": str(source_selection_path(run_dir, round_id, role)),
             }
             for role in SOURCE_SELECTION_ROLES

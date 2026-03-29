@@ -47,7 +47,7 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
         raise ValueError(f"run_id mismatch between mission.json and --run-id: {maybe_text(mission.get('run_id'))!r} != {run_id!r}")
     tasks = read_json_list(task_path)
 
-    selections = build_source_selections(mission=mission, tasks=tasks, run_id=run_id, round_id=round_id)
+    selections = build_source_selections(run_dir=run_dir_path, mission=mission, tasks=tasks, run_id=run_id, round_id=round_id)
     write_source_selections(run_dir_path, round_id, selections)
     plan_payload, warnings = build_fetch_plan(
         run_dir=run_dir_path,

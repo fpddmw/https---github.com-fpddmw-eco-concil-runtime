@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from .source_queue_contract import (
@@ -13,6 +14,7 @@ from .source_queue_contract import (
     stable_hash,
     unique_texts,
 )
+from .source_queue_history import role_family_memory
 
 
 def task_ids_for_role(tasks: list[dict[str, Any]], role: str) -> list[str]:
@@ -109,13 +111,17 @@ def family_plans_for_role(mission: dict[str, Any], role: str, selected_sources: 
             selected = bool(selected_layer_skills)
             if selected:
                 family_selected = True
+            tier = maybe_text(layer.get("tier")) or "l1"
             authorization_basis = "entry-layer"
-            if (family_id, maybe_text(layer.get("layer_id"))) in approved_layers:
-                authorization_basis = "upstream-approval"
+            if tier != "l1":
+                if (family_id, maybe_text(layer.get("layer_id"))) in approved_layers:
+                    authorization_basis = "upstream-approval"
+                elif layer.get("auto_selectable") is True:
+                    authorization_basis = "policy-auto"
             layer_plans.append(
                 {
                     "layer_id": maybe_text(layer.get("layer_id")),
-                    "tier": maybe_text(layer.get("tier")) or "l1",
+                    "tier": tier,
                     "selected": selected,
                     "reason": f"{'Select' if selected else 'Skip'} {family_id}:{maybe_text(layer.get('layer_id'))}.",
                     "source_skills": selected_layer_skills,
@@ -136,8 +142,167 @@ def family_plans_for_role(mission: dict[str, Any], role: str, selected_sources: 
     return plans
 
 
+def validate_source_selection_payload(*, mission: dict[str, Any], role: str, source_selection: dict[str, Any]) -> None:
+    governance = role_source_governance(mission, role)
+    families = governance.get("families", []) if isinstance(governance.get("families"), list) else []
+    if not families:
+        return
+
+    family_lookup = {
+        maybe_text(family.get("family_id")): family
+        for family in families
+        if isinstance(family, dict) and maybe_text(family.get("family_id"))
+    }
+    family_plans = source_selection.get("family_plans")
+    if not isinstance(family_plans, list):
+        raise ValueError(f"Role {role} source_selection must include family_plans.")
+    payload_lookup = {
+        maybe_text(family_plan.get("family_id")): family_plan
+        for family_plan in family_plans
+        if isinstance(family_plan, dict) and maybe_text(family_plan.get("family_id"))
+    }
+    if set(payload_lookup) != set(family_lookup):
+        missing = sorted(set(family_lookup) - set(payload_lookup))
+        extra = sorted(set(payload_lookup) - set(family_lookup))
+        raise ValueError(f"Role {role} family_plans must match governed families. Missing={missing}, extra={extra}")
+
+    explicit_selected_sources = unique_texts(source_selection.get("selected_sources", []) if isinstance(source_selection.get("selected_sources"), list) else [])
+    layer_selected_sources: list[str] = []
+    allowed_lookup = {item.casefold() for item in allowed_sources_for_role(mission, role)}
+    approved_lookup = {
+        (maybe_text(item.get("family_id")), maybe_text(item.get("layer_id"))): item
+        for item in governance.get("approved_layers", [])
+        if isinstance(item, dict) and maybe_text(item.get("family_id")) and maybe_text(item.get("layer_id"))
+    }
+    allow_cross_round_anchors = bool(governance.get("allow_cross_round_anchors"))
+    selected_family_count = 0
+    selected_non_entry_layers = 0
+
+    for family_id, family_plan in payload_lookup.items():
+        family_policy = family_lookup.get(family_id)
+        if not isinstance(family_policy, dict):
+            continue
+        if family_plan.get("selected") is True:
+            selected_family_count += 1
+        layer_lookup = {
+            maybe_text(layer.get("layer_id")): layer
+            for layer in family_policy.get("layers", [])
+            if isinstance(layer, dict) and maybe_text(layer.get("layer_id"))
+        }
+        layer_plans = family_plan.get("layer_plans")
+        if not isinstance(layer_plans, list):
+            raise ValueError(f"Role {role} family {family_id} must include layer_plans.")
+        payload_layer_ids = {
+            maybe_text(layer_plan.get("layer_id"))
+            for layer_plan in layer_plans
+            if isinstance(layer_plan, dict) and maybe_text(layer_plan.get("layer_id"))
+        }
+        if set(layer_lookup) != payload_layer_ids:
+            missing = sorted(set(layer_lookup) - payload_layer_ids)
+            extra = sorted(payload_layer_ids - set(layer_lookup))
+            raise ValueError(f"Role {role} family {family_id} layer_plans mismatch. Missing={missing}, extra={extra}")
+
+        family_selected_from_layers = False
+        for layer_plan in layer_plans:
+            if not isinstance(layer_plan, dict):
+                continue
+            layer_id = maybe_text(layer_plan.get("layer_id"))
+            layer_policy = layer_lookup.get(layer_id)
+            if not isinstance(layer_policy, dict):
+                continue
+            tier = maybe_text(layer_policy.get("tier")) or "l1"
+            if maybe_text(layer_plan.get("tier")) != tier:
+                raise ValueError(f"Role {role} family {family_id} layer {layer_id} tier mismatch.")
+
+            selected = layer_plan.get("selected") is True
+            selected_skill_set = {
+                maybe_text(skill)
+                for skill in layer_plan.get("source_skills", [])
+                if maybe_text(skill)
+            }
+            allowed_skill_set = {
+                maybe_text(skill)
+                for skill in layer_policy.get("skills", [])
+                if maybe_text(skill)
+            }
+            if not selected_skill_set <= allowed_skill_set:
+                invalid = sorted(selected_skill_set - allowed_skill_set)
+                raise ValueError(f"Role {role} family {family_id} layer {layer_id} selected invalid skills {invalid}.")
+            if not selected and selected_skill_set:
+                raise ValueError(f"Role {role} family {family_id} layer {layer_id} cannot list source_skills when selected=false.")
+            if selected and not selected_skill_set:
+                raise ValueError(f"Role {role} family {family_id} layer {layer_id} must list at least one selected source_skill.")
+            if selected:
+                family_selected_from_layers = True
+                layer_selected_sources.extend(sorted(selected_skill_set))
+
+            max_selected_skills = layer_policy.get("max_selected_skills")
+            if isinstance(max_selected_skills, int) and max_selected_skills > 0 and len(selected_skill_set) > max_selected_skills:
+                raise ValueError(
+                    f"Role {role} family {family_id} layer {layer_id} selected {len(selected_skill_set)} skills but max_selected_skills={max_selected_skills}."
+                )
+
+            anchor_mode = maybe_text(layer_plan.get("anchor_mode")) or "none"
+            anchor_refs = layer_plan.get("anchor_refs") if isinstance(layer_plan.get("anchor_refs"), list) else []
+            if layer_policy.get("requires_anchor") is True and (anchor_mode == "none" or not anchor_refs):
+                raise ValueError(f"Role {role} family {family_id} layer {layer_id} requires anchors.")
+            if anchor_mode == "prior_round_l1" and not allow_cross_round_anchors:
+                raise ValueError(f"Role {role} family {family_id} layer {layer_id} cannot use prior_round_l1 anchors.")
+
+            if not selected:
+                continue
+            authorization_basis = maybe_text(layer_plan.get("authorization_basis"))
+            if tier == "l1":
+                if authorization_basis and authorization_basis != "entry-layer":
+                    raise ValueError(f"Role {role} family {family_id} layer {layer_id} must use entry-layer authorization.")
+            else:
+                selected_non_entry_layers += 1
+                if (family_id, layer_id) in approved_lookup:
+                    if authorization_basis != "upstream-approval":
+                        raise ValueError(f"Role {role} family {family_id} layer {layer_id} must use upstream-approval.")
+                elif layer_policy.get("auto_selectable") is True:
+                    if authorization_basis != "policy-auto":
+                        raise ValueError(f"Role {role} family {family_id} layer {layer_id} must use policy-auto authorization.")
+                else:
+                    raise ValueError(f"Role {role} family {family_id} layer {layer_id} is not approved by governance.")
+
+        if family_plan.get("selected") is True and not family_selected_from_layers:
+            raise ValueError(f"Role {role} family {family_id} selected=true but no layer is selected.")
+        if family_plan.get("selected") is not True and family_selected_from_layers:
+            raise ValueError(f"Role {role} family {family_id} selected flag must match selected layers.")
+
+    normalized_layer_selected_sources = unique_texts(layer_selected_sources)
+    if explicit_selected_sources and {
+        item.casefold() for item in explicit_selected_sources
+    } != {
+        item.casefold() for item in normalized_layer_selected_sources
+    }:
+        raise ValueError(
+            f"Role {role} selected_sources does not match selected family layers. selected_sources={explicit_selected_sources}, layer_sources={normalized_layer_selected_sources}"
+        )
+    selected_sources = explicit_selected_sources or normalized_layer_selected_sources
+    invalid_sources = [item for item in selected_sources if item.casefold() not in allowed_lookup]
+    if invalid_sources:
+        raise ValueError(f"Role {role} selected invalid sources: {', '.join(invalid_sources)}")
+
+    max_selected = governance.get("max_selected_sources_per_role")
+    if isinstance(max_selected, int) and max_selected > 0 and len(selected_sources) > max_selected:
+        raise ValueError(f"Role {role} selected too many sources: {len(selected_sources)} > {max_selected}")
+
+    max_families = governance.get("max_active_families_per_role")
+    if isinstance(max_families, int) and max_families > 0 and selected_family_count > max_families:
+        raise ValueError(f"Role {role} selected {selected_family_count} families but max_active_families_per_role={max_families}.")
+
+    max_l2_layers = governance.get("max_non_entry_layers_per_role")
+    if isinstance(max_l2_layers, int) and max_l2_layers >= 0 and selected_non_entry_layers > max_l2_layers:
+        raise ValueError(
+            f"Role {role} selected {selected_non_entry_layers} non-entry layers but max_non_entry_layers_per_role={max_l2_layers}."
+        )
+
+
 def build_source_selection(
     *,
+    run_dir: str | Path | None = None,
     mission: dict[str, Any],
     tasks: list[dict[str, Any]],
     run_id: str,
@@ -178,7 +343,8 @@ def build_source_selection(
     family_plans = family_plans_for_role(mission, role, selected_sources)
     for family in family_plans:
         family["evidence_requirement_ids"] = evidence_requirement_ids
-    return {
+    family_memory = role_family_memory(Path(run_dir).expanduser().resolve(), round_id, role, mission) if run_dir is not None else []
+    payload = {
         "schema_version": "1.0.0",
         "selection_id": selection_id,
         "run_id": run_id,
@@ -192,19 +358,23 @@ def build_source_selection(
         "override_requests": [item for item in override_requests if isinstance(item, dict)],
         "evidence_requirements": evidence_requirements,
         "family_plans": family_plans,
+        "family_memory": family_memory,
         "source_decisions": source_decisions_for_role(mission, role, selected_sources),
     }
+    validate_source_selection_payload(mission=mission, role=role, source_selection=payload)
+    return payload
 
 
 def build_source_selections(
     *,
+    run_dir: str | Path | None = None,
     mission: dict[str, Any],
     tasks: list[dict[str, Any]],
     run_id: str,
     round_id: str,
 ) -> dict[str, dict[str, Any]]:
     return {
-        role: build_source_selection(mission=mission, tasks=tasks, run_id=run_id, round_id=round_id, role=role)
+        role: build_source_selection(run_dir=run_dir, mission=mission, tasks=tasks, run_id=run_id, round_id=round_id, role=role)
         for role in SOURCE_SELECTION_ROLES
     }
 
@@ -222,4 +392,5 @@ __all__ = [
     "selected_sources_from_payload",
     "task_ids_for_role",
     "tasks_for_role",
+    "validate_source_selection_payload",
 ]

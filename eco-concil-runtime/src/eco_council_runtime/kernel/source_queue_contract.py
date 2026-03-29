@@ -82,6 +82,15 @@ def maybe_text(value: Any) -> str:
     return normalize_space(value)
 
 
+def coerce_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def unique_texts(values: list[Any]) -> list[str]:
     seen: set[str] = set()
     results: list[str] = []
@@ -183,24 +192,15 @@ def effective_constraints(mission: dict[str, Any]) -> dict[str, int]:
         value = governance.get(key)
         if value in (None, ""):
             value = constraints.get(key)
-        try:
-            if value not in (None, ""):
-                defaults[key] = int(value)
-        except (TypeError, ValueError):
-            continue
+        coerced = coerce_int(value)
+        if coerced is not None:
+            defaults[key] = coerced
     return defaults
 
 
 def role_source_governance(mission: dict[str, Any], role: str) -> dict[str, Any]:
     governance = mission.get("source_governance") if isinstance(mission.get("source_governance"), dict) else {}
     approved_layers_payload = governance.get("approved_layers") if isinstance(governance.get("approved_layers"), list) else []
-    approved_layers = [
-        item
-        for item in approved_layers_payload
-        if isinstance(item, dict)
-        and maybe_text(item.get("family_id"))
-        and maybe_text(item.get("layer_id"))
-    ]
     families: dict[str, dict[str, Any]] = {}
     for source_skill, config in SOURCE_CATALOG.items():
         if maybe_text(config.get("role")) != role:
@@ -213,26 +213,58 @@ def role_source_governance(mission: dict[str, Any], role: str) -> dict[str, Any]
                 "label": maybe_text(config.get("family_label")),
                 "role": role,
                 "skills": [],
-                "layers": [],
+                "_layers": {},
             },
         )
         family["skills"].append(source_skill)
-        family["layers"].append(
+        layer_id = maybe_text(config.get("layer_id"))
+        tier = maybe_text(config.get("tier")) or "l1"
+        layer_lookup = family.setdefault("_layers", {})
+        if not isinstance(layer_lookup, dict):
+            layer_lookup = {}
+            family["_layers"] = layer_lookup
+        layer = layer_lookup.setdefault(
+            layer_id,
             {
-                "layer_id": maybe_text(config.get("layer_id")),
+                "layer_id": layer_id,
                 "label": maybe_text(config.get("layer_label")),
-                "tier": maybe_text(config.get("tier")) or "l1",
-                "skills": [source_skill],
-                "auto_selectable": True,
-            }
+                "tier": tier,
+                "skills": [],
+                "max_selected_skills": 0,
+                "requires_anchor": False,
+                "auto_selectable": tier == "l1",
+            },
         )
+        if isinstance(layer, dict):
+            layer_skills = layer.setdefault("skills", [])
+            if isinstance(layer_skills, list):
+                layer_skills.append(source_skill)
     for family in families.values():
         family["skills"] = unique_texts(family.get("skills", []))
-        family["layers"] = sorted(family.get("layers", []), key=lambda item: maybe_text(item.get("layer_id")))
+        layer_lookup = family.pop("_layers", {})
+        layers = layer_lookup.values() if isinstance(layer_lookup, dict) else []
+        finalized_layers: list[dict[str, Any]] = []
+        for layer in layers:
+            if not isinstance(layer, dict):
+                continue
+            layer["skills"] = unique_texts(layer.get("skills", []))
+            layer["max_selected_skills"] = len(layer["skills"])
+            finalized_layers.append(layer)
+        family["layers"] = sorted(finalized_layers, key=lambda item: maybe_text(item.get("layer_id")))
+    family_ids = {maybe_text(item.get("family_id")) for item in families.values() if maybe_text(item.get("family_id"))}
+    approved_layers = [
+        item
+        for item in approved_layers_payload
+        if isinstance(item, dict)
+        and maybe_text(item.get("family_id")) in family_ids
+        and maybe_text(item.get("layer_id"))
+    ]
     return {
         "approval_authority": maybe_text(governance.get("approval_authority")) or "runtime-operator",
         "allow_cross_round_anchors": bool(governance.get("allow_cross_round_anchors")),
         "max_selected_sources_per_role": effective_constraints(mission).get("max_selected_sources_per_role"),
+        "max_active_families_per_role": coerce_int(governance.get("max_active_families_per_role")),
+        "max_non_entry_layers_per_role": coerce_int(governance.get("max_non_entry_layers_per_role")),
         "approved_layers": approved_layers,
         "families": sorted(families.values(), key=lambda item: maybe_text(item.get("family_id"))),
     }

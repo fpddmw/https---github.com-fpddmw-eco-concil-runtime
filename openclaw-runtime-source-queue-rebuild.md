@@ -1,5 +1,7 @@
 # Runtime Source-Queue 重建设计
 
+执行顺序、旧版取舍和删除判据请同步参见 [openclaw-runtime-mode-development-flow.md](openclaw-runtime-mode-development-flow.md)。
+
 ## 1. 目标
 
 把 runtime source-queue 重建成第二编排面，而不是继续维护一个 import-only 过渡层。
