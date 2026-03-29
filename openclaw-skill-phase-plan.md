@@ -18,7 +18,7 @@
 2. phase-2 controller 已经切到 planner-backed preview，但这只是过渡态，不是最终 OpenClaw 工作模式。
 3. 本批次已经补入 mission scaffold、prepare-round、fetch-plan、import execution 的最小 ingress 闭环。
 4. sibling detached skills 仓库已经具备 atomic data-source fetch skills；当前仓库剩余的第一优先级不是继续补 fetcher，而是把两仓 skill 一起接入 OpenClaw。
-5. archive/history context 与 single-host runtime hardening baseline 已经交付；下一批优先级应先转向 OpenClaw multi-agent framework，再做 detached fetch integration、simulation/benchmark 和 production admission。
+5. archive/history context 与 single-host runtime hardening baseline 已经交付；下一批优先级应先转向 OpenClaw multi-agent framework，同时把 runtime source-queue mode 收敛为第二编排流程，再做 detached fetch integration、simulation/benchmark 和 production admission。
 
 ### 5.2 下一批验收条件
 
@@ -26,8 +26,9 @@
 
 1. 当前仓库 `skills/` 与 detached `/home/fpddmw/projects/skills` 能被统一暴露到 OpenClaw skill surface
 2. moderator、sociologist、environmentalist、challenger、archivist 至少能以最小 role workspace 形式被 provision 出来
-3. 至少一个 round 能由多个 OpenClaw agent 通过 board 协作推进，而不是只靠 runtime 固定队列
-4. unittest 需要新增 OpenClaw adapter / managed skill projection / agent turn integration regression，而不是只更新文档口径
+3. runtime source-queue mode 被明确保留为第二编排流程，但不再与 skill surface 分叉
+4. 至少一个 round 能由多个 OpenClaw agent 通过 board 协作推进，而不是只靠 runtime 固定队列
+5. unittest 需要新增 OpenClaw adapter / managed skill projection / agent turn integration regression，而不是只更新文档口径
 
 ## 6. runtime 当前边界
 
@@ -54,6 +55,7 @@ runtime 在当前阶段仍不应承担新的业务推理，推荐继续维持下
 - runtime 现在已经具备 contract-aware preflight 与 enforcement baseline：支持 `preflight-skill`、`run-skill --contract-mode off|warn|strict`，并能阻断缺失 required inputs、未声明 path override、undeclared summary path 与 artifact_ref mismatch。
 - runtime 现在已经补上 timeout budget、retry/backoff、high-risk side-effect approval、exclusive execution lock 和 structured failure payload；controller、supervisor 与 CLI 也会透传 execution policy。
 - 活跃实现里目前仍没有真正启用的 OpenClaw adapter、managed skill projection 或 role-agent turn loop；这部分应成为下一批编码主目标。
+- 活跃 runtime 的 prepare/import 仍只是最小 import baseline，不足以作为即将投产的 source-queue 流程。
 - 当前完整 unittest 集已经覆盖 runtime timeout、retry、side-effect approval、planner cutover 与后续 orchestration integration 回归，并会继续扩展到 detached fetch integration 与 benchmark。
 
 ## 8. 面向生产的开发指引

@@ -22,6 +22,8 @@
    - 轻量交付入口页
 5. `openclaw-production-development-plan.md`
    - 轻量生产化入口页
+6. `openclaw-dual-flow-skill-assessment.md`
+   - 双流程并存下的逐 skill 适配评估
 
 也就是说，架构判断留在蓝图里，执行层判断统一收敛到本报告，不再让 3 份计划/状态文档重复叙述同一件事。
 
@@ -116,6 +118,8 @@
 
 当前最大的缺口，不是 skill 数量不足，而是 skill 还没有真正回到 OpenClaw agent 手里。
 
+同时，如果后续要保留 runtime source-queue 流程，也应把它作为第二套 orchestration mode 保留，而不是重新分叉 skill 定义层。
+
 还缺：
 
 - active `adapters/openclaw/` 实现
@@ -139,6 +143,8 @@
 - fetch execution snapshot / retry / overwrite guard
 - remote dependency / credential surface handling
 - 非本地 fixture 的 mission-driven collection
+
+这里还需要明确一点：当前活跃 runtime 的 source queue 还不接近 production-ready。活跃的 `eco-prepare-round` 仍只会从 `mission.artifact_imports` 生成最小本地 import plan，`eco-import-fetch-execution` 也仍只是在复制本地文件并调用 normalizer。这可以作为 ingress baseline，但还不能作为完整 source-selection / external collection control plane 来投产。
 
 #### C. archive / history context 已接回主链基线
 
@@ -198,6 +204,7 @@
 - 已经具备 archive / history context 的主链回接与历史证据复用基线
 - 已经具备 single-host runtime hardening baseline
 - 但当前活跃 workflow 仍主要是 runtime/controller 顺序调 skill，而不是 OpenClaw 多 agent 自主协作
+- 并且当前 runtime source queue 仍只是最小 import baseline，而不是接近完工的生产流程
 - 但仍处于 pre-production integration 阶段
 
 当前不能宣称的内容包括：
@@ -285,9 +292,10 @@
 更合适的优先级是：
 
 1. 先补 `adapters/openclaw/` 与统一 managed skill surface，让多个 OpenClaw agent 能自主调用 skill
-2. 再把 detached fetch skills 接回当前 run / round 主链
-3. 再补 simulation / benchmark 与跨轮次对照扩展
-4. 最后补更强的 production admission control plane
+2. 再把 runtime source-queue mode 明确收敛为第二编排流程，并从 abandoned 实现中选择性回收 source-selection / fetch-plan governance
+3. 再把 detached fetch skills 接回当前 run / round 主链
+4. 再补 simulation / benchmark 与跨轮次对照扩展
+5. 最后补更强的 production admission control plane
 
 ## 7. 文档收敛后的使用方式
 
@@ -295,6 +303,7 @@
 
 - 架构是否正确：看 `openclaw-first-refactor-blueprint.md`
 - 当前做到哪里、还差什么、整体路线是什么：看 `openclaw-full-development-report.md`
+- 想看双流程并存下的 skill 适配判断：看 `openclaw-dual-flow-skill-assessment.md`
 - 只想快速进入状态页：看 `openclaw-collaboration-status.md`
 - 只想快速进入交付页：看 `openclaw-skill-phase-plan.md`
 - 只想快速进入生产化页：看 `openclaw-production-development-plan.md`
