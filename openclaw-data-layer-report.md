@@ -88,13 +88,19 @@
 2. `round_tasks`
    把一轮工作拆成角色化任务
 3. `source_selection`
-   决定本轮允许选哪些 source
+   决定本轮允许选哪些 source，并显式记录 `family_plans / layer_plans / source_decisions`
 4. `fetch_plan`
-   把取数动作显式化为可执行步骤
+   把取数动作显式化为可执行步骤，并记录 `depends_on / anchor_refs / anchor_artifact_paths`
 5. `round_transition`
    把“从上一轮切到下一轮”这件事显式化
 
 这层还是“规划层”，不是“证据层”。
+
+要点是：
+
+1. `source family / layer / anchor` 现在属于规划元数据，不属于实际证据行
+2. 它们决定 runtime 怎样拿到原始数据，但它们本身不等于 signal
+3. 因此它们应放在 planning layer，而不是 signal layer
 
 ### 3.3 第 2 层：原始证据层 `raw`
 
@@ -111,12 +117,26 @@
 1. 形状不统一
 2. 强依赖具体 source
 3. 仍保留最丰富、最少压缩的信息
+4. 现在已经开始出现“同 family 分层”的 raw 继承关系
+
+例如：
+
+1. `youtube-video-search` 的 raw artifact 可以直接作为 `youtube-comments-fetch` 的 anchor 输入
+2. `regulationsgov-comments-fetch` 的 raw artifact 可以直接作为 `regulationsgov-comment-detail-fetch` 的 anchor 输入
+
+因此当前 raw 层内部其实已经存在：
+
+1. 入口型 raw
+2. 派生型 raw
+
+它们都还是 raw，只是后者依赖前者。
 
 它的价值不是方便 agent 直接消费，而是：
 
 1. 保留回溯源
 2. 作为 normalize 的输入
 3. 作为争议时的最终原始证据
+4. 在 normalizer 缺失时，仍可作为 `raw-only` 证据被保留
 
 ### 3.4 第 3 层：归一化证据层 `normalized signals`
 
@@ -136,6 +156,7 @@
 2. 仍保留 `artifact_path`、`record_locator`、`raw_json`
 3. 每条记录都带 `run_id`、`round_id`
 4. 现在已经支持跨轮读取
+5. 多个新 source family 已开始接入同一张表
 
 这层回答的是：
 
@@ -146,6 +167,30 @@
 5. 它属于哪一轮调查
 
 这是当前项目最接近“统一证据面”的部分。
+
+但这里要补一个非常关键的真实边界：
+
+1. 只有“已有 normalizer”的 source 才会进入 `normalized_signals`
+2. 如果某个 source 尚无 normalizer，当前 runtime 会走 `raw-only` 保底
+3. 这意味着“已归档”不总是等于“已入库”
+
+截至目前，新的 row-level normalizer 已经覆盖了：
+
+1. `youtube-comments-fetch`
+2. `regulationsgov-comments-fetch`
+3. `regulationsgov-comment-detail-fetch`
+4. `open-meteo-air-quality-fetch`
+5. `open-meteo-flood-fetch`
+6. `usgs-water-iv-fetch`
+7. `nasa-firms-fire-fetch`
+
+同时还要注意：
+
+1. `gdelt-events-fetch`
+2. `gdelt-mentions-fetch`
+3. `gdelt-gkg-fetch`
+
+当前是 manifest 级 normalize，不是 zip 内全表行级 normalize。
 
 ### 3.5 第 4 层：候选抽取层 `claim / observation`
 
@@ -288,6 +333,7 @@
 2. 有 provenance
 3. 有跨轮字段
 4. 有 query skill 直接读取
+5. 新 source family 不再需要各自单独设计下游存储
 
 ### 5.2 当前最脆弱的一层是 `claim / observation -> link / coverage`
 
@@ -296,6 +342,30 @@
 1. 它们现在太容易被当成唯一主链
 2. 它们大多还是 JSON 工件
 3. 它们还没有进入统一 analysis plane
+
+### 5.4 当前还有一个“raw-only 缓冲带”
+
+这层不是正式数据层，但实际已经存在。
+
+它出现在：
+
+1. source 已接入 runtime
+2. raw artifact 已经落盘
+3. normalizer 还没完全就位
+
+它的优点是：
+
+1. 不会因为单个新 source 未完成而卡死整轮
+2. 仍保留审计链和回溯链
+
+它的缺点是：
+
+1. 这些数据还不能像 `normalized_signals` 一样被统一查询
+2. 下游分析 skill 还无法直接消费
+
+所以它应被理解为：
+
+`一个过渡带，不是最终目标。`
 
 ### 5.3 当前 `card` 层还没有完全独立出来
 

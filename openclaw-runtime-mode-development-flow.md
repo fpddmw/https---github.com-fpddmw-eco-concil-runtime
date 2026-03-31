@@ -66,6 +66,46 @@
 7. `declared_side_effects / requested_side_effect_approvals`
 8. `runtime admission / dead-letter / operator surface`
 9. `registry + source_queue_profile`
+10. `artifact_imports + source_requests` 双入口接入
+11. `source family / layer / anchor` 编排
+12. `l2 source depends_on + anchor_artifact_paths` 自动生成
+13. `missing normalizer -> raw-only ingest` 降级保底
+
+截至 `2026-03-31`，已验证：
+
+1. `python3 -m unittest discover -s tests` 共 `75` 项测试通过
+2. 新迁移 source 已能进入 `SOURCE_CATALOG`
+3. `youtube-video-search -> youtube-comments-fetch` 链路可执行
+4. `regulationsgov-comments-fetch -> regulationsgov-comment-detail-fetch` 链路可执行
+
+### 2.2.1 当前已接入的 source 组
+
+公共舆情面：
+
+1. `bluesky-cascade-fetch`
+2. `gdelt-doc-search`
+3. `gdelt-events-fetch`
+4. `gdelt-mentions-fetch`
+5. `gdelt-gkg-fetch`
+6. `youtube-video-search`
+7. `youtube-comments-fetch`
+8. `regulationsgov-comments-fetch`
+9. `regulationsgov-comment-detail-fetch`
+
+物理环境面：
+
+1. `airnow-hourly-obs-fetch`
+2. `openaq-data-fetch`
+3. `open-meteo-historical-fetch`
+4. `open-meteo-air-quality-fetch`
+5. `open-meteo-flood-fetch`
+6. `usgs-water-iv-fetch`
+7. `nasa-firms-fire-fetch`
+
+其中：
+
+1. `youtube-comments-fetch` 依赖 `youtube-video-search`
+2. `regulationsgov-comment-detail-fetch` 依赖 `regulationsgov-comments-fetch`
 
 ### 2.3 R6 之后剩余的维护项
 
@@ -73,8 +113,10 @@
 
 1. detached fetch 仍缺少更正式的 credential / env 注入策略
 2. detached fetch artifact 还缺少 quarantine / provenance 扩展
-3. history retrieval 仍是辅助检索层，不是更强的调查型检索层
-4. replay / benchmark / nightly 的 corpus 编排仍可继续完善，但已经不再是阻塞主链的缺口
+3. `gdelt-events / gdelt-mentions / gdelt-gkg` 目前是 manifest 级 normalize，不是 zip 内全表行级 normalize
+4. history retrieval 仍是辅助检索层，不是更强的调查型检索层
+5. replay / benchmark / nightly 的 corpus 编排仍可继续完善，但已经不再是阻塞主链的缺口
+6. 新增 normalizer 目录当前主要是 runtime 可调用脚本，尚未全部补齐 `SKILL.md / agents/openai.yaml`
 
 ## 3. 路线完成定义
 
@@ -152,7 +194,7 @@
 
 ### 阶段 R2: fetch plan 与执行边界收口
 
-状态：`已完成第一版`
+状态：`已完成并完成第一轮 migrated source 接入`
 
 目标：
 
@@ -166,6 +208,8 @@
 3. `skills/eco-prepare-round`
 4. `skills/eco-import-fetch-execution`
 5. `tests/test_source_queue_rebuild.py`
+6. `kernel/signal_plane_normalizer.py`
+7. `tests/test_migrated_source_runtime_integration.py`
 
 下一步要补的不是更多字段，而是更硬的执行控制：
 
@@ -173,12 +217,15 @@
 2. detached fetch request contract 的 provider 级标准化
 3. detached fetch artifact quarantine / provenance 规则
 4. 更多 admission negative tests 与 provider fixture coverage
+5. GDELT 全量导出类 source 的深度解包与行级 normalize
 
 完成判据：
 
 1. 所有 fetch step 都能在 plan 中声明执行政策
 2. 所有执行失败都有结构化状态和重试语义
 3. 所有 raw artifacts 都有统一落盘与引用方式
+4. l2 source 可以通过 anchor 依赖同轮或前轮上游 artifact
+5. 当 normalizer 尚未实现时，runtime 至少能 raw-only 保留证据，不因单源缺口打断整轮
 
 ### 阶段 R3: phase-2 控制面硬化
 

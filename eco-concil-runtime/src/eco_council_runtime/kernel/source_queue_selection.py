@@ -88,7 +88,57 @@ def source_decisions_for_role(mission: dict[str, Any], role: str, selected_sourc
     return decisions
 
 
-def family_plans_for_role(mission: dict[str, Any], role: str, selected_sources: list[str]) -> list[dict[str, Any]]:
+def infer_same_round_anchor_refs(selected_lookup: set[str], anchor_source_skills: list[str]) -> list[dict[str, str]]:
+    refs: list[dict[str, str]] = []
+    for source_skill in anchor_source_skills:
+        if source_skill.casefold() not in selected_lookup:
+            continue
+        refs.append({"source_skill": source_skill, "scope": "current-round"})
+    return refs
+
+
+def infer_prior_round_anchor_refs(
+    family_memory: list[dict[str, Any]],
+    *,
+    family_id: str,
+    anchor_source_skills: list[str],
+) -> list[dict[str, str]]:
+    matching_family = next(
+        (
+            item
+            for item in family_memory
+            if isinstance(item, dict) and maybe_text(item.get("family_id")) == family_id
+        ),
+        None,
+    )
+    if not isinstance(matching_family, dict):
+        return []
+    prior_rounds = matching_family.get("prior_rounds") if isinstance(matching_family.get("prior_rounds"), list) else []
+    for prior_round in reversed(prior_rounds):
+        if not isinstance(prior_round, dict):
+            continue
+        round_id = maybe_text(prior_round.get("round_id"))
+        completed = {
+            maybe_text(source_skill)
+            for source_skill in prior_round.get("completed_sources", [])
+            if maybe_text(source_skill)
+        }
+        refs = [
+            {"source_skill": source_skill, "round_id": round_id, "scope": "prior-round"}
+            for source_skill in anchor_source_skills
+            if source_skill in completed and round_id
+        ]
+        if refs:
+            return refs
+    return []
+
+
+def family_plans_for_role(
+    mission: dict[str, Any],
+    role: str,
+    selected_sources: list[str],
+    family_memory: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     selected_lookup = {item.casefold() for item in selected_sources}
     governance = role_source_governance(mission, role)
     approved_layers = {
@@ -96,6 +146,8 @@ def family_plans_for_role(mission: dict[str, Any], role: str, selected_sources: 
         for item in governance.get("approved_layers", [])
         if isinstance(item, dict)
     }
+    allow_cross_round_anchors = bool(governance.get("allow_cross_round_anchors"))
+    memory = family_memory or []
     plans: list[dict[str, Any]] = []
     for family in governance.get("families", []):
         if not isinstance(family, dict):
@@ -118,6 +170,17 @@ def family_plans_for_role(mission: dict[str, Any], role: str, selected_sources: 
                     authorization_basis = "upstream-approval"
                 elif layer.get("auto_selectable") is True:
                     authorization_basis = "policy-auto"
+            anchor_mode = "none"
+            anchor_refs: list[dict[str, str]] = []
+            if selected and layer.get("requires_anchor") is True:
+                anchor_source_skills = unique_texts(layer.get("anchor_source_skills", []) if isinstance(layer.get("anchor_source_skills"), list) else [])
+                anchor_refs = infer_same_round_anchor_refs(selected_lookup, anchor_source_skills)
+                if anchor_refs:
+                    anchor_mode = "same-round-source"
+                elif allow_cross_round_anchors:
+                    anchor_refs = infer_prior_round_anchor_refs(memory, family_id=family_id, anchor_source_skills=anchor_source_skills)
+                    if anchor_refs:
+                        anchor_mode = "prior_round_l1"
             layer_plans.append(
                 {
                     "layer_id": maybe_text(layer.get("layer_id")),
@@ -125,8 +188,8 @@ def family_plans_for_role(mission: dict[str, Any], role: str, selected_sources: 
                     "selected": selected,
                     "reason": f"{'Select' if selected else 'Skip'} {family_id}:{maybe_text(layer.get('layer_id'))}.",
                     "source_skills": selected_layer_skills,
-                    "anchor_mode": "none",
-                    "anchor_refs": [],
+                    "anchor_mode": anchor_mode,
+                    "anchor_refs": anchor_refs,
                     "authorization_basis": authorization_basis,
                 }
             )
@@ -242,6 +305,15 @@ def validate_source_selection_payload(*, mission: dict[str, Any], role: str, sou
                     f"Role {role} family {family_id} layer {layer_id} selected {len(selected_skill_set)} skills but max_selected_skills={max_selected_skills}."
                 )
 
+            if not selected:
+                anchor_mode = maybe_text(layer_plan.get("anchor_mode")) or "none"
+                anchor_refs = layer_plan.get("anchor_refs") if isinstance(layer_plan.get("anchor_refs"), list) else []
+                if anchor_mode != "none" or anchor_refs:
+                    raise ValueError(
+                        f"Role {role} family {family_id} layer {layer_id} cannot declare anchors when selected=false."
+                    )
+                continue
+
             anchor_mode = maybe_text(layer_plan.get("anchor_mode")) or "none"
             anchor_refs = layer_plan.get("anchor_refs") if isinstance(layer_plan.get("anchor_refs"), list) else []
             if layer_policy.get("requires_anchor") is True and (anchor_mode == "none" or not anchor_refs):
@@ -249,8 +321,6 @@ def validate_source_selection_payload(*, mission: dict[str, Any], role: str, sou
             if anchor_mode == "prior_round_l1" and not allow_cross_round_anchors:
                 raise ValueError(f"Role {role} family {family_id} layer {layer_id} cannot use prior_round_l1 anchors.")
 
-            if not selected:
-                continue
             authorization_basis = maybe_text(layer_plan.get("authorization_basis"))
             if tier == "l1":
                 if authorization_basis and authorization_basis != "entry-layer":
@@ -340,10 +410,14 @@ def build_source_selection(
         for item in evidence_requirements
         if isinstance(item, dict) and maybe_text(item.get("requirement_id"))
     ]
-    family_plans = family_plans_for_role(mission, role, selected_sources)
+    family_memory = role_family_memory(Path(run_dir).expanduser().resolve(), round_id, role, mission) if run_dir is not None else []
+    explicit_family_plans = (explicit_payload or {}).get("family_plans")
+    if isinstance(explicit_family_plans, list):
+        family_plans = json.loads(json.dumps(explicit_family_plans, ensure_ascii=True))
+    else:
+        family_plans = family_plans_for_role(mission, role, selected_sources, family_memory)
     for family in family_plans:
         family["evidence_requirement_ids"] = evidence_requirement_ids
-    family_memory = role_family_memory(Path(run_dir).expanduser().resolve(), round_id, role, mission) if run_dir is not None else []
     payload = {
         "schema_version": "1.0.0",
         "selection_id": selection_id,

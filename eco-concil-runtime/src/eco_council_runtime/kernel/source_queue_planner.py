@@ -13,13 +13,20 @@ from .source_queue_contract import (
     normalize_artifact_imports,
     normalize_source_requests,
     policy_profile_summary,
+    source_anchor_argument,
+    source_artifact_capture,
     source_config,
+    source_normalizer_skill,
+    source_runtime_default_args,
+    source_runtime_output_arg,
+    source_runtime_output_mode,
     source_selection_path,
     stable_hash,
     unique_texts,
     utc_now_iso,
     write_json_file,
 )
+from .source_queue_history import import_execution_path, prior_round_ids
 from .source_queue_selection import role_selected_sources
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
@@ -76,6 +83,199 @@ def planned_artifact_path(run_dir: Path, round_id: str, source_skill: str, step_
         return candidate.resolve()
     suffix = maybe_text(source_config(source_skill).get("default_suffix")) or ".json"
     return (run_dir / "raw" / round_id / f"{step_index:02d}-{sanitize_fragment(source_skill)}{suffix}").resolve()
+
+
+def planned_artifact_dir(artifact_path: Path) -> Path:
+    if artifact_path.suffix:
+        return artifact_path.with_suffix("").resolve()
+    return (artifact_path.parent / f"{artifact_path.name}.files").resolve()
+
+
+def load_json_if_exists(path: Path) -> Any | None:
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def argument_present(argv: list[str], option: str) -> bool:
+    normalized = maybe_text(option)
+    return any(maybe_text(item) == normalized for item in argv)
+
+
+def append_runtime_fetch_defaults(
+    source_skill: str,
+    fetch_argv: list[str],
+    *,
+    artifact_path: Path,
+    artifact_dir: Path,
+    anchor_artifact_paths: list[str],
+) -> list[str]:
+    argv = [maybe_text(item) for item in fetch_argv if maybe_text(item)]
+    for arg in source_runtime_default_args(source_skill):
+        if argument_present(argv, arg):
+            continue
+        if arg.startswith("--no-") and argument_present(argv, "--" + arg[5:]):
+            continue
+        if arg.startswith("--") and argument_present(argv, "--no-" + arg[2:]):
+            continue
+        argv.append(arg)
+
+    output_mode = source_runtime_output_mode(source_skill)
+    output_arg = source_runtime_output_arg(source_skill)
+    if output_arg and not argument_present(argv, output_arg):
+        if output_mode == "file":
+            argv.extend([output_arg, str(artifact_path)])
+        elif output_mode == "dir":
+            argv.extend([output_arg, str(artifact_dir)])
+
+    anchor_arg = source_anchor_argument(source_skill)
+    if anchor_arg and anchor_artifact_paths and not argument_present(argv, anchor_arg):
+        argv.extend([anchor_arg, anchor_artifact_paths[0]])
+
+    return argv
+
+
+def selected_source_sequence(selection: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(selection, dict):
+        return []
+    family_plans = selection.get("family_plans") if isinstance(selection.get("family_plans"), list) else []
+    sequence: list[dict[str, Any]] = []
+    for family in family_plans:
+        if not isinstance(family, dict):
+            continue
+        family_id = maybe_text(family.get("family_id"))
+        layer_plans = family.get("layer_plans") if isinstance(family.get("layer_plans"), list) else []
+        ordered_layers = sorted(
+            [layer_plan for layer_plan in layer_plans if isinstance(layer_plan, dict)],
+            key=lambda layer_plan: (0 if maybe_text(layer_plan.get("tier")) == "l1" else 1, maybe_text(layer_plan.get("layer_id"))),
+        )
+        for layer_plan in ordered_layers:
+            if layer_plan.get("selected") is not True:
+                continue
+            for source_skill in layer_plan.get("source_skills", []):
+                if not maybe_text(source_skill):
+                    continue
+                sequence.append(
+                    {
+                        "family_id": family_id,
+                        "layer_id": maybe_text(layer_plan.get("layer_id")),
+                        "layer_plan": layer_plan,
+                        "source_skill": maybe_text(source_skill),
+                    }
+                )
+    return sequence
+
+
+def latest_completed_status_for_source(
+    run_dir: Path,
+    *,
+    current_round_id: str,
+    source_skill: str,
+    requested_round_id: str = "",
+) -> dict[str, Any] | None:
+    round_ids = [requested_round_id] if maybe_text(requested_round_id) else list(reversed(prior_round_ids(run_dir, current_round_id)))
+    for observed_round_id in round_ids:
+        if not maybe_text(observed_round_id):
+            continue
+        execution = load_json_if_exists(import_execution_path(run_dir, observed_round_id))
+        statuses = execution.get("statuses", []) if isinstance(execution, dict) and isinstance(execution.get("statuses"), list) else []
+        for status in reversed(statuses):
+            if not isinstance(status, dict):
+                continue
+            if maybe_text(status.get("status")) != "completed":
+                continue
+            if maybe_text(status.get("source_skill")) != source_skill:
+                continue
+            artifact_path = maybe_text(status.get("artifact_path"))
+            if not artifact_path:
+                continue
+            return {
+                "round_id": observed_round_id,
+                "source_skill": source_skill,
+                "artifact_path": artifact_path,
+                "step_id": maybe_text(status.get("step_id")),
+            }
+    return None
+
+
+def resolved_anchor_context(
+    *,
+    run_dir: Path,
+    current_round_id: str,
+    source_skill: str,
+    layer_plan: dict[str, Any],
+    planned_steps_by_source: dict[str, list[dict[str, Any]]],
+) -> tuple[list[str], list[str], list[dict[str, Any]], list[str]]:
+    anchor_mode = maybe_text(layer_plan.get("anchor_mode")) or "none"
+    refs_payload = layer_plan.get("anchor_refs") if isinstance(layer_plan.get("anchor_refs"), list) else []
+    depends_on: list[str] = []
+    anchor_paths: list[str] = []
+    resolved_refs: list[dict[str, Any]] = []
+    notes: list[str] = []
+
+    if anchor_mode == "none" or not refs_payload:
+        return depends_on, anchor_paths, resolved_refs, notes
+
+    for raw_ref in refs_payload:
+        if isinstance(raw_ref, dict):
+            ref_source_skill = maybe_text(raw_ref.get("source_skill"))
+            ref_round_id = maybe_text(raw_ref.get("round_id"))
+            ref_scope = maybe_text(raw_ref.get("scope"))
+            ref_artifact_path = maybe_text(raw_ref.get("artifact_path"))
+        else:
+            ref_source_skill = maybe_text(raw_ref)
+            ref_round_id = ""
+            ref_scope = ""
+            ref_artifact_path = ""
+
+        if ref_artifact_path:
+            anchor_paths.append(ref_artifact_path)
+            resolved_refs.append({"artifact_path": ref_artifact_path, "scope": ref_scope or anchor_mode})
+            continue
+
+        if anchor_mode in {"same-round-source", "current-round-source"} or ref_scope == "current-round":
+            if not ref_source_skill:
+                continue
+            upstream_steps = planned_steps_by_source.get(ref_source_skill, [])
+            if not upstream_steps:
+                raise ValueError(f"{source_skill} requires same-round anchor from {ref_source_skill}, but no upstream step was planned.")
+            upstream = upstream_steps[-1]
+            depends_on.append(maybe_text(upstream.get("step_id")))
+            anchor_path = maybe_text(upstream.get("artifact_path"))
+            if anchor_path:
+                anchor_paths.append(anchor_path)
+            resolved_refs.append(
+                {
+                    "source_skill": ref_source_skill,
+                    "scope": "current-round",
+                    "step_id": maybe_text(upstream.get("step_id")),
+                    "artifact_path": anchor_path,
+                }
+            )
+            continue
+
+        if anchor_mode == "prior_round_l1" or ref_scope == "prior-round":
+            if not ref_source_skill:
+                continue
+            prior_status = latest_completed_status_for_source(
+                run_dir,
+                current_round_id=current_round_id,
+                source_skill=ref_source_skill,
+                requested_round_id=ref_round_id,
+            )
+            if prior_status is None:
+                requested = f" round={ref_round_id}" if ref_round_id else ""
+                raise ValueError(f"{source_skill} requires prior-round anchor from {ref_source_skill}{requested}, but no completed artifact was found.")
+            anchor_path = maybe_text(prior_status.get("artifact_path"))
+            if anchor_path:
+                anchor_paths.append(anchor_path)
+            resolved_refs.append(prior_status)
+            notes.append(
+                f"Use prior-round anchor from {ref_source_skill} ({maybe_text(prior_status.get('round_id'))})."
+            )
+            continue
+
+    return unique_texts(depends_on), unique_texts(anchor_paths), resolved_refs, notes
 
 
 def source_selection_snapshot(run_dir: Path, round_id: str, selections: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -175,77 +375,141 @@ def build_fetch_plan(
     warnings: list[dict[str, str]] = []
     steps: list[dict[str, Any]] = []
     step_index = 0
-    imported_sources = {maybe_text(item.get("source_skill")) for item in imports}
+    planned_steps_by_source: dict[str, list[dict[str, Any]]] = {}
+    import_items_by_source: dict[str, list[dict[str, Any]]] = {}
+    request_items_by_source: dict[str, list[dict[str, Any]]] = {}
 
     for item in imports:
         source_skill = maybe_text(item.get("source_skill"))
-        role = maybe_text(item.get("role"))
-        if source_skill not in role_selected_sources(selections.get(role)):
+        if not source_skill:
             continue
-        source_artifact_path = Path(maybe_text(item.get("artifact_path"))).expanduser().resolve()
-        if not source_artifact_path.exists():
-            raise ValueError(f"Mission artifact import does not exist: {source_artifact_path}")
-        step_index += 1
-        config = source_config(source_skill)
-        steps.append(
-            {
-                "step_id": f"step-{role}-{step_index:02d}-{sanitize_fragment(source_skill)}",
-                "step_kind": "import",
-                "role": role,
-                "source_skill": source_skill,
-                "normalizer_skill": maybe_text(config.get("normalizer_skill")),
-                "task_ids": task_ids_for_role(tasks, role),
-                "depends_on": [],
-                "source_artifact_path": str(source_artifact_path),
-                "artifact_path": str(planned_artifact_path(run_dir, round_id, source_skill, step_index)),
-                "normalizer_args": normalizer_args_for(source_skill, item),
-                "notes": [
-                    f"Import prepared raw artifact for {source_skill} into the run raw store before normalization.",
-                    *item.get("notes", []),
-                ],
-            }
-        )
-
+        import_items_by_source.setdefault(source_skill, []).append(item)
     for item in requests:
         source_skill = maybe_text(item.get("source_skill"))
-        role = maybe_text(item.get("role"))
-        if source_skill not in role_selected_sources(selections.get(role)):
+        if not source_skill:
             continue
-        if source_skill in imported_sources:
-            continue
-        fetch_argv = item.get("fetch_argv") if isinstance(item.get("fetch_argv"), list) else []
-        if not fetch_argv:
-            warnings.append({"code": "missing-fetch-argv", "message": f"Selected source_skill={source_skill} has no fetch_argv and will be skipped."})
-            continue
-        step_index += 1
-        config = source_config(source_skill)
-        steps.append(
-            {
-                "step_id": f"step-{role}-{step_index:02d}-{sanitize_fragment(source_skill)}",
-                "step_kind": "detached-fetch",
-                "role": role,
-                "source_skill": source_skill,
-                "normalizer_skill": maybe_text(config.get("normalizer_skill")),
-                "task_ids": task_ids_for_role(tasks, role),
-                "depends_on": [],
-                "artifact_path": str(planned_artifact_path(run_dir, round_id, source_skill, step_index, maybe_text(item.get("artifact_path")))),
-                "artifact_capture": maybe_text(item.get("artifact_capture")) or "stdout-json",
-                "fetch_argv": fetch_argv,
-                "fetch_cwd": maybe_text(item.get("fetch_cwd")) or str(WORKSPACE_ROOT),
-                "fetch_execution_policy": item.get("fetch_execution_policy", {}) if isinstance(item.get("fetch_execution_policy"), dict) else {},
-                "declared_side_effects": item.get("declared_side_effects", []) if isinstance(item.get("declared_side_effects"), list) else [],
-                "requested_side_effect_approvals": (
-                    item.get("requested_side_effect_approvals", [])
-                    if isinstance(item.get("requested_side_effect_approvals"), list)
-                    else []
-                ),
-                "normalizer_args": normalizer_args_for(source_skill, item),
-                "notes": [
-                    f"Execute detached-fetch request for {source_skill} before normalization.",
-                    *item.get("notes", []),
-                ],
-            }
-        )
+        request_items_by_source.setdefault(source_skill, []).append(item)
+
+    for role in SOURCE_SELECTION_ROLES:
+        selection = selections.get(role) if isinstance(selections.get(role), dict) else {}
+        ordered_sources = selected_source_sequence(selection)
+        if not ordered_sources:
+            ordered_sources = [
+                {
+                    "family_id": "",
+                    "layer_id": "",
+                    "layer_plan": {},
+                    "source_skill": source_skill,
+                }
+                for source_skill in role_selected_sources(selection)
+            ]
+        for source_entry in ordered_sources:
+            source_skill = maybe_text(source_entry.get("source_skill"))
+            layer_plan = source_entry.get("layer_plan") if isinstance(source_entry.get("layer_plan"), dict) else {}
+            import_items = [item for item in import_items_by_source.get(source_skill, []) if maybe_text(item.get("role")) == role]
+            request_items = [item for item in request_items_by_source.get(source_skill, []) if maybe_text(item.get("role")) == role]
+
+            if import_items and request_items:
+                warnings.append(
+                    {
+                        "code": "source-input-preferred-import",
+                        "message": f"Selected source_skill={source_skill} provided both artifact_imports and source_requests; runtime will use artifact_imports.",
+                    }
+                )
+
+            if import_items:
+                for item in import_items:
+                    source_artifact_path = Path(maybe_text(item.get("artifact_path"))).expanduser().resolve()
+                    if not source_artifact_path.exists():
+                        raise ValueError(f"Mission artifact import does not exist: {source_artifact_path}")
+                    step_index += 1
+                    artifact_path = planned_artifact_path(run_dir, round_id, source_skill, step_index)
+                    step = {
+                        "step_id": f"step-{role}-{step_index:02d}-{sanitize_fragment(source_skill)}",
+                        "step_kind": "import",
+                        "role": role,
+                        "source_skill": source_skill,
+                        "family_id": maybe_text(source_entry.get("family_id")),
+                        "layer_id": maybe_text(source_entry.get("layer_id")),
+                        "normalizer_skill": source_normalizer_skill(source_skill),
+                        "task_ids": task_ids_for_role(tasks, role),
+                        "depends_on": [],
+                        "source_artifact_path": str(source_artifact_path),
+                        "artifact_path": str(artifact_path),
+                        "normalizer_args": normalizer_args_for(source_skill, item),
+                        "notes": [
+                            f"Import prepared raw artifact for {source_skill} into the run raw store before normalization.",
+                            *item.get("notes", []),
+                        ],
+                    }
+                    steps.append(step)
+                    planned_steps_by_source.setdefault(source_skill, []).append(step)
+                continue
+
+            if not request_items:
+                warnings.append(
+                    {
+                        "code": "missing-source-input",
+                        "message": f"Selected source_skill={source_skill} has no artifact_imports or source_requests entry and will be skipped.",
+                    }
+                )
+                continue
+
+            for item in request_items:
+                fetch_argv = item.get("fetch_argv") if isinstance(item.get("fetch_argv"), list) else []
+                if not fetch_argv:
+                    warnings.append({"code": "missing-fetch-argv", "message": f"Selected source_skill={source_skill} has no fetch_argv and will be skipped."})
+                    continue
+                step_index += 1
+                artifact_path = planned_artifact_path(run_dir, round_id, source_skill, step_index, maybe_text(item.get("artifact_path")))
+                artifact_dir = planned_artifact_dir(artifact_path)
+                depends_on, anchor_artifact_paths, resolved_anchor_refs, anchor_notes = resolved_anchor_context(
+                    run_dir=run_dir,
+                    current_round_id=round_id,
+                    source_skill=source_skill,
+                    layer_plan=layer_plan,
+                    planned_steps_by_source=planned_steps_by_source,
+                )
+                step = {
+                    "step_id": f"step-{role}-{step_index:02d}-{sanitize_fragment(source_skill)}",
+                    "step_kind": "detached-fetch",
+                    "role": role,
+                    "source_skill": source_skill,
+                    "family_id": maybe_text(source_entry.get("family_id")),
+                    "layer_id": maybe_text(source_entry.get("layer_id")),
+                    "normalizer_skill": source_normalizer_skill(source_skill),
+                    "task_ids": task_ids_for_role(tasks, role),
+                    "depends_on": depends_on,
+                    "artifact_path": str(artifact_path),
+                    "artifact_dir": str(artifact_dir),
+                    "artifact_capture": maybe_text(item.get("artifact_capture")) or source_artifact_capture(source_skill),
+                    "fetch_argv": append_runtime_fetch_defaults(
+                        source_skill,
+                        fetch_argv,
+                        artifact_path=artifact_path,
+                        artifact_dir=artifact_dir,
+                        anchor_artifact_paths=anchor_artifact_paths,
+                    ),
+                    "fetch_cwd": maybe_text(item.get("fetch_cwd")) or str(WORKSPACE_ROOT),
+                    "fetch_execution_policy": item.get("fetch_execution_policy", {}) if isinstance(item.get("fetch_execution_policy"), dict) else {},
+                    "declared_side_effects": item.get("declared_side_effects", []) if isinstance(item.get("declared_side_effects"), list) else [],
+                    "requested_side_effect_approvals": (
+                        item.get("requested_side_effect_approvals", [])
+                        if isinstance(item.get("requested_side_effect_approvals"), list)
+                        else []
+                    ),
+                    "normalizer_args": normalizer_args_for(source_skill, item),
+                    "anchor_mode": maybe_text(layer_plan.get("anchor_mode")) or "none",
+                    "anchor_refs": resolved_anchor_refs,
+                    "anchor_artifact_paths": anchor_artifact_paths,
+                    "notes": [
+                        f"Execute detached-fetch request for {source_skill} before normalization.",
+                        *anchor_notes,
+                        *item.get("notes", []),
+                    ],
+                }
+                steps.append(step)
+                planned_steps_by_source.setdefault(source_skill, []).append(step)
 
     for role in SOURCE_SELECTION_ROLES:
         selected = role_selected_sources(selections.get(role))
@@ -257,7 +521,7 @@ def build_fetch_plan(
     plan_id = "fetch-plan-" + stable_hash(run_id, round_id, len(steps), mission_path, tasks_path)[:12]
     plan = {
         "plan_kind": "eco-council-fetch-plan",
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "generated_at_utc": utc_now_iso(),
         "policy_profile": policy_profile_summary(mission),
         "effective_constraints": effective_constraints(mission),

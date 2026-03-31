@@ -65,6 +65,33 @@ def run_json_script(script_path: Path, *args: str) -> dict[str, Any]:
     return payload
 
 
+def raw_only_normalization_payload(*, source_skill: str, run_id: str, round_id: str, artifact_path: Path, reason: str) -> dict[str, Any]:
+    artifact_ref = {
+        "signal_id": "",
+        "artifact_path": str(artifact_path),
+        "record_locator": "$",
+        "artifact_ref": f"{artifact_path}:$",
+    }
+    raw_receipt_id = "raw-receipt-" + stable_hash(SKILL_NAME, source_skill, run_id, round_id, artifact_path.name)[:20]
+    raw_batch_id = "rawbatch-" + stable_hash(SKILL_NAME, source_skill, artifact_path)[:16]
+    return {
+        "status": "completed",
+        "summary": {
+            "skill": SKILL_NAME,
+            "mode": "raw-only",
+            "run_id": run_id,
+            "round_id": round_id,
+            "source_skill": source_skill,
+            "artifact_path": str(artifact_path),
+        },
+        "receipt_id": raw_receipt_id,
+        "batch_id": raw_batch_id,
+        "artifact_refs": [artifact_ref],
+        "canonical_ids": [],
+        "warnings": [{"code": "raw-only-ingest", "message": reason}],
+    }
+
+
 def execute_import_step(
     *,
     run_dir: Path,
@@ -89,23 +116,38 @@ def execute_import_step(
         raise RuntimeError(f"Unsupported step_kind: {step_kind}")
 
     raw_sha256 = file_sha256(raw_artifact_path)
-    script_path = normalizer_script_path(normalizer_skill)
-    if not script_path.exists():
-        raise FileNotFoundError(f"Normalizer script is missing for {normalizer_skill}: {script_path}")
-
     normalizer_args = [maybe_text(item) for item in step.get("normalizer_args", []) if maybe_text(item)] if isinstance(step.get("normalizer_args"), list) else []
-    payload = run_json_script(
-        script_path,
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
-        "--artifact-path",
-        str(raw_artifact_path),
-        *normalizer_args,
-    )
+    if not normalizer_skill:
+        payload = raw_only_normalization_payload(
+            source_skill=source_skill,
+            run_id=run_id,
+            round_id=round_id,
+            artifact_path=raw_artifact_path,
+            reason=f"{source_skill} has no mapped normalizer skill yet; raw artifact was kept for later processing.",
+        )
+    else:
+        script_path = normalizer_script_path(normalizer_skill)
+        if not script_path.exists():
+            payload = raw_only_normalization_payload(
+                source_skill=source_skill,
+                run_id=run_id,
+                round_id=round_id,
+                artifact_path=raw_artifact_path,
+                reason=f"Normalizer script {normalizer_skill} is not present; raw artifact was kept for later processing.",
+            )
+        else:
+            payload = run_json_script(
+                script_path,
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+                "--artifact-path",
+                str(raw_artifact_path),
+                *normalizer_args,
+            )
     status = {
         "step_id": step_id,
         "step_kind": step_kind,
@@ -114,6 +156,7 @@ def execute_import_step(
         "source_skill": source_skill,
         "normalizer_skill": normalizer_skill,
         "artifact_path": str(raw_artifact_path),
+        "artifact_dir": maybe_text(step.get("artifact_dir")),
         "artifact_sha256": raw_sha256,
         "receipt_id": maybe_text(payload.get("receipt_id")),
         "batch_id": maybe_text(payload.get("batch_id")),

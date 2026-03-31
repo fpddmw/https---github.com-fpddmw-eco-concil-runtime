@@ -17,67 +17,235 @@ KNOWN_FETCH_SIDE_EFFECTS = (
     "destructive-write",
 )
 
-SOURCE_CATALOG: dict[str, dict[str, str]] = {
-    "bluesky-cascade-fetch": {
-        "role": "sociologist",
-        "family_id": "bluesky",
-        "family_label": "Bluesky",
-        "layer_id": "posts",
-        "layer_label": "Posts",
-        "tier": "l1",
-        "normalizer_skill": "eco-normalize-bluesky-cascade-public-signals",
-        "default_suffix": ".json",
-    },
-    "gdelt-doc-search": {
-        "role": "sociologist",
-        "family_id": "gdelt",
-        "family_label": "GDELT",
-        "layer_id": "recon",
-        "layer_label": "Recon",
-        "tier": "l1",
-        "normalizer_skill": "eco-normalize-gdelt-doc-public-signals",
-        "default_suffix": ".json",
-    },
-    "youtube-video-search": {
-        "role": "sociologist",
-        "family_id": "youtube",
-        "family_label": "YouTube",
-        "layer_id": "video-search",
-        "layer_label": "Video Search",
-        "tier": "l1",
-        "normalizer_skill": "eco-normalize-youtube-video-public-signals",
-        "default_suffix": ".json",
-    },
-    "airnow-hourly-obs-fetch": {
-        "role": "environmentalist",
-        "family_id": "airnow",
-        "family_label": "AirNow",
-        "layer_id": "hourly-observations",
-        "layer_label": "Hourly Observations",
-        "tier": "l1",
-        "normalizer_skill": "eco-normalize-airnow-observation-signals",
-        "default_suffix": ".json",
-    },
-    "openaq-data-fetch": {
-        "role": "environmentalist",
-        "family_id": "openaq",
-        "family_label": "OpenAQ",
-        "layer_id": "stations",
-        "layer_label": "Stations",
-        "tier": "l1",
-        "normalizer_skill": "eco-normalize-openaq-observation-signals",
-        "default_suffix": ".json",
-    },
-    "open-meteo-historical-fetch": {
-        "role": "environmentalist",
-        "family_id": "open-meteo",
-        "family_label": "Open-Meteo",
-        "layer_id": "historical",
-        "layer_label": "Historical",
-        "tier": "l1",
-        "normalizer_skill": "eco-normalize-open-meteo-historical-signals",
-        "default_suffix": ".json",
-    },
+def _source(
+    *,
+    role: str,
+    family_id: str,
+    family_label: str,
+    layer_id: str,
+    layer_label: str,
+    tier: str,
+    normalizer_skill: str,
+    default_suffix: str = ".json",
+    artifact_capture: str = "stdout-json",
+    runtime_output_mode: str = "none",
+    runtime_output_arg: str = "",
+    runtime_default_args: list[str] | None = None,
+    requires_anchor: bool = False,
+    anchor_argument: str = "",
+    anchor_source_skills: list[str] | None = None,
+    auto_selectable: bool | None = None,
+) -> dict[str, Any]:
+    return {
+        "role": role,
+        "family_id": family_id,
+        "family_label": family_label,
+        "layer_id": layer_id,
+        "layer_label": layer_label,
+        "tier": tier,
+        "normalizer_skill": normalizer_skill,
+        "default_suffix": default_suffix,
+        "artifact_capture": artifact_capture,
+        "runtime_output_mode": runtime_output_mode,
+        "runtime_output_arg": runtime_output_arg,
+        "runtime_default_args": list(runtime_default_args or []),
+        "requires_anchor": requires_anchor,
+        "anchor_argument": anchor_argument,
+        "anchor_source_skills": list(anchor_source_skills or []),
+        "auto_selectable": bool(auto_selectable) if auto_selectable is not None else tier == "l1",
+    }
+
+
+SOURCE_CATALOG: dict[str, dict[str, Any]] = {
+    "bluesky-cascade-fetch": _source(
+        role="sociologist",
+        family_id="bluesky",
+        family_label="Bluesky",
+        layer_id="posts",
+        layer_label="Posts",
+        tier="l1",
+        normalizer_skill="eco-normalize-bluesky-cascade-public-signals",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
+    "gdelt-doc-search": _source(
+        role="sociologist",
+        family_id="gdelt",
+        family_label="GDELT",
+        layer_id="doc-search",
+        layer_label="Doc Search",
+        tier="l1",
+        normalizer_skill="eco-normalize-gdelt-doc-public-signals",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
+    "gdelt-events-fetch": _source(
+        role="sociologist",
+        family_id="gdelt",
+        family_label="GDELT",
+        layer_id="events",
+        layer_label="Events Export",
+        tier="l1",
+        normalizer_skill="eco-normalize-gdelt-events-public-signals",
+        artifact_capture="stdout-json",
+        runtime_output_mode="dir",
+        runtime_output_arg="--output-dir",
+    ),
+    "gdelt-mentions-fetch": _source(
+        role="sociologist",
+        family_id="gdelt",
+        family_label="GDELT",
+        layer_id="mentions",
+        layer_label="Mentions Export",
+        tier="l1",
+        normalizer_skill="eco-normalize-gdelt-mentions-public-signals",
+        artifact_capture="stdout-json",
+        runtime_output_mode="dir",
+        runtime_output_arg="--output-dir",
+    ),
+    "gdelt-gkg-fetch": _source(
+        role="sociologist",
+        family_id="gdelt",
+        family_label="GDELT",
+        layer_id="gkg",
+        layer_label="GKG Export",
+        tier="l1",
+        normalizer_skill="eco-normalize-gdelt-gkg-public-signals",
+        artifact_capture="stdout-json",
+        runtime_output_mode="dir",
+        runtime_output_arg="--output-dir",
+    ),
+    "youtube-video-search": _source(
+        role="sociologist",
+        family_id="youtube",
+        family_label="YouTube",
+        layer_id="video-search",
+        layer_label="Video Search",
+        tier="l1",
+        normalizer_skill="eco-normalize-youtube-video-public-signals",
+        runtime_default_args=["--include-records", "--no-save-records"],
+    ),
+    "youtube-comments-fetch": _source(
+        role="sociologist",
+        family_id="youtube",
+        family_label="YouTube",
+        layer_id="comments",
+        layer_label="Comments",
+        tier="l2",
+        normalizer_skill="eco-normalize-youtube-comments-public-signals",
+        runtime_default_args=["--include-records", "--no-save-records"],
+        requires_anchor=True,
+        anchor_argument="--video-ids-file",
+        anchor_source_skills=["youtube-video-search"],
+        auto_selectable=False,
+    ),
+    "regulationsgov-comments-fetch": _source(
+        role="sociologist",
+        family_id="regulationsgov",
+        family_label="Regulations.gov",
+        layer_id="comments",
+        layer_label="Comment List",
+        tier="l1",
+        normalizer_skill="eco-normalize-regulationsgov-comments-public-signals",
+        runtime_default_args=["--include-records", "--no-save-response"],
+    ),
+    "regulationsgov-comment-detail-fetch": _source(
+        role="sociologist",
+        family_id="regulationsgov",
+        family_label="Regulations.gov",
+        layer_id="comment-detail",
+        layer_label="Comment Detail",
+        tier="l2",
+        normalizer_skill="eco-normalize-regulationsgov-comment-detail-public-signals",
+        runtime_default_args=["--include-records", "--no-save-response"],
+        requires_anchor=True,
+        anchor_argument="--comment-ids-file",
+        anchor_source_skills=["regulationsgov-comments-fetch"],
+        auto_selectable=False,
+    ),
+    "airnow-hourly-obs-fetch": _source(
+        role="environmentalist",
+        family_id="airnow",
+        family_label="AirNow",
+        layer_id="hourly-observations",
+        layer_label="Hourly Observations",
+        tier="l1",
+        normalizer_skill="eco-normalize-airnow-observation-signals",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
+    "openaq-data-fetch": _source(
+        role="environmentalist",
+        family_id="openaq",
+        family_label="OpenAQ",
+        layer_id="stations",
+        layer_label="Stations",
+        tier="l1",
+        normalizer_skill="eco-normalize-openaq-observation-signals",
+    ),
+    "open-meteo-historical-fetch": _source(
+        role="environmentalist",
+        family_id="open-meteo",
+        family_label="Open-Meteo",
+        layer_id="historical",
+        layer_label="Historical Weather",
+        tier="l1",
+        normalizer_skill="eco-normalize-open-meteo-historical-signals",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
+    "open-meteo-air-quality-fetch": _source(
+        role="environmentalist",
+        family_id="open-meteo",
+        family_label="Open-Meteo",
+        layer_id="air-quality",
+        layer_label="Air Quality",
+        tier="l1",
+        normalizer_skill="eco-normalize-open-meteo-air-quality-signals",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
+    "open-meteo-flood-fetch": _source(
+        role="environmentalist",
+        family_id="open-meteo",
+        family_label="Open-Meteo",
+        layer_id="flood",
+        layer_label="Flood",
+        tier="l1",
+        normalizer_skill="eco-normalize-open-meteo-flood-signals",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
+    "usgs-water-iv-fetch": _source(
+        role="environmentalist",
+        family_id="usgs-water",
+        family_label="USGS Water",
+        layer_id="instantaneous-values",
+        layer_label="Instantaneous Values",
+        tier="l1",
+        normalizer_skill="eco-normalize-usgs-water-observation-signals",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
+    "nasa-firms-fire-fetch": _source(
+        role="environmentalist",
+        family_id="nasa-firms",
+        family_label="NASA FIRMS",
+        layer_id="active-fire",
+        layer_label="Active Fire",
+        tier="l1",
+        normalizer_skill="eco-normalize-nasa-firms-fire-observation-signals",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
 }
 
 
@@ -107,6 +275,14 @@ def coerce_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().casefold() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
 
 
 def unique_texts(values: list[Any]) -> list[str]:
@@ -175,7 +351,7 @@ def source_selection_path(run_dir: Path, round_id: str, role: str) -> Path:
     return resolve_run_dir(run_dir) / "runtime" / f"source_selection_{role}_{round_id}.json"
 
 
-def source_config(source_skill: str) -> dict[str, str]:
+def source_config(source_skill: str) -> dict[str, Any]:
     config = SOURCE_CATALOG.get(maybe_text(source_skill))
     if config is None:
         raise ValueError(f"Unsupported source_skill: {source_skill}")
@@ -184,6 +360,51 @@ def source_config(source_skill: str) -> dict[str, str]:
 
 def source_role(source_skill: str) -> str:
     return maybe_text(source_config(source_skill).get("role"))
+
+
+def source_normalizer_skill(source_skill: str) -> str:
+    return maybe_text(source_config(source_skill).get("normalizer_skill"))
+
+
+def source_artifact_capture(source_skill: str) -> str:
+    return normalize_artifact_capture(source_config(source_skill).get("artifact_capture"))
+
+
+def source_runtime_output_mode(source_skill: str) -> str:
+    mode = maybe_text(source_config(source_skill).get("runtime_output_mode")) or "none"
+    if mode not in {"none", "file", "dir"}:
+        raise ValueError(f"Unsupported runtime_output_mode for {source_skill}: {mode}")
+    return mode
+
+
+def source_runtime_output_arg(source_skill: str) -> str:
+    return maybe_text(source_config(source_skill).get("runtime_output_arg"))
+
+
+def source_runtime_default_args(source_skill: str) -> list[str]:
+    values = source_config(source_skill).get("runtime_default_args")
+    if not isinstance(values, list):
+        return []
+    return [maybe_text(value) for value in values if maybe_text(value)]
+
+
+def source_requires_anchor(source_skill: str) -> bool:
+    return coerce_bool(source_config(source_skill).get("requires_anchor"))
+
+
+def source_anchor_source_skills(source_skill: str) -> list[str]:
+    values = source_config(source_skill).get("anchor_source_skills")
+    if not isinstance(values, list):
+        return []
+    return [maybe_text(value) for value in values if maybe_text(value)]
+
+
+def source_anchor_argument(source_skill: str) -> str:
+    return maybe_text(source_config(source_skill).get("anchor_argument"))
+
+
+def source_auto_selectable(source_skill: str) -> bool:
+    return coerce_bool(source_config(source_skill).get("auto_selectable"))
 
 
 def normalize_text_list(values: Any) -> list[str]:
@@ -310,14 +531,18 @@ def role_source_governance(mission: dict[str, Any], role: str) -> dict[str, Any]
                 "tier": tier,
                 "skills": [],
                 "max_selected_skills": 0,
-                "requires_anchor": False,
-                "auto_selectable": tier == "l1",
+                "requires_anchor": coerce_bool(config.get("requires_anchor")),
+                "anchor_source_skills": [],
+                "auto_selectable": coerce_bool(config.get("auto_selectable")) if "auto_selectable" in config else tier == "l1",
             },
         )
         if isinstance(layer, dict):
             layer_skills = layer.setdefault("skills", [])
             if isinstance(layer_skills, list):
                 layer_skills.append(source_skill)
+            anchor_skills = layer.setdefault("anchor_source_skills", [])
+            if isinstance(anchor_skills, list):
+                anchor_skills.extend(source_anchor_source_skills(source_skill))
     for family in families.values():
         family["skills"] = unique_texts(family.get("skills", []))
         layer_lookup = family.pop("_layers", {})
@@ -327,9 +552,13 @@ def role_source_governance(mission: dict[str, Any], role: str) -> dict[str, Any]
             if not isinstance(layer, dict):
                 continue
             layer["skills"] = unique_texts(layer.get("skills", []))
+            layer["anchor_source_skills"] = unique_texts(layer.get("anchor_source_skills", []))
             layer["max_selected_skills"] = len(layer["skills"])
             finalized_layers.append(layer)
-        family["layers"] = sorted(finalized_layers, key=lambda item: maybe_text(item.get("layer_id")))
+        family["layers"] = sorted(
+            finalized_layers,
+            key=lambda item: (0 if maybe_text(item.get("tier")) == "l1" else 1, maybe_text(item.get("layer_id"))),
+        )
     family_ids = {maybe_text(item.get("family_id")) for item in families.values() if maybe_text(item.get("family_id"))}
     approved_layers = [
         item
@@ -340,7 +569,7 @@ def role_source_governance(mission: dict[str, Any], role: str) -> dict[str, Any]
     ]
     return {
         "approval_authority": maybe_text(governance.get("approval_authority")) or "runtime-operator",
-        "allow_cross_round_anchors": bool(governance.get("allow_cross_round_anchors")),
+        "allow_cross_round_anchors": coerce_bool(governance.get("allow_cross_round_anchors")),
         "max_selected_sources_per_role": effective_constraints(mission).get("max_selected_sources_per_role"),
         "max_active_families_per_role": coerce_int(governance.get("max_active_families_per_role")),
         "max_non_entry_layers_per_role": coerce_int(governance.get("max_non_entry_layers_per_role")),
@@ -356,7 +585,7 @@ def policy_profile_summary(mission: dict[str, Any]) -> dict[str, Any]:
         "effective_constraints": effective_constraints(mission),
         "source_governance": {
             "approval_authority": maybe_text(governance.get("approval_authority")) or "runtime-operator",
-            "allow_cross_round_anchors": bool(governance.get("allow_cross_round_anchors")),
+            "allow_cross_round_anchors": coerce_bool(governance.get("allow_cross_round_anchors")),
             "max_selected_sources_per_role": effective_constraints(mission).get("max_selected_sources_per_role"),
         },
     }
@@ -405,7 +634,7 @@ def normalize_source_requests(mission: dict[str, Any]) -> list[dict[str, Any]]:
                 "role": maybe_text(config.get("role")),
                 "query_text": maybe_text(item.get("query_text")),
                 "source_mode": maybe_text(item.get("source_mode")),
-                "artifact_capture": normalize_artifact_capture(item.get("artifact_capture")),
+                "artifact_capture": normalize_artifact_capture(item.get("artifact_capture") or config.get("artifact_capture")),
                 "artifact_path": maybe_text(item.get("artifact_path")),
                 "fetch_cwd": maybe_text(item.get("fetch_cwd")),
                 "fetch_argv": [maybe_text(arg) for arg in fetch_argv if maybe_text(arg)],
@@ -419,6 +648,7 @@ def normalize_source_requests(mission: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 __all__ = [
+    "coerce_bool",
     "coerce_float",
     "coerce_int",
     "KNOWN_FETCH_SIDE_EFFECTS",
@@ -442,8 +672,17 @@ __all__ = [
     "read_json_object",
     "resolve_run_dir",
     "role_source_governance",
+    "source_anchor_argument",
+    "source_anchor_source_skills",
+    "source_artifact_capture",
+    "source_auto_selectable",
     "source_config",
+    "source_normalizer_skill",
     "source_role",
+    "source_requires_anchor",
+    "source_runtime_default_args",
+    "source_runtime_output_arg",
+    "source_runtime_output_mode",
     "source_selection_path",
     "stable_hash",
     "unique_texts",

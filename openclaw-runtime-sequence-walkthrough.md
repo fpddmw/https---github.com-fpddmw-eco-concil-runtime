@@ -54,11 +54,12 @@ sequenceDiagram
     S-->>K: mission.json + round_tasks + investigation_board
 
     K->>P: prepare round
+    P->>P: family/layer planning + anchor resolution
     P-->>K: source_selection_<role> + fetch_plan
 
     K->>F: execute fetch plan
     F->>F: import / detached-fetch
-    F->>N: 调用对应 normalizer
+    F->>N: 调用对应 normalizer 或 raw-only fallback
     N->>DB: 写入 normalized_signals
     N-->>F: receipt / artifact refs / warnings
     F-->>K: import_execution_<round>.json
@@ -109,6 +110,7 @@ sequenceDiagram
 3. `window`
 4. `region`
 5. 可选的 `artifact_imports` 或 `source_requests`
+6. 如果涉及二级 source，可附带 `source_governance` 来批准非入口层
 
 这一阶段的作用不是分析，而是把“自然语言课题”转成一份可执行、可冻结、可审计的任务合同。
 
@@ -127,6 +129,36 @@ sequenceDiagram
 1. 根据 mission 和任务，把取数需求按角色拆开
 2. 生成 `source_selection_<role>_<round_id>.json`
 3. 生成真正可执行的 `fetch_plan_<round_id>.json`
+
+这里现在已经不是“简单列出几个 source 名字”，而是会显式生成：
+
+1. `family_plans`
+2. `layer_plans`
+3. `anchor_mode`
+4. `anchor_refs`
+5. `depends_on`
+
+也就是说，runtime 已经开始区分：
+
+1. 入口层 `l1`
+2. 依赖上游结果的派生层 `l2`
+
+例如当前已经接入并验证的两条典型链路是：
+
+1. `youtube-video-search -> youtube-comments-fetch`
+2. `regulationsgov-comments-fetch -> regulationsgov-comment-detail-fetch`
+
+其机理是：
+
+1. `youtube-comments-fetch` 不直接自己猜 `video_id`，而是读取上游 `youtube-video-search` 的 raw artifact
+2. `regulationsgov-comment-detail-fetch` 不直接自己猜 `comment_id`，而是读取上游 `regulationsgov-comments-fetch` 的 raw artifact
+3. `eco-prepare-round` 会把这种关系写成 `depends_on + anchor_artifact_paths`
+4. 如果 mission 允许，还可以从 prior round 读取同 family 的上游 anchor
+
+当前已接入的 source families 主要包括：
+
+1. 公共舆情面：`bluesky`、`gdelt`、`youtube`、`regulationsgov`
+2. 物理环境面：`airnow`、`openaq`、`open-meteo`、`usgs-water`、`nasa-firms`
 
 当前角色是显式写死的两类主调查角色：
 
@@ -148,6 +180,20 @@ sequenceDiagram
 2. 或执行 detached fetch
 3. 然后为每个 source 调用对应的 normalize skill
 
+这里现在有一个重要的保底行为：
+
+1. 如果 normalizer 已存在，就把结果写入 `analytics/signal_plane.sqlite`
+2. 如果 normalizer 暂时缺失，runtime 不会直接把整轮打崩
+3. 它会以 `raw-only` 方式保留 raw artifact，并在 `import_execution_<round_id>.json` 里写明 warning
+
+这意味着“新 source 接入未完全做完”时，系统至少还能先完成：
+
+1. 取数
+2. 原始证据归档
+3. 审计链保留
+
+而不是因为单一 source 缺 normalize 就整轮失败
+
 这里要强调一个关键点：
 
 原始文件不会消失。
@@ -164,6 +210,12 @@ sequenceDiagram
 
 1. `runtime/import_execution_<round_id>.json`
 2. `analytics/signal_plane.sqlite`
+
+补充说明：
+
+1. 不是所有 source 一定都会立刻入库
+2. 只有“已有 normalizer”的 source 会写入 `normalized_signals`
+3. `raw-only` source 当前仍只保留在 `raw/` 与 `import_execution` 中，等待后续补齐 normalize
 
 ## 5. 数据进入统一证据库
 
@@ -320,8 +372,8 @@ normalize 完成后，公共信号和环境信号会被统一写入同一个 run
 | --- | --- | --- |
 | mission ingress | `mission.json` | 把题目冻结成可执行合同 |
 | task scaffold | `round_tasks_<round_id>.json` | 把工作拆成按角色分配的调查任务 |
-| source planning | `source_selection_<role>_<round_id>.json` | 记录每个角色允许与选中的信息源 |
-| fetch execution | `fetch_plan_<round_id>.json` | 记录本轮取数执行图 |
+| source planning | `source_selection_<role>_<round_id>.json` | 记录每个角色允许与选中的信息源，以及 family/layer/anchor 规划 |
+| fetch execution | `fetch_plan_<round_id>.json` | 记录本轮取数执行图，包括 depends_on 与 anchor 引用 |
 | normalize | `analytics/signal_plane.sqlite` | 存放统一规范化证据 |
 | analysis | `analytics/*.json` | 存放 claim、observation、link、scope、coverage 等中间分析物 |
 | deliberation | `board/investigation_board.json` | 存放 note、hypothesis、challenge、task |

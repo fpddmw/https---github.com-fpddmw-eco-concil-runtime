@@ -166,7 +166,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             plan = load_json(runtime_path(run_dir, f"fetch_plan_{ROUND_ID}.json"))
             detached_step = next(step for step in plan["steps"] if step["step_kind"] == "detached-fetch")
 
-            self.assertEqual("1.2.0", plan["schema_version"])
+            self.assertEqual("1.3.0", plan["schema_version"])
             self.assertEqual(9.0, detached_step["fetch_execution_policy"]["timeout_seconds"])
             self.assertEqual(1, detached_step["fetch_execution_policy"]["retry_budget"])
             self.assertEqual(25, detached_step["fetch_execution_policy"]["retry_backoff_ms"])

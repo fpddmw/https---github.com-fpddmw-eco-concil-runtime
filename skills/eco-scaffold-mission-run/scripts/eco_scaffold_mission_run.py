@@ -6,23 +6,18 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "eco-scaffold-mission-run"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
 
-PUBLIC_SOURCES = {
-    "bluesky-cascade-fetch",
-    "gdelt-doc-search",
-    "youtube-video-search",
-}
-
-ENVIRONMENT_SOURCES = {
-    "airnow-hourly-obs-fetch",
-    "openaq-data-fetch",
-    "open-meteo-historical-fetch",
-}
+from eco_council_runtime.kernel.source_queue_contract import source_role  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -83,11 +78,7 @@ def write_json_file(path: Path, payload: Any) -> None:
 
 
 def role_for_source_skill(source_skill: str) -> str:
-    if source_skill in PUBLIC_SOURCES:
-        return "sociologist"
-    if source_skill in ENVIRONMENT_SOURCES:
-        return "environmentalist"
-    raise ValueError(f"Unsupported mission artifact source_skill: {source_skill}")
+    return source_role(source_skill)
 
 
 def normalize_mission_payload(mission: dict[str, Any], mission_file: Path, run_id: str) -> dict[str, Any]:
@@ -113,12 +104,11 @@ def normalize_mission_payload(mission: dict[str, Any], mission_file: Path, run_i
     imports = payload.get("artifact_imports")
     if imports is None:
         payload["artifact_imports"] = []
-        return payload
-    if not isinstance(imports, list):
+    elif not isinstance(imports, list):
         raise ValueError("Mission artifact_imports must be a JSON list when present.")
 
     normalized_imports: list[dict[str, Any]] = []
-    for index, item in enumerate(imports, start=1):
+    for index, item in enumerate(payload["artifact_imports"], start=1):
         if not isinstance(item, dict):
             raise ValueError(f"artifact_imports[{index - 1}] must be a JSON object.")
         source_skill = maybe_text(item.get("source_skill"))
@@ -140,6 +130,35 @@ def normalize_mission_payload(mission: dict[str, Any], mission_file: Path, run_i
             }
         )
     payload["artifact_imports"] = normalized_imports
+
+    requests = payload.get("source_requests")
+    if requests is None:
+        payload["source_requests"] = []
+        return payload
+    if not isinstance(requests, list):
+        raise ValueError("Mission source_requests must be a JSON list when present.")
+
+    normalized_requests: list[dict[str, Any]] = []
+    for index, item in enumerate(requests, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(f"source_requests[{index - 1}] must be a JSON object.")
+        source_skill = maybe_text(item.get("source_skill"))
+        if not source_skill:
+            raise ValueError(f"source_requests[{index - 1}] must include source_skill.")
+        role_for_source_skill(source_skill)
+        fetch_argv = item.get("fetch_argv") if isinstance(item.get("fetch_argv"), list) else []
+        normalized_requests.append(
+            {
+                **item,
+                "source_skill": source_skill,
+                "query_text": maybe_text(item.get("query_text")),
+                "source_mode": maybe_text(item.get("source_mode")),
+                "fetch_cwd": maybe_text(item.get("fetch_cwd")),
+                "fetch_argv": [maybe_text(arg) for arg in fetch_argv if maybe_text(arg)],
+                "notes": [maybe_text(note) for note in item.get("notes", []) if maybe_text(note)] if isinstance(item.get("notes"), list) else [],
+            }
+        )
+    payload["source_requests"] = normalized_requests
     return payload
 
 
@@ -157,10 +176,16 @@ def artifact_imports(mission: dict[str, Any]) -> list[dict[str, Any]]:
     return [item for item in imports if isinstance(item, dict)]
 
 
+def source_requests(mission: dict[str, Any]) -> list[dict[str, Any]]:
+    requests = mission.get("source_requests") if isinstance(mission.get("source_requests"), list) else []
+    return [item for item in requests if isinstance(item, dict)]
+
+
 def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) -> list[dict[str, Any]]:
     imports = artifact_imports(mission)
+    requests = source_requests(mission)
     by_role = {"sociologist": [], "environmentalist": []}
-    for item in imports:
+    for item in [*imports, *requests]:
         source_skill = maybe_text(item.get("source_skill"))
         by_role[role_for_source_skill(source_skill)].append(source_skill)
 
@@ -281,6 +306,7 @@ def build_board(*, mission: dict[str, Any], run_id: str, round_id: str, hypothes
                 "payload": {
                     "topic": maybe_text(mission.get("topic")),
                     "artifact_import_count": len(artifact_imports(mission)),
+                    "source_request_count": len(source_requests(mission)),
                     "seeded_hypothesis_count": len(hypotheses),
                 },
             }
@@ -328,9 +354,10 @@ def scaffold_mission_run_skill(
 
     scaffold_id = "mission-scaffold-" + stable_hash(run_id, round_id, mission_output_path, task_output_path)[:12]
     imports = artifact_imports(mission)
+    requests = source_requests(mission)
     role_source_counts = {
-        "sociologist": len([item for item in imports if role_for_source_skill(maybe_text(item.get("source_skill"))) == "sociologist"]),
-        "environmentalist": len([item for item in imports if role_for_source_skill(maybe_text(item.get("source_skill"))) == "environmentalist"]),
+        "sociologist": len([item for item in [*imports, *requests] if role_for_source_skill(maybe_text(item.get("source_skill"))) == "sociologist"]),
+        "environmentalist": len([item for item in [*imports, *requests] if role_for_source_skill(maybe_text(item.get("source_skill"))) == "environmentalist"]),
     }
     summary_payload = {
         "schema_version": "ingress-scaffold-v1",
@@ -343,6 +370,7 @@ def scaffold_mission_run_skill(
         "task_path": str(task_output_path),
         "board_path": str(board_output_path),
         "import_source_count": len(imports),
+        "request_source_count": len(requests),
         "task_count": len(task_payload),
         "seeded_hypothesis_ids": seeded_hypothesis_ids,
         "role_source_counts": role_source_counts,
@@ -350,8 +378,13 @@ def scaffold_mission_run_skill(
     write_json_file(summary_output_path, summary_payload)
 
     warnings: list[dict[str, str]] = []
-    if not imports:
-        warnings.append({"code": "no-artifact-imports", "message": "Mission scaffold completed without any artifact_imports; prepare-round will produce an empty plan."})
+    if not imports and not requests:
+        warnings.append(
+            {
+                "code": "no-source-inputs",
+                "message": "Mission scaffold completed without artifact_imports or source_requests; prepare-round will produce an empty plan.",
+            }
+        )
     if not seeded_hypothesis_ids:
         warnings.append({"code": "no-hypotheses", "message": "Mission scaffold completed without seeded hypotheses; readiness will remain blocked until hypotheses are added."})
 
@@ -379,6 +412,7 @@ def scaffold_mission_run_skill(
             "output_path": str(summary_output_path),
             "scaffold_id": scaffold_id,
             "import_source_count": len(imports),
+            "request_source_count": len(requests),
             "task_count": len(task_payload),
             "seeded_hypothesis_count": len(seeded_hypothesis_ids),
             "seeded_hypothesis_ids": seeded_hypothesis_ids,
@@ -391,7 +425,7 @@ def scaffold_mission_run_skill(
         "board_handoff": {
             "candidate_ids": [scaffold_id, *seeded_hypothesis_ids],
             "evidence_refs": artifact_refs,
-            "gap_hints": [item["message"] for item in warnings if item.get("code") in {"no-artifact-imports", "no-hypotheses"}],
+            "gap_hints": [item["message"] for item in warnings if item.get("code") in {"no-source-inputs", "no-hypotheses"}],
             "challenge_hints": [],
             "suggested_next_skills": suggested_next_skills,
         },

@@ -123,8 +123,13 @@ def append_detached_fetch_event(
 
 def render_fetch_argv(step: dict[str, Any], *, run_dir: Path, run_id: str, round_id: str) -> list[str]:
     artifact_path = maybe_text(step.get("artifact_path"))
+    artifact_dir = maybe_text(step.get("artifact_dir")) or str(Path(artifact_path).expanduser().resolve().parent)
+    artifact_file = Path(artifact_path).expanduser().resolve() if artifact_path else run_dir
     substitutions = {
         "artifact_path": artifact_path,
+        "artifact_dir": artifact_dir,
+        "artifact_basename": artifact_file.name,
+        "artifact_stem": artifact_file.stem,
         "run_dir": str(run_dir),
         "run_id": run_id,
         "round_id": round_id,
