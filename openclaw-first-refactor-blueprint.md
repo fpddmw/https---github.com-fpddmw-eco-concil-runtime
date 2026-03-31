@@ -1,197 +1,317 @@
-# OpenClaw-First 总蓝图与当前状态
+# OpenClaw 项目总览（当前实现与中期汇报）
 
-## 1. 项目最终目标
+## 1. 文档定位
 
-项目只保留一个目标形态：一层共享 skill surface，两条编排路线。
+这份文档只负责讲清楚三件事：
 
-1. `OpenClaw multi-agent`
-   - 主路径
-   - 负责开放式调查、假设竞争、challenge、falsification、动态取证、跨轮协作
-2. `runtime source-queue`
-   - 第二编排面
-   - 负责固定场景、回放、benchmark、nightly run、受控批处理、审计复现
+1. 目前项目已经实现了什么。
+2. 当前 `runtime route` 是怎样实际工作的。
+3. 中期汇报时，哪些内容可以被稳妥地当作“已完成成果”。
 
-两条路线都调用同一套 `skills/eco-*`。  
-runtime 不再承担新的业务推理，只负责治理、不变式、执行封装、账本、归档和状态物化。
+根目录现在只保留三份文档：
 
-## 2. 当前代码真实状态
+1. 本文档 `openclaw-first-refactor-blueprint.md`
+   说明当前实现、当前工作流、当前边界。
+2. `openclaw-db-first-agent-runtime-blueprint.md`
+   说明未来主目标，也就是 `db first / openclaw agent` 路线。
+3. `openclaw-skills-catalog.md`
+   作为 skill 索引附录，不再承担路线说明。
 
-### 2.1 已经完成的事实
+阅读顺序建议：
 
-1. 旧版 legacy runtime 已删除，迁移阶段结束。
-2. 当前运行时代码已经收敛到 `eco-concil-runtime/src/eco_council_runtime/kernel/`。
-3. 当前技能层已经形成统一 skill surface。
-4. runtime registry 能扫描全部活跃 skills，并输出机器可读的 `source_queue_profile`。
-5. runtime route 已经具备从 ingress 到 archive/history 的可运行主链。
+1. 先看本文档，确认“现在做到了什么”。
+2. 再看 `db first` 蓝图，确认“以后要变成什么”。
+3. 最后按需查 `skills` 附录。
 
-### 2.2 当前代码结构
+## 2. 一句话结论
 
-```text
-skills/
-  eco-.../
+当前仓库已经落地的是：
 
-eco-concil-runtime/
-  src/eco_council_runtime/
-    kernel/
+`一条可运行、可审计、可复现的 runtime 调查主链。`
 
-tests/
+当前仓库还没有真正落地的是：
+
+`以 OpenClaw 多 agent 为主导、以数据库为主工作面的开放式调查主链。`
+
+所以中期汇报时，最稳妥的表达应当是：
+
+1. 当前已经完成一条“受治理的调查执行底座”。
+2. 它已经能完成多源取数、归一化入库、分析、议会状态推进、汇报和归档。
+3. 未来的主目标不变，仍然是把上层工作面重构为 `db first openclaw agent mode`。
+
+## 3. 当前代码状态
+
+截至 `2026-03-31`，当前项目的事实状态可以固定为：
+
+1. legacy 旧 runtime 已删除，迁移工作已结束。
+2. 当前运行时内核收敛在 `eco-concil-runtime/src/eco_council_runtime/kernel/`。
+3. 当前仓库共有 `73` 个 skill 目录。
+4. 当前已接入 `16` 个 source skill。
+5. 全量测试结果为 `python3 -m unittest discover -s tests -q`，共 `78` 项，通过。
+
+当前已验证的关键事实：
+
+1. `mission -> prepare-round -> import/fetch -> normalize -> analysis -> board -> reporting/archive` 主链可跑通。
+2. `youtube-video-search -> youtube-comments-fetch` 的依赖链可执行。
+3. `regulationsgov-comments-fetch -> regulationsgov-comment-detail-fetch` 的依赖链可执行。
+4. `gdelt-events / gdelt-mentions / gdelt-gkg` 已支持 zip 行级 normalize 入库。
+5. 当前已注册 source 都有对应 normalizer，不再只停留在 `raw-only` 占位状态。
+
+## 4. 当前两条路线的关系
+
+项目现在其实同时存在两条路线，但成熟度完全不同。
+
+### 4.1 Route A: Runtime Route
+
+这是当前真正落地、可演示、可回归的路线。
+
+它负责：
+
+1. mission 初始化与 round 规划。
+2. source governance 与 fetch plan 冻结。
+3. import / detached fetch 执行。
+4. normalize 入统一证据库。
+5. 后续 analysis、board、reporting、archive 主链。
+6. 审计、回放、benchmark、operator surface。
+
+它的定位是：
+
+`受治理的执行与审计底座。`
+
+### 4.2 Route B: DB-First OpenClaw Agent Route
+
+这是未来的主目标，但当前还没有主实现。
+
+它未来负责：
+
+1. 多 agent 共享数据库工作面。
+2. 动态查询、补证、分支调查。
+3. moderator 主导议会状态推进。
+4. 让 summary / coverage / readiness 类 skill 变成分析工具，而不是硬控制器。
+
+它的定位是：
+
+`未来的主智能体调查工作面。`
+
+## 5. 当前 Runtime 工作流
+
+当前最适合讲给老师或评委的，不是代码细节，而是下面这条主链。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Operator
+    participant S as eco-scaffold-mission-run
+    participant P as eco-prepare-round
+    participant F as eco-import-fetch-execution
+    participant N as Normalize Skills
+    database DB as signal_plane.sqlite
+    participant A as Analysis Skills
+    participant B as Board Skills
+    participant R as Reporting / Archive
+
+    U->>S: 提交 topic / mission
+    S-->>U: mission.json + round_tasks + board 初始化
+
+    U->>P: prepare round
+    P-->>U: source_selection + fetch_plan
+
+    U->>F: execute fetch plan
+    F->>N: 对每个 source 调用 normalizer
+    N->>DB: 写 normalized_signals
+    F-->>U: import_execution
+
+    U->>A: query / extract / cluster / link / coverage
+    A->>DB: 读统一证据库
+    A-->>U: analytics artifacts
+
+    U->>B: note / hypothesis / task / challenge / probe / open round
+    B-->>U: board state updated
+
+    U->>R: handoff / report / publish / archive
+    R-->>U: final artifacts + history persistence
 ```
 
-当前已经不存在单独的 `adapters/openclaw/`、`board/`、`storage/` 子包。  
-这说明现在的代码现实是：
+把它展开成文字，就是六个阶段。
 
-1. `runtime route` 已经有实装内核。
-2. `OpenClaw route` 还没有独立 runtime 实现层。
-3. 第二条路线目前仍停留在 skill 元数据、handoff 提示和 advisory planner 级别。
+### 阶段 1：任务进入系统
 
-### 2.3 当前能力面
+`eco-scaffold-mission-run` 负责把题目写成可执行 run。
 
-当前 registry 扫描结果：
+当前固定产物：
 
-1. 活跃 skills 总数：`46`
-2. queue profile 已覆盖：`46 / 46`
-3. `core_queue_default` skills：`30`
-4. profile 分类：
-   - `bridge`: `3`
-   - `direct`: `29`
-   - `advisory`: `14`
+1. `mission.json`
+2. `investigation/round_tasks_<round_id>.json`
+3. `board/investigation_board.json`
 
-当前已经实装的 runtime kernel 关键模块：
+### 阶段 2：准备本轮数据入口
 
-1. `registry.py`
-   - skill 扫描、frontmatter 解析、agent metadata 读取、queue profile 导出
-2. `source_queue_contract.py`
-   - source-queue 合同对象与通用 helper
-3. `source_queue_selection.py`
-   - source selection 组装与校验
-4. `source_queue_history.py`
-   - prior-round family memory
-5. `source_queue_planner.py`
-   - fetch plan 组装、input snapshot、drift detection
-6. `source_queue_execution.py`
-   - detached fetch 边界与执行 helper
-7. `controller.py`
-   - planner-backed phase-2 runtime route
-8. `supervisor.py`
-   - promotion / reporting 准入态物化
-9. `cli.py`
-   - `init-run`、`run-skill`、`preflight-skill`、`run-phase2-round`、`supervise-round`、`show-run-state`
+`eco-prepare-round` 负责生成 role 级 source governance 与 `fetch_plan`。
 
-### 2.4 当前最重要的实现结论
+当前已经明确支持：
 
-`runtime source-queue` 不是空壳，而是已经能跑。  
-`OpenClaw multi-agent` 不是成型主链，而是还没落地。
+1. `family / layer / anchor` 编排。
+2. `depends_on + anchor_artifact_paths` 自动生成。
+3. prior-round anchor 读取。
 
-这两个判断必须固定住，后续文档和开发计划都不能再写反。
+它的意义是：
 
-## 3. 两条路线的现状判断
+`把“本轮允许怎么取数”显式冻结成治理对象。`
 
-### 3.1 Route A: runtime source-queue
+### 阶段 3：执行 fetch / import 并归一化
+
+`eco-import-fetch-execution` 负责：
+
+1. 导入已有 artifact。
+2. 执行 detached fetch。
+3. 调用对应 normalizer。
+4. 记录 `import_execution_<round_id>.json`。
+
+归一化后的统一主入口是：
+
+`analytics/signal_plane.sqlite`
+
+其中最关键的是 `normalized_signals`。
+
+### 阶段 4：分析链处理统一证据库
+
+当前大量分析 skill 都已经基于同一个证据面工作，包括：
+
+1. `query / lookup`
+2. `claim / observation extract`
+3. `cluster / merge`
+4. `link / scope / coverage`
+
+要点是：
+
+1. 现在下层证据面已经开始 DB 化。
+2. 上层很多分析对象仍以 JSON 工件存在。
+
+### 阶段 5：议会状态推进
+
+当前 board 相关 skill 已经形成一组显式状态变更器：
+
+1. `eco-post-board-note`
+2. `eco-update-hypothesis-status`
+3. `eco-open-challenge-ticket`
+4. `eco-close-challenge-ticket`
+5. `eco-claim-board-task`
+6. `eco-open-falsification-probe`
+7. `eco-open-investigation-round`
+
+这意味着当前系统已经不只是“跑完分析就结束”，而是已经具备：
+
+`显式议会状态 + 多轮调查切换能力。`
+
+### 阶段 6：汇报、发布与归档
 
 当前已经具备：
 
-1. `eco-scaffold-mission-run`
-2. `eco-prepare-round`
-3. `eco-import-fetch-execution`
-4. normalize / analysis / board / readiness / reporting skills
-5. planner-backed `controller`
-6. `supervisor`
-7. archive / query / history context
+1. `eco-materialize-reporting-handoff`
+2. `eco-draft-council-decision`
+3. `eco-draft-expert-report`
+4. `eco-publish-council-decision`
+5. `eco-publish-expert-report`
+6. `eco-materialize-final-publication`
+7. `eco-archive-case-library`
+8. `eco-archive-signal-corpus`
 
-因此这条路线的状态是：
+这保证了当前路线不是“分析 demo”，而是一条能把结果沉淀下来的完整链路。
 
-1. 已有可运行主链
-2. 可做演示、回放、基准样例
-3. 尚未完成生产化
-4. 不应继续扩张为业务推理中心
+## 6. 当前数据层级
 
-### 3.2 Route B: OpenClaw multi-agent
+当前项目的数据主干可以概括为七层。
 
-当前只具备以下“前置条件”，还不具备真正主链：
+| 层级 | 当前主要对象 | 当前作用 |
+| --- | --- | --- |
+| 治理层 | `run_manifest`、ledger、receipts、dead_letters | 记录执行与审计状态 |
+| 规划层 | `mission`、`round_tasks`、`source_selection`、`fetch_plan` | 记录本轮要做什么 |
+| 原始层 | `raw/` 下各 source artifacts | 保留最原始证据与上游 anchor |
+| 归一化层 | `analytics/signal_plane.sqlite` / `normalized_signals` | 统一 public / environment 证据面 |
+| 分析层 | `claim / observation / link / coverage` 等 `analytics/*.json` | 形成候选解释与中间分析物 |
+| 议会层 | board、hypothesis、challenge、task、probe | 显式调查状态与多轮协作对象 |
+| 输出层 | handoff、report、decision、archive | 对外汇报与历史沉淀 |
 
-1. `eco-scaffold-mission-run` 支持 `orchestration_mode=openclaw-agent`
-2. `eco-plan-round-orchestration` 支持 `planner_mode=agent-advisory`
-3. skills 普遍带有 agent metadata 与 queue profile
-4. 已有 board/query/lookup/history/reporting 类 skills 可供 agent 调用
+当前最关键的实现结论有两个：
 
-但仍然缺失：
+1. `normalized_signals` 已经是统一证据面。
+2. `claim / observation / coverage` 还不是数据库中的通用分析平面，而仍主要是 JSON 工件。
 
-1. OpenClaw adapter
-2. managed skill projection
-3. role workspace
-4. turn loop
-5. multi-agent 协作协议
-6. agent audit / ledger / replay 语义
-7. 从 agent source request 到 runtime queue bridge 的正式接线
+## 7. 当前 Agent / Role 边界
 
-因此这条路线的状态是：
+当前项目已经有“角色语义”，但还没有“真正独立运行的多 agent”。
 
-1. 战略主路径
-2. 实际上尚未开始主实现
-3. 不能再被文档描述成“快完成了”
+| 当前对象 | 当前真实形态 | 当前职责 | 是否是真正独立 agent |
+| --- | --- | --- | --- |
+| `runtime` | 内核执行面 | 治理、执行、审计、归档 | 否 |
+| `sociologist` | 任务与 source role | public 证据侧责任标签 | 否 |
+| `environmentalist` | 任务与 source role | environment 证据侧责任标签 | 否 |
+| `moderator` | board / round 控制角色 | 汇总状态、保持或推进轮次 | 否 |
+| `challenger` | board / probe 责任角色 | 反证、挑战、falsification 压力 | 否 |
+| board skills | 状态变更器 | 显式写 hypothesis / challenge / task / round | 否，但已接近未来雏形 |
 
-## 4. 当前测试状态
+所以当前最准确的判断是：
 
-当前测试目录覆盖：
+1. 角色已经存在，但主要还是标签与责任边界。
+2. 真实执行主体仍然是 runtime。
+3. 真正的 agent 协作工作面，要到 `db first` 路线里才会建立。
 
-1. `test_orchestration_ingress_workflow.py`
-2. `test_source_queue_rebuild.py`
-3. `test_source_queue_governance.py`
-4. `test_source_queue_family_memory.py`
-5. `test_runtime_source_queue_profiles.py`
-6. `test_runtime_kernel.py`
-7. `test_analysis_workflow.py`
-8. `test_board_workflow.py`
-9. `test_investigation_workflow.py`
-10. `test_reporting_workflow.py`
-11. `test_reporting_publish_workflow.py`
-12. `test_archive_history_workflow.py`
-13. `test_orchestration_planner_workflow.py`
-14. `test_signal_plane_workflow.py`
-15. `test_supervisor_simulation_regression.py`
+## 8. 中期汇报时可稳妥主张的成果
 
-当前全量回归结果：
+以下内容适合被当作“当前阶段已经完成”的成果。
 
-1. `python3 -m unittest discover -s tests -q`
-2. `Ran 53 tests`
-3. `OK`
+### 8.1 可运行的受治理调查链
 
-所以当前仓库不是“概念稿”，而是一个已经可以持续回归的 active codebase。
+可以明确主张：
 
-## 5. 已经固定的架构边界
+1. 项目已经能从题目进入系统，一直跑到归档。
+2. 这条链不是手工演示，而是有自动化测试支撑的。
 
-下面这些边界不应再摇摆：
+### 8.2 多源证据统一入库
 
-1. 只保留一层 shared skills，不再维护两套 skill 体系。
-2. OpenClaw multi-agent 是主路径，runtime source-queue 是第二编排面。
-3. runtime 不替代 agent 做主要调查判断。
-4. board、history、query、lookup、reporting 都应该表现为 skill，而不是 controller 内部特判逻辑。
-5. source selection、fetch plan、execution policy、ledger、archive 属于 runtime 强项。
-6. 假设竞争、挑战、推翻、补证策略属于 agent 强项。
-7. 生产化约束要后置到两条路线都跑通之后。
+可以明确主张：
 
-## 6. 当前优先级判断
+1. 多类 public source 和 environment source 已进入统一 signal plane。
+2. 证据保留 `artifact_path + record_locator + raw_json`，具备回溯链。
 
-当前项目的最优先事项不是“再写更多 skill”，而是下面三件事：
+### 8.3 多轮调查与议会状态雏形
 
-1. 把 runtime route 从“能跑”推进到“边界稳定、可复现、可回放”。
-2. 真正启动 OpenClaw multi-agent 主实现，而不是继续停留在 handoff 文档层。
-3. 把 agent 与 runtime 的桥接面收敛为明确合同：
-   - source request
-   - governed fetch queue
-   - normalized signal plane
-   - board / history / reporting handoff
+可以明确主张：
 
-## 7. 文档约定
+1. 当前已支持显式 board 状态。
+2. 已支持 `open next round`。
+3. 后续轮次可继续读取前面轮次的 DB 证据。
 
-根目录只保留三份文档：
+### 8.4 可审计性已经成形
 
-1. 本文档 `openclaw-first-refactor-blueprint.md`
-   - 负责统一目标形态、当前代码现实、边界、优先级
-2. `openclaw-runtime-mode-development-flow.md`
-   - 负责 Route A: runtime source-queue 的全量开发计划
-3. `openclaw-skill-phase-plan.md`
-   - 负责 Route B: OpenClaw multi-agent 的全量开发计划
+可以明确主张：
 
-以后不再恢复阶段性碎片文档。  
-新增文档前，必须先判断能否并入这三份之一。
+1. runtime 具备 ledger / receipt / dead-letter / operator surface。
+2. source ingress 已有 planning snapshot 与 drift detection。
+3. archive / history persistence 已接入主链。
+
+## 9. 当前真实短板
+
+这部分也要在汇报时讲清楚，否则容易把“现状”和“蓝图”混在一起。
+
+当前还没有完成的关键点是：
+
+1. 还没有真正独立运行的多 agent turn loop。
+2. `sociologist / environmentalist / moderator / challenger` 还不是拥有独立 session 和记忆的实体 agent。
+3. 很多 analysis skill 仍然是强线性的 JSON 工件链。
+4. `fetch_plan` 仍然更适合 governed batch run，而不适合开放式调查中途随时追加动作。
+5. 上层工作面还没有真正把 OpenClaw 当成主调查者。
+
+## 10. 与未来蓝图的关系
+
+当前路线不是未来主目标的替代品，而是未来主目标的底座。
+
+应当固定的关系是：
+
+1. 当前 `runtime route` 保留，并继续承担治理执行面。
+2. 未来主目标仍然是 `db first / openclaw agent mode`。
+3. 之后不是推翻当前成果，而是把上层调查工作面从“线性工件链”迁移到“共享数据库 + 原子 skill + 多 agent 状态推进”。
+
+因此，后续开发目标没有变化：
+
+`继续保留 runtime 的强治理能力，同时把主智能体工作面转移到 db-first openclaw agent 路线。`

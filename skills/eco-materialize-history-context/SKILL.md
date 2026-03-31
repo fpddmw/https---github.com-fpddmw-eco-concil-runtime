@@ -60,7 +60,7 @@ description: Build retrieval-ready history context for the current round by quer
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-runtime-mode-development-flow.md`
+- `../../openclaw-first-refactor-blueprint.md`
 
 ## Scripts
 - `scripts/eco_materialize_history_context.py`

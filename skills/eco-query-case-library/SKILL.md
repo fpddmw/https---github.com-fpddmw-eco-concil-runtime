@@ -48,7 +48,7 @@ description: Query archived historical cases from the shared case library so cur
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-runtime-mode-development-flow.md`
+- `../../openclaw-first-refactor-blueprint.md`
 
 ## Scripts
 - `scripts/eco_query_case_library.py`

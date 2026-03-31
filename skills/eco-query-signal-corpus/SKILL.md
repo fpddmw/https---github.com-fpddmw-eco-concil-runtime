@@ -46,7 +46,7 @@ description: Query archived cross-run public and environment signals from the si
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-runtime-mode-development-flow.md`
+- `../../openclaw-first-refactor-blueprint.md`
 
 ## Scripts
 - `scripts/eco_query_signal_corpus.py`
