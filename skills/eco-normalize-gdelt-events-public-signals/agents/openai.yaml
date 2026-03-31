@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Normalize GDELT Events Public Signals"
+  short_description: "Normalize GDELT events zip exports into unified public signals"
+  default_prompt: "Use $eco-normalize-gdelt-events-public-signals to normalize one gdelt-events-fetch manifest and its zip exports into canonical public-signal rows in the unified signal plane and return compact receipts, artifact refs, signal ids, and board-ready hints."

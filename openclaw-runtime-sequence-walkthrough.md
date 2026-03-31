@@ -206,6 +206,8 @@ sequenceDiagram
 
 所以它不是“只剩一份压缩结果”，而是保留了回溯链。
 
+对于 `gdelt-events-fetch / gdelt-mentions-fetch / gdelt-gkg-fetch`，当前 normalize 已经不是只保留 manifest，而是会继续读取 manifest 指向的 zip 文件，把 zip 内每一行写成可追溯的 `normalized_signals` 记录；对应 provenance 会落在 zip 文件路径和 `zip://member#row=n` 形式的 `record_locator` 上。
+
 核心产物：
 
 1. `runtime/import_execution_<round_id>.json`
@@ -213,9 +215,9 @@ sequenceDiagram
 
 补充说明：
 
-1. 不是所有 source 一定都会立刻入库
-2. 只有“已有 normalizer”的 source 会写入 `normalized_signals`
-3. `raw-only` source 当前仍只保留在 `raw/` 与 `import_execution` 中，等待后续补齐 normalize
+1. 对当前已注册的 source，已经都有对应 normalizer，可以进入 `normalized_signals`
+2. `raw-only` 现在主要是未来新 source 接入期或 normalizer 异常时的保底机制
+3. 所以它仍重要，但已不是当前主链的常态路径
 
 ## 5. 数据进入统一证据库
 

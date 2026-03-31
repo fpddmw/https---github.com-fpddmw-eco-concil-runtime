@@ -72,6 +72,17 @@ def normalizer_args_for(source_skill: str, payload: dict[str, Any]) -> list[str]
         args.extend(["--query-text-override", query_text])
     if source_skill == "openaq-data-fetch" and source_mode:
         args.extend(["--source-mode", source_mode])
+    if source_skill in {"gdelt-events-fetch", "gdelt-mentions-fetch", "gdelt-gkg-fetch"}:
+        for payload_key, option_name in (
+            ("max_rows_per_download", "--max-rows-per-download"),
+            ("max_total_rows", "--max-total-rows"),
+            ("artifact_ref_limit", "--artifact-ref-limit"),
+            ("canonical_id_limit", "--canonical-id-limit"),
+        ):
+            value = payload.get(payload_key)
+            if value in (None, ""):
+                continue
+            args.extend([option_name, str(value)])
     return args
 
 

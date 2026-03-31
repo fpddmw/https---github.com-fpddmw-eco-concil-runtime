@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -151,6 +152,17 @@ def delete_existing_rows(connection: sqlite3.Connection, run_id: str, round_id: 
     )
 
 
+def delete_existing_rows_for_artifacts(
+    connection: sqlite3.Connection,
+    run_id: str,
+    round_id: str,
+    source_skill: str,
+    artifact_paths: list[str],
+) -> None:
+    for artifact_path in sorted({maybe_text(item) for item in artifact_paths if maybe_text(item)}):
+        delete_existing_rows(connection, run_id, round_id, source_skill, artifact_path)
+
+
 def insert_signals(connection: sqlite3.Connection, signals: list[dict[str, Any]]) -> None:
     for signal in signals:
         connection.execute(INSERT_SQL, signal)
@@ -256,6 +268,121 @@ def plane_challenge_hints(plane: str) -> list[str]:
     return ["Check whether provider-specific observation rows still need spatial or metric-family harmonization before promotion."]
 
 
+def normalize_limit(value: int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        resolved = int(value)
+    except (TypeError, ValueError):
+        return None
+    if resolved <= 0:
+        return None
+    return resolved
+
+
+def finalize_normalization_streaming(
+    *,
+    skill_name: str,
+    source_skill: str,
+    plane: str,
+    run_dir: str,
+    run_id: str,
+    round_id: str,
+    artifact_file: Path,
+    db_path: str,
+    signals: Iterable[dict[str, Any]],
+    warnings: list[dict[str, str]],
+    cleanup_artifact_paths: list[str] | None = None,
+    artifact_ref_limit: int | None = None,
+    canonical_id_limit: int | None = None,
+    chunk_size: int = 1000,
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    batch_id = "sigbatch-" + stable_hash(skill_name, run_id, round_id, artifact_file.name, utc_now_iso())[:16]
+    connection, db_file = connect_db(run_dir_path, db_path)
+    returned_artifact_refs: list[dict[str, str]] = []
+    returned_canonical_ids: list[str] = []
+    signal_count = 0
+    artifact_limit = normalize_limit(artifact_ref_limit)
+    canonical_limit = normalize_limit(canonical_id_limit)
+    resolved_chunk_size = max(1, int(chunk_size))
+    buffer: list[dict[str, Any]] = []
+
+    try:
+        delete_existing_rows_for_artifacts(
+            connection,
+            run_id,
+            round_id,
+            source_skill,
+            cleanup_artifact_paths or [str(artifact_file)],
+        )
+        for signal in signals:
+            signal["batch_id"] = batch_id
+            buffer.append(signal)
+            signal_count += 1
+
+            if artifact_limit is None or len(returned_artifact_refs) < artifact_limit:
+                returned_artifact_refs.append(artifact_ref(signal))
+            if canonical_limit is None or len(returned_canonical_ids) < canonical_limit:
+                signal_id = maybe_text(signal.get("signal_id"))
+                if signal_id:
+                    returned_canonical_ids.append(signal_id)
+
+            if len(buffer) >= resolved_chunk_size:
+                insert_signals(connection, buffer)
+                buffer.clear()
+
+        if buffer:
+            insert_signals(connection, buffer)
+        connection.commit()
+    finally:
+        connection.close()
+
+    if artifact_limit is not None and signal_count > artifact_limit:
+        warnings.append(
+            {
+                "code": "artifact-refs-truncated",
+                "message": f"Returned artifact_refs were truncated to {artifact_limit} while {signal_count} signals were normalized.",
+            }
+        )
+    if canonical_limit is not None and signal_count > canonical_limit:
+        warnings.append(
+            {
+                "code": "canonical-ids-truncated",
+                "message": f"Returned canonical_ids were truncated to {canonical_limit} while {signal_count} signals were normalized.",
+            }
+        )
+
+    suggested_next_skills = ["eco-query-public-signals", "eco-extract-claim-candidates"] if plane == "public" else ["eco-query-environment-signals", "eco-extract-observation-candidates"]
+    return {
+        "status": "completed",
+        "summary": {
+            "skill": skill_name,
+            "run_id": run_id,
+            "round_id": round_id,
+            "plane": plane,
+            "source_skill": source_skill,
+            "signal_count": signal_count,
+            "warning_count": len(warnings),
+            "returned_artifact_ref_count": len(returned_artifact_refs),
+            "returned_canonical_id_count": len(returned_canonical_ids),
+            "db_path": str(db_file),
+        },
+        "receipt_id": "normalize-receipt-" + stable_hash(skill_name, batch_id)[:20],
+        "batch_id": batch_id,
+        "artifact_refs": returned_artifact_refs,
+        "canonical_ids": returned_canonical_ids,
+        "warnings": warnings,
+        "board_handoff": {
+            "candidate_ids": returned_canonical_ids,
+            "evidence_refs": returned_artifact_refs[:20],
+            "gap_hints": [] if signal_count else plane_gap_hints(plane, []),
+            "challenge_hints": plane_challenge_hints(plane),
+            "suggested_next_skills": suggested_next_skills,
+        },
+    }
+
+
 def finalize_normalization(
     *,
     skill_name: str,
@@ -269,45 +396,18 @@ def finalize_normalization(
     signals: list[dict[str, Any]],
     warnings: list[dict[str, str]],
 ) -> dict[str, Any]:
-    run_dir_path = resolve_run_dir(run_dir)
-    batch_id = "sigbatch-" + stable_hash(skill_name, run_id, round_id, artifact_file.name, len(signals))[:16]
-    for signal in signals:
-        signal["batch_id"] = batch_id
-    connection, db_file = connect_db(run_dir_path, db_path)
-    try:
-        delete_existing_rows(connection, run_id, round_id, source_skill, str(artifact_file))
-        insert_signals(connection, signals)
-        connection.commit()
-    finally:
-        connection.close()
-
-    artifact_refs = [artifact_ref(signal) for signal in signals]
-    suggested_next_skills = ["eco-query-public-signals", "eco-extract-claim-candidates"] if plane == "public" else ["eco-query-environment-signals", "eco-extract-observation-candidates"]
-    return {
-        "status": "completed",
-        "summary": {
-            "skill": skill_name,
-            "run_id": run_id,
-            "round_id": round_id,
-            "plane": plane,
-            "source_skill": source_skill,
-            "signal_count": len(signals),
-            "warning_count": len(warnings),
-            "db_path": str(db_file),
-        },
-        "receipt_id": "normalize-receipt-" + stable_hash(skill_name, batch_id)[:20],
-        "batch_id": batch_id,
-        "artifact_refs": artifact_refs,
-        "canonical_ids": [maybe_text(signal.get("signal_id")) for signal in signals if maybe_text(signal.get("signal_id"))],
-        "warnings": warnings,
-        "board_handoff": {
-            "candidate_ids": [maybe_text(signal.get("signal_id")) for signal in signals if maybe_text(signal.get("signal_id"))],
-            "evidence_refs": artifact_refs[:20],
-            "gap_hints": plane_gap_hints(plane, signals),
-            "challenge_hints": plane_challenge_hints(plane),
-            "suggested_next_skills": suggested_next_skills,
-        },
-    }
+    return finalize_normalization_streaming(
+        skill_name=skill_name,
+        source_skill=source_skill,
+        plane=plane,
+        run_dir=run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        artifact_file=artifact_file,
+        db_path=db_path,
+        signals=signals,
+        warnings=warnings,
+    )
 
 
 __all__ = [
@@ -316,8 +416,10 @@ __all__ = [
     "connect_db",
     "default_db_path",
     "delete_existing_rows",
+    "delete_existing_rows_for_artifacts",
     "file_sha256",
     "finalize_normalization",
+    "finalize_normalization_streaming",
     "insert_signals",
     "json_text",
     "maybe_number",

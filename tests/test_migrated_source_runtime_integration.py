@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import json
 import sqlite3
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from _workflow_support import load_json, run_script, runtime_path, script_path, write_json
@@ -105,6 +107,65 @@ def normalized_counts_by_source(run_dir: Path) -> dict[str, int]:
             "SELECT source_skill, COUNT(*) FROM normalized_signals GROUP BY source_skill ORDER BY source_skill"
         ).fetchall()
     return {str(source_skill): int(count) for source_skill, count in rows}
+
+
+def normalized_rows_for_source(run_dir: Path, source_skill: str) -> list[dict[str, object]]:
+    with sqlite3.connect(analytics_db_path(run_dir)) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(
+            """
+            SELECT signal_id, source_skill, signal_kind, external_id, artifact_path, record_locator, title
+            FROM normalized_signals
+            WHERE source_skill = ?
+            ORDER BY signal_id
+            """,
+            (source_skill,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def load_skill_module(skill_name: str):
+    module_name = f"test_{skill_name.replace('-', '_')}"
+    spec = importlib.util.spec_from_file_location(module_name, script_path(skill_name))
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def tsv_row(field_names: list[str], values: dict[str, str]) -> str:
+    index = {name: position for position, name in enumerate(field_names)}
+    columns = [""] * len(field_names)
+    for field_name, value in values.items():
+        columns[index[field_name]] = value
+    return "\t".join(columns)
+
+
+def write_zip_lines(path: Path, member_name: str, lines: list[str]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(member_name, "\n".join(lines) + "\n")
+    return path
+
+
+def write_gdelt_manifest(path: Path, zip_path: Path | None, *, request_url: str, timestamp_utc: str) -> Path:
+    payload: dict[str, object] = {
+        "downloads": [
+            {
+                "request_url": request_url,
+                "entry": {
+                    "timestamp_utc": timestamp_utc,
+                    "url": request_url,
+                    "size_bytes": zip_path.stat().st_size if zip_path is not None and zip_path.exists() else 0,
+                    "md5": "fixture-md5",
+                },
+            }
+        ]
+    }
+    if zip_path is not None:
+        payload["downloads"][0]["output_path"] = str(zip_path)
+    write_json(path, payload)
+    return path
 
 
 class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
@@ -392,6 +453,338 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             self.assertEqual(1, status["warning_count"])
             self.assertTrue(any(item.get("code") == "raw-only-ingest" for item in payload["warnings"]))
             self.assertTrue(Path(status["artifact_path"]).exists())
+
+    def test_gdelt_export_normalizers_write_row_level_signals_into_signal_plane(self) -> None:
+        events_module = load_skill_module("eco-normalize-gdelt-events-public-signals")
+        mentions_module = load_skill_module("eco-normalize-gdelt-mentions-public-signals")
+        gkg_module = load_skill_module("eco-normalize-gdelt-gkg-public-signals")
+
+        specs = [
+            {
+                "source_skill": "gdelt-events-fetch",
+                "normalizer_skill": "eco-normalize-gdelt-events-public-signals",
+                "field_names": list(events_module.EVENT_FIELDS),
+                "member_name": "20230607130000.export.CSV",
+                "signal_kind": "event-row",
+                "rows": [
+                    tsv_row(
+                        list(events_module.EVENT_FIELDS),
+                        {
+                            "GLOBALEVENTID": "evt-001",
+                            "SQLDATE": "20230607",
+                            "Actor1Name": "EPA",
+                            "Actor2Name": "Residents",
+                            "IsRootEvent": "1",
+                            "EventCode": "112",
+                            "EventBaseCode": "11",
+                            "EventRootCode": "1",
+                            "QuadClass": "4",
+                            "NumMentions": "5",
+                            "NumSources": "2",
+                            "NumArticles": "3",
+                            "AvgTone": "-1.2",
+                            "ActionGeo_FullName": "New York, USA",
+                            "ActionGeo_Lat": "40.7128",
+                            "ActionGeo_Long": "-74.0060",
+                            "DATEADDED": "20230607130000",
+                            "SOURCEURL": "https://example.com/event-1",
+                        },
+                    ),
+                    tsv_row(
+                        list(events_module.EVENT_FIELDS),
+                        {
+                            "GLOBALEVENTID": "evt-002",
+                            "SQLDATE": "20230607",
+                            "Actor1Name": "Health Department",
+                            "Actor2Name": "Residents",
+                            "EventCode": "120",
+                            "EventBaseCode": "12",
+                            "EventRootCode": "1",
+                            "QuadClass": "2",
+                            "NumMentions": "7",
+                            "NumSources": "4",
+                            "NumArticles": "5",
+                            "AvgTone": "-0.3",
+                            "ActionGeo_FullName": "Boston, USA",
+                            "ActionGeo_Lat": "42.3601",
+                            "ActionGeo_Long": "-71.0589",
+                            "DATEADDED": "20230607130500",
+                            "SOURCEURL": "https://example.com/event-2",
+                        },
+                    ),
+                ],
+            },
+            {
+                "source_skill": "gdelt-mentions-fetch",
+                "normalizer_skill": "eco-normalize-gdelt-mentions-public-signals",
+                "field_names": list(mentions_module.MENTION_FIELDS),
+                "member_name": "20230607131500.mentions.CSV",
+                "signal_kind": "mention-row",
+                "rows": [
+                    tsv_row(
+                        list(mentions_module.MENTION_FIELDS),
+                        {
+                            "GLOBALEVENTID": "evt-101",
+                            "EventTimeDate": "20230607110000",
+                            "MentionTimeDate": "20230607113000",
+                            "MentionType": "1",
+                            "MentionSourceName": "Example News",
+                            "MentionIdentifier": "https://example.com/mention-1",
+                            "SentenceID": "2",
+                            "InRawText": "1",
+                            "Confidence": "87",
+                            "MentionDocLen": "420",
+                            "MentionDocTone": "-0.8",
+                        },
+                    ),
+                    tsv_row(
+                        list(mentions_module.MENTION_FIELDS),
+                        {
+                            "GLOBALEVENTID": "evt-102",
+                            "EventTimeDate": "20230607120000",
+                            "MentionTimeDate": "20230607124000",
+                            "MentionType": "2",
+                            "MentionSourceName": "Metro Desk",
+                            "MentionIdentifier": "https://example.com/mention-2",
+                            "SentenceID": "5",
+                            "Confidence": "92",
+                            "MentionDocLen": "510",
+                            "MentionDocTone": "0.4",
+                        },
+                    ),
+                ],
+            },
+            {
+                "source_skill": "gdelt-gkg-fetch",
+                "normalizer_skill": "eco-normalize-gdelt-gkg-public-signals",
+                "field_names": list(gkg_module.GKG_FIELDS),
+                "member_name": "20230607133000.gkg.csv",
+                "signal_kind": "gkg-row",
+                "rows": [
+                    tsv_row(
+                        list(gkg_module.GKG_FIELDS),
+                        {
+                            "GKGRECORDID": "gkg-001",
+                            "DATE": "20230607133000",
+                            "SourceCollectionIdentifier": "1",
+                            "SourceCommonName": "Example News",
+                            "DocumentIdentifier": "https://example.com/gkg-1",
+                            "V2Themes": "ENV_POLLUTION;SMOKE",
+                            "V2Persons": "John Doe",
+                            "V2Organizations": "EPA",
+                            "V2Tone": "-2.0,0,0,0,0,0,0",
+                            "TranslationInfo": "srclc:eng",
+                        },
+                    ),
+                    tsv_row(
+                        list(gkg_module.GKG_FIELDS),
+                        {
+                            "GKGRECORDID": "gkg-002",
+                            "DATE": "20230607134500",
+                            "SourceCollectionIdentifier": "1",
+                            "SourceCommonName": "City Paper",
+                            "DocumentIdentifier": "https://example.com/gkg-2",
+                            "V2Themes": "CLIMATE;AIR_POLLUTION",
+                            "V2Persons": "Jane Roe",
+                            "V2Organizations": "WHO",
+                            "V2Tone": "1.5,0,0,0,0,0,0",
+                        },
+                    ),
+                ],
+            },
+        ]
+
+        for spec in specs:
+            with self.subTest(source_skill=spec["source_skill"]):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    root = Path(tmpdir)
+                    run_dir = root / "run"
+                    zip_path = write_zip_lines(root / f"{spec['source_skill']}.zip", spec["member_name"], spec["rows"])
+                    manifest_path = write_gdelt_manifest(
+                        root / f"{spec['source_skill']}.json",
+                        zip_path,
+                        request_url=f"https://example.com/{spec['source_skill']}",
+                        timestamp_utc="2023-06-07T13:00:00Z",
+                    )
+
+                    payload = run_script(
+                        script_path(spec["normalizer_skill"]),
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        RUN_ID,
+                        "--round-id",
+                        ROUND_ID,
+                        "--artifact-path",
+                        str(manifest_path),
+                    )
+                    rows = normalized_rows_for_source(run_dir, str(spec["source_skill"]))
+
+                    self.assertEqual(2, payload["summary"]["signal_count"])
+                    self.assertEqual(2, len(rows))
+                    self.assertEqual({str(spec["signal_kind"])}, {str(row["signal_kind"]) for row in rows})
+                    self.assertEqual({str(zip_path)}, {str(row["artifact_path"]) for row in rows})
+                    self.assertTrue(all(str(row["record_locator"]).startswith(f"zip://{spec['member_name']}#row=") for row in rows))
+
+    def test_gdelt_events_normalizer_replaces_manifest_fallback_rows_on_rerun(self) -> None:
+        events_module = load_skill_module("eco-normalize-gdelt-events-public-signals")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            manifest_path = write_gdelt_manifest(
+                root / "gdelt-events.json",
+                None,
+                request_url="https://example.com/gdelt-events-manifest",
+                timestamp_utc="2023-06-07T13:00:00Z",
+            )
+
+            first_payload = run_script(
+                script_path("eco-normalize-gdelt-events-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(manifest_path),
+            )
+            first_rows = normalized_rows_for_source(run_dir, "gdelt-events-fetch")
+
+            self.assertEqual(1, first_payload["summary"]["signal_count"])
+            self.assertEqual(1, len(first_rows))
+            self.assertEqual("export-download", first_rows[0]["signal_kind"])
+            self.assertEqual(str(manifest_path), first_rows[0]["artifact_path"])
+
+            zip_path = write_zip_lines(
+                root / "gdelt-events.zip",
+                "20230607130000.export.CSV",
+                [
+                    tsv_row(
+                        list(events_module.EVENT_FIELDS),
+                        {
+                            "GLOBALEVENTID": "evt-rerun-001",
+                            "SQLDATE": "20230607",
+                            "Actor1Name": "EPA",
+                            "Actor2Name": "Residents",
+                            "EventCode": "112",
+                            "EventBaseCode": "11",
+                            "DATEADDED": "20230607130000",
+                            "SOURCEURL": "https://example.com/event-rerun",
+                        },
+                    )
+                ],
+            )
+            write_gdelt_manifest(
+                manifest_path,
+                zip_path,
+                request_url="https://example.com/gdelt-events-zip",
+                timestamp_utc="2023-06-07T13:05:00Z",
+            )
+
+            second_payload = run_script(
+                script_path("eco-normalize-gdelt-events-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(manifest_path),
+            )
+            second_rows = normalized_rows_for_source(run_dir, "gdelt-events-fetch")
+
+            self.assertEqual(1, second_payload["summary"]["signal_count"])
+            self.assertEqual(1, len(second_rows))
+            self.assertEqual("event-row", second_rows[0]["signal_kind"])
+            self.assertEqual(str(zip_path), second_rows[0]["artifact_path"])
+            self.assertNotIn(str(manifest_path), {str(row["artifact_path"]) for row in second_rows})
+
+    def test_gdelt_events_normalizer_total_row_limit_does_not_emit_manifest_fallback(self) -> None:
+        events_module = load_skill_module("eco-normalize-gdelt-events-public-signals")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            zip_one = write_zip_lines(
+                root / "gdelt-events-1.zip",
+                "20230607130000.export.CSV",
+                [
+                    tsv_row(
+                        list(events_module.EVENT_FIELDS),
+                        {
+                            "GLOBALEVENTID": "evt-limit-001",
+                            "SQLDATE": "20230607",
+                            "Actor1Name": "EPA",
+                            "Actor2Name": "Residents",
+                            "EventCode": "112",
+                            "EventBaseCode": "11",
+                            "DATEADDED": "20230607130000",
+                            "SOURCEURL": "https://example.com/event-limit-1",
+                        },
+                    )
+                ],
+            )
+            zip_two = write_zip_lines(
+                root / "gdelt-events-2.zip",
+                "20230607131500.export.CSV",
+                [
+                    tsv_row(
+                        list(events_module.EVENT_FIELDS),
+                        {
+                            "GLOBALEVENTID": "evt-limit-002",
+                            "SQLDATE": "20230607",
+                            "Actor1Name": "Health Department",
+                            "Actor2Name": "Residents",
+                            "EventCode": "120",
+                            "EventBaseCode": "12",
+                            "DATEADDED": "20230607131500",
+                            "SOURCEURL": "https://example.com/event-limit-2",
+                        },
+                    )
+                ],
+            )
+            manifest_path = root / "gdelt-events-limit.json"
+            write_json(
+                manifest_path,
+                {
+                    "downloads": [
+                        {
+                            "output_path": str(zip_one),
+                            "request_url": "https://example.com/gdelt-events-1",
+                            "entry": {"timestamp_utc": "2023-06-07T13:00:00Z", "url": "https://example.com/gdelt-events-1"},
+                        },
+                        {
+                            "output_path": str(zip_two),
+                            "request_url": "https://example.com/gdelt-events-2",
+                            "entry": {"timestamp_utc": "2023-06-07T13:15:00Z", "url": "https://example.com/gdelt-events-2"},
+                        },
+                    ]
+                },
+            )
+
+            payload = run_script(
+                script_path("eco-normalize-gdelt-events-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(manifest_path),
+                "--max-total-rows",
+                "1",
+            )
+            rows = normalized_rows_for_source(run_dir, "gdelt-events-fetch")
+
+            self.assertEqual(1, payload["summary"]["signal_count"])
+            self.assertTrue(any(item.get("code") == "total-row-limit-reached" for item in payload["warnings"]))
+            self.assertEqual(1, len(rows))
+            self.assertEqual({"event-row"}, {str(row["signal_kind"]) for row in rows})
+            self.assertEqual({str(zip_one)}, {str(row["artifact_path"]) for row in rows})
 
 
 if __name__ == "__main__":

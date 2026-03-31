@@ -136,7 +136,7 @@
 1. 保留回溯源
 2. 作为 normalize 的输入
 3. 作为争议时的最终原始证据
-4. 在 normalizer 缺失时，仍可作为 `raw-only` 证据被保留
+4. 在未来新 source 尚未补齐 normalizer，或运行时异常时，仍可作为 `raw-only` 证据被保留
 
 ### 3.4 第 3 层：归一化证据层 `normalized signals`
 
@@ -174,23 +174,20 @@
 2. 如果某个 source 尚无 normalizer，当前 runtime 会走 `raw-only` 保底
 3. 这意味着“已归档”不总是等于“已入库”
 
-截至目前，新的 row-level normalizer 已经覆盖了：
+截至目前，当前已接入的 `16` 个 source skill 都已经有对应 normalizer，可进入 `normalized_signals`。
 
-1. `youtube-comments-fetch`
-2. `regulationsgov-comments-fetch`
-3. `regulationsgov-comment-detail-fetch`
-4. `open-meteo-air-quality-fetch`
-5. `open-meteo-flood-fetch`
-6. `usgs-water-iv-fetch`
-7. `nasa-firms-fire-fetch`
-
-同时还要注意：
+其中需要特别点名的是：
 
 1. `gdelt-events-fetch`
 2. `gdelt-mentions-fetch`
 3. `gdelt-gkg-fetch`
 
-当前是 manifest 级 normalize，不是 zip 内全表行级 normalize。
+这三类现在已经从“只保留 manifest 信息”升级为“读取 manifest 指向的 zip，并按 zip 行级写入 `normalized_signals`”。
+
+因此当前数据层在 source ingress 这一段的真实状态是：
+
+1. 已注册 source 主路径：`raw artifact -> normalize -> normalized_signals`
+2. `raw-only`：保底带，而不是当前已接入 source 的常态路径
 
 ### 3.5 第 4 层：候选抽取层 `claim / observation`
 
@@ -351,7 +348,7 @@
 
 1. source 已接入 runtime
 2. raw artifact 已经落盘
-3. normalizer 还没完全就位
+3. 但 normalizer 暂未实现，或运行期被故障隔离
 
 它的优点是：
 
