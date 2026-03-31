@@ -1,19 +1,20 @@
 ---
 name: eco-query-public-signals
-description: Query compact public-signal rows from the unified signal plane database with run, round, source, kind, time, and keyword filters. Use when an agent needs board-ready public evidence refs instead of raw artifacts or packet-heavy context.
+ description: Query compact public-signal rows from the unified signal plane database with run, round, round-scope, source, kind, time, and keyword filters. Use when an agent needs board-ready public evidence refs instead of raw artifacts or packet-heavy context.
 ---
 
 # Eco Query Public Signals
 
 ## Core Goal
 - Read compact public signal rows from the unified signal plane database.
-- Filter by run, round, source skill, signal kind, publication window, and keywords.
+- Filter by run, round or cross-round scope, source skill, signal kind, publication window, and keywords.
 - Return short results with provenance refs and board-ready hints.
 
 ## Triggering Conditions
 - Need public narrative evidence without reopening raw artifacts.
 - Need to validate whether a public source has already been normalized.
 - Need compact references for sociologist, moderator, or challenger work.
+- Need to reopen prior-round public evidence while staying inside the same run.
 
 ## Read/Write Contract
 - Read only.
@@ -26,6 +27,7 @@ description: Query compact public-signal rows from the unified signal plane data
 - `round_id`
 - Optional:
   - `db_path`
+  - `round_scope`
 - Optional filters:
   - `source_skill`
   - `signal_kind`

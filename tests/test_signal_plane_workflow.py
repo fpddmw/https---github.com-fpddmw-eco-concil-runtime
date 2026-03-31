@@ -8,6 +8,7 @@ from _workflow_support import run_script, script_path, seed_signal_plane, write_
 
 RUN_ID = "run-signal-001"
 ROUND_ID = "round-signal-001"
+ROUND2_ID = "round-signal-002"
 
 
 class SignalPlaneWorkflowTests(unittest.TestCase):
@@ -204,6 +205,57 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             db_path = run_dir / "analytics" / "signal_plane.sqlite"
             self.assertTrue(db_path.exists())
             self.assertIsInstance(load_json(run_dir / "analytics" / "nonexistent.json") if False else {}, dict)
+
+    def test_query_skills_can_read_prior_rounds_with_round_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seed_signal_plane(run_dir, root, RUN_ID, ROUND_ID, include_airnow=False, include_openmeteo=False)
+            seed_signal_plane(run_dir, root, RUN_ID, ROUND2_ID, include_airnow=False, include_openmeteo=False)
+
+            public_current = run_script(
+                script_path("eco-query-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND2_ID,
+            )
+            public_cross_round = run_script(
+                script_path("eco-query-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND2_ID,
+                "--round-scope",
+                "up-to-current",
+            )
+            environment_cross_round = run_script(
+                script_path("eco-query-environment-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND2_ID,
+                "--round-scope",
+                "up-to-current",
+                "--metric",
+                "pm2_5",
+            )
+
+            self.assertEqual("current", public_current["summary"]["round_scope"])
+            self.assertEqual(2, public_current["result_count"])
+            self.assertEqual("up-to-current", public_cross_round["summary"]["round_scope"])
+            self.assertEqual([ROUND_ID, ROUND2_ID], public_cross_round["summary"]["queried_round_ids"])
+            self.assertEqual(4, public_cross_round["result_count"])
+            self.assertEqual({ROUND_ID, ROUND2_ID}, {item["round_id"] for item in public_cross_round["results"]})
+            self.assertEqual([ROUND_ID, ROUND2_ID], environment_cross_round["summary"]["queried_round_ids"])
+            self.assertEqual(4, environment_cross_round["result_count"])
+            self.assertEqual({ROUND_ID, ROUND2_ID}, {item["round_id"] for item in environment_cross_round["results"]})
 
 
 if __name__ == "__main__":

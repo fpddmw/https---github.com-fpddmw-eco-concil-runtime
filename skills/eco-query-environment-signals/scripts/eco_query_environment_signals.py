@@ -7,9 +7,17 @@ import argparse
 import json
 import sqlite3
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-query-environment-signals"
+VALID_ROUND_SCOPES = ("current", "up-to-current", "all")
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.source_queue_history import discovered_round_ids  # noqa: E402
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
@@ -61,6 +69,18 @@ def maybe_text(value: Any) -> str:
     return normalize_space(value)
 
 
+def unique_texts(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
+
+
 def pretty_json(data: Any, pretty: bool) -> str:
     if pretty:
         return json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True)
@@ -90,6 +110,86 @@ def connect_db(run_dir: Path, db_path: str) -> tuple[sqlite3.Connection, Path]:
     return connection, file_path
 
 
+def normalize_round_scope(round_scope: str) -> str:
+    scope = maybe_text(round_scope) or "current"
+    if scope not in VALID_ROUND_SCOPES:
+        raise ValueError(f"Unsupported --round-scope {scope!r}. Expected one of {', '.join(VALID_ROUND_SCOPES)}.")
+    return scope
+
+
+def observed_round_ids(connection: sqlite3.Connection, *, run_id: str, plane: str) -> list[str]:
+    rows = connection.execute(
+        """
+        SELECT
+            round_id,
+            MIN(
+                COALESCE(
+                    NULLIF(captured_at_utc, ''),
+                    NULLIF(observed_at_utc, ''),
+                    NULLIF(window_start_utc, ''),
+                    NULLIF(window_end_utc, ''),
+                    NULLIF(published_at_utc, ''),
+                    signal_id
+                )
+            ) AS first_seen
+        FROM normalized_signals
+        WHERE run_id = ? AND plane = ?
+        GROUP BY round_id
+        ORDER BY first_seen, round_id
+        """,
+        (run_id, plane),
+    ).fetchall()
+    return [maybe_text(row["round_id"]) for row in rows if maybe_text(row["round_id"])]
+
+
+def ordered_round_ids(run_dir: Path, connection: sqlite3.Connection, *, run_id: str, plane: str, current_round_id: str) -> list[str]:
+    ordered = discovered_round_ids(run_dir)
+    for round_id in observed_round_ids(connection, run_id=run_id, plane=plane):
+        if round_id not in ordered:
+            ordered.append(round_id)
+    current = maybe_text(current_round_id)
+    if current and current not in ordered:
+        ordered.append(current)
+    return ordered
+
+
+def query_round_ids(
+    run_dir: Path,
+    connection: sqlite3.Connection,
+    *,
+    run_id: str,
+    plane: str,
+    current_round_id: str,
+    round_scope: str,
+) -> tuple[str, list[str]]:
+    scope = normalize_round_scope(round_scope)
+    current = maybe_text(current_round_id)
+    if scope == "current":
+        return scope, [current]
+    ordered = ordered_round_ids(run_dir, connection, run_id=run_id, plane=plane, current_round_id=current)
+    if scope == "all":
+        return scope, ordered
+    if current not in ordered:
+        ordered.append(current)
+    return scope, ordered[: ordered.index(current) + 1]
+
+
+def fetch_rows(connection: sqlite3.Connection, *, run_id: str, plane: str, round_ids: list[str]) -> list[sqlite3.Row]:
+    selected_round_ids = [round_id for round_id in round_ids if maybe_text(round_id)]
+    if not selected_round_ids:
+        return []
+    placeholders = ",".join("?" for _ in selected_round_ids)
+    return connection.execute(
+        f"""
+        SELECT *
+        FROM normalized_signals
+        WHERE plane = ? AND run_id = ? AND round_id IN ({placeholders})
+        ORDER BY COALESCE(observed_at_utc, window_start_utc, captured_at_utc) DESC, signal_id
+        """,
+        (plane, run_id, *selected_round_ids),
+    ).fetchall()
+
+
 def within_bbox(row: sqlite3.Row, bbox: dict[str, float] | None) -> bool:
     if bbox is None:
         return True
@@ -114,6 +214,7 @@ def quality_match(row: sqlite3.Row, wanted: list[str]) -> bool:
 def compact_result(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "signal_id": row["signal_id"],
+        "round_id": maybe_text(row["round_id"]),
         "source_skill": maybe_text(row["source_skill"]),
         "metric": maybe_text(row["metric"]),
         "value": row["numeric_value"],
@@ -128,6 +229,7 @@ def compact_result(row: sqlite3.Row) -> dict[str, Any]:
 def artifact_ref(row: sqlite3.Row) -> dict[str, str]:
     return {
         "signal_id": row["signal_id"],
+        "round_id": maybe_text(row["round_id"]),
         "artifact_path": maybe_text(row["artifact_path"]),
         "record_locator": maybe_text(row["record_locator"]),
         "artifact_ref": f"{row['artifact_path']}:{row['record_locator']}",
@@ -138,6 +240,7 @@ def query_environment_signals_skill(
     run_dir: str,
     run_id: str,
     round_id: str,
+    round_scope: str,
     db_path: str,
     source_skill: str,
     metric: str,
@@ -150,10 +253,15 @@ def query_environment_signals_skill(
     run_dir_path = resolve_run_dir(run_dir)
     connection, db_file = connect_db(run_dir_path, db_path)
     try:
-        rows = connection.execute(
-            "SELECT * FROM normalized_signals WHERE plane = 'environment' AND run_id = ? AND round_id = ? ORDER BY COALESCE(observed_at_utc, window_start_utc, captured_at_utc) DESC, signal_id",
-            (run_id, round_id),
-        ).fetchall()
+        resolved_round_scope, selected_round_ids = query_round_ids(
+            run_dir_path,
+            connection,
+            run_id=run_id,
+            plane="environment",
+            current_round_id=round_id,
+            round_scope=round_scope,
+        )
+        rows = fetch_rows(connection, run_id=run_id, plane="environment", round_ids=selected_round_ids)
     finally:
         connection.close()
     filtered: list[sqlite3.Row] = []
@@ -174,12 +282,16 @@ def query_environment_signals_skill(
         filtered.append(row)
     limited = filtered[: max(1, limit)]
     refs = [artifact_ref(row) for row in limited]
+    matched_round_ids = unique_texts([row["round_id"] for row in filtered])
     return {
         "status": "completed",
         "summary": {
             "skill": SKILL_NAME,
             "run_id": run_id,
             "round_id": round_id,
+            "round_scope": resolved_round_scope,
+            "queried_round_ids": selected_round_ids,
+            "matched_round_ids": matched_round_ids,
             "result_count": len(limited),
             "db_path": str(db_file),
         },
@@ -202,6 +314,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
+    parser.add_argument("--round-scope", default="current", choices=VALID_ROUND_SCOPES)
     parser.add_argument("--db-path", default="")
     parser.add_argument("--source-skill", default="")
     parser.add_argument("--metric", default="")
@@ -223,6 +336,7 @@ def main() -> int:
         run_dir=args.run_dir,
         run_id=args.run_id,
         round_id=args.round_id,
+        round_scope=args.round_scope,
         db_path=args.db_path,
         source_skill=args.source_skill,
         metric=args.metric,

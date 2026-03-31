@@ -1,14 +1,97 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import board_path, load_json, run_script, script_path, seed_analysis_chain
+from _workflow_support import board_path, investigation_path, load_json, run_script, script_path, seed_analysis_chain, write_json
 
 RUN_ID = "run-board-001"
 ROUND_ID = "round-board-001"
+ROUND2_ID = "round-board-002"
+
+
+def build_mission_fixture(root: Path) -> Path:
+    youtube_path = root / "mission_youtube.json"
+    openaq_path = root / "mission_openaq.json"
+    write_json(
+        youtube_path,
+        [
+            {
+                "query": "nyc smoke wildfire",
+                "video_id": "vid-mission-001",
+                "video": {
+                    "id": "vid-mission-001",
+                    "title": "Smoke over New York City",
+                    "description": "Wildfire smoke covered New York City and reduced visibility.",
+                    "channel_title": "City Desk",
+                    "published_at": "2023-06-07T13:00:00Z",
+                    "default_language": "en",
+                    "statistics": {"view_count": 1250},
+                },
+            }
+        ],
+    )
+    write_json(
+        openaq_path,
+        {
+            "results": [
+                {
+                    "parameter": {"name": "pm25", "units": "ug/m3"},
+                    "value": 41.5,
+                    "date": {"utc": "2023-06-07T12:00:00Z"},
+                    "coordinates": {"latitude": 40.7004, "longitude": -74.0004},
+                    "location": {"id": 1, "name": "NYC"},
+                    "provider": {"name": "OpenAQ"},
+                }
+            ]
+        },
+    )
+    mission_path = root / "mission.json"
+    write_json(
+        mission_path,
+        {
+            "schema_version": "1.0.0",
+            "run_id": RUN_ID,
+            "topic": "NYC smoke verification",
+            "objective": "Determine whether public smoke reports are supported by physical evidence.",
+            "policy_profile": "standard",
+            "window": {
+                "start_utc": "2023-06-07T00:00:00Z",
+                "end_utc": "2023-06-07T23:59:59Z",
+            },
+            "region": {
+                "label": "New York City, USA",
+                "geometry": {
+                    "type": "Point",
+                    "latitude": 40.7128,
+                    "longitude": -74.0060,
+                },
+            },
+            "hypotheses": [
+                {
+                    "title": "Smoke over NYC was materially significant",
+                    "statement": "Public smoke reports are backed by elevated PM2.5 observations.",
+                    "confidence": 0.55,
+                }
+            ],
+            "artifact_imports": [
+                {
+                    "source_skill": "youtube-video-search",
+                    "artifact_path": str(youtube_path),
+                    "query_text": "nyc smoke wildfire",
+                },
+                {
+                    "source_skill": "openaq-data-fetch",
+                    "artifact_path": str(openaq_path),
+                    "source_mode": "test-fixture",
+                },
+            ],
+        },
+    )
+    return mission_path
 
 
 class BoardWorkflowTests(unittest.TestCase):
@@ -257,6 +340,143 @@ class BoardWorkflowTests(unittest.TestCase):
             self.assertIn("Smoke over NYC was materially significant", brief_text)
             self.assertIn(task_payload["canonical_ids"][0], brief_text)
             self.assertEqual("closed", close_payload["summary"]["operation"])
+
+    def test_open_investigation_round_preserves_prior_round_and_carries_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            mission_path = build_mission_fixture(root)
+
+            run_script(
+                script_path("eco-scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+            )
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            board_before = load_json(board_path(run_dir))
+            seeded_hypothesis_id = board_before["rounds"][ROUND_ID]["hypotheses"][0]["hypothesis_id"]
+
+            coverage_payload = run_script(
+                script_path("eco-score-evidence-coverage"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            challenge_payload = run_script(
+                script_path("eco-open-challenge-ticket"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Check whether reported smoke impact is overstated",
+                "--challenge-statement",
+                "Evaluate whether public narratives overstate the severity relative to observation coverage.",
+                "--target-claim-id",
+                outputs["cluster_claims"]["canonical_ids"][0],
+                "--target-hypothesis-id",
+                seeded_hypothesis_id,
+                "--priority",
+                "high",
+                "--owner-role",
+                "challenger",
+                "--linked-artifact-ref",
+                coverage_ref,
+            )
+            open_task_payload = run_script(
+                script_path("eco-claim-board-task"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Collect additional cross-source smoke timing evidence",
+                "--task-text",
+                "Query more public and physical records to sharpen temporal alignment.",
+                "--task-type",
+                "board-follow-up",
+                "--owner-role",
+                "moderator",
+                "--priority",
+                "high",
+                "--linked-artifact-ref",
+                coverage_ref,
+                "--related-id",
+                outputs["cluster_claims"]["canonical_ids"][0],
+            )
+
+            write_json(
+                investigation_path(run_dir, f"next_actions_{ROUND_ID}.json"),
+                {
+                    "ranked_actions": [
+                        {
+                            "action_id": "action-followup-public-001",
+                            "action_kind": "expand-public-evidence",
+                            "assigned_role": "sociologist",
+                            "priority": "high",
+                            "objective": "Broaden public evidence around smoke timing and intensity.",
+                            "reason": "Current public evidence is still narrow in timing coverage.",
+                            "brief_context": "Need more temporal corroboration before promotion.",
+                            "source_ids": [outputs["cluster_claims"]["canonical_ids"][0]],
+                            "evidence_refs": [coverage_ref],
+                            "target": {"hypothesis_id": seeded_hypothesis_id},
+                        }
+                    ],
+                    "action_count": 1,
+                },
+            )
+
+            open_round_payload = run_script(
+                script_path("eco-open-investigation-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND2_ID,
+                "--source-round-id",
+                ROUND_ID,
+            )
+
+            board_after = load_json(board_path(run_dir))
+            round2_state = board_after["rounds"][ROUND2_ID]
+            round2_tasks = json.loads(investigation_path(run_dir, f"round_tasks_{ROUND2_ID}.json").read_text(encoding="utf-8"))
+            transition_artifact = load_json(run_dir / "runtime" / f"round_transition_{ROUND2_ID}.json")
+
+            self.assertIn(ROUND_ID, board_after["rounds"])
+            self.assertIn(ROUND2_ID, board_after["rounds"])
+            self.assertEqual(1, len(round2_state["hypotheses"]))
+            self.assertEqual(3, len(round2_state["tasks"]))
+            self.assertEqual([], round2_state["challenge_tickets"])
+            self.assertEqual(1, len(round2_state["notes"]))
+            self.assertIn("Follow-up round opened", round2_state["notes"][0]["note_text"])
+            self.assertEqual(2, len(round2_tasks))
+            self.assertEqual([ROUND_ID], round2_tasks[0]["inputs"]["prior_round_ids"])
+            self.assertEqual("up-to-current", transition_artifact["cross_round_query_hints"]["public_signals"]["round_scope"])
+            self.assertEqual("up-to-current", transition_artifact["cross_round_query_hints"]["environment_signals"]["round_scope"])
+            self.assertEqual(ROUND_ID, transition_artifact["prior_round_ids"][0])
+            self.assertIn("eco-prepare-round", open_round_payload["board_handoff"]["suggested_next_skills"])
+            self.assertTrue(
+                any(task.get("carryover_from_task_id") == open_task_payload["canonical_ids"][0] for task in round2_state["tasks"])
+            )
+            self.assertTrue(
+                any(task.get("source_ticket_id") == challenge_payload["canonical_ids"][0] for task in round2_state["tasks"])
+            )
 
     def test_board_delta_cursor_filters_events(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

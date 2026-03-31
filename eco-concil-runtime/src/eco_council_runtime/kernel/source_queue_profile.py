@@ -139,6 +139,15 @@ EXACT_PROFILES: dict[str, dict[str, object]] = {
         notes="Task-claim writes are queue-compatible but are usually driven by a role decision rather than the fixed queue.",
         downstream_hints=["eco-read-board-delta", "eco-summarize-board-state"],
     ),
+    "eco-open-investigation-round": _profile(
+        queue_status="advisory",
+        stage="board",
+        queue_role="round-transition",
+        default_invocation="moderator-controlled",
+        core_queue_default=False,
+        notes="Moderator-controlled council-state skill that opens a follow-up round while preserving prior board state and carryover context.",
+        downstream_hints=["eco-prepare-round", "eco-read-board-delta", "eco-query-public-signals", "eco-query-environment-signals"],
+    ),
     "eco-summarize-board-state": _profile(
         queue_status="direct",
         stage="board",

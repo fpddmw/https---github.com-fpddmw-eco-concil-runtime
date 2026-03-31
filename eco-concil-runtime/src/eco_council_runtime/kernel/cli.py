@@ -166,6 +166,8 @@ def phase2_operator_view(run_dir: Path, round_id: str, phase2_state: dict[str, A
             else maybe_text(supervisor.get("promotion_gate_path")),
             "supervisor_path": str(supervisor_state_path(run_dir, round_id).resolve()) if round_id else "",
         },
+        "recommended_next_skills": supervisor.get("recommended_next_skills", []) if isinstance(supervisor.get("recommended_next_skills"), list) else [],
+        "round_transition": supervisor.get("round_transition", {}) if isinstance(supervisor.get("round_transition"), dict) else {},
         "operator_notes": supervisor.get("operator_notes", []) if isinstance(supervisor.get("operator_notes"), list) else [],
     }
 

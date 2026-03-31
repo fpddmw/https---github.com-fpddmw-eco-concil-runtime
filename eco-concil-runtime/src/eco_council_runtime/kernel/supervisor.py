@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+import re
 from typing import Any
 
 from .executor import SkillExecutionError
@@ -10,11 +11,28 @@ from .executor import maybe_text, new_runtime_event_id, utc_now_iso
 from .ledger import append_ledger_event
 from .manifest import load_json_if_exists, write_json
 from .paths import supervisor_state_path
+from .source_queue_history import discovered_round_ids
+
+WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
+OPEN_ROUND_SCRIPT = WORKSPACE_ROOT / "skills" / "eco-open-investigation-round" / "scripts" / "eco_open_investigation_round.py"
+ROUND_SUFFIX_PATTERN = re.compile(r"^(?P<prefix>.*?)(?P<number>\d+)$")
 
 
 def stable_hash(*parts: Any) -> str:
     joined = "||".join(maybe_text(part) for part in parts)
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def unique_texts(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
 
 
 def top_actions(next_actions: dict[str, Any]) -> list[dict[str, str]]:
@@ -55,6 +73,39 @@ def operator_commands(*, run_id: str, round_id: str, run_dir: Path) -> dict[str,
         "resume_command": f"resume-phase2-round {base}",
         "restart_command": f"restart-phase2-round {base}",
         "inspect_command": f"show-run-state --run-dir {run_dir} --round-id {round_id} --tail 20",
+    }
+
+
+def increment_round_id(round_id: str) -> str:
+    normalized = maybe_text(round_id)
+    match = ROUND_SUFFIX_PATTERN.match(normalized)
+    if match is None:
+        return f"{normalized}-next"
+    prefix = maybe_text(match.group("prefix"))
+    number_text = maybe_text(match.group("number"))
+    return f"{prefix}{int(number_text) + 1:0{len(number_text)}d}"
+
+
+def suggest_next_round_id(run_dir: Path, current_round_id: str) -> str:
+    observed = set(discovered_round_ids(run_dir))
+    candidate = increment_round_id(current_round_id)
+    while candidate in observed:
+        candidate = increment_round_id(candidate)
+    return candidate
+
+
+def round_transition_hint(run_dir: Path, *, run_id: str, round_id: str, supervisor_status: str) -> dict[str, str]:
+    if supervisor_status != "hold-investigation-open":
+        return {}
+    suggested_round_id = suggest_next_round_id(run_dir, round_id)
+    return {
+        "skill_name": "eco-open-investigation-round",
+        "source_round_id": round_id,
+        "suggested_round_id": suggested_round_id,
+        "command": (
+            f"python3 {OPEN_ROUND_SCRIPT} --run-dir {run_dir} --run-id {run_id} "
+            f"--round-id {suggested_round_id} --source-round-id {round_id}"
+        ),
     }
 
 
@@ -167,6 +218,7 @@ def supervise_round_with_contract_mode(
             "promotion_gate_path": artifacts.get("promotion_gate_path", ""),
             "promotion_basis_path": artifacts.get("promotion_basis_path", ""),
             "recommended_next_skills": controller.get("recommended_next_skills", []),
+            "round_transition": {},
             "top_actions": [],
             "operator_notes": [
                 f"Controller failed at stage {maybe_text(controller.get('failed_stage')) or maybe_text(controller.get('current_stage')) or 'unknown'}."
@@ -224,6 +276,32 @@ def supervise_round_with_contract_mode(
     promotion_status = maybe_text(controller.get("promotion_status")) or "withheld"
     gate_status = maybe_text(controller.get("gate_status")) or "freeze-withheld"
     classification = classify_supervisor_state(controller)
+    round_transition = round_transition_hint(run_dir, run_id=run_id, round_id=round_id, supervisor_status=classification["supervisor_status"])
+    recommended_next_skills = unique_texts(
+        [
+            *(
+                ["eco-open-investigation-round"]
+                if classification["supervisor_status"] == "hold-investigation-open"
+                else []
+            ),
+            *(
+                controller.get("recommended_next_skills", [])
+                if isinstance(controller.get("recommended_next_skills"), list)
+                else []
+            ),
+        ]
+    )
+    resolved_operator_notes = operator_notes(
+        promotion_status=promotion_status,
+        gate_status=gate_status,
+        gate_reasons=gate_reasons,
+        top_action_rows=top_action_rows,
+    )
+    if round_transition:
+        resolved_operator_notes = [
+            *resolved_operator_notes,
+            f"Moderator may open {round_transition['suggested_round_id']} via eco-open-investigation-round to continue the case with a clean round boundary.",
+        ][:4]
     finished_at = utc_now_iso()
 
     payload = {
@@ -255,14 +333,10 @@ def supervise_round_with_contract_mode(
         "controller_path": artifacts.get("controller_state_path", ""),
         "promotion_gate_path": artifacts.get("promotion_gate_path", ""),
         "promotion_basis_path": artifacts.get("promotion_basis_path", ""),
-        "recommended_next_skills": controller.get("recommended_next_skills", []),
+        "recommended_next_skills": recommended_next_skills,
+        "round_transition": round_transition,
         "top_actions": top_action_rows,
-        "operator_notes": operator_notes(
-            promotion_status=promotion_status,
-            gate_status=gate_status,
-            gate_reasons=gate_reasons,
-            top_action_rows=top_action_rows,
-        ),
+        "operator_notes": resolved_operator_notes,
         "resume_command": command_hints["resume_command"],
         "restart_command": command_hints["restart_command"],
         "inspect_command": command_hints["inspect_command"],

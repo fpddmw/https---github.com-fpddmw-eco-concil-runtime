@@ -1,19 +1,20 @@
 ---
 name: eco-query-environment-signals
-description: Query compact environment-signal rows from the unified signal plane database with run, round, metric, source, time, bbox, and quality filters. Use when an agent needs board-ready physical evidence refs without reopening raw model or station artifacts.
+ description: Query compact environment-signal rows from the unified signal plane database with run, round, round-scope, metric, source, time, bbox, and quality filters. Use when an agent needs board-ready physical evidence refs without reopening raw model or station artifacts.
 ---
 
 # Eco Query Environment Signals
 
 ## Core Goal
 - Read compact environment signal rows from the unified signal plane database.
-- Filter by run, round, metric, source, time window, location, and quality flags.
+- Filter by run, round or cross-round scope, metric, source, time window, location, and quality flags.
 - Return short results with provenance refs for environmentalist, moderator, and challenger use.
 
 ## Triggering Conditions
 - Need physical observations without reading raw provider payloads.
 - Need mission-window filtering for air, weather, hydrology, or fire signals.
 - Need compact evidence refs for board or challenge work.
+- Need to reopen prior-round physical evidence while staying inside the same run.
 
 ## Read/Write Contract
 - Read only.
@@ -26,6 +27,7 @@ description: Query compact environment-signal rows from the unified signal plane
 - `round_id`
 - Optional:
   - `db_path`
+  - `round_scope`
 - Optional filters:
   - `source_skill`
   - `metric`

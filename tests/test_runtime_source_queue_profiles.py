@@ -47,6 +47,9 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
         self.assertEqual("advisory", profiles["eco-query-public-signals"]["queue_status"])
         self.assertEqual("context", profiles["eco-query-public-signals"]["stage"])
 
+        self.assertEqual("advisory", profiles["eco-open-investigation-round"]["queue_status"])
+        self.assertEqual("round-transition", profiles["eco-open-investigation-round"]["queue_role"])
+
         self.assertEqual("direct", profiles["eco-summarize-round-readiness"]["queue_status"])
         self.assertEqual("investigation", profiles["eco-summarize-round-readiness"]["stage"])
 

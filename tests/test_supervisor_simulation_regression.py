@@ -246,6 +246,9 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             self.assertEqual(str(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json").resolve()), supervisor_artifact["orchestration_plan_path"])
             self.assertEqual("withheld", promotion_artifact["promotion_status"])
             self.assertGreaterEqual(len(supervisor_artifact["top_actions"]), 1)
+            self.assertIn("eco-open-investigation-round", supervisor_artifact["recommended_next_skills"])
+            self.assertEqual("eco-open-investigation-round", supervisor_artifact["round_transition"]["skill_name"])
+            self.assertEqual("round-phase2-002", supervisor_artifact["round_transition"]["suggested_round_id"])
             self.assertIn("eco-propose-next-actions", supervisor_artifact["recommended_next_skills"])
             self.assertEqual("hold-investigation-open", state_payload["phase2"]["supervisor"]["supervisor_status"])
             event_types = [item.get("event_type") for item in state_payload["ledger_tail"]]
