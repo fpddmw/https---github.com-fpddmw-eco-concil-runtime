@@ -16,8 +16,9 @@ description: Append a compact investigation note to the local board artifact, pr
 - Need to initialize board activity for a run or round.
 
 ## Read/Write Contract
-- Reads and writes `run_dir/board/investigation_board.json` by default.
-- Appends one note and one board event.
+- Reads the shared deliberation plane first and exports `run_dir/board/investigation_board.json` for compatibility.
+- Bootstraps existing board JSON into the deliberation plane when needed.
+- Appends one note and one board event on the deliberation plane.
 
 ## Required Input
 - `run_dir`
@@ -35,6 +36,8 @@ description: Append a compact investigation note to the local board artifact, pr
 ## Output Contract
 - `status`
 - `summary`
+  - Includes `db_path`
+  - Includes `write_surface`
 - `receipt_id`
 - `batch_id`
 - `artifact_refs`

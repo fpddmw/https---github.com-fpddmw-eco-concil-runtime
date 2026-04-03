@@ -6,7 +6,7 @@ description: Build a board-facing normalization audit from previously extracted 
 # Eco Build Normalization Audit
 
 ## Core Goal
-- Read the current round's claim and observation candidate artifacts.
+- Read the current round's claim and observation candidate results.
 - Summarize coverage, diversity, and unresolved matching gaps.
 - Persist a normalization audit artifact for board review.
 
@@ -16,7 +16,8 @@ description: Build a board-facing normalization audit from previously extracted 
 - Need a shared audit artifact for moderator, challenger, or orchestrator workflows.
 
 ## Read/Write Contract
-- Reads `claim_candidates_<round_id>.json` and `observation_candidates_<round_id>.json`.
+- Reads shared claim/observation candidate result sets from `runs/<run_id>/analytics/signal_plane.sqlite` first when available.
+- Reads `claim_candidates_<round_id>.json` and `observation_candidates_<round_id>.json` as compatible artifact paths when present.
 - Writes `runs/<run_id>/analytics/normalization_audit_<round_id>.json` by default.
 
 ## Required Input

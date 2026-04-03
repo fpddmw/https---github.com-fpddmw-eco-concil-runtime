@@ -7,12 +7,22 @@ import argparse
 import hashlib
 import json
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import fmean, median
 from typing import Any
 
 SKILL_NAME = "eco-extract-observation-candidates"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
+    sync_observation_candidate_result_set,
+)
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
     signal_id TEXT PRIMARY KEY,
@@ -204,6 +214,16 @@ def extract_observation_candidates_skill(
         )
     wrapper = {"schema_version": "n2", "skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "generated_at_utc": utc_now_iso(), "candidate_count": len(candidates), "candidates": candidates}
     write_json(candidate_path, wrapper)
+    analysis_sync = sync_observation_candidate_result_set(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        observation_candidates_path=candidate_path,
+        db_path=str(db_file),
+    )
+    wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
+    wrapper["analysis_sync"] = analysis_sync
+    write_json(candidate_path, wrapper)
     artifact_refs = [{"signal_id": "", "artifact_path": str(candidate_path), "record_locator": "$.candidates", "artifact_ref": f"{candidate_path}:$.candidates"}]
     for candidate in candidates:
         artifact_refs.extend(candidate["provenance_refs"])
@@ -211,12 +231,13 @@ def extract_observation_candidates_skill(
     warnings = [] if candidates else [{"code": "no-candidates", "message": "No observation candidates were extracted from the current environment signal plane."}]
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "candidate_count": len(candidates), "output_path": str(candidate_path), "db_path": str(db_file)},
+        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "candidate_count": len(candidates), "output_path": str(candidate_path), "db_path": maybe_text(analysis_sync.get("db_path"))},
         "receipt_id": "candidate-receipt-" + stable_hash(SKILL_NAME, batch_id)[:20],
         "batch_id": batch_id,
         "artifact_refs": artifact_refs[:40],
         "canonical_ids": [candidate["observation_id"] for candidate in candidates],
         "warnings": warnings,
+        "analysis_sync": analysis_sync,
         "board_handoff": {"candidate_ids": [candidate["observation_id"] for candidate in candidates], "evidence_refs": artifact_refs[:20], "gap_hints": ["Observation candidates without stable coordinates still need spatial refinement."] if candidates else [], "challenge_hints": ["Check whether provider-specific clusters should be merged before matching."] if candidates else [], "suggested_next_skills": ["eco-merge-observation-candidates", "eco-build-normalization-audit"]},
     }
 

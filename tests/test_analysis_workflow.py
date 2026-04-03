@@ -23,6 +23,10 @@ class AnalysisWorkflowTests(unittest.TestCase):
             self.assertGreaterEqual(len(outputs["cluster_claims"]["canonical_ids"]), 1)
             self.assertEqual(1, len(outputs["merge_observations"]["canonical_ids"]))
             self.assertGreaterEqual(len(outputs["link_evidence"]["canonical_ids"]), 1)
+            self.assertEqual("completed", outputs["extract_claims"]["analysis_sync"]["status"])
+            self.assertEqual(
+                "completed", outputs["extract_observations"]["analysis_sync"]["status"]
+            )
 
             claim_scope_payload = run_script(
                 script_path("eco-derive-claim-scope"),
@@ -92,11 +96,17 @@ class AnalysisWorkflowTests(unittest.TestCase):
                     (RUN_ID, ROUND_ID),
                 ).fetchall()
                 result_set_map = {row[0]: row for row in result_sets}
+                self.assertIn("claim-candidate", result_set_map)
                 self.assertIn("claim-observation-link", result_set_map)
+                self.assertIn("observation-candidate", result_set_map)
                 self.assertIn("claim-scope", result_set_map)
                 self.assertIn("observation-scope", result_set_map)
                 self.assertIn("evidence-coverage", result_set_map)
+                self.assertGreaterEqual(int(result_set_map["claim-candidate"][1]), 1)
                 self.assertGreaterEqual(int(result_set_map["claim-observation-link"][1]), 1)
+                self.assertGreaterEqual(
+                    int(result_set_map["observation-candidate"][1]), 1
+                )
                 self.assertGreaterEqual(int(result_set_map["claim-scope"][1]), 1)
                 self.assertGreaterEqual(int(result_set_map["observation-scope"][1]), 1)
                 self.assertGreaterEqual(int(result_set_map["evidence-coverage"][1]), 1)
@@ -252,6 +262,66 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 coverage_artifact["observed_inputs"]["observation_scope_present"]
             )
             self.assertGreaterEqual(coverage_payload["summary"]["coverage_count"], 1)
+
+    def test_normalization_audit_can_read_candidates_from_analysis_plane_without_artifacts(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            self.assertEqual("completed", outputs["extract_claims"]["analysis_sync"]["status"])
+            self.assertEqual(
+                "completed", outputs["extract_observations"]["analysis_sync"]["status"]
+            )
+
+            analytics_path(run_dir, f"claim_candidates_{ROUND_ID}.json").unlink()
+            analytics_path(run_dir, f"observation_candidates_{ROUND_ID}.json").unlink()
+
+            audit_payload = run_script(
+                script_path("eco-build-normalization-audit"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            audit_artifact = load_json(
+                analytics_path(run_dir, f"normalization_audit_{ROUND_ID}.json")
+            )
+
+            self.assertEqual(
+                "analysis-plane", audit_payload["summary"]["claim_candidate_source"]
+            )
+            self.assertEqual(
+                "analysis-plane",
+                audit_payload["summary"]["observation_candidate_source"],
+            )
+            self.assertEqual("analysis-plane", audit_artifact["claim_candidate_source"])
+            self.assertEqual(
+                "analysis-plane",
+                audit_artifact["observation_candidate_source"],
+            )
+            self.assertFalse(
+                audit_artifact["observed_inputs"]["claim_candidates_artifact_present"]
+            )
+            self.assertFalse(
+                audit_artifact["observed_inputs"][
+                    "observation_candidates_artifact_present"
+                ]
+            )
+            self.assertTrue(audit_artifact["observed_inputs"]["claim_candidates_present"])
+            self.assertTrue(
+                audit_artifact["observed_inputs"]["observation_candidates_present"]
+            )
+            self.assertGreaterEqual(
+                audit_artifact["report"]["claim_candidate_count"], 1
+            )
+            self.assertGreaterEqual(
+                audit_artifact["report"]["observation_candidate_count"], 1
+            )
 
 
 if __name__ == "__main__":

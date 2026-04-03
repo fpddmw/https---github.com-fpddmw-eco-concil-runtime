@@ -16,8 +16,9 @@ description: Create or update a hypothesis card on the local investigation board
 - Need a board-visible object for moderator and challenger workflows.
 
 ## Read/Write Contract
-- Reads and writes `run_dir/board/investigation_board.json` by default.
-- Upserts one hypothesis card and appends one board event.
+- Reads the shared deliberation plane first and exports `run_dir/board/investigation_board.json` for compatibility.
+- Bootstraps existing board JSON into the deliberation plane when needed.
+- Upserts one hypothesis card and appends one board event on the deliberation plane.
 
 ## Required Input
 - `run_dir`
@@ -36,6 +37,8 @@ description: Create or update a hypothesis card on the local investigation board
 ## Output Contract
 - `status`
 - `summary`
+  - Includes `db_path`
+  - Includes `write_surface`
 - `receipt_id`
 - `batch_id`
 - `artifact_refs`

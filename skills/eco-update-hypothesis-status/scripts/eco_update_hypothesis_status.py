@@ -7,7 +7,6 @@ import argparse
 import fcntl
 import hashlib
 import json
-import os
 import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -21,7 +20,10 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
-    sync_board_to_deliberation_plane,
+    bootstrap_board_state,
+    commit_board_mutation,
+    connect_db,
+    load_raw_board_record,
 )
 
 
@@ -73,66 +75,14 @@ def resolve_board_path(run_dir: Path, board_path: str) -> Path:
     return candidate.resolve()
 
 
-def load_or_init_board(path: Path, run_id: str) -> dict[str, Any]:
-    if path.exists():
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(payload, dict):
-            return payload
-    return {"schema_version": "board-v1", "run_id": run_id, "board_revision": 0, "updated_at_utc": utc_now_iso(), "events": [], "rounds": {}}
-
-
-def board_revision(board: dict[str, Any]) -> int:
-    try:
-        return max(0, int(board.get("board_revision") or 0))
-    except (TypeError, ValueError):
-        return 0
-
-
-def ensure_round(board: dict[str, Any], round_id: str) -> dict[str, Any]:
-    rounds = board.setdefault("rounds", {})
-    if not isinstance(rounds, dict):
-        rounds = {}
-        board["rounds"] = rounds
-    round_state = rounds.setdefault(round_id, {"notes": [], "challenge_tickets": [], "hypotheses": [], "tasks": []})
-    if not isinstance(round_state, dict):
-        round_state = {"notes": [], "challenge_tickets": [], "hypotheses": [], "tasks": []}
-        rounds[round_id] = round_state
-    round_state.setdefault("notes", [])
-    round_state.setdefault("challenge_tickets", [])
-    round_state.setdefault("hypotheses", [])
-    round_state.setdefault("tasks", [])
-    return round_state
-
-
-def append_event(board: dict[str, Any], run_id: str, round_id: str, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
-    events = board.setdefault("events", [])
-    if not isinstance(events, list):
-        events = []
-        board["events"] = events
-    timestamp = utc_now_iso()
-    event_id = "boardevt-" + stable_hash(run_id, round_id, event_type, len(events), timestamp, payload.get("hypothesis_id", ""))[:12]
-    event = {"event_id": event_id, "run_id": run_id, "round_id": round_id, "event_type": event_type, "created_at_utc": timestamp, "payload": payload}
-    events.append(event)
-    board["updated_at_utc"] = timestamp
-    return event
-
-
-def write_board(path: Path, board: dict[str, Any], next_revision: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    board["board_revision"] = next_revision
-    temp_path = path.with_name(f".{path.name}.{os.getpid()}.{next_revision}.tmp")
-    temp_path.write_text(json.dumps(board, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    os.replace(temp_path, path)
-
-
 @contextmanager
-def locked_board(path: Path, run_id: str):
+def locked_board(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.with_name(path.name + ".lock")
     with lock_path.open("a+", encoding="utf-8") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
         try:
-            yield load_or_init_board(path, run_id)
+            yield
         finally:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
@@ -152,13 +102,26 @@ def update_hypothesis_status_skill(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
-    with locked_board(board_file, run_id) as board:
-        next_revision = board_revision(board) + 1
-        round_state = ensure_round(board, round_id)
-        hypotheses = round_state["hypotheses"] if isinstance(round_state.get("hypotheses"), list) else []
-        round_state["hypotheses"] = hypotheses
-        resolved_hypothesis_id = maybe_text(hypothesis_id) or ("hypothesis-" + stable_hash(run_id, round_id, title, statement, next_revision)[:12])
-        existing = next((item for item in hypotheses if isinstance(item, dict) and maybe_text(item.get("hypothesis_id")) == resolved_hypothesis_id), None)
+    with locked_board(board_file):
+        bootstrap_summary = bootstrap_board_state(
+            run_dir_path,
+            expected_run_id=run_id,
+            board_path=board_file,
+        )
+        next_revision = max(0, int(bootstrap_summary.get("board_revision") or 0)) + 1
+        resolved_hypothesis_id = maybe_text(hypothesis_id) or (
+            "hypothesis-" + stable_hash(run_id, round_id, title, statement, next_revision)[:12]
+        )
+        connection, _ = connect_db(run_dir_path)
+        try:
+            existing = load_raw_board_record(
+                connection,
+                table_name="hypothesis_cards",
+                id_column="hypothesis_id",
+                record_id=resolved_hypothesis_id,
+            )
+        finally:
+            connection.close()
         timestamp = utc_now_iso()
         payload = {
             "hypothesis_id": resolved_hypothesis_id,
@@ -176,7 +139,6 @@ def update_hypothesis_status_skill(
         if existing is None:
             payload["created_at_utc"] = timestamp
             payload["history"] = [{"status": payload["status"], "updated_at_utc": timestamp, "confidence": payload["confidence"]}]
-            hypotheses.append(payload)
             existing = payload
             operation = "created"
         else:
@@ -184,16 +146,49 @@ def update_hypothesis_status_skill(
             history = existing.get("history") if isinstance(existing.get("history"), list) else []
             history.append({"status": payload["status"], "updated_at_utc": timestamp, "confidence": payload["confidence"]})
             existing["history"] = history
-        hypothesis_index = next(index for index, item in enumerate(hypotheses) if isinstance(item, dict) and maybe_text(item.get("hypothesis_id")) == resolved_hypothesis_id)
-        event = append_event(board, run_id, round_id, "hypothesis-updated", {"hypothesis_id": resolved_hypothesis_id, "status": maybe_text(status), "operation": operation})
-        write_board(board_file, board, next_revision)
-    sync_board_to_deliberation_plane(run_dir_path, expected_run_id=run_id, board_path=board_file)
-    artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": f"$.rounds.{round_id}.hypotheses[{hypothesis_index}]", "artifact_ref": f"{board_file}:$.rounds.{round_id}.hypotheses[{hypothesis_index}]"}]
+        write_summary = commit_board_mutation(
+            run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            board_path=board_file,
+            hypothesis_records=[existing],
+            event_type="hypothesis-updated",
+            event_payload={
+                "hypothesis_id": resolved_hypothesis_id,
+                "status": maybe_text(status),
+                "operation": operation,
+            },
+            event_created_at_utc=timestamp,
+            event_discriminator=resolved_hypothesis_id,
+        )
+        event_id = maybe_text(write_summary.get("event_id"))
+        record_locators = (
+            write_summary.get("record_locators", {})
+            if isinstance(write_summary.get("record_locators"), dict)
+            else {}
+        )
+        hypothesis_locator = (
+            record_locators.get("hypotheses", {})
+            if isinstance(record_locators.get("hypotheses"), dict)
+            else {}
+        ).get(resolved_hypothesis_id, f"$.rounds.{round_id}.hypotheses[0]")
+    artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": hypothesis_locator, "artifact_ref": f"{board_file}:{hypothesis_locator}"}]
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "board_path": str(board_file), "board_revision": next_revision, "event_id": event["event_id"], "hypothesis_id": resolved_hypothesis_id, "operation": operation},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "board_path": str(board_file),
+            "board_revision": max(0, int(write_summary.get("board_revision") or 0)),
+            "event_id": event_id,
+            "hypothesis_id": resolved_hypothesis_id,
+            "operation": operation,
+            "db_path": maybe_text(write_summary.get("db_path")),
+            "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
+        },
         "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, resolved_hypothesis_id)[:20],
-        "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event["event_id"])[:16],
+        "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event_id)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [resolved_hypothesis_id],
         "warnings": [],

@@ -4,7 +4,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import load_json, run_kernel, run_script, script_path, seed_analysis_chain, write_json
+from _workflow_support import (
+    analytics_path,
+    load_json,
+    run_kernel,
+    run_script,
+    script_path,
+    seed_analysis_chain,
+    write_json,
+)
 
 HISTORICAL_RUN_ID = "run-history-archive-001"
 HISTORICAL_ROUND_ID = "round-history-archive-001"
@@ -292,6 +300,16 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 HISTORICAL_ROUND_ID,
                 publish=True,
             )
+            analytics_path(
+                historical_run_dir, f"claim_scope_proposals_{HISTORICAL_ROUND_ID}.json"
+            ).unlink()
+            analytics_path(
+                historical_run_dir,
+                f"observation_scope_proposals_{HISTORICAL_ROUND_ID}.json",
+            ).unlink()
+            analytics_path(
+                historical_run_dir, f"evidence_coverage_{HISTORICAL_ROUND_ID}.json"
+            ).unlink()
 
             signal_archive = run_kernel(
                 "run-skill",
@@ -359,6 +377,11 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
 
             case_query_artifact = load_json(search_run_dir / "archive" / f"case_library_query_{SEARCH_ROUND_ID}.json")
             signal_query_artifact = load_json(search_run_dir / "archive" / f"signal_corpus_query_{SEARCH_ROUND_ID}.json")
+            case_import_artifact = load_json(
+                historical_run_dir
+                / "archive"
+                / f"case_library_import_{HISTORICAL_ROUND_ID}.json"
+            )
             case_db_path = (root / "archives" / "eco_case_library.sqlite").resolve().as_posix()
             signal_db_path = (root / "archives" / "eco_signal_corpus.sqlite").resolve().as_posix()
 
@@ -369,6 +392,18 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertIn(signal_db_path, signal_archive["event"]["resolved_write_paths"])
             self.assertIn(case_db_path, case_archive["event"]["resolved_write_paths"])
             self.assertEqual(HISTORICAL_RUN_ID, case_archive["skill_payload"]["summary"]["case_id"])
+            self.assertEqual(
+                "analysis-plane",
+                case_archive["skill_payload"]["summary"]["claim_scope_source"],
+            )
+            self.assertEqual(
+                "analysis-plane",
+                case_archive["skill_payload"]["summary"]["observation_scope_source"],
+            )
+            self.assertEqual(
+                "analysis-plane",
+                case_archive["skill_payload"]["summary"]["coverage_source"],
+            )
 
             self.assertEqual("completed", case_query["status"])
             self.assertEqual("completed", signal_query["status"])
@@ -382,6 +417,28 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertIn("air-quality", first_case["matched_metric_families"])
             self.assertEqual(HISTORICAL_RUN_ID, first_signal["run_id"])
             self.assertEqual("air-quality", first_signal["metric_family"])
+            self.assertEqual("analysis-plane", case_import_artifact["claim_scope_source"])
+            self.assertEqual(
+                "analysis-plane",
+                case_import_artifact["observation_scope_source"],
+            )
+            self.assertEqual("analysis-plane", case_import_artifact["coverage_source"])
+            self.assertFalse(
+                case_import_artifact["observed_inputs"]["claim_scope_artifact_present"]
+            )
+            self.assertFalse(
+                case_import_artifact["observed_inputs"][
+                    "observation_scope_artifact_present"
+                ]
+            )
+            self.assertFalse(
+                case_import_artifact["observed_inputs"]["coverage_artifact_present"]
+            )
+            self.assertTrue(case_import_artifact["observed_inputs"]["claim_scope_present"])
+            self.assertTrue(
+                case_import_artifact["observed_inputs"]["observation_scope_present"]
+            )
+            self.assertTrue(case_import_artifact["observed_inputs"]["coverage_present"])
 
     def test_runtime_history_bootstrap_materializes_archive_backed_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -488,6 +545,13 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 CURRENT_ROUND_ID,
                 publish=False,
             )
+            analytics_path(
+                current_run_dir, f"claim_scope_proposals_{CURRENT_ROUND_ID}.json"
+            ).unlink()
+            analytics_path(
+                current_run_dir,
+                f"observation_scope_proposals_{CURRENT_ROUND_ID}.json",
+            ).unlink()
 
             history_payload = run_kernel(
                 "run-skill",
@@ -508,9 +572,36 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
 
             self.assertEqual("completed", history_payload["status"])
             self.assertEqual("strict", history_payload["summary"]["contract_mode"])
+            self.assertEqual(
+                "analysis-plane",
+                history_payload["skill_payload"]["summary"]["claim_scope_source"],
+            )
+            self.assertEqual(
+                "analysis-plane",
+                history_payload["skill_payload"]["summary"][
+                    "observation_scope_source"
+                ],
+            )
             self.assertGreaterEqual(retrieval_artifact["budget"]["selected_case_count"], 1)
             self.assertGreaterEqual(retrieval_artifact["budget"]["selected_signal_count"], 1)
             self.assertEqual("smoke-transport", retrieval_artifact["history_query"]["profile_id"])
+            self.assertEqual("analysis-plane", retrieval_artifact["claim_scope_source"])
+            self.assertEqual(
+                "analysis-plane",
+                retrieval_artifact["observation_scope_source"],
+            )
+            self.assertFalse(
+                retrieval_artifact["observed_inputs"]["claim_scope_artifact_present"]
+            )
+            self.assertFalse(
+                retrieval_artifact["observed_inputs"][
+                    "observation_scope_artifact_present"
+                ]
+            )
+            self.assertTrue(retrieval_artifact["observed_inputs"]["claim_scope_present"])
+            self.assertTrue(
+                retrieval_artifact["observed_inputs"]["observation_scope_present"]
+            )
             self.assertTrue(any(case["case_id"] == HISTORICAL_RUN_ID for case in retrieval_artifact["cases"]))
             self.assertIn(HISTORICAL_RUN_ID, context_text)
             self.assertIn("Historical Signal Hints", context_text)

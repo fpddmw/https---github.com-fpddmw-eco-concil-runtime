@@ -16,6 +16,15 @@ from typing import Any
 
 SKILL_NAME = "eco-materialize-history-context"
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
+    load_claim_scope_context,
+    load_observation_scope_context,
+)
+
 MAX_CASES = 3
 MAX_EXCERPTS_PER_CASE = 2
 MAX_SIGNALS = 4
@@ -228,7 +237,11 @@ def load_signal_rows(run_dir: Path, run_id: str) -> list[sqlite3.Row]:
         connection.close()
 
 
-def build_history_query(run_dir: Path, run_id: str, round_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+def build_history_query(
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, str]]]:
     mission = load_json_if_exists(run_dir / "mission.json")
     if not isinstance(mission, dict):
         mission = {"run_id": run_id}
@@ -238,12 +251,40 @@ def build_history_query(run_dir: Path, run_id: str, round_id: str) -> tuple[dict
     next_actions = load_json_if_exists(run_dir / "investigation" / f"next_actions_{round_id}.json") or {}
     probes = load_json_if_exists(run_dir / "investigation" / f"falsification_probes_{round_id}.json") or {}
     promotion = load_json_if_exists(run_dir / "promotion" / f"promoted_evidence_basis_{round_id}.json") or {}
-    claim_scope_wrapper = load_json_if_exists(run_dir / "analytics" / f"claim_scope_proposals_{round_id}.json") or {}
-    observation_scope_wrapper = load_json_if_exists(run_dir / "analytics" / f"observation_scope_proposals_{round_id}.json") or {}
+    analysis_warnings: list[dict[str, str]] = []
+    claim_scope_context = load_claim_scope_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    observation_scope_context = load_observation_scope_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=maybe_text(claim_scope_context.get("db_path")),
+    )
+    analysis_warnings.extend(
+        claim_scope_context.get("warnings", [])
+        if isinstance(claim_scope_context.get("warnings"), list)
+        else []
+    )
+    analysis_warnings.extend(
+        observation_scope_context.get("warnings", [])
+        if isinstance(observation_scope_context.get("warnings"), list)
+        else []
+    )
     signal_rows = load_signal_rows(run_dir, run_id)
 
-    claim_scopes = claim_scope_wrapper.get("scopes", []) if isinstance(claim_scope_wrapper.get("scopes"), list) else []
-    observation_scopes = observation_scope_wrapper.get("scopes", []) if isinstance(observation_scope_wrapper.get("scopes"), list) else []
+    claim_scopes = (
+        claim_scope_context.get("claim_scopes", [])
+        if isinstance(claim_scope_context.get("claim_scopes"), list)
+        else []
+    )
+    observation_scopes = (
+        observation_scope_context.get("observation_scopes", [])
+        if isinstance(observation_scope_context.get("observation_scopes"), list)
+        else []
+    )
     active_hypotheses = board_summary.get("active_hypotheses", []) if isinstance(board_summary.get("active_hypotheses"), list) else []
     open_challenges = board_summary.get("open_challenges", []) if isinstance(board_summary.get("open_challenges"), list) else []
     query_fragments = unique_texts(
@@ -326,7 +367,35 @@ def build_history_query(run_dir: Path, run_id: str, round_id: str) -> tuple[dict
         "active_hypothesis_count": len(active_hypotheses),
         "open_challenge_count": len(open_challenges),
     }
-    return query, current_context
+    analysis_inputs = {
+        "claim_scope_path": maybe_text(claim_scope_context.get("claim_scope_file")),
+        "observation_scope_path": maybe_text(
+            observation_scope_context.get("observation_scope_file")
+        ),
+        "claim_scope_source": maybe_text(claim_scope_context.get("claim_scope_source"))
+        or "missing-claim-scope",
+        "observation_scope_source": maybe_text(
+            observation_scope_context.get("observation_scope_source")
+        )
+        or "missing-observation-scope",
+        "analysis_db_path": maybe_text(observation_scope_context.get("db_path"))
+        or maybe_text(claim_scope_context.get("db_path")),
+        "observed_inputs": {
+            "claim_scope_present": bool(claim_scopes),
+            "claim_scope_artifact_present": bool(
+                claim_scope_context.get("claim_scope_artifact_present")
+            ),
+            "observation_scope_present": bool(observation_scopes),
+            "observation_scope_artifact_present": bool(
+                observation_scope_context.get("observation_scope_artifact_present")
+            ),
+        },
+        "input_analysis_sync": {
+            "claim_scope": claim_scope_context.get("analysis_sync", {}),
+            "observation_scope": observation_scope_context.get("analysis_sync", {}),
+        },
+    }
+    return query, current_context, analysis_inputs, analysis_warnings
 
 
 def query_script_path(skill_name: str) -> Path:
@@ -483,7 +552,11 @@ def materialize_history_context_skill(
     max_excerpts_per_case = max(1, min(MAX_EXCERPTS_PER_CASE, max_excerpts_per_case))
     max_signals = max(1, min(MAX_SIGNALS, max_signals))
 
-    history_query, current_context = build_history_query(run_dir_path, run_id, round_id)
+    warnings: list[dict[str, str]] = []
+    history_query, current_context, analysis_inputs, analysis_warnings = (
+        build_history_query(run_dir_path, run_id, round_id)
+    )
+    warnings.extend(analysis_warnings)
     query_text = maybe_text(history_query.get("query"))
 
     run_json_script(
@@ -602,6 +675,19 @@ def materialize_history_context_skill(
         "round_id": round_id,
         "history_query": history_query,
         "current_context": current_context,
+        "claim_scope_path": maybe_text(analysis_inputs.get("claim_scope_path")),
+        "observation_scope_path": maybe_text(
+            analysis_inputs.get("observation_scope_path")
+        ),
+        "claim_scope_source": maybe_text(analysis_inputs.get("claim_scope_source"))
+        or "missing-claim-scope",
+        "observation_scope_source": maybe_text(
+            analysis_inputs.get("observation_scope_source")
+        )
+        or "missing-observation-scope",
+        "analysis_db_path": maybe_text(analysis_inputs.get("analysis_db_path")),
+        "observed_inputs": analysis_inputs.get("observed_inputs", {}),
+        "input_analysis_sync": analysis_inputs.get("input_analysis_sync", {}),
         "case_query_path": str(case_query_file),
         "signal_query_path": str(signal_query_file),
         "budget": {
@@ -620,7 +706,6 @@ def materialize_history_context_skill(
     write_json_file(retrieval_file, snapshot)
     write_text_file(context_file, render_history_context(snapshot))
 
-    warnings: list[dict[str, str]] = []
     if not rendered_cases:
         warnings.append({"code": "no-case-matches", "message": "No archived case matches were available for history context."})
     if not selected_signals:
@@ -644,12 +729,20 @@ def materialize_history_context_skill(
             "history_context_path": str(context_file),
             "selected_case_count": len(rendered_cases),
             "selected_signal_count": len(selected_signals),
+            "claim_scope_source": maybe_text(analysis_inputs.get("claim_scope_source"))
+            or "missing-claim-scope",
+            "observation_scope_source": maybe_text(
+                analysis_inputs.get("observation_scope_source")
+            )
+            or "missing-observation-scope",
+            "analysis_db_path": maybe_text(analysis_inputs.get("analysis_db_path")),
         },
         "receipt_id": "archive-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, retrieval_file)[:20],
         "batch_id": "archivebatch-" + stable_hash(SKILL_NAME, run_id, round_id, context_file)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": unique_texts([item.get("case_id") for item in rendered_cases if isinstance(item, dict)]),
         "warnings": warnings,
+        "input_analysis_sync": analysis_inputs.get("input_analysis_sync", {}),
         "board_handoff": {
             "candidate_ids": unique_texts(
                 [item.get("case_id") for item in rendered_cases if isinstance(item, dict)]

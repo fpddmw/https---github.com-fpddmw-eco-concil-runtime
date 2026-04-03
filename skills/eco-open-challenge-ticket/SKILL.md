@@ -16,8 +16,9 @@ description: Open a challenge ticket on the local investigation board, preserve 
 - Need a durable challenger queue item rather than an ad hoc note.
 
 ## Read/Write Contract
-- Reads and writes `run_dir/board/investigation_board.json` by default.
-- Appends one challenge ticket and one board event.
+- Reads the shared deliberation plane first and exports `run_dir/board/investigation_board.json` for compatibility.
+- Bootstraps existing board JSON into the deliberation plane when needed.
+- Appends one challenge ticket and one board event on the deliberation plane.
 
 ## Required Input
 - `run_dir`
@@ -36,6 +37,8 @@ description: Open a challenge ticket on the local investigation board, preserve 
 ## Output Contract
 - `status`
 - `summary`
+  - Includes `db_path`
+  - Includes `write_surface`
 - `receipt_id`
 - `batch_id`
 - `artifact_refs`

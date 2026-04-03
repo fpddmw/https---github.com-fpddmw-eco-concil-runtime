@@ -20,9 +20,8 @@ description: Archive one run's canonical board, reporting, and promotion artifac
 - Reads `run_dir/board/investigation_board.json` by default when present.
 - Reads `run_dir/board/board_state_summary_<round_id>.json` by default when present.
 - Reads `run_dir/board/board_brief_<round_id>.md` by default when present.
-- Reads `run_dir/analytics/claim_scope_proposals_<round_id>.json` by default when present.
-- Reads `run_dir/analytics/observation_scope_proposals_<round_id>.json` by default when present.
-- Reads `run_dir/analytics/evidence_coverage_<round_id>.json` by default when present.
+- Reads shared claim-scope, observation-scope, and coverage result sets from `run_dir/analytics/signal_plane.sqlite` first when available.
+- Reads `run_dir/analytics/claim_scope_proposals_<round_id>.json`, `run_dir/analytics/observation_scope_proposals_<round_id>.json`, and `run_dir/analytics/evidence_coverage_<round_id>.json` as compatible artifact paths when present.
 - Reads `run_dir/investigation/next_actions_<round_id>.json` by default when present.
 - Reads `run_dir/investigation/falsification_probes_<round_id>.json` by default when present.
 - Reads `run_dir/reporting/round_readiness_<round_id>.json` by default when present.

@@ -11,6 +11,8 @@ ANALYSIS_KIND_EVIDENCE_COVERAGE = "evidence-coverage"
 ANALYSIS_KIND_CLAIM_SCOPE = "claim-scope"
 ANALYSIS_KIND_OBSERVATION_SCOPE = "observation-scope"
 ANALYSIS_KIND_CLAIM_OBSERVATION_LINK = "claim-observation-link"
+ANALYSIS_KIND_CLAIM_CANDIDATE = "claim-candidate"
+ANALYSIS_KIND_OBSERVATION_CANDIDATE = "observation-candidate"
 
 ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
     ANALYSIS_KIND_EVIDENCE_COVERAGE: {
@@ -68,6 +70,30 @@ ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
         "related_id_fields": ["link_id", "claim_id", "observation_id"],
         "default_source_skill": "eco-link-claims-to-observations",
         "summary_fields": ["claim_input_path", "observation_input_path"],
+    },
+    ANALYSIS_KIND_CLAIM_CANDIDATE: {
+        "artifact_label": "claim-candidate",
+        "default_relative": "analytics/claim_candidates_{round_id}.json",
+        "items_key": "candidates",
+        "count_key": "candidate_count",
+        "id_field": "claim_id",
+        "subject_field": "claim_id",
+        "state_field": "status",
+        "related_id_fields": ["claim_id", "claim_type"],
+        "default_source_skill": "eco-extract-claim-candidates",
+        "summary_fields": [],
+    },
+    ANALYSIS_KIND_OBSERVATION_CANDIDATE: {
+        "artifact_label": "observation-candidate",
+        "default_relative": "analytics/observation_candidates_{round_id}.json",
+        "items_key": "candidates",
+        "count_key": "candidate_count",
+        "id_field": "observation_id",
+        "subject_field": "observation_id",
+        "state_field": "aggregation",
+        "related_id_fields": ["observation_id", "metric", "source_skill"],
+        "default_source_skill": "eco-extract-observation-candidates",
+        "summary_fields": [],
     },
 }
 
@@ -895,5 +921,109 @@ def load_claim_observation_link_context(
         "db_path": maybe_text(context.get("db_path")),
         "analysis_sync": context.get("analysis_sync", {}),
         "links_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_claim_candidate_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    claim_candidates_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_CLAIM_CANDIDATE,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=claim_candidates_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "claim_candidates_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_claim_candidate_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    claim_candidates_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_CLAIM_CANDIDATE,
+        artifact_path=claim_candidates_path,
+        db_path=db_path,
+    )
+    return {
+        "claim_candidates_wrapper": context.get("payload_wrapper", {}),
+        "claim_candidates": context.get("items", []),
+        "claim_candidate_count": int(context.get("item_count") or 0),
+        "claim_candidate_source": maybe_text(context.get("source")),
+        "claim_candidates_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "claim_candidates_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_observation_candidate_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    observation_candidates_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_OBSERVATION_CANDIDATE,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=observation_candidates_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "observation_candidates_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_observation_candidate_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    observation_candidates_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_OBSERVATION_CANDIDATE,
+        artifact_path=observation_candidates_path,
+        db_path=db_path,
+    )
+    return {
+        "observation_candidates_wrapper": context.get("payload_wrapper", {}),
+        "observation_candidates": context.get("items", []),
+        "observation_candidate_count": int(context.get("item_count") or 0),
+        "observation_candidate_source": maybe_text(context.get("source")),
+        "observation_candidates_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "observation_candidates_artifact_present": bool(
+            context.get("artifact_present")
+        ),
         "warnings": context.get("warnings", []),
     }

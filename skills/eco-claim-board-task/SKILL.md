@@ -16,8 +16,9 @@ description: Claim or upsert a board follow-up task on the local investigation b
 - Need a durable task object before summarizing or briefing the board state.
 
 ## Read/Write Contract
-- Reads and writes `run_dir/board/investigation_board.json` by default.
-- Appends or updates one board task and one board event.
+- Reads the shared deliberation plane first and exports `run_dir/board/investigation_board.json` for compatibility.
+- Bootstraps existing board JSON into the deliberation plane when needed.
+- Appends or updates one board task and one board event on the deliberation plane.
 
 ## Required Input
 - `run_dir`
@@ -40,6 +41,8 @@ description: Claim or upsert a board follow-up task on the local investigation b
 ## Output Contract
 - `status`
 - `summary`
+  - Includes `db_path`
+  - Includes `write_surface`
 - `receipt_id`
 - `batch_id`
 - `artifact_refs`

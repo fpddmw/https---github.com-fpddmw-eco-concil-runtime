@@ -17,8 +17,9 @@ description: Read compact round-scoped investigation board deltas, return event 
 
 ## Read/Write Contract
 - Read only.
-- Reads `run_dir/board/investigation_board.json` by default.
-- Syncs board state into the run-local deliberation plane before reading.
+- Reads the run-local deliberation plane first.
+- Uses `run_dir/board/investigation_board.json` as a bootstrap import when it exists.
+- Falls back to DB-only reads when the board JSON export is temporarily absent.
 - Does not mutate board state.
 
 ## Required Input

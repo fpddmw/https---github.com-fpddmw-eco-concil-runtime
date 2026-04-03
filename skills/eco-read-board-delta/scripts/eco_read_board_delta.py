@@ -17,11 +17,8 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
-    connect_db,
-    fetch_round_events,
-    fetch_round_state,
+    load_round_snapshot,
     resolve_board_path as runtime_resolve_board_path,
-    sync_board_to_deliberation_plane,
 )
 
 
@@ -77,12 +74,19 @@ def read_board_delta_skill(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
-    sync_summary = sync_board_to_deliberation_plane(
+    round_snapshot = load_round_snapshot(
         run_dir_path,
         expected_run_id=run_id,
+        round_id=round_id,
         board_path=board_file,
+        include_closed=include_closed,
     )
-    if maybe_text(sync_summary.get("status")) != "completed":
+    sync_summary = (
+        round_snapshot.get("deliberation_sync")
+        if isinstance(round_snapshot.get("deliberation_sync"), dict)
+        else {}
+    )
+    if maybe_text(round_snapshot.get("status")) != "completed":
         return {
             "status": "completed",
             "summary": {
@@ -116,17 +120,17 @@ def read_board_delta_skill(
             "deliberation_sync": sync_summary,
             "board_handoff": {"candidate_ids": [], "evidence_refs": [], "gap_hints": ["Board state has not been initialized for this run yet."], "challenge_hints": [], "suggested_next_skills": ["eco-post-board-note", "eco-update-hypothesis-status"]},
         }
-    connection, db_file = connect_db(run_dir_path)
-    try:
-        round_events = fetch_round_events(connection, run_id=run_id, round_id=round_id)
-        round_state = fetch_round_state(
-            connection,
-            run_id=run_id,
-            round_id=round_id,
-            include_closed=include_closed,
-        )
-    finally:
-        connection.close()
+    db_file = Path(maybe_text(round_snapshot.get("db_path")))
+    round_events = (
+        round_snapshot.get("round_events", [])
+        if isinstance(round_snapshot.get("round_events"), list)
+        else []
+    )
+    round_state = (
+        round_snapshot.get("round_state", {})
+        if isinstance(round_snapshot.get("round_state"), dict)
+        else {}
+    )
     if maybe_text(after_event_id):
         index = next((position for position, event in enumerate(round_events) if maybe_text(event.get("event_id")) == maybe_text(after_event_id)), -1)
         round_events = round_events[index + 1 :] if index >= 0 else round_events

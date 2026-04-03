@@ -18,6 +18,7 @@ description: Extract board-ready environmental observation candidates from norma
 ## Read/Write Contract
 - Reads from `normalized_signals` where `plane = environment` in `runs/<run_id>/analytics/signal_plane.sqlite`.
 - Writes `runs/<run_id>/analytics/observation_candidates_<round_id>.json` by default.
+- Syncs the emitted observation-candidate result set into the shared analysis-plane tables in `runs/<run_id>/analytics/signal_plane.sqlite`.
 
 ## Required Input
 - `run_dir`

@@ -2,9 +2,23 @@
 
 This log records independently deliverable increments that move the project from the current runtime route toward the `db first / openclaw agent mode` target.
 
+Planning source of truth:
+- `openclaw-db-first-master-plan.md`
+
+Use this log only for delivered increments and historical detail.
+Use the master plan for:
+- route definitions
+- normalized stage numbering
+- future sequencing
+- historical crosswalks
+
+Normalization note:
+- Historical `B2 / B2.1` entries remain unchanged in this log, but they are treated as `C1 / C1.1` in the master plan because they belong to the analysis-plane route semantically.
+
 Reference blueprints:
 - `openclaw-first-refactor-blueprint.md`
 - `openclaw-db-first-agent-runtime-blueprint.md`
+- `openclaw-db-first-master-plan.md`
 
 ## 2026-04-02 A1: Review Fix Pack
 
@@ -336,3 +350,149 @@ Known limitations:
 Next:
 - Migrate history/archive consumers that still read scope artifacts directly onto the shared analysis-plane helper.
 - Decide whether `claim_observation_links` itself should become an operational query surface for more downstream reasoning beyond coverage scoring.
+
+## 2026-04-03 D2: Master Plan And Route Normalization
+
+Status: completed
+
+Objective:
+- Stop using the progress log itself as the place where route semantics are inferred.
+- Define one stable A/B/C/D route taxonomy and a near-term development sequence that can be used to coordinate future work.
+
+Implementation:
+- Added `openclaw-db-first-master-plan.md`
+  - Defined the meaning of `A / B / C / D`.
+  - Defined normalized stage numbering and stage status semantics.
+  - Added a historical crosswalk so early log items can be interpreted consistently.
+  - Added a full route-level development plan plus the recommended next several increments.
+- Updated this file:
+  - Added a planning-source notice that points future sequencing and route meaning to the master plan.
+  - Added a normalization note explaining why historical `B2 / B2.1` should now be interpreted as `C1 / C1.1`.
+
+Validation:
+- `rg -n "Route Legend|历史编号归一化说明|推荐的未来数次开发顺序" openclaw-db-first-master-plan.md`
+- `rg -n "Planning source of truth|Normalization note" openclaw-db-first-progress-log.md`
+
+Known limitations:
+- The master plan is still a planning/control document; it does not replace the detailed implementation history kept in this log.
+- Some future stages are intentionally broad and will still need to be split into turn-sized independent deliveries when work starts.
+
+Next:
+- Use `openclaw-db-first-master-plan.md` as the only source for route definitions and forward scheduling.
+- Continue the next implementation increment from `C1.2`, then append the delivery detail here after completion.
+
+## 2026-04-03 C1.2: History / Archive Read Migration
+
+Status: completed
+
+Objective:
+- Move history/archive consumers off direct JSON-first reads for scopes and coverage so they can continue from the shared analysis plane.
+
+Implementation:
+- `skills/eco-materialize-history-context/scripts/eco_materialize_history_context.py`
+  - Replaced direct claim/observation scope JSON reads with analysis-plane-first loading via the shared runtime helper.
+  - Added `claim_scope_source`, `observation_scope_source`, `analysis_db_path`, `observed_inputs`, and `input_analysis_sync` to the retrieval artifact and skill summary for traceability.
+- `skills/eco-archive-case-library/scripts/eco_archive_case_library.py`
+  - Replaced direct claim-scope, observation-scope, and coverage JSON reads with analysis-plane-first loading via the shared runtime helper.
+  - Added source-trace fields, input-presence flags, and `input_analysis_sync` to the archive snapshot and skill summary while preserving the existing archive DB contract.
+- `tests/test_archive_history_workflow.py`
+  - Extended archive/history regression coverage to delete scope and coverage JSON artifacts before execution and verify both skills continue from analysis-plane state.
+
+Validation:
+- `python3 -m unittest tests/test_archive_history_workflow.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- `tests/test_archive_history_workflow.py`
+  - Verifies `eco-archive-case-library` continues from analysis-plane state after deleting `claim_scope_proposals`, `observation_scope_proposals`, and `evidence_coverage` JSON artifacts.
+  - Verifies `eco-materialize-history-context` continues from analysis-plane state after deleting current-round claim/observation scope JSON artifacts.
+
+Known limitations:
+- `eco-materialize-history-context` and `eco-archive-case-library` still assemble the rest of their context from board/reporting/promotion artifacts; this increment only migrates the analysis-side scope/coverage reads.
+- The analysis-plane helper is still runtime-local Python infrastructure rather than a formal cross-tool query contract.
+
+Next:
+- Continue with `C1.3` by migrating remaining reporting/export consumers that still read analysis JSON as their primary input.
+- Revisit whether the analysis-plane helper should expose a more formal query surface for non-Python tooling.
+
+## 2026-04-03 C1.3: Normalization Audit Analysis Read Migration
+
+Status: completed
+
+Objective:
+- Remove the remaining board-facing normalization audit dependence on candidate-export JSON so audit generation can continue from shared analysis-plane state.
+
+Implementation:
+- `eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py`
+  - Added transitional result-set support for:
+    - `claim-candidate`
+    - `observation-candidate`
+  - Added shared sync/load wrappers for claim and observation candidate results.
+- `skills/eco-extract-claim-candidates/scripts/eco_extract_claim_candidates.py`
+  - Now syncs claim candidates into the shared analysis plane after JSON export.
+  - Emits `db_path` and `analysis_sync`.
+- `skills/eco-extract-observation-candidates/scripts/eco_extract_observation_candidates.py`
+  - Now syncs observation candidates into the shared analysis plane after JSON export.
+  - Emits `db_path` and `analysis_sync`.
+- `skills/eco-build-normalization-audit/scripts/eco_build_normalization_audit.py`
+  - Now loads claim and observation candidates from the shared analysis plane first.
+  - Falls back to candidate JSON artifacts only when no synced result set is available.
+  - Emits candidate source trace fields, input-presence flags, `db_path`, and `input_analysis_sync`.
+
+Validation:
+- `python3 -m unittest tests/test_analysis_workflow.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- `tests/test_analysis_workflow.py`
+  - Verifies claim-candidate and observation-candidate result sets are present in `analysis_result_sets`.
+  - Verifies `eco-build-normalization-audit` continues from analysis-plane state after deleting `claim_candidates` and `observation_candidates` JSON artifacts.
+
+Known limitations:
+- Clustered and merged candidate-family objects still remain outside the shared analysis plane; this increment only migrates raw claim/observation candidate results plus the audit consumer.
+- The shared result-set contract still lacks richer lineage semantics for non-Python tooling.
+
+Next:
+- Shift the next independent increment to `B2` now that the major read-side DB-first migration tranche is complete.
+- Revisit `C2` and `C2.1` later for broader result-set contract hardening and cluster/merge object migration.
+
+## 2026-04-03 B2: Core Board Mutation DB-First
+
+Status: completed
+
+Objective:
+- Move the core board mutation skills off `JSON first -> DB sync` and onto `deliberation-plane first -> JSON export`.
+- Remove the hard requirement that board readers must see `investigation_board.json` before they can continue from existing DB state.
+
+Implementation:
+- `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
+  - Added `board_runs` metadata to track board revision and export path in the DB.
+  - Added bootstrap logic that imports board JSON only when the DB is missing or stale.
+  - Added a shared DB-first mutation commit path that writes deliberation rows first, then exports `investigation_board.json`, and backfills stable record locators.
+  - Updated `load_round_snapshot(...)` so readers can continue from DB-only state when the board JSON export is temporarily absent.
+- Migrated core board mutation skills to `deliberation-plane` primary writes:
+  - `skills/eco-post-board-note/scripts/eco_post_board_note.py`
+  - `skills/eco-update-hypothesis-status/scripts/eco_update_hypothesis_status.py`
+  - `skills/eco-open-challenge-ticket/scripts/eco_open_challenge_ticket.py`
+  - `skills/eco-close-challenge-ticket/scripts/eco_close_challenge_ticket.py`
+  - `skills/eco-claim-board-task/scripts/eco_claim_board_task.py`
+  - These skills now read existing board state from the deliberation plane, write DB rows first, export the board JSON for compatibility, and emit `summary.db_path` plus `summary.write_surface`.
+- `skills/eco-read-board-delta/scripts/eco_read_board_delta.py`
+  - Now reads through `load_round_snapshot(...)` so delta reads can continue from deliberation-plane state even when the board JSON export is missing.
+
+Validation:
+- `python3 -m unittest tests/test_board_workflow.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- `tests/test_board_workflow.py`
+  - Verifies a second DB-first board mutation can recreate `board/investigation_board.json` after the file has been deleted, while preserving earlier board state from the DB.
+  - Verifies board delta and board brief readers continue from `deliberation-plane` state when the board JSON export is absent.
+
+Known limitations:
+- `eco-open-investigation-round` still performs a JSON-first board mutation and then syncs back into the deliberation plane.
+- `eco-scaffold-mission-run` still seeds the initial board through a JSON artifact; this increment relies on DB bootstrap to import that scaffold on the first DB-first mutation.
+
+Next:
+- Continue `B2` by migrating `eco-open-investigation-round` and any remaining round-transition mutation paths onto the same deliberation-plane-first surface.
+- Then move to `B2.1` so `board_summary` and `board_brief` can be treated as derived exports rather than operational prerequisites.

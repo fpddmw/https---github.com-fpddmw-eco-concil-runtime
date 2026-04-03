@@ -7,11 +7,23 @@ import argparse
 import hashlib
 import json
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "eco-archive-case-library"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
+    load_claim_scope_context,
+    load_evidence_coverage_context,
+    load_observation_scope_context,
+)
+
 SIGNAL_TABLE = "normalized_signals"
 
 SCHEMA_SQL = """
@@ -395,6 +407,108 @@ def claim_type_lookup(claim_scopes: list[dict[str, Any]]) -> dict[str, list[str]
     return lookup
 
 
+def load_archive_analysis_inputs(
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    warnings: list[dict[str, str]] = []
+    claim_scope_context = load_claim_scope_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    observation_scope_context = load_observation_scope_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=maybe_text(claim_scope_context.get("db_path")),
+    )
+    coverage_context = load_evidence_coverage_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=maybe_text(observation_scope_context.get("db_path"))
+        or maybe_text(claim_scope_context.get("db_path")),
+    )
+    for context in (
+        claim_scope_context,
+        observation_scope_context,
+        coverage_context,
+    ):
+        warnings.extend(
+            context.get("warnings", [])
+            if isinstance(context.get("warnings"), list)
+            else []
+        )
+
+    claim_scopes = (
+        claim_scope_context.get("claim_scopes", [])
+        if isinstance(claim_scope_context.get("claim_scopes"), list)
+        else []
+    )
+    observation_scopes = (
+        observation_scope_context.get("observation_scopes", [])
+        if isinstance(observation_scope_context.get("observation_scopes"), list)
+        else []
+    )
+    coverages = (
+        coverage_context.get("coverages", [])
+        if isinstance(coverage_context.get("coverages"), list)
+        else []
+    )
+    return (
+        {
+            "coverage_wrapper": (
+                coverage_context.get("coverage_wrapper")
+                if isinstance(coverage_context.get("coverage_wrapper"), dict)
+                else {}
+            ),
+            "claim_scopes": claim_scopes,
+            "observation_scopes": observation_scopes,
+            "coverages": coverages,
+            "claim_scope_path": maybe_text(claim_scope_context.get("claim_scope_file")),
+            "observation_scope_path": maybe_text(
+                observation_scope_context.get("observation_scope_file")
+            ),
+            "coverage_path": maybe_text(coverage_context.get("coverage_file")),
+            "claim_scope_source": maybe_text(claim_scope_context.get("claim_scope_source"))
+            or "missing-claim-scope",
+            "observation_scope_source": maybe_text(
+                observation_scope_context.get("observation_scope_source")
+            )
+            or "missing-observation-scope",
+            "coverage_source": maybe_text(coverage_context.get("coverage_source"))
+            or "missing-coverage",
+            "analysis_db_path": maybe_text(coverage_context.get("db_path"))
+            or maybe_text(observation_scope_context.get("db_path"))
+            or maybe_text(claim_scope_context.get("db_path")),
+            "observed_inputs": {
+                "claim_scope_present": bool(claim_scopes),
+                "claim_scope_artifact_present": bool(
+                    claim_scope_context.get("claim_scope_artifact_present")
+                ),
+                "observation_scope_present": bool(observation_scopes),
+                "observation_scope_artifact_present": bool(
+                    observation_scope_context.get("observation_scope_artifact_present")
+                ),
+                "coverage_present": bool(coverages),
+                "coverage_artifact_present": bool(
+                    coverage_context.get("coverage_artifact_present")
+                ),
+            },
+            "input_analysis_sync": {
+                "claim_scope": claim_scope_context.get("analysis_sync", {}),
+                "observation_scope": observation_scope_context.get(
+                    "analysis_sync", {}
+                ),
+                "coverage": coverage_context.get("analysis_sync", {}),
+            },
+        },
+        warnings,
+    )
+
+
 def build_excerpts(
     *,
     run_id: str,
@@ -512,9 +626,14 @@ def archive_case_library_skill(
         mission = {"run_id": run_id}
     board_brief_text = read_text_if_exists(run_dir_path / "board" / f"board_brief_{round_id}.md")
     board_state = load_board_round_state(run_dir_path, round_id)
-    claim_scope_wrapper = load_json_if_exists(run_dir_path / "analytics" / f"claim_scope_proposals_{round_id}.json")
-    observation_scope_wrapper = load_json_if_exists(run_dir_path / "analytics" / f"observation_scope_proposals_{round_id}.json")
-    coverage_wrapper = load_json_if_exists(run_dir_path / "analytics" / f"evidence_coverage_{round_id}.json")
+    warnings: list[dict[str, str]] = []
+    analysis_inputs, analysis_warnings = load_archive_analysis_inputs(
+        run_dir_path,
+        run_id,
+        round_id,
+    )
+    warnings.extend(analysis_warnings)
+    coverage_wrapper = analysis_inputs.get("coverage_wrapper", {})
     next_actions = load_json_if_exists(run_dir_path / "investigation" / f"next_actions_{round_id}.json") or {}
     probes = load_json_if_exists(run_dir_path / "investigation" / f"falsification_probes_{round_id}.json") or {}
     readiness = load_json_if_exists(run_dir_path / "reporting" / f"round_readiness_{round_id}.json") or {}
@@ -528,8 +647,21 @@ def archive_case_library_skill(
     ]
     signal_rows = load_signal_rows((run_dir_path / "analytics" / "signal_plane.sqlite").resolve(), run_id)
 
-    claim_scopes = claim_scope_wrapper.get("scopes", []) if isinstance(claim_scope_wrapper, dict) and isinstance(claim_scope_wrapper.get("scopes"), list) else []
-    observation_scopes = observation_scope_wrapper.get("scopes", []) if isinstance(observation_scope_wrapper, dict) and isinstance(observation_scope_wrapper.get("scopes"), list) else []
+    claim_scopes = [
+        scope
+        for scope in analysis_inputs.get("claim_scopes", [])
+        if isinstance(scope, dict)
+    ]
+    observation_scopes = [
+        scope
+        for scope in analysis_inputs.get("observation_scopes", [])
+        if isinstance(scope, dict)
+    ]
+    coverages = [
+        coverage
+        for coverage in analysis_inputs.get("coverages", [])
+        if isinstance(coverage, dict)
+    ]
     declared_claim_types = [maybe_text(scope.get("claim_type")) for scope in claim_scopes if isinstance(scope, dict) and maybe_text(scope.get("claim_type"))]
     topic = maybe_text(mission.get("topic")) or maybe_text(final_publication.get("publication_summary")) or maybe_text(decision.get("decision_summary")) or f"Archived case {run_id}"
     objective = maybe_text(mission.get("objective")) or maybe_text(handoff.get("board_brief_excerpt")) or maybe_text(board_brief_text)[:220]
@@ -597,7 +729,6 @@ def archive_case_library_skill(
         "selected_evidence_refs": selected_evidence_refs,
     }
 
-    warnings: list[dict[str, str]] = []
     if not signal_rows:
         warnings.append({"code": "missing-signal-plane", "message": "Case library import found no normalized signal rows for this run."})
     if not final_decision_summary:
@@ -646,8 +777,20 @@ def archive_case_library_skill(
                 utc_now_iso(),
             ),
         )
-        strong_coverages = len([row for row in (coverage_wrapper.get("coverages", []) if isinstance(coverage_wrapper, dict) and isinstance(coverage_wrapper.get("coverages"), list) else []) if isinstance(row, dict) and maybe_text(row.get("readiness")) == "strong"])
-        moderate_coverages = len([row for row in (coverage_wrapper.get("coverages", []) if isinstance(coverage_wrapper, dict) and isinstance(coverage_wrapper.get("coverages"), list) else []) if isinstance(row, dict) and maybe_text(row.get("readiness")) == "partial"])
+        strong_coverages = len(
+            [
+                row
+                for row in coverages
+                if maybe_text(row.get("readiness")) == "strong"
+            ]
+        )
+        moderate_coverages = len(
+            [
+                row
+                for row in coverages
+                if maybe_text(row.get("readiness")) == "partial"
+            ]
+        )
         connection.execute(
             """
             INSERT INTO case_rounds (
@@ -708,6 +851,22 @@ def archive_case_library_skill(
         "import_id": import_id,
         "db_path": str(archive_db),
         "output_path": str(output_file),
+        "claim_scope_path": maybe_text(analysis_inputs.get("claim_scope_path")),
+        "observation_scope_path": maybe_text(
+            analysis_inputs.get("observation_scope_path")
+        ),
+        "coverage_path": maybe_text(analysis_inputs.get("coverage_path")),
+        "claim_scope_source": maybe_text(analysis_inputs.get("claim_scope_source"))
+        or "missing-claim-scope",
+        "observation_scope_source": maybe_text(
+            analysis_inputs.get("observation_scope_source")
+        )
+        or "missing-observation-scope",
+        "coverage_source": maybe_text(analysis_inputs.get("coverage_source"))
+        or "missing-coverage",
+        "analysis_db_path": maybe_text(analysis_inputs.get("analysis_db_path")),
+        "observed_inputs": analysis_inputs.get("observed_inputs", {}),
+        "input_analysis_sync": analysis_inputs.get("input_analysis_sync", {}),
         "profile_id": profile_id,
         "topic": topic,
         "objective": objective,
@@ -740,12 +899,22 @@ def archive_case_library_skill(
             "output_path": str(output_file),
             "profile_id": profile_id,
             "excerpt_count": len(excerpts),
+            "claim_scope_source": maybe_text(analysis_inputs.get("claim_scope_source"))
+            or "missing-claim-scope",
+            "observation_scope_source": maybe_text(
+                analysis_inputs.get("observation_scope_source")
+            )
+            or "missing-observation-scope",
+            "coverage_source": maybe_text(analysis_inputs.get("coverage_source"))
+            or "missing-coverage",
+            "analysis_db_path": maybe_text(analysis_inputs.get("analysis_db_path")),
         },
         "receipt_id": "archive-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, import_id)[:20],
         "batch_id": "archivebatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [case_id],
         "warnings": warnings,
+        "input_analysis_sync": analysis_inputs.get("input_analysis_sync", {}),
         "board_handoff": {
             "candidate_ids": [case_id],
             "evidence_refs": artifact_refs,

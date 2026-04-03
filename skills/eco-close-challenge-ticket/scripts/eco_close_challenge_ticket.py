@@ -7,7 +7,6 @@ import argparse
 import fcntl
 import hashlib
 import json
-import os
 import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -21,7 +20,10 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
-    sync_board_to_deliberation_plane,
+    bootstrap_board_state,
+    commit_board_mutation,
+    connect_db,
+    load_raw_board_record,
 )
 
 
@@ -76,66 +78,14 @@ def resolve_board_path(run_dir: Path, board_path: str) -> Path:
     return candidate.resolve()
 
 
-def load_or_init_board(path: Path, run_id: str) -> dict[str, Any]:
-    if path.exists():
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(payload, dict):
-            return payload
-    return {"schema_version": "board-v1", "run_id": run_id, "board_revision": 0, "updated_at_utc": utc_now_iso(), "events": [], "rounds": {}}
-
-
-def board_revision(board: dict[str, Any]) -> int:
-    try:
-        return max(0, int(board.get("board_revision") or 0))
-    except (TypeError, ValueError):
-        return 0
-
-
-def ensure_round(board: dict[str, Any], round_id: str) -> dict[str, Any]:
-    rounds = board.setdefault("rounds", {})
-    if not isinstance(rounds, dict):
-        rounds = {}
-        board["rounds"] = rounds
-    round_state = rounds.setdefault(round_id, {"notes": [], "challenge_tickets": [], "hypotheses": [], "tasks": []})
-    if not isinstance(round_state, dict):
-        round_state = {"notes": [], "challenge_tickets": [], "hypotheses": [], "tasks": []}
-        rounds[round_id] = round_state
-    round_state.setdefault("notes", [])
-    round_state.setdefault("challenge_tickets", [])
-    round_state.setdefault("hypotheses", [])
-    round_state.setdefault("tasks", [])
-    return round_state
-
-
-def append_event(board: dict[str, Any], run_id: str, round_id: str, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
-    events = board.setdefault("events", [])
-    if not isinstance(events, list):
-        events = []
-        board["events"] = events
-    timestamp = utc_now_iso()
-    event_id = "boardevt-" + stable_hash(run_id, round_id, event_type, len(events), timestamp, payload.get("ticket_id", ""))[:12]
-    event = {"event_id": event_id, "run_id": run_id, "round_id": round_id, "event_type": event_type, "created_at_utc": timestamp, "payload": payload}
-    events.append(event)
-    board["updated_at_utc"] = timestamp
-    return event
-
-
-def write_board(path: Path, board: dict[str, Any], next_revision: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    board["board_revision"] = next_revision
-    temp_path = path.with_name(f".{path.name}.{os.getpid()}.{next_revision}.tmp")
-    temp_path.write_text(json.dumps(board, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    os.replace(temp_path, path)
-
-
 @contextmanager
-def locked_board(path: Path, run_id: str):
+def locked_board(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.with_name(path.name + ".lock")
     with lock_path.open("a+", encoding="utf-8") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
         try:
-            yield load_or_init_board(path, run_id)
+            yield
         finally:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
@@ -172,13 +122,24 @@ def close_challenge_ticket_skill(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
-    with locked_board(board_file, run_id) as board:
-        next_revision = board_revision(board) + 1
-        round_state = ensure_round(board, round_id)
-        tickets = round_state["challenge_tickets"] if isinstance(round_state.get("challenge_tickets"), list) else []
-        round_state["challenge_tickets"] = tickets
+    with locked_board(board_file):
+        bootstrap_board_state(
+            run_dir_path,
+            expected_run_id=run_id,
+            board_path=board_file,
+        )
+        connection, _ = connect_db(run_dir_path)
+        try:
+            resolved_ticket_id = maybe_text(ticket_id)
+            ticket = load_raw_board_record(
+                connection,
+                table_name="challenge_tickets",
+                id_column="ticket_id",
+                record_id=resolved_ticket_id,
+            )
+        finally:
+            connection.close()
         resolved_ticket_id = maybe_text(ticket_id)
-        ticket = next((item for item in tickets if isinstance(item, dict) and maybe_text(item.get("ticket_id")) == resolved_ticket_id), None)
         if ticket is None:
             return missing_ticket_payload(run_id, round_id, board_file, resolved_ticket_id)
 
@@ -194,22 +155,50 @@ def close_challenge_ticket_skill(
         history.append({"status": "closed", "updated_at_utc": timestamp, "closing_role": ticket["closed_by_role"], "resolution": ticket["resolution"]})
         ticket["history"] = history
 
-        ticket_index = next(index for index, item in enumerate(tickets) if isinstance(item, dict) and maybe_text(item.get("ticket_id")) == resolved_ticket_id)
-        event = append_event(
-            board,
-            run_id,
-            round_id,
-            "challenge-closed",
-            {"ticket_id": resolved_ticket_id, "resolution": ticket["resolution"], "closed_by_role": ticket["closed_by_role"], "previous_status": previous_status},
+        write_summary = commit_board_mutation(
+            run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            board_path=board_file,
+            challenge_records=[ticket],
+            event_type="challenge-closed",
+            event_payload={
+                "ticket_id": resolved_ticket_id,
+                "resolution": ticket["resolution"],
+                "closed_by_role": ticket["closed_by_role"],
+                "previous_status": previous_status,
+            },
+            event_created_at_utc=timestamp,
+            event_discriminator=resolved_ticket_id,
         )
-        write_board(board_file, board, next_revision)
-    sync_board_to_deliberation_plane(run_dir_path, expected_run_id=run_id, board_path=board_file)
-    artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": f"$.rounds.{round_id}.challenge_tickets[{ticket_index}]", "artifact_ref": f"{board_file}:$.rounds.{round_id}.challenge_tickets[{ticket_index}]"}]
+        event_id = maybe_text(write_summary.get("event_id"))
+        record_locators = (
+            write_summary.get("record_locators", {})
+            if isinstance(write_summary.get("record_locators"), dict)
+            else {}
+        )
+        ticket_locator = (
+            record_locators.get("challenge_tickets", {})
+            if isinstance(record_locators.get("challenge_tickets"), dict)
+            else {}
+        ).get(resolved_ticket_id, f"$.rounds.{round_id}.challenge_tickets[0]")
+    artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": ticket_locator, "artifact_ref": f"{board_file}:{ticket_locator}"}]
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "board_path": str(board_file), "board_revision": next_revision, "event_id": event["event_id"], "ticket_id": resolved_ticket_id, "operation": "closed"},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "board_path": str(board_file),
+            "board_revision": max(0, int(write_summary.get("board_revision") or 0)),
+            "event_id": event_id,
+            "ticket_id": resolved_ticket_id,
+            "operation": "closed",
+            "db_path": maybe_text(write_summary.get("db_path")),
+            "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
+        },
         "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, resolved_ticket_id)[:20],
-        "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event["event_id"])[:16],
+        "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event_id)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [resolved_ticket_id],
         "warnings": [],

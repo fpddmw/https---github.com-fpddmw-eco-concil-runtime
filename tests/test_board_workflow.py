@@ -689,6 +689,146 @@ class BoardWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(1, delta_payload["result_count"])
 
+    def test_db_first_board_mutation_recreates_board_export_when_json_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+
+            first_note = run_script(
+                script_path("eco-post-board-note"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--author-role",
+                "moderator",
+                "--note-text",
+                "Initial DB-first note.",
+            )
+            run_script(
+                script_path("eco-update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "DB-first board export recreation",
+                "--statement",
+                "Deleting the board JSON should not prevent further deliberation writes.",
+                "--status",
+                "active",
+                "--owner-role",
+                "moderator",
+                "--confidence",
+                "0.71",
+            )
+
+            board_file = board_path(run_dir)
+            board_file.unlink()
+
+            second_note = run_script(
+                script_path("eco-post-board-note"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--author-role",
+                "moderator",
+                "--note-text",
+                "DB-first write should rebuild the board export.",
+            )
+
+            board = load_json(board_file)
+            rounds = board.get("rounds", {})
+            assert isinstance(rounds, dict)
+            round_state = rounds[ROUND_ID]
+
+            self.assertEqual("deliberation-plane", second_note["summary"]["write_surface"])
+            self.assertTrue(Path(second_note["summary"]["db_path"]).exists())
+            self.assertEqual(2, len(round_state["notes"]))
+            self.assertEqual(1, len(round_state["hypotheses"]))
+            self.assertNotEqual(
+                first_note["canonical_ids"][0],
+                second_note["canonical_ids"][0],
+            )
+
+    def test_board_readers_fallback_to_db_when_board_json_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+
+            run_script(
+                script_path("eco-post-board-note"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--author-role",
+                "moderator",
+                "--note-text",
+                "Reader fallback should survive a missing board JSON export.",
+            )
+            hypothesis_payload = run_script(
+                script_path("eco-update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "DB-only reader fallback",
+                "--statement",
+                "Round readers should use the deliberation plane when JSON is absent.",
+                "--status",
+                "active",
+                "--owner-role",
+                "moderator",
+                "--confidence",
+                "0.68",
+            )
+
+            board_path(run_dir).unlink()
+
+            delta_payload = run_script(
+                script_path("eco-read-board-delta"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            brief_payload = run_script(
+                script_path("eco-materialize-board-brief"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            brief_file = Path(brief_payload["artifact_refs"][0]["artifact_path"])
+            brief_text = brief_file.read_text(encoding="utf-8")
+
+            self.assertEqual("completed", delta_payload["deliberation_sync"]["status"])
+            self.assertEqual("db-only", delta_payload["deliberation_sync"]["sync_mode"])
+            self.assertEqual(1, delta_payload["round_state"]["note_count"])
+            self.assertEqual(1, delta_payload["round_state"]["hypothesis_count"])
+            self.assertEqual("completed", brief_payload["deliberation_sync"]["status"])
+            self.assertEqual("db-only", brief_payload["deliberation_sync"]["sync_mode"])
+            self.assertEqual("deliberation-plane", brief_payload["summary"]["state_source"])
+            self.assertIn(hypothesis_payload["canonical_ids"][0], brief_text)
+
     def test_concurrent_board_writes_preserve_both_updates(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

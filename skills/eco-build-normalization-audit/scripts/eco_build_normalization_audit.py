@@ -6,12 +6,22 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "eco-build-normalization-audit"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
+    load_claim_candidate_context,
+    load_observation_candidate_context,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -76,10 +86,51 @@ def build_normalization_audit_skill(
     claim_path = resolve_output_path(run_dir_path, claim_candidates_path, f"claim_candidates_{round_id}.json")
     observation_path = resolve_output_path(run_dir_path, observation_candidates_path, f"observation_candidates_{round_id}.json")
     audit_path = resolve_output_path(run_dir_path, output_path, f"normalization_audit_{round_id}.json")
-    claim_payload = load_json_if_exists(claim_path)
-    observation_payload = load_json_if_exists(observation_path)
-    claims = claim_payload.get("candidates", []) if isinstance(claim_payload, dict) and isinstance(claim_payload.get("candidates"), list) else []
-    observations = observation_payload.get("candidates", []) if isinstance(observation_payload, dict) and isinstance(observation_payload.get("candidates"), list) else []
+    claim_context = load_claim_candidate_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        claim_candidates_path=claim_path,
+    )
+    observation_context = load_observation_candidate_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        observation_candidates_path=observation_path,
+        db_path=maybe_text(claim_context.get("db_path")),
+    )
+    warnings = []
+    warnings.extend(
+        claim_context.get("warnings", [])
+        if isinstance(claim_context.get("warnings"), list)
+        else []
+    )
+    warnings.extend(
+        observation_context.get("warnings", [])
+        if isinstance(observation_context.get("warnings"), list)
+        else []
+    )
+    claims = claim_context.get("claim_candidates", []) if isinstance(claim_context.get("claim_candidates"), list) else []
+    observations = observation_context.get("observation_candidates", []) if isinstance(observation_context.get("observation_candidates"), list) else []
+    claim_path = Path(
+        maybe_text(claim_context.get("claim_candidates_file")) or str(claim_path)
+    )
+    observation_path = Path(
+        maybe_text(observation_context.get("observation_candidates_file"))
+        or str(observation_path)
+    )
+    claim_candidate_source = (
+        maybe_text(claim_context.get("claim_candidate_source"))
+        or "missing-claim-candidate"
+    )
+    observation_candidate_source = (
+        maybe_text(observation_context.get("observation_candidate_source"))
+        or "missing-observation-candidate"
+    )
+    analysis_db_path = (
+        maybe_text(observation_context.get("db_path"))
+        or maybe_text(claim_context.get("db_path"))
+    )
     claim_type_counts = Counter(maybe_text(item.get("claim_type")) for item in claims if maybe_text(item.get("claim_type")))
     metric_counts = Counter(maybe_text(item.get("metric")) for item in observations if maybe_text(item.get("metric")))
     source_skill_counts = Counter(
@@ -103,7 +154,33 @@ def build_normalization_audit_skill(
         "source_skill_counts": [{"value": key, "count": count} for key, count in source_skill_counts.most_common(10)],
         "coverage_summary": f"Built normalization audit from {len(claims)} claim candidates and {len(observations)} observation candidates.",
     }
-    wrapper = {"schema_version": "n2", "skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "generated_at_utc": utc_now_iso(), "report": report}
+    wrapper = {
+        "schema_version": "n2",
+        "skill": SKILL_NAME,
+        "run_id": run_id,
+        "round_id": round_id,
+        "generated_at_utc": utc_now_iso(),
+        "claim_candidates_path": str(claim_path),
+        "observation_candidates_path": str(observation_path),
+        "claim_candidate_source": claim_candidate_source,
+        "observation_candidate_source": observation_candidate_source,
+        "db_path": analysis_db_path,
+        "observed_inputs": {
+            "claim_candidates_present": bool(claims),
+            "claim_candidates_artifact_present": bool(
+                claim_context.get("claim_candidates_artifact_present")
+            ),
+            "observation_candidates_present": bool(observations),
+            "observation_candidates_artifact_present": bool(
+                observation_context.get("observation_candidates_artifact_present")
+            ),
+        },
+        "input_analysis_sync": {
+            "claim_candidates": claim_context.get("analysis_sync", {}),
+            "observation_candidates": observation_context.get("analysis_sync", {}),
+        },
+        "report": report,
+    }
     write_json(audit_path, wrapper)
     artifact_refs = [
         {"signal_id": "", "artifact_path": str(claim_path), "record_locator": "$.candidates", "artifact_ref": f"{claim_path}:$.candidates"},
@@ -111,11 +188,10 @@ def build_normalization_audit_skill(
         {"signal_id": "", "artifact_path": str(audit_path), "record_locator": "$.report", "artifact_ref": f"{audit_path}:$.report"},
     ]
     batch_id = "candbatch-" + stable_hash(SKILL_NAME, run_id, round_id, str(audit_path))[:16]
-    warnings = []
     if not claims:
-        warnings.append({"code": "no-claim-candidates", "message": f"No claim candidate artifact was available at {claim_path}."})
+        warnings.append({"code": "no-claim-candidates", "message": f"No claim candidate result was available for round {round_id} at {claim_path}."})
     if not observations:
-        warnings.append({"code": "no-observation-candidates", "message": f"No observation candidate artifact was available at {observation_path}."})
+        warnings.append({"code": "no-observation-candidates", "message": f"No observation candidate result was available for round {round_id} at {observation_path}."})
     canonical_ids = [maybe_text(item.get("claim_id") or item.get("observation_id")) for item in list(claims) + list(observations) if maybe_text(item.get("claim_id") or item.get("observation_id"))]
     gap_hints = []
     if claims:
@@ -124,12 +200,23 @@ def build_normalization_audit_skill(
         gap_hints.append("Some observation candidates still need spatial refinement.")
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "claim_candidate_count": len(claims), "observation_candidate_count": len(observations), "output_path": str(audit_path)},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "claim_candidate_count": len(claims),
+            "observation_candidate_count": len(observations),
+            "output_path": str(audit_path),
+            "claim_candidate_source": claim_candidate_source,
+            "observation_candidate_source": observation_candidate_source,
+            "db_path": analysis_db_path,
+        },
         "receipt_id": "candidate-receipt-" + stable_hash(SKILL_NAME, batch_id)[:20],
         "batch_id": batch_id,
         "artifact_refs": artifact_refs,
         "canonical_ids": canonical_ids,
         "warnings": warnings,
+        "input_analysis_sync": wrapper.get("input_analysis_sync", {}),
         "board_handoff": {"candidate_ids": canonical_ids, "evidence_refs": artifact_refs, "gap_hints": gap_hints, "challenge_hints": ["Compare claim-type diversity and observation-metric diversity before promotion."] if claims or observations else [], "suggested_next_skills": ["eco-derive-claim-scope", "eco-derive-observation-scope", "eco-score-evidence-coverage", "eco-post-board-note"]},
     }
 
