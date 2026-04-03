@@ -74,6 +74,15 @@ def parse_contract(markdown_text: str) -> dict[str, list[str]]:
             reads.append(path_pattern)
             writes.append(path_pattern)
             continue
+        export_match = re.match(
+            r"^\s*-\s*Reads\b.*\bexports\s+`([^`]+)`",
+            stripped,
+        )
+        if export_match:
+            path_pattern = export_match.group(1)
+            reads.append(path_pattern)
+            writes.append(path_pattern)
+            continue
         match = re.match(r"^\s*-\s*(Reads|Writes)\s+`([^`]+)`", stripped)
         if not match:
             continue

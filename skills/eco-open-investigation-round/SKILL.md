@@ -18,7 +18,7 @@ description: Moderator-controlled council-state skill that opens one follow-up i
 - A run needs an explicit round transition object rather than continuing to mutate the prior round forever.
 
 ## Read/Write Contract
-- Reads and writes `run_dir/board/investigation_board.json` by default.
+- Reads board state from the shared deliberation plane first and exports `run_dir/board/investigation_board.json` for compatibility.
 - Reads `run_dir/investigation/round_tasks_<source_round_id>.json` when present.
 - Reads `run_dir/investigation/next_actions_<source_round_id>.json` when present.
 - Reads `run_dir/mission.json` when present.

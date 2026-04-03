@@ -1440,6 +1440,40 @@ def commit_board_mutation(
     }
 
 
+def store_round_transition_record(
+    run_dir: str | Path,
+    *,
+    transition_record: dict[str, Any],
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            write_round_transition_row(
+                connection,
+                round_transition_row_from_payload(
+                    transition_record,
+                    board_revision=coerce_int(transition_record.get("board_revision")),
+                    artifact_path=maybe_text(transition_record.get("artifact_path")),
+                    record_locator=maybe_text(transition_record.get("record_locator"))
+                    or "$",
+                ),
+            )
+    finally:
+        connection.close()
+    return {
+        "status": "completed",
+        "run_id": maybe_text(transition_record.get("run_id")),
+        "round_id": maybe_text(transition_record.get("round_id")),
+        "transition_id": maybe_text(transition_record.get("transition_id")),
+        "db_path": str(db_file),
+        "board_revision": coerce_int(transition_record.get("board_revision")),
+        "artifact_path": maybe_text(transition_record.get("artifact_path")),
+        "record_locator": maybe_text(transition_record.get("record_locator")) or "$",
+    }
+
+
 def fetch_round_events(connection: sqlite3.Connection, *, run_id: str, round_id: str) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
@@ -1691,5 +1725,6 @@ __all__ = [
     "resolve_board_path",
     "resolve_db_path",
     "resolve_run_dir",
+    "store_round_transition_record",
     "sync_board_to_deliberation_plane",
 ]

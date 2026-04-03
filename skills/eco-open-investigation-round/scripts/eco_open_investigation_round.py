@@ -8,7 +8,6 @@ import copy
 import fcntl
 import hashlib
 import json
-import os
 import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -23,7 +22,9 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
-    sync_board_to_deliberation_plane,
+    commit_board_mutation,
+    load_round_snapshot,
+    store_round_transition_record,
 )
 from eco_council_runtime.kernel.source_queue_contract import source_role  # noqa: E402
 
@@ -103,68 +104,36 @@ def write_json_file(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def load_or_init_board(path: Path, run_id: str) -> dict[str, Any]:
-    if path.exists():
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(payload, dict):
-            return payload
-    return {"schema_version": "board-v1", "run_id": run_id, "board_revision": 0, "updated_at_utc": utc_now_iso(), "events": [], "rounds": {}}
-
-
-def board_revision(board: dict[str, Any]) -> int:
-    try:
-        return max(0, int(board.get("board_revision") or 0))
-    except (TypeError, ValueError):
-        return 0
-
-
-def ensure_round(board: dict[str, Any], round_id: str) -> dict[str, Any]:
-    rounds = board.setdefault("rounds", {})
-    if not isinstance(rounds, dict):
-        rounds = {}
-        board["rounds"] = rounds
-    round_state = rounds.setdefault(round_id, {"notes": [], "challenge_tickets": [], "hypotheses": [], "tasks": []})
-    if not isinstance(round_state, dict):
-        round_state = {"notes": [], "challenge_tickets": [], "hypotheses": [], "tasks": []}
-        rounds[round_id] = round_state
-    round_state.setdefault("notes", [])
-    round_state.setdefault("challenge_tickets", [])
-    round_state.setdefault("hypotheses", [])
-    round_state.setdefault("tasks", [])
-    return round_state
-
-
-def append_event(board: dict[str, Any], run_id: str, round_id: str, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
-    events = board.setdefault("events", [])
-    if not isinstance(events, list):
-        events = []
-        board["events"] = events
-    timestamp = utc_now_iso()
-    event_id = "boardevt-" + stable_hash(run_id, round_id, event_type, len(events), timestamp, payload.get("source_round_id", ""))[:12]
-    event = {"event_id": event_id, "run_id": run_id, "round_id": round_id, "event_type": event_type, "created_at_utc": timestamp, "payload": payload}
-    events.append(event)
-    board["updated_at_utc"] = timestamp
-    return event
-
-
-def write_board(path: Path, board: dict[str, Any], next_revision: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    board["board_revision"] = next_revision
-    temp_path = path.with_name(f".{path.name}.{os.getpid()}.{next_revision}.tmp")
-    temp_path.write_text(json.dumps(board, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    os.replace(temp_path, path)
-
-
 @contextmanager
-def locked_board(path: Path, run_id: str):
+def locked_board(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.with_name(path.name + ".lock")
     with lock_path.open("a+", encoding="utf-8") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
         try:
-            yield load_or_init_board(path, run_id)
+            yield
         finally:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+
+def round_snapshot_has_state(snapshot: dict[str, Any]) -> bool:
+    if not isinstance(snapshot, dict):
+        return False
+    round_events = snapshot.get("round_events")
+    if isinstance(round_events, list) and round_events:
+        return True
+    round_state = snapshot.get("round_state")
+    if not isinstance(round_state, dict):
+        return False
+    return any(
+        int(round_state.get(field) or 0) > 0
+        for field in (
+            "note_count",
+            "hypothesis_count",
+            "challenge_ticket_count",
+            "task_count",
+        )
+    )
 
 
 def task_is_open(task: dict[str, Any]) -> bool:
@@ -506,13 +475,37 @@ def open_investigation_round_skill(
         warnings.append({"code": "missing-mission", "message": f"No mission artifact was found at {mission_file}."})
         mission = {}
 
-    with locked_board(board_file, run_id) as board:
-        rounds = board.get("rounds", {}) if isinstance(board.get("rounds"), dict) else {}
-        source_round = rounds.get(source_round_id)
-        if not isinstance(source_round, dict):
-            raise ValueError(f"Source round {source_round_id} does not exist on the board: {board_file}")
-        if isinstance(rounds.get(round_id), dict):
+    with locked_board(board_file):
+        source_snapshot = load_round_snapshot(
+            run_dir_path,
+            expected_run_id=run_id,
+            round_id=source_round_id,
+            board_path=board_file,
+            include_closed=True,
+        )
+        target_snapshot = load_round_snapshot(
+            run_dir_path,
+            expected_run_id=run_id,
+            round_id=round_id,
+            board_path=board_file,
+            include_closed=True,
+        )
+        source_round = (
+            source_snapshot.get("round_state")
+            if isinstance(source_snapshot.get("round_state"), dict)
+            else {}
+        )
+        if not round_snapshot_has_state(source_snapshot):
+            raise ValueError(
+                f"Source round {source_round_id} does not exist on the board or deliberation plane: {board_file}"
+            )
+        if round_snapshot_has_state(target_snapshot):
             existing_output = load_json_if_exists(output_file)
+            target_sync = (
+                target_snapshot.get("deliberation_sync")
+                if isinstance(target_snapshot.get("deliberation_sync"), dict)
+                else {}
+            )
             return {
                 "status": "completed",
                 "summary": {
@@ -522,6 +515,9 @@ def open_investigation_round_skill(
                     "source_round_id": source_round_id,
                     "operation": "noop",
                     "board_path": str(board_file),
+                    "board_revision": max(0, int(target_sync.get("board_revision") or 0)),
+                    "db_path": maybe_text(target_snapshot.get("db_path")) or maybe_text(target_sync.get("db_path")),
+                    "write_surface": "deliberation-plane",
                     "output_path": str(output_file),
                     "task_path": str(target_task_file),
                 },
@@ -542,12 +538,7 @@ def open_investigation_round_skill(
                 },
             }
 
-        next_revision = board_revision(board) + 1
         timestamp = utc_now_iso()
-        target_round = ensure_round(board, round_id)
-        target_round["notes"] = []
-        target_round["challenge_tickets"] = []
-
         source_hypotheses = source_round.get("hypotheses", []) if isinstance(source_round.get("hypotheses"), list) else []
         source_challenges = source_round.get("challenge_tickets", []) if isinstance(source_round.get("challenge_tickets"), list) else []
         source_board_tasks = source_round.get("tasks", []) if isinstance(source_round.get("tasks"), list) else []
@@ -559,7 +550,6 @@ def open_investigation_round_skill(
             clone_hypothesis(item, run_id=run_id, round_id=round_id, source_round_id=source_round_id, timestamp=timestamp)
             for item in active_hypotheses
         ]
-        target_round["hypotheses"] = carried_hypotheses
 
         carried_tasks: list[dict[str, Any]] = []
         for source_task in open_board_tasks:
@@ -618,7 +608,6 @@ def open_investigation_round_skill(
             )
         )
         carried_tasks = dedupe_tasks(carried_tasks)
-        target_round["tasks"] = carried_tasks
 
         generated_note_text = maybe_text(transition_note) or (
             f"Follow-up round opened from {source_round_id}. "
@@ -637,77 +626,93 @@ def open_investigation_round_skill(
             "linked_artifact_refs": [],
             "related_ids": unique_texts([source_round_id, *[item.get("task_id") for item in carried_tasks], *[item.get("hypothesis_id") for item in carried_hypotheses]]),
         }
-        target_round["notes"] = [note]
-
-        event = append_event(
-            board,
-            run_id,
-            round_id,
-            "round-opened",
-            {
+        followup_tasks, task_warnings = build_followup_round_tasks(
+            run_id=run_id,
+            round_id=round_id,
+            source_round_id=source_round_id,
+            mission=mission,
+            source_tasks=source_task_rows,
+            next_actions=next_actions if isinstance(next_actions, dict) else {},
+            active_hypothesis_count=len(carried_hypotheses),
+            open_challenge_count=len(open_challenges),
+            open_task_count=len(open_board_tasks),
+        )
+        warnings.extend(task_warnings)
+        write_summary = commit_board_mutation(
+            run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            board_path=board_file,
+            note_records=[note],
+            hypothesis_records=carried_hypotheses,
+            task_records=carried_tasks,
+            event_type="round-opened",
+            event_payload={
                 "source_round_id": source_round_id,
                 "note_id": note_id,
                 "carried_hypothesis_count": len(carried_hypotheses),
                 "carried_task_count": len(carried_tasks),
                 "source_open_challenge_count": len(open_challenges),
             },
+            event_created_at_utc=timestamp,
+            event_discriminator=note_id,
         )
-        write_board(board_file, board, next_revision)
+        write_json_file(target_task_file, followup_tasks)
 
-    followup_tasks, task_warnings = build_followup_round_tasks(
-        run_id=run_id,
-        round_id=round_id,
-        source_round_id=source_round_id,
-        mission=mission,
-        source_tasks=source_task_rows,
-        next_actions=next_actions if isinstance(next_actions, dict) else {},
-        active_hypothesis_count=len(carried_hypotheses),
-        open_challenge_count=len(open_challenges),
-        open_task_count=len(open_board_tasks),
-    )
-    warnings.extend(task_warnings)
-    write_json_file(target_task_file, followup_tasks)
+        event_id = maybe_text(write_summary.get("event_id"))
+        board_revision = max(0, int(write_summary.get("board_revision") or 0))
+        transition_id = "round-transition-" + stable_hash(run_id, round_id, source_round_id, event_id)[:12]
+        transition_payload = {
+            "schema_version": "board-round-transition-v1",
+            "skill": SKILL_NAME,
+            "generated_at_utc": utc_now_iso(),
+            "transition_id": transition_id,
+            "run_id": run_id,
+            "round_id": round_id,
+            "source_round_id": source_round_id,
+            "operation": "created",
+            "board_path": str(board_file),
+            "task_path": str(target_task_file),
+            "source_task_path": str(source_task_file),
+            "source_next_actions_path": str(source_next_actions_file),
+            "db_path": maybe_text(write_summary.get("db_path")),
+            "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
+            "board_revision": board_revision,
+            "event_id": event_id,
+            "counts": {
+                "carried_hypothesis_count": len(carried_hypotheses),
+                "carried_board_task_count": len(carried_tasks),
+                "source_open_challenge_count": len(open_challenges),
+                "source_open_task_count": len(open_board_tasks),
+                "followup_round_task_count": len(followup_tasks),
+            },
+            "prior_round_ids": [source_round_id],
+            "cross_round_query_hints": {
+                "public_signals": {
+                    "skill": "eco-query-public-signals",
+                    "round_scope": "up-to-current",
+                    "query_round_id": round_id,
+                },
+                "environment_signals": {
+                    "skill": "eco-query-environment-signals",
+                    "round_scope": "up-to-current",
+                    "query_round_id": round_id,
+                },
+            },
+            "warnings": warnings,
+        }
+        write_json_file(output_file, transition_payload)
+        store_round_transition_record(
+            run_dir_path,
+            transition_record={
+                **transition_payload,
+                "artifact_path": str(output_file),
+                "record_locator": "$",
+            },
+        )
 
-    transition_id = "round-transition-" + stable_hash(run_id, round_id, source_round_id, event["event_id"])[:12]
-    transition_payload = {
-        "schema_version": "board-round-transition-v1",
-        "skill": SKILL_NAME,
-        "generated_at_utc": utc_now_iso(),
-        "transition_id": transition_id,
-        "run_id": run_id,
-        "round_id": round_id,
-        "source_round_id": source_round_id,
-        "operation": "created",
-        "board_path": str(board_file),
-        "task_path": str(target_task_file),
-        "source_task_path": str(source_task_file),
-        "source_next_actions_path": str(source_next_actions_file),
-        "board_revision": next_revision,
-        "event_id": event["event_id"],
-        "counts": {
-            "carried_hypothesis_count": len(carried_hypotheses),
-            "carried_board_task_count": len(carried_tasks),
-            "source_open_challenge_count": len(open_challenges),
-            "source_open_task_count": len(open_board_tasks),
-            "followup_round_task_count": len(followup_tasks),
-        },
-        "prior_round_ids": [source_round_id],
-        "cross_round_query_hints": {
-            "public_signals": {
-                "skill": "eco-query-public-signals",
-                "round_scope": "up-to-current",
-                "query_round_id": round_id,
-            },
-            "environment_signals": {
-                "skill": "eco-query-environment-signals",
-                "round_scope": "up-to-current",
-                "query_round_id": round_id,
-            },
-        },
-        "warnings": warnings,
-    }
-    write_json_file(output_file, transition_payload)
-    sync_board_to_deliberation_plane(run_dir_path, expected_run_id=run_id, board_path=board_file)
+    event_id = maybe_text(write_summary.get("event_id"))
+    board_revision = max(0, int(write_summary.get("board_revision") or 0))
 
     artifact_refs = [
         {"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"},
@@ -723,17 +728,19 @@ def open_investigation_round_skill(
             "round_id": round_id,
             "source_round_id": source_round_id,
             "board_path": str(board_file),
-            "board_revision": next_revision,
-            "event_id": event["event_id"],
+            "board_revision": board_revision,
+            "event_id": event_id,
             "output_path": str(output_file),
             "task_path": str(target_task_file),
             "operation": "created",
             "carried_hypothesis_count": len(carried_hypotheses),
             "carried_board_task_count": len(carried_tasks),
             "followup_round_task_count": len(followup_tasks),
+            "db_path": maybe_text(write_summary.get("db_path")),
+            "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
         },
         "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, transition_id)[:20],
-        "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event["event_id"])[:16],
+        "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event_id)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [item for item in canonical_ids if maybe_text(item)],
         "warnings": warnings,

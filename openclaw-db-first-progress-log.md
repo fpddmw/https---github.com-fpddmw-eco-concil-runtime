@@ -496,3 +496,41 @@ Known limitations:
 Next:
 - Continue `B2` by migrating `eco-open-investigation-round` and any remaining round-transition mutation paths onto the same deliberation-plane-first surface.
 - Then move to `B2.1` so `board_summary` and `board_brief` can be treated as derived exports rather than operational prerequisites.
+
+## 2026-04-03 B2: Round Transition Write-Path Migration
+
+Status: completed
+
+Objective:
+- Finish `B2` by moving `eco-open-investigation-round` off `JSON first -> DB sync` and onto `deliberation-plane first -> JSON export`.
+- Keep follow-up round transition artifacts queryable in the deliberation plane while preserving the existing JSON exports and task scaffold contract.
+
+Implementation:
+- `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
+  - Added `store_round_transition_record(...)` so `round_transitions` can be written directly into SQLite without requiring a full board re-sync.
+- `skills/eco-open-investigation-round/scripts/eco_open_investigation_round.py`
+  - Replaced in-place board JSON mutation with `load_round_snapshot(...)` plus `commit_board_mutation(...)`.
+  - Source and target round existence now resolve from deliberation-plane state, so follow-up round opening continues even when `board/investigation_board.json` is temporarily absent.
+  - Added `summary.db_path` and `summary.write_surface`, and now writes the `round_transition` row directly into the deliberation plane after exporting `runtime/round_transition_<round_id>.json`.
+- `eco-concil-runtime/src/eco_council_runtime/kernel/registry.py`
+  - Extended contract parsing so DB-first board skills that declare compatibility exports still register their resolved write paths for runtime governance and ledger metadata.
+- `skills/eco-open-investigation-round/SKILL.md`
+  - Updated the read/write contract wording to match deliberation-plane-first behavior.
+
+Validation:
+- `python3 -m unittest tests/test_board_workflow.py -q`
+- `python3 -m unittest tests/test_investigation_workflow.py -q`
+- `python3 -m unittest tests/test_runtime_kernel.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- `tests/test_board_workflow.py`
+  - Verifies `eco-open-investigation-round` can reopen a follow-up round after deleting `board/investigation_board.json`, recreate the compatibility export from DB state, and persist the round transition into `round_transitions`.
+
+Known limitations:
+- `eco-scaffold-mission-run` still seeds the initial board through a JSON artifact before DB bootstrap takes over on the first DB-first mutation.
+- `runtime/round_transition_<round_id>.json` and `investigation/round_tasks_<round_id>.json` remain compatibility exports written after the DB mutation rather than transactional DB-only surfaces.
+
+Next:
+- Move to `B2.1` so `board_summary` and `board_brief` are treated strictly as derived exports instead of operational prerequisites.
+- Follow with `A2` shared contract hardening so board / analysis trace fields and runtime governance metadata stop drifting independently.

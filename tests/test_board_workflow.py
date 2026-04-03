@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -412,7 +413,7 @@ class BoardWorkflowTests(unittest.TestCase):
             self.assertIn("State source: deliberation-plane", brief_text)
             self.assertIn(hypothesis_payload["canonical_ids"][0], brief_text)
 
-    def test_open_investigation_round_preserves_prior_round_and_carries_state(self) -> None:
+    def test_open_investigation_round_preserves_prior_round_and_carries_state_from_db(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -512,6 +513,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 },
             )
 
+            board_path(run_dir).unlink()
+
             open_round_payload = run_script(
                 script_path("eco-open-investigation-round"),
                 "--run-dir",
@@ -528,9 +531,23 @@ class BoardWorkflowTests(unittest.TestCase):
             round2_state = board_after["rounds"][ROUND2_ID]
             round2_tasks = json.loads(investigation_path(run_dir, f"round_tasks_{ROUND2_ID}.json").read_text(encoding="utf-8"))
             transition_artifact = load_json(run_dir / "runtime" / f"round_transition_{ROUND2_ID}.json")
+            connection = sqlite3.connect(run_dir / "analytics" / "signal_plane.sqlite")
+            try:
+                transition_row = connection.execute(
+                    """
+                    SELECT source_round_id, event_id, board_revision, artifact_path
+                    FROM round_transitions
+                    WHERE transition_id = ?
+                    """,
+                    (open_round_payload["canonical_ids"][0],),
+                ).fetchone()
+            finally:
+                connection.close()
 
             self.assertIn(ROUND_ID, board_after["rounds"])
             self.assertIn(ROUND2_ID, board_after["rounds"])
+            self.assertEqual("deliberation-plane", open_round_payload["summary"]["write_surface"])
+            self.assertTrue(Path(open_round_payload["summary"]["db_path"]).exists())
             self.assertEqual(1, len(round2_state["hypotheses"]))
             self.assertEqual(3, len(round2_state["tasks"]))
             self.assertEqual([], round2_state["challenge_tickets"])
@@ -538,6 +555,8 @@ class BoardWorkflowTests(unittest.TestCase):
             self.assertIn("Follow-up round opened", round2_state["notes"][0]["note_text"])
             self.assertEqual(2, len(round2_tasks))
             self.assertEqual([ROUND_ID], round2_tasks[0]["inputs"]["prior_round_ids"])
+            self.assertEqual("deliberation-plane", transition_artifact["write_surface"])
+            self.assertEqual(open_round_payload["summary"]["db_path"], transition_artifact["db_path"])
             self.assertEqual("up-to-current", transition_artifact["cross_round_query_hints"]["public_signals"]["round_scope"])
             self.assertEqual("up-to-current", transition_artifact["cross_round_query_hints"]["environment_signals"]["round_scope"])
             self.assertEqual(ROUND_ID, transition_artifact["prior_round_ids"][0])
@@ -547,6 +566,15 @@ class BoardWorkflowTests(unittest.TestCase):
             )
             self.assertTrue(
                 any(task.get("source_ticket_id") == challenge_payload["canonical_ids"][0] for task in round2_state["tasks"])
+            )
+            self.assertIsNotNone(transition_row)
+            assert transition_row is not None
+            self.assertEqual(ROUND_ID, transition_row[0])
+            self.assertEqual(open_round_payload["summary"]["event_id"], transition_row[1])
+            self.assertEqual(open_round_payload["summary"]["board_revision"], transition_row[2])
+            self.assertEqual(
+                str((run_dir / "runtime" / f"round_transition_{ROUND2_ID}.json").resolve()),
+                transition_row[3],
             )
 
     def test_open_investigation_round_fallback_uses_shared_source_role_catalog(self) -> None:
