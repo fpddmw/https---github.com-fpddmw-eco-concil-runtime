@@ -18,6 +18,7 @@ description: Derive matching-oriented observation scope proposals from observati
 ## Read/Write Contract
 - Reads `merged_observation_candidates_<round_id>.json` by default and falls back to `observation_candidates_<round_id>.json`.
 - Writes `runs/<run_id>/analytics/observation_scope_proposals_<round_id>.json` by default.
+- Syncs the same observation-scope result set into `runs/<run_id>/analytics/signal_plane.sqlite` as analysis-plane state.
 
 ## Required Input
 - `run_dir`
@@ -36,6 +37,7 @@ description: Derive matching-oriented observation scope proposals from observati
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `analysis_sync`
 - `board_handoff`
 
 ## References

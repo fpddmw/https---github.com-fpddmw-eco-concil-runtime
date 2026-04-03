@@ -272,6 +272,7 @@ Validation:
 - `python3 -m unittest tests/test_analysis_workflow.py -q`
 - `python3 -m unittest tests/test_investigation_workflow.py -q`
 - `python3 -m unittest discover -s tests -q`
+- `python3 -m unittest discover -s tests -q`
 
 Tests added or extended:
 - `tests/test_analysis_workflow.py`
@@ -288,3 +289,50 @@ Known limitations:
 Next:
 - Extend the same analysis-plane query surface to other high-value analysis artifacts such as links, scopes, or promotion-ready result sets.
 - Decide whether additional reporting/export consumers should stop reading coverage-export JSON directly and rely on analysis-plane queries instead.
+
+## 2026-04-03 B2.1: Coverage Upstream Analysis Migration
+
+Status: completed
+
+Objective:
+- Move `eco-score-evidence-coverage` off direct JSON-only dependence on upstream links and scope artifacts so coverage scoring can continue from the shared analysis plane.
+
+Implementation:
+- `eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py`
+  - Generalized the transitional analysis-plane helper beyond coverage.
+  - Added shared sync/load wrappers for:
+    - `claim-observation-link`
+    - `claim-scope`
+    - `observation-scope`
+    - existing `evidence-coverage`
+- `skills/eco-link-claims-to-observations/scripts/eco_link_claims_to_observations.py`
+  - Now syncs link results into the analysis plane after JSON export.
+  - Emits `db_path` and `analysis_sync`.
+- `skills/eco-derive-claim-scope/scripts/eco_derive_claim_scope.py`
+  - Now syncs claim-scope results into the analysis plane after JSON export.
+  - Emits `db_path` and `analysis_sync`.
+- `skills/eco-derive-observation-scope/scripts/eco_derive_observation_scope.py`
+  - Now syncs observation-scope results into the analysis plane after JSON export.
+  - Emits `db_path` and `analysis_sync`.
+- `skills/eco-score-evidence-coverage/scripts/eco_score_evidence_coverage.py`
+  - Now loads links, claim scopes, and observation scopes from the shared analysis plane first.
+  - Falls back to the JSON artifacts only when no synced result set is available.
+  - Emits upstream source trace fields, input-presence flags, and `input_analysis_sync`.
+
+Validation:
+- `python3 -m unittest tests/test_analysis_workflow.py -q`
+- `python3 -m unittest tests/test_investigation_workflow.py -q`
+
+Tests added or extended:
+- `tests/test_analysis_workflow.py`
+  - Verifies link, claim-scope, observation-scope, and coverage result sets are all present in `analysis_result_sets`.
+  - Verifies coverage can still run after deleting `claim_observation_links`, `claim_scope_proposals`, and `observation_scope_proposals` JSON artifacts.
+- Existing custom-path coverage checks now also confirm custom claim-scope and observation-scope artifact paths are recorded in the analysis plane.
+
+Known limitations:
+- `eco-materialize-history-context` and `eco-archive-case-library` still read claim/observation scope artifacts directly instead of querying the shared analysis plane.
+- The analysis-plane result-set helper is still local runtime infrastructure rather than a formal public contract for non-Python tooling.
+
+Next:
+- Migrate history/archive consumers that still read scope artifacts directly onto the shared analysis-plane helper.
+- Decide whether `claim_observation_links` itself should become an operational query surface for more downstream reasoning beyond coverage scoring.

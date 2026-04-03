@@ -16,7 +16,9 @@ description: Score claim-side evidence coverage using links and scope proposals,
 - Need a summary object that can guide moderator and challenger behavior.
 
 ## Read/Write Contract
-- Reads `claim_observation_links_<round_id>.json` and available claim/observation scope artifacts.
+- Reads claim-observation links from the run-local analysis plane first.
+- Reads claim and observation scope proposals from the run-local analysis plane first.
+- Falls back to the corresponding JSON artifacts when the synced result sets are unavailable.
 - Writes `runs/<run_id>/analytics/evidence_coverage_<round_id>.json` by default.
 - Syncs the same coverage result set into `runs/<run_id>/analytics/signal_plane.sqlite` as analysis-plane state.
 
@@ -39,6 +41,7 @@ description: Score claim-side evidence coverage using links and scope proposals,
 - `canonical_ids`
 - `warnings`
 - `analysis_sync`
+- `input_analysis_sync`
 - `board_handoff`
 
 ## References

@@ -9,9 +9,16 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-link-claims-to-observations"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import sync_claim_observation_link_result_set  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -347,6 +354,15 @@ def link_claims_to_observations_skill(
         "links": links,
     }
     write_json(output_file, wrapper)
+    analysis_sync = sync_claim_observation_link_result_set(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        links_path=output_file,
+    )
+    wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
+    wrapper["analysis_sync"] = analysis_sync
+    write_json(output_file, wrapper)
     artifact_refs: list[dict[str, str]] = [
         {
             "signal_id": "",
@@ -377,12 +393,14 @@ def link_claims_to_observations_skill(
             "observation_input_count": len(observations),
             "link_count": len(links),
             "output_path": str(output_file),
+            "db_path": maybe_text(analysis_sync.get("db_path")),
         },
         "receipt_id": "evidence-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
         "batch_id": "evbatch-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:16],
         "artifact_refs": unique_refs(artifact_refs, 40),
         "canonical_ids": [link["link_id"] for link in links],
         "warnings": warnings,
+        "analysis_sync": analysis_sync,
         "board_handoff": {
             "candidate_ids": [link["link_id"] for link in links],
             "evidence_refs": unique_refs(artifact_refs, 20),

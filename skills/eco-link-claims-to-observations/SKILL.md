@@ -19,6 +19,7 @@ description: Link claim-side evidence objects to observation-side evidence objec
 - Reads claim clusters if available, otherwise falls back to claim candidates.
 - Reads merged observations if available, otherwise falls back to observation candidates.
 - Writes `runs/<run_id>/analytics/claim_observation_links_<round_id>.json` by default.
+- Syncs the same link result set into `runs/<run_id>/analytics/signal_plane.sqlite` as analysis-plane state.
 
 ## Required Input
 - `run_dir`
@@ -41,6 +42,7 @@ description: Link claim-side evidence objects to observation-side evidence objec
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `analysis_sync`
 - `board_handoff`
 
 ## References

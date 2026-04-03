@@ -9,9 +9,16 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-derive-claim-scope"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import sync_claim_scope_result_set  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -180,6 +187,15 @@ def derive_claim_scope_skill(
         "scopes": scopes,
     }
     write_json(output_file, wrapper)
+    analysis_sync = sync_claim_scope_result_set(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        claim_scope_path=output_file,
+    )
+    wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
+    wrapper["analysis_sync"] = analysis_sync
+    write_json(output_file, wrapper)
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$.scopes", "artifact_ref": f"{output_file}:$.scopes"}]
     for scope in scopes:
         artifact_refs.extend(scope["evidence_refs"])
@@ -187,12 +203,21 @@ def derive_claim_scope_skill(
         warnings.append({"code": "no-claim-scopes", "message": "No claim scope proposals were derived from the available claim-side inputs."})
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "input_path": str(input_file), "output_path": str(output_file), "scope_count": len(scopes)},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "input_path": str(input_file),
+            "output_path": str(output_file),
+            "scope_count": len(scopes),
+            "db_path": maybe_text(analysis_sync.get("db_path")),
+        },
         "receipt_id": "scope-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
         "batch_id": "scopebatch-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:16],
         "artifact_refs": unique_refs(artifact_refs, 40),
         "canonical_ids": [scope["claim_scope_id"] for scope in scopes],
         "warnings": warnings,
+        "analysis_sync": analysis_sync,
         "board_handoff": {
             "candidate_ids": [scope["claim_scope_id"] for scope in scopes],
             "evidence_refs": unique_refs(artifact_refs, 20),

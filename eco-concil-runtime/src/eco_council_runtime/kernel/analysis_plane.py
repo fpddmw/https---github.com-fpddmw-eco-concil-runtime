@@ -8,7 +8,68 @@ from pathlib import Path
 from typing import Any
 
 ANALYSIS_KIND_EVIDENCE_COVERAGE = "evidence-coverage"
-DEFAULT_SOURCE_SKILL = "eco-score-evidence-coverage"
+ANALYSIS_KIND_CLAIM_SCOPE = "claim-scope"
+ANALYSIS_KIND_OBSERVATION_SCOPE = "observation-scope"
+ANALYSIS_KIND_CLAIM_OBSERVATION_LINK = "claim-observation-link"
+
+ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
+    ANALYSIS_KIND_EVIDENCE_COVERAGE: {
+        "artifact_label": "coverage",
+        "default_relative": "analytics/evidence_coverage_{round_id}.json",
+        "items_key": "coverages",
+        "count_key": "coverage_count",
+        "id_field": "coverage_id",
+        "subject_field": "claim_id",
+        "score_field": "coverage_score",
+        "state_field": "readiness",
+        "related_id_fields": ["coverage_id", "claim_id"],
+        "default_source_skill": "eco-score-evidence-coverage",
+        "summary_fields": [
+            "links_path",
+            "claim_scope_path",
+            "observation_scope_path",
+        ],
+    },
+    ANALYSIS_KIND_CLAIM_SCOPE: {
+        "artifact_label": "claim-scope",
+        "default_relative": "analytics/claim_scope_proposals_{round_id}.json",
+        "items_key": "scopes",
+        "count_key": "scope_count",
+        "id_field": "claim_scope_id",
+        "subject_field": "claim_id",
+        "score_field": "confidence",
+        "state_field": "scope_kind",
+        "related_id_fields": ["claim_scope_id", "claim_id", "claim_type"],
+        "default_source_skill": "eco-derive-claim-scope",
+        "summary_fields": ["input_path"],
+    },
+    ANALYSIS_KIND_OBSERVATION_SCOPE: {
+        "artifact_label": "observation-scope",
+        "default_relative": "analytics/observation_scope_proposals_{round_id}.json",
+        "items_key": "scopes",
+        "count_key": "scope_count",
+        "id_field": "observation_scope_id",
+        "subject_field": "observation_id",
+        "score_field": "confidence",
+        "state_field": "scope_kind",
+        "related_id_fields": ["observation_scope_id", "observation_id", "metric"],
+        "default_source_skill": "eco-derive-observation-scope",
+        "summary_fields": ["input_path"],
+    },
+    ANALYSIS_KIND_CLAIM_OBSERVATION_LINK: {
+        "artifact_label": "claim-observation-link",
+        "default_relative": "analytics/claim_observation_links_{round_id}.json",
+        "items_key": "links",
+        "count_key": "link_count",
+        "id_field": "link_id",
+        "subject_field": "claim_id",
+        "score_field": "confidence",
+        "state_field": "relation",
+        "related_id_fields": ["link_id", "claim_id", "observation_id"],
+        "default_source_skill": "eco-link-claims-to-observations",
+        "summary_fields": ["claim_input_path", "observation_input_path"],
+    },
+}
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS analysis_result_sets (
@@ -159,6 +220,26 @@ def load_json_if_exists(path: Path) -> dict[str, Any] | None:
     return None
 
 
+def analysis_config(analysis_kind: str) -> dict[str, Any]:
+    config = ANALYSIS_KIND_CONFIGS.get(maybe_text(analysis_kind))
+    if config is None:
+        raise ValueError(f"Unsupported analysis kind: {analysis_kind}")
+    return config
+
+
+def _extract_items_from_payload(
+    payload: dict[str, Any] | None,
+    *,
+    items_key: str,
+) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    values = payload.get(items_key)
+    if not isinstance(values, list):
+        return []
+    return [item for item in values if isinstance(item, dict)]
+
+
 def _select_latest_result_set(
     connection: sqlite3.Connection,
     *,
@@ -226,6 +307,8 @@ def _load_result_wrapper(
     connection: sqlite3.Connection,
     *,
     result_set_row: sqlite3.Row,
+    items_key: str,
+    count_key: str,
 ) -> dict[str, Any]:
     raw_text = result_set_row["raw_json"] if isinstance(result_set_row["raw_json"], str) else ""
     wrapper = decode_json(raw_text, {})
@@ -235,53 +318,83 @@ def _load_result_wrapper(
         connection,
         result_set_id=maybe_text(result_set_row["result_set_id"]),
     )
-    wrapper["coverages"] = items
-    wrapper["coverage_count"] = len(items)
+    wrapper[items_key] = items
+    wrapper[count_key] = len(items)
     return wrapper
 
 
-def sync_evidence_coverage_result_set(
+def _resolve_analysis_artifact_path(
+    run_dir: Path,
+    *,
+    analysis_kind: str,
+    artifact_path: str | Path,
+    round_id: str,
+) -> Path:
+    config = analysis_config(analysis_kind)
+    default_relative = maybe_text(config.get("default_relative")).format(round_id=round_id)
+    return resolve_artifact_path(run_dir, artifact_path, default_relative)
+
+
+def sync_analysis_result_set(
     run_dir: str | Path,
     *,
+    analysis_kind: str,
     expected_run_id: str = "",
     round_id: str = "",
-    coverage_path: str | Path = "",
+    artifact_path: str | Path = "",
     db_path: str = "",
 ) -> dict[str, Any]:
+    config = analysis_config(analysis_kind)
     run_dir_path = resolve_run_dir(run_dir)
-    coverage_file = resolve_artifact_path(
+    analysis_file = _resolve_analysis_artifact_path(
         run_dir_path,
-        coverage_path,
-        f"analytics/evidence_coverage_{round_id}.json",
+        analysis_kind=analysis_kind,
+        artifact_path=artifact_path,
+        round_id=round_id,
     )
     db_file = resolve_db_path(run_dir_path, db_path)
-    coverage_payload = load_json_if_exists(coverage_file)
-    if not isinstance(coverage_payload, dict):
+    payload = load_json_if_exists(analysis_file)
+    artifact_label = maybe_text(config.get("artifact_label")) or analysis_kind
+    items_key = maybe_text(config.get("items_key")) or "items"
+    count_key = maybe_text(config.get("count_key")) or "item_count"
+    id_field = maybe_text(config.get("id_field")) or "id"
+    subject_field = maybe_text(config.get("subject_field"))
+    score_field = maybe_text(config.get("score_field"))
+    state_field = maybe_text(config.get("state_field"))
+    related_id_fields = (
+        config.get("related_id_fields")
+        if isinstance(config.get("related_id_fields"), list)
+        else []
+    )
+    summary_fields = (
+        config.get("summary_fields")
+        if isinstance(config.get("summary_fields"), list)
+        else []
+    )
+    default_source_skill = maybe_text(config.get("default_source_skill"))
+    if not isinstance(payload, dict):
         return {
-            "status": "missing-coverage",
-            "analysis_kind": ANALYSIS_KIND_EVIDENCE_COVERAGE,
+            "status": f"missing-{artifact_label}",
+            "analysis_kind": analysis_kind,
             "run_id": maybe_text(expected_run_id),
             "round_id": maybe_text(round_id),
-            "coverage_path": str(coverage_file),
+            "artifact_path": str(analysis_file),
             "db_path": str(db_file),
             "result_set_id": "",
             "item_count": 0,
+            "source_skill": default_source_skill,
         }
 
-    payload_run_id = maybe_text(coverage_payload.get("run_id")) or maybe_text(expected_run_id)
-    payload_round_id = maybe_text(coverage_payload.get("round_id")) or maybe_text(round_id)
-    source_skill = maybe_text(coverage_payload.get("skill")) or DEFAULT_SOURCE_SKILL
-    generated_at_utc = maybe_text(coverage_payload.get("generated_at_utc")) or utc_now_iso()
-    coverages = (
-        [item for item in coverage_payload.get("coverages", []) if isinstance(item, dict)]
-        if isinstance(coverage_payload.get("coverages"), list)
-        else []
-    )
+    payload_run_id = maybe_text(payload.get("run_id")) or maybe_text(expected_run_id)
+    payload_round_id = maybe_text(payload.get("round_id")) or maybe_text(round_id)
+    source_skill = maybe_text(payload.get("skill")) or default_source_skill
+    generated_at_utc = maybe_text(payload.get("generated_at_utc")) or utc_now_iso()
+    items = _extract_items_from_payload(payload, items_key=items_key)
     result_set_id = "analysis-set-" + stable_hash(
-        ANALYSIS_KIND_EVIDENCE_COVERAGE,
+        analysis_kind,
         payload_run_id,
         payload_round_id,
-        str(coverage_file),
+        str(analysis_file),
     )[:16]
 
     connection, resolved_db_file = connect_db(run_dir_path, db_path)
@@ -292,14 +405,14 @@ def sync_evidence_coverage_result_set(
                 DELETE FROM analysis_result_items
                 WHERE run_id = ? AND round_id = ? AND analysis_kind = ?
                 """,
-                (payload_run_id, payload_round_id, ANALYSIS_KIND_EVIDENCE_COVERAGE),
+                (payload_run_id, payload_round_id, analysis_kind),
             )
             connection.execute(
                 """
                 DELETE FROM analysis_result_sets
                 WHERE run_id = ? AND round_id = ? AND analysis_kind = ?
                 """,
-                (payload_run_id, payload_round_id, ANALYSIS_KIND_EVIDENCE_COVERAGE),
+                (payload_run_id, payload_round_id, analysis_kind),
             )
             connection.execute(
                 """
@@ -321,30 +434,28 @@ def sync_evidence_coverage_result_set(
                     result_set_id,
                     payload_run_id,
                     payload_round_id,
-                    ANALYSIS_KIND_EVIDENCE_COVERAGE,
+                    analysis_kind,
                     source_skill,
-                    str(coverage_file),
-                    "$.coverages",
+                    str(analysis_file),
+                    f"$.{items_key}",
                     generated_at_utc,
-                    len(coverages),
+                    len(items),
                     json_text(
                         {
-                            "coverage_count": len(coverages),
-                            "links_path": maybe_text(coverage_payload.get("links_path")),
-                            "claim_scope_path": maybe_text(
-                                coverage_payload.get("claim_scope_path")
-                            ),
-                            "observation_scope_path": maybe_text(
-                                coverage_payload.get("observation_scope_path")
-                            ),
+                            count_key: len(items),
+                            **{
+                                field: maybe_text(payload.get(field))
+                                for field in summary_fields
+                                if maybe_text(payload.get(field))
+                            },
                         }
                     ),
-                    json_text(coverage_payload),
+                    json_text(payload),
                 ),
             )
-            for index, coverage in enumerate(coverages, start=1):
-                coverage_id = maybe_text(coverage.get("coverage_id")) or str(index)
-                item_id = "analysis-item-" + stable_hash(result_set_id, coverage_id)[:16]
+            for index, item in enumerate(items, start=1):
+                item_id_value = maybe_text(item.get(id_field)) or str(index)
+                item_id = "analysis-item-" + stable_hash(result_set_id, item_id_value)[:16]
                 connection.execute(
                     """
                     INSERT OR REPLACE INTO analysis_result_items (
@@ -371,28 +482,25 @@ def sync_evidence_coverage_result_set(
                         result_set_id,
                         payload_run_id,
                         payload_round_id,
-                        ANALYSIS_KIND_EVIDENCE_COVERAGE,
+                        analysis_kind,
                         source_skill,
                         index,
-                        maybe_text(coverage.get("claim_id")) or coverage_id,
-                        maybe_text(coverage.get("readiness")),
-                        maybe_number(coverage.get("coverage_score")),
+                        maybe_text(item.get(subject_field)) or item_id_value,
+                        maybe_text(item.get(state_field)),
+                        maybe_number(item.get(score_field)) if score_field else None,
                         json_text(
                             unique_texts(
-                                [
-                                    coverage.get("coverage_id"),
-                                    coverage.get("claim_id"),
-                                ]
+                                [item.get(field) for field in related_id_fields]
                             )
                         ),
                         json_text(
-                            coverage.get("evidence_refs", [])
-                            if isinstance(coverage.get("evidence_refs"), list)
+                            item.get("evidence_refs", [])
+                            if isinstance(item.get("evidence_refs"), list)
                             else []
                         ),
-                        json_text(coverage),
-                        str(coverage_file),
-                        f"$.coverages[{index - 1}]",
+                        json_text(item),
+                        str(analysis_file),
+                        f"$.{items_key}[{index - 1}]",
                         generated_at_utc,
                     ),
                 )
@@ -401,33 +509,40 @@ def sync_evidence_coverage_result_set(
 
     return {
         "status": "completed",
-        "analysis_kind": ANALYSIS_KIND_EVIDENCE_COVERAGE,
+        "analysis_kind": analysis_kind,
         "run_id": payload_run_id,
         "round_id": payload_round_id,
-        "coverage_path": str(coverage_file),
+        "artifact_path": str(analysis_file),
         "db_path": str(resolved_db_file),
         "result_set_id": result_set_id,
-        "item_count": len(coverages),
+        "item_count": len(items),
         "source_skill": source_skill,
     }
 
 
-def load_evidence_coverage_context(
+def load_analysis_result_context(
     run_dir: str | Path,
     *,
     run_id: str,
     round_id: str,
-    coverage_path: str | Path = "",
+    analysis_kind: str,
+    artifact_path: str | Path = "",
     db_path: str = "",
 ) -> dict[str, Any]:
+    config = analysis_config(analysis_kind)
     run_dir_path = resolve_run_dir(run_dir)
-    coverage_file = resolve_artifact_path(
+    analysis_file = _resolve_analysis_artifact_path(
         run_dir_path,
-        coverage_path,
-        f"analytics/evidence_coverage_{round_id}.json",
+        analysis_kind=analysis_kind,
+        artifact_path=artifact_path,
+        round_id=round_id,
     )
-    coverage_override_requested = bool(maybe_text(coverage_path))
-    artifact_payload = load_json_if_exists(coverage_file)
+    artifact_label = maybe_text(config.get("artifact_label")) or analysis_kind
+    items_key = maybe_text(config.get("items_key")) or "items"
+    count_key = maybe_text(config.get("count_key")) or "item_count"
+    default_source_skill = maybe_text(config.get("default_source_skill"))
+    artifact_override_requested = bool(maybe_text(artifact_path))
+    artifact_payload = load_json_if_exists(analysis_file)
     artifact_present = isinstance(artifact_payload, dict)
 
     connection, resolved_db_file = connect_db(run_dir_path, db_path)
@@ -437,9 +552,9 @@ def load_evidence_coverage_context(
                 connection,
                 run_id=run_id,
                 round_id=round_id,
-                analysis_kind=ANALYSIS_KIND_EVIDENCE_COVERAGE,
-                artifact_path=str(coverage_file),
-                allow_any_artifact=not coverage_override_requested,
+                analysis_kind=analysis_kind,
+                artifact_path=str(analysis_file),
+                allow_any_artifact=not artifact_override_requested,
             )
     finally:
         connection.close()
@@ -459,7 +574,7 @@ def load_evidence_coverage_context(
     analysis_sync: dict[str, Any] = {}
     should_sync = artifact_present and (
         existing_row is None
-        or existing_artifact_path != str(coverage_file)
+        or existing_artifact_path != str(analysis_file)
         or (
             artifact_generated_at
             and existing_generated_at
@@ -467,11 +582,12 @@ def load_evidence_coverage_context(
         )
     )
     if should_sync:
-        analysis_sync = sync_evidence_coverage_result_set(
+        analysis_sync = sync_analysis_result_set(
             run_dir_path,
+            analysis_kind=analysis_kind,
             expected_run_id=run_id,
             round_id=round_id,
-            coverage_path=coverage_file,
+            artifact_path=analysis_file,
             db_path=str(resolved_db_file),
         )
 
@@ -482,108 +598,302 @@ def load_evidence_coverage_context(
                 connection,
                 run_id=run_id,
                 round_id=round_id,
-                analysis_kind=ANALYSIS_KIND_EVIDENCE_COVERAGE,
-                artifact_path=str(coverage_file),
-                allow_any_artifact=not coverage_override_requested,
+                analysis_kind=analysis_kind,
+                artifact_path=str(analysis_file),
+                allow_any_artifact=not artifact_override_requested,
             )
             if result_set_row is not None:
                 wrapper = _load_result_wrapper(
                     connection,
                     result_set_row=result_set_row,
+                    items_key=items_key,
+                    count_key=count_key,
                 )
-                coverages = (
-                    [
-                        item
-                        for item in wrapper.get("coverages", [])
-                        if isinstance(item, dict)
-                    ]
-                    if isinstance(wrapper.get("coverages"), list)
-                    else []
-                )
+                items = _extract_items_from_payload(wrapper, items_key=items_key)
                 if not analysis_sync:
                     analysis_sync = {
                         "status": "existing-result-set",
-                        "analysis_kind": ANALYSIS_KIND_EVIDENCE_COVERAGE,
+                        "analysis_kind": analysis_kind,
                         "run_id": run_id,
                         "round_id": round_id,
-                        "coverage_path": maybe_text(result_set_row["artifact_path"]),
+                        "artifact_path": maybe_text(result_set_row["artifact_path"]),
                         "db_path": str(resolved_db_file),
                         "result_set_id": maybe_text(result_set_row["result_set_id"]),
-                        "item_count": len(coverages),
+                        "item_count": len(items),
                         "source_skill": maybe_text(result_set_row["source_skill"]),
                     }
                 return {
-                    "coverage_wrapper": wrapper,
-                    "coverages": coverages,
-                    "coverage_count": len(coverages),
-                    "coverage_source": "analysis-plane",
-                    "coverage_file": maybe_text(result_set_row["artifact_path"])
-                    or str(coverage_file),
+                    "payload_wrapper": wrapper,
+                    "items": items,
+                    "item_count": len(items),
+                    "source": "analysis-plane",
+                    "artifact_path": maybe_text(result_set_row["artifact_path"])
+                    or str(analysis_file),
                     "db_path": str(resolved_db_file),
                     "analysis_sync": analysis_sync,
-                    "coverage_artifact_present": artifact_present,
+                    "artifact_present": artifact_present,
                     "warnings": [],
                 }
     finally:
         connection.close()
 
     if artifact_present:
-        coverages = (
-            [item for item in artifact_payload.get("coverages", []) if isinstance(item, dict)]
-            if isinstance(artifact_payload.get("coverages"), list)
-            else []
-        )
+        items = _extract_items_from_payload(artifact_payload, items_key=items_key)
         if not analysis_sync:
             analysis_sync = {
                 "status": "artifact-only",
-                "analysis_kind": ANALYSIS_KIND_EVIDENCE_COVERAGE,
+                "analysis_kind": analysis_kind,
                 "run_id": run_id,
                 "round_id": round_id,
-                "coverage_path": str(coverage_file),
+                "artifact_path": str(analysis_file),
                 "db_path": str(resolved_db_file),
                 "result_set_id": "",
-                "item_count": len(coverages),
+                "item_count": len(items),
                 "source_skill": maybe_text(artifact_payload.get("skill"))
-                or DEFAULT_SOURCE_SKILL,
+                or default_source_skill,
             }
         return {
-            "coverage_wrapper": artifact_payload,
-            "coverages": coverages,
-            "coverage_count": len(coverages),
-            "coverage_source": "coverage-artifact",
-            "coverage_file": str(coverage_file),
+            "payload_wrapper": artifact_payload,
+            "items": items,
+            "item_count": len(items),
+            "source": f"{artifact_label}-artifact",
+            "artifact_path": str(analysis_file),
             "db_path": str(resolved_db_file),
             "analysis_sync": analysis_sync,
-            "coverage_artifact_present": True,
+            "artifact_present": True,
             "warnings": [],
         }
 
     warnings = [
         {
-            "code": "missing-coverage",
-            "message": f"No evidence coverage result was found for round {round_id} at {coverage_file}.",
+            "code": f"missing-{artifact_label}",
+            "message": f"No {artifact_label} result was found for round {round_id} at {analysis_file}.",
         }
     ]
     if not analysis_sync:
         analysis_sync = {
-            "status": "missing-coverage",
-            "analysis_kind": ANALYSIS_KIND_EVIDENCE_COVERAGE,
+            "status": f"missing-{artifact_label}",
+            "analysis_kind": analysis_kind,
             "run_id": run_id,
             "round_id": round_id,
-            "coverage_path": str(coverage_file),
+            "artifact_path": str(analysis_file),
             "db_path": str(resolved_db_file),
             "result_set_id": "",
             "item_count": 0,
-            "source_skill": DEFAULT_SOURCE_SKILL,
+            "source_skill": default_source_skill,
         }
     return {
-        "coverage_wrapper": {"coverages": [], "coverage_count": 0},
-        "coverages": [],
-        "coverage_count": 0,
-        "coverage_source": "missing-coverage",
-        "coverage_file": str(coverage_file),
+        "payload_wrapper": {items_key: [], count_key: 0},
+        "items": [],
+        "item_count": 0,
+        "source": f"missing-{artifact_label}",
+        "artifact_path": str(analysis_file),
         "db_path": str(resolved_db_file),
         "analysis_sync": analysis_sync,
-        "coverage_artifact_present": False,
+        "artifact_present": False,
         "warnings": warnings,
+    }
+
+
+def sync_evidence_coverage_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    coverage_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_EVIDENCE_COVERAGE,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=coverage_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "coverage_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_evidence_coverage_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    coverage_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_EVIDENCE_COVERAGE,
+        artifact_path=coverage_path,
+        db_path=db_path,
+    )
+    return {
+        "coverage_wrapper": context.get("payload_wrapper", {}),
+        "coverages": context.get("items", []),
+        "coverage_count": int(context.get("item_count") or 0),
+        "coverage_source": maybe_text(context.get("source")),
+        "coverage_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "coverage_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_claim_scope_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    claim_scope_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_CLAIM_SCOPE,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=claim_scope_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "claim_scope_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_claim_scope_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    claim_scope_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_CLAIM_SCOPE,
+        artifact_path=claim_scope_path,
+        db_path=db_path,
+    )
+    return {
+        "claim_scope_wrapper": context.get("payload_wrapper", {}),
+        "claim_scopes": context.get("items", []),
+        "claim_scope_count": int(context.get("item_count") or 0),
+        "claim_scope_source": maybe_text(context.get("source")),
+        "claim_scope_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "claim_scope_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_observation_scope_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    observation_scope_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_OBSERVATION_SCOPE,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=observation_scope_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "observation_scope_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_observation_scope_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    observation_scope_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_OBSERVATION_SCOPE,
+        artifact_path=observation_scope_path,
+        db_path=db_path,
+    )
+    return {
+        "observation_scope_wrapper": context.get("payload_wrapper", {}),
+        "observation_scopes": context.get("items", []),
+        "observation_scope_count": int(context.get("item_count") or 0),
+        "observation_scope_source": maybe_text(context.get("source")),
+        "observation_scope_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "observation_scope_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_claim_observation_link_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    links_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_CLAIM_OBSERVATION_LINK,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=links_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "links_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_claim_observation_link_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    links_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_CLAIM_OBSERVATION_LINK,
+        artifact_path=links_path,
+        db_path=db_path,
+    )
+    return {
+        "links_wrapper": context.get("payload_wrapper", {}),
+        "links": context.get("items", []),
+        "link_count": int(context.get("item_count") or 0),
+        "links_source": maybe_text(context.get("source")),
+        "links_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "links_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
     }

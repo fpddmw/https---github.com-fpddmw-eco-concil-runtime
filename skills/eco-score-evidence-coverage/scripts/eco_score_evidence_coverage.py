@@ -18,7 +18,12 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.analysis_plane import sync_evidence_coverage_result_set  # noqa: E402
+from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
+    load_claim_observation_link_context,
+    load_claim_scope_context,
+    load_observation_scope_context,
+    sync_evidence_coverage_result_set,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -143,18 +148,59 @@ def score_evidence_coverage_skill(
     output_path: str,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
-    links_file = resolve_path(run_dir_path, links_path, f"claim_observation_links_{round_id}.json")
-    claim_scope_file = resolve_path(run_dir_path, claim_scope_path, f"claim_scope_proposals_{round_id}.json")
-    observation_scope_file = resolve_path(run_dir_path, observation_scope_path, f"observation_scope_proposals_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"evidence_coverage_{round_id}.json")
 
-    warnings: list[dict[str, str]] = []
-    links_payload = load_json_if_exists(links_file)
-    if links_payload is None:
-        warnings.append({"code": "missing-links", "message": f"Evidence links were not found at {links_file}."})
-    links = links_payload.get("links", []) if isinstance(links_payload, dict) and isinstance(links_payload.get("links"), list) else []
-    claim_scopes = claim_scope_map(load_json_if_exists(claim_scope_file))
-    observation_scopes = observation_scope_map(load_json_if_exists(observation_scope_file))
+    warnings: list[dict[str, Any]] = []
+    links_context = load_claim_observation_link_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        links_path=links_path,
+    )
+    claim_scope_context = load_claim_scope_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        claim_scope_path=claim_scope_path,
+        db_path=maybe_text(links_context.get("db_path")),
+    )
+    observation_scope_context = load_observation_scope_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        observation_scope_path=observation_scope_path,
+        db_path=maybe_text(claim_scope_context.get("db_path"))
+        or maybe_text(links_context.get("db_path")),
+    )
+    warnings.extend(
+        links_context.get("warnings", [])
+        if isinstance(links_context.get("warnings"), list)
+        else []
+    )
+    warnings.extend(
+        claim_scope_context.get("warnings", [])
+        if isinstance(claim_scope_context.get("warnings"), list)
+        else []
+    )
+    warnings.extend(
+        observation_scope_context.get("warnings", [])
+        if isinstance(observation_scope_context.get("warnings"), list)
+        else []
+    )
+    links = (
+        links_context.get("links", [])
+        if isinstance(links_context.get("links"), list)
+        else []
+    )
+    claim_scopes = claim_scope_map(claim_scope_context.get("claim_scope_wrapper"))
+    observation_scopes = observation_scope_map(
+        observation_scope_context.get("observation_scope_wrapper")
+    )
+    links_file = Path(maybe_text(links_context.get("links_file")))
+    claim_scope_file = Path(maybe_text(claim_scope_context.get("claim_scope_file")))
+    observation_scope_file = Path(
+        maybe_text(observation_scope_context.get("observation_scope_file"))
+    )
 
     by_claim: dict[str, list[dict[str, Any]]] = {}
     for link in links:
@@ -229,6 +275,31 @@ def score_evidence_coverage_skill(
         "links_path": str(links_file),
         "claim_scope_path": str(claim_scope_file),
         "observation_scope_path": str(observation_scope_file),
+        "links_source": maybe_text(links_context.get("links_source"))
+        or "missing-claim-observation-link",
+        "claim_scope_source": maybe_text(claim_scope_context.get("claim_scope_source"))
+        or "missing-claim-scope",
+        "observation_scope_source": maybe_text(
+            observation_scope_context.get("observation_scope_source")
+        )
+        or "missing-observation-scope",
+        "observed_inputs": {
+            "links_present": bool(links),
+            "links_artifact_present": bool(links_context.get("links_artifact_present")),
+            "claim_scope_present": bool(claim_scopes),
+            "claim_scope_artifact_present": bool(
+                claim_scope_context.get("claim_scope_artifact_present")
+            ),
+            "observation_scope_present": bool(observation_scopes),
+            "observation_scope_artifact_present": bool(
+                observation_scope_context.get("observation_scope_artifact_present")
+            ),
+        },
+        "input_analysis_sync": {
+            "links": links_context.get("analysis_sync", {}),
+            "claim_scope": claim_scope_context.get("analysis_sync", {}),
+            "observation_scope": observation_scope_context.get("analysis_sync", {}),
+        },
         "coverage_count": len(coverages),
         "coverages": coverages,
     }
@@ -238,6 +309,9 @@ def score_evidence_coverage_skill(
         expected_run_id=run_id,
         round_id=round_id,
         coverage_path=output_file,
+        db_path=maybe_text(observation_scope_context.get("db_path"))
+        or maybe_text(claim_scope_context.get("db_path"))
+        or maybe_text(links_context.get("db_path")),
     )
     wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
     wrapper["analysis_sync"] = analysis_sync
@@ -255,6 +329,14 @@ def score_evidence_coverage_skill(
             "round_id": round_id,
             "output_path": str(output_file),
             "coverage_count": len(coverages),
+            "links_source": maybe_text(links_context.get("links_source"))
+            or "missing-claim-observation-link",
+            "claim_scope_source": maybe_text(claim_scope_context.get("claim_scope_source"))
+            or "missing-claim-scope",
+            "observation_scope_source": maybe_text(
+                observation_scope_context.get("observation_scope_source")
+            )
+            or "missing-observation-scope",
             "db_path": maybe_text(analysis_sync.get("db_path")),
         },
         "receipt_id": "coverage-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
@@ -263,6 +345,7 @@ def score_evidence_coverage_skill(
         "canonical_ids": [coverage["coverage_id"] for coverage in coverages],
         "warnings": warnings,
         "analysis_sync": analysis_sync,
+        "input_analysis_sync": wrapper.get("input_analysis_sync", {}),
         "board_handoff": {
             "candidate_ids": [coverage["coverage_id"] for coverage in coverages],
             "evidence_refs": unique_refs(artifact_refs, 20),
