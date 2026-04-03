@@ -18,7 +18,7 @@ description: Summarize round-level readiness from board, next-action, probe, and
 ## Read/Write Contract
 - Syncs the round into the run-local deliberation plane and prefers that state for readiness evaluation.
 - Reads `run_dir/board/board_state_summary_<round_id>.json` by default as a compatible advisory fallback.
-- Reads `run_dir/board/board_brief_<round_id>.md` by default when present.
+- Reads `run_dir/board/board_brief_<round_id>.md` by default when present as a compatible advisory fallback.
 - Reads `run_dir/investigation/next_actions_<round_id>.json` by default when present.
 - Reads `run_dir/investigation/falsification_probes_<round_id>.json` by default when present.
 - Reads evidence coverage from the run-local analysis plane first.

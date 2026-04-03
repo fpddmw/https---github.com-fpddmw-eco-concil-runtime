@@ -1,6 +1,6 @@
 ---
 name: eco-propose-next-actions
-description: Propose a ranked next-action queue from the current board summary, board brief, and evidence coverage so the council can move from organized board state into explicit investigation work.
+description: Propose a ranked next-action queue from shared board state and evidence coverage, with board summary and board brief retained only as compatible fallback context.
 ---
 
 # Eco Propose Next Actions
@@ -11,7 +11,7 @@ description: Propose a ranked next-action queue from the current board summary, 
 - Emit a durable investigation artifact that downstream probe and readiness skills can consume.
 
 ## Triggering Conditions
-- Board state has reached summary / brief level and needs explicit follow-up actions.
+- Board state is organized enough to need explicit follow-up actions.
 - Need a deterministic queue before opening falsification probes.
 - Need an intermediate artifact between board organization and readiness / promotion.
 

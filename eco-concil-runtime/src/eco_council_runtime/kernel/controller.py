@@ -14,8 +14,6 @@ from .registry import write_registry
 
 PLANNER_SKILL_NAME = "eco-plan-round-orchestration"
 STATIC_PHASE2_STAGES: list[tuple[str, str]] = [
-    ("board-summary", "eco-summarize-board-state"),
-    ("board-brief", "eco-materialize-board-brief"),
     ("next-actions", "eco-propose-next-actions"),
     ("falsification-probes", "eco-open-falsification-probe"),
     ("round-readiness", "eco-summarize-round-readiness"),

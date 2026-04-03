@@ -245,6 +245,18 @@ def step_entry(stage_name: str, skill_name: str, reason: str, assigned_role_hint
     }
 
 
+def derived_export_entry(stage_name: str, skill_name: str, reason: str, expected_output_path: Path) -> dict[str, Any]:
+    return {
+        "stage_name": stage_name,
+        "skill_name": skill_name,
+        "assigned_role_hint": "moderator",
+        "reason": reason,
+        "expected_output_path": str(expected_output_path),
+        "required_for_controller": False,
+        "export_mode": "derived-only",
+    }
+
+
 def stop_conditions(include_probe: bool) -> list[dict[str, str]]:
     rows = [
         {
@@ -383,23 +395,9 @@ def plan_round_orchestration_skill(
 
     execution_queue = [
         step_entry(
-            "board-summary",
-            "eco-summarize-board-state",
-            "Refresh the board summary from the current investigation board before planning any downstream work.",
-            "moderator",
-            board_summary_file,
-        ),
-        step_entry(
-            "board-brief",
-            "eco-materialize-board-brief",
-            "Refresh the board brief so downstream planning uses a compact textual snapshot.",
-            "moderator",
-            board_brief_file,
-        ),
-        step_entry(
             "next-actions",
             "eco-propose-next-actions",
-            "Re-rank investigation actions from refreshed board and coverage context.",
+            "Re-rank investigation actions directly from shared board state and coverage context.",
             primary_action_role or "moderator",
             next_actions_file,
         ),
@@ -418,11 +416,26 @@ def plan_round_orchestration_skill(
         step_entry(
             "round-readiness",
             "eco-summarize-round-readiness",
-            "Re-evaluate round readiness from refreshed board, action, and probe artifacts.",
+            "Re-evaluate round readiness from shared board state, action, and probe artifacts.",
             "moderator",
             readiness_file,
         )
     )
+
+    derived_exports = [
+        derived_export_entry(
+            "board-summary",
+            "eco-summarize-board-state",
+            "Materialize a structured board snapshot only when operators need an explicit export artifact.",
+            board_summary_file,
+        ),
+        derived_export_entry(
+            "board-brief",
+            "eco-materialize-board-brief",
+            "Materialize a compact human-readable board brief only when handoff or archival text is needed.",
+            board_brief_file,
+        ),
+    ]
 
     post_gate_steps = [
         step_entry(
@@ -440,6 +453,7 @@ def plan_round_orchestration_skill(
     planning_notes = [
         "Planner artifact exists to make the phase-2 controller queue explicit and auditable.",
         "Probe materialization is only kept in the queue when the current board state still shows contradiction or low-confidence pressure.",
+        "Board summary and board brief are treated as derived exports rather than controller prerequisites.",
     ]
     if brief_text:
         planning_notes.append(f"Board brief context: {maybe_text(brief_text)[:180]}")
@@ -465,6 +479,7 @@ def plan_round_orchestration_skill(
             "board_present": isinstance(board, dict),
             "board_summary_present": isinstance(board_summary, dict),
             "board_brief_present": bool(brief_text),
+            "board_exports_are_derived": True,
             "next_actions_present": isinstance(next_actions, dict) and bool(next_actions),
             "probes_present": isinstance(probes, dict) and bool(probes),
             "readiness_present": isinstance(readiness, dict) and bool(readiness),
@@ -484,10 +499,11 @@ def plan_round_orchestration_skill(
             "readiness_path": str(readiness_file),
         },
         "execution_queue": execution_queue,
+        "derived_exports": derived_exports,
         "post_gate_steps": post_gate_steps,
         "stop_conditions": stop_conditions(probe_stage_included),
         "fallback_path": fallback_rows,
-        "planning_notes": planning_notes[:3],
+        "planning_notes": planning_notes[:4],
         "deliberation_sync": deliberation_sync,
     }
     write_json_file(output_file, plan_payload)
@@ -517,6 +533,7 @@ def plan_round_orchestration_skill(
             "output_path": str(output_file),
             "plan_id": plan_id,
             "planned_skill_count": len(execution_queue) + len(post_gate_steps),
+            "derived_export_count": len(derived_exports),
             "planning_mode": plan_payload["planning_mode"],
             "probe_stage_included": probe_stage_included,
             "downstream_posture": posture,

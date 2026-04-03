@@ -142,12 +142,16 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             payload = run_script(script_path("eco-plan-round-orchestration"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
             stage_names = [item["stage_name"] for item in plan["execution_queue"]]
+            derived_export_stage_names = [item["stage_name"] for item in plan["derived_exports"]]
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual("planner-backed-phase2", plan["planning_mode"])
             self.assertFalse(plan["probe_stage_included"])
             self.assertEqual("promote-candidate", plan["downstream_posture"])
-            self.assertEqual(["board-summary", "board-brief", "next-actions", "round-readiness"], stage_names)
+            self.assertEqual(["next-actions", "round-readiness"], stage_names)
+            self.assertEqual(["board-summary", "board-brief"], derived_export_stage_names)
+            self.assertTrue(plan["observed_state"]["board_exports_are_derived"])
+            self.assertEqual(2, payload["summary"]["derived_export_count"])
             self.assertEqual("eco-promote-evidence-basis", plan["post_gate_steps"][0]["skill_name"])
 
     def test_hold_round_planner_keeps_probe_stage_and_fallbacks(self) -> None:
@@ -166,9 +170,12 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             self.assertEqual("hold-investigation-open", plan["downstream_posture"])
             self.assertFalse(plan["observed_state"]["board_summary_present"])
             self.assertEqual("deliberation-plane", plan["observed_state"]["board_state_source"])
+            self.assertTrue(plan["observed_state"]["board_exports_are_derived"])
             self.assertEqual("deliberation-plane", payload["summary"]["board_state_source"])
             self.assertEqual("completed", payload["deliberation_sync"]["status"])
             self.assertIn("falsification-probes", stage_names)
+            self.assertNotIn("board-summary", stage_names)
+            self.assertNotIn("board-brief", stage_names)
             self.assertTrue(any("eco-open-falsification-probe" in skill_set for skill_set in fallback_skill_sets))
 
 

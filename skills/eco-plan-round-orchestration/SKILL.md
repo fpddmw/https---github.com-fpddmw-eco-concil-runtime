@@ -1,6 +1,6 @@
 ---
 name: eco-plan-round-orchestration
-description: Build one runtime orchestration plan from the current board, D1/D2 artifacts, and readiness posture before the phase-2 controller executes.
+description: Build one runtime orchestration plan from shared board state, D1/D2 artifacts, and readiness posture before the phase-2 controller executes, while treating board summary and brief as derived exports rather than hard controller prerequisites.
 ---
 
 # Eco Plan Round Orchestration
@@ -20,7 +20,7 @@ description: Build one runtime orchestration plan from the current board, D1/D2 
 - Reads `run_dir/board/investigation_board.json` by default.
 - Syncs the round into the run-local deliberation plane and prefers that state for planning.
 - Reads `run_dir/board/board_state_summary_<round_id>.json` by default when present as a compatible advisory artifact.
-- Reads `run_dir/board/board_brief_<round_id>.md` by default when present.
+- Reads `run_dir/board/board_brief_<round_id>.md` by default when present as a compatible advisory artifact.
 - Reads `run_dir/investigation/next_actions_<round_id>.json` by default when present.
 - Reads `run_dir/investigation/falsification_probes_<round_id>.json` by default when present.
 - Reads `run_dir/reporting/round_readiness_<round_id>.json` by default when present.

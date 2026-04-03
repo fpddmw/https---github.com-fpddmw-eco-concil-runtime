@@ -91,7 +91,7 @@
 | `B1.3` | Next-Action Deliberation Migration | D1 action planning 改为 deliberation-plane-first | `completed` | `eco-propose-next-actions` 脱离 board summary 主依赖 |
 | `B1.4` | Probe Source Decoupling | probe generation 不再硬依赖 `next_actions` artifact | `completed` | probe 可直接从共享 D1 上下文恢复 |
 | `B2` | Board Write-Path Migration | board 状态变更从“JSON first, DB sync”转向“DB first, JSON export” | `completed` | 关键 state-change skills 与 round opening 的主写面切到 deliberation plane |
-| `B2.1` | JSON Board Export Demotion | `board_summary` / `board_brief` 明确降级为导出物 | `planned` | 运营链路不再把 summary/brief 当硬前置 |
+| `B2.1` | JSON Board Export Demotion | `board_summary` / `board_brief` 明确降级为导出物 | `completed` | 运营链路不再把 summary/brief 当硬前置 |
 | `B3` | Moderator Control Consolidation | round transition、promotion freeze、probe/challenge/task 编排由 moderator DB 工作面主导 | `planned` | moderator loop 的主要状态推进不再依赖线性工件顺序 |
 
 ### 5.3 Route C: Analysis Plane / DB-First Analysis
@@ -120,7 +120,7 @@
 截至现在，四条路线的成熟度可以概括为：
 
 1. `A` 路线只有第一轮修复完成，后续还需要做契约硬化与治理回归。
-2. `B` 路线已经完成 deliberation-plane 读路径迁移，并完成包括 open-round / round transition 在内的关键 board 写路径 DB-first 切换；下一步主要是把 `board_summary / board_brief` 真正降级为导出物，并继续收拢 moderator DB 工作面。
+2. `B` 路线已经完成 deliberation-plane 读路径迁移、关键 board 写路径 DB-first 切换，以及 `board_summary / board_brief` 的运行时降级；下一步主要是继续收拢 moderator DB 工作面而不是维护 summary-first 的运营顺序。
 3. `C` 路线已经完成 coverage、其上游 links/scopes、history/archive 读取面，以及剩余关键 export/read consumer 的 analysis-plane-first 迁移；下一步更多是 result-set contract 与更早期压缩对象的统一查询问题。
 4. `D` 路线的基础追踪已建立，但还缺“总控视图”和“持续调度规则”，本文件正是为此补位。
 
@@ -130,11 +130,11 @@
 
 | 顺序 | 阶段 | 路线 | 为什么先做 | 预期独立交付 |
 | --- | --- | --- | --- | --- |
-| `1` | `B2.1` | `B` | 既然 board 主写面已经切主，下一步最有价值的是把 summary/brief 真正降级为导出物 | board exports 不再是运营前置 |
-| `2` | `A2` | `A` | B/C 路线完成一轮大迁移后，需要统一 contract 与治理元数据，避免 trace 字段再次漂移 | 共享输出契约文档和代码硬化 |
-| `3` | `C2` | `C` | analysis plane 已覆盖更多结果集，下一步应补强通用 result-set / lineage 契约 | result set 可追溯 query basis、parent ids、artifact refs |
-| `4` | `D3` | `D` | 路线越来越多，需要更强的阶段看板和阻塞视图 | progress dashboard 约束与汇总模板 |
-| `5` | `B3` | `B` | 当 exports 已降级且 contract 更稳定后，再收拢 moderator 控制面会更清晰 | moderator loop 的主要状态推进改由 DB 工作面主导 |
+| `1` | `A2` | `A` | B/C 路线完成一轮大迁移后，需要统一 contract 与治理元数据，避免 trace 字段再次漂移 | 共享输出契约文档和代码硬化 |
+| `2` | `C2` | `C` | analysis plane 已覆盖更多结果集，下一步应补强通用 result-set / lineage 契约 | result set 可追溯 query basis、parent ids、artifact refs |
+| `3` | `D3` | `D` | 路线越来越多，需要更强的阶段看板和阻塞视图 | progress dashboard 约束与汇总模板 |
+| `4` | `B3` | `B` | 当 exports 已降级且 contract 更稳定后，再收拢 moderator 控制面会更清晰 | moderator loop 的主要状态推进改由 DB 工作面主导 |
+| `5` | `A3` | `A` | control-plane 收敛后需要补一轮治理回归，确保 replay / benchmark / archive 不被新契约影响 | 全量治理命令与回归稳定 |
 
 ## 8. 每次开发交付的记录规范
 

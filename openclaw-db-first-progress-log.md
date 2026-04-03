@@ -534,3 +534,46 @@ Known limitations:
 Next:
 - Move to `B2.1` so `board_summary` and `board_brief` are treated strictly as derived exports instead of operational prerequisites.
 - Follow with `A2` shared contract hardening so board / analysis trace fields and runtime governance metadata stop drifting independently.
+
+## 2026-04-03 B2.1: Phase-2 Board Export Demotion
+
+Status: completed
+
+Objective:
+- Stop treating `board_summary` and `board_brief` as hard phase-2 controller prerequisites.
+- Keep these artifacts available as derived exports while letting planner/controller proceed directly from deliberation-plane-backed board state.
+
+Implementation:
+- `eco-concil-runtime/src/eco_council_runtime/kernel/controller.py`
+  - Removed `board-summary` and `board-brief` from the default phase-2 execution queue so runtime fallback control no longer requires them before `next-actions` and `round-readiness`.
+- `eco-concil-runtime/src/eco_council_runtime/kernel/phase2_contract.py`
+  - Reclassified `board-summary` and `board-brief` as non-blocking export-side stages.
+  - Relaxed `next-actions` so it depends on `orchestration-planner` directly instead of `board-brief`.
+- `skills/eco-plan-round-orchestration/scripts/eco_plan_round_orchestration.py`
+  - Planner-backed execution queues now start from `next-actions`.
+  - `board-summary` and `board-brief` are emitted under `derived_exports` rather than `execution_queue`.
+  - Added `observed_state.board_exports_are_derived` and `summary.derived_export_count` for traceability.
+- Updated skill docs to match the new semantics:
+  - `skills/eco-plan-round-orchestration/SKILL.md`
+  - `skills/eco-propose-next-actions/SKILL.md`
+  - `skills/eco-summarize-round-readiness/SKILL.md`
+
+Validation:
+- `python3 -m unittest tests/test_orchestration_planner_workflow.py -q`
+- `python3 -m unittest tests/test_supervisor_simulation_regression.py -q`
+- `python3 -m unittest tests/test_runtime_kernel.py -q`
+
+Tests added or extended:
+- `tests/test_orchestration_planner_workflow.py`
+  - Verifies planner-backed execution queues omit `board-summary` and `board-brief`.
+  - Verifies both artifacts remain visible as `derived_exports`.
+- `tests/test_supervisor_simulation_regression.py`
+  - Verifies real controller runs no longer execute `board-summary` or `board-brief` as phase-2 stages.
+
+Known limitations:
+- Reporting/archive skills still consume `board_brief` or `board_summary` as optional human-facing context in some paths; this increment only demotes them from runtime control prerequisites.
+- The planner still records summary/brief paths in the plan payload for export discoverability even when controller execution does not materialize them.
+
+Next:
+- Move to `A2` shared contract hardening so `analysis_sync / deliberation_sync / observed_inputs / *_source` fields stop drifting between skills and runtime wrappers.
+- Revisit `B3` later to consolidate more moderator control transitions onto the DB work surface now that summary-first ordering is no longer required.
