@@ -9,6 +9,7 @@ import fcntl
 import hashlib
 import json
 import os
+import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,16 +17,15 @@ from typing import Any
 
 SKILL_NAME = "eco-open-investigation-round"
 SOURCE_SELECTION_ROLES = ("sociologist", "environmentalist")
-PUBLIC_SOURCES = {
-    "bluesky-cascade-fetch",
-    "gdelt-doc-search",
-    "youtube-video-search",
-}
-ENVIRONMENT_SOURCES = {
-    "airnow-hourly-obs-fetch",
-    "openaq-data-fetch",
-    "open-meteo-historical-fetch",
-}
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    sync_board_to_deliberation_plane,
+)
+from eco_council_runtime.kernel.source_queue_contract import source_role  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -179,14 +179,6 @@ def hypothesis_is_active(hypothesis: dict[str, Any]) -> bool:
     return maybe_text(hypothesis.get("status")) not in {"closed", "rejected"}
 
 
-def inferred_role_for_source_skill(source_skill: str) -> str:
-    if source_skill in PUBLIC_SOURCES:
-        return "sociologist"
-    if source_skill in ENVIRONMENT_SOURCES:
-        return "environmentalist"
-    return ""
-
-
 def role_source_skills_from_mission(mission: dict[str, Any], role: str) -> list[str]:
     imports = mission.get("artifact_imports") if isinstance(mission.get("artifact_imports"), list) else []
     requests = mission.get("source_requests") if isinstance(mission.get("source_requests"), list) else []
@@ -197,7 +189,7 @@ def role_source_skills_from_mission(mission: dict[str, Any], role: str) -> list[
         source_skill = maybe_text(item.get("source_skill"))
         if not source_skill:
             continue
-        inferred_role = maybe_text(item.get("role")) or inferred_role_for_source_skill(source_skill)
+        inferred_role = maybe_text(item.get("role")) or source_role(source_skill)
         if inferred_role == role:
             values.append(source_skill)
     return unique_texts(values)
@@ -715,6 +707,7 @@ def open_investigation_round_skill(
         "warnings": warnings,
     }
     write_json_file(output_file, transition_payload)
+    sync_board_to_deliberation_plane(run_dir_path, expected_run_id=run_id, board_path=board_file)
 
     artifact_refs = [
         {"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"},

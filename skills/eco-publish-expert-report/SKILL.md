@@ -41,7 +41,7 @@ description: Publish a canonical expert report from a role-specific draft while 
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_publish_expert_report.py`

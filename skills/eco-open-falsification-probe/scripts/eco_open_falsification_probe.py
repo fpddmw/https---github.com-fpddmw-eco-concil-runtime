@@ -8,31 +8,22 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-open-falsification-probe"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
 
-
-def normalize_space(value: Any) -> str:
-    return " ".join(str(value).split())
-
-
-def maybe_text(value: Any) -> str:
-    if value is None:
-        return ""
-    return normalize_space(value)
-
-
-def unique_texts(values: list[Any]) -> list[str]:
-    seen: set[str] = set()
-    results: list[str] = []
-    for value in values:
-        text = maybe_text(value)
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        results.append(text)
-    return results
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_json_if_exists,
+    load_ranked_actions_context,
+    maybe_text,
+    resolve_path,
+    unique_texts,
+)
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -54,28 +45,12 @@ def resolve_run_dir(run_dir: str) -> Path:
     return Path(run_dir).expanduser().resolve()
 
 
-def resolve_path(run_dir: Path, override: str, default_relative: str) -> Path:
-    text = maybe_text(override)
-    if not text:
-        return (run_dir / default_relative).resolve()
-    candidate = Path(text).expanduser()
-    if not candidate.is_absolute():
-        candidate = run_dir / candidate
-    return candidate.resolve()
-
-
-def load_json_if_exists(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(payload, dict):
-        return payload
-    return None
-
-
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
@@ -98,26 +73,41 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
 def probe_candidates(actions: list[dict[str, Any]], action_id: str) -> list[dict[str, Any]]:
     filtered = [action for action in actions if isinstance(action, dict)]
     if maybe_text(action_id):
-        filtered = [action for action in filtered if maybe_text(action.get("action_id")) == maybe_text(action_id)]
+        filtered = [
+            action
+            for action in filtered
+            if maybe_text(action.get("action_id")) == maybe_text(action_id)
+        ]
     return [
         action
         for action in filtered
-        if bool(action.get("probe_candidate")) or maybe_text(action.get("action_kind")) in {"resolve-challenge", "resolve-contradiction", "stabilize-hypothesis"}
+        if bool(action.get("probe_candidate"))
+        or maybe_text(action.get("action_kind"))
+        in {"resolve-challenge", "resolve-contradiction", "stabilize-hypothesis"}
     ]
 
 
-def build_probe(action: dict[str, Any]) -> dict[str, Any]:
+def build_probe(
+    action: dict[str, Any],
+    *,
+    default_run_id: str,
+    default_round_id: str,
+) -> dict[str, Any]:
     target = action.get("target", {}) if isinstance(action.get("target"), dict) else {}
     action_id = maybe_text(action.get("action_id"))
     hypothesis_id = maybe_text(target.get("hypothesis_id"))
     claim_id = maybe_text(target.get("claim_id"))
     ticket_id = maybe_text(target.get("ticket_id"))
     probe_id = "probe-" + stable_hash(SKILL_NAME, action_id, hypothesis_id, claim_id, ticket_id)[:12]
-    objective = maybe_text(action.get("objective")) or maybe_text(action.get("reason")) or "Probe the current contradiction or uncertainty."
+    objective = (
+        maybe_text(action.get("objective"))
+        or maybe_text(action.get("reason"))
+        or "Probe the current contradiction or uncertainty."
+    )
     return {
         "probe_id": probe_id,
-        "run_id": maybe_text(action.get("run_id")),
-        "round_id": maybe_text(action.get("round_id")),
+        "run_id": maybe_text(action.get("run_id")) or maybe_text(default_run_id),
+        "round_id": maybe_text(action.get("round_id")) or maybe_text(default_round_id),
         "opened_at_utc": utc_now_iso(),
         "probe_status": "open",
         "action_id": action_id,
@@ -137,8 +127,16 @@ def build_probe(action: dict[str, Any]) -> dict[str, Any]:
             "The target can no longer be defended with matching-ready evidence scope.",
         ],
         "requested_skills": requested_skills_for_action(action),
-        "evidence_refs": unique_texts(action.get("evidence_refs", []) if isinstance(action.get("evidence_refs"), list) else []),
-        "source_ids": unique_texts(action.get("source_ids", []) if isinstance(action.get("source_ids"), list) else []),
+        "evidence_refs": unique_texts(
+            action.get("evidence_refs", [])
+            if isinstance(action.get("evidence_refs"), list)
+            else []
+        ),
+        "source_ids": unique_texts(
+            action.get("source_ids", [])
+            if isinstance(action.get("source_ids"), list)
+            else []
+        ),
     }
 
 
@@ -147,23 +145,129 @@ def open_falsification_probe_skill(
     run_id: str,
     round_id: str,
     next_actions_path: str,
+    board_summary_path: str,
+    board_brief_path: str,
+    coverage_path: str,
     output_path: str,
     action_id: str,
     max_probes: int,
+    max_actions: int,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
-    next_actions_file = resolve_path(run_dir_path, next_actions_path, f"investigation/next_actions_{round_id}.json")
-    output_file = resolve_path(run_dir_path, output_path, f"investigation/falsification_probes_{round_id}.json")
+    next_actions_file = resolve_path(
+        run_dir_path,
+        next_actions_path,
+        f"investigation/next_actions_{round_id}.json",
+    )
+    output_file = resolve_path(
+        run_dir_path,
+        output_path,
+        f"investigation/falsification_probes_{round_id}.json",
+    )
 
     warnings: list[dict[str, Any]] = []
     next_actions_wrapper = load_json_if_exists(next_actions_file)
-    if not isinstance(next_actions_wrapper, dict):
-        warnings.append({"code": "missing-next-actions", "message": f"No next-actions artifact was found at {next_actions_file}."})
-        next_actions_wrapper = {"ranked_actions": [], "action_count": 0}
+    action_source = "next-actions-artifact"
+    deliberation_sync: dict[str, Any] = {}
+    analysis_sync: dict[str, Any] = {}
+    board_state_source = ""
+    coverage_source = ""
+    db_path = ""
+    observed_inputs: dict[str, Any] = {
+        "next_actions_present": isinstance(next_actions_wrapper, dict),
+    }
+    if isinstance(next_actions_wrapper, dict):
+        ranked_actions = (
+            next_actions_wrapper.get("ranked_actions", [])
+            if isinstance(next_actions_wrapper.get("ranked_actions"), list)
+            else []
+        )
+        action_source = (
+            maybe_text(next_actions_wrapper.get("action_source"))
+            or "next-actions-artifact"
+        )
+        deliberation_sync = (
+            next_actions_wrapper.get("deliberation_sync")
+            if isinstance(next_actions_wrapper.get("deliberation_sync"), dict)
+            else {}
+        )
+        analysis_sync = (
+            next_actions_wrapper.get("analysis_sync")
+            if isinstance(next_actions_wrapper.get("analysis_sync"), dict)
+            else {}
+        )
+        board_state_source = maybe_text(next_actions_wrapper.get("board_state_source"))
+        coverage_source = maybe_text(next_actions_wrapper.get("coverage_source"))
+        db_path = maybe_text(next_actions_wrapper.get("db_path"))
+        action_inputs = (
+            next_actions_wrapper.get("observed_inputs")
+            if isinstance(next_actions_wrapper.get("observed_inputs"), dict)
+            else {}
+        )
+        observed_inputs = {
+            **action_inputs,
+            "next_actions_present": True,
+        }
+    else:
+        warnings.append(
+            {
+                "code": "missing-next-actions",
+                "message": f"No next-actions artifact was found at {next_actions_file}. Rebuilding action context from deliberation state.",
+            }
+        )
+        action_context = load_ranked_actions_context(
+            run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            board_summary_path=board_summary_path,
+            board_brief_path=board_brief_path,
+            coverage_path=coverage_path,
+            max_actions=max_actions,
+        )
+        ranked_actions = (
+            action_context.get("ranked_actions", [])
+            if isinstance(action_context.get("ranked_actions"), list)
+            else []
+        )
+        context_warnings = (
+            action_context.get("warnings", [])
+            if isinstance(action_context.get("warnings"), list)
+            else []
+        )
+        warnings.extend(context_warnings)
+        action_source = "derived-from-deliberation"
+        deliberation_sync = (
+            action_context.get("deliberation_sync")
+            if isinstance(action_context.get("deliberation_sync"), dict)
+            else {}
+        )
+        analysis_sync = (
+            action_context.get("analysis_sync")
+            if isinstance(action_context.get("analysis_sync"), dict)
+            else {}
+        )
+        board_state_source = maybe_text(action_context.get("board_state_source"))
+        coverage_source = maybe_text(action_context.get("coverage_source"))
+        db_path = maybe_text(action_context.get("db_path"))
+        action_inputs = (
+            action_context.get("observed_inputs")
+            if isinstance(action_context.get("observed_inputs"), dict)
+            else {}
+        )
+        observed_inputs = {
+            **action_inputs,
+            "next_actions_present": False,
+        }
 
-    ranked_actions = next_actions_wrapper.get("ranked_actions", []) if isinstance(next_actions_wrapper.get("ranked_actions"), list) else []
     candidates = probe_candidates(ranked_actions, action_id)[: max(1, max_probes)]
-    probes = [build_probe(action) for action in candidates]
+    probes = [
+        build_probe(
+            action,
+            default_run_id=run_id,
+            default_round_id=round_id,
+        )
+        for action in candidates
+    ]
 
     wrapper = {
         "schema_version": "d1.1",
@@ -172,41 +276,90 @@ def open_falsification_probe_skill(
         "run_id": run_id,
         "round_id": round_id,
         "next_actions_path": str(next_actions_file),
+        "action_source": action_source,
+        "board_state_source": board_state_source,
+        "db_path": db_path,
+        "deliberation_sync": deliberation_sync,
+        "analysis_sync": analysis_sync,
+        "coverage_source": coverage_source or "missing-coverage",
+        "observed_inputs": observed_inputs,
         "probe_count": len(probes),
         "probes": probes,
     }
     write_json_file(output_file, wrapper)
 
-    artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$.probes", "artifact_ref": f"{output_file}:$.probes"}]
+    artifact_refs = [
+        {
+            "signal_id": "",
+            "artifact_path": str(output_file),
+            "record_locator": "$.probes",
+            "artifact_ref": f"{output_file}:$.probes",
+        }
+    ]
     if not probes:
         warnings.append({"code": "no-probes", "message": "No probe-worthy next actions were found."})
+    canonical_ids = [
+        maybe_text(probe.get("probe_id"))
+        for probe in probes
+        if isinstance(probe, dict) and maybe_text(probe.get("probe_id"))
+    ]
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "output_path": str(output_file), "probe_count": len(probes)},
-        "receipt_id": "investigation-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
-        "batch_id": "investigationbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "output_path": str(output_file),
+            "probe_count": len(probes),
+            "action_source": action_source,
+            "board_state_source": board_state_source,
+            "coverage_source": coverage_source or "missing-coverage",
+            "db_path": db_path,
+        },
+        "receipt_id": "investigation-receipt-"
+        + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
+        "batch_id": "investigationbatch-"
+        + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
-        "canonical_ids": [maybe_text(probe.get("probe_id")) for probe in probes if maybe_text(probe.get("probe_id"))],
+        "canonical_ids": canonical_ids,
         "warnings": warnings,
+        "deliberation_sync": deliberation_sync,
+        "analysis_sync": analysis_sync,
         "board_handoff": {
-            "candidate_ids": [maybe_text(probe.get("probe_id")) for probe in probes if maybe_text(probe.get("probe_id"))],
+            "candidate_ids": canonical_ids,
             "evidence_refs": artifact_refs,
-            "gap_hints": [] if probes else ["No falsification probes are open for this round yet."],
-            "challenge_hints": ["Open probes should be reviewed before marking the round fully ready."] if probes else [],
-            "suggested_next_skills": ["eco-summarize-round-readiness", "eco-post-board-note", "eco-update-hypothesis-status"],
+            "gap_hints": []
+            if probes
+            else ["No falsification probes are open for this round yet."],
+            "challenge_hints": [
+                "Open probes should be reviewed before marking the round fully ready."
+            ]
+            if probes
+            else [],
+            "suggested_next_skills": [
+                "eco-summarize-round-readiness",
+                "eco-post-board-note",
+                "eco-update-hypothesis-status",
+            ],
         },
     }
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Open falsification probes from the next-action queue.")
+    parser = argparse.ArgumentParser(
+        description="Open falsification probes from the next-action queue."
+    )
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--next-actions-path", default="")
+    parser.add_argument("--board-summary-path", default="")
+    parser.add_argument("--board-brief-path", default="")
+    parser.add_argument("--coverage-path", default="")
     parser.add_argument("--output-path", default="")
     parser.add_argument("--action-id", default="")
     parser.add_argument("--max-probes", type=int, default=3)
+    parser.add_argument("--max-actions", type=int, default=6)
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
@@ -218,9 +371,13 @@ def main() -> int:
         run_id=args.run_id,
         round_id=args.round_id,
         next_actions_path=args.next_actions_path,
+        board_summary_path=args.board_summary_path,
+        board_brief_path=args.board_brief_path,
+        coverage_path=args.coverage_path,
         output_path=args.output_path,
         action_id=args.action_id,
         max_probes=args.max_probes,
+        max_actions=args.max_actions,
     )
     print(pretty_json(payload, args.pretty))
     return 0

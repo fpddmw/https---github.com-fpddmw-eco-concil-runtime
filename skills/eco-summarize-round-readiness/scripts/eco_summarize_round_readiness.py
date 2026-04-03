@@ -8,9 +8,17 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-summarize-round-readiness"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import load_evidence_coverage_context  # noqa: E402
+from eco_council_runtime.kernel.deliberation_plane import load_round_snapshot  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -93,6 +101,62 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def board_counts_from_round_state(round_state: dict[str, Any], *, state_source: str) -> dict[str, Any]:
+    notes = round_state.get("notes", []) if isinstance(round_state.get("notes"), list) else []
+    hypotheses = [item for item in round_state.get("hypotheses", []) if isinstance(item, dict)] if isinstance(round_state.get("hypotheses"), list) else []
+    challenges = [item for item in round_state.get("challenge_tickets", []) if isinstance(item, dict)] if isinstance(round_state.get("challenge_tickets"), list) else []
+    tasks = [item for item in round_state.get("tasks", []) if isinstance(item, dict)] if isinstance(round_state.get("tasks"), list) else []
+    active_hypotheses = [item for item in hypotheses if maybe_text(item.get("status")) not in {"closed", "rejected"}]
+    open_challenges = [item for item in challenges if maybe_text(item.get("status")) != "closed"]
+    open_tasks = [item for item in tasks if maybe_text(item.get("status")) not in {"completed", "closed", "cancelled"}]
+    return {
+        "state_source": state_source,
+        "counts": {
+            "notes_total": len(notes),
+            "hypotheses_active": len(active_hypotheses),
+            "challenge_open": len(open_challenges),
+            "tasks_open": len(open_tasks),
+        },
+        "active_hypotheses": active_hypotheses,
+        "open_challenges": open_challenges,
+        "open_tasks": open_tasks,
+    }
+
+
+def board_snapshot(round_state: dict[str, Any] | None, board_summary: dict[str, Any] | None) -> dict[str, Any]:
+    if isinstance(round_state, dict):
+        return board_counts_from_round_state(
+            round_state,
+            state_source="deliberation-plane",
+        )
+    if isinstance(board_summary, dict):
+        counts = board_summary.get("counts", {}) if isinstance(board_summary.get("counts"), dict) else {}
+        return {
+            "state_source": maybe_text(board_summary.get("state_source")) or "board-summary-artifact",
+            "counts": {
+                "notes_total": int(counts.get("notes_total") or 0),
+                "hypotheses_active": int(counts.get("hypotheses_active") or len(board_summary.get("active_hypotheses", []))),
+                "challenge_open": int(counts.get("challenge_open") or len(board_summary.get("open_challenges", []))),
+                "tasks_open": int(counts.get("tasks_open") or len(board_summary.get("open_tasks", []))),
+            },
+            "active_hypotheses": board_summary.get("active_hypotheses", []) if isinstance(board_summary.get("active_hypotheses"), list) else [],
+            "open_challenges": board_summary.get("open_challenges", []) if isinstance(board_summary.get("open_challenges"), list) else [],
+            "open_tasks": board_summary.get("open_tasks", []) if isinstance(board_summary.get("open_tasks"), list) else [],
+        }
+    return {
+        "state_source": "missing-board",
+        "counts": {
+            "notes_total": 0,
+            "hypotheses_active": 0,
+            "challenge_open": 0,
+            "tasks_open": 0,
+        },
+        "active_hypotheses": [],
+        "open_challenges": [],
+        "open_tasks": [],
+    }
+
+
 def readiness_status(*, active_hypotheses: int, strong_coverages: int, moderate_coverages: int, open_challenges: int, open_tasks: int, open_probes: int, high_priority_actions: int) -> tuple[str, list[str]]:
     reasons: list[str] = []
     if active_hypotheses == 0:
@@ -134,35 +198,81 @@ def summarize_round_readiness_skill(
     board_brief_file = resolve_path(run_dir_path, board_brief_path, f"board/board_brief_{round_id}.md")
     next_actions_file = resolve_path(run_dir_path, next_actions_path, f"investigation/next_actions_{round_id}.json")
     probes_file = resolve_path(run_dir_path, probes_path, f"investigation/falsification_probes_{round_id}.json")
-    coverage_file = resolve_path(run_dir_path, coverage_path, f"analytics/evidence_coverage_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"reporting/round_readiness_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
+    round_snapshot = load_round_snapshot(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        include_closed=True,
+    )
     board_summary = load_json_if_exists(board_summary_file)
-    if not isinstance(board_summary, dict):
-        warnings.append({"code": "missing-board-summary", "message": f"No board summary artifact was found at {board_summary_file}."})
-        board_summary = {"counts": {}, "active_hypotheses": [], "open_challenges": [], "open_tasks": []}
-    next_actions = load_json_if_exists(next_actions_file)
+    round_state = (
+        round_snapshot.get("round_state")
+        if maybe_text(round_snapshot.get("status")) == "completed"
+        and isinstance(round_snapshot.get("round_state"), dict)
+        else None
+    )
+    if round_state is None and not isinstance(board_summary, dict):
+        warnings.append({"code": "missing-board-state", "message": f"No board state was found for round {round_id}."})
+    next_actions_payload = load_json_if_exists(next_actions_file)
+    next_actions_present = isinstance(next_actions_payload, dict)
+    next_actions = next_actions_payload
     if not isinstance(next_actions, dict):
         next_actions = {"ranked_actions": [], "action_count": 0}
-    probes = load_json_if_exists(probes_file)
+    probes_payload = load_json_if_exists(probes_file)
+    probes_present = isinstance(probes_payload, dict)
+    probes = probes_payload
     if not isinstance(probes, dict):
         probes = {"probes": [], "probe_count": 0}
-    coverage_wrapper = load_json_if_exists(coverage_file)
-    if not isinstance(coverage_wrapper, dict):
-        warnings.append({"code": "missing-coverage", "message": f"No evidence coverage artifact was found at {coverage_file}."})
-        coverage_wrapper = {"coverages": [], "coverage_count": 0}
     brief_excerpt = maybe_text(load_text_if_exists(board_brief_file))[:220]
+    deliberation_sync = (
+        round_snapshot.get("deliberation_sync")
+        if isinstance(round_snapshot.get("deliberation_sync"), dict)
+        else {}
+    )
+    db_path = maybe_text(round_snapshot.get("db_path"))
+    coverage_context = load_evidence_coverage_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        coverage_path=coverage_path,
+        db_path=db_path,
+    )
+    coverage_warnings = (
+        coverage_context.get("warnings", [])
+        if isinstance(coverage_context.get("warnings"), list)
+        else []
+    )
+    warnings.extend(coverage_warnings)
+    coverages = (
+        coverage_context.get("coverages", [])
+        if isinstance(coverage_context.get("coverages"), list)
+        else []
+    )
+    coverage_file = maybe_text(coverage_context.get("coverage_file"))
+    coverage_source = maybe_text(coverage_context.get("coverage_source")) or "missing-coverage"
+    analysis_sync = (
+        coverage_context.get("analysis_sync")
+        if isinstance(coverage_context.get("analysis_sync"), dict)
+        else {}
+    )
+    if not db_path:
+        db_path = maybe_text(coverage_context.get("db_path"))
+    board_state = board_snapshot(
+        round_state,
+        board_summary if isinstance(board_summary, dict) else None,
+    )
 
-    coverages = [item for item in coverage_wrapper.get("coverages", []) if isinstance(item, dict)] if isinstance(coverage_wrapper.get("coverages"), list) else []
     strong_coverages = len([item for item in coverages if maybe_text(item.get("readiness")) == "strong"])
     moderate_coverages = len([item for item in coverages if maybe_text(item.get("readiness")) == "moderate"])
     weak_coverages = len([item for item in coverages if maybe_text(item.get("readiness")) == "weak"])
 
-    counts = board_summary.get("counts", {}) if isinstance(board_summary.get("counts"), dict) else {}
-    active_hypotheses = int(counts.get("hypotheses_active") or len(board_summary.get("active_hypotheses", [])))
-    open_challenges = int(counts.get("challenge_open") or len(board_summary.get("open_challenges", [])))
-    open_tasks = int(counts.get("tasks_open") or len(board_summary.get("open_tasks", [])))
+    counts = board_state.get("counts", {}) if isinstance(board_state.get("counts"), dict) else {}
+    active_hypotheses = int(counts.get("hypotheses_active") or len(board_state.get("active_hypotheses", [])))
+    open_challenges = int(counts.get("challenge_open") or len(board_state.get("open_challenges", [])))
+    open_tasks = int(counts.get("tasks_open") or len(board_state.get("open_tasks", [])))
     open_probes = len([item for item in probes.get("probes", []) if isinstance(item, dict) and maybe_text(item.get("probe_status")) not in {"closed", "cancelled"}]) if isinstance(probes.get("probes"), list) else 0
     high_priority_actions = len(
         [
@@ -200,11 +310,26 @@ def summarize_round_readiness_skill(
         "round_id": round_id,
         "board_summary_path": str(board_summary_file),
         "board_brief_path": str(board_brief_file),
+        "board_state_source": maybe_text(board_state.get("state_source")) or "missing-board",
+        "db_path": db_path,
+        "deliberation_sync": deliberation_sync,
         "next_actions_path": str(next_actions_file),
         "probes_path": str(probes_file),
         "coverage_path": str(coverage_file),
+        "coverage_source": coverage_source,
         "readiness_status": status_value,
         "sufficient_for_promotion": status_value == "ready",
+        "observed_inputs": {
+            "board_summary_present": isinstance(board_summary, dict),
+            "board_brief_present": bool(brief_excerpt),
+            "next_actions_present": next_actions_present,
+            "probes_present": probes_present,
+            "coverage_present": bool(coverages),
+            "coverage_artifact_present": bool(
+                coverage_context.get("coverage_artifact_present")
+            ),
+        },
+        "analysis_sync": analysis_sync,
         "counts": {
             "active_hypotheses": active_hypotheses,
             "open_challenges": open_challenges,
@@ -224,12 +349,24 @@ def summarize_round_readiness_skill(
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "output_path": str(output_file), "readiness_status": status_value, "readiness_id": readiness_id},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "output_path": str(output_file),
+            "readiness_status": status_value,
+            "readiness_id": readiness_id,
+            "board_state_source": maybe_text(board_state.get("state_source")) or "missing-board",
+            "coverage_source": coverage_source,
+            "db_path": db_path,
+        },
         "receipt_id": "reporting-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, readiness_id)[:20],
         "batch_id": "reportingbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [readiness_id],
         "warnings": warnings,
+        "deliberation_sync": deliberation_sync,
+        "analysis_sync": analysis_sync,
         "board_handoff": {
             "candidate_ids": [readiness_id],
             "evidence_refs": artifact_refs,

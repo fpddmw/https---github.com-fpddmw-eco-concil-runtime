@@ -18,7 +18,8 @@ description: Build one runtime orchestration plan from the current board, D1/D2 
 
 ## Read/Write Contract
 - Reads `run_dir/board/investigation_board.json` by default.
-- Reads `run_dir/board/board_state_summary_<round_id>.json` by default when present.
+- Syncs the round into the run-local deliberation plane and prefers that state for planning.
+- Reads `run_dir/board/board_state_summary_<round_id>.json` by default when present as a compatible advisory artifact.
 - Reads `run_dir/board/board_brief_<round_id>.md` by default when present.
 - Reads `run_dir/investigation/next_actions_<round_id>.json` by default when present.
 - Reads `run_dir/investigation/falsification_probes_<round_id>.json` by default when present.
@@ -47,11 +48,12 @@ description: Build one runtime orchestration plan from the current board, D1/D2 
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `deliberation_sync`
 - `board_handoff`
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_plan_round_orchestration.py`

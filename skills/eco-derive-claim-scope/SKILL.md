@@ -40,7 +40,7 @@ description: Derive matching-oriented claim scope proposals from claim-side evid
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_derive_claim_scope.py`

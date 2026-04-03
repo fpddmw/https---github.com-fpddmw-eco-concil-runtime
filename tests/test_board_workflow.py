@@ -190,6 +190,13 @@ class BoardWorkflowTests(unittest.TestCase):
             self.assertEqual(1, len(hypothesis_payload["canonical_ids"]))
             self.assertEqual(1, len(challenge_payload["canonical_ids"]))
             self.assertGreaterEqual(delta_payload["result_count"], 3)
+            self.assertTrue(Path(delta_payload["summary"]["db_path"]).exists())
+            self.assertEqual(1, delta_payload["round_state"]["note_count"])
+            self.assertEqual(1, delta_payload["round_state"]["hypothesis_count"])
+            self.assertEqual(1, delta_payload["round_state"]["challenge_ticket_count"])
+            self.assertEqual(0, delta_payload["round_state"]["task_count"])
+            self.assertEqual(1, len(delta_payload["round_state"]["hypotheses"]))
+            self.assertEqual(1, len(delta_payload["round_state"]["challenge_tickets"]))
 
             board = load_json(board_path(run_dir))
             rounds = board.get("rounds", {})
@@ -331,15 +338,79 @@ class BoardWorkflowTests(unittest.TestCase):
 
             summary_file = Path(summary_payload["artifact_refs"][0]["artifact_path"])
             summary_data = load_json(summary_file)
+            self.assertEqual("deliberation-plane", summary_payload["summary"]["state_source"])
+            self.assertEqual("completed", summary_payload["deliberation_sync"]["status"])
             self.assertEqual(1, summary_data["counts"]["tasks_total"])
             self.assertEqual(1, summary_data["counts"]["challenge_closed"])
             self.assertEqual("in-flight", summary_data["status_rollup"])
+            self.assertEqual("deliberation-plane", summary_data["state_source"])
+            self.assertTrue(summary_data["db_path"].endswith("analytics/signal_plane.sqlite"))
 
             brief_file = Path(brief_payload["artifact_refs"][0]["artifact_path"])
             brief_text = brief_file.read_text(encoding="utf-8")
+            self.assertEqual("deliberation-plane", brief_payload["summary"]["state_source"])
+            self.assertEqual("completed", brief_payload["deliberation_sync"]["status"])
             self.assertIn("Smoke over NYC was materially significant", brief_text)
+            self.assertIn("State source: deliberation-plane", brief_text)
             self.assertIn(task_payload["canonical_ids"][0], brief_text)
             self.assertEqual("closed", close_payload["summary"]["operation"])
+
+    def test_board_brief_reads_deliberation_plane_without_summary_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+
+            run_script(
+                script_path("eco-post-board-note"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--author-role",
+                "moderator",
+                "--note-text",
+                "Direct board brief generation should not require a summary artifact.",
+            )
+            hypothesis_payload = run_script(
+                script_path("eco-update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Direct deliberation-plane board brief",
+                "--statement",
+                "A board brief should be generated from shared deliberation state.",
+                "--status",
+                "active",
+                "--owner-role",
+                "moderator",
+                "--confidence",
+                "0.7",
+            )
+
+            brief_payload = run_script(
+                script_path("eco-materialize-board-brief"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            brief_file = Path(brief_payload["artifact_refs"][0]["artifact_path"])
+            brief_text = brief_file.read_text(encoding="utf-8")
+
+            self.assertFalse((run_dir / "board" / f"board_state_summary_{ROUND_ID}.json").exists())
+            self.assertEqual("deliberation-plane", brief_payload["summary"]["state_source"])
+            self.assertEqual("completed", brief_payload["deliberation_sync"]["status"])
+            self.assertIn("State source: deliberation-plane", brief_text)
+            self.assertIn(hypothesis_payload["canonical_ids"][0], brief_text)
 
     def test_open_investigation_round_preserves_prior_round_and_carries_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -476,6 +547,100 @@ class BoardWorkflowTests(unittest.TestCase):
             )
             self.assertTrue(
                 any(task.get("source_ticket_id") == challenge_payload["canonical_ids"][0] for task in round2_state["tasks"])
+            )
+
+    def test_open_investigation_round_fallback_uses_shared_source_role_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            regulations_path = root / "regulations_comments.json"
+            flood_path = root / "flood.json"
+            write_json(regulations_path, {"data": []})
+            write_json(flood_path, {"daily": {}})
+            mission_path = root / "mission_shared_sources.json"
+            write_json(
+                mission_path,
+                {
+                    "schema_version": "1.0.0",
+                    "run_id": RUN_ID,
+                    "topic": "Shared source role inheritance",
+                    "objective": "Ensure follow-up round fallback tasks reuse the shared source catalog.",
+                    "policy_profile": "standard",
+                    "window": {
+                        "start_utc": "2023-06-07T00:00:00Z",
+                        "end_utc": "2023-06-07T23:59:59Z",
+                    },
+                    "region": {
+                        "label": "New York City, USA",
+                        "geometry": {
+                            "type": "Point",
+                            "latitude": 40.7128,
+                            "longitude": -74.0060,
+                        },
+                    },
+                    "hypotheses": [
+                        {
+                            "title": "Follow-up source inheritance",
+                            "statement": "Fallback round planning should preserve source-role assignments from mission inputs.",
+                            "confidence": 0.55,
+                        }
+                    ],
+                    "artifact_imports": [
+                        {
+                            "source_skill": "regulationsgov-comments-fetch",
+                            "artifact_path": str(regulations_path),
+                        },
+                        {
+                            "source_skill": "open-meteo-flood-fetch",
+                            "artifact_path": str(flood_path),
+                        },
+                    ],
+                },
+            )
+
+            run_script(
+                script_path("eco-scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+            )
+            (investigation_path(run_dir, f"round_tasks_{ROUND_ID}.json")).unlink()
+
+            run_script(
+                script_path("eco-open-investigation-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND2_ID,
+                "--source-round-id",
+                ROUND_ID,
+            )
+
+            round2_tasks = json.loads(
+                investigation_path(run_dir, f"round_tasks_{ROUND2_ID}.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            role_to_sources = {
+                task["assigned_role"]: task["inputs"]["source_skills"]
+                for task in round2_tasks
+                if isinstance(task, dict)
+            }
+
+            self.assertEqual(
+                ["regulationsgov-comments-fetch"],
+                role_to_sources["sociologist"],
+            )
+            self.assertEqual(
+                ["open-meteo-flood-fetch"],
+                role_to_sources["environmentalist"],
             )
 
     def test_board_delta_cursor_filters_events(self) -> None:

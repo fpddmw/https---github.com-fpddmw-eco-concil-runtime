@@ -9,9 +9,16 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import fmean
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-score-evidence-coverage"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import sync_evidence_coverage_result_set  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -226,6 +233,15 @@ def score_evidence_coverage_skill(
         "coverages": coverages,
     }
     write_json(output_file, wrapper)
+    analysis_sync = sync_evidence_coverage_result_set(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        coverage_path=output_file,
+    )
+    wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
+    wrapper["analysis_sync"] = analysis_sync
+    write_json(output_file, wrapper)
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$.coverages", "artifact_ref": f"{output_file}:$.coverages"}]
     for coverage in coverages:
         artifact_refs.extend(coverage["evidence_refs"])
@@ -233,12 +249,20 @@ def score_evidence_coverage_skill(
         warnings.append({"code": "no-coverages", "message": "No evidence coverage objects were produced from the available links and scopes."})
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "output_path": str(output_file), "coverage_count": len(coverages)},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "output_path": str(output_file),
+            "coverage_count": len(coverages),
+            "db_path": maybe_text(analysis_sync.get("db_path")),
+        },
         "receipt_id": "coverage-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
         "batch_id": "coveragebatch-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:16],
         "artifact_refs": unique_refs(artifact_refs, 40),
         "canonical_ids": [coverage["coverage_id"] for coverage in coverages],
         "warnings": warnings,
+        "analysis_sync": analysis_sync,
         "board_handoff": {
             "candidate_ids": [coverage["coverage_id"] for coverage in coverages],
             "evidence_refs": unique_refs(artifact_refs, 20),

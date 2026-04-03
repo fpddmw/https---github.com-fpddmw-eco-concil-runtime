@@ -16,9 +16,11 @@ description: Propose a ranked next-action queue from the current board summary, 
 - Need an intermediate artifact between board organization and readiness / promotion.
 
 ## Read/Write Contract
-- Reads `run_dir/board/board_state_summary_<round_id>.json` by default.
+- Syncs the round into the run-local deliberation plane and prefers that state for action ranking.
+- Reads `run_dir/board/board_state_summary_<round_id>.json` by default as a compatible advisory fallback.
 - Reads `run_dir/board/board_brief_<round_id>.md` by default when present.
-- Reads `run_dir/analytics/evidence_coverage_<round_id>.json` by default when present.
+- Reads evidence coverage from the run-local analysis plane first.
+- Falls back to `run_dir/analytics/evidence_coverage_<round_id>.json` when the synced result set is unavailable.
 - Writes `run_dir/investigation/next_actions_<round_id>.json` by default.
 
 ## Required Input
@@ -40,11 +42,13 @@ description: Propose a ranked next-action queue from the current board summary, 
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `deliberation_sync`
+- `analysis_sync`
 - `board_handoff`
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_propose_next_actions.py`

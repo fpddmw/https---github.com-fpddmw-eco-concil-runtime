@@ -49,7 +49,7 @@ description: Claim or upsert a board follow-up task on the local investigation b
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_claim_board_task.py`

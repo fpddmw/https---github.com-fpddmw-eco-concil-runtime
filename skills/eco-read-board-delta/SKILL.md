@@ -18,6 +18,7 @@ description: Read compact round-scoped investigation board deltas, return event 
 ## Read/Write Contract
 - Read only.
 - Reads `run_dir/board/investigation_board.json` by default.
+- Syncs board state into the run-local deliberation plane before reading.
 - Does not mutate board state.
 
 ## Required Input
@@ -37,11 +38,13 @@ description: Read compact round-scoped investigation board deltas, return event 
 - `results`
 - `artifact_refs`
 - `warnings`
+- `round_state`
+- `deliberation_sync`
 - `board_handoff`
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_read_board_delta.py`

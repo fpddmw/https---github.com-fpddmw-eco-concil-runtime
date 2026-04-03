@@ -8,9 +8,16 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-promote-evidence-basis"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import load_evidence_coverage_context  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -108,7 +115,6 @@ def promote_evidence_basis_skill(
     run_dir_path = resolve_run_dir(run_dir)
     readiness_file = resolve_path(run_dir_path, readiness_path, f"reporting/round_readiness_{round_id}.json")
     board_brief_file = resolve_path(run_dir_path, board_brief_path, f"board/board_brief_{round_id}.md")
-    coverage_file = resolve_path(run_dir_path, coverage_path, f"analytics/evidence_coverage_{round_id}.json")
     next_actions_file = resolve_path(run_dir_path, next_actions_path, f"investigation/next_actions_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"promotion/promoted_evidence_basis_{round_id}.json")
 
@@ -117,11 +123,33 @@ def promote_evidence_basis_skill(
     if not isinstance(readiness, dict):
         warnings.append({"code": "missing-readiness", "message": f"No round readiness artifact was found at {readiness_file}."})
         readiness = {"readiness_status": "blocked", "gate_reasons": ["Missing round readiness artifact."], "counts": {}, "recommended_next_skills": []}
-    coverage_wrapper = load_json_if_exists(coverage_file)
-    if not isinstance(coverage_wrapper, dict):
-        warnings.append({"code": "missing-coverage", "message": f"No evidence coverage artifact was found at {coverage_file}."})
-        coverage_wrapper = {"coverages": [], "coverage_count": 0}
-    next_actions = load_json_if_exists(next_actions_file)
+    coverage_context = load_evidence_coverage_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        coverage_path=coverage_path,
+    )
+    coverage_warnings = (
+        coverage_context.get("warnings", [])
+        if isinstance(coverage_context.get("warnings"), list)
+        else []
+    )
+    warnings.extend(coverage_warnings)
+    coverages = (
+        coverage_context.get("coverages", [])
+        if isinstance(coverage_context.get("coverages"), list)
+        else []
+    )
+    coverage_file = maybe_text(coverage_context.get("coverage_file"))
+    coverage_source = maybe_text(coverage_context.get("coverage_source")) or "missing-coverage"
+    db_path = maybe_text(coverage_context.get("db_path"))
+    analysis_sync = (
+        coverage_context.get("analysis_sync")
+        if isinstance(coverage_context.get("analysis_sync"), dict)
+        else {}
+    )
+    next_actions_payload = load_json_if_exists(next_actions_file)
+    next_actions = next_actions_payload
     if not isinstance(next_actions, dict):
         next_actions = {"ranked_actions": []}
     brief_text = maybe_text(load_text_if_exists(board_brief_file))
@@ -131,7 +159,6 @@ def promote_evidence_basis_skill(
     if promotion_status == "withheld":
         warnings.append({"code": "promotion-withheld", "message": "Promotion was withheld because the round-readiness gate is not ready."})
 
-    coverages = [item for item in coverage_wrapper.get("coverages", []) if isinstance(item, dict)] if isinstance(coverage_wrapper.get("coverages"), list) else []
     ranked_coverages = sorted(coverages, key=lambda item: (-float(item.get("coverage_score") or 0.0), maybe_text(item.get("coverage_id"))))[: max(1, max_coverages)]
     selected_coverages = [
         {
@@ -170,6 +197,16 @@ def promote_evidence_basis_skill(
         "readiness_path": str(readiness_file),
         "board_brief_path": str(board_brief_file),
         "coverage_path": str(coverage_file),
+        "coverage_source": coverage_source,
+        "db_path": db_path,
+        "analysis_sync": analysis_sync,
+        "observed_inputs": {
+            "coverage_present": bool(coverages),
+            "coverage_artifact_present": bool(
+                coverage_context.get("coverage_artifact_present")
+            ),
+            "next_actions_present": isinstance(next_actions_payload, dict),
+        },
         "selected_coverages": selected_coverages,
         "selected_evidence_refs": selected_evidence_refs,
         "board_brief_excerpt": brief_text[:300],
@@ -186,12 +223,22 @@ def promote_evidence_basis_skill(
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "output_path": str(output_file), "basis_id": basis_id, "promotion_status": promotion_status},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "output_path": str(output_file),
+            "basis_id": basis_id,
+            "promotion_status": promotion_status,
+            "coverage_source": coverage_source,
+            "db_path": db_path,
+        },
         "receipt_id": "promotion-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, basis_id)[:20],
         "batch_id": "promotionbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [basis_id],
         "warnings": warnings,
+        "analysis_sync": analysis_sync,
         "board_handoff": {
             "candidate_ids": unique_texts([basis_id] + [item.get("coverage_id") for item in selected_coverages]),
             "evidence_refs": artifact_refs,

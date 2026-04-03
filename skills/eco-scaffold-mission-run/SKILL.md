@@ -44,7 +44,7 @@ description: Scaffold one mission-driven run by materializing mission.json, firs
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_scaffold_mission_run.py`

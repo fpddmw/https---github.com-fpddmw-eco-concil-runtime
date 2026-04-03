@@ -45,7 +45,7 @@ description: Publish a canonical council decision from the current decision draf
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_publish_council_decision.py`

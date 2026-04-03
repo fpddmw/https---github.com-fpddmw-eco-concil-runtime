@@ -8,12 +8,21 @@ import fcntl
 import hashlib
 import json
 import os
+import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "eco-open-challenge-ticket"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    sync_board_to_deliberation_plane,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -159,6 +168,7 @@ def open_challenge_ticket_skill(
         event = append_event(board, run_id, round_id, "challenge-opened", {"ticket_id": ticket_id, "priority": ticket["priority"], "target_claim_id": ticket["target_claim_id"], "target_hypothesis_id": ticket["target_hypothesis_id"]})
         write_board(board_file, board, next_revision)
         ticket_index = len(tickets) - 1
+    sync_board_to_deliberation_plane(run_dir_path, expected_run_id=run_id, board_path=board_file)
     artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": f"$.rounds.{round_id}.challenge_tickets[{ticket_index}]", "artifact_ref": f"{board_file}:$.rounds.{round_id}.challenge_tickets[{ticket_index}]"}]
     return {
         "status": "completed",

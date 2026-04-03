@@ -39,7 +39,7 @@ description: Execute one prepared fetch-plan by running mixed local-import and d
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_import_fetch_execution.py`

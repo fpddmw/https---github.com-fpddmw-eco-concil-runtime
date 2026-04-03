@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -103,6 +105,70 @@ class SourceQueueGovernanceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "selected flag must match selected layers"):
             selection_module.validate_source_selection_payload(mission=mission, role="sociologist", source_selection=payload)
+
+    def test_build_fetch_plan_enforces_max_source_steps_per_round(self) -> None:
+        selection_module, _ = load_modules()
+        planner_module = importlib.import_module("eco_council_runtime.kernel.source_queue_planner")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            youtube_path = Path(tmpdir) / "youtube.json"
+            bluesky_path = Path(tmpdir) / "bluesky.json"
+            youtube_path.write_text(json.dumps([], ensure_ascii=True), encoding="utf-8")
+            bluesky_path.write_text(json.dumps({}, ensure_ascii=True), encoding="utf-8")
+
+            mission = {
+                "allowed_sources_by_role": {
+                    "sociologist": ["youtube-video-search", "bluesky-cascade-fetch"],
+                },
+                "artifact_imports": [
+                    {
+                        "source_skill": "youtube-video-search",
+                        "artifact_path": str(youtube_path),
+                        "query_text": "nyc smoke wildfire",
+                    },
+                    {
+                        "source_skill": "bluesky-cascade-fetch",
+                        "artifact_path": str(bluesky_path),
+                    },
+                ],
+                "source_governance": {
+                    "max_selected_sources_per_role": 2,
+                    "max_active_families_per_role": 2,
+                    "max_non_entry_layers_per_role": 0,
+                },
+                "constraints": {
+                    "max_source_steps_per_round": 1,
+                },
+            }
+            tasks = sociologist_tasks("round-governance-003")
+            (run_dir / "investigation").mkdir(parents=True, exist_ok=True)
+            (run_dir / "mission.json").write_text(
+                json.dumps(mission, ensure_ascii=True, sort_keys=True),
+                encoding="utf-8",
+            )
+            (run_dir / "investigation" / "round_tasks_round-governance-003.json").write_text(
+                json.dumps(tasks, ensure_ascii=True, sort_keys=True),
+                encoding="utf-8",
+            )
+
+            selections = selection_module.build_source_selections(
+                run_dir=run_dir,
+                mission=mission,
+                tasks=tasks,
+                run_id="run-governance-003",
+                round_id="round-governance-003",
+            )
+
+            with self.assertRaisesRegex(ValueError, "max_source_steps_per_round=1"):
+                planner_module.build_fetch_plan(
+                    run_dir=run_dir,
+                    run_id="run-governance-003",
+                    round_id="round-governance-003",
+                    mission=mission,
+                    tasks=tasks,
+                    selections=selections,
+                )
 
 
 if __name__ == "__main__":

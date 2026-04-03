@@ -45,7 +45,7 @@ description: Draft a compact role-specific expert report from the reporting hand
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_draft_expert_report.py`

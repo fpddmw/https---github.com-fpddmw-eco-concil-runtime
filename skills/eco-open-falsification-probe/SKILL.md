@@ -17,6 +17,7 @@ description: Open compact falsification probes from the next-action queue so con
 
 ## Read/Write Contract
 - Reads `run_dir/investigation/next_actions_<round_id>.json` by default.
+- If the next-actions artifact is absent, rebuilds probe candidates from the run-local deliberation plane plus analysis-plane-backed coverage context.
 - Writes `run_dir/investigation/falsification_probes_<round_id>.json` by default.
 
 ## Required Input
@@ -25,9 +26,13 @@ description: Open compact falsification probes from the next-action queue so con
 - `round_id`
 - Optional:
   - `next_actions_path`
+  - `board_summary_path`
+  - `board_brief_path`
+  - `coverage_path`
   - `output_path`
   - `action_id`
   - `max_probes`
+  - `max_actions`
 
 ## Output Contract
 - `status`
@@ -37,11 +42,13 @@ description: Open compact falsification probes from the next-action queue so con
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `deliberation_sync`
+- `analysis_sync`
 - `board_handoff`
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_open_falsification_probe.py`

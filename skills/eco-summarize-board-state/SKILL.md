@@ -17,6 +17,7 @@ description: Summarize the current round's investigation board into a compact JS
 
 ## Read/Write Contract
 - Reads `run_dir/board/investigation_board.json` by default.
+- Syncs the round into the run-local deliberation plane before summarizing.
 - Writes `run_dir/board/board_state_summary_<round_id>.json` by default.
 
 ## Required Input
@@ -36,11 +37,12 @@ description: Summarize the current round's investigation board into a compact JS
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `deliberation_sync`
 - `board_handoff`
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_summarize_board_state.py`

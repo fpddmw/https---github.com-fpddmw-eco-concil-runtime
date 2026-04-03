@@ -8,9 +8,16 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-summarize-board-state"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.deliberation_plane import load_round_snapshot  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -83,15 +90,6 @@ def resolve_summary_path(run_dir: Path, summary_path: str, round_id: str) -> Pat
     return candidate.resolve()
 
 
-def load_board_if_exists(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(payload, dict):
-        return payload
-    return None
-
-
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -150,18 +148,26 @@ def summarize_board_state_skill(
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
     summary_file = resolve_summary_path(run_dir_path, summary_path, round_id)
-    board = load_board_if_exists(board_file)
+    round_snapshot = load_round_snapshot(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        board_path=board_file,
+        include_closed=True,
+    )
 
-    round_state: dict[str, Any] = {}
-    events: list[dict[str, Any]] = []
+    round_state = round_snapshot.get("round_state", {}) if isinstance(round_snapshot.get("round_state"), dict) else {}
+    events = round_snapshot.get("round_events", []) if isinstance(round_snapshot.get("round_events"), list) else []
+    state_source = maybe_text(round_snapshot.get("state_source")) or "missing-board"
+    db_path = maybe_text(round_snapshot.get("db_path"))
+    deliberation_sync = (
+        round_snapshot.get("deliberation_sync")
+        if isinstance(round_snapshot.get("deliberation_sync"), dict)
+        else {}
+    )
     warnings: list[dict[str, Any]] = []
-    if board is None:
+    if maybe_text(round_snapshot.get("status")) != "completed":
         warnings.append({"code": "missing-board", "message": f"No board artifact was found at {board_file}."})
-    else:
-        rounds = board.get("rounds", {}) if isinstance(board.get("rounds"), dict) else {}
-        round_state = rounds.get(round_id, {}) if isinstance(rounds.get(round_id), dict) else {}
-        all_events = board.get("events", []) if isinstance(board.get("events"), list) else []
-        events = [item for item in all_events if isinstance(item, dict) and maybe_text(item.get("round_id")) == round_id]
 
     notes = round_state.get("notes", []) if isinstance(round_state.get("notes"), list) else []
     challenges = round_state.get("challenge_tickets", []) if isinstance(round_state.get("challenge_tickets"), list) else []
@@ -198,6 +204,9 @@ def summarize_board_state_skill(
         "run_id": run_id,
         "round_id": round_id,
         "board_path": str(board_file),
+        "db_path": db_path,
+        "state_source": state_source,
+        "deliberation_sync": deliberation_sync,
         "status_rollup": status_rollup,
         "counts": counts,
         "active_hypotheses": [
@@ -263,12 +272,22 @@ def summarize_board_state_skill(
         challenge_hints.append(f"{counts['hypotheses_low_confidence']} active hypotheses remain low confidence without an open challenge ticket.")
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "summary_path": str(summary_file), "status_rollup": status_rollup, "summary_id": summary_id},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "summary_path": str(summary_file),
+            "status_rollup": status_rollup,
+            "summary_id": summary_id,
+            "state_source": state_source,
+            "db_path": db_path,
+        },
         "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, summary_id)[:20],
         "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, summary_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [summary_id],
         "warnings": warnings,
+        "deliberation_sync": deliberation_sync,
         "board_handoff": {
             "candidate_ids": unique_texts(
                 [item.get("hypothesis_id") for item in active_hypothesis_items[:8]]

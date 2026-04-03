@@ -45,7 +45,7 @@ description: Create or update a hypothesis card on the local investigation board
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_update_hypothesis_status.py`

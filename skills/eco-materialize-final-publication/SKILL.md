@@ -50,7 +50,7 @@ description: Materialize one final publication artifact from the canonical decis
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_materialize_final_publication.py`

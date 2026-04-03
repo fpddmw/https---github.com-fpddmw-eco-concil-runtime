@@ -1,0 +1,537 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+from typing import Any
+
+from .analysis_plane import load_evidence_coverage_context
+from .deliberation_plane import load_round_snapshot
+
+PRIORITY_WEIGHT = {"critical": 4.0, "high": 3.0, "medium": 2.0, "low": 1.0}
+ACTION_KIND_WEIGHT = {
+    "resolve-challenge": 2.6,
+    "resolve-contradiction": 2.4,
+    "finish-board-task": 2.1,
+    "stabilize-hypothesis": 1.8,
+    "expand-coverage": 1.7,
+    "prepare-promotion": 1.2,
+}
+
+
+def normalize_space(value: Any) -> str:
+    return " ".join(str(value).split())
+
+
+def maybe_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return normalize_space(value)
+
+
+def maybe_number(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def unique_texts(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
+
+
+def stable_hash(*parts: Any) -> str:
+    joined = "||".join(maybe_text(part) for part in parts)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def resolve_path(run_dir: Path, override: str, default_relative: str) -> Path:
+    text = maybe_text(override)
+    if not text:
+        return (run_dir / default_relative).resolve()
+    candidate = Path(text).expanduser()
+    if not candidate.is_absolute():
+        candidate = run_dir / candidate
+    return candidate.resolve()
+
+
+def load_json_if_exists(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        return payload
+    return None
+
+
+def load_text_if_exists(path: Path) -> str:
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8")
+
+
+def excerpt_text(text: str, limit: int = 180) -> str:
+    normalized = maybe_text(text)
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3].rstrip() + "..."
+
+
+def priority_score(priority: str) -> float:
+    return PRIORITY_WEIGHT.get(maybe_text(priority).lower(), PRIORITY_WEIGHT["medium"])
+
+
+def score_action(payload: dict[str, Any]) -> float:
+    priority_component = priority_score(payload.get("priority"))
+    action_kind_component = ACTION_KIND_WEIGHT.get(
+        maybe_text(payload.get("action_kind")),
+        1.0,
+    )
+    contradiction_component = min(
+        1.5,
+        float(payload.get("contradiction_link_count") or 0) * 0.4,
+    )
+    coverage_component = max(0.0, 1.0 - float(payload.get("coverage_score") or 0.0))
+    confidence_value = maybe_number(payload.get("confidence"))
+    uncertainty_component = (
+        0.0
+        if confidence_value is None
+        else max(0.0, 0.9 - float(confidence_value))
+    )
+    probe_component = 0.5 if bool(payload.get("probe_candidate")) else 0.0
+    return round(
+        priority_component
+        + action_kind_component
+        + contradiction_component
+        + coverage_component
+        + uncertainty_component
+        + probe_component,
+        3,
+    )
+
+
+def board_snapshot(
+    round_state: dict[str, Any] | None,
+    board_summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if isinstance(round_state, dict):
+        hypotheses = (
+            [item for item in round_state.get("hypotheses", []) if isinstance(item, dict)]
+            if isinstance(round_state.get("hypotheses"), list)
+            else []
+        )
+        challenges = (
+            [
+                item
+                for item in round_state.get("challenge_tickets", [])
+                if isinstance(item, dict)
+            ]
+            if isinstance(round_state.get("challenge_tickets"), list)
+            else []
+        )
+        tasks = (
+            [item for item in round_state.get("tasks", []) if isinstance(item, dict)]
+            if isinstance(round_state.get("tasks"), list)
+            else []
+        )
+        active_hypotheses = [
+            item
+            for item in hypotheses
+            if maybe_text(item.get("status")) not in {"closed", "rejected"}
+        ]
+        open_challenges = [
+            item for item in challenges if maybe_text(item.get("status")) != "closed"
+        ]
+        open_tasks = [
+            item
+            for item in tasks
+            if maybe_text(item.get("status")) not in {"completed", "closed", "cancelled"}
+        ]
+        return {
+            "state_source": "deliberation-plane",
+            "counts": {
+                "hypotheses_active": len(active_hypotheses),
+                "challenge_open": len(open_challenges),
+                "tasks_open": len(open_tasks),
+            },
+            "active_hypotheses": active_hypotheses,
+            "open_challenges": open_challenges,
+            "open_tasks": open_tasks,
+        }
+    if isinstance(board_summary, dict):
+        return {
+            **board_summary,
+            "state_source": maybe_text(board_summary.get("state_source"))
+            or "board-summary-artifact",
+        }
+    return {
+        "state_source": "missing-board",
+        "counts": {
+            "hypotheses_active": 0,
+            "challenge_open": 0,
+            "tasks_open": 0,
+        },
+        "active_hypotheses": [],
+        "open_challenges": [],
+        "open_tasks": [],
+    }
+
+
+def action_from_open_challenge(challenge: dict[str, Any], brief_context: str) -> dict[str, Any]:
+    ticket_id = maybe_text(challenge.get("ticket_id"))
+    target_claim_id = maybe_text(challenge.get("target_claim_id"))
+    target_hypothesis_id = maybe_text(challenge.get("target_hypothesis_id"))
+    return {
+        "action_id": "action-" + stable_hash("d1-action", ticket_id, "challenge")[:12],
+        "action_kind": "resolve-challenge",
+        "priority": maybe_text(challenge.get("priority")) or "high",
+        "assigned_role": maybe_text(challenge.get("owner_role")) or "challenger",
+        "objective": maybe_text(challenge.get("title")) or "Resolve an open challenge ticket.",
+        "reason": maybe_text(challenge.get("title"))
+        or "An open challenge ticket still needs explicit follow-up.",
+        "source_ids": unique_texts([ticket_id, target_claim_id, target_hypothesis_id]),
+        "target": {
+            "ticket_id": ticket_id,
+            "claim_id": target_claim_id,
+            "hypothesis_id": target_hypothesis_id,
+        },
+        "evidence_refs": unique_texts(
+            challenge.get("linked_artifact_refs", [])
+            if isinstance(challenge.get("linked_artifact_refs"), list)
+            else []
+        ),
+        "probe_candidate": True,
+        "contradiction_link_count": 1,
+        "coverage_score": 0.45,
+        "confidence": None,
+        "brief_context": brief_context,
+    }
+
+
+def action_from_open_task(task: dict[str, Any], brief_context: str) -> dict[str, Any]:
+    task_id = maybe_text(task.get("task_id"))
+    return {
+        "action_id": "action-" + stable_hash("d1-action", task_id, "task")[:12],
+        "action_kind": "finish-board-task",
+        "priority": maybe_text(task.get("priority")) or "medium",
+        "assigned_role": maybe_text(task.get("owner_role")) or "moderator",
+        "objective": maybe_text(task.get("title")) or "Finish a claimed board task.",
+        "reason": maybe_text(task.get("title"))
+        or maybe_text(task.get("task_text"))
+        or "A claimed task is still in flight.",
+        "source_ids": unique_texts(
+            [task_id, task.get("source_ticket_id"), task.get("source_hypothesis_id")]
+        ),
+        "target": {
+            "task_id": task_id,
+            "ticket_id": maybe_text(task.get("source_ticket_id")),
+            "hypothesis_id": maybe_text(task.get("source_hypothesis_id")),
+        },
+        "evidence_refs": unique_texts(
+            task.get("linked_artifact_refs", [])
+            if isinstance(task.get("linked_artifact_refs"), list)
+            else []
+        ),
+        "probe_candidate": False,
+        "contradiction_link_count": 0,
+        "coverage_score": 0.55,
+        "confidence": None,
+        "brief_context": brief_context,
+    }
+
+
+def action_from_hypothesis(
+    hypothesis: dict[str, Any],
+    brief_context: str,
+) -> dict[str, Any] | None:
+    confidence = maybe_number(hypothesis.get("confidence"))
+    if confidence is not None and confidence >= 0.75:
+        return None
+    hypothesis_id = maybe_text(hypothesis.get("hypothesis_id"))
+    linked_claim_ids = unique_texts(
+        hypothesis.get("linked_claim_ids", [])
+        if isinstance(hypothesis.get("linked_claim_ids"), list)
+        else []
+    )
+    return {
+        "action_id": "action-"
+        + stable_hash("d1-action", hypothesis_id, "hypothesis")[:12],
+        "action_kind": "stabilize-hypothesis",
+        "priority": "high" if (confidence or 0.0) < 0.6 else "medium",
+        "assigned_role": maybe_text(hypothesis.get("owner_role")) or "moderator",
+        "objective": maybe_text(hypothesis.get("title")) or "Stabilize an active hypothesis.",
+        "reason": "The board still carries an active hypothesis with limited confidence.",
+        "source_ids": unique_texts([hypothesis_id] + linked_claim_ids),
+        "target": {
+            "hypothesis_id": hypothesis_id,
+            "claim_id": linked_claim_ids[0] if linked_claim_ids else "",
+        },
+        "evidence_refs": [],
+        "probe_candidate": (confidence or 0.0) < 0.6,
+        "contradiction_link_count": 0,
+        "coverage_score": 0.5,
+        "confidence": confidence,
+        "brief_context": brief_context,
+    }
+
+
+def role_from_coverage(coverage: dict[str, Any]) -> str:
+    if int(coverage.get("contradiction_link_count") or 0) > 0:
+        return "challenger"
+    if int(coverage.get("linked_observation_count") or 0) > 0:
+        return "environmentalist"
+    return "sociologist"
+
+
+def action_from_coverage(
+    coverage: dict[str, Any],
+    brief_context: str,
+) -> dict[str, Any] | None:
+    readiness = maybe_text(coverage.get("readiness"))
+    contradiction_count = int(coverage.get("contradiction_link_count") or 0)
+    if readiness == "strong" and contradiction_count == 0:
+        return None
+    coverage_id = maybe_text(coverage.get("coverage_id"))
+    claim_id = maybe_text(coverage.get("claim_id"))
+    action_kind = (
+        "resolve-contradiction" if contradiction_count > 0 else "expand-coverage"
+    )
+    priority = "high" if contradiction_count > 0 or readiness == "weak" else "medium"
+    objective = (
+        "Resolve contradiction-leaning evidence."
+        if contradiction_count > 0
+        else "Expand evidence coverage for a still-weak claim."
+    )
+    reason = (
+        f"Claim {claim_id} has {contradiction_count} contradiction links."
+        if contradiction_count > 0
+        else f"Claim {claim_id} is only {readiness or 'unknown'} on evidence coverage."
+    )
+    return {
+        "action_id": "action-"
+        + stable_hash("d1-action", coverage_id, action_kind)[:12],
+        "action_kind": action_kind,
+        "priority": priority,
+        "assigned_role": role_from_coverage(coverage),
+        "objective": objective,
+        "reason": reason,
+        "source_ids": unique_texts([coverage_id, claim_id]),
+        "target": {"coverage_id": coverage_id, "claim_id": claim_id},
+        "evidence_refs": unique_texts(
+            coverage.get("evidence_refs", [])
+            if isinstance(coverage.get("evidence_refs"), list)
+            else []
+        ),
+        "probe_candidate": contradiction_count > 0 or readiness == "weak",
+        "contradiction_link_count": contradiction_count,
+        "coverage_score": float(coverage.get("coverage_score") or 0.0),
+        "confidence": None,
+        "brief_context": brief_context,
+    }
+
+
+def prepare_promotion_action(
+    coverage: dict[str, Any],
+    brief_context: str,
+) -> dict[str, Any]:
+    coverage_id = maybe_text(coverage.get("coverage_id"))
+    claim_id = maybe_text(coverage.get("claim_id"))
+    return {
+        "action_id": "action-"
+        + stable_hash("d1-action", coverage_id, "promotion")[:12],
+        "action_kind": "prepare-promotion",
+        "priority": "medium",
+        "assigned_role": "moderator",
+        "objective": "Prepare the round for readiness and promotion review.",
+        "reason": f"Claim {claim_id} already has strong evidence coverage and can move toward readiness gating.",
+        "source_ids": unique_texts([coverage_id, claim_id]),
+        "target": {"coverage_id": coverage_id, "claim_id": claim_id},
+        "evidence_refs": unique_texts(
+            coverage.get("evidence_refs", [])
+            if isinstance(coverage.get("evidence_refs"), list)
+            else []
+        ),
+        "probe_candidate": False,
+        "contradiction_link_count": 0,
+        "coverage_score": float(coverage.get("coverage_score") or 0.0),
+        "confidence": None,
+        "brief_context": brief_context,
+    }
+
+
+def build_actions(
+    board_state: dict[str, Any],
+    coverages: list[dict[str, Any]],
+    brief_text: str,
+) -> list[dict[str, Any]]:
+    brief_context = excerpt_text(brief_text)
+    actions: list[dict[str, Any]] = []
+    for challenge in board_state.get("open_challenges", []):
+        if isinstance(challenge, dict):
+            actions.append(action_from_open_challenge(challenge, brief_context))
+    for task in board_state.get("open_tasks", []):
+        if isinstance(task, dict):
+            actions.append(action_from_open_task(task, brief_context))
+    for hypothesis in board_state.get("active_hypotheses", []):
+        if isinstance(hypothesis, dict):
+            candidate = action_from_hypothesis(hypothesis, brief_context)
+            if candidate is not None:
+                actions.append(candidate)
+    for coverage in coverages:
+        if isinstance(coverage, dict):
+            candidate = action_from_coverage(coverage, brief_context)
+            if candidate is not None:
+                actions.append(candidate)
+    if not actions:
+        strong_coverages = [
+            coverage
+            for coverage in coverages
+            if isinstance(coverage, dict)
+            and maybe_text(coverage.get("readiness")) == "strong"
+        ]
+        if strong_coverages:
+            actions.append(prepare_promotion_action(strong_coverages[0], brief_context))
+    deduped: dict[str, dict[str, Any]] = {}
+    for action in actions:
+        key = "|".join(
+            unique_texts([action.get("action_kind"), *(action.get("source_ids") or [])])
+        )
+        if key in deduped:
+            continue
+        deduped[key] = action
+    ranked = list(deduped.values())
+    for action in ranked:
+        action["score"] = score_action(action)
+    ranked.sort(
+        key=lambda item: (
+            -float(item.get("score") or 0.0),
+            -priority_score(item.get("priority")),
+            maybe_text(item.get("action_id")),
+        )
+    )
+    for index, action in enumerate(ranked, start=1):
+        action["rank"] = index
+    return ranked
+
+
+def load_ranked_actions_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    board_summary_path: str = "",
+    board_brief_path: str = "",
+    coverage_path: str = "",
+    max_actions: int = 6,
+) -> dict[str, Any]:
+    run_dir_path = Path(run_dir).expanduser().resolve()
+    board_summary_file = resolve_path(
+        run_dir_path,
+        board_summary_path,
+        f"board/board_state_summary_{round_id}.json",
+    )
+    board_brief_file = resolve_path(
+        run_dir_path,
+        board_brief_path,
+        f"board/board_brief_{round_id}.md",
+    )
+
+    warnings: list[dict[str, Any]] = []
+    round_snapshot = load_round_snapshot(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        include_closed=True,
+    )
+    board_summary = load_json_if_exists(board_summary_file)
+    round_state = (
+        round_snapshot.get("round_state")
+        if maybe_text(round_snapshot.get("status")) == "completed"
+        and isinstance(round_snapshot.get("round_state"), dict)
+        else None
+    )
+    if round_state is None and not isinstance(board_summary, dict):
+        warnings.append(
+            {
+                "code": "missing-board-state",
+                "message": f"No board state was found for round {round_id}.",
+            }
+        )
+    deliberation_sync = (
+        round_snapshot.get("deliberation_sync")
+        if isinstance(round_snapshot.get("deliberation_sync"), dict)
+        else {}
+    )
+    db_path = maybe_text(round_snapshot.get("db_path"))
+    coverage_context = load_evidence_coverage_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        coverage_path=coverage_path,
+        db_path=db_path,
+    )
+    coverage_warnings = (
+        coverage_context.get("warnings", [])
+        if isinstance(coverage_context.get("warnings"), list)
+        else []
+    )
+    warnings.extend(coverage_warnings)
+    coverages = (
+        coverage_context.get("coverages", [])
+        if isinstance(coverage_context.get("coverages"), list)
+        else []
+    )
+    coverage_file = maybe_text(coverage_context.get("coverage_file"))
+    coverage_source = maybe_text(coverage_context.get("coverage_source"))
+    analysis_sync = (
+        coverage_context.get("analysis_sync")
+        if isinstance(coverage_context.get("analysis_sync"), dict)
+        else {}
+    )
+    if not db_path:
+        db_path = maybe_text(coverage_context.get("db_path"))
+    brief_text = load_text_if_exists(board_brief_file)
+    current_board_state = board_snapshot(
+        round_state,
+        board_summary if isinstance(board_summary, dict) else None,
+    )
+    ranked_actions = build_actions(
+        current_board_state,
+        coverages,
+        brief_text,
+    )[: max(1, max_actions)]
+    for action in ranked_actions:
+        action.setdefault("run_id", run_id)
+        action.setdefault("round_id", round_id)
+
+    return {
+        "warnings": warnings,
+        "ranked_actions": ranked_actions,
+        "board_summary_file": str(board_summary_file),
+        "board_brief_file": str(board_brief_file),
+        "coverage_file": str(coverage_file),
+        "coverage_source": coverage_source or "missing-coverage",
+        "board_state_source": maybe_text(current_board_state.get("state_source"))
+        or "missing-board",
+        "db_path": db_path,
+        "deliberation_sync": deliberation_sync,
+        "analysis_sync": analysis_sync,
+        "observed_inputs": {
+            "board_summary_present": isinstance(board_summary, dict),
+            "board_brief_present": bool(maybe_text(brief_text)),
+            "coverage_present": bool(coverages),
+            "coverage_artifact_present": bool(
+                coverage_context.get("coverage_artifact_present")
+            ),
+        },
+    }

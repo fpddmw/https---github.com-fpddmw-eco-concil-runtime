@@ -164,6 +164,10 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", payload["status"])
             self.assertTrue(plan["probe_stage_included"])
             self.assertEqual("hold-investigation-open", plan["downstream_posture"])
+            self.assertFalse(plan["observed_state"]["board_summary_present"])
+            self.assertEqual("deliberation-plane", plan["observed_state"]["board_state_source"])
+            self.assertEqual("deliberation-plane", payload["summary"]["board_state_source"])
+            self.assertEqual("completed", payload["deliberation_sync"]["status"])
             self.assertIn("falsification-probes", stage_names)
             self.assertTrue(any("eco-open-falsification-probe" in skill_set for skill_set in fallback_skill_sets))
 

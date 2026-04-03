@@ -40,7 +40,7 @@ description: Derive matching-oriented observation scope proposals from observati
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_derive_observation_scope.py`

@@ -8,12 +8,21 @@ import fcntl
 import hashlib
 import json
 import os
+import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "eco-update-hypothesis-status"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    sync_board_to_deliberation_plane,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -178,6 +187,7 @@ def update_hypothesis_status_skill(
         hypothesis_index = next(index for index, item in enumerate(hypotheses) if isinstance(item, dict) and maybe_text(item.get("hypothesis_id")) == resolved_hypothesis_id)
         event = append_event(board, run_id, round_id, "hypothesis-updated", {"hypothesis_id": resolved_hypothesis_id, "status": maybe_text(status), "operation": operation})
         write_board(board_file, board, next_revision)
+    sync_board_to_deliberation_plane(run_dir_path, expected_run_id=run_id, board_path=board_file)
     artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": f"$.rounds.{round_id}.hypotheses[{hypothesis_index}]", "artifact_ref": f"{board_file}:$.rounds.{round_id}.hypotheses[{hypothesis_index}]"}]
     return {
         "status": "completed",

@@ -43,7 +43,7 @@ description: Merge nearby observation candidates into stable observation groups,
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_merge_observation_candidates.py`

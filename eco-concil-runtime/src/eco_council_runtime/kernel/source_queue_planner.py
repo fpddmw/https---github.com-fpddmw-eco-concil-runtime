@@ -383,12 +383,25 @@ def build_fetch_plan(
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
     imports = normalize_artifact_imports(mission)
     requests = normalize_source_requests(mission)
+    constraints = effective_constraints(mission)
+    max_source_steps_per_round = int(constraints.get("max_source_steps_per_round") or 0)
     warnings: list[dict[str, str]] = []
     steps: list[dict[str, Any]] = []
     step_index = 0
     planned_steps_by_source: dict[str, list[dict[str, Any]]] = {}
     import_items_by_source: dict[str, list[dict[str, Any]]] = {}
     request_items_by_source: dict[str, list[dict[str, Any]]] = {}
+
+    def next_step_index(*, role: str, source_skill: str, step_kind: str) -> int:
+        candidate = step_index + 1
+        if max_source_steps_per_round > 0 and candidate > max_source_steps_per_round:
+            raise ValueError(
+                "Fetch plan exceeds max_source_steps_per_round="
+                f"{max_source_steps_per_round} while planning {step_kind} "
+                f"for role={role} source_skill={source_skill}. Rerun prepare-round with fewer selected sources "
+                "or raise the per-round source step budget."
+            )
+        return candidate
 
     for item in imports:
         source_skill = maybe_text(item.get("source_skill"))
@@ -433,7 +446,7 @@ def build_fetch_plan(
                     source_artifact_path = Path(maybe_text(item.get("artifact_path"))).expanduser().resolve()
                     if not source_artifact_path.exists():
                         raise ValueError(f"Mission artifact import does not exist: {source_artifact_path}")
-                    step_index += 1
+                    step_index = next_step_index(role=role, source_skill=source_skill, step_kind="import")
                     artifact_path = planned_artifact_path(run_dir, round_id, source_skill, step_index)
                     step = {
                         "step_id": f"step-{role}-{step_index:02d}-{sanitize_fragment(source_skill)}",
@@ -471,7 +484,7 @@ def build_fetch_plan(
                 if not fetch_argv:
                     warnings.append({"code": "missing-fetch-argv", "message": f"Selected source_skill={source_skill} has no fetch_argv and will be skipped."})
                     continue
-                step_index += 1
+                step_index = next_step_index(role=role, source_skill=source_skill, step_kind="detached-fetch")
                 artifact_path = planned_artifact_path(run_dir, round_id, source_skill, step_index, maybe_text(item.get("artifact_path")))
                 artifact_dir = planned_artifact_dir(artifact_path)
                 depends_on, anchor_artifact_paths, resolved_anchor_refs, anchor_notes = resolved_anchor_context(
@@ -535,7 +548,7 @@ def build_fetch_plan(
         "schema_version": "1.3.0",
         "generated_at_utc": utc_now_iso(),
         "policy_profile": policy_profile_summary(mission),
-        "effective_constraints": effective_constraints(mission),
+        "effective_constraints": constraints,
         "run": {
             "run_id": run_id,
             "round_id": round_id,

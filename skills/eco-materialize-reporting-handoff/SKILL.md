@@ -46,7 +46,7 @@ description: Materialize a compact reporting handoff from promoted evidence basi
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_materialize_reporting_handoff.py`

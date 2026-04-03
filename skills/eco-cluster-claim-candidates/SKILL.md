@@ -43,7 +43,7 @@ description: Cluster previously extracted claim candidates into board-reviewable
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_cluster_claim_candidates.py`

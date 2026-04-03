@@ -8,9 +8,16 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-materialize-board-brief"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.deliberation_plane import load_round_snapshot  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -99,11 +106,7 @@ def render_markdown_section(title: str, items: list[str]) -> list[str]:
     return lines
 
 
-def summarize_from_board(board: dict[str, Any] | None, round_id: str) -> dict[str, Any]:
-    round_state: dict[str, Any] = {}
-    if isinstance(board, dict):
-        rounds = board.get("rounds", {}) if isinstance(board.get("rounds"), dict) else {}
-        round_state = rounds.get(round_id, {}) if isinstance(rounds.get(round_id), dict) else {}
+def summarize_from_round_state(round_state: dict[str, Any], *, state_source: str) -> dict[str, Any]:
     notes = round_state.get("notes", []) if isinstance(round_state.get("notes"), list) else []
     hypotheses = [item for item in round_state.get("hypotheses", []) if isinstance(item, dict)] if isinstance(round_state.get("hypotheses"), list) else []
     challenges = [item for item in round_state.get("challenge_tickets", []) if isinstance(item, dict)] if isinstance(round_state.get("challenge_tickets"), list) else []
@@ -118,6 +121,7 @@ def summarize_from_board(board: dict[str, Any] | None, round_id: str) -> dict[st
             "challenge_open": len(open_challenges),
             "tasks_open": len(open_tasks),
         },
+        "state_source": state_source,
         "active_hypotheses": active_hypotheses,
         "open_challenges": open_challenges,
         "open_tasks": open_tasks,
@@ -157,17 +161,48 @@ def materialize_board_brief_skill(
     board_file = resolve_board_path(run_dir_path, board_path)
     summary_file = resolve_summary_path(run_dir_path, summary_path, round_id)
     brief_file = resolve_brief_path(run_dir_path, brief_path, round_id)
-    board = load_json_if_exists(board_file)
+    round_snapshot = load_round_snapshot(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        board_path=board_file,
+        include_closed=True,
+    )
     summary_payload = load_json_if_exists(summary_file)
+    round_state = (
+        round_snapshot.get("round_state")
+        if maybe_text(round_snapshot.get("status")) == "completed"
+        and isinstance(round_snapshot.get("round_state"), dict)
+        else None
+    )
+    state_source = maybe_text(round_snapshot.get("state_source"))
+    db_path = maybe_text(round_snapshot.get("db_path"))
+    deliberation_sync = (
+        round_snapshot.get("deliberation_sync")
+        if isinstance(round_snapshot.get("deliberation_sync"), dict)
+        else {}
+    )
     warnings: list[dict[str, Any]] = []
-    if board is None:
+    if round_state is None and not isinstance(summary_payload, dict):
         warnings.append({"code": "missing-board", "message": f"No board artifact was found at {board_file}."})
 
-    snapshot = summary_payload if isinstance(summary_payload, dict) else summarize_from_board(board, round_id)
+    if isinstance(round_state, dict):
+        snapshot = summarize_from_round_state(
+            round_state,
+            state_source=state_source or "deliberation-plane",
+        )
+    elif isinstance(summary_payload, dict):
+        snapshot = {
+            **summary_payload,
+            "state_source": maybe_text(summary_payload.get("state_source")) or "board-summary-artifact",
+        }
+    else:
+        snapshot = summarize_from_round_state({}, state_source="missing-board")
     counts = snapshot.get("counts", {}) if isinstance(snapshot.get("counts"), dict) else {}
     active_hypotheses = snapshot.get("active_hypotheses", []) if isinstance(snapshot.get("active_hypotheses"), list) else []
     open_challenges = snapshot.get("open_challenges", []) if isinstance(snapshot.get("open_challenges"), list) else []
     open_tasks = snapshot.get("open_tasks", []) if isinstance(snapshot.get("open_tasks"), list) else []
+    state_source = maybe_text(snapshot.get("state_source")) or "missing-board"
     moves = next_moves(snapshot)
 
     hypothesis_lines = [
@@ -191,6 +226,7 @@ def materialize_board_brief_skill(
         "",
         f"- Run: {run_id}",
         f"- Generated at: {utc_now_iso()}",
+        f"- State source: {state_source}",
         f"- Active hypotheses: {int(counts.get('hypotheses_active') or 0)}",
         f"- Open challenges: {int(counts.get('challenge_open') or 0)}",
         f"- Open tasks: {int(counts.get('tasks_open') or 0)}",
@@ -225,12 +261,21 @@ def materialize_board_brief_skill(
             candidate_ids.append(item.get("task_id"))
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "brief_path": str(brief_file), "brief_id": brief_id},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "brief_path": str(brief_file),
+            "brief_id": brief_id,
+            "state_source": state_source,
+            "db_path": db_path,
+        },
         "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, brief_id)[:20],
         "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, brief_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [brief_id],
         "warnings": warnings,
+        "deliberation_sync": deliberation_sync,
         "board_handoff": {
             "candidate_ids": [maybe_text(item) for item in candidate_ids if maybe_text(item)],
             "evidence_refs": artifact_refs,

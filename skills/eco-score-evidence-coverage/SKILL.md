@@ -18,6 +18,7 @@ description: Score claim-side evidence coverage using links and scope proposals,
 ## Read/Write Contract
 - Reads `claim_observation_links_<round_id>.json` and available claim/observation scope artifacts.
 - Writes `runs/<run_id>/analytics/evidence_coverage_<round_id>.json` by default.
+- Syncs the same coverage result set into `runs/<run_id>/analytics/signal_plane.sqlite` as analysis-plane state.
 
 ## Required Input
 - `run_dir`
@@ -37,11 +38,12 @@ description: Score claim-side evidence coverage using links and scope proposals,
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `analysis_sync`
 - `board_handoff`
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_score_evidence_coverage.py`

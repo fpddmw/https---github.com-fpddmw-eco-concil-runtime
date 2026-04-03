@@ -44,7 +44,7 @@ description: Append a compact investigation note to the local board artifact, pr
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_post_board_note.py`

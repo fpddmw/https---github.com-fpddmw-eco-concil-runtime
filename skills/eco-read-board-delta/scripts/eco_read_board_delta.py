@@ -6,11 +6,23 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-read-board-delta"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    connect_db,
+    fetch_round_events,
+    fetch_round_state,
+    resolve_board_path as runtime_resolve_board_path,
+    sync_board_to_deliberation_plane,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -21,6 +33,18 @@ def maybe_text(value: Any) -> str:
     if value is None:
         return ""
     return normalize_space(value)
+
+
+def unique_texts(values: list[Any]) -> list[str]:
+    items: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        items.append(text)
+    return items
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -34,19 +58,7 @@ def resolve_run_dir(run_dir: str) -> Path:
 
 
 def resolve_board_path(run_dir: Path, board_path: str) -> Path:
-    text = maybe_text(board_path)
-    if not text:
-        return (run_dir / "board" / "investigation_board.json").resolve()
-    candidate = Path(text).expanduser()
-    if not candidate.is_absolute():
-        candidate = run_dir / candidate
-    return candidate.resolve()
-
-
-def load_board_if_exists(path: Path) -> Any | None:
-    if not path.exists():
-        return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    return runtime_resolve_board_path(run_dir, board_path)
 
 
 def stable_hash(*parts: Any) -> str:
@@ -65,46 +77,116 @@ def read_board_delta_skill(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
-    payload = load_board_if_exists(board_file)
-    if not isinstance(payload, dict):
+    sync_summary = sync_board_to_deliberation_plane(
+        run_dir_path,
+        expected_run_id=run_id,
+        board_path=board_file,
+    )
+    if maybe_text(sync_summary.get("status")) != "completed":
         return {
             "status": "completed",
-            "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "result_count": 0, "board_path": str(board_file), "event_cursor": ""},
+            "summary": {
+                "skill": SKILL_NAME,
+                "run_id": run_id,
+                "round_id": round_id,
+                "result_count": 0,
+                "board_path": str(board_file),
+                "db_path": maybe_text(sync_summary.get("db_path")),
+                "event_cursor": "",
+                "note_count": 0,
+                "hypothesis_count": 0,
+                "challenge_ticket_count": 0,
+                "task_count": 0,
+            },
             "result_count": 0,
             "results": [],
             "artifact_refs": [],
             "warnings": [{"code": "missing-board", "message": f"No board artifact was found at {board_file}."}],
+            "round_state": {
+                "include_closed": bool(include_closed),
+                "note_count": 0,
+                "hypothesis_count": 0,
+                "challenge_ticket_count": 0,
+                "task_count": 0,
+                "notes": [],
+                "hypotheses": [],
+                "challenge_tickets": [],
+                "tasks": [],
+            },
+            "deliberation_sync": sync_summary,
             "board_handoff": {"candidate_ids": [], "evidence_refs": [], "gap_hints": ["Board state has not been initialized for this run yet."], "challenge_hints": [], "suggested_next_skills": ["eco-post-board-note", "eco-update-hypothesis-status"]},
         }
-    events = payload.get("events", []) if isinstance(payload.get("events"), list) else []
-    round_events = [event for event in events if isinstance(event, dict) and maybe_text(event.get("round_id")) == round_id]
+    connection, db_file = connect_db(run_dir_path)
+    try:
+        round_events = fetch_round_events(connection, run_id=run_id, round_id=round_id)
+        round_state = fetch_round_state(
+            connection,
+            run_id=run_id,
+            round_id=round_id,
+            include_closed=include_closed,
+        )
+    finally:
+        connection.close()
     if maybe_text(after_event_id):
         index = next((position for position, event in enumerate(round_events) if maybe_text(event.get("event_id")) == maybe_text(after_event_id)), -1)
         round_events = round_events[index + 1 :] if index >= 0 else round_events
     limited_events = round_events[: max(1, event_limit)]
-    rounds = payload.get("rounds", {}) if isinstance(payload.get("rounds"), dict) else {}
-    round_state = rounds.get(round_id, {}) if isinstance(rounds.get(round_id), dict) else {}
     notes = round_state.get("notes", []) if isinstance(round_state.get("notes"), list) else []
     challenge_tickets = round_state.get("challenge_tickets", []) if isinstance(round_state.get("challenge_tickets"), list) else []
     hypotheses = round_state.get("hypotheses", []) if isinstance(round_state.get("hypotheses"), list) else []
     tasks = round_state.get("tasks", []) if isinstance(round_state.get("tasks"), list) else []
-    if not include_closed:
-        challenge_tickets = [ticket for ticket in challenge_tickets if isinstance(ticket, dict) and maybe_text(ticket.get("status")) != "closed"]
-        hypotheses = [hypothesis for hypothesis in hypotheses if isinstance(hypothesis, dict) and maybe_text(hypothesis.get("status")) not in {"closed", "rejected"}]
-        tasks = [task for task in tasks if isinstance(task, dict) and maybe_text(task.get("status")) not in {"completed", "closed", "cancelled"}]
     artifact_refs = [{"signal_id": "", "artifact_path": str(board_file), "record_locator": "$.events", "artifact_ref": f"{board_file}:$.events"}]
     event_cursor = maybe_text(limited_events[-1].get("event_id")) if limited_events else ""
+    candidate_ids = unique_texts(
+        [
+            *[
+                maybe_text(event.get("event_id"))
+                for event in limited_events
+                if isinstance(event, dict)
+            ],
+            *[
+                maybe_text(item.get("hypothesis_id"))
+                for item in hypotheses
+                if isinstance(item, dict)
+            ],
+            *[
+                maybe_text(item.get("ticket_id"))
+                for item in challenge_tickets
+                if isinstance(item, dict)
+            ],
+            *[
+                maybe_text(item.get("task_id"))
+                for item in tasks
+                if isinstance(item, dict)
+            ],
+        ]
+    )
+    empty_round = not limited_events and not notes and not hypotheses and not challenge_tickets and not tasks
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "result_count": len(limited_events), "board_path": str(board_file), "event_cursor": event_cursor},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "result_count": len(limited_events),
+            "board_path": str(board_file),
+            "db_path": str(db_file),
+            "event_cursor": event_cursor,
+            "note_count": len(notes),
+            "hypothesis_count": len(hypotheses),
+            "challenge_ticket_count": len(challenge_tickets),
+            "task_count": len(tasks),
+        },
         "result_count": len(limited_events),
         "results": limited_events,
         "artifact_refs": artifact_refs,
+        "round_state": round_state,
+        "deliberation_sync": sync_summary,
         "warnings": [],
         "board_handoff": {
-            "candidate_ids": [maybe_text(event.get("event_id")) for event in limited_events if maybe_text(event.get("event_id"))],
+            "candidate_ids": candidate_ids,
             "evidence_refs": artifact_refs,
-            "gap_hints": [] if limited_events or notes or hypotheses or challenge_tickets or tasks else ["Board exists but no round activity has been recorded yet."],
+            "gap_hints": [] if not empty_round else ["Board exists but no round activity has been recorded yet."],
             "challenge_hints": [f"{len(challenge_tickets)} open challenge tickets need review."] if challenge_tickets else ([f"{len(tasks)} claimed or open tasks are still in flight."] if tasks else []),
             "suggested_next_skills": ["eco-claim-board-task", "eco-close-challenge-ticket", "eco-summarize-board-state"],
         },

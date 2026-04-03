@@ -18,7 +18,8 @@ description: Promote the current round into a compact evidence-basis artifact by
 ## Read/Write Contract
 - Reads `run_dir/reporting/round_readiness_<round_id>.json` by default.
 - Reads `run_dir/board/board_brief_<round_id>.md` by default.
-- Reads `run_dir/analytics/evidence_coverage_<round_id>.json` by default.
+- Reads evidence coverage from the run-local analysis plane first.
+- Falls back to `run_dir/analytics/evidence_coverage_<round_id>.json` when the synced result set is unavailable.
 - Reads `run_dir/investigation/next_actions_<round_id>.json` by default when present.
 - Writes `run_dir/promotion/promoted_evidence_basis_<round_id>.json` by default.
 
@@ -43,11 +44,12 @@ description: Promote the current round into a compact evidence-basis artifact by
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `analysis_sync`
 - `board_handoff`
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_promote_evidence_basis.py`

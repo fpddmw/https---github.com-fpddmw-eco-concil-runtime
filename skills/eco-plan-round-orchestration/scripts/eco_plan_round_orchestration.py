@@ -8,9 +8,16 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-plan-round-orchestration"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.deliberation_plane import load_round_snapshot  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -93,9 +100,17 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def round_board_state(board: dict[str, Any], round_id: str) -> dict[str, Any]:
-    rounds = board.get("rounds", {}) if isinstance(board.get("rounds"), dict) else {}
-    round_state = rounds.get(round_id, {}) if isinstance(rounds.get(round_id), dict) else {}
+def board_rollup(active_hypothesis_count: int, open_challenge_count: int, open_task_count: int, note_count: int) -> str:
+    if active_hypothesis_count == 0 and open_challenge_count == 0 and open_task_count == 0 and note_count == 0:
+        return "empty"
+    if open_challenge_count > 0 and open_task_count == 0:
+        return "needs-triage"
+    if open_challenge_count > 0 or open_task_count > 0:
+        return "in-flight"
+    return "organized"
+
+
+def round_board_state(round_state: dict[str, Any], *, state_source: str) -> dict[str, Any]:
     notes = round_state.get("notes", []) if isinstance(round_state.get("notes"), list) else []
     hypotheses = [item for item in round_state.get("hypotheses", []) if isinstance(item, dict)] if isinstance(round_state.get("hypotheses"), list) else []
     challenges = [item for item in round_state.get("challenge_tickets", []) if isinstance(item, dict)] if isinstance(round_state.get("challenge_tickets"), list) else []
@@ -106,21 +121,31 @@ def round_board_state(board: dict[str, Any], round_id: str) -> dict[str, Any]:
     low_confidence_hypotheses = [
         item for item in active_hypotheses if (maybe_number(item.get("confidence")) or 0.0) < 0.6
     ]
+    counts = {
+        "notes_total": len(notes),
+        "hypotheses_active": len(active_hypotheses),
+        "hypotheses_low_confidence": len(low_confidence_hypotheses),
+        "challenge_open": len(open_challenges),
+        "tasks_open": len(open_tasks),
+    }
     return {
-        "counts": {
-            "notes_total": len(notes),
-            "hypotheses_active": len(active_hypotheses),
-            "hypotheses_low_confidence": len(low_confidence_hypotheses),
-            "challenge_open": len(open_challenges),
-            "tasks_open": len(open_tasks),
-        },
+        "counts": counts,
+        "state_source": state_source,
+        "status_rollup": board_rollup(
+            counts["hypotheses_active"],
+            counts["challenge_open"],
+            counts["tasks_open"],
+            counts["notes_total"],
+        ),
         "active_hypotheses": active_hypotheses,
         "open_challenges": open_challenges,
         "open_tasks": open_tasks,
     }
 
 
-def board_snapshot(board: dict[str, Any] | None, board_summary: dict[str, Any] | None, round_id: str) -> dict[str, Any]:
+def board_snapshot(round_state: dict[str, Any] | None, board_summary: dict[str, Any] | None) -> dict[str, Any]:
+    if isinstance(round_state, dict):
+        return round_board_state(round_state, state_source="deliberation-plane")
     if isinstance(board_summary, dict):
         counts = board_summary.get("counts", {}) if isinstance(board_summary.get("counts"), dict) else {}
         return {
@@ -131,14 +156,12 @@ def board_snapshot(board: dict[str, Any] | None, board_summary: dict[str, Any] |
                 "challenge_open": int(counts.get("challenge_open") or len(board_summary.get("open_challenges", []))),
                 "tasks_open": int(counts.get("tasks_open") or len(board_summary.get("open_tasks", []))),
             },
+            "state_source": "board-summary-artifact",
             "status_rollup": maybe_text(board_summary.get("status_rollup")) or "",
             "active_hypotheses": board_summary.get("active_hypotheses", []) if isinstance(board_summary.get("active_hypotheses"), list) else [],
             "open_challenges": board_summary.get("open_challenges", []) if isinstance(board_summary.get("open_challenges"), list) else [],
             "open_tasks": board_summary.get("open_tasks", []) if isinstance(board_summary.get("open_tasks"), list) else [],
         }
-    if isinstance(board, dict):
-        derived = round_board_state(board, round_id)
-        return {**derived, "status_rollup": "derived-from-board"}
     return {
         "counts": {
             "notes_total": 0,
@@ -147,6 +170,7 @@ def board_snapshot(board: dict[str, Any] | None, board_summary: dict[str, Any] |
             "challenge_open": 0,
             "tasks_open": 0,
         },
+        "state_source": "missing-board",
         "status_rollup": "missing-board",
         "active_hypotheses": [],
         "open_challenges": [],
@@ -322,6 +346,13 @@ def plan_round_orchestration_skill(
     promotion_basis_file = (run_dir_path / "promotion" / f"promoted_evidence_basis_{round_id}.json").resolve()
 
     warnings: list[dict[str, Any]] = []
+    round_snapshot = load_round_snapshot(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        board_path=board_file,
+        include_closed=True,
+    )
     board = load_json_if_exists(board_file)
     if not isinstance(board, dict):
         warnings.append({"code": "missing-board", "message": f"No board artifact was found at {board_file}."})
@@ -330,8 +361,20 @@ def plan_round_orchestration_skill(
     readiness = load_json_if_exists(readiness_file) or {}
     brief_text = load_text_if_exists(board_brief_file)
     probes = load_json_if_exists(probes_file) or {}
+    deliberation_sync = (
+        round_snapshot.get("deliberation_sync")
+        if isinstance(round_snapshot.get("deliberation_sync"), dict)
+        else {}
+    )
+    round_state = (
+        round_snapshot.get("round_state")
+        if maybe_text(round_snapshot.get("status")) == "completed"
+        and isinstance(round_snapshot.get("round_state"), dict)
+        else None
+    )
+    db_path = maybe_text(round_snapshot.get("db_path"))
 
-    snapshot = board_snapshot(board if isinstance(board, dict) else None, board_summary if isinstance(board_summary, dict) else None, round_id)
+    snapshot = board_snapshot(round_state, board_summary if isinstance(board_summary, dict) else None)
     counts = snapshot.get("counts", {}) if isinstance(snapshot.get("counts"), dict) else {}
     probe_stage_included = include_probe_stage(snapshot, next_actions, readiness)
     posture = downstream_posture(snapshot, readiness, probe_stage_included)
@@ -425,6 +468,8 @@ def plan_round_orchestration_skill(
             "next_actions_present": isinstance(next_actions, dict) and bool(next_actions),
             "probes_present": isinstance(probes, dict) and bool(probes),
             "readiness_present": isinstance(readiness, dict) and bool(readiness),
+            "board_state_source": maybe_text(snapshot.get("state_source")),
+            "board_state_db_path": db_path,
             "status_rollup": maybe_text(snapshot.get("status_rollup")),
             "readiness_status": maybe_text(readiness.get("readiness_status")),
             "counts": counts,
@@ -443,6 +488,7 @@ def plan_round_orchestration_skill(
         "stop_conditions": stop_conditions(probe_stage_included),
         "fallback_path": fallback_rows,
         "planning_notes": planning_notes[:3],
+        "deliberation_sync": deliberation_sync,
     }
     write_json_file(output_file, plan_payload)
 
@@ -474,12 +520,15 @@ def plan_round_orchestration_skill(
             "planning_mode": plan_payload["planning_mode"],
             "probe_stage_included": probe_stage_included,
             "downstream_posture": posture,
+            "board_state_source": maybe_text(snapshot.get("state_source")),
+            "db_path": db_path,
         },
         "receipt_id": "runtime-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, plan_id)[:20],
         "batch_id": "runtimebatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [plan_id],
         "warnings": warnings,
+        "deliberation_sync": deliberation_sync,
         "board_handoff": {
             "candidate_ids": [plan_id],
             "evidence_refs": artifact_refs,

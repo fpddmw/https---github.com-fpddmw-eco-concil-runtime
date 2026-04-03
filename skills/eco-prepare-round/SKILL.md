@@ -39,7 +39,7 @@ description: Build one governed fetch plan from mission.json, round tasks, and s
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_prepare_round.py`

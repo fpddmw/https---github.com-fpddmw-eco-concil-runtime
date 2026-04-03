@@ -45,7 +45,7 @@ description: Open a challenge ticket on the local investigation board, preserve 
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-skill-phase-plan.md`
+- `../../openclaw-db-first-agent-runtime-blueprint.md`
 
 ## Scripts
 - `scripts/eco_open_challenge_ticket.py`
