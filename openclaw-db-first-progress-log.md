@@ -5,12 +5,19 @@ This log records independently deliverable increments that move the project from
 Planning source of truth:
 - `openclaw-db-first-master-plan.md`
 
+Dashboard view:
+- `openclaw-db-first-dashboard.md`
+
 Use this log only for delivered increments and historical detail.
 Use the master plan for:
 - route definitions
 - normalized stage numbering
 - future sequencing
 - historical crosswalks
+Use the dashboard for:
+- current stage / next stage / blocked-point control view
+- route-level milestone snapshot
+- stage index and latest-delivery rollup
 
 Normalization note:
 - Historical `B2 / B2.1` entries remain unchanged in this log, but they are treated as `C1 / C1.1` in the master plan because they belong to the analysis-plane route semantically.
@@ -804,3 +811,57 @@ Known limitations:
 Next:
 - Move to `D3` so the enlarged route map gains a stronger progress dashboard and blocking view.
 - Then continue either `B3` moderator control consolidation or `C2.1` candidate/cluster migration according to the updated master plan order.
+
+## 2026-04-04 D3: Progress Dashboard Conventions
+
+Status: completed
+
+Objective:
+- Stop requiring a full manual read of the master plan plus the entire progress log to understand the current control state.
+- Add one stable dashboard view that always exposes the current stage, next recommended stage, blocked points, route milestone snapshot, and stage index.
+
+Implementation:
+- Added `eco-concil-runtime/src/eco_council_runtime/kernel/progress_dashboard.py`
+  - Parses the master plan route tables, historical crosswalk, near-term queue, and progress-log delivery sections.
+  - Renders a stable markdown dashboard with:
+    - control summary
+    - route snapshot
+    - near-term queue
+    - full stage index
+    - latest deliveries
+- Added `eco-concil-runtime/scripts/eco_progress_dashboard.py`
+  - Provides a repo-local CLI to regenerate the dashboard from:
+    - `openclaw-db-first-master-plan.md`
+    - `openclaw-db-first-progress-log.md`
+  - Writes `openclaw-db-first-dashboard.md` and emits a compact JSON summary.
+- Added generated file: `openclaw-db-first-dashboard.md`
+  - Establishes the current operator-facing control view for plan/log status.
+  - Marks the file as generated and documents the refresh command.
+- Updated `openclaw-db-first-master-plan.md`
+  - Marked `D3` as completed.
+  - Clarified the three-way document split:
+    - master plan = future scheduling and route meaning
+    - progress log = delivered history
+    - dashboard = current control view
+  - Added the rule that each completed delivery should refresh the dashboard.
+- Updated this file:
+  - Added a top-level dashboard reference and clarified that the dashboard is the current-state view rather than the historical log.
+
+Validation:
+- `python3 -m unittest tests/test_progress_dashboard.py -q`
+- `python3 eco-concil-runtime/scripts/eco_progress_dashboard.py --pretty`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- Added `tests/test_progress_dashboard.py`
+  - Verifies the real repo docs render a dashboard whose next recommended stage, latest delivery, and stage index match the current plan state.
+  - Verifies synthetic docs surface active stages, blocked stages, and queue pickup points correctly.
+  - Verifies the CLI writes the dashboard file and returns a usable JSON summary.
+
+Known limitations:
+- The dashboard is only as strong as the stability of the master-plan and progress-log markdown table formats; it is not yet backed by a stricter machine-readable schema.
+- Narrative blockers that appear only inside delivery prose are not inferred automatically; the blocked-point view currently reflects explicit stage status from the master plan.
+
+Next:
+- Move to `B3` so moderator control consolidation becomes the next independent delivery on the execution queue.
+- After that, continue `A3` governance hardening and `C2.1` candidate/cluster migration according to the refreshed dashboard order.

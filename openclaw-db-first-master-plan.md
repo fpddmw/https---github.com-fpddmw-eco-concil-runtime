@@ -15,7 +15,8 @@
 
 1. `openclaw-db-first-progress-log.md` 只负责记录“已经交付了什么”。
 2. 本文档负责定义“为什么这样分路线、下一步按什么顺序推进”。
-3. 当历史编号与当前路线语义发生冲突时，以本文档的归一化定义为准。
+3. `openclaw-db-first-dashboard.md` 负责给出“当前阶段、下一阶段、阻塞点、路线快照”的生成看板视图。
+4. 当历史编号与当前路线语义发生冲突时，以本文档的归一化定义为准。
 
 ## 2. Route Legend
 
@@ -114,7 +115,7 @@
 | --- | --- | --- | --- | --- |
 | `D1` | Documentation Traceability Pack | 修复文档引用漂移并建立 progress log | `completed` | 每次交付有仓内记录 |
 | `D2` | Master Plan And Route Normalization | 统一 A/B/C/D 路线定义与阶段规划 | `completed` | 本文档成为唯一计划源 |
-| `D3` | Progress Dashboard Conventions | 给 progress log 增加更强的阶段索引、里程碑视图、状态汇总约束 | `planned` | 任意时刻都能看出“当前阶段、下一阶段、阻塞点” |
+| `D3` | Progress Dashboard Conventions | 给 progress log 增加更强的阶段索引、里程碑视图、状态汇总约束 | `completed` | 任意时刻都能看出“当前阶段、下一阶段、阻塞点” |
 | `D4` | Milestone / Demo Packaging | 面向中期汇报或阶段验收整理固定里程碑包 | `planned` | 能快速导出当前成果清单、风险、下一步 |
 
 ## 6. 当前总体判断
@@ -124,7 +125,7 @@
 1. `A` 路线已完成第一轮修复以及 `A2` 共享契约硬化；当前 D1、promotion/reporting draft、canonical publish、以及 final publication 链都已收口到更一致的 trace contract，下一步主要转向 `A3` 治理回归硬化。
 2. `B` 路线已经完成 deliberation-plane 读路径迁移、关键 board 写路径 DB-first 切换，以及 `board_summary / board_brief` 的运行时降级；下一步主要是继续收拢 moderator DB 工作面而不是维护 summary-first 的运营顺序。
 3. `C` 路线已经完成 coverage、其上游 links/scopes、history/archive 读取面、剩余关键 export/read consumer 的 analysis-plane-first 迁移，以及 `C2` result-set lineage contract；下一步更多是把 cluster/merge family 继续纳入 analysis plane，并把 runtime-local query helper 提升成更正式的查询接口。
-4. `D` 路线的基础追踪已建立，但还缺“总控视图”和“持续调度规则”，本文件正是为此补位。
+4. `D` 路线现在已经有 master plan、progress log、以及生成式 dashboard 三层分工；下一步主要转向 `D4` 的固定里程碑包整理，而不是继续依赖人工通读整份 progress log 才能判断当前控制状态。
 
 ## 7. 推荐的未来数次开发顺序
 
@@ -132,11 +133,11 @@
 
 | 顺序 | 阶段 | 路线 | 为什么先做 | 预期独立交付 |
 | --- | --- | --- | --- | --- |
-| `1` | `D3` | `D` | 路线越来越多，需要更强的阶段看板和阻塞视图 | progress dashboard 约束与汇总模板 |
-| `2` | `B3` | `B` | 当 exports 已降级且 contract 更稳定后，再收拢 moderator 控制面会更清晰 | moderator loop 的主要状态推进改由 DB 工作面主导 |
-| `3` | `A3` | `A` | contract surface 与 analysis lineage 已基本稳定，现在需要补一轮治理回归，确保 replay / benchmark / archive 不被新契约影响 | 全量治理命令与回归稳定 |
-| `4` | `C2.1` | `C` | 通用 result-set 契约已经补齐，下一步最自然的是把 candidate / cluster / merge 对象继续纳入 analysis plane | 早期分析链的关键压缩对象可被统一查询 |
-| `5` | `C2.2` | `C` | 当 lineage contract 与对象族谱更稳定后，再把 runtime-local helper 提升为正式 query surface 会更少返工 | 非 Python tooling 也能稳定消费 analysis-plane 结果 |
+| `1` | `B3` | `B` | exports 已降级、contract 也更稳定，现在继续收拢 moderator 控制面最顺势 | moderator loop 的主要状态推进改由 DB 工作面主导 |
+| `2` | `A3` | `A` | board / analysis / reporting contract 已基本稳定，现在需要补一轮治理回归，确保 replay / benchmark / archive 不被新契约影响 | 全量治理命令与回归稳定 |
+| `3` | `C2.1` | `C` | 通用 result-set 契约已经补齐，下一步最自然的是把 candidate / cluster / merge 对象继续纳入 analysis plane | 早期分析链的关键压缩对象可被统一查询 |
+| `4` | `C2.2` | `C` | 当 lineage contract 与对象族谱更稳定后，再把 runtime-local helper 提升为正式 query surface 会更少返工 | 非 Python tooling 也能稳定消费 analysis-plane 结果 |
+| `5` | `D4` | `D` | 当 queue / blocker 可视化已经稳定后，再整理阶段验收与 demo 包更容易形成固定模板 | 能快速导出当前成果清单、风险、下一步 |
 
 ## 8. 每次开发交付的记录规范
 
@@ -153,7 +154,8 @@
    - `Tests added or extended`
    - `Known limitations`
    - `Next`
-4. 若历史编号与当前路线语义冲突，progress log 保留历史编号，但在本文档的 crosswalk 中补映射。
+4. 交付完成后应刷新 `openclaw-db-first-dashboard.md`，确保当前控制视图与 plan/log 一致。
+5. 若历史编号与当前路线语义冲突，progress log 保留历史编号，但在本文档的 crosswalk 中补映射。
 
 ## 9. 当前建议
 
