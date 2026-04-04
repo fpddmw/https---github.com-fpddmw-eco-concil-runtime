@@ -91,6 +91,27 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("published", decision_publish["summary"]["operation"])
             self.assertEqual("sociologist", soc_report["agent_role"])
             self.assertEqual("environmentalist", env_report["agent_role"])
+            self.assertEqual("expert-report", soc_report["canonical_artifact"])
+            self.assertEqual(
+                "expert-report-draft-artifact",
+                soc_report["expert_report_draft_source"],
+            )
+            self.assertEqual(
+                "reporting-handoff-artifact",
+                soc_report["reporting_handoff_source"],
+            )
+            self.assertEqual(
+                "council-decision-draft-artifact",
+                soc_report["decision_source"],
+            )
+            self.assertTrue(
+                soc_report["observed_inputs"][
+                    "expert_report_draft_artifact_present"
+                ]
+            )
+            self.assertTrue(
+                soc_report["observed_inputs"]["expert_report_draft_present"]
+            )
             self.assertEqual("reporting-handoff-artifact", soc_draft["reporting_handoff_source"])
             self.assertEqual("council-decision-draft-artifact", soc_draft["decision_source"])
             self.assertEqual("missing-board-brief", soc_draft["board_brief_source"])
@@ -103,6 +124,40 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertTrue(soc_draft["observed_inputs"]["decision_artifact_present"])
             self.assertTrue(soc_draft["observed_inputs"]["decision_present"])
             self.assertEqual("ready", decision["publication_readiness"])
+            self.assertEqual("council-decision", decision["canonical_artifact"])
+            self.assertEqual(
+                "council-decision-draft-artifact",
+                decision["decision_source"],
+            )
+            self.assertEqual(
+                "reporting-handoff-artifact",
+                decision["reporting_handoff_source"],
+            )
+            self.assertEqual("promotion-artifact", decision["promotion_source"])
+            self.assertEqual(
+                "expert-report-artifact",
+                decision["sociologist_report_source"],
+            )
+            self.assertEqual(
+                "expert-report-artifact",
+                decision["environmentalist_report_source"],
+            )
+            self.assertTrue(decision["observed_inputs"]["decision_artifact_present"])
+            self.assertTrue(decision["observed_inputs"]["decision_present"])
+            self.assertTrue(
+                decision["observed_inputs"]["sociologist_report_artifact_present"]
+            )
+            self.assertTrue(
+                decision["observed_inputs"]["sociologist_report_present"]
+            )
+            self.assertTrue(
+                decision["observed_inputs"][
+                    "environmentalist_report_artifact_present"
+                ]
+            )
+            self.assertTrue(
+                decision["observed_inputs"]["environmentalist_report_present"]
+            )
             self.assertEqual(2, len(decision["published_report_refs"]))
 
     def test_publish_council_decision_blocks_ready_round_without_reports(self) -> None:
@@ -132,11 +187,34 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             modified["summary"] = modified["summary"] + " Changed after first publish."
             write_json(draft_path, modified)
             second_publish = run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            decision = load_json(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json"))
 
             self.assertEqual("needs-more-evidence", draft_payload["summary"]["report_status"])
             self.assertEqual("published", first_publish["summary"]["operation"])
             self.assertEqual("completed", decision_publish["status"])
             self.assertEqual("hold", decision_publish["summary"]["publication_readiness"])
+            self.assertEqual(
+                "expert-report-artifact",
+                decision["sociologist_report_source"],
+            )
+            self.assertEqual(
+                "missing-environmentalist-report",
+                decision["environmentalist_report_source"],
+            )
+            self.assertTrue(
+                decision["observed_inputs"]["sociologist_report_artifact_present"]
+            )
+            self.assertTrue(
+                decision["observed_inputs"]["sociologist_report_present"]
+            )
+            self.assertFalse(
+                decision["observed_inputs"][
+                    "environmentalist_report_artifact_present"
+                ]
+            )
+            self.assertFalse(
+                decision["observed_inputs"]["environmentalist_report_present"]
+            )
             self.assertEqual("blocked", second_publish["status"])
             self.assertTrue(any(item["code"] == "overwrite-blocked" for item in second_publish["warnings"]))
 
@@ -160,6 +238,38 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("ready-for-release", publication_payload["summary"]["publication_status"])
             self.assertEqual("noop", publication_noop["summary"]["operation"])
             self.assertEqual("release", publication["publication_posture"])
+            self.assertEqual("deliberation-plane", publication["board_state_source"])
+            self.assertEqual("analysis-plane", publication["coverage_source"])
+            self.assertEqual(
+                "reporting-handoff-artifact",
+                publication["reporting_handoff_source"],
+            )
+            self.assertEqual("council-decision-artifact", publication["decision_source"])
+            self.assertEqual("promotion-artifact", publication["promotion_source"])
+            self.assertEqual(
+                "supervisor-state-artifact",
+                publication["supervisor_state_source"],
+            )
+            self.assertEqual(
+                "expert-report-artifact",
+                publication["sociologist_report_source"],
+            )
+            self.assertEqual(
+                "expert-report-artifact",
+                publication["environmentalist_report_source"],
+            )
+            self.assertTrue(
+                publication["observed_inputs"]["reporting_handoff_artifact_present"]
+            )
+            self.assertTrue(publication["observed_inputs"]["decision_artifact_present"])
+            self.assertTrue(
+                publication["observed_inputs"]["sociologist_report_artifact_present"]
+            )
+            self.assertTrue(
+                publication["observed_inputs"][
+                    "environmentalist_report_artifact_present"
+                ]
+            )
             self.assertEqual(2, len(publication["role_reports"]))
             self.assertIn("role-reports", publication["published_sections"])
             self.assertEqual(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json").resolve().as_posix(), Path(publication["audit_refs"]["decision_path"]).resolve().as_posix())
@@ -178,9 +288,26 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             modified["publication_summary"] = modified["publication_summary"] + " Changed after first publish."
             write_json(publication_path, modified)
             second_publication = run_script(script_path("eco-materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            first_payload = load_json(publication_path)
 
             self.assertEqual("hold-release", first_publication["summary"]["publication_status"])
-            self.assertEqual("withhold", load_json(publication_path)["publication_posture"])
+            self.assertEqual("withhold", first_payload["publication_posture"])
+            self.assertEqual(
+                "missing-sociologist-report",
+                first_payload["sociologist_report_source"],
+            )
+            self.assertEqual(
+                "missing-environmentalist-report",
+                first_payload["environmentalist_report_source"],
+            )
+            self.assertFalse(
+                first_payload["observed_inputs"]["sociologist_report_artifact_present"]
+            )
+            self.assertFalse(
+                first_payload["observed_inputs"][
+                    "environmentalist_report_artifact_present"
+                ]
+            )
             self.assertEqual("blocked", second_publication["status"])
             self.assertTrue(any(item["code"] == "overwrite-blocked" for item in second_publication["warnings"]))
 

@@ -22,6 +22,7 @@ class ReportingContractTests(unittest.TestCase):
                 "readiness_artifact_present": True,
                 "readiness_present": False,
                 "promotion_present": True,
+                "expert_report_draft_present": True,
                 "custom_flag": "kept",
             }
         )
@@ -30,6 +31,8 @@ class ReportingContractTests(unittest.TestCase):
         self.assertFalse(normalized["readiness_present"])
         self.assertTrue(normalized["promotion_artifact_present"])
         self.assertTrue(normalized["promotion_present"])
+        self.assertTrue(normalized["expert_report_draft_artifact_present"])
+        self.assertTrue(normalized["expert_report_draft_present"])
         self.assertEqual("kept", normalized["custom_flag"])
         self.assertFalse(normalized["board_summary_artifact_present"])
         self.assertNotIn("decision_artifact_present", normalized)

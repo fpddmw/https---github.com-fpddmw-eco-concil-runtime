@@ -46,7 +46,10 @@ description: Materialize one final publication artifact from the canonical decis
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `deliberation_sync`
+- `analysis_sync`
 - `board_handoff`
+- The emitted final publication preserves normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `decision_source`, `promotion_source`, `supervisor_state_source`, role-report sources, `db_path`, and `observed_inputs`.
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`

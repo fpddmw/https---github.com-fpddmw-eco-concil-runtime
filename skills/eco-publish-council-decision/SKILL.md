@@ -41,7 +41,10 @@ description: Publish a canonical council decision from the current decision draf
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `deliberation_sync`
+- `analysis_sync`
 - `board_handoff`
+- The emitted canonical decision preserves normalized reporting-chain trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `promotion_source`, `decision_source`, `sociologist_report_source`, `environmentalist_report_source`, `db_path`, and `observed_inputs`.
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`

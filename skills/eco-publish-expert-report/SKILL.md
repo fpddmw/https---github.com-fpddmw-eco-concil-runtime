@@ -37,7 +37,10 @@ description: Publish a canonical expert report from a role-specific draft while 
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `deliberation_sync`
+- `analysis_sync`
 - `board_handoff`
+- The emitted canonical report preserves normalized reporting-chain trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `decision_source`, `expert_report_draft_source`, `db_path`, and `observed_inputs`.
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`

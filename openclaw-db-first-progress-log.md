@@ -695,3 +695,63 @@ Known limitations:
 Next:
 - Continue `A2.2` into `eco-publish-expert-report`, `eco-publish-council-decision`, and `eco-materialize-final-publication` so the rest of the export plane emits the same explicit trace contract.
 - Then revisit `C2` once the remaining cross-plane metadata drift is further reduced.
+
+## 2026-04-04 A2.2: Publish / Final Publication Trace Contract Adoption
+
+Status: completed
+
+Objective:
+- Finish the remaining `A2.2` publish/export consumers so canonical report publication, canonical decision publication, and final publication all emit the same normalized cross-plane trace contract already used by the reporting draft chain.
+- Preserve optional-input absence explicitly in final export artifacts instead of relying on warnings alone.
+
+Implementation:
+- `eco-concil-runtime/src/eco_council_runtime/kernel/reporting_contracts.py`
+  - Extended the shared reporting helper to cover publish/export input families:
+    - `expert_report_draft`
+    - `sociologist_report`
+    - `environmentalist_report`
+  - Added matching normalized source fields:
+    - `expert_report_draft_source`
+    - `sociologist_report_source`
+    - `environmentalist_report_source`
+- `skills/eco-publish-expert-report/scripts/eco_publish_expert_report.py`
+  - Canonical expert reports now preserve reporting-chain provenance from the draft instead of only adding publish metadata.
+  - Adds explicit `expert_report_draft_source`, normalized `observed_inputs`, and shared `deliberation_sync` / `analysis_sync` passthrough.
+- `skills/eco-publish-council-decision/scripts/eco_publish_council_decision.py`
+  - Canonical council decisions now preserve draft-side board/evidence provenance while explicitly recording the presence state of canonical role reports.
+  - Adds `decision_source`, `sociologist_report_source`, `environmentalist_report_source`, normalized `observed_inputs`, and shared sync metadata.
+- `skills/eco-materialize-final-publication/scripts/eco_materialize_final_publication.py`
+  - Final publication artifacts now preserve shared board/evidence provenance from upstream decision/handoff payloads instead of collapsing to publish-only metadata.
+  - Explicitly records direct input sources and input presence for:
+    - `reporting_handoff`
+    - `decision`
+    - `promotion`
+    - `supervisor_state`
+    - both canonical role reports
+  - Makes absent optional canonical reports visible in the final artifact on hold paths through normalized `*_source` and `observed_inputs` fields.
+- Updated skill docs to match the new output contract:
+  - `skills/eco-publish-expert-report/SKILL.md`
+  - `skills/eco-publish-council-decision/SKILL.md`
+  - `skills/eco-materialize-final-publication/SKILL.md`
+
+Validation:
+- `python3 -m unittest tests/test_reporting_contracts.py -q`
+- `python3 -m unittest tests/test_reporting_publish_workflow.py -q`
+- `python3 -m unittest tests/test_reporting_workflow.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- `tests/test_reporting_contracts.py`
+  - Extended explicit-flag coverage to the publish-layer `expert_report_draft` input family.
+- `tests/test_reporting_publish_workflow.py`
+  - Verifies canonical expert reports preserve draft/reporting provenance.
+  - Verifies canonical council decisions preserve draft provenance and explicit role-report presence flags on both ready and hold paths.
+  - Verifies final publication artifacts preserve reporting/promotion/decision/supervisor/role-report provenance, including explicit absence on hold paths.
+
+Known limitations:
+- The normalized reporting contract is still runtime-local Python infrastructure; it is not yet surfaced as a formal non-Python query or schema package.
+- Payload schema versions remain stable for compatibility, so older artifacts may still rely on fallback merge behavior when they predate the new normalized fields.
+
+Next:
+- Shift the next implementation priority to `C2` so analysis-plane result sets gain stronger lineage semantics on top of the now more stable cross-plane contract base.
+- After that, revisit `D3` or `B3` depending whether program-control visibility or moderator control consolidation is the more immediate bottleneck.

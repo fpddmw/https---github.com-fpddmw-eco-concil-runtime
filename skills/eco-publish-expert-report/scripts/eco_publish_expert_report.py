@@ -7,10 +7,19 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-publish-expert-report"
 ROLE_VALUES = ("sociologist", "environmentalist")
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
+    reporting_contract_fields_from_payload,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -106,7 +115,26 @@ def publish_expert_report_skill(
             "board_handoff": {"candidate_ids": [], "evidence_refs": [], "gap_hints": [item["message"] for item in warnings], "challenge_hints": [], "suggested_next_skills": ["eco-draft-expert-report"]},
         }
 
-    canonical_payload = {**draft_payload, "canonical_artifact": "expert-report", "canonical_role": role}
+    contract_fields = reporting_contract_fields_from_payload(
+        draft_payload,
+        observed_inputs_overrides={
+            "expert_report_draft_artifact_present": draft_file.exists(),
+            "expert_report_draft_present": isinstance(draft_payload, dict),
+        },
+        field_overrides={
+            "expert_report_draft_source": (
+                "expert-report-draft-artifact"
+                if draft_file.exists()
+                else "missing-expert-report-draft"
+            ),
+        },
+    )
+    canonical_payload = {
+        **draft_payload,
+        **contract_fields,
+        "canonical_artifact": "expert-report",
+        "canonical_role": role,
+    }
     existing = load_json_if_exists(output_file)
     operation = "published"
     overwrote_existing = False
@@ -134,12 +162,33 @@ def publish_expert_report_skill(
     report_id = maybe_text(draft_payload.get("report_id"))
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "role": role, "operation": operation, "overwrote_existing": overwrote_existing, "output_path": str(output_file), "report_id": report_id},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "role": role,
+            "operation": operation,
+            "overwrote_existing": overwrote_existing,
+            "output_path": str(output_file),
+            "report_id": report_id,
+            "board_state_source": contract_fields["board_state_source"],
+            "coverage_source": contract_fields["coverage_source"],
+            "reporting_handoff_source": maybe_text(
+                contract_fields.get("reporting_handoff_source")
+            ),
+            "decision_source": maybe_text(contract_fields.get("decision_source")),
+            "expert_report_draft_source": maybe_text(
+                contract_fields.get("expert_report_draft_source")
+            ),
+            "db_path": contract_fields["db_path"],
+        },
         "receipt_id": "reporting-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, role, operation, report_id)[:20],
         "batch_id": "reportingbatch-" + stable_hash(SKILL_NAME, run_id, round_id, role, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [report_id] if report_id else [],
         "warnings": warnings,
+        "deliberation_sync": contract_fields["deliberation_sync"],
+        "analysis_sync": contract_fields["analysis_sync"],
         "board_handoff": {
             "candidate_ids": [report_id] if report_id else [],
             "evidence_refs": artifact_refs,

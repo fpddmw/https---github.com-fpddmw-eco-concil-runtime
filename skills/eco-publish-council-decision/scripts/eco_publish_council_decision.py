@@ -7,9 +7,18 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-publish-council-decision"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
+    reporting_contract_fields_from_payload,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -121,9 +130,18 @@ def publish_council_decision_skill(
 
     publication_readiness = maybe_text(draft_payload.get("publication_readiness")) or "hold"
     report_refs: list[str] = []
+    report_payloads: dict[str, dict[str, Any]] = {}
+    sociologist_payload = load_json_if_exists(sociologist_file)
+    if isinstance(sociologist_payload, dict):
+        report_payloads["sociologist"] = sociologist_payload
+    environmentalist_payload = load_json_if_exists(environmentalist_file)
+    if isinstance(environmentalist_payload, dict):
+        report_payloads["environmentalist"] = environmentalist_payload
     if publication_readiness == "ready" and not skip_report_check:
-        for path in (sociologist_file, environmentalist_file):
-            payload = load_json_if_exists(path)
+        for path, payload in (
+            (sociologist_file, sociologist_payload),
+            (environmentalist_file, environmentalist_payload),
+        ):
             if not isinstance(payload, dict):
                 warnings.append({"code": "missing-canonical-report", "message": f"Required canonical expert report is missing at {path}."})
             else:
@@ -140,8 +158,39 @@ def publish_council_decision_skill(
                 "board_handoff": {"candidate_ids": [maybe_text(draft_payload.get("decision_id"))] if maybe_text(draft_payload.get("decision_id")) else [], "evidence_refs": [], "gap_hints": [item["message"] for item in warnings], "challenge_hints": [], "suggested_next_skills": ["eco-publish-expert-report"]},
             }
 
+    contract_fields = reporting_contract_fields_from_payload(
+        draft_payload,
+        observed_inputs_overrides={
+            "decision_artifact_present": draft_file.exists(),
+            "decision_present": isinstance(draft_payload, dict),
+            "sociologist_report_artifact_present": sociologist_file.exists(),
+            "sociologist_report_present": isinstance(sociologist_payload, dict),
+            "environmentalist_report_artifact_present": environmentalist_file.exists(),
+            "environmentalist_report_present": isinstance(
+                environmentalist_payload, dict
+            ),
+        },
+        field_overrides={
+            "decision_source": (
+                "council-decision-draft-artifact"
+                if draft_file.exists()
+                else "missing-decision-draft"
+            ),
+            "sociologist_report_source": (
+                "expert-report-artifact"
+                if sociologist_file.exists()
+                else "missing-sociologist-report"
+            ),
+            "environmentalist_report_source": (
+                "expert-report-artifact"
+                if environmentalist_file.exists()
+                else "missing-environmentalist-report"
+            ),
+        },
+    )
     canonical_payload = {
         **draft_payload,
+        **contract_fields,
         "canonical_artifact": "council-decision",
         "published_report_refs": unique_texts(report_refs),
     }
@@ -172,12 +221,37 @@ def publish_council_decision_skill(
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
     return {
         "status": "completed",
-        "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "operation": operation, "overwrote_existing": overwrote_existing, "output_path": str(output_file), "decision_id": decision_id, "publication_readiness": publication_readiness},
+        "summary": {
+            "skill": SKILL_NAME,
+            "run_id": run_id,
+            "round_id": round_id,
+            "operation": operation,
+            "overwrote_existing": overwrote_existing,
+            "output_path": str(output_file),
+            "decision_id": decision_id,
+            "publication_readiness": publication_readiness,
+            "board_state_source": contract_fields["board_state_source"],
+            "coverage_source": contract_fields["coverage_source"],
+            "reporting_handoff_source": maybe_text(
+                contract_fields.get("reporting_handoff_source")
+            ),
+            "promotion_source": maybe_text(contract_fields.get("promotion_source")),
+            "decision_source": maybe_text(contract_fields.get("decision_source")),
+            "sociologist_report_source": maybe_text(
+                contract_fields.get("sociologist_report_source")
+            ),
+            "environmentalist_report_source": maybe_text(
+                contract_fields.get("environmentalist_report_source")
+            ),
+            "db_path": contract_fields["db_path"],
+        },
         "receipt_id": "reporting-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, operation, decision_id)[:20],
         "batch_id": "reportingbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [decision_id] if decision_id else [],
         "warnings": warnings,
+        "deliberation_sync": contract_fields["deliberation_sync"],
+        "analysis_sync": contract_fields["analysis_sync"],
         "board_handoff": {
             "candidate_ids": [decision_id] if decision_id else [],
             "evidence_refs": artifact_refs,

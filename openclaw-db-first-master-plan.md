@@ -77,9 +77,9 @@
 | 阶段 | 名称 | 目标 | 当前状态 | 退出标准 |
 | --- | --- | --- | --- | --- |
 | `A1` | Review Fix Pack | 修复 review 发现的运行时与契约问题 | `completed` | 关键 contract regressions 消失并通过测试 |
-| `A2` | Shared Contract Hardening | 统一 `analysis_sync / deliberation_sync / observed_inputs / *_source` 等共享输出契约 | `in_progress` | 关键技能输出字段稳定且不再重复漂移 |
+| `A2` | Shared Contract Hardening | 统一 `analysis_sync / deliberation_sync / observed_inputs / *_source` 等共享输出契约 | `completed` | 关键技能输出字段稳定且不再重复漂移 |
 | `A2.1` | D1 Contract Metadata Normalization | 收敛 `next-actions / falsification-probe / round-readiness` 的共享 trace contract，并明确区分 artifact presence 与 materialized presence | `completed` | D1 输出通过共享 runtime helper 发出一致的 `*_source / *_sync / observed_inputs` 字段 |
-| `A2.2` | Cross-Plane Contract Adoption | 将同一套归一化 contract 扩展到剩余 archive / reporting / promotion 等消费者 | `in_progress` | 剩余关键 consumer 不再各自手写 trace metadata 语义 |
+| `A2.2` | Cross-Plane Contract Adoption | 将同一套归一化 contract 扩展到剩余 archive / reporting / promotion 等消费者 | `completed` | 剩余关键 consumer 不再各自手写 trace metadata 语义 |
 | `A3` | Governance Regression Hardening | 确保 replay、benchmark、archive、close-round 等治理命令不被 DB-first 迁移破坏 | `planned` | 全量工作流和治理回归稳定 |
 | `A4` | Agent Entry Gate | 定义从 runtime route 进入 DB-first agent route 的最小可控入口 | `planned` | 至少一条 operator-visible 入口链路形成闭环 |
 
@@ -121,7 +121,7 @@
 
 截至现在，四条路线的成熟度可以概括为：
 
-1. `A` 路线已完成第一轮修复，并启动了 `A2` 契约硬化；当前 D1 investigation 链的共享 trace contract 已收口，后续还需要把同一规范扩展到更多 cross-plane consumer 与治理命令。
+1. `A` 路线已完成第一轮修复以及 `A2` 共享契约硬化；当前 D1、promotion/reporting draft、canonical publish、以及 final publication 链都已收口到更一致的 trace contract，下一步主要转向 `A3` 治理回归硬化。
 2. `B` 路线已经完成 deliberation-plane 读路径迁移、关键 board 写路径 DB-first 切换，以及 `board_summary / board_brief` 的运行时降级；下一步主要是继续收拢 moderator DB 工作面而不是维护 summary-first 的运营顺序。
 3. `C` 路线已经完成 coverage、其上游 links/scopes、history/archive 读取面，以及剩余关键 export/read consumer 的 analysis-plane-first 迁移；下一步更多是 result-set contract 与更早期压缩对象的统一查询问题。
 4. `D` 路线的基础追踪已建立，但还缺“总控视图”和“持续调度规则”，本文件正是为此补位。
@@ -132,11 +132,11 @@
 
 | 顺序 | 阶段 | 路线 | 为什么先做 | 预期独立交付 |
 | --- | --- | --- | --- | --- |
-| `1` | `A2.2` | `A` | D1 链的契约面已经先收口，下一步应把同一套显式 metadata 规范推广到 archive / reporting / promotion 等剩余 consumer | 剩余关键 consumer 的 trace contract 继续归一化 |
-| `2` | `C2` | `C` | analysis plane 已覆盖更多结果集，下一步应补强通用 result-set / lineage 契约 | result set 可追溯 query basis、parent ids、artifact refs |
-| `3` | `D3` | `D` | 路线越来越多，需要更强的阶段看板和阻塞视图 | progress dashboard 约束与汇总模板 |
-| `4` | `B3` | `B` | 当 exports 已降级且 contract 更稳定后，再收拢 moderator 控制面会更清晰 | moderator loop 的主要状态推进改由 DB 工作面主导 |
-| `5` | `A3` | `A` | control-plane 收敛后需要补一轮治理回归，确保 replay / benchmark / archive 不被新契约影响 | 全量治理命令与回归稳定 |
+| `1` | `C2` | `C` | reporting/export contract 已基本收口，下一步应补强 analysis plane 的通用 result-set / lineage 语义 | result set 可追溯 query basis、parent ids、artifact refs |
+| `2` | `D3` | `D` | 路线越来越多，需要更强的阶段看板和阻塞视图 | progress dashboard 约束与汇总模板 |
+| `3` | `B3` | `B` | 当 exports 已降级且 contract 更稳定后，再收拢 moderator 控制面会更清晰 | moderator loop 的主要状态推进改由 DB 工作面主导 |
+| `4` | `A3` | `A` | contract surface 已基本稳定，现在需要补一轮治理回归，确保 replay / benchmark / archive 不被新契约影响 | 全量治理命令与回归稳定 |
+| `5` | `C2.1` | `C` | 在通用 result-set 契约补强之后，下一步最自然的是把 candidate / cluster / merge 对象继续纳入 analysis plane | 早期分析链的关键压缩对象可被统一查询 |
 
 ## 8. 每次开发交付的记录规范
 

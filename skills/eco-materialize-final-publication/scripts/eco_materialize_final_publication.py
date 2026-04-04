@@ -8,10 +8,19 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-materialize-final-publication"
 ROLE_VALUES = ("sociologist", "environmentalist")
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
+    reporting_contract_fields_from_payload,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -153,8 +162,8 @@ def materialize_final_publication_skill(
     output_file = resolve_path(run_dir_path, output_path, f"reporting/final_publication_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
-    handoff = load_json_if_exists(handoff_file)
-    if not isinstance(handoff, dict):
+    handoff_payload = load_json_if_exists(handoff_file)
+    if not isinstance(handoff_payload, dict):
         warnings.append({"code": "missing-reporting-handoff", "message": f"No reporting handoff artifact was found at {handoff_file}."})
         return {
             "status": "blocked",
@@ -166,9 +175,10 @@ def materialize_final_publication_skill(
             "warnings": warnings,
             "board_handoff": {"candidate_ids": [], "evidence_refs": [], "gap_hints": [warnings[0]["message"]], "challenge_hints": [], "suggested_next_skills": ["eco-materialize-reporting-handoff"]},
         }
+    handoff = handoff_payload
 
-    decision = load_json_if_exists(decision_file)
-    if not isinstance(decision, dict):
+    decision_payload = load_json_if_exists(decision_file)
+    if not isinstance(decision_payload, dict):
         warnings.append({"code": "missing-canonical-decision", "message": f"No canonical council decision was found at {decision_file}."})
         return {
             "status": "blocked",
@@ -180,9 +190,10 @@ def materialize_final_publication_skill(
             "warnings": warnings,
             "board_handoff": {"candidate_ids": [], "evidence_refs": [], "gap_hints": [warnings[0]["message"]], "challenge_hints": [], "suggested_next_skills": ["eco-publish-council-decision"]},
         }
+    decision = decision_payload
 
-    promotion_basis = load_json_if_exists(promotion_file)
-    if not isinstance(promotion_basis, dict):
+    promotion_payload = load_json_if_exists(promotion_file)
+    if not isinstance(promotion_payload, dict):
         warnings.append({"code": "missing-promotion-basis", "message": f"No promotion basis artifact was found at {promotion_file}."})
         return {
             "status": "blocked",
@@ -194,19 +205,23 @@ def materialize_final_publication_skill(
             "warnings": warnings,
             "board_handoff": {"candidate_ids": [], "evidence_refs": [], "gap_hints": [warnings[0]["message"]], "challenge_hints": [], "suggested_next_skills": ["eco-promote-evidence-basis"]},
         }
+    promotion_basis = promotion_payload
 
-    supervisor_state = load_json_if_exists(supervisor_file) or {}
-    if not supervisor_state:
+    supervisor_state_payload = load_json_if_exists(supervisor_file)
+    supervisor_state = supervisor_state_payload or {}
+    if not supervisor_state_payload:
         warnings.append({"code": "missing-supervisor-state", "message": f"No supervisor state artifact was found at {supervisor_file}."})
 
     publication_readiness = maybe_text(decision.get("publication_readiness")) or "hold"
     publication_posture = "release" if publication_readiness == "ready" else "withhold"
     report_rows: list[dict[str, Any]] = []
     missing_ready_reports: list[str] = []
+    report_payloads: dict[str, dict[str, Any]] = {}
     published_report_refs = decision.get("published_report_refs", []) if isinstance(decision.get("published_report_refs"), list) else []
     for role in ROLE_VALUES:
         report_payload = load_json_if_exists(report_files[role])
         if isinstance(report_payload, dict):
+            report_payloads[role] = report_payload
             report_rows.append(report_summary(role, report_payload, report_files[role]))
         elif publication_posture == "release":
             missing_ready_reports.append(str(report_files[role]))
@@ -225,6 +240,62 @@ def materialize_final_publication_skill(
             "board_handoff": {"candidate_ids": [maybe_text(decision.get("decision_id"))] if maybe_text(decision.get("decision_id")) else [], "evidence_refs": [], "gap_hints": [item["message"] for item in warnings], "challenge_hints": [], "suggested_next_skills": ["eco-publish-expert-report"]},
         }
 
+    contract_fields = reporting_contract_fields_from_payload(
+        decision_payload,
+        fallback_payload=handoff_payload,
+        observed_inputs_overrides={
+            "reporting_handoff_artifact_present": handoff_file.exists(),
+            "reporting_handoff_present": isinstance(handoff_payload, dict),
+            "decision_artifact_present": decision_file.exists(),
+            "decision_present": isinstance(decision_payload, dict),
+            "promotion_artifact_present": promotion_file.exists(),
+            "promotion_present": isinstance(promotion_payload, dict),
+            "supervisor_state_artifact_present": supervisor_file.exists(),
+            "supervisor_state_present": isinstance(supervisor_state_payload, dict),
+            "sociologist_report_artifact_present": report_files["sociologist"].exists(),
+            "sociologist_report_present": isinstance(
+                report_payloads.get("sociologist"), dict
+            ),
+            "environmentalist_report_artifact_present": report_files[
+                "environmentalist"
+            ].exists(),
+            "environmentalist_report_present": isinstance(
+                report_payloads.get("environmentalist"), dict
+            ),
+        },
+        field_overrides={
+            "reporting_handoff_source": (
+                "reporting-handoff-artifact"
+                if handoff_file.exists()
+                else "missing-reporting-handoff"
+            ),
+            "decision_source": (
+                "council-decision-artifact"
+                if decision_file.exists()
+                else "missing-canonical-decision"
+            ),
+            "promotion_source": (
+                "promotion-artifact"
+                if promotion_file.exists()
+                else "missing-promotion"
+            ),
+            "supervisor_state_source": (
+                "supervisor-state-artifact"
+                if supervisor_file.exists()
+                else "missing-supervisor-state"
+            ),
+            "sociologist_report_source": (
+                "expert-report-artifact"
+                if report_files["sociologist"].exists()
+                else "missing-sociologist-report"
+            ),
+            "environmentalist_report_source": (
+                "expert-report-artifact"
+                if report_files["environmentalist"].exists()
+                else "missing-environmentalist-report"
+            ),
+        },
+    )
     publication_id = "final-publication-" + stable_hash(run_id, round_id, publication_posture, maybe_text(decision.get("decision_id")))[:12]
     selected_evidence_refs = unique_texts(
         handoff.get("selected_evidence_refs", []) if isinstance(handoff.get("selected_evidence_refs"), list) else []
@@ -243,6 +314,7 @@ def materialize_final_publication_skill(
         "publication_id": publication_id,
         "publication_status": "ready-for-release" if publication_posture == "release" else "hold-release",
         "publication_posture": publication_posture,
+        **contract_fields,
         "publication_summary": release_summary(
             decision=decision,
             handoff=handoff,
@@ -268,7 +340,11 @@ def materialize_final_publication_skill(
             "decision_path": str(decision_file),
             "promotion_path": str(promotion_file),
             "supervisor_state_path": str(supervisor_file),
-            "role_report_paths": {role: str(path) for role, path in report_files.items() if load_json_if_exists(path) is not None},
+            "role_report_paths": {
+                role: str(path)
+                for role, path in report_files.items()
+                if isinstance(report_payloads.get(role), dict)
+            },
         },
     }
 
@@ -311,12 +387,31 @@ def materialize_final_publication_skill(
             "publication_id": publication_id,
             "publication_status": publication_payload["publication_status"],
             "publication_posture": publication_posture,
+            "board_state_source": contract_fields["board_state_source"],
+            "coverage_source": contract_fields["coverage_source"],
+            "reporting_handoff_source": maybe_text(
+                contract_fields.get("reporting_handoff_source")
+            ),
+            "decision_source": maybe_text(contract_fields.get("decision_source")),
+            "promotion_source": maybe_text(contract_fields.get("promotion_source")),
+            "supervisor_state_source": maybe_text(
+                contract_fields.get("supervisor_state_source")
+            ),
+            "sociologist_report_source": maybe_text(
+                contract_fields.get("sociologist_report_source")
+            ),
+            "environmentalist_report_source": maybe_text(
+                contract_fields.get("environmentalist_report_source")
+            ),
+            "db_path": contract_fields["db_path"],
         },
         "receipt_id": "publication-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, operation, publication_id)[:20],
         "batch_id": "publicationbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [publication_id],
         "warnings": warnings,
+        "deliberation_sync": contract_fields["deliberation_sync"],
+        "analysis_sync": contract_fields["analysis_sync"],
         "board_handoff": {
             "candidate_ids": [publication_id],
             "evidence_refs": artifact_refs,
