@@ -865,3 +865,56 @@ Known limitations:
 Next:
 - Move to `B3` so moderator control consolidation becomes the next independent delivery on the execution queue.
 - After that, continue `A3` governance hardening and `C2.1` candidate/cluster migration according to the refreshed dashboard order.
+
+## 2026-04-04 B3: Moderator Control Consolidation
+
+Status: completed
+
+Objective:
+- Stop treating `promotion_gate` and `round_controller` / `supervisor_state` JSON files as the only recoverable moderator control surface for phase-2 state.
+- Establish a deliberation-plane-backed moderator control snapshot so the runtime can recover gate/freeze posture and controller progress even when runtime JSON artifacts are missing.
+
+Implementation:
+- Added `promotion_freezes` to `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
+  - Introduced a deliberation-plane control object for the latest per-round moderator freeze snapshot.
+  - Added load/store helpers for:
+    - merged controller snapshot
+    - promotion-gate snapshot
+    - supervisor snapshot
+  - Added `load_phase2_control_state(...)` so other runtime readers can recover phase-2 control state from DB.
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/gate.py`
+  - `apply_promotion_gate(...)` now writes the gate JSON export and also persists the gate snapshot into `promotion_freezes`.
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/controller.py`
+  - `persist_controller_state(...)` now mirrors controller state into `promotion_freezes`.
+  - `run_phase2_round_with_contract_mode(...)` now falls back to deliberation-plane control snapshots when `round_controller_<round>.json` or `promotion_gate_<round>.json` is missing.
+  - Gate-stage persistence now stores both the refreshed controller snapshot and the evaluated gate payload together.
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/supervisor.py`
+  - Success and failure paths now persist the generated supervisor snapshot into `promotion_freezes`.
+  - Added `supervisor_path` to the supervisor payload so DB-backed recovery keeps the same operator inspection anchor.
+- Updated control-state readers:
+  - `eco-concil-runtime/src/eco_council_runtime/kernel/cli.py`
+    - `show-run-state` now fills missing phase-2 controller / gate / supervisor state from deliberation plane.
+  - `eco-concil-runtime/src/eco_council_runtime/kernel/benchmark.py`
+    - benchmark phase-2 snapshots now recover control state from deliberation plane when runtime JSON is absent.
+  - `eco-concil-runtime/src/eco_council_runtime/kernel/post_round.py`
+    - post-round terminal-state inference now falls back to deliberation-plane control snapshots for controller / supervisor state.
+- Updated `openclaw-db-first-master-plan.md`
+  - Marked `B3` as `in_progress`.
+  - Reflected that moderator control consolidation has started with DB-backed promotion freeze / control snapshot recovery.
+
+Validation:
+- `python3 -m unittest tests/test_runtime_kernel.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- Updated `tests/test_runtime_kernel.py`
+  - `test_controller_resume_skips_completed_stages_after_failure` now deletes the controller JSON before resume, verifying the controller can continue from deliberation-plane state alone.
+  - Added `test_show_run_state_uses_deliberation_control_snapshots_when_phase2_json_is_missing`, verifying operator control view can recover controller / gate / supervisor state from `promotion_freezes`.
+
+Known limitations:
+- `promotion_freezes` currently stores the latest per-round moderator control snapshot rather than a full historical decision log.
+- This increment consolidates promotion freeze and controller/supervisor recovery posture, but probe/challenge/task orchestration itself is not yet represented as separate DB-backed moderator control objects.
+
+Next:
+- Continue `B3` by moving more active moderator orchestration state, especially probe/challenge/task coordination, onto the deliberation-plane work surface.
+- After that, continue `A3` governance hardening and `C2.1` candidate/cluster migration according to the refreshed dashboard order.

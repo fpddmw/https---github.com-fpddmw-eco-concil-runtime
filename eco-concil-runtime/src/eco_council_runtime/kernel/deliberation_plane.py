@@ -150,6 +150,29 @@ CREATE TABLE IF NOT EXISTS round_transitions (
 );
 CREATE INDEX IF NOT EXISTS idx_round_transitions_round
 ON round_transitions(run_id, round_id, generated_at_utc, transition_id);
+
+CREATE TABLE IF NOT EXISTS promotion_freezes (
+    freeze_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL DEFAULT '',
+    gate_status TEXT NOT NULL DEFAULT '',
+    readiness_status TEXT NOT NULL DEFAULT '',
+    promotion_status TEXT NOT NULL DEFAULT '',
+    controller_status TEXT NOT NULL DEFAULT '',
+    supervisor_status TEXT NOT NULL DEFAULT '',
+    planning_mode TEXT NOT NULL DEFAULT '',
+    promote_allowed INTEGER NOT NULL DEFAULT 0,
+    gate_reasons_json TEXT NOT NULL DEFAULT '[]',
+    recommended_next_skills_json TEXT NOT NULL DEFAULT '[]',
+    controller_artifact_path TEXT NOT NULL DEFAULT '',
+    gate_artifact_path TEXT NOT NULL DEFAULT '',
+    supervisor_artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_promotion_freezes_round_updated
+ON promotion_freezes(run_id, round_id, updated_at_utc, freeze_id);
 """
 
 
@@ -161,6 +184,18 @@ def maybe_text(value: Any) -> str:
     if value is None:
         return ""
     return normalize_space(value)
+
+
+def unique_texts(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
 
 
 def utc_now_iso() -> str:
@@ -552,6 +587,27 @@ def write_round_transition_row(connection: sqlite3.Connection, row: dict[str, An
     )
 
 
+def write_promotion_freeze_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO promotion_freezes (
+            freeze_id, run_id, round_id, updated_at_utc, gate_status, readiness_status,
+            promotion_status, controller_status, supervisor_status, planning_mode,
+            promote_allowed, gate_reasons_json, recommended_next_skills_json,
+            controller_artifact_path, gate_artifact_path, supervisor_artifact_path,
+            record_locator, raw_json
+        ) VALUES (
+            :freeze_id, :run_id, :round_id, :updated_at_utc, :gate_status, :readiness_status,
+            :promotion_status, :controller_status, :supervisor_status, :planning_mode,
+            :promote_allowed, :gate_reasons_json, :recommended_next_skills_json,
+            :controller_artifact_path, :gate_artifact_path, :supervisor_artifact_path,
+            :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
 def event_row_from_payload(
     event: dict[str, Any],
     *,
@@ -724,6 +780,366 @@ def round_transition_row_from_payload(
         "artifact_path": maybe_text(artifact_path),
         "record_locator": maybe_text(record_locator) or "$",
         "raw_json": json_text(transition),
+    }
+
+
+def promotion_freeze_record_id(run_id: str, round_id: str) -> str:
+    return "freeze-" + stable_hash("promotion-freeze", run_id, round_id)[:12]
+
+
+def promotion_freeze_row_from_payload(
+    freeze_record: dict[str, Any],
+    *,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    artifacts = freeze_record.get("artifacts", {}) if isinstance(freeze_record.get("artifacts"), dict) else {}
+    return {
+        "freeze_id": maybe_text(freeze_record.get("freeze_id")),
+        "run_id": maybe_text(freeze_record.get("run_id")),
+        "round_id": maybe_text(freeze_record.get("round_id")),
+        "updated_at_utc": maybe_text(freeze_record.get("updated_at_utc")),
+        "gate_status": maybe_text(freeze_record.get("gate_status")),
+        "readiness_status": maybe_text(freeze_record.get("readiness_status")),
+        "promotion_status": maybe_text(freeze_record.get("promotion_status")),
+        "controller_status": maybe_text(freeze_record.get("controller_status")),
+        "supervisor_status": maybe_text(freeze_record.get("supervisor_status")),
+        "planning_mode": maybe_text(freeze_record.get("planning_mode")),
+        "promote_allowed": 1 if bool(freeze_record.get("promote_allowed")) else 0,
+        "gate_reasons_json": json_text(freeze_record.get("gate_reasons", [])),
+        "recommended_next_skills_json": json_text(freeze_record.get("recommended_next_skills", [])),
+        "controller_artifact_path": maybe_text(artifacts.get("controller_state_path")),
+        "gate_artifact_path": maybe_text(artifacts.get("promotion_gate_path")),
+        "supervisor_artifact_path": maybe_text(artifacts.get("supervisor_state_path")),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(freeze_record),
+    }
+
+
+def fetch_promotion_freeze(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+) -> dict[str, Any] | None:
+    normalized_run_id = maybe_text(run_id)
+    normalized_round_id = maybe_text(round_id)
+    clauses: list[str] = []
+    params: list[str] = []
+    if normalized_run_id:
+        clauses.append("run_id = ?")
+        params.append(normalized_run_id)
+    if normalized_round_id:
+        clauses.append("round_id = ?")
+        params.append(normalized_round_id)
+    if not clauses:
+        return None
+    row = connection.execute(
+        f"""
+        SELECT raw_json
+        FROM promotion_freezes
+        WHERE {' AND '.join(clauses)}
+        ORDER BY updated_at_utc DESC, freeze_id DESC
+        LIMIT 1
+        """,
+        tuple(params),
+    ).fetchone()
+    if row is None:
+        return None
+    payload = decode_json(maybe_text(row["raw_json"]), {})
+    return payload if isinstance(payload, dict) else None
+
+
+def resolved_promotion_freeze_artifacts(
+    existing_record: dict[str, Any],
+    *,
+    controller_snapshot: dict[str, Any] | None = None,
+    gate_snapshot: dict[str, Any] | None = None,
+    supervisor_snapshot: dict[str, Any] | None = None,
+    artifact_paths: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    existing_artifacts = (
+        existing_record.get("artifacts", {})
+        if isinstance(existing_record.get("artifacts"), dict)
+        else {}
+    )
+    controller_artifacts = (
+        controller_snapshot.get("artifacts", {})
+        if isinstance(controller_snapshot, dict)
+        and isinstance(controller_snapshot.get("artifacts"), dict)
+        else {}
+    )
+    supervisor_inspection = (
+        supervisor_snapshot.get("inspection_paths", {})
+        if isinstance(supervisor_snapshot, dict)
+        and isinstance(supervisor_snapshot.get("inspection_paths"), dict)
+        else {}
+    )
+    explicit = artifact_paths if isinstance(artifact_paths, dict) else {}
+    gate_output_path = (
+        maybe_text(gate_snapshot.get("output_path"))
+        if isinstance(gate_snapshot, dict)
+        else ""
+    )
+    supervisor_gate_path = (
+        maybe_text(supervisor_snapshot.get("promotion_gate_path"))
+        if isinstance(supervisor_snapshot, dict)
+        else ""
+    )
+    supervisor_path = (
+        maybe_text(supervisor_snapshot.get("supervisor_path"))
+        if isinstance(supervisor_snapshot, dict)
+        else ""
+    )
+    return {
+        "controller_state_path": maybe_text(explicit.get("controller_state_path"))
+        or maybe_text(controller_artifacts.get("controller_state_path"))
+        or maybe_text(existing_artifacts.get("controller_state_path")),
+        "promotion_gate_path": maybe_text(explicit.get("promotion_gate_path"))
+        or gate_output_path
+        or maybe_text(controller_artifacts.get("promotion_gate_path"))
+        or supervisor_gate_path
+        or maybe_text(supervisor_inspection.get("gate_path"))
+        or maybe_text(existing_artifacts.get("promotion_gate_path")),
+        "supervisor_state_path": maybe_text(explicit.get("supervisor_state_path"))
+        or supervisor_path
+        or maybe_text(existing_artifacts.get("supervisor_state_path")),
+    }
+
+
+def merged_promotion_freeze_record(
+    *,
+    run_id: str,
+    round_id: str,
+    existing_record: dict[str, Any] | None = None,
+    controller_snapshot: dict[str, Any] | None = None,
+    gate_snapshot: dict[str, Any] | None = None,
+    supervisor_snapshot: dict[str, Any] | None = None,
+    artifact_paths: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    record = dict(existing_record) if isinstance(existing_record, dict) else {}
+    normalized_run_id = maybe_text(run_id) or maybe_text(record.get("run_id"))
+    normalized_round_id = maybe_text(round_id) or maybe_text(record.get("round_id"))
+    record["schema_version"] = "deliberation-promotion-freeze-v1"
+    record["freeze_id"] = maybe_text(record.get("freeze_id")) or promotion_freeze_record_id(
+        normalized_run_id,
+        normalized_round_id,
+    )
+    record["run_id"] = normalized_run_id
+    record["round_id"] = normalized_round_id
+    if isinstance(controller_snapshot, dict) and controller_snapshot:
+        record["controller_snapshot"] = controller_snapshot
+    if isinstance(gate_snapshot, dict) and gate_snapshot:
+        record["gate_snapshot"] = gate_snapshot
+    if isinstance(supervisor_snapshot, dict) and supervisor_snapshot:
+        record["supervisor_snapshot"] = supervisor_snapshot
+
+    resolved_controller = (
+        record.get("controller_snapshot", {})
+        if isinstance(record.get("controller_snapshot"), dict)
+        else {}
+    )
+    resolved_gate = (
+        record.get("gate_snapshot", {})
+        if isinstance(record.get("gate_snapshot"), dict)
+        else {}
+    )
+    resolved_supervisor = (
+        record.get("supervisor_snapshot", {})
+        if isinstance(record.get("supervisor_snapshot"), dict)
+        else {}
+    )
+    record["updated_at_utc"] = (
+        maybe_text(resolved_supervisor.get("generated_at_utc"))
+        or maybe_text(resolved_controller.get("generated_at_utc"))
+        or maybe_text(resolved_gate.get("generated_at_utc"))
+        or maybe_text(record.get("updated_at_utc"))
+        or utc_now_iso()
+    )
+    record["gate_status"] = (
+        maybe_text(resolved_supervisor.get("gate_status"))
+        or maybe_text(resolved_controller.get("gate_status"))
+        or maybe_text(resolved_gate.get("gate_status"))
+        or maybe_text(record.get("gate_status"))
+    )
+    record["readiness_status"] = (
+        maybe_text(resolved_supervisor.get("readiness_status"))
+        or maybe_text(resolved_controller.get("readiness_status"))
+        or maybe_text(resolved_gate.get("readiness_status"))
+        or maybe_text(record.get("readiness_status"))
+    )
+    record["promotion_status"] = (
+        maybe_text(resolved_supervisor.get("promotion_status"))
+        or maybe_text(resolved_controller.get("promotion_status"))
+        or maybe_text(record.get("promotion_status"))
+    )
+    record["controller_status"] = (
+        maybe_text(resolved_controller.get("controller_status"))
+        or maybe_text(record.get("controller_status"))
+    )
+    record["supervisor_status"] = (
+        maybe_text(resolved_supervisor.get("supervisor_status"))
+        or maybe_text(record.get("supervisor_status"))
+    )
+    record["planning_mode"] = (
+        maybe_text(resolved_supervisor.get("planning_mode"))
+        or maybe_text(resolved_controller.get("planning_mode"))
+        or maybe_text(
+            resolved_controller.get("planning", {}).get("planning_mode")
+            if isinstance(resolved_controller.get("planning"), dict)
+            else ""
+        )
+        or maybe_text(record.get("planning_mode"))
+    )
+    gate_present = isinstance(resolved_gate, dict) and bool(resolved_gate)
+    promote_allowed = (
+        bool(resolved_gate.get("promote_allowed"))
+        if gate_present
+        else bool(record.get("promote_allowed"))
+    )
+    if record["gate_status"] == "allow-promote":
+        promote_allowed = True
+    record["promote_allowed"] = promote_allowed
+    record["gate_reasons"] = unique_texts(
+        (
+            resolved_supervisor.get("gate_reasons", [])
+            if isinstance(resolved_supervisor.get("gate_reasons"), list)
+            else []
+        )
+        + (
+            resolved_controller.get("gate_reasons", [])
+            if isinstance(resolved_controller.get("gate_reasons"), list)
+            else []
+        )
+        + (
+            resolved_gate.get("gate_reasons", [])
+            if isinstance(resolved_gate.get("gate_reasons"), list)
+            else []
+        )
+        + (
+            record.get("gate_reasons", [])
+            if isinstance(record.get("gate_reasons"), list)
+            else []
+        )
+    )
+    record["recommended_next_skills"] = unique_texts(
+        (
+            resolved_supervisor.get("recommended_next_skills", [])
+            if isinstance(resolved_supervisor.get("recommended_next_skills"), list)
+            else []
+        )
+        + (
+            resolved_controller.get("recommended_next_skills", [])
+            if isinstance(resolved_controller.get("recommended_next_skills"), list)
+            else []
+        )
+        + (
+            resolved_gate.get("recommended_next_skills", [])
+            if isinstance(resolved_gate.get("recommended_next_skills"), list)
+            else []
+        )
+        + (
+            record.get("recommended_next_skills", [])
+            if isinstance(record.get("recommended_next_skills"), list)
+            else []
+        )
+    )
+    record["artifacts"] = resolved_promotion_freeze_artifacts(
+        record,
+        controller_snapshot=resolved_controller,
+        gate_snapshot=resolved_gate,
+        supervisor_snapshot=resolved_supervisor,
+        artifact_paths=artifact_paths,
+    )
+    return record
+
+
+def store_promotion_freeze_record(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    controller_snapshot: dict[str, Any] | None = None,
+    gate_snapshot: dict[str, Any] | None = None,
+    supervisor_snapshot: dict[str, Any] | None = None,
+    artifact_paths: dict[str, Any] | None = None,
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            existing_record = fetch_promotion_freeze(
+                connection,
+                run_id=run_id,
+                round_id=round_id,
+            )
+            freeze_record = merged_promotion_freeze_record(
+                run_id=run_id,
+                round_id=round_id,
+                existing_record=existing_record,
+                controller_snapshot=controller_snapshot,
+                gate_snapshot=gate_snapshot,
+                supervisor_snapshot=supervisor_snapshot,
+                artifact_paths=artifact_paths,
+            )
+            write_promotion_freeze_row(
+                connection,
+                promotion_freeze_row_from_payload(freeze_record),
+            )
+    finally:
+        connection.close()
+    return freeze_record
+
+
+def load_promotion_freeze_record(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return fetch_promotion_freeze(
+            connection,
+            run_id=run_id,
+            round_id=round_id,
+        )
+    finally:
+        connection.close()
+
+
+def load_phase2_control_state(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    freeze_record = load_promotion_freeze_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    ) or {}
+    return {
+        "promotion_freeze": freeze_record,
+        "controller": (
+            freeze_record.get("controller_snapshot", {})
+            if isinstance(freeze_record.get("controller_snapshot"), dict)
+            else {}
+        ),
+        "promotion_gate": (
+            freeze_record.get("gate_snapshot", {})
+            if isinstance(freeze_record.get("gate_snapshot"), dict)
+            else {}
+        ),
+        "supervisor": (
+            freeze_record.get("supervisor_snapshot", {})
+            if isinstance(freeze_record.get("supervisor_snapshot"), dict)
+            else {}
+        ),
     }
 
 

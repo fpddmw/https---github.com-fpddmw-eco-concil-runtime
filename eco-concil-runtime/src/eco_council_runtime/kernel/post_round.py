@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .deliberation_plane import load_phase2_control_state
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill, utc_now_iso
 from .ledger import append_ledger_event
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists, write_json
@@ -91,8 +92,17 @@ def infer_close_posture(*, promotion_status: str, publication_posture: str, publ
 
 
 def round_terminal_state(run_dir: Path, round_id: str, artifacts: dict[str, str]) -> dict[str, Any]:
-    controller = load_json_if_exists(Path(artifacts["controller_state_path"])) or {}
-    supervisor = load_json_if_exists(Path(artifacts["supervisor_state_path"])) or {}
+    control_state = load_phase2_control_state(run_dir, round_id=round_id)
+    controller = load_json_if_exists(Path(artifacts["controller_state_path"])) or (
+        control_state.get("controller", {})
+        if isinstance(control_state.get("controller"), dict)
+        else {}
+    )
+    supervisor = load_json_if_exists(Path(artifacts["supervisor_state_path"])) or (
+        control_state.get("supervisor", {})
+        if isinstance(control_state.get("supervisor"), dict)
+        else {}
+    )
     promotion = load_json_if_exists(Path(artifacts["promotion_basis_path"])) or {}
     handoff = load_json_if_exists(Path(artifacts["reporting_handoff_path"])) or {}
     decision = selected_decision_artifact(run_dir, round_id)

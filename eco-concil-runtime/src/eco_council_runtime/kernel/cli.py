@@ -12,6 +12,7 @@ from .benchmark import (
     replay_runtime_scenario,
 )
 from .controller import run_phase2_round, run_phase2_round_with_contract_mode
+from .deliberation_plane import load_phase2_control_state
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill
 from .governance import CONTRACT_MODES, preflight_skill_execution
 from .gate import apply_promotion_gate
@@ -164,7 +165,12 @@ def phase2_operator_view(run_dir: Path, round_id: str, phase2_state: dict[str, A
             "gate_path": maybe_text(controller.get("artifacts", {}).get("promotion_gate_path"))
             if isinstance(controller.get("artifacts"), dict)
             else maybe_text(supervisor.get("promotion_gate_path")),
-            "supervisor_path": str(supervisor_state_path(run_dir, round_id).resolve()) if round_id else "",
+            "supervisor_path": (
+                maybe_text(supervisor.get("supervisor_path"))
+                or str(supervisor_state_path(run_dir, round_id).resolve())
+            )
+            if round_id
+            else "",
         },
         "recommended_next_skills": supervisor.get("recommended_next_skills", []) if isinstance(supervisor.get("recommended_next_skills"), list) else [],
         "round_transition": supervisor.get("round_transition", {}) if isinstance(supervisor.get("round_transition"), dict) else {},
@@ -274,11 +280,34 @@ def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, An
     post_round_state: dict[str, Any] = {}
     benchmark_state: dict[str, Any] = {}
     if selected_round_id:
+        control_state = load_phase2_control_state(
+            run_dir,
+            run_id=maybe_text(manifest.get("run_id")) or maybe_text(cursor.get("run_id")),
+            round_id=selected_round_id,
+        )
         phase2_state = {
             "plan": load_json_if_exists(orchestration_plan_path(run_dir, selected_round_id)) or {},
-            "promotion_gate": load_json_if_exists(promotion_gate_path(run_dir, selected_round_id)) or {},
-            "controller": load_json_if_exists(controller_state_path(run_dir, selected_round_id)) or {},
-            "supervisor": load_json_if_exists(supervisor_state_path(run_dir, selected_round_id)) or {},
+            "promotion_gate": load_json_if_exists(promotion_gate_path(run_dir, selected_round_id))
+            or (
+                control_state.get("promotion_gate", {})
+                if isinstance(control_state.get("promotion_gate"), dict)
+                else {}
+            ),
+            "controller": load_json_if_exists(controller_state_path(run_dir, selected_round_id))
+            or (
+                control_state.get("controller", {})
+                if isinstance(control_state.get("controller"), dict)
+                else {}
+            ),
+            "supervisor": load_json_if_exists(supervisor_state_path(run_dir, selected_round_id))
+            or (
+                control_state.get("supervisor", {})
+                if isinstance(control_state.get("supervisor"), dict)
+                else {}
+            ),
+            "promotion_freeze": control_state.get("promotion_freeze", {})
+            if isinstance(control_state.get("promotion_freeze"), dict)
+            else {},
         }
         phase2_state["operator"] = phase2_operator_view(run_dir, selected_round_id, phase2_state)
         post_round_state = {

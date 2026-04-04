@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .deliberation_plane import load_phase2_control_state, store_promotion_freeze_record
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill, utc_now_iso
 from .gate import apply_promotion_gate
 from .ledger import append_ledger_event
@@ -356,10 +357,27 @@ def refresh_controller_payload(controller_payload: dict[str, Any]) -> dict[str, 
     return controller_payload
 
 
-def persist_controller_state(run_dir: Path, round_id: str, controller_payload: dict[str, Any]) -> dict[str, Any]:
+def persist_controller_state(
+    run_dir: Path,
+    round_id: str,
+    controller_payload: dict[str, Any],
+    *,
+    gate_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     controller_payload["artifacts"] = phase2_artifact_paths(run_dir, round_id)
-    write_json(controller_state_path(run_dir, round_id), refresh_controller_payload(controller_payload))
-    return controller_payload
+    refreshed_payload = refresh_controller_payload(controller_payload)
+    write_json(controller_state_path(run_dir, round_id), refreshed_payload)
+    store_promotion_freeze_record(
+        run_dir,
+        run_id=maybe_text(refreshed_payload.get("run_id")),
+        round_id=round_id,
+        controller_snapshot=refreshed_payload,
+        gate_snapshot=gate_payload,
+        artifact_paths=refreshed_payload.get("artifacts", {})
+        if isinstance(refreshed_payload.get("artifacts"), dict)
+        else {},
+    )
+    return refreshed_payload
 
 
 def stage_summary_from_result(stage_name: str, result: dict[str, Any], blueprint: dict[str, Any]) -> dict[str, Any]:
@@ -575,10 +593,27 @@ def run_phase2_round_with_contract_mode(
     }
 
     existing_controller = load_json_if_exists(controller_state_path(run_dir, round_id)) or {}
+    existing_gate = load_json_if_exists(Path(artifacts["promotion_gate_path"])) or {}
+    phase2_control_state = (
+        load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id)
+        if (not existing_controller or not existing_gate)
+        else {}
+    )
+    if not existing_controller:
+        existing_controller = (
+            phase2_control_state.get("controller", {})
+            if isinstance(phase2_control_state.get("controller"), dict)
+            else {}
+        )
+    if not existing_gate:
+        existing_gate = (
+            phase2_control_state.get("promotion_gate", {})
+            if isinstance(phase2_control_state.get("promotion_gate"), dict)
+            else {}
+        )
     existing_status = maybe_text(existing_controller.get("controller_status"))
     if not force_restart and existing_status == "completed":
-        gate_payload = load_json_if_exists(Path(artifacts["promotion_gate_path"])) or {}
-        return controller_result_payload(existing_controller, gate_payload)
+        return controller_result_payload(existing_controller, existing_gate)
 
     started_at = utc_now_iso()
     resume_status = "restart-forced" if force_restart else "fresh-run"
@@ -797,7 +832,7 @@ def run_phase2_round_with_contract_mode(
                 controller_payload["recommended_next_skills"] = (
                     gate_payload.get("recommended_next_skills", []) if isinstance(gate_payload.get("recommended_next_skills"), list) else []
                 )
-                persist_controller_state(run_dir, round_id, controller_payload)
+                persist_controller_state(run_dir, round_id, controller_payload, gate_payload=gate_payload)
                 continue
 
             skill_result = run_skill(
@@ -896,7 +931,9 @@ def run_phase2_round_with_contract_mode(
         )
         raise SkillExecutionError(failure_payload["message"], failure_payload)
 
-    gate_payload = load_json_if_exists(Path(artifacts["promotion_gate_path"])) or {}
+    gate_payload = load_json_if_exists(Path(artifacts["promotion_gate_path"])) or (
+        load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id).get("promotion_gate", {})
+    )
     controller_payload["controller_status"] = "completed"
     controller_payload["planning_mode"] = maybe_text(planning.get("planning_mode")) or maybe_text(controller_payload.get("planning_mode")) or "planner-backed"
     controller_payload["readiness_status"] = maybe_text(gate_payload.get("readiness_status")) or maybe_text(controller_payload.get("readiness_status")) or "blocked"
@@ -912,7 +949,7 @@ def run_phase2_round_with_contract_mode(
             + (planning.get("fallback_suggested_next_skills", []) if isinstance(planning.get("fallback_suggested_next_skills"), list) else [])
         )
     controller_payload["gate_reasons"] = gate_payload.get("gate_reasons", []) if isinstance(gate_payload.get("gate_reasons"), list) else []
-    persist_controller_state(run_dir, round_id, controller_payload)
+    persist_controller_state(run_dir, round_id, controller_payload, gate_payload=gate_payload)
 
     finished_at = utc_now_iso()
     append_ledger_event(

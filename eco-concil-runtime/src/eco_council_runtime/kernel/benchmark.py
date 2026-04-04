@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .deliberation_plane import load_phase2_control_state
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
 from .ledger import append_ledger_event, load_ledger_tail
 from .manifest import load_json_if_exists, write_json
@@ -358,10 +359,23 @@ def comparison_step_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def phase2_state_snapshot(run_dir: Path, round_id: str, artifact_hashes: dict[str, str]) -> dict[str, Any]:
+    control_state = load_phase2_control_state(run_dir, round_id=round_id)
     plan = load_json_if_exists(orchestration_plan_path(run_dir, round_id)) or {}
-    gate = load_json_if_exists(promotion_gate_path(run_dir, round_id)) or {}
-    controller = load_json_if_exists(controller_state_path(run_dir, round_id)) or {}
-    supervisor = load_json_if_exists(supervisor_state_path(run_dir, round_id)) or {}
+    gate = load_json_if_exists(promotion_gate_path(run_dir, round_id)) or (
+        control_state.get("promotion_gate", {})
+        if isinstance(control_state.get("promotion_gate"), dict)
+        else {}
+    )
+    controller = load_json_if_exists(controller_state_path(run_dir, round_id)) or (
+        control_state.get("controller", {})
+        if isinstance(control_state.get("controller"), dict)
+        else {}
+    )
+    supervisor = load_json_if_exists(supervisor_state_path(run_dir, round_id)) or (
+        control_state.get("supervisor", {})
+        if isinstance(control_state.get("supervisor"), dict)
+        else {}
+    )
     steps = summarized_step_rows(run_dir, round_id, controller.get("steps"), artifact_hashes=artifact_hashes)
     summary = {
         "planning_mode": maybe_text(controller.get("planning_mode")) or maybe_text(supervisor.get("planning_mode")) or "missing",

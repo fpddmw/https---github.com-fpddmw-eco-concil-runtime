@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 from typing import Any
 
+from .deliberation_plane import store_promotion_freeze_record
 from .executor import SkillExecutionError
 from .controller import run_phase2_round, run_phase2_round_with_contract_mode
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
@@ -193,6 +194,7 @@ def supervise_round_with_contract_mode(
             "generated_at_utc": finished_at,
             "run_id": run_id,
             "round_id": round_id,
+            "supervisor_path": "",
             "supervisor_status": classification["supervisor_status"],
             "supervisor_substatus": classification["supervisor_substatus"],
             "phase2_posture": classification["phase2_posture"],
@@ -233,7 +235,19 @@ def supervise_round_with_contract_mode(
             },
         }
         output_file = supervisor_state_path(run_dir, round_id)
+        payload["supervisor_path"] = str(output_file)
         write_json(output_file, payload)
+        store_promotion_freeze_record(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            supervisor_snapshot=payload,
+            artifact_paths={
+                "controller_state_path": artifacts.get("controller_state_path", ""),
+                "promotion_gate_path": artifacts.get("promotion_gate_path", ""),
+                "supervisor_state_path": str(output_file),
+            },
+        )
         append_ledger_event(
             run_dir,
             {
@@ -309,6 +323,7 @@ def supervise_round_with_contract_mode(
         "generated_at_utc": finished_at,
         "run_id": run_id,
         "round_id": round_id,
+        "supervisor_path": "",
         "supervisor_status": classification["supervisor_status"],
         "supervisor_substatus": classification["supervisor_substatus"],
         "phase2_posture": classification["phase2_posture"],
@@ -348,7 +363,19 @@ def supervise_round_with_contract_mode(
         },
     }
     output_file = supervisor_state_path(run_dir, round_id)
+    payload["supervisor_path"] = str(output_file)
     write_json(output_file, payload)
+    store_promotion_freeze_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        supervisor_snapshot=payload,
+        artifact_paths={
+            "controller_state_path": artifacts.get("controller_state_path", ""),
+            "promotion_gate_path": artifacts.get("promotion_gate_path", ""),
+            "supervisor_state_path": str(output_file),
+        },
+    )
 
     event_id = new_runtime_event_id("runtimeevt", run_id, round_id, "supervisor", started_at, finished_at, contract_mode)
     append_ledger_event(

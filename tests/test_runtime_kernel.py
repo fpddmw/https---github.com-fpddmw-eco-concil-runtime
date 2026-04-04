@@ -838,6 +838,7 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("failed", state_payload["phase2"]["operator"]["controller_status"])
             self.assertEqual("board-brief", state_payload["phase2"]["operator"]["failed_stage"])
             self.assertIn("resume-phase2-round", state_payload["phase2"]["operator"]["resume_command"])
+            (run_dir / "runtime" / f"round_controller_{ROUND_ID}.json").unlink()
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
@@ -859,6 +860,125 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("resumed", payload["controller"]["resume_status"])
             self.assertEqual("promoted", payload["controller"]["promotion_status"])
             self.assertFalse(payload["controller"]["resume_recommended"])
+
+    def test_show_run_state_uses_deliberation_control_snapshots_when_phase2_json_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.deliberation_plane import store_promotion_freeze_record
+
+            controller_path = run_dir / "runtime" / f"round_controller_{ROUND_ID}.json"
+            gate_path = run_dir / "runtime" / f"promotion_gate_{ROUND_ID}.json"
+            supervisor_path = run_dir / "runtime" / f"supervisor_state_{ROUND_ID}.json"
+            controller_snapshot = {
+                "schema_version": "runtime-controller-v3",
+                "generated_at_utc": "2024-01-01T00:00:00Z",
+                "run_id": RUN_ID,
+                "round_id": ROUND_ID,
+                "controller_status": "completed",
+                "planning_mode": "planner-backed",
+                "readiness_status": "ready",
+                "gate_status": "allow-promote",
+                "promotion_status": "promoted",
+                "resume_status": "fresh-run",
+                "current_stage": "",
+                "failed_stage": "",
+                "completed_stage_names": ["orchestration-planner", "next-actions", "round-readiness", "promotion-gate", "promotion-basis"],
+                "pending_stage_names": [],
+                "resume_recommended": False,
+                "restart_recommended": False,
+                "recovery": {"resume_from_stage": ""},
+                "gate_reasons": [],
+                "recommended_next_skills": ["eco-materialize-reporting-handoff"],
+                "planning": {"plan_path": str((run_dir / "runtime" / f"orchestration_plan_{ROUND_ID}.json").resolve())},
+                "steps": [],
+                "artifacts": {
+                    "controller_state_path": str(controller_path.resolve()),
+                    "promotion_gate_path": str(gate_path.resolve()),
+                    "orchestration_plan_path": str((run_dir / "runtime" / f"orchestration_plan_{ROUND_ID}.json").resolve()),
+                },
+            }
+            gate_snapshot = {
+                "schema_version": "runtime-gate-v1",
+                "generated_at_utc": "2024-01-01T00:00:00Z",
+                "run_id": RUN_ID,
+                "round_id": ROUND_ID,
+                "readiness_path": str((run_dir / "reporting" / f"round_readiness_{ROUND_ID}.json").resolve()),
+                "readiness_status": "ready",
+                "promote_allowed": True,
+                "gate_status": "allow-promote",
+                "gate_reasons": [],
+                "recommended_next_skills": [],
+                "output_path": str(gate_path.resolve()),
+            }
+            supervisor_snapshot = {
+                "schema_version": "runtime-supervisor-v3",
+                "generated_at_utc": "2024-01-01T00:05:00Z",
+                "run_id": RUN_ID,
+                "round_id": ROUND_ID,
+                "supervisor_path": str(supervisor_path.resolve()),
+                "supervisor_status": "ready-for-reporting",
+                "supervisor_substatus": "promotion-complete",
+                "phase2_posture": "reporting-ready",
+                "terminal_state": "reporting-ready",
+                "recovery_posture": "terminal",
+                "operator_action": "handoff-reporting",
+                "controller_status": "completed",
+                "resume_status": "fresh-run",
+                "current_stage": "",
+                "failed_stage": "",
+                "resume_recommended": False,
+                "restart_recommended": False,
+                "resume_from_stage": "",
+                "readiness_status": "ready",
+                "gate_status": "allow-promote",
+                "promotion_status": "promoted",
+                "planning_mode": "planner-backed",
+                "promotion_gate_path": str(gate_path.resolve()),
+                "controller_path": str(controller_path.resolve()),
+                "recommended_next_skills": ["eco-materialize-reporting-handoff"],
+                "round_transition": {},
+                "operator_notes": ["Round promotion succeeded and the evidence basis is now ready for downstream reporting."],
+                "inspection_paths": {
+                    "controller_path": str(controller_path.resolve()),
+                    "plan_path": str((run_dir / "runtime" / f"orchestration_plan_{ROUND_ID}.json").resolve()),
+                    "gate_path": str(gate_path.resolve()),
+                    "promotion_basis_path": str((run_dir / "promotion" / f"promoted_evidence_basis_{ROUND_ID}.json").resolve()),
+                },
+            }
+
+            store_promotion_freeze_record(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                controller_snapshot=controller_snapshot,
+                gate_snapshot=gate_snapshot,
+                supervisor_snapshot=supervisor_snapshot,
+                artifact_paths={
+                    "controller_state_path": str(controller_path.resolve()),
+                    "promotion_gate_path": str(gate_path.resolve()),
+                    "supervisor_state_path": str(supervisor_path.resolve()),
+                },
+            )
+
+            state_payload = run_kernel(
+                "show-run-state",
+                "--run-dir",
+                str(run_dir),
+                "--round-id",
+                ROUND_ID,
+                "--tail",
+                "5",
+            )
+
+            self.assertEqual("completed", state_payload["phase2"]["operator"]["controller_status"])
+            self.assertEqual("ready-for-reporting", state_payload["phase2"]["operator"]["supervisor_status"])
+            self.assertEqual("allow-promote", state_payload["phase2"]["operator"]["gate_status"])
+            self.assertEqual("promoted", state_payload["phase2"]["operator"]["promotion_status"])
+            self.assertEqual(str(controller_path.resolve()), state_payload["phase2"]["operator"]["inspection_paths"]["controller_path"])
+            self.assertEqual(str(supervisor_path.resolve()), state_payload["phase2"]["operator"]["inspection_paths"]["supervisor_path"])
 
     def test_supervisor_forwards_execution_policy_and_records_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

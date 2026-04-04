@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .deliberation_plane import store_promotion_freeze_record
 from .manifest import load_json_if_exists, write_json
 from .paths import promotion_gate_path
 
@@ -67,4 +68,11 @@ def apply_promotion_gate(
     }
     write_json(output_file, payload)
     payload["output_path"] = str(output_file)
+    store_promotion_freeze_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        gate_snapshot=payload,
+        artifact_paths={"promotion_gate_path": str(output_file)},
+    )
     return payload
