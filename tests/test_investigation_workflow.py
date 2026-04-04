@@ -147,9 +147,15 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertEqual("next-actions-artifact", probes_payload["summary"]["action_source"])
             actions = actions_artifact["ranked_actions"]
             self.assertEqual("deliberation-plane", actions_artifact["board_state_source"])
+            self.assertTrue(actions_artifact["observed_inputs"]["board_summary_artifact_present"])
+            self.assertTrue(actions_artifact["observed_inputs"]["board_summary_present"])
+            self.assertTrue(actions_artifact["observed_inputs"]["board_brief_artifact_present"])
+            self.assertTrue(actions_artifact["observed_inputs"]["board_brief_present"])
             self.assertTrue(any(action["action_kind"] == "resolve-challenge" for action in actions))
             self.assertTrue(any(bool(action["probe_candidate"]) for action in actions))
             probes = probes_artifact["probes"]
+            self.assertTrue(probes_artifact["observed_inputs"]["next_actions_artifact_present"])
+            self.assertTrue(probes_artifact["observed_inputs"]["next_actions_present"])
             self.assertTrue(any(probe["target_hypothesis_id"] == hypothesis_payload["canonical_ids"][0] for probe in probes))
             self.assertTrue(any("eco-close-challenge-ticket" in probe["requested_skills"] for probe in probes))
 
@@ -260,10 +266,16 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertEqual("deliberation-plane", actions_payload["summary"]["board_state_source"])
             self.assertEqual("completed", actions_payload["deliberation_sync"]["status"])
             self.assertEqual("deliberation-plane", actions_artifact["board_state_source"])
+            self.assertFalse(actions_artifact["observed_inputs"]["board_summary_artifact_present"])
             self.assertFalse(actions_artifact["observed_inputs"]["board_summary_present"])
+            self.assertFalse(actions_artifact["observed_inputs"]["board_brief_artifact_present"])
             self.assertFalse(actions_artifact["observed_inputs"]["board_brief_present"])
             self.assertTrue(any(action["action_kind"] == "resolve-challenge" for action in actions_artifact["ranked_actions"]))
             self.assertGreaterEqual(probes_payload["summary"]["probe_count"], 1)
+            self.assertTrue(probes_artifact["observed_inputs"]["next_actions_artifact_present"])
+            self.assertTrue(probes_artifact["observed_inputs"]["next_actions_present"])
+            self.assertFalse(probes_artifact["observed_inputs"]["board_summary_artifact_present"])
+            self.assertFalse(probes_artifact["observed_inputs"]["board_brief_artifact_present"])
             self.assertGreaterEqual(len(probes_artifact["probes"]), 1)
 
     def test_d1_probe_skill_can_rebuild_candidates_without_next_actions_artifact(self) -> None:
@@ -369,7 +381,10 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", probes_payload["deliberation_sync"]["status"])
             self.assertEqual("derived-from-deliberation", probes_artifact["action_source"])
             self.assertEqual("analysis-plane", probes_artifact["coverage_source"])
+            self.assertFalse(probes_artifact["observed_inputs"]["next_actions_artifact_present"])
             self.assertFalse(probes_artifact["observed_inputs"]["next_actions_present"])
+            self.assertFalse(probes_artifact["observed_inputs"]["board_summary_artifact_present"])
+            self.assertFalse(probes_artifact["observed_inputs"]["board_brief_artifact_present"])
             self.assertFalse(probes_artifact["observed_inputs"]["coverage_artifact_present"])
             self.assertTrue(probes_artifact["observed_inputs"]["coverage_present"])
             self.assertGreaterEqual(probes_payload["summary"]["probe_count"], 1)
@@ -581,8 +596,14 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", readiness_payload["deliberation_sync"]["status"])
             self.assertTrue(readiness_artifact["sufficient_for_promotion"])
             self.assertEqual("deliberation-plane", readiness_artifact["board_state_source"])
+            self.assertFalse(readiness_artifact["observed_inputs"]["board_summary_artifact_present"])
             self.assertFalse(readiness_artifact["observed_inputs"]["board_summary_present"])
+            self.assertFalse(readiness_artifact["observed_inputs"]["board_brief_artifact_present"])
             self.assertFalse(readiness_artifact["observed_inputs"]["board_brief_present"])
+            self.assertFalse(readiness_artifact["observed_inputs"]["next_actions_artifact_present"])
+            self.assertFalse(readiness_artifact["observed_inputs"]["next_actions_present"])
+            self.assertFalse(readiness_artifact["observed_inputs"]["probes_artifact_present"])
+            self.assertFalse(readiness_artifact["observed_inputs"]["probes_present"])
 
     def test_d1_and_d2_continue_from_analysis_plane_when_coverage_artifact_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

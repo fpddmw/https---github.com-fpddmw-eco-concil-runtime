@@ -18,6 +18,7 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    d1_contract_fields_from_payload,
     load_ranked_actions_context,
     maybe_text,
 )
@@ -92,6 +93,7 @@ def propose_next_actions_skill(
         if isinstance(action_context.get("warnings"), list)
         else []
     )
+    contract_fields = d1_contract_fields_from_payload(action_context)
 
     wrapper = {
         "schema_version": "d1.1",
@@ -101,15 +103,8 @@ def propose_next_actions_skill(
         "round_id": round_id,
         "board_summary_path": maybe_text(action_context.get("board_summary_file")),
         "board_brief_path": maybe_text(action_context.get("board_brief_file")),
-        "board_state_source": maybe_text(action_context.get("board_state_source"))
-        or "missing-board",
-        "db_path": maybe_text(action_context.get("db_path")),
-        "deliberation_sync": action_context.get("deliberation_sync", {}),
-        "analysis_sync": action_context.get("analysis_sync", {}),
         "coverage_path": maybe_text(action_context.get("coverage_file")),
-        "coverage_source": maybe_text(action_context.get("coverage_source"))
-        or "missing-coverage",
-        "observed_inputs": action_context.get("observed_inputs", {}),
+        **contract_fields,
         "action_count": len(ranked_actions),
         "ranked_actions": ranked_actions,
     }
@@ -136,11 +131,9 @@ def propose_next_actions_skill(
             "round_id": round_id,
             "output_path": str(output_file),
             "action_count": len(ranked_actions),
-            "board_state_source": maybe_text(action_context.get("board_state_source"))
-            or "missing-board",
-            "coverage_source": maybe_text(action_context.get("coverage_source"))
-            or "missing-coverage",
-            "db_path": maybe_text(action_context.get("db_path")),
+            "board_state_source": contract_fields["board_state_source"],
+            "coverage_source": contract_fields["coverage_source"],
+            "db_path": contract_fields["db_path"],
         },
         "receipt_id": "investigation-receipt-"
         + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
@@ -149,8 +142,8 @@ def propose_next_actions_skill(
         "artifact_refs": artifact_refs,
         "canonical_ids": canonical_ids,
         "warnings": warnings,
-        "deliberation_sync": action_context.get("deliberation_sync", {}),
-        "analysis_sync": action_context.get("analysis_sync", {}),
+        "deliberation_sync": contract_fields["deliberation_sync"],
+        "analysis_sync": contract_fields["analysis_sync"],
         "board_handoff": {
             "candidate_ids": canonical_ids,
             "evidence_refs": artifact_refs,

@@ -8,10 +8,19 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-draft-expert-report"
 ROLE_VALUES = ("sociologist", "environmentalist")
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
+    reporting_contract_fields_from_payload,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -186,12 +195,44 @@ def draft_expert_report_skill(
     output_file = resolve_path(run_dir_path, output_path, f"reporting/expert_report_draft_{role}_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
-    handoff = load_json_if_exists(handoff_file)
-    if not isinstance(handoff, dict):
+    handoff_payload = load_json_if_exists(handoff_file)
+    if not isinstance(handoff_payload, dict):
         warnings.append({"code": "missing-reporting-handoff", "message": f"No reporting handoff artifact was found at {handoff_file}."})
         handoff = {"handoff_status": "pending-more-investigation", "promotion_status": "withheld", "key_findings": [], "open_risks": [], "recommended_next_actions": []}
-    decision = load_json_if_exists(decision_file) or {}
+    else:
+        handoff = handoff_payload
+    decision_payload = load_json_if_exists(decision_file)
+    decision = decision_payload or {}
     board_excerpt = maybe_text(load_text_if_exists(board_brief_file))[:220]
+    contract_fields = reporting_contract_fields_from_payload(
+        decision_payload,
+        fallback_payload=handoff_payload,
+        observed_inputs_overrides={
+            "reporting_handoff_artifact_present": handoff_file.exists(),
+            "reporting_handoff_present": isinstance(handoff_payload, dict),
+            "decision_artifact_present": decision_file.exists(),
+            "decision_present": isinstance(decision_payload, dict),
+            "board_brief_artifact_present": board_brief_file.exists(),
+            "board_brief_present": bool(board_excerpt),
+        },
+        field_overrides={
+            "reporting_handoff_source": (
+                "reporting-handoff-artifact"
+                if handoff_file.exists()
+                else "missing-reporting-handoff"
+            ),
+            "decision_source": (
+                "council-decision-draft-artifact"
+                if decision_file.exists()
+                else "missing-decision"
+            ),
+            "board_brief_source": (
+                "board-brief-artifact"
+                if board_brief_file.exists()
+                else "missing-board-brief"
+            ),
+        },
+    )
 
     handoff_status = maybe_text(handoff.get("handoff_status")) or "pending-more-investigation"
     publication_readiness = maybe_text(decision.get("publication_readiness")) or ("ready" if handoff_status == "ready-for-reporting" else "hold")
@@ -214,6 +255,7 @@ def draft_expert_report_skill(
         "status": report_status,
         "handoff_status": handoff_status,
         "publication_readiness": publication_readiness,
+        **contract_fields,
         "summary": (
             f"{profile['summary_prefix']} for round {round_id}. {decision_summary or 'The round still needs more reporting context.'}"
             if report_status == "ready-to-publish"
@@ -243,12 +285,20 @@ def draft_expert_report_skill(
             "output_path": str(output_file),
             "report_id": report_id,
             "report_status": report_status,
+            "board_state_source": contract_fields["board_state_source"],
+            "coverage_source": contract_fields["coverage_source"],
+            "reporting_handoff_source": maybe_text(contract_fields.get("reporting_handoff_source")),
+            "decision_source": maybe_text(contract_fields.get("decision_source")),
+            "board_brief_source": maybe_text(contract_fields.get("board_brief_source")),
+            "db_path": contract_fields["db_path"],
         },
         "receipt_id": "reporting-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, role, report_id)[:20],
         "batch_id": "reportingbatch-" + stable_hash(SKILL_NAME, run_id, round_id, role, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [report_id],
         "warnings": warnings,
+        "deliberation_sync": contract_fields["deliberation_sync"],
+        "analysis_sync": contract_fields["analysis_sync"],
         "board_handoff": {
             "candidate_ids": [report_id],
             "evidence_refs": artifact_refs,

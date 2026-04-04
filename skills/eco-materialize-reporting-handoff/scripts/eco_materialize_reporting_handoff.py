@@ -8,9 +8,18 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-materialize-reporting-handoff"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
+    reporting_contract_fields_from_payload,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -229,18 +238,60 @@ def materialize_reporting_handoff_skill(
     output_file = resolve_path(run_dir_path, output_path, f"reporting/reporting_handoff_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
-    promotion_basis = load_json_if_exists(promotion_file)
-    if not isinstance(promotion_basis, dict):
+    promotion_payload = load_json_if_exists(promotion_file)
+    if not isinstance(promotion_payload, dict):
         warnings.append({"code": "missing-promotion-basis", "message": f"No promotion basis artifact was found at {promotion_file}."})
         promotion_basis = {"promotion_status": "withheld", "selected_coverages": [], "selected_evidence_refs": [], "remaining_risks": []}
-    readiness = load_json_if_exists(readiness_file)
-    if not isinstance(readiness, dict):
+    else:
+        promotion_basis = promotion_payload
+    readiness_payload = load_json_if_exists(readiness_file)
+    if not isinstance(readiness_payload, dict):
         warnings.append({"code": "missing-readiness", "message": f"No round readiness artifact was found at {readiness_file}."})
         readiness = {"readiness_status": "blocked", "gate_reasons": []}
-    supervisor_state = load_json_if_exists(supervisor_file)
-    if not isinstance(supervisor_state, dict):
+    else:
+        readiness = readiness_payload
+    supervisor_state_payload = load_json_if_exists(supervisor_file)
+    if not isinstance(supervisor_state_payload, dict):
         supervisor_state = {"supervisor_status": "unavailable", "top_actions": [], "operator_notes": []}
+    else:
+        supervisor_state = supervisor_state_payload
     board_brief_text = load_text_if_exists(board_brief_file)
+    contract_fields = reporting_contract_fields_from_payload(
+        promotion_payload,
+        fallback_payload=readiness_payload,
+        observed_inputs_overrides={
+            "promotion_artifact_present": promotion_file.exists(),
+            "promotion_present": isinstance(promotion_payload, dict),
+            "readiness_artifact_present": readiness_file.exists(),
+            "readiness_present": isinstance(readiness_payload, dict),
+            "board_brief_artifact_present": board_brief_file.exists(),
+            "board_brief_present": bool(maybe_text(board_brief_text)),
+            "supervisor_state_artifact_present": supervisor_file.exists(),
+            "supervisor_state_present": isinstance(supervisor_state_payload, dict),
+        },
+        field_overrides={
+            "promotion_source": (
+                "promotion-artifact"
+                if promotion_file.exists()
+                else "missing-promotion"
+            ),
+            "readiness_source": (
+                "round-readiness-artifact"
+                if readiness_file.exists()
+                else "missing-readiness"
+            ),
+            "board_brief_source": (
+                "board-brief-artifact"
+                if board_brief_file.exists()
+                else "missing-board-brief"
+            ),
+            "supervisor_state_source": (
+                "supervisor-state-artifact"
+                if supervisor_file.exists()
+                else "missing-supervisor-state"
+            ),
+        },
+    )
 
     promotion_status = maybe_text(promotion_basis.get("promotion_status")) or "withheld"
     readiness_status = maybe_text(readiness.get("readiness_status")) or "blocked"
@@ -269,6 +320,7 @@ def materialize_reporting_handoff_skill(
         "readiness_path": str(readiness_file),
         "board_brief_path": str(board_brief_file),
         "supervisor_state_path": str(supervisor_file),
+        **contract_fields,
         "promoted_basis_id": maybe_text(promotion_basis.get("basis_id")),
         "selected_evidence_refs": unique_texts(promotion_basis.get("selected_evidence_refs", []) if isinstance(promotion_basis.get("selected_evidence_refs"), list) else []),
         "board_brief_excerpt": board_excerpt,
@@ -291,12 +343,20 @@ def materialize_reporting_handoff_skill(
             "handoff_id": handoff_id,
             "handoff_status": handoff_status,
             "finding_count": len(key_findings),
+            "board_state_source": contract_fields["board_state_source"],
+            "coverage_source": contract_fields["coverage_source"],
+            "promotion_source": maybe_text(contract_fields.get("promotion_source")),
+            "readiness_source": maybe_text(contract_fields.get("readiness_source")),
+            "supervisor_state_source": maybe_text(contract_fields.get("supervisor_state_source")),
+            "db_path": contract_fields["db_path"],
         },
         "receipt_id": "reporting-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, handoff_id)[:20],
         "batch_id": "reportingbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [handoff_id],
         "warnings": warnings,
+        "deliberation_sync": contract_fields["deliberation_sync"],
+        "analysis_sync": contract_fields["analysis_sync"],
         "board_handoff": {
             "candidate_ids": [handoff_id],
             "evidence_refs": artifact_refs,

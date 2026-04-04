@@ -45,6 +45,7 @@ description: Open compact falsification probes from the next-action queue so con
 - `deliberation_sync`
 - `analysis_sync`
 - `board_handoff`
+- The emitted artifact also carries normalized D1 trace metadata in `action_source`, `board_state_source`, `coverage_source`, `db_path`, and `observed_inputs`, including explicit `next_actions_artifact_present` handling on both artifact and fallback paths.
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`

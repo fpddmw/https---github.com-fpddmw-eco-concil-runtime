@@ -18,6 +18,7 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    d1_contract_fields_from_payload,
     load_json_if_exists,
     load_ranked_actions_context,
     maybe_text,
@@ -167,15 +168,15 @@ def open_falsification_probe_skill(
 
     warnings: list[dict[str, Any]] = []
     next_actions_wrapper = load_json_if_exists(next_actions_file)
+    next_actions_artifact_present = next_actions_file.exists()
     action_source = "next-actions-artifact"
-    deliberation_sync: dict[str, Any] = {}
-    analysis_sync: dict[str, Any] = {}
-    board_state_source = ""
-    coverage_source = ""
-    db_path = ""
-    observed_inputs: dict[str, Any] = {
-        "next_actions_present": isinstance(next_actions_wrapper, dict),
-    }
+    contract_fields = d1_contract_fields_from_payload(
+        None,
+        observed_inputs_overrides={
+            "next_actions_artifact_present": next_actions_artifact_present,
+            "next_actions_present": isinstance(next_actions_wrapper, dict),
+        },
+    )
     if isinstance(next_actions_wrapper, dict):
         ranked_actions = (
             next_actions_wrapper.get("ranked_actions", [])
@@ -186,28 +187,13 @@ def open_falsification_probe_skill(
             maybe_text(next_actions_wrapper.get("action_source"))
             or "next-actions-artifact"
         )
-        deliberation_sync = (
-            next_actions_wrapper.get("deliberation_sync")
-            if isinstance(next_actions_wrapper.get("deliberation_sync"), dict)
-            else {}
+        contract_fields = d1_contract_fields_from_payload(
+            next_actions_wrapper,
+            observed_inputs_overrides={
+                "next_actions_artifact_present": next_actions_artifact_present,
+                "next_actions_present": True,
+            },
         )
-        analysis_sync = (
-            next_actions_wrapper.get("analysis_sync")
-            if isinstance(next_actions_wrapper.get("analysis_sync"), dict)
-            else {}
-        )
-        board_state_source = maybe_text(next_actions_wrapper.get("board_state_source"))
-        coverage_source = maybe_text(next_actions_wrapper.get("coverage_source"))
-        db_path = maybe_text(next_actions_wrapper.get("db_path"))
-        action_inputs = (
-            next_actions_wrapper.get("observed_inputs")
-            if isinstance(next_actions_wrapper.get("observed_inputs"), dict)
-            else {}
-        )
-        observed_inputs = {
-            **action_inputs,
-            "next_actions_present": True,
-        }
     else:
         warnings.append(
             {
@@ -236,28 +222,13 @@ def open_falsification_probe_skill(
         )
         warnings.extend(context_warnings)
         action_source = "derived-from-deliberation"
-        deliberation_sync = (
-            action_context.get("deliberation_sync")
-            if isinstance(action_context.get("deliberation_sync"), dict)
-            else {}
+        contract_fields = d1_contract_fields_from_payload(
+            action_context,
+            observed_inputs_overrides={
+                "next_actions_artifact_present": next_actions_artifact_present,
+                "next_actions_present": False,
+            },
         )
-        analysis_sync = (
-            action_context.get("analysis_sync")
-            if isinstance(action_context.get("analysis_sync"), dict)
-            else {}
-        )
-        board_state_source = maybe_text(action_context.get("board_state_source"))
-        coverage_source = maybe_text(action_context.get("coverage_source"))
-        db_path = maybe_text(action_context.get("db_path"))
-        action_inputs = (
-            action_context.get("observed_inputs")
-            if isinstance(action_context.get("observed_inputs"), dict)
-            else {}
-        )
-        observed_inputs = {
-            **action_inputs,
-            "next_actions_present": False,
-        }
 
     candidates = probe_candidates(ranked_actions, action_id)[: max(1, max_probes)]
     probes = [
@@ -277,12 +248,7 @@ def open_falsification_probe_skill(
         "round_id": round_id,
         "next_actions_path": str(next_actions_file),
         "action_source": action_source,
-        "board_state_source": board_state_source,
-        "db_path": db_path,
-        "deliberation_sync": deliberation_sync,
-        "analysis_sync": analysis_sync,
-        "coverage_source": coverage_source or "missing-coverage",
-        "observed_inputs": observed_inputs,
+        **contract_fields,
         "probe_count": len(probes),
         "probes": probes,
     }
@@ -312,9 +278,9 @@ def open_falsification_probe_skill(
             "output_path": str(output_file),
             "probe_count": len(probes),
             "action_source": action_source,
-            "board_state_source": board_state_source,
-            "coverage_source": coverage_source or "missing-coverage",
-            "db_path": db_path,
+            "board_state_source": contract_fields["board_state_source"],
+            "coverage_source": contract_fields["coverage_source"],
+            "db_path": contract_fields["db_path"],
         },
         "receipt_id": "investigation-receipt-"
         + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
@@ -323,8 +289,8 @@ def open_falsification_probe_skill(
         "artifact_refs": artifact_refs,
         "canonical_ids": canonical_ids,
         "warnings": warnings,
-        "deliberation_sync": deliberation_sync,
-        "analysis_sync": analysis_sync,
+        "deliberation_sync": contract_fields["deliberation_sync"],
+        "analysis_sync": contract_fields["analysis_sync"],
         "board_handoff": {
             "candidate_ids": canonical_ids,
             "evidence_refs": artifact_refs,

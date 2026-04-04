@@ -8,9 +8,18 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 SKILL_NAME = "eco-draft-council-decision"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
+    reporting_contract_fields_from_payload,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -128,8 +137,8 @@ def draft_council_decision_skill(
     output_file = resolve_path(run_dir_path, output_path, f"reporting/council_decision_draft_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
-    handoff = load_json_if_exists(handoff_file)
-    if not isinstance(handoff, dict):
+    handoff_payload = load_json_if_exists(handoff_file)
+    if not isinstance(handoff_payload, dict):
         warnings.append({"code": "missing-reporting-handoff", "message": f"No reporting handoff artifact was found at {handoff_file}."})
         handoff = {
             "handoff_status": "pending-more-investigation",
@@ -138,9 +147,35 @@ def draft_council_decision_skill(
             "open_risks": [],
             "recommended_next_actions": [],
         }
-    promotion_basis = load_json_if_exists(promotion_file)
-    if not isinstance(promotion_basis, dict):
+    else:
+        handoff = handoff_payload
+    promotion_payload = load_json_if_exists(promotion_file)
+    if not isinstance(promotion_payload, dict):
         promotion_basis = {"selected_evidence_refs": [], "basis_id": ""}
+    else:
+        promotion_basis = promotion_payload
+    contract_fields = reporting_contract_fields_from_payload(
+        handoff_payload,
+        fallback_payload=promotion_payload,
+        observed_inputs_overrides={
+            "reporting_handoff_artifact_present": handoff_file.exists(),
+            "reporting_handoff_present": isinstance(handoff_payload, dict),
+            "promotion_artifact_present": promotion_file.exists(),
+            "promotion_present": isinstance(promotion_payload, dict),
+        },
+        field_overrides={
+            "reporting_handoff_source": (
+                "reporting-handoff-artifact"
+                if handoff_file.exists()
+                else "missing-reporting-handoff"
+            ),
+            "promotion_source": (
+                "promotion-artifact"
+                if promotion_file.exists()
+                else "missing-promotion"
+            ),
+        },
+    )
 
     handoff_status = maybe_text(handoff.get("handoff_status")) or "pending-more-investigation"
     promotion_status = maybe_text(handoff.get("promotion_status")) or maybe_text(promotion_basis.get("promotion_status")) or "withheld"
@@ -168,6 +203,7 @@ def draft_council_decision_skill(
         "publication_readiness": publication_readiness,
         "next_round_required": moderator_status != "finalize",
         "decision_summary": summary_text,
+        **contract_fields,
         "decision_gating": {
             "reason_codes": reason_codes(handoff_status, promotion_status, open_risks),
             "reasons": [maybe_text(item.get("summary")) for item in open_risks[:4] if maybe_text(item.get("summary"))],
@@ -198,12 +234,19 @@ def draft_council_decision_skill(
             "decision_id": decision_id,
             "moderator_status": moderator_status,
             "publication_readiness": publication_readiness,
+            "board_state_source": contract_fields["board_state_source"],
+            "coverage_source": contract_fields["coverage_source"],
+            "reporting_handoff_source": maybe_text(contract_fields.get("reporting_handoff_source")),
+            "promotion_source": maybe_text(contract_fields.get("promotion_source")),
+            "db_path": contract_fields["db_path"],
         },
         "receipt_id": "reporting-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, decision_id)[:20],
         "batch_id": "reportingbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [decision_id],
         "warnings": warnings,
+        "deliberation_sync": contract_fields["deliberation_sync"],
+        "analysis_sync": contract_fields["analysis_sync"],
         "board_handoff": {
             "candidate_ids": [decision_id],
             "evidence_refs": artifact_refs,

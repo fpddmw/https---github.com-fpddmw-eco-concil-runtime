@@ -120,9 +120,82 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertEqual("ready-for-reporting", handoff_artifact["handoff_status"])
             self.assertEqual("promoted", handoff_artifact["promotion_status"])
             self.assertGreaterEqual(len(handoff_artifact["key_findings"]), 1)
+            self.assertEqual("deliberation-plane", promotion_artifact["board_state_source"])
+            self.assertEqual("analysis-plane", promotion_artifact["coverage_source"])
+            self.assertEqual(
+                "round-readiness-artifact",
+                promotion_artifact["readiness_source"],
+            )
+            self.assertEqual(
+                "missing-board-brief",
+                promotion_artifact["board_brief_source"],
+            )
+            self.assertFalse(
+                promotion_artifact["observed_inputs"]["board_brief_artifact_present"]
+            )
+            self.assertFalse(
+                promotion_artifact["observed_inputs"]["board_brief_present"]
+            )
+            self.assertTrue(
+                promotion_artifact["observed_inputs"]["readiness_artifact_present"]
+            )
+            self.assertTrue(promotion_artifact["observed_inputs"]["readiness_present"])
+            self.assertTrue(
+                promotion_artifact["observed_inputs"]["next_actions_artifact_present"]
+            )
+            self.assertTrue(
+                promotion_artifact["observed_inputs"]["next_actions_present"]
+            )
+            self.assertEqual("deliberation-plane", handoff_artifact["board_state_source"])
+            self.assertEqual("analysis-plane", handoff_artifact["coverage_source"])
+            self.assertEqual("promotion-artifact", handoff_artifact["promotion_source"])
+            self.assertEqual(
+                "round-readiness-artifact",
+                handoff_artifact["readiness_source"],
+            )
+            self.assertEqual(
+                "supervisor-state-artifact",
+                handoff_artifact["supervisor_state_source"],
+            )
+            self.assertEqual("missing-board-brief", handoff_artifact["board_brief_source"])
+            self.assertFalse(
+                handoff_artifact["observed_inputs"]["board_brief_artifact_present"]
+            )
+            self.assertEqual("completed", handoff_payload["deliberation_sync"]["status"])
+            self.assertIn(
+                handoff_payload["analysis_sync"]["status"],
+                {"completed", "existing-result-set"},
+            )
+            self.assertTrue(
+                handoff_artifact["observed_inputs"]["promotion_artifact_present"]
+            )
+            self.assertTrue(handoff_artifact["observed_inputs"]["promotion_present"])
+            self.assertTrue(
+                handoff_artifact["observed_inputs"][
+                    "supervisor_state_artifact_present"
+                ]
+            )
+            self.assertTrue(
+                handoff_artifact["observed_inputs"]["supervisor_state_present"]
+            )
             self.assertEqual("finalize", decision_payload["summary"]["moderator_status"])
             self.assertEqual("ready", decision_artifact["publication_readiness"])
             self.assertFalse(decision_artifact["next_round_required"])
+            self.assertEqual(
+                "reporting-handoff-artifact",
+                decision_artifact["reporting_handoff_source"],
+            )
+            self.assertEqual("promotion-artifact", decision_artifact["promotion_source"])
+            self.assertEqual("deliberation-plane", decision_artifact["board_state_source"])
+            self.assertEqual("analysis-plane", decision_artifact["coverage_source"])
+            self.assertTrue(
+                decision_artifact["observed_inputs"][
+                    "reporting_handoff_artifact_present"
+                ]
+            )
+            self.assertTrue(
+                decision_artifact["observed_inputs"]["reporting_handoff_present"]
+            )
             self.assertEqual(promotion_artifact["basis_id"], handoff_artifact["promoted_basis_id"])
 
     def test_reporting_handoff_and_decision_hold_withheld_round(self) -> None:
@@ -239,9 +312,18 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertEqual("withheld", handoff_artifact["promotion_status"])
             self.assertGreaterEqual(len(handoff_artifact["open_risks"]), 1)
             self.assertGreaterEqual(len(handoff_artifact["recommended_next_actions"]), 1)
+            self.assertEqual("missing-board-brief", handoff_artifact["board_brief_source"])
+            self.assertFalse(
+                handoff_artifact["observed_inputs"]["board_brief_artifact_present"]
+            )
+            self.assertFalse(handoff_artifact["observed_inputs"]["board_brief_present"])
             self.assertEqual("continue", decision_payload["summary"]["moderator_status"])
             self.assertEqual("hold", decision_artifact["publication_readiness"])
             self.assertTrue(decision_artifact["next_round_required"])
+            self.assertEqual("missing-board-brief", decision_artifact["board_brief_source"])
+            self.assertFalse(
+                decision_artifact["observed_inputs"]["board_brief_artifact_present"]
+            )
             self.assertIn("promotion-withheld", decision_artifact["decision_gating"]["reason_codes"])
 
 

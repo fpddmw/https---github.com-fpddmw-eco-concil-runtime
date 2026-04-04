@@ -18,6 +18,9 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.analysis_plane import load_evidence_coverage_context  # noqa: E402
+from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
+    reporting_contract_fields_from_payload,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -119,10 +122,12 @@ def promote_evidence_basis_skill(
     output_file = resolve_path(run_dir_path, output_path, f"promotion/promoted_evidence_basis_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
-    readiness = load_json_if_exists(readiness_file)
-    if not isinstance(readiness, dict):
+    readiness_payload = load_json_if_exists(readiness_file)
+    if not isinstance(readiness_payload, dict):
         warnings.append({"code": "missing-readiness", "message": f"No round readiness artifact was found at {readiness_file}."})
         readiness = {"readiness_status": "blocked", "gate_reasons": ["Missing round readiness artifact."], "counts": {}, "recommended_next_skills": []}
+    else:
+        readiness = readiness_payload
     coverage_context = load_evidence_coverage_context(
         run_dir_path,
         run_id=run_id,
@@ -153,6 +158,40 @@ def promote_evidence_basis_skill(
     if not isinstance(next_actions, dict):
         next_actions = {"ranked_actions": []}
     brief_text = maybe_text(load_text_if_exists(board_brief_file))
+    contract_fields = reporting_contract_fields_from_payload(
+        readiness_payload,
+        observed_inputs_overrides={
+            "readiness_artifact_present": readiness_file.exists(),
+            "readiness_present": isinstance(readiness_payload, dict),
+            "board_brief_artifact_present": board_brief_file.exists(),
+            "board_brief_present": bool(brief_text),
+            "coverage_artifact_present": bool(
+                coverage_context.get("coverage_artifact_present")
+            ),
+            "coverage_present": bool(coverages),
+            "next_actions_artifact_present": next_actions_file.exists(),
+            "next_actions_present": isinstance(next_actions_payload, dict),
+        },
+        field_overrides={
+            "coverage_source": coverage_source or "missing-coverage",
+            "db_path": db_path,
+            "readiness_source": (
+                "round-readiness-artifact"
+                if readiness_file.exists()
+                else "missing-readiness"
+            ),
+            "board_brief_source": (
+                "board-brief-artifact"
+                if board_brief_file.exists()
+                else "missing-board-brief"
+            ),
+            "next_actions_source": (
+                "next-actions-artifact"
+                if next_actions_file.exists()
+                else "missing-next-actions"
+            ),
+        },
+    )
 
     readiness_status = maybe_text(readiness.get("readiness_status")) or "blocked"
     promotion_status = "promoted" if readiness_status == "ready" or allow_non_ready else "withheld"
@@ -197,16 +236,7 @@ def promote_evidence_basis_skill(
         "readiness_path": str(readiness_file),
         "board_brief_path": str(board_brief_file),
         "coverage_path": str(coverage_file),
-        "coverage_source": coverage_source,
-        "db_path": db_path,
-        "analysis_sync": analysis_sync,
-        "observed_inputs": {
-            "coverage_present": bool(coverages),
-            "coverage_artifact_present": bool(
-                coverage_context.get("coverage_artifact_present")
-            ),
-            "next_actions_present": isinstance(next_actions_payload, dict),
-        },
+        **contract_fields,
         "selected_coverages": selected_coverages,
         "selected_evidence_refs": selected_evidence_refs,
         "board_brief_excerpt": brief_text[:300],
@@ -230,15 +260,20 @@ def promote_evidence_basis_skill(
             "output_path": str(output_file),
             "basis_id": basis_id,
             "promotion_status": promotion_status,
-            "coverage_source": coverage_source,
-            "db_path": db_path,
+            "board_state_source": contract_fields["board_state_source"],
+            "coverage_source": contract_fields["coverage_source"],
+            "readiness_source": maybe_text(contract_fields.get("readiness_source")),
+            "board_brief_source": maybe_text(contract_fields.get("board_brief_source")),
+            "next_actions_source": maybe_text(contract_fields.get("next_actions_source")),
+            "db_path": contract_fields["db_path"],
         },
         "receipt_id": "promotion-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, basis_id)[:20],
         "batch_id": "promotionbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [basis_id],
         "warnings": warnings,
-        "analysis_sync": analysis_sync,
+        "deliberation_sync": contract_fields["deliberation_sync"],
+        "analysis_sync": contract_fields["analysis_sync"],
         "board_handoff": {
             "candidate_ids": unique_texts([basis_id] + [item.get("coverage_id") for item in selected_coverages]),
             "evidence_refs": artifact_refs,

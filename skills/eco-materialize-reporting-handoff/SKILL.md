@@ -42,7 +42,10 @@ description: Materialize a compact reporting handoff from promoted evidence basi
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `deliberation_sync`
+- `analysis_sync`
 - `board_handoff`
+- The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `promotion_source`, `readiness_source`, `board_brief_source`, `supervisor_state_source`, `db_path`, and `observed_inputs`, including explicit artifact-versus-materialized flags for each upstream input.
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`

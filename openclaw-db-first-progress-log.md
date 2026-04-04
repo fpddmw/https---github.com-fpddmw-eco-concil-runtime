@@ -577,3 +577,121 @@ Known limitations:
 Next:
 - Move to `A2` shared contract hardening so `analysis_sync / deliberation_sync / observed_inputs / *_source` fields stop drifting between skills and runtime wrappers.
 - Revisit `B3` later to consolidate more moderator control transitions onto the DB work surface now that summary-first ordering is no longer required.
+
+## 2026-04-03 A2.1: D1 Contract Metadata Normalization
+
+Status: completed
+
+Objective:
+- Stop D1 contract metadata from drifting independently between `eco-propose-next-actions`, `eco-open-falsification-probe`, and `eco-summarize-round-readiness`.
+- Make artifact presence and materialized input presence explicit in `observed_inputs` while preserving compatibility with older payloads.
+
+Implementation:
+- `eco-concil-runtime/src/eco_council_runtime/kernel/investigation_planning.py`
+  - Added shared helpers for D1 contract hardening:
+    - `normalize_d1_observed_inputs(...)`
+    - `d1_contract_fields(...)`
+    - `d1_contract_fields_from_payload(...)`
+    - `load_d1_shared_context(...)`
+  - Generalized `board_snapshot(...)` so D1 consumers can share one board-state summarization path, including readiness-side note counts when needed.
+  - Normalized D1 trace metadata around:
+    - `board_state_source`
+    - `coverage_source`
+    - `deliberation_sync`
+    - `analysis_sync`
+    - explicit `*_artifact_present` and `*_present` flags inside `observed_inputs`
+- `skills/eco-propose-next-actions/scripts/eco_propose_next_actions.py`
+  - Now serializes D1 contract metadata through the shared runtime helper instead of hand-copying trace fields.
+- `skills/eco-open-falsification-probe/scripts/eco_open_falsification_probe.py`
+  - Now normalizes contract metadata both when consuming an existing `next_actions` artifact and when rebuilding from shared D1 context.
+  - Adds explicit `next_actions_artifact_present` tracking without losing compatibility with the older `next_actions_present` flag.
+- `skills/eco-summarize-round-readiness/scripts/eco_summarize_round_readiness.py`
+  - Replaced duplicated deliberation/analysis trace assembly with the shared D1 context helper.
+  - Now emits the same normalized input-presence contract as the D1 action/probe artifacts.
+
+Validation:
+- `python3 -m unittest tests/test_investigation_contracts.py -q`
+- `python3 -m unittest tests/test_investigation_workflow.py -q`
+- `python3 -m unittest tests/test_runtime_kernel.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- `tests/test_investigation_contracts.py`
+  - Verifies explicit D1 artifact-presence flags can diverge from materialized-presence flags when provided directly.
+  - Verifies legacy D1 payloads are backfilled into the new normalized contract shape.
+- `tests/test_investigation_workflow.py`
+  - Verifies next-actions, probes, and readiness artifacts all expose the new explicit `*_artifact_present` flags on both normal and fallback paths.
+
+Known limitations:
+- This increment hardens the D1 investigation chain only; archive/history/promotion/reporting consumers still have similar trace metadata that should be normalized under the remaining `A2` work.
+- Output schema versions remain unchanged because this delivery is a compatible contract normalization rather than a breaking payload rewrite.
+
+Next:
+- Continue `A2` by extending the same explicit contract surface to remaining cross-plane consumers such as archive/reporting/promotion skills.
+- Then revisit `C2` once contract drift is reduced enough to harden result-set lineage semantics on top of a more stable metadata base.
+
+## 2026-04-03 A2.2: Promotion / Reporting Trace Contract Adoption
+
+Status: completed
+
+Objective:
+- Extend the normalized cross-plane trace contract from D1 into the promotion and reporting draft chain.
+- Make artifact presence versus materialized presence explicit for promotion, reporting handoff, council decision draft, and expert report draft inputs without breaking existing workflow contracts.
+
+Implementation:
+- Added `eco-concil-runtime/src/eco_council_runtime/kernel/reporting_contracts.py`
+  - Introduced shared helpers for the reporting chain:
+    - `normalize_reporting_observed_inputs(...)`
+    - `reporting_contract_fields(...)`
+    - `reporting_contract_fields_from_payload(...)`
+  - Reused the D1 contract surface so downstream reporting artifacts can carry forward:
+    - `board_state_source`
+    - `coverage_source`
+    - `deliberation_sync`
+    - `analysis_sync`
+    - normalized `observed_inputs`
+  - Added reporting-side source and presence normalization for:
+    - `readiness`
+    - `promotion`
+    - `supervisor_state`
+    - `reporting_handoff`
+    - `decision`
+- `skills/eco-promote-evidence-basis/scripts/eco_promote_evidence_basis.py`
+  - Now emits shared trace metadata through the reporting contract helper.
+  - Preserves readiness-origin deliberation/analysis provenance while making `readiness`, `board_brief`, and `next_actions` artifact-versus-materialized presence explicit.
+- `skills/eco-materialize-reporting-handoff/scripts/eco_materialize_reporting_handoff.py`
+  - Now carries forward normalized promotion/readiness contract metadata instead of emitting a reporting-only summary object with no shared trace surface.
+  - Adds explicit `promotion_source`, `readiness_source`, `board_brief_source`, `supervisor_state_source`, `deliberation_sync`, `analysis_sync`, and normalized `observed_inputs`.
+- `skills/eco-draft-council-decision/scripts/eco_draft_council_decision.py`
+  - Now preserves normalized reporting/promotion trace metadata in the decision draft so downstream consumers can still see board/evidence provenance.
+- `skills/eco-draft-expert-report/scripts/eco_draft_expert_report.py`
+  - Now preserves normalized reporting/decision trace metadata in role report drafts, including explicit handoff/decision/board-brief presence flags.
+- Updated skill docs to match the new output contract:
+  - `skills/eco-promote-evidence-basis/SKILL.md`
+  - `skills/eco-materialize-reporting-handoff/SKILL.md`
+  - `skills/eco-draft-council-decision/SKILL.md`
+  - `skills/eco-draft-expert-report/SKILL.md`
+
+Validation:
+- `python3 -m unittest tests/test_reporting_contracts.py -q`
+- `python3 -m unittest tests/test_reporting_workflow.py -q`
+- `python3 -m unittest tests/test_reporting_publish_workflow.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- Added `tests/test_reporting_contracts.py`
+  - Verifies reporting-side explicit artifact flags can diverge from materialized-presence flags.
+  - Verifies reporting contracts can merge fallback upstream payload metadata and local overrides.
+- `tests/test_reporting_workflow.py`
+  - Verifies promotion, reporting handoff, and council decision artifacts expose normalized cross-plane trace metadata on both promoted and withheld paths.
+  - Verifies normal runtime paths explicitly record `board_brief` as absent when the derived export is not materialized.
+- `tests/test_reporting_publish_workflow.py`
+  - Verifies expert report drafts preserve reporting-handoff, decision-draft, board-state, and coverage provenance.
+
+Known limitations:
+- The canonical publish/final-publication layer still consumes upstream reporting artifacts without yet emitting the same fully normalized trace contract; that remains part of the unfinished `A2.2` surface.
+- This increment intentionally preserves existing schema versions and payload shapes, so some older upstream artifacts may still rely on fallback merge behavior rather than natively carrying every normalized source field.
+
+Next:
+- Continue `A2.2` into `eco-publish-expert-report`, `eco-publish-council-decision`, and `eco-materialize-final-publication` so the rest of the export plane emits the same explicit trace contract.
+- Then revisit `C2` once the remaining cross-plane metadata drift is further reduced.

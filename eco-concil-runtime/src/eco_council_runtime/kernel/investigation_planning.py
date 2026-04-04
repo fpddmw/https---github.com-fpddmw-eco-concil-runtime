@@ -17,6 +17,18 @@ ACTION_KIND_WEIGHT = {
     "expand-coverage": 1.7,
     "prepare-promotion": 1.2,
 }
+EXPLICIT_D1_INPUT_KEYS = {
+    "board_summary_artifact_present",
+    "board_summary_present",
+    "board_brief_artifact_present",
+    "board_brief_present",
+    "coverage_artifact_present",
+    "coverage_present",
+    "next_actions_artifact_present",
+    "next_actions_present",
+    "probes_artifact_present",
+    "probes_present",
+}
 
 
 def normalize_space(value: Any) -> str:
@@ -91,6 +103,105 @@ def priority_score(priority: str) -> float:
     return PRIORITY_WEIGHT.get(maybe_text(priority).lower(), PRIORITY_WEIGHT["medium"])
 
 
+def normalize_d1_observed_inputs(
+    observed_inputs: dict[str, Any] | None = None,
+    **overrides: Any,
+) -> dict[str, Any]:
+    source: dict[str, Any] = {}
+    if isinstance(observed_inputs, dict):
+        source.update(observed_inputs)
+    source.update(overrides)
+    normalized = {
+        key: value for key, value in source.items() if key not in EXPLICIT_D1_INPUT_KEYS
+    }
+    normalized["board_summary_artifact_present"] = bool(
+        source.get(
+            "board_summary_artifact_present",
+            source.get("board_summary_present", False),
+        )
+    )
+    normalized["board_summary_present"] = bool(
+        source.get("board_summary_present", False)
+    )
+    normalized["board_brief_artifact_present"] = bool(
+        source.get(
+            "board_brief_artifact_present",
+            source.get("board_brief_present", False),
+        )
+    )
+    normalized["board_brief_present"] = bool(
+        source.get("board_brief_present", False)
+    )
+    normalized["coverage_artifact_present"] = bool(
+        source.get("coverage_artifact_present", False)
+    )
+    normalized["coverage_present"] = bool(source.get("coverage_present", False))
+    normalized["next_actions_artifact_present"] = bool(
+        source.get(
+            "next_actions_artifact_present",
+            source.get("next_actions_present", False),
+        )
+    )
+    normalized["next_actions_present"] = bool(
+        source.get("next_actions_present", False)
+    )
+    normalized["probes_artifact_present"] = bool(
+        source.get("probes_artifact_present", source.get("probes_present", False))
+    )
+    normalized["probes_present"] = bool(source.get("probes_present", False))
+    return normalized
+
+
+def d1_contract_fields(
+    *,
+    board_state_source: Any = "",
+    coverage_source: Any = "",
+    db_path: Any = "",
+    deliberation_sync: dict[str, Any] | None = None,
+    analysis_sync: dict[str, Any] | None = None,
+    observed_inputs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "board_state_source": maybe_text(board_state_source) or "missing-board",
+        "coverage_source": maybe_text(coverage_source) or "missing-coverage",
+        "db_path": maybe_text(db_path),
+        "deliberation_sync": deliberation_sync if isinstance(deliberation_sync, dict) else {},
+        "analysis_sync": analysis_sync if isinstance(analysis_sync, dict) else {},
+        "observed_inputs": normalize_d1_observed_inputs(observed_inputs),
+    }
+
+
+def d1_contract_fields_from_payload(
+    payload: dict[str, Any] | None,
+    *,
+    observed_inputs_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    source = payload if isinstance(payload, dict) else {}
+    observed_inputs = (
+        source.get("observed_inputs")
+        if isinstance(source.get("observed_inputs"), dict)
+        else {}
+    )
+    if isinstance(observed_inputs_overrides, dict):
+        observed_inputs = {**observed_inputs, **observed_inputs_overrides}
+    return d1_contract_fields(
+        board_state_source=source.get("board_state_source"),
+        coverage_source=source.get("coverage_source"),
+        db_path=source.get("db_path"),
+        deliberation_sync=(
+            source.get("deliberation_sync")
+            if isinstance(source.get("deliberation_sync"), dict)
+            else {}
+        ),
+        analysis_sync=(
+            source.get("analysis_sync")
+            if isinstance(source.get("analysis_sync"), dict)
+            else {}
+        ),
+        observed_inputs=observed_inputs,
+    )
+
+
 def score_action(payload: dict[str, Any]) -> float:
     priority_component = priority_score(payload.get("priority"))
     action_kind_component = ACTION_KIND_WEIGHT.get(
@@ -120,67 +231,126 @@ def score_action(payload: dict[str, Any]) -> float:
     )
 
 
+def board_counts_from_round_state(
+    round_state: dict[str, Any],
+    *,
+    state_source: str,
+    include_notes: bool = False,
+) -> dict[str, Any]:
+    notes = (
+        round_state.get("notes", []) if isinstance(round_state.get("notes"), list) else []
+    )
+    hypotheses = (
+        [item for item in round_state.get("hypotheses", []) if isinstance(item, dict)]
+        if isinstance(round_state.get("hypotheses"), list)
+        else []
+    )
+    challenges = (
+        [
+            item
+            for item in round_state.get("challenge_tickets", [])
+            if isinstance(item, dict)
+        ]
+        if isinstance(round_state.get("challenge_tickets"), list)
+        else []
+    )
+    tasks = (
+        [item for item in round_state.get("tasks", []) if isinstance(item, dict)]
+        if isinstance(round_state.get("tasks"), list)
+        else []
+    )
+    active_hypotheses = [
+        item
+        for item in hypotheses
+        if maybe_text(item.get("status")) not in {"closed", "rejected"}
+    ]
+    open_challenges = [
+        item for item in challenges if maybe_text(item.get("status")) != "closed"
+    ]
+    open_tasks = [
+        item
+        for item in tasks
+        if maybe_text(item.get("status")) not in {"completed", "closed", "cancelled"}
+    ]
+    counts = {
+        "hypotheses_active": len(active_hypotheses),
+        "challenge_open": len(open_challenges),
+        "tasks_open": len(open_tasks),
+    }
+    if include_notes:
+        counts["notes_total"] = len(notes)
+    return {
+        "state_source": state_source,
+        "counts": counts,
+        "active_hypotheses": active_hypotheses,
+        "open_challenges": open_challenges,
+        "open_tasks": open_tasks,
+    }
+
+
 def board_snapshot(
     round_state: dict[str, Any] | None,
     board_summary: dict[str, Any] | None,
+    *,
+    include_notes: bool = False,
 ) -> dict[str, Any]:
     if isinstance(round_state, dict):
-        hypotheses = (
-            [item for item in round_state.get("hypotheses", []) if isinstance(item, dict)]
-            if isinstance(round_state.get("hypotheses"), list)
-            else []
+        return board_counts_from_round_state(
+            round_state,
+            state_source="deliberation-plane",
+            include_notes=include_notes,
         )
-        challenges = (
-            [
-                item
-                for item in round_state.get("challenge_tickets", [])
-                if isinstance(item, dict)
-            ]
-            if isinstance(round_state.get("challenge_tickets"), list)
-            else []
-        )
-        tasks = (
-            [item for item in round_state.get("tasks", []) if isinstance(item, dict)]
-            if isinstance(round_state.get("tasks"), list)
-            else []
-        )
-        active_hypotheses = [
-            item
-            for item in hypotheses
-            if maybe_text(item.get("status")) not in {"closed", "rejected"}
-        ]
-        open_challenges = [
-            item for item in challenges if maybe_text(item.get("status")) != "closed"
-        ]
-        open_tasks = [
-            item
-            for item in tasks
-            if maybe_text(item.get("status")) not in {"completed", "closed", "cancelled"}
-        ]
-        return {
-            "state_source": "deliberation-plane",
-            "counts": {
-                "hypotheses_active": len(active_hypotheses),
-                "challenge_open": len(open_challenges),
-                "tasks_open": len(open_tasks),
-            },
-            "active_hypotheses": active_hypotheses,
-            "open_challenges": open_challenges,
-            "open_tasks": open_tasks,
-        }
     if isinstance(board_summary, dict):
+        counts = (
+            board_summary.get("counts", {})
+            if isinstance(board_summary.get("counts"), dict)
+            else {}
+        )
+        summary_counts = {
+            "hypotheses_active": int(
+                counts.get("hypotheses_active")
+                or len(board_summary.get("active_hypotheses", []))
+            ),
+            "challenge_open": int(
+                counts.get("challenge_open")
+                or len(board_summary.get("open_challenges", []))
+            ),
+            "tasks_open": int(
+                counts.get("tasks_open") or len(board_summary.get("open_tasks", []))
+            ),
+        }
+        if include_notes:
+            summary_counts["notes_total"] = int(counts.get("notes_total") or 0)
         return {
-            **board_summary,
             "state_source": maybe_text(board_summary.get("state_source"))
             or "board-summary-artifact",
+            "counts": summary_counts,
+            "active_hypotheses": (
+                board_summary.get("active_hypotheses", [])
+                if isinstance(board_summary.get("active_hypotheses"), list)
+                else []
+            ),
+            "open_challenges": (
+                board_summary.get("open_challenges", [])
+                if isinstance(board_summary.get("open_challenges"), list)
+                else []
+            ),
+            "open_tasks": (
+                board_summary.get("open_tasks", [])
+                if isinstance(board_summary.get("open_tasks"), list)
+                else []
+            ),
         }
+    counts = {
+        "hypotheses_active": 0,
+        "challenge_open": 0,
+        "tasks_open": 0,
+    }
+    if include_notes:
+        counts["notes_total"] = 0
     return {
         "state_source": "missing-board",
-        "counts": {
-            "hypotheses_active": 0,
-            "challenge_open": 0,
-            "tasks_open": 0,
-        },
+        "counts": counts,
         "active_hypotheses": [],
         "open_challenges": [],
         "open_tasks": [],
@@ -424,7 +594,7 @@ def build_actions(
     return ranked
 
 
-def load_ranked_actions_context(
+def load_d1_shared_context(
     run_dir: str | Path,
     *,
     run_id: str,
@@ -432,7 +602,7 @@ def load_ranked_actions_context(
     board_summary_path: str = "",
     board_brief_path: str = "",
     coverage_path: str = "",
-    max_actions: int = 6,
+    include_board_notes: bool = False,
 ) -> dict[str, Any]:
     run_dir_path = Path(run_dir).expanduser().resolve()
     board_summary_file = resolve_path(
@@ -504,34 +674,69 @@ def load_ranked_actions_context(
     current_board_state = board_snapshot(
         round_state,
         board_summary if isinstance(board_summary, dict) else None,
+        include_notes=include_board_notes,
     )
-    ranked_actions = build_actions(
-        current_board_state,
-        coverages,
-        brief_text,
-    )[: max(1, max_actions)]
-    for action in ranked_actions:
-        action.setdefault("run_id", run_id)
-        action.setdefault("round_id", round_id)
-
-    return {
-        "warnings": warnings,
-        "ranked_actions": ranked_actions,
-        "board_summary_file": str(board_summary_file),
-        "board_brief_file": str(board_brief_file),
-        "coverage_file": str(coverage_file),
-        "coverage_source": coverage_source or "missing-coverage",
-        "board_state_source": maybe_text(current_board_state.get("state_source"))
+    contract_fields = d1_contract_fields(
+        board_state_source=maybe_text(current_board_state.get("state_source"))
         or "missing-board",
-        "db_path": db_path,
-        "deliberation_sync": deliberation_sync,
-        "analysis_sync": analysis_sync,
-        "observed_inputs": {
+        coverage_source=coverage_source or "missing-coverage",
+        db_path=db_path,
+        deliberation_sync=deliberation_sync,
+        analysis_sync=analysis_sync,
+        observed_inputs={
+            "board_summary_artifact_present": board_summary_file.exists(),
             "board_summary_present": isinstance(board_summary, dict),
+            "board_brief_artifact_present": board_brief_file.exists(),
             "board_brief_present": bool(maybe_text(brief_text)),
             "coverage_present": bool(coverages),
             "coverage_artifact_present": bool(
                 coverage_context.get("coverage_artifact_present")
             ),
         },
+    )
+    return {
+        "warnings": warnings,
+        "board_state": current_board_state,
+        "coverages": coverages,
+        "board_brief_text": brief_text,
+        "board_summary_file": str(board_summary_file),
+        "board_brief_file": str(board_brief_file),
+        "coverage_file": str(coverage_file),
+        **contract_fields,
+    }
+
+
+def load_ranked_actions_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    board_summary_path: str = "",
+    board_brief_path: str = "",
+    coverage_path: str = "",
+    max_actions: int = 6,
+) -> dict[str, Any]:
+    shared_context = load_d1_shared_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        board_summary_path=board_summary_path,
+        board_brief_path=board_brief_path,
+        coverage_path=coverage_path,
+    )
+    ranked_actions = build_actions(
+        shared_context.get("board_state", {}),
+        (
+            shared_context.get("coverages", [])
+            if isinstance(shared_context.get("coverages"), list)
+            else []
+        ),
+        maybe_text(shared_context.get("board_brief_text")),
+    )[: max(1, max_actions)]
+    for action in ranked_actions:
+        action.setdefault("run_id", run_id)
+        action.setdefault("round_id", round_id)
+    return {
+        **shared_context,
+        "ranked_actions": ranked_actions,
     }

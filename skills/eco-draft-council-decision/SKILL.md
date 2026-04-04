@@ -38,7 +38,10 @@ description: Draft a compact council decision object from the reporting handoff 
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `deliberation_sync`
+- `analysis_sync`
 - `board_handoff`
+- The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `promotion_source`, `db_path`, and `observed_inputs`, preserving upstream trace fields from the reporting chain.
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`

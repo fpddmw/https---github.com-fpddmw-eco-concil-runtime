@@ -48,6 +48,7 @@ description: Summarize round-level readiness from board, next-action, probe, and
 - `deliberation_sync`
 - `analysis_sync`
 - `board_handoff`
+- The emitted artifact also carries normalized D1/D2 trace metadata in `board_state_source`, `coverage_source`, `db_path`, and `observed_inputs`, including explicit `*_artifact_present` and `*_present` flags for board, action, probe, and coverage inputs.
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`

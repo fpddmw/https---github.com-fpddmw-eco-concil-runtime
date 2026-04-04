@@ -81,6 +81,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
 
             soc_report = load_json(reporting_path(run_dir, f"expert_report_sociologist_{ROUND_ID}.json"))
             env_report = load_json(reporting_path(run_dir, f"expert_report_environmentalist_{ROUND_ID}.json"))
+            soc_draft = load_json(reporting_path(run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json"))
             decision = load_json(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json"))
 
             self.assertEqual("ready-to-publish", sociologist_draft["summary"]["report_status"])
@@ -90,6 +91,17 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("published", decision_publish["summary"]["operation"])
             self.assertEqual("sociologist", soc_report["agent_role"])
             self.assertEqual("environmentalist", env_report["agent_role"])
+            self.assertEqual("reporting-handoff-artifact", soc_draft["reporting_handoff_source"])
+            self.assertEqual("council-decision-draft-artifact", soc_draft["decision_source"])
+            self.assertEqual("missing-board-brief", soc_draft["board_brief_source"])
+            self.assertEqual("deliberation-plane", soc_draft["board_state_source"])
+            self.assertEqual("analysis-plane", soc_draft["coverage_source"])
+            self.assertTrue(
+                soc_draft["observed_inputs"]["reporting_handoff_artifact_present"]
+            )
+            self.assertTrue(soc_draft["observed_inputs"]["reporting_handoff_present"])
+            self.assertTrue(soc_draft["observed_inputs"]["decision_artifact_present"])
+            self.assertTrue(soc_draft["observed_inputs"]["decision_present"])
             self.assertEqual("ready", decision["publication_readiness"])
             self.assertEqual(2, len(decision["published_report_refs"]))
 

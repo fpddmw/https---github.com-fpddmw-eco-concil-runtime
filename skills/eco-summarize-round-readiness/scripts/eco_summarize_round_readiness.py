@@ -17,39 +17,13 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.analysis_plane import load_evidence_coverage_context  # noqa: E402
-from eco_council_runtime.kernel.deliberation_plane import load_round_snapshot  # noqa: E402
-
-
-def normalize_space(value: Any) -> str:
-    return " ".join(str(value).split())
-
-
-def maybe_text(value: Any) -> str:
-    if value is None:
-        return ""
-    return normalize_space(value)
-
-
-def maybe_number(value: Any) -> float | None:
-    if value in (None, ""):
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def unique_texts(values: list[Any]) -> list[str]:
-    seen: set[str] = set()
-    results: list[str] = []
-    for value in values:
-        text = maybe_text(value)
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        results.append(text)
-    return results
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    d1_contract_fields_from_payload,
+    load_d1_shared_context,
+    load_json_if_exists,
+    maybe_text,
+    resolve_path,
+)
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -71,90 +45,9 @@ def resolve_run_dir(run_dir: str) -> Path:
     return Path(run_dir).expanduser().resolve()
 
 
-def resolve_path(run_dir: Path, override: str, default_relative: str) -> Path:
-    text = maybe_text(override)
-    if not text:
-        return (run_dir / default_relative).resolve()
-    candidate = Path(text).expanduser()
-    if not candidate.is_absolute():
-        candidate = run_dir / candidate
-    return candidate.resolve()
-
-
-def load_json_if_exists(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(payload, dict):
-        return payload
-    return None
-
-
-def load_text_if_exists(path: Path) -> str:
-    if not path.exists():
-        return ""
-    return path.read_text(encoding="utf-8")
-
-
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def board_counts_from_round_state(round_state: dict[str, Any], *, state_source: str) -> dict[str, Any]:
-    notes = round_state.get("notes", []) if isinstance(round_state.get("notes"), list) else []
-    hypotheses = [item for item in round_state.get("hypotheses", []) if isinstance(item, dict)] if isinstance(round_state.get("hypotheses"), list) else []
-    challenges = [item for item in round_state.get("challenge_tickets", []) if isinstance(item, dict)] if isinstance(round_state.get("challenge_tickets"), list) else []
-    tasks = [item for item in round_state.get("tasks", []) if isinstance(item, dict)] if isinstance(round_state.get("tasks"), list) else []
-    active_hypotheses = [item for item in hypotheses if maybe_text(item.get("status")) not in {"closed", "rejected"}]
-    open_challenges = [item for item in challenges if maybe_text(item.get("status")) != "closed"]
-    open_tasks = [item for item in tasks if maybe_text(item.get("status")) not in {"completed", "closed", "cancelled"}]
-    return {
-        "state_source": state_source,
-        "counts": {
-            "notes_total": len(notes),
-            "hypotheses_active": len(active_hypotheses),
-            "challenge_open": len(open_challenges),
-            "tasks_open": len(open_tasks),
-        },
-        "active_hypotheses": active_hypotheses,
-        "open_challenges": open_challenges,
-        "open_tasks": open_tasks,
-    }
-
-
-def board_snapshot(round_state: dict[str, Any] | None, board_summary: dict[str, Any] | None) -> dict[str, Any]:
-    if isinstance(round_state, dict):
-        return board_counts_from_round_state(
-            round_state,
-            state_source="deliberation-plane",
-        )
-    if isinstance(board_summary, dict):
-        counts = board_summary.get("counts", {}) if isinstance(board_summary.get("counts"), dict) else {}
-        return {
-            "state_source": maybe_text(board_summary.get("state_source")) or "board-summary-artifact",
-            "counts": {
-                "notes_total": int(counts.get("notes_total") or 0),
-                "hypotheses_active": int(counts.get("hypotheses_active") or len(board_summary.get("active_hypotheses", []))),
-                "challenge_open": int(counts.get("challenge_open") or len(board_summary.get("open_challenges", []))),
-                "tasks_open": int(counts.get("tasks_open") or len(board_summary.get("open_tasks", []))),
-            },
-            "active_hypotheses": board_summary.get("active_hypotheses", []) if isinstance(board_summary.get("active_hypotheses"), list) else [],
-            "open_challenges": board_summary.get("open_challenges", []) if isinstance(board_summary.get("open_challenges"), list) else [],
-            "open_tasks": board_summary.get("open_tasks", []) if isinstance(board_summary.get("open_tasks"), list) else [],
-        }
-    return {
-        "state_source": "missing-board",
-        "counts": {
-            "notes_total": 0,
-            "hypotheses_active": 0,
-            "challenge_open": 0,
-            "tasks_open": 0,
-        },
-        "active_hypotheses": [],
-        "open_challenges": [],
-        "open_tasks": [],
-    }
 
 
 def readiness_status(*, active_hypotheses: int, strong_coverages: int, moderate_coverages: int, open_challenges: int, open_tasks: int, open_probes: int, high_priority_actions: int) -> tuple[str, list[str]]:
@@ -200,69 +93,52 @@ def summarize_round_readiness_skill(
     probes_file = resolve_path(run_dir_path, probes_path, f"investigation/falsification_probes_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"reporting/round_readiness_{round_id}.json")
 
-    warnings: list[dict[str, Any]] = []
-    round_snapshot = load_round_snapshot(
+    shared_context = load_d1_shared_context(
         run_dir_path,
-        expected_run_id=run_id,
+        run_id=run_id,
         round_id=round_id,
-        include_closed=True,
+        board_summary_path=board_summary_path,
+        board_brief_path=board_brief_path,
+        coverage_path=coverage_path,
+        include_board_notes=True,
     )
-    board_summary = load_json_if_exists(board_summary_file)
-    round_state = (
-        round_snapshot.get("round_state")
-        if maybe_text(round_snapshot.get("status")) == "completed"
-        and isinstance(round_snapshot.get("round_state"), dict)
-        else None
+    warnings = (
+        shared_context.get("warnings", [])
+        if isinstance(shared_context.get("warnings"), list)
+        else []
     )
-    if round_state is None and not isinstance(board_summary, dict):
-        warnings.append({"code": "missing-board-state", "message": f"No board state was found for round {round_id}."})
     next_actions_payload = load_json_if_exists(next_actions_file)
+    next_actions_artifact_present = next_actions_file.exists()
     next_actions_present = isinstance(next_actions_payload, dict)
     next_actions = next_actions_payload
     if not isinstance(next_actions, dict):
         next_actions = {"ranked_actions": [], "action_count": 0}
     probes_payload = load_json_if_exists(probes_file)
+    probes_artifact_present = probes_file.exists()
     probes_present = isinstance(probes_payload, dict)
     probes = probes_payload
     if not isinstance(probes, dict):
         probes = {"probes": [], "probe_count": 0}
-    brief_excerpt = maybe_text(load_text_if_exists(board_brief_file))[:220]
-    deliberation_sync = (
-        round_snapshot.get("deliberation_sync")
-        if isinstance(round_snapshot.get("deliberation_sync"), dict)
-        else {}
+    contract_fields = d1_contract_fields_from_payload(
+        shared_context,
+        observed_inputs_overrides={
+            "next_actions_artifact_present": next_actions_artifact_present,
+            "next_actions_present": next_actions_present,
+            "probes_artifact_present": probes_artifact_present,
+            "probes_present": probes_present,
+        },
     )
-    db_path = maybe_text(round_snapshot.get("db_path"))
-    coverage_context = load_evidence_coverage_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        coverage_path=coverage_path,
-        db_path=db_path,
-    )
-    coverage_warnings = (
-        coverage_context.get("warnings", [])
-        if isinstance(coverage_context.get("warnings"), list)
-        else []
-    )
-    warnings.extend(coverage_warnings)
     coverages = (
-        coverage_context.get("coverages", [])
-        if isinstance(coverage_context.get("coverages"), list)
+        shared_context.get("coverages", [])
+        if isinstance(shared_context.get("coverages"), list)
         else []
     )
-    coverage_file = maybe_text(coverage_context.get("coverage_file"))
-    coverage_source = maybe_text(coverage_context.get("coverage_source")) or "missing-coverage"
-    analysis_sync = (
-        coverage_context.get("analysis_sync")
-        if isinstance(coverage_context.get("analysis_sync"), dict)
+    coverage_file = maybe_text(shared_context.get("coverage_file"))
+    brief_excerpt = maybe_text(shared_context.get("board_brief_text"))[:220]
+    board_state = (
+        shared_context.get("board_state")
+        if isinstance(shared_context.get("board_state"), dict)
         else {}
-    )
-    if not db_path:
-        db_path = maybe_text(coverage_context.get("db_path"))
-    board_state = board_snapshot(
-        round_state,
-        board_summary if isinstance(board_summary, dict) else None,
     )
 
     strong_coverages = len([item for item in coverages if maybe_text(item.get("readiness")) == "strong"])
@@ -310,26 +186,12 @@ def summarize_round_readiness_skill(
         "round_id": round_id,
         "board_summary_path": str(board_summary_file),
         "board_brief_path": str(board_brief_file),
-        "board_state_source": maybe_text(board_state.get("state_source")) or "missing-board",
-        "db_path": db_path,
-        "deliberation_sync": deliberation_sync,
         "next_actions_path": str(next_actions_file),
         "probes_path": str(probes_file),
         "coverage_path": str(coverage_file),
-        "coverage_source": coverage_source,
+        **contract_fields,
         "readiness_status": status_value,
         "sufficient_for_promotion": status_value == "ready",
-        "observed_inputs": {
-            "board_summary_present": isinstance(board_summary, dict),
-            "board_brief_present": bool(brief_excerpt),
-            "next_actions_present": next_actions_present,
-            "probes_present": probes_present,
-            "coverage_present": bool(coverages),
-            "coverage_artifact_present": bool(
-                coverage_context.get("coverage_artifact_present")
-            ),
-        },
-        "analysis_sync": analysis_sync,
         "counts": {
             "active_hypotheses": active_hypotheses,
             "open_challenges": open_challenges,
@@ -356,17 +218,17 @@ def summarize_round_readiness_skill(
             "output_path": str(output_file),
             "readiness_status": status_value,
             "readiness_id": readiness_id,
-            "board_state_source": maybe_text(board_state.get("state_source")) or "missing-board",
-            "coverage_source": coverage_source,
-            "db_path": db_path,
+            "board_state_source": contract_fields["board_state_source"],
+            "coverage_source": contract_fields["coverage_source"],
+            "db_path": contract_fields["db_path"],
         },
         "receipt_id": "reporting-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, readiness_id)[:20],
         "batch_id": "reportingbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [readiness_id],
         "warnings": warnings,
-        "deliberation_sync": deliberation_sync,
-        "analysis_sync": analysis_sync,
+        "deliberation_sync": contract_fields["deliberation_sync"],
+        "analysis_sync": contract_fields["analysis_sync"],
         "board_handoff": {
             "candidate_ids": [readiness_id],
             "evidence_refs": artifact_refs,

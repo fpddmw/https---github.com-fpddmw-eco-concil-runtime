@@ -45,6 +45,7 @@ description: Propose a ranked next-action queue from shared board state and evid
 - `deliberation_sync`
 - `analysis_sync`
 - `board_handoff`
+- The emitted artifact also carries normalized D1 trace metadata in `board_state_source`, `coverage_source`, `db_path`, and `observed_inputs`, including explicit `*_artifact_present` and `*_present` flags.
 
 ## References
 - `../../openclaw-first-refactor-blueprint.md`
