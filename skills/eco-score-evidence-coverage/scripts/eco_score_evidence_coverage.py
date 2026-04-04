@@ -272,6 +272,22 @@ def score_evidence_coverage_skill(
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
+        "query_basis": {
+            "links_path": str(links_file),
+            "claim_scope_path": str(claim_scope_file),
+            "observation_scope_path": str(observation_scope_file),
+            "links_source": maybe_text(links_context.get("links_source"))
+            or "missing-claim-observation-link",
+            "claim_scope_source": maybe_text(
+                claim_scope_context.get("claim_scope_source")
+            )
+            or "missing-claim-scope",
+            "observation_scope_source": maybe_text(
+                observation_scope_context.get("observation_scope_source")
+            )
+            or "missing-observation-scope",
+            "method": "heuristic-coverage-v1",
+        },
         "links_path": str(links_file),
         "claim_scope_path": str(claim_scope_file),
         "observation_scope_path": str(observation_scope_file),

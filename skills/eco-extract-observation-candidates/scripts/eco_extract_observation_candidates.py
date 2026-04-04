@@ -212,7 +212,27 @@ def extract_observation_candidates_skill(
                 "compact_audit": {"representative": lead["latitude"] is not None and lead["longitude"] is not None, "retained_count": 1, "total_candidate_count": len(group), "coverage_summary": f"Aggregated {len(group)} normalized environment signals into one observation candidate.", "concentration_flags": [], "coverage_dimensions": ["metric", "time-window", "place-scope"], "missing_dimensions": [] if lead["latitude"] is not None and lead["longitude"] is not None else ["coordinate-coverage"], "sampling_notes": []},
             }
         )
-    wrapper = {"schema_version": "n2", "skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "generated_at_utc": utc_now_iso(), "candidate_count": len(candidates), "candidates": candidates}
+    wrapper = {
+        "schema_version": "n2",
+        "skill": SKILL_NAME,
+        "run_id": run_id,
+        "round_id": round_id,
+        "generated_at_utc": utc_now_iso(),
+        "query_basis": {
+            "source_plane": "environment",
+            "db_path": str(db_file),
+            "source_skill_filter": maybe_text(source_skill),
+            "metric_filter": maybe_text(metric),
+            "quality_flag_any": [
+                maybe_text(flag) for flag in quality_flag_any if maybe_text(flag)
+            ],
+            "max_candidates": max(1, int(max_candidates)),
+            "selection_mode": "group-by-source-skill-metric-and-rounded-point",
+            "order_by": "COALESCE(observed_at_utc, captured_at_utc) DESC, signal_id",
+        },
+        "candidate_count": len(candidates),
+        "candidates": candidates,
+    }
     write_json(candidate_path, wrapper)
     analysis_sync = sync_observation_candidate_result_set(
         run_dir_path,

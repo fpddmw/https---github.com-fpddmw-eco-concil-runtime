@@ -168,6 +168,11 @@ def derive_observation_scope_skill(
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
+        "query_basis": {
+            "input_path": str(input_file),
+            "selection_mode": "prefer-merged-observations-then-candidates",
+            "method": "heuristic-observation-scope-v1",
+        },
         "input_path": str(input_file),
         "scope_count": len(scopes),
         "scopes": scopes,

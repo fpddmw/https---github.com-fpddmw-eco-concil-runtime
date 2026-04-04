@@ -755,3 +755,52 @@ Known limitations:
 Next:
 - Shift the next implementation priority to `C2` so analysis-plane result sets gain stronger lineage semantics on top of the now more stable cross-plane contract base.
 - After that, revisit `D3` or `B3` depending whether program-control visibility or moderator control consolidation is the more immediate bottleneck.
+
+## 2026-04-04 C2: Generic Result-Set Lineage Contract
+
+Status: completed
+
+Objective:
+- Harden the shared analysis-plane contract so result sets are no longer just JSON mirrors in SQLite.
+- Make `result_sets / result_items` traceable by `query_basis`, parent result sets, parent ids, and artifact refs through one consistent runtime surface.
+
+Implementation:
+- `eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py`
+  - Added `analysis_result_lineage` as a shared SQLite lineage table for analysis result sets and items.
+  - Added generic extraction helpers for:
+    - `query_basis`
+    - set-level parent artifact refs
+    - set-level parent result-set resolution by input artifact path
+    - item-level parent ids
+    - item-level artifact refs
+  - `sync_analysis_result_set(...)` now persists lineage rows alongside `analysis_result_sets` and `analysis_result_items`.
+  - `load_analysis_result_context(...)` and all typed analysis-context loaders now return a normalized `result_contract`, and `analysis_sync` now carries the same lineage summary fields.
+- Added explicit `query_basis` emission to current analysis-plane producers:
+  - `skills/eco-extract-claim-candidates/scripts/eco_extract_claim_candidates.py`
+  - `skills/eco-extract-observation-candidates/scripts/eco_extract_observation_candidates.py`
+  - `skills/eco-link-claims-to-observations/scripts/eco_link_claims_to_observations.py`
+  - `skills/eco-derive-claim-scope/scripts/eco_derive_claim_scope.py`
+  - `skills/eco-derive-observation-scope/scripts/eco_derive_observation_scope.py`
+  - `skills/eco-score-evidence-coverage/scripts/eco_score_evidence_coverage.py`
+- `tests/test_analysis_workflow.py`
+  - Added lineage persistence coverage for both DB rows and analysis-plane load helpers.
+- `openclaw-db-first-master-plan.md`
+  - Marked `C2` as completed and shifted the recommended next queue forward.
+
+Validation:
+- `python3 -m unittest tests/test_analysis_workflow.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- `tests/test_analysis_workflow.py`
+  - Verifies coverage result sets persist `query-basis`, parent result-set, and parent artifact-ref lineage rows in `analysis_result_lineage`.
+  - Verifies claim-candidate items persist parent-id and artifact-ref lineage rows.
+  - Verifies `load_evidence_coverage_context(...)` can recover the same lineage contract from DB-only state after deleting the coverage JSON artifact.
+
+Known limitations:
+- The lineage contract is still a runtime-local Python/SQLite surface; `C2.2` is still needed before non-Python tooling can query it through a more formal interface.
+- Clustered and merged candidate-family objects still remain outside the shared analysis plane; this increment hardens the contract for already-migrated result kinds, but does not yet finish `C2.1`.
+
+Next:
+- Move to `D3` so the enlarged route map gains a stronger progress dashboard and blocking view.
+- Then continue either `B3` moderator control consolidation or `C2.1` candidate/cluster migration according to the updated master plan order.

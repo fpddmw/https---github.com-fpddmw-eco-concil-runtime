@@ -245,6 +245,18 @@ def extract_claim_candidates_skill(
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
+        "query_basis": {
+            "source_plane": "public",
+            "db_path": str(db_file),
+            "source_skill_filter": maybe_text(source_skill),
+            "claim_type_filter": wanted_claim_type,
+            "keyword_any": [
+                maybe_text(keyword) for keyword in keyword_any if maybe_text(keyword)
+            ],
+            "max_candidates": max(1, int(max_candidates)),
+            "selection_mode": "group-by-claim-type-and-semantic-fingerprint",
+            "order_by": "COALESCE(published_at_utc, captured_at_utc) DESC, signal_id",
+        },
         "candidate_count": len(candidates),
         "candidates": candidates,
     }

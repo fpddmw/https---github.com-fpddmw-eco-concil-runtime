@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from _workflow_support import analytics_path, load_json, run_script, script_path, seed_analysis_chain
+
+WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import load_evidence_coverage_context
 
 RUN_ID = "run-analysis-001"
 ROUND_ID = "round-analysis-001"
@@ -262,6 +270,224 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 coverage_artifact["observed_inputs"]["observation_scope_present"]
             )
             self.assertGreaterEqual(coverage_payload["summary"]["coverage_count"], 1)
+
+    def test_analysis_result_sets_persist_lineage_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            run_script(
+                script_path("eco-derive-claim-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-derive-observation-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            coverage_payload = run_script(
+                script_path("eco-score-evidence-coverage"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            self.assertEqual(
+                "heuristic-coverage-v1",
+                coverage_payload["analysis_sync"]["query_basis"]["method"],
+            )
+            self.assertGreaterEqual(
+                coverage_payload["analysis_sync"]["lineage_counts"][
+                    "parent_result_set_count"
+                ],
+                3,
+            )
+            self.assertGreaterEqual(
+                outputs["extract_claims"]["analysis_sync"]["lineage_counts"][
+                    "parent_id_count"
+                ],
+                1,
+            )
+
+            db_file = analytics_path(run_dir, "signal_plane.sqlite")
+            with sqlite3.connect(db_file) as connection:
+                connection.row_factory = sqlite3.Row
+                result_rows = connection.execute(
+                    """
+                    SELECT analysis_kind, result_set_id
+                    FROM analysis_result_sets
+                    WHERE run_id = ? AND round_id = ?
+                    """,
+                    (RUN_ID, ROUND_ID),
+                ).fetchall()
+                result_set_ids = {
+                    maybe_row["analysis_kind"]: maybe_row["result_set_id"]
+                    for maybe_row in result_rows
+                }
+                coverage_lineage = connection.execute(
+                    """
+                    SELECT lineage_scope, lineage_type, relation, value_text,
+                           artifact_path, source_analysis_kind
+                    FROM analysis_result_lineage
+                    WHERE result_set_id = ?
+                    ORDER BY lineage_scope, lineage_type, relation, value_text
+                    """,
+                    (result_set_ids["evidence-coverage"],),
+                ).fetchall()
+                query_basis_relations = {
+                    row["relation"]
+                    for row in coverage_lineage
+                    if row["lineage_scope"] == "result-set"
+                    and row["lineage_type"] == "query-basis"
+                }
+                self.assertTrue(
+                    {
+                        "links_path",
+                        "claim_scope_path",
+                        "observation_scope_path",
+                        "method",
+                    }.issubset(query_basis_relations)
+                )
+                parent_result_kinds = {
+                    row["source_analysis_kind"]
+                    for row in coverage_lineage
+                    if row["lineage_scope"] == "result-set"
+                    and row["lineage_type"] == "parent-result-set"
+                }
+                self.assertSetEqual(
+                    {
+                        "claim-observation-link",
+                        "claim-scope",
+                        "observation-scope",
+                    },
+                    parent_result_kinds,
+                )
+                parent_artifact_relations = {
+                    row["relation"]
+                    for row in coverage_lineage
+                    if row["lineage_scope"] == "result-set"
+                    and row["lineage_type"] == "artifact-ref"
+                }
+                self.assertSetEqual(
+                    {
+                        "links_path",
+                        "claim_scope_path",
+                        "observation_scope_path",
+                    },
+                    parent_artifact_relations,
+                )
+                claim_candidate_parent_id_count = connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM analysis_result_lineage
+                    WHERE result_set_id = ?
+                      AND lineage_scope = 'item'
+                      AND lineage_type = 'parent-id'
+                      AND relation = 'source_signal_ids'
+                    """,
+                    (result_set_ids["claim-candidate"],),
+                ).fetchone()
+                self.assertIsNotNone(claim_candidate_parent_id_count)
+                assert claim_candidate_parent_id_count is not None
+                self.assertGreaterEqual(int(claim_candidate_parent_id_count[0]), 1)
+                claim_candidate_artifact_ref_count = connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM analysis_result_lineage
+                    WHERE result_set_id = ?
+                      AND lineage_scope = 'item'
+                      AND lineage_type = 'artifact-ref'
+                      AND relation = 'public_refs'
+                    """,
+                    (result_set_ids["claim-candidate"],),
+                ).fetchone()
+                self.assertIsNotNone(claim_candidate_artifact_ref_count)
+                assert claim_candidate_artifact_ref_count is not None
+                self.assertGreaterEqual(int(claim_candidate_artifact_ref_count[0]), 1)
+
+    def test_analysis_context_returns_lineage_contract_from_db(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            run_script(
+                script_path("eco-derive-claim-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-derive-observation-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-score-evidence-coverage"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json").unlink()
+
+            coverage_context = load_evidence_coverage_context(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+            )
+
+            self.assertEqual("analysis-plane", coverage_context["coverage_source"])
+            self.assertFalse(coverage_context["coverage_artifact_present"])
+            self.assertEqual(
+                "heuristic-coverage-v1",
+                coverage_context["result_contract"]["query_basis"]["method"],
+            )
+            self.assertEqual(
+                coverage_context["result_contract"]["query_basis"],
+                coverage_context["analysis_sync"]["query_basis"],
+            )
+            parent_result_kinds = {
+                parent["analysis_kind"]
+                for parent in coverage_context["result_contract"]["parent_result_sets"]
+            }
+            self.assertSetEqual(
+                {
+                    "claim-observation-link",
+                    "claim-scope",
+                    "observation-scope",
+                },
+                parent_result_kinds,
+            )
+            self.assertGreaterEqual(
+                coverage_context["analysis_sync"]["lineage_counts"][
+                    "parent_artifact_ref_count"
+                ],
+                3,
+            )
 
     def test_normalization_audit_can_read_candidates_from_analysis_plane_without_artifacts(
         self,

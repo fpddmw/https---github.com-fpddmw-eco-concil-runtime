@@ -182,6 +182,11 @@ def derive_claim_scope_skill(
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
+        "query_basis": {
+            "input_path": str(input_file),
+            "selection_mode": "prefer-clusters-then-candidates",
+            "method": "heuristic-text-scope-v1",
+        },
         "input_path": str(input_file),
         "scope_count": len(scopes),
         "scopes": scopes,
