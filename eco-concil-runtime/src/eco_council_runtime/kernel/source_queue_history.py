@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
 
+from .deliberation_plane import load_round_task_snapshot
 from .manifest import load_json_if_exists
-from .source_queue_contract import SOURCE_SELECTION_ROLES, maybe_text, role_source_governance, source_role, source_selection_path
+from .source_queue_contract import (
+    SOURCE_SELECTION_ROLES,
+    maybe_text,
+    role_source_governance,
+    source_role,
+    source_selection_path,
+)
 
 ROUND_TASK_PATTERN = re.compile(r"^round_tasks_(?P<round_id>.+)\.json$")
 IMPORT_EXECUTION_PATTERN = re.compile(r"^import_execution_(?P<round_id>.+)\.json$")
@@ -14,6 +22,70 @@ SOURCE_SELECTION_PATTERN = re.compile(r"^source_selection_(?P<role>[^_]+)_(?P<ro
 
 def import_execution_path(run_dir: Path, round_id: str) -> Path:
     return run_dir / "runtime" / f"import_execution_{round_id}.json"
+
+
+def round_task_path(run_dir: Path, round_id: str) -> Path:
+    return run_dir / "investigation" / f"round_tasks_{round_id}.json"
+
+
+def load_json_list_if_exists(path: Path) -> list[dict[str, Any]] | None:
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, list) and all(isinstance(item, dict) for item in payload):
+        return payload
+    return None
+
+
+def load_round_tasks_wrapper(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    task_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = Path(run_dir).expanduser().resolve()
+    task_file = round_task_path(run_dir_path, round_id)
+    override = maybe_text(task_path)
+    if override:
+        candidate = Path(override).expanduser()
+        if not candidate.is_absolute():
+            candidate = run_dir_path / candidate
+        task_file = candidate.resolve()
+
+    artifact_payload = load_json_list_if_exists(task_file)
+    if isinstance(artifact_payload, list):
+        return {
+            "payload": artifact_payload,
+            "source": "round-tasks-artifact",
+            "artifact_path": str(task_file),
+            "artifact_present": True,
+            "payload_present": True,
+        }
+
+    snapshot_payload = load_round_task_snapshot(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if isinstance(snapshot_payload, dict):
+        tasks = snapshot_payload.get("tasks")
+        if isinstance(tasks, list) and all(isinstance(item, dict) for item in tasks):
+            return {
+                "payload": tasks,
+                "source": "deliberation-plane-round-tasks",
+                "artifact_path": str(task_file),
+                "artifact_present": False,
+                "payload_present": True,
+            }
+
+    return {
+        "payload": None,
+        "source": "missing-round-tasks",
+        "artifact_path": str(task_file),
+        "artifact_present": False,
+        "payload_present": False,
+    }
 
 
 def observe_round_artifact(round_times: dict[str, int], round_id: str, path: Path) -> None:
@@ -153,6 +225,8 @@ def role_family_memory(run_dir: Path, current_round_id: str, role: str, mission:
 __all__ = [
     "discovered_round_ids",
     "import_execution_path",
+    "load_round_tasks_wrapper",
     "prior_round_ids",
     "role_family_memory",
+    "round_task_path",
 ]

@@ -17,6 +17,9 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_round_task_snapshot,
+)
 from eco_council_runtime.kernel.source_queue_contract import source_role  # noqa: E402
 
 
@@ -351,6 +354,19 @@ def scaffold_mission_run_skill(
     write_json_file(mission_output_path, mission)
     write_json_file(task_output_path, task_payload)
     write_json_file(board_output_path, board_payload)
+    store_round_task_snapshot(
+        run_dir_path,
+        task_snapshot={
+            "schema_version": "round-task-snapshot-v1",
+            "generated_at_utc": utc_now_iso(),
+            "run_id": run_id,
+            "round_id": round_id,
+            "task_source": "round-tasks-artifact",
+            "task_count": len(task_payload),
+            "tasks": task_payload,
+        },
+        artifact_path=str(task_output_path),
+    )
 
     scaffold_id = "mission-scaffold-" + stable_hash(run_id, round_id, mission_output_path, task_output_path)[:12]
     imports = artifact_imports(mission)

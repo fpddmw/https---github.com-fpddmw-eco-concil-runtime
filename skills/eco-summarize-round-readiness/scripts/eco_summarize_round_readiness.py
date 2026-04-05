@@ -19,8 +19,9 @@ if str(RUNTIME_SRC) not in sys.path:
 
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     d1_contract_fields_from_payload,
+    load_falsification_probe_wrapper,
     load_d1_shared_context,
-    load_json_if_exists,
+    load_next_actions_wrapper,
     maybe_text,
     resolve_path,
 )
@@ -107,18 +108,34 @@ def summarize_round_readiness_skill(
         if isinstance(shared_context.get("warnings"), list)
         else []
     )
-    next_actions_payload = load_json_if_exists(next_actions_file)
-    next_actions_artifact_present = next_actions_file.exists()
-    next_actions_present = isinstance(next_actions_payload, dict)
-    next_actions = next_actions_payload
-    if not isinstance(next_actions, dict):
-        next_actions = {"ranked_actions": [], "action_count": 0}
-    probes_payload = load_json_if_exists(probes_file)
-    probes_artifact_present = probes_file.exists()
-    probes_present = isinstance(probes_payload, dict)
-    probes = probes_payload
-    if not isinstance(probes, dict):
-        probes = {"probes": [], "probe_count": 0}
+    next_actions_context = load_next_actions_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        next_actions_path=next_actions_path,
+    )
+    next_actions_payload = (
+        next_actions_context.get("payload")
+        if isinstance(next_actions_context.get("payload"), dict)
+        else None
+    )
+    next_actions_artifact_present = bool(next_actions_context.get("artifact_present"))
+    next_actions_present = bool(next_actions_context.get("payload_present"))
+    next_actions = next_actions_payload if isinstance(next_actions_payload, dict) else {"ranked_actions": [], "action_count": 0}
+    probes_context = load_falsification_probe_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        probes_path=probes_path,
+    )
+    probes_payload = (
+        probes_context.get("payload")
+        if isinstance(probes_context.get("payload"), dict)
+        else None
+    )
+    probes_artifact_present = bool(probes_context.get("artifact_present"))
+    probes_present = bool(probes_context.get("payload_present"))
+    probes = probes_payload if isinstance(probes_payload, dict) else {"probes": [], "probe_count": 0}
     contract_fields = d1_contract_fields_from_payload(
         shared_context,
         observed_inputs_overrides={

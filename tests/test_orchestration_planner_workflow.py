@@ -178,6 +178,51 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             self.assertNotIn("board-brief", stage_names)
             self.assertTrue(any("eco-open-falsification-probe" in skill_set for skill_set in fallback_skill_sets))
 
+    def test_planner_reads_db_backed_actions_and_probes_when_exports_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_hold_board_state(run_dir, root)
+
+            run_script(
+                script_path("eco-propose-next-actions"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-open-falsification-probe"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            (run_dir / "investigation" / f"next_actions_{ROUND_ID}.json").unlink()
+            (run_dir / "investigation" / f"falsification_probes_{ROUND_ID}.json").unlink()
+
+            payload = run_script(
+                script_path("eco-plan-round-orchestration"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", payload["status"])
+            self.assertTrue(plan["probe_stage_included"])
+            self.assertTrue(plan["observed_state"]["next_actions_present"])
+            self.assertTrue(plan["observed_state"]["probes_present"])
+            self.assertEqual("deliberation-plane-actions", plan["observed_state"]["next_actions_source"])
+            self.assertEqual("deliberation-plane-probes", plan["observed_state"]["probes_source"])
+
 
 if __name__ == "__main__":
     unittest.main()

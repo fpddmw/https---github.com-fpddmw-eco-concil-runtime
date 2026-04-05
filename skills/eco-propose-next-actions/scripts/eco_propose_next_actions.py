@@ -22,6 +22,9 @@ from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     load_ranked_actions_context,
     maybe_text,
 )
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_moderator_action_snapshot,
+)
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -109,6 +112,11 @@ def propose_next_actions_skill(
         "ranked_actions": ranked_actions,
     }
     write_json_file(output_file, wrapper)
+    store_moderator_action_snapshot(
+        run_dir_path,
+        action_snapshot=wrapper,
+        artifact_path=str(output_file),
+    )
 
     artifact_refs = [
         {

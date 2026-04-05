@@ -19,11 +19,14 @@ if str(RUNTIME_SRC) not in sys.path:
 
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     d1_contract_fields_from_payload,
-    load_json_if_exists,
+    load_next_actions_wrapper,
     load_ranked_actions_context,
     maybe_text,
     resolve_path,
     unique_texts,
+)
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_falsification_probe_snapshot,
 )
 
 
@@ -167,14 +170,24 @@ def open_falsification_probe_skill(
     )
 
     warnings: list[dict[str, Any]] = []
-    next_actions_wrapper = load_json_if_exists(next_actions_file)
-    next_actions_artifact_present = next_actions_file.exists()
+    next_actions_context = load_next_actions_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        next_actions_path=next_actions_path,
+    )
+    next_actions_wrapper = (
+        next_actions_context.get("payload")
+        if isinstance(next_actions_context.get("payload"), dict)
+        else None
+    )
+    next_actions_artifact_present = bool(next_actions_context.get("artifact_present"))
     action_source = "next-actions-artifact"
     contract_fields = d1_contract_fields_from_payload(
         None,
         observed_inputs_overrides={
             "next_actions_artifact_present": next_actions_artifact_present,
-            "next_actions_present": isinstance(next_actions_wrapper, dict),
+            "next_actions_present": bool(next_actions_context.get("payload_present")),
         },
     )
     if isinstance(next_actions_wrapper, dict):
@@ -185,6 +198,7 @@ def open_falsification_probe_skill(
         )
         action_source = (
             maybe_text(next_actions_wrapper.get("action_source"))
+            or maybe_text(next_actions_context.get("source"))
             or "next-actions-artifact"
         )
         contract_fields = d1_contract_fields_from_payload(
@@ -198,7 +212,7 @@ def open_falsification_probe_skill(
         warnings.append(
             {
                 "code": "missing-next-actions",
-                "message": f"No next-actions artifact was found at {next_actions_file}. Rebuilding action context from deliberation state.",
+                "message": f"No next-actions artifact or DB snapshot was found for {next_actions_file}. Rebuilding action context from deliberation state.",
             }
         )
         action_context = load_ranked_actions_context(
@@ -253,6 +267,11 @@ def open_falsification_probe_skill(
         "probes": probes,
     }
     write_json_file(output_file, wrapper)
+    store_falsification_probe_snapshot(
+        run_dir_path,
+        probe_snapshot=wrapper,
+        artifact_path=str(output_file),
+    )
 
     artifact_refs = [
         {

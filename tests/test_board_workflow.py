@@ -639,7 +639,7 @@ class BoardWorkflowTests(unittest.TestCase):
             )
             (investigation_path(run_dir, f"round_tasks_{ROUND_ID}.json")).unlink()
 
-            run_script(
+            open_round_payload = run_script(
                 script_path("eco-open-investigation-round"),
                 "--run-dir",
                 str(run_dir),
@@ -656,6 +656,9 @@ class BoardWorkflowTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
+            transition_artifact = load_json(
+                run_dir / "runtime" / f"round_transition_{ROUND2_ID}.json"
+            )
             role_to_sources = {
                 task["assigned_role"]: task["inputs"]["source_skills"]
                 for task in round2_tasks
@@ -669,6 +672,176 @@ class BoardWorkflowTests(unittest.TestCase):
             self.assertEqual(
                 ["open-meteo-flood-fetch"],
                 role_to_sources["environmentalist"],
+            )
+            self.assertEqual(
+                "deliberation-plane-round-tasks",
+                open_round_payload["summary"]["source_task_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-round-tasks",
+                transition_artifact["source_task_source"],
+            )
+            self.assertFalse(
+                transition_artifact["observed_inputs"]["source_task_artifact_present"]
+            )
+            self.assertTrue(
+                transition_artifact["observed_inputs"]["source_task_present"]
+            )
+            self.assertFalse(
+                any(
+                    warning.get("code") == "missing-source-round-tasks"
+                    for warning in open_round_payload["warnings"]
+                    if isinstance(warning, dict)
+                )
+            )
+
+    def test_open_investigation_round_reads_db_backed_actions_when_export_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            coverage_payload = run_script(
+                script_path("eco-score-evidence-coverage"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+
+            hypothesis_payload = run_script(
+                script_path("eco-update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Smoke over NYC may be overstated",
+                "--statement",
+                "Public smoke reports may overstate severity relative to observed PM2.5 coverage.",
+                "--status",
+                "active",
+                "--owner-role",
+                "moderator",
+                "--linked-claim-id",
+                outputs["cluster_claims"]["canonical_ids"][0],
+                "--confidence",
+                "0.52",
+            )
+            run_script(
+                script_path("eco-open-challenge-ticket"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Check whether smoke narrative is overstated",
+                "--challenge-statement",
+                "Re-test whether the strongest smoke narrative exceeds evidence coverage.",
+                "--target-claim-id",
+                outputs["cluster_claims"]["canonical_ids"][0],
+                "--target-hypothesis-id",
+                hypothesis_payload["canonical_ids"][0],
+                "--priority",
+                "high",
+                "--owner-role",
+                "challenger",
+                "--linked-artifact-ref",
+                coverage_ref,
+            )
+            run_script(
+                script_path("eco-summarize-board-state"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-materialize-board-brief"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-propose-next-actions"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            next_actions_artifact = load_json(
+                investigation_path(run_dir, f"next_actions_{ROUND_ID}.json")
+            )
+            expected_action_ids = [
+                action["action_id"]
+                for action in next_actions_artifact["ranked_actions"][:3]
+                if isinstance(action, dict) and action.get("action_id")
+            ]
+            self.assertTrue(expected_action_ids)
+
+            investigation_path(run_dir, f"next_actions_{ROUND_ID}.json").unlink()
+
+            open_round_payload = run_script(
+                script_path("eco-open-investigation-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND2_ID,
+                "--source-round-id",
+                ROUND_ID,
+            )
+
+            round2_state = load_json(board_path(run_dir))["rounds"][ROUND2_ID]
+            transition_artifact = load_json(
+                run_dir / "runtime" / f"round_transition_{ROUND2_ID}.json"
+            )
+
+            self.assertEqual(
+                "deliberation-plane-actions",
+                transition_artifact["source_next_actions_source"],
+            )
+            self.assertFalse(
+                transition_artifact["observed_inputs"][
+                    "source_next_actions_artifact_present"
+                ]
+            )
+            self.assertTrue(
+                transition_artifact["observed_inputs"]["source_next_actions_present"]
+            )
+            self.assertEqual(
+                "deliberation-plane-actions",
+                open_round_payload["summary"]["source_next_actions_source"],
+            )
+            self.assertFalse(
+                any(
+                    warning.get("code") == "missing-next-actions"
+                    for warning in open_round_payload["warnings"]
+                    if isinstance(warning, dict)
+                )
+            )
+            self.assertTrue(
+                any(
+                    task.get("carryover_from_action_id") in expected_action_ids
+                    for task in round2_state["tasks"]
+                    if isinstance(task, dict)
+                )
             )
 
     def test_board_delta_cursor_filters_events(self) -> None:

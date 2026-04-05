@@ -25,8 +25,15 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     commit_board_mutation,
     load_round_snapshot,
     store_round_transition_record,
+    store_round_task_snapshot,
+)
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_next_actions_wrapper,
 )
 from eco_council_runtime.kernel.source_queue_contract import source_role  # noqa: E402
+from eco_council_runtime.kernel.source_queue_history import (  # noqa: E402
+    load_round_tasks_wrapper,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -455,20 +462,82 @@ def open_investigation_round_skill(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
-    source_task_file = resolve_path(run_dir_path, source_task_path, f"investigation/round_tasks_{source_round_id}.json")
-    source_next_actions_file = resolve_path(run_dir_path, source_next_actions_path, f"investigation/next_actions_{source_round_id}.json")
+    source_task_wrapper = load_round_tasks_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=source_round_id,
+        task_path=source_task_path,
+    )
+    source_task_file = Path(
+        maybe_text(source_task_wrapper.get("artifact_path"))
+        or resolve_path(
+            run_dir_path,
+            source_task_path,
+            f"investigation/round_tasks_{source_round_id}.json",
+        )
+    ).resolve()
+    source_next_actions_wrapper = load_next_actions_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=source_round_id,
+        next_actions_path=source_next_actions_path,
+    )
+    source_next_actions_file = Path(
+        maybe_text(source_next_actions_wrapper.get("artifact_path"))
+        or resolve_path(
+            run_dir_path,
+            source_next_actions_path,
+            f"investigation/next_actions_{source_round_id}.json",
+        )
+    ).resolve()
     output_file = resolve_path(run_dir_path, output_path, f"runtime/round_transition_{round_id}.json")
     target_task_file = (run_dir_path / "investigation" / f"round_tasks_{round_id}.json").resolve()
     mission_file = (run_dir_path / "mission.json").resolve()
 
     warnings: list[dict[str, str]] = []
-    source_tasks = load_json_if_exists(source_task_file)
-    source_task_rows = [item for item in source_tasks if isinstance(item, dict)] if isinstance(source_tasks, list) else []
+    source_task_source = (
+        maybe_text(source_task_wrapper.get("source")) or "missing-round-tasks"
+    )
+    source_task_artifact_present = bool(source_task_wrapper.get("artifact_present"))
+    source_task_present = bool(source_task_wrapper.get("payload_present"))
+    source_tasks = source_task_wrapper.get("payload")
+    source_task_rows = (
+        [item for item in source_tasks if isinstance(item, dict)]
+        if isinstance(source_tasks, list)
+        else []
+    )
     if not source_task_rows:
-        warnings.append({"code": "missing-source-round-tasks", "message": f"No task scaffold was found at {source_task_file}."})
-    next_actions = load_json_if_exists(source_next_actions_file)
-    if next_actions is None:
-        warnings.append({"code": "missing-next-actions", "message": f"No next-actions artifact was found at {source_next_actions_file}."})
+        warnings.append(
+            {
+                "code": "missing-source-round-tasks",
+                "message": (
+                    "No source round task scaffold artifact or deliberation-plane "
+                    f"snapshot was found for {source_round_id} "
+                    f"(expected artifact path: {source_task_file})."
+                ),
+            }
+        )
+    source_next_actions_source = (
+        maybe_text(source_next_actions_wrapper.get("source")) or "missing-next-actions"
+    )
+    source_next_actions_artifact_present = bool(
+        source_next_actions_wrapper.get("artifact_present")
+    )
+    source_next_actions_present = bool(
+        source_next_actions_wrapper.get("payload_present")
+    )
+    next_actions = source_next_actions_wrapper.get("payload")
+    if not isinstance(next_actions, dict):
+        warnings.append(
+            {
+                "code": "missing-next-actions",
+                "message": (
+                    "No next-actions artifact or deliberation-plane snapshot was "
+                    f"found for source round {source_round_id} "
+                    f"(expected artifact path: {source_next_actions_file})."
+                ),
+            }
+        )
         next_actions = {}
     mission = load_json_if_exists(mission_file)
     if not isinstance(mission, dict):
@@ -658,6 +727,19 @@ def open_investigation_round_skill(
             event_discriminator=note_id,
         )
         write_json_file(target_task_file, followup_tasks)
+        store_round_task_snapshot(
+            run_dir_path,
+            task_snapshot={
+                "schema_version": "round-task-snapshot-v1",
+                "generated_at_utc": utc_now_iso(),
+                "run_id": run_id,
+                "round_id": round_id,
+                "task_source": "round-tasks-artifact",
+                "task_count": len(followup_tasks),
+                "tasks": followup_tasks,
+            },
+            artifact_path=str(target_task_file),
+        )
 
         event_id = maybe_text(write_summary.get("event_id"))
         board_revision = max(0, int(write_summary.get("board_revision") or 0))
@@ -674,11 +756,19 @@ def open_investigation_round_skill(
             "board_path": str(board_file),
             "task_path": str(target_task_file),
             "source_task_path": str(source_task_file),
+            "source_task_source": source_task_source,
             "source_next_actions_path": str(source_next_actions_file),
+            "source_next_actions_source": source_next_actions_source,
             "db_path": maybe_text(write_summary.get("db_path")),
             "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
             "board_revision": board_revision,
             "event_id": event_id,
+            "observed_inputs": {
+                "source_task_present": source_task_present,
+                "source_task_artifact_present": source_task_artifact_present,
+                "source_next_actions_present": source_next_actions_present,
+                "source_next_actions_artifact_present": source_next_actions_artifact_present,
+            },
             "counts": {
                 "carried_hypothesis_count": len(carried_hypotheses),
                 "carried_board_task_count": len(carried_tasks),
@@ -736,6 +826,8 @@ def open_investigation_round_skill(
             "carried_hypothesis_count": len(carried_hypotheses),
             "carried_board_task_count": len(carried_tasks),
             "followup_round_task_count": len(followup_tasks),
+            "source_task_source": source_task_source,
+            "source_next_actions_source": source_next_actions_source,
             "db_path": maybe_text(write_summary.get("db_path")),
             "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
         },

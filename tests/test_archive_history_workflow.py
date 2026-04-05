@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
 from _workflow_support import (
     analytics_path,
+    investigation_path,
     load_json,
     run_kernel,
     run_script,
@@ -231,6 +234,55 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         run_id,
         "--round-id",
         round_id,
+    )
+
+
+def seed_moderator_actions_and_probes(
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+) -> tuple[dict[str, object], dict[str, object]]:
+    run_script(
+        script_path("eco-summarize-board-state"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+    )
+    run_script(
+        script_path("eco-materialize-board-brief"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+    )
+    run_script(
+        script_path("eco-propose-next-actions"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+    )
+    run_script(
+        script_path("eco-open-falsification-probe"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+    )
+    return (
+        load_json(investigation_path(run_dir, f"next_actions_{round_id}.json")),
+        load_json(
+            investigation_path(run_dir, f"falsification_probes_{round_id}.json")
+        ),
     )
 
 
@@ -605,6 +657,200 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertTrue(any(case["case_id"] == HISTORICAL_RUN_ID for case in retrieval_artifact["cases"]))
             self.assertIn(HISTORICAL_RUN_ID, context_text)
             self.assertIn("Historical Signal Hints", context_text)
+
+    def test_archive_case_library_reads_db_backed_actions_and_probes_when_exports_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            historical_run_dir = root / "historical-run"
+
+            prepare_ready_round(
+                historical_run_dir,
+                root / "historical-fixtures",
+                HISTORICAL_RUN_ID,
+                HISTORICAL_ROUND_ID,
+                publish=True,
+            )
+            next_actions_artifact, probes_artifact = seed_moderator_actions_and_probes(
+                historical_run_dir,
+                HISTORICAL_RUN_ID,
+                HISTORICAL_ROUND_ID,
+            )
+            expected_questions = [
+                next_actions_artifact["ranked_actions"][0]["objective"],
+                probes_artifact["probes"][0]["falsification_question"],
+            ]
+
+            investigation_path(
+                historical_run_dir, f"next_actions_{HISTORICAL_ROUND_ID}.json"
+            ).unlink()
+            investigation_path(
+                historical_run_dir,
+                f"falsification_probes_{HISTORICAL_ROUND_ID}.json",
+            ).unlink()
+
+            archive_payload = run_script(
+                script_path("eco-archive-case-library"),
+                "--run-dir",
+                str(historical_run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+            )
+
+            archive_artifact = load_json(
+                historical_run_dir
+                / "archive"
+                / f"case_library_import_{HISTORICAL_ROUND_ID}.json"
+            )
+            connection = sqlite3.connect(archive_payload["summary"]["db_path"])
+            try:
+                row = connection.execute(
+                    "SELECT open_questions_json FROM cases WHERE case_id = ?",
+                    (HISTORICAL_RUN_ID,),
+                ).fetchone()
+            finally:
+                connection.close()
+
+            self.assertEqual(
+                "deliberation-plane-actions",
+                archive_payload["summary"]["next_actions_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-probes",
+                archive_payload["summary"]["probes_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-actions",
+                archive_artifact["next_actions_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-probes",
+                archive_artifact["probes_source"],
+            )
+            self.assertFalse(
+                archive_artifact["observed_inputs"]["next_actions_artifact_present"]
+            )
+            self.assertFalse(
+                archive_artifact["observed_inputs"]["probes_artifact_present"]
+            )
+            self.assertTrue(archive_artifact["observed_inputs"]["next_actions_present"])
+            self.assertTrue(archive_artifact["observed_inputs"]["probes_present"])
+            self.assertIsNotNone(row)
+            assert row is not None
+            open_questions = json.loads(row[0])
+            self.assertTrue(
+                all(question in open_questions for question in expected_questions)
+            )
+
+    def test_history_context_reads_db_backed_actions_and_probes_when_exports_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            historical_run_dir = root / "historical-run"
+            current_run_dir = root / "current-run"
+
+            prepare_ready_round(
+                historical_run_dir,
+                root / "historical-fixtures",
+                HISTORICAL_RUN_ID,
+                HISTORICAL_ROUND_ID,
+                publish=True,
+            )
+            run_script(
+                script_path("eco-archive-signal-corpus"),
+                "--run-dir",
+                str(historical_run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+            )
+            run_script(
+                script_path("eco-archive-case-library"),
+                "--run-dir",
+                str(historical_run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+            )
+
+            prepare_ready_round(
+                current_run_dir,
+                root / "current-fixtures",
+                CURRENT_RUN_ID,
+                CURRENT_ROUND_ID,
+                publish=False,
+            )
+            next_actions_artifact, probes_artifact = seed_moderator_actions_and_probes(
+                current_run_dir,
+                CURRENT_RUN_ID,
+                CURRENT_ROUND_ID,
+            )
+            expected_questions = [
+                next_actions_artifact["ranked_actions"][0]["objective"],
+                probes_artifact["probes"][0]["falsification_question"],
+            ]
+
+            investigation_path(
+                current_run_dir, f"next_actions_{CURRENT_ROUND_ID}.json"
+            ).unlink()
+            investigation_path(
+                current_run_dir, f"falsification_probes_{CURRENT_ROUND_ID}.json"
+            ).unlink()
+
+            history_payload = run_script(
+                script_path("eco-materialize-history-context"),
+                "--run-dir",
+                str(current_run_dir),
+                "--run-id",
+                CURRENT_RUN_ID,
+                "--round-id",
+                CURRENT_ROUND_ID,
+            )
+
+            retrieval_artifact = load_json(
+                current_run_dir / "investigation" / f"history_retrieval_{CURRENT_ROUND_ID}.json"
+            )
+
+            self.assertEqual(
+                "deliberation-plane-actions",
+                history_payload["summary"]["next_actions_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-probes",
+                history_payload["summary"]["probes_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-actions",
+                retrieval_artifact["next_actions_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-probes",
+                retrieval_artifact["probes_source"],
+            )
+            self.assertFalse(
+                retrieval_artifact["observed_inputs"][
+                    "next_actions_artifact_present"
+                ]
+            )
+            self.assertFalse(
+                retrieval_artifact["observed_inputs"]["probes_artifact_present"]
+            )
+            self.assertTrue(retrieval_artifact["observed_inputs"]["next_actions_present"])
+            self.assertTrue(retrieval_artifact["observed_inputs"]["probes_present"])
+            self.assertTrue(
+                all(
+                    question in retrieval_artifact["current_context"]["open_questions"]
+                    for question in expected_questions
+                )
+            )
+            self.assertGreaterEqual(
+                retrieval_artifact["budget"]["selected_case_count"], 1
+            )
+            self.assertGreaterEqual(
+                retrieval_artifact["budget"]["selected_signal_count"], 1
+            )
 
 
 if __name__ == "__main__":

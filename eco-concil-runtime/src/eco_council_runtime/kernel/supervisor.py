@@ -9,6 +9,7 @@ from .deliberation_plane import store_promotion_freeze_record
 from .executor import SkillExecutionError
 from .controller import run_phase2_round, run_phase2_round_with_contract_mode
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
+from .investigation_planning import load_next_actions_wrapper
 from .ledger import append_ledger_event
 from .manifest import load_json_if_exists, write_json
 from .paths import supervisor_state_path
@@ -283,7 +284,21 @@ def supervise_round_with_contract_mode(
     controller = controller_result.get("controller", {}) if isinstance(controller_result.get("controller"), dict) else {}
     artifacts = controller.get("artifacts", {}) if isinstance(controller.get("artifacts"), dict) else {}
     next_actions_path = maybe_text(artifacts.get("next_actions_path"))
-    next_actions = load_json_if_exists(Path(next_actions_path)) if next_actions_path else {}
+    next_actions_context = (
+        load_next_actions_wrapper(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            next_actions_path=next_actions_path,
+        )
+        if next_actions_path
+        else {"payload": {}}
+    )
+    next_actions = (
+        next_actions_context.get("payload")
+        if isinstance(next_actions_context.get("payload"), dict)
+        else {}
+    )
     next_actions = next_actions or {}
     top_action_rows = top_actions(next_actions)
     gate_reasons = controller.get("gate_reasons", []) if isinstance(controller.get("gate_reasons"), list) else []

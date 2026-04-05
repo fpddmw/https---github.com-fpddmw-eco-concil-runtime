@@ -918,3 +918,184 @@ Known limitations:
 Next:
 - Continue `B3` by moving more active moderator orchestration state, especially probe/challenge/task coordination, onto the deliberation-plane work surface.
 - After that, continue `A3` governance hardening and `C2.1` candidate/cluster migration according to the refreshed dashboard order.
+
+## 2026-04-05 B3: Moderator Action / Probe Snapshot Migration
+
+Status: completed
+
+Objective:
+- Stop treating `next_actions_<round>.json` and `falsification_probes_<round>.json` as the only durable moderator work surface once those objects have already been computed.
+- Let the active moderator loop recover ranked actions and probe state from deliberation-plane storage so readiness, promotion, planner, and operator paths no longer depend on those JSON files remaining present.
+
+Implementation:
+- Extended `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
+  - Added `moderator_action_snapshots`.
+  - Added `falsification_probe_snapshots`.
+  - Added helpers to store/load:
+    - next-action snapshots
+    - falsification-probe snapshots
+    - a compact moderator work surface bundle for one round
+- Extended `eco-concil-runtime/src/eco_council_runtime/kernel/investigation_planning.py`
+  - Added shared loaders that resolve next actions and probes in this order:
+    - JSON artifact
+    - deliberation-plane snapshot
+    - missing
+  - Normalized the recovered source labels so downstream skills can distinguish:
+    - `next-actions-artifact`
+    - `deliberation-plane-actions`
+    - `falsification-probes-artifact`
+    - `deliberation-plane-probes`
+- Updated `skills/eco-propose-next-actions/scripts/eco_propose_next_actions.py`
+  - After writing the JSON export, it now persists the ranked action snapshot into deliberation plane.
+- Updated `skills/eco-open-falsification-probe/scripts/eco_open_falsification_probe.py`
+  - Reads DB-backed next-action snapshots when the next-actions JSON export is missing.
+  - Still falls back to direct deliberation/analysis reconstruction when neither artifact nor DB snapshot exists.
+  - Persists the generated probe snapshot into deliberation plane.
+- Updated `skills/eco-summarize-round-readiness/scripts/eco_summarize_round_readiness.py`
+  - Reads next actions and probes from deliberation-plane snapshots when the JSON exports are absent.
+- Updated `skills/eco-promote-evidence-basis/scripts/eco_promote_evidence_basis.py`
+  - Reads DB-backed next actions when the explicit next-actions export is missing.
+- Updated `skills/eco-plan-round-orchestration/scripts/eco_plan_round_orchestration.py`
+  - Planner observed-state reconstruction now falls back to DB-backed next actions and probes.
+  - Added explicit `next_actions_source` / `probes_source` reporting in the plan payload.
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/supervisor.py`
+  - Supervisor top-action resolution now falls back to deliberation-plane action snapshots if the next-actions export is gone.
+- Updated `openclaw-db-first-master-plan.md`
+  - Refined the Route `B` maturity summary to reflect that moderator action/probe snapshots now also recover from deliberation plane.
+
+Validation:
+- `python3 -m unittest tests/test_investigation_workflow.py tests/test_orchestration_planner_workflow.py -q`
+- `python3 -m unittest tests/test_runtime_kernel.py tests/test_reporting_workflow.py tests/test_supervisor_simulation_regression.py -q`
+- `python3 -m unittest tests/test_archive_history_workflow.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- Updated `tests/test_investigation_workflow.py`
+  - Added `test_d1_probe_skill_reads_db_backed_actions_when_next_actions_artifact_is_missing`.
+  - Added `test_d2_reads_db_backed_actions_and_probes_when_artifacts_are_missing`.
+- Updated `tests/test_orchestration_planner_workflow.py`
+  - Added `test_planner_reads_db_backed_actions_and_probes_when_exports_are_missing`.
+
+Known limitations:
+- This increment persists the latest per-round `next_actions` and `falsification_probes` snapshots, but it still does not model them as deeper per-item deliberation objects with their own mutation history.
+- `eco-open-investigation-round`, `eco-materialize-history-context`, and `eco-archive-case-library` still have some direct next-action/probe artifact reads that have not yet been moved onto the same DB-backed moderator work surface.
+- Challenge/task carryover orchestration still remains the next substantial `B3` gap after this action/probe migration.
+
+Next:
+- Continue `B3` by moving source-round carryover, challenge/task coordination, and round-opening orchestration onto the deliberation-plane-first moderator work surface.
+- After that, continue `A3` governance hardening and `C2.1` candidate/cluster migration according to the refreshed dashboard order.
+
+## 2026-04-05 B3: Carryover / History Snapshot Read Migration
+
+Status: completed
+
+Objective:
+- Remove the remaining operational dependence of round opening on `next_actions_<source_round>.json` once the moderator action snapshot already exists in deliberation plane.
+- Move the remaining history/archive consumers off direct `next_actions` / `falsification_probes` JSON reads so moderator open-question context survives export deletion.
+
+Implementation:
+- Updated `skills/eco-open-investigation-round/scripts/eco_open_investigation_round.py`
+  - Source-round carryover now resolves `next_actions` through the shared wrapper:
+    - artifact
+    - deliberation-plane snapshot
+    - missing
+  - `round_transition_<round>.json` now records:
+    - `source_next_actions_source`
+    - `observed_inputs.source_next_actions_present`
+    - `observed_inputs.source_next_actions_artifact_present`
+  - Missing-next-actions warnings now only fire when both the JSON export and deliberation-plane snapshot are absent.
+- Updated `skills/eco-materialize-history-context/scripts/eco_materialize_history_context.py`
+  - History query assembly now reads `next_actions` and `falsification_probes` through the same artifact-or-DB wrapper path.
+  - `history_retrieval_<round>.json` and the skill summary now expose:
+    - `next_actions_source`
+    - `probes_source`
+    - corresponding observed input presence flags
+- Updated `skills/eco-archive-case-library/scripts/eco_archive_case_library.py`
+  - Archive import open-question assembly now reads `next_actions` and `falsification_probes` via the shared wrapper instead of direct JSON loads.
+  - `case_library_import_<round>.json` and the skill summary now expose:
+    - `next_actions_source`
+    - `probes_source`
+    - corresponding observed input presence flags
+- Updated `openclaw-db-first-master-plan.md`
+  - Refined the Route `B` maturity summary to reflect that source-round carryover and history/archive moderator reads are now also DB-backed.
+
+Validation:
+- `python3 -m unittest tests/test_board_workflow.py -q`
+- `python3 -m unittest tests/test_archive_history_workflow.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- Updated `tests/test_board_workflow.py`
+  - Added `test_open_investigation_round_reads_db_backed_actions_when_export_is_missing`.
+- Updated `tests/test_archive_history_workflow.py`
+  - Added `test_archive_case_library_reads_db_backed_actions_and_probes_when_exports_are_missing`.
+  - Added `test_history_context_reads_db_backed_actions_and_probes_when_exports_are_missing`.
+
+Known limitations:
+- `next_actions` / `falsification_probes` still persist as latest per-round snapshots, not as finer-grained moderator control objects with their own mutation history.
+- `eco-open-investigation-round` still exports follow-up task scaffolds as JSON after the DB-first board mutation; this increment only migrates the source-round carryover input surface.
+- History/archive still depend on reporting/promotion artifacts for the rest of their context; this increment only migrates the remaining moderator action/probe reads.
+
+Next:
+- Continue `B3` by deciding whether moderator action/probe/challenge/task coordination should evolve beyond latest-round snapshots into finer-grained DB-backed history.
+- After that, continue `A3` governance hardening and `C2.1` candidate/cluster migration according to the refreshed dashboard order.
+
+## 2026-04-05 B3: Round Task Snapshot Migration
+
+Status: completed
+
+Objective:
+- Stop treating `round_tasks_<round>.json` as the only recoverable round-level orchestration input once a mission scaffold or follow-up round has already materialized that task set.
+- Let `eco-open-investigation-round` and `eco-prepare-round` continue from a deliberation-plane-backed round-task surface when the compatibility JSON export is absent.
+
+Implementation:
+- Extended `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
+  - Added `round_task_snapshots`.
+  - Added helpers to store/load round-task snapshots.
+  - Extended the compact moderator work-surface bundle so it can also expose round-task snapshots.
+- Extended `eco-concil-runtime/src/eco_council_runtime/kernel/source_queue_history.py`
+  - Added a shared `load_round_tasks_wrapper(...)` that resolves round tasks in this order:
+    - JSON artifact
+    - deliberation-plane snapshot
+    - missing
+  - Normalized the recovered source labels so downstream skills can distinguish:
+    - `round-tasks-artifact`
+    - `deliberation-plane-round-tasks`
+- Updated `skills/eco-scaffold-mission-run/scripts/eco_scaffold_mission_run.py`
+  - After writing the initial `round_tasks_<round>.json`, it now persists the same scaffold into deliberation plane.
+- Updated `skills/eco-open-investigation-round/scripts/eco_open_investigation_round.py`
+  - Source-round task carryover now reads through the shared round-task wrapper instead of direct JSON-only reads.
+  - Follow-up `round_tasks_<round>.json` exports are now also persisted into deliberation plane.
+  - `round_transition_<round>.json` now exposes:
+    - `source_task_source`
+    - `observed_inputs.source_task_present`
+    - `observed_inputs.source_task_artifact_present`
+- Updated `skills/eco-prepare-round/scripts/eco_prepare_round.py`
+  - `prepare-round` now reads current-round task scaffolds through the shared wrapper.
+  - When the task export is missing but the DB snapshot exists, it recreates the compatibility JSON export before building source selections and fetch plans.
+  - `fetch_plan_<round>.json` and the skill summary now expose:
+    - `task_source`
+    - round-task observed input presence flags
+- Updated `openclaw-db-first-master-plan.md`
+  - Refined the Route `B` maturity summary to reflect that round task scaffolds and `prepare-round` input recovery are now also DB-backed.
+
+Validation:
+- `python3 -m unittest tests/test_board_workflow.py -q`
+- `python3 -m unittest tests/test_orchestration_ingress_workflow.py -q`
+- `python3 -m unittest tests/test_source_queue_rebuild.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- Updated `tests/test_board_workflow.py`
+  - Extended `test_open_investigation_round_fallback_uses_shared_source_role_catalog` to verify source-round task scaffolds recover from `deliberation-plane-round-tasks` when the source `round_tasks` export is missing.
+- Updated `tests/test_orchestration_ingress_workflow.py`
+  - Added `test_prepare_round_reads_db_backed_round_tasks_when_export_is_missing`.
+
+Known limitations:
+- `round_task_snapshots` still stores the latest per-round scaffold snapshot rather than a finer-grained mutation history for per-role planning decisions.
+- `source_queue_history.discovered_round_ids(...)` still primarily infers round lineage from runtime/artifact footprints; this increment hardens task recovery, but does not yet replace that discovery model with a dedicated DB query surface.
+- `next_actions` / `falsification_probes` / `round_tasks` are now all DB-backed recovery surfaces, but moderator coordination still stops at latest-round snapshots rather than deeper per-item histories.
+
+Next:
+- Continue `B3` by deciding whether moderator action/probe/challenge/task coordination should evolve beyond latest-round snapshots into finer-grained DB-backed history.
+- After that, continue `A3` governance hardening and `C2.1` candidate/cluster migration according to the refreshed dashboard order.

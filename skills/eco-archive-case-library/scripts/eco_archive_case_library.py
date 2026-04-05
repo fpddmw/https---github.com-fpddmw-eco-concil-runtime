@@ -23,6 +23,10 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_evidence_coverage_context,
     load_observation_scope_context,
 )
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_falsification_probe_wrapper,
+    load_next_actions_wrapper,
+)
 
 SIGNAL_TABLE = "normalized_signals"
 
@@ -634,8 +638,26 @@ def archive_case_library_skill(
     )
     warnings.extend(analysis_warnings)
     coverage_wrapper = analysis_inputs.get("coverage_wrapper", {})
-    next_actions = load_json_if_exists(run_dir_path / "investigation" / f"next_actions_{round_id}.json") or {}
-    probes = load_json_if_exists(run_dir_path / "investigation" / f"falsification_probes_{round_id}.json") or {}
+    next_actions_wrapper = load_next_actions_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    probes_wrapper = load_falsification_probe_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    next_actions = (
+        next_actions_wrapper.get("payload")
+        if isinstance(next_actions_wrapper.get("payload"), dict)
+        else {}
+    )
+    probes = (
+        probes_wrapper.get("payload")
+        if isinstance(probes_wrapper.get("payload"), dict)
+        else {}
+    )
     readiness = load_json_if_exists(run_dir_path / "reporting" / f"round_readiness_{round_id}.json") or {}
     promotion = load_json_if_exists(run_dir_path / "promotion" / f"promoted_evidence_basis_{round_id}.json") or {}
     handoff = load_json_if_exists(run_dir_path / "reporting" / f"reporting_handoff_{round_id}.json") or {}
@@ -715,6 +737,21 @@ def archive_case_library_skill(
 
     publication_status = maybe_text(final_publication.get("publication_status")) or ("ready-for-release" if maybe_text(decision.get("publication_readiness")) == "ready" else "hold-release")
     case_id = maybe_text(mission.get("run_id")) or run_id
+    observed_inputs = (
+        dict(analysis_inputs.get("observed_inputs"))
+        if isinstance(analysis_inputs.get("observed_inputs"), dict)
+        else {}
+    )
+    observed_inputs.update(
+        {
+            "next_actions_present": bool(next_actions_wrapper.get("payload_present")),
+            "next_actions_artifact_present": bool(
+                next_actions_wrapper.get("artifact_present")
+            ),
+            "probes_present": bool(probes_wrapper.get("payload_present")),
+            "probes_artifact_present": bool(probes_wrapper.get("artifact_present")),
+        }
+    )
     archive_payload = {
         "topic": topic,
         "objective": objective,
@@ -856,6 +893,8 @@ def archive_case_library_skill(
             analysis_inputs.get("observation_scope_path")
         ),
         "coverage_path": maybe_text(analysis_inputs.get("coverage_path")),
+        "next_actions_path": maybe_text(next_actions_wrapper.get("artifact_path")),
+        "probes_path": maybe_text(probes_wrapper.get("artifact_path")),
         "claim_scope_source": maybe_text(analysis_inputs.get("claim_scope_source"))
         or "missing-claim-scope",
         "observation_scope_source": maybe_text(
@@ -864,8 +903,12 @@ def archive_case_library_skill(
         or "missing-observation-scope",
         "coverage_source": maybe_text(analysis_inputs.get("coverage_source"))
         or "missing-coverage",
+        "next_actions_source": maybe_text(next_actions_wrapper.get("source"))
+        or "missing-next-actions",
+        "probes_source": maybe_text(probes_wrapper.get("source"))
+        or "missing-probes",
         "analysis_db_path": maybe_text(analysis_inputs.get("analysis_db_path")),
-        "observed_inputs": analysis_inputs.get("observed_inputs", {}),
+        "observed_inputs": observed_inputs,
         "input_analysis_sync": analysis_inputs.get("input_analysis_sync", {}),
         "profile_id": profile_id,
         "topic": topic,
@@ -907,6 +950,10 @@ def archive_case_library_skill(
             or "missing-observation-scope",
             "coverage_source": maybe_text(analysis_inputs.get("coverage_source"))
             or "missing-coverage",
+            "next_actions_source": maybe_text(next_actions_wrapper.get("source"))
+            or "missing-next-actions",
+            "probes_source": maybe_text(probes_wrapper.get("source"))
+            or "missing-probes",
             "analysis_db_path": maybe_text(analysis_inputs.get("analysis_db_path")),
         },
         "receipt_id": "archive-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, import_id)[:20],

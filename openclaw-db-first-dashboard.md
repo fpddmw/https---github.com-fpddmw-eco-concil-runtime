@@ -11,7 +11,7 @@
 | Next recommended stage | `B3` Moderator Control Consolidation |
 | Blocked stages | none |
 | Deferred stages | none |
-| Latest delivered increment | 2026-04-04 `B3` Moderator Control Consolidation |
+| Latest delivered increment | 2026-04-05 `B3` Round Task Snapshot Migration |
 | Completed stage count | `19 / 25` |
 | Planned stage count | `5` |
 
@@ -20,7 +20,7 @@
 | Route | Completed | In Progress | Blocked | Next Stage | Latest Delivery |
 | --- | --- | --- | --- | --- | --- |
 | `A` Runtime / Governance Stabilization | `4 / 6` | none | none | `A3` Governance Regression Hardening | 2026-04-04 `A2.2` Publish / Final Publication Trace Contract Adoption |
-| `B` Deliberation Plane / Moderator Loop | `7 / 8` | `B3` Moderator Control Consolidation | none | `B3` Moderator Control Consolidation | 2026-04-04 `B3` Moderator Control Consolidation |
+| `B` Deliberation Plane / Moderator Loop | `7 / 8` | `B3` Moderator Control Consolidation | none | `B3` Moderator Control Consolidation | 2026-04-05 `B3` Round Task Snapshot Migration |
 | `C` Analysis Plane / DB-First Analysis | `5 / 7` | none | none | `C2.1` Candidate / Cluster Result Migration | 2026-04-04 `C2` Generic Result-Set Lineage Contract |
 | `D` Program Control / Documentation | `3 / 4` | none | none | `D4` Milestone / Demo Packaging | 2026-04-04 `D3` Progress Dashboard Conventions |
 
@@ -51,7 +51,7 @@
 | `B1.4` | `B` | `completed` | Probe Source Decoupling | 2026-04-02 | 1 |
 | `B2` | `B` | `completed` | Board Write-Path Migration | 2026-04-03 | 2 |
 | `B2.1` | `B` | `completed` | JSON Board Export Demotion | 2026-04-03 | 1 |
-| `B3` | `B` | `in_progress` | Moderator Control Consolidation | 2026-04-04 | 1 |
+| `B3` | `B` | `in_progress` | Moderator Control Consolidation | 2026-04-05 | 4 |
 | `C1` | `C` | `completed` | Coverage Analysis Query Surface | 2026-04-02 | 1 |
 | `C1.1` | `C` | `completed` | Coverage Upstream Analysis Migration | 2026-04-03 | 1 |
 | `C1.2` | `C` | `completed` | History / Archive Read Migration | 2026-04-03 | 1 |
@@ -68,11 +68,11 @@
 
 | Date | Stage | Status | Title |
 | --- | --- | --- | --- |
+| 2026-04-05 | `B3` | `completed` | Round Task Snapshot Migration |
+| 2026-04-05 | `B3` | `completed` | Carryover / History Snapshot Read Migration |
+| 2026-04-05 | `B3` | `completed` | Moderator Action / Probe Snapshot Migration |
 | 2026-04-04 | `B3` | `completed` | Moderator Control Consolidation |
 | 2026-04-04 | `D3` | `completed` | Progress Dashboard Conventions |
 | 2026-04-04 | `C2` | `completed` | Generic Result-Set Lineage Contract |
 | 2026-04-04 | `A2.2` | `completed` | Publish / Final Publication Trace Contract Adoption |
 | 2026-04-03 | `A2.2` | `completed` | Promotion / Reporting Trace Contract Adoption |
-| 2026-04-03 | `A2.1` | `completed` | D1 Contract Metadata Normalization |
-| 2026-04-03 | `B2.1` | `completed` | Phase-2 Board Export Demotion |
-| 2026-04-03 | `B2` | `completed` | Round Transition Write-Path Migration |

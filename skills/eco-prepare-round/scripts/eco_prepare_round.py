@@ -17,7 +17,6 @@ if str(RUNTIME_SRC) not in sys.path:
 
 from eco_council_runtime.kernel.source_queue_contract import (  # noqa: E402
     maybe_text,
-    read_json_list,
     read_json_object,
     resolve_run_dir,
     stable_hash,
@@ -26,6 +25,9 @@ from eco_council_runtime.kernel.source_queue_contract import (  # noqa: E402
 from eco_council_runtime.kernel.source_queue_planner import (  # noqa: E402
     build_fetch_plan,
     write_source_selections,
+)
+from eco_council_runtime.kernel.source_queue_history import (  # noqa: E402
+    load_round_tasks_wrapper,
 )
 from eco_council_runtime.kernel.source_queue_selection import build_source_selections  # noqa: E402
 
@@ -45,7 +47,25 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
     mission = read_json_object(mission_path)
     if maybe_text(mission.get("run_id")) != run_id:
         raise ValueError(f"run_id mismatch between mission.json and --run-id: {maybe_text(mission.get('run_id'))!r} != {run_id!r}")
-    tasks = read_json_list(task_path)
+    task_context = load_round_tasks_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    task_source = maybe_text(task_context.get("source")) or "missing-round-tasks"
+    task_artifact_present = bool(task_context.get("artifact_present"))
+    task_present = bool(task_context.get("payload_present"))
+    task_payload = task_context.get("payload")
+    if not isinstance(task_payload, list) or not all(
+        isinstance(item, dict) for item in task_payload
+    ):
+        raise ValueError(
+            "No round task scaffold artifact or deliberation-plane snapshot was "
+            f"found for round {round_id} (expected artifact path: {task_path})."
+        )
+    tasks = list(task_payload)
+    if not task_artifact_present:
+        write_json_file(task_path, tasks)
 
     selections = build_source_selections(run_dir=run_dir_path, mission=mission, tasks=tasks, run_id=run_id, round_id=round_id)
     write_source_selections(run_dir_path, round_id, selections)
@@ -57,6 +77,12 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
         tasks=tasks,
         selections=selections,
     )
+    plan_payload["task_path"] = str(task_path)
+    plan_payload["task_source"] = task_source
+    plan_payload["observed_inputs"] = {
+        "round_tasks_artifact_present": task_artifact_present,
+        "round_tasks_present": task_present,
+    }
     write_json_file(output_path, plan_payload)
 
     if not plan_payload["steps"]:
@@ -86,6 +112,7 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
             "plan_id": plan_payload["plan_id"],
             "source_count": len({maybe_text(item) for item in selected_sources if maybe_text(item)}),
             "step_count": len(plan_payload["steps"]),
+            "task_source": task_source,
             "selection_statuses": {
                 role: maybe_text(payload.get("selection_status"))
                 for role, payload in plan_payload.get("roles", {}).items()

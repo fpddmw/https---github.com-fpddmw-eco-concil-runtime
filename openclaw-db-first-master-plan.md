@@ -123,7 +123,7 @@
 截至现在，四条路线的成熟度可以概括为：
 
 1. `A` 路线已完成第一轮修复以及 `A2` 共享契约硬化；当前 D1、promotion/reporting draft、canonical publish、以及 final publication 链都已收口到更一致的 trace contract，下一步主要转向 `A3` 治理回归硬化。
-2. `B` 路线已经完成 deliberation-plane 读路径迁移、关键 board 写路径 DB-first 切换，以及 `board_summary / board_brief` 的运行时降级；`B3` 也已开始把 promotion freeze / controller / supervisor 控制快照收拢到 deliberation plane，并让 phase-2 控制读路径在缺少 JSON 工件时可从 DB 恢复，下一步主要是继续把 probe/challenge/task 编排动作并入同一 moderator DB 工作面。
+2. `B` 路线已经完成 deliberation-plane 读路径迁移、关键 board 写路径 DB-first 切换，以及 `board_summary / board_brief` 的运行时降级；`B3` 现在也已把 promotion freeze / controller / supervisor 控制快照、`next_actions / falsification_probes` 这类 moderator action/probe 工作快照、source-round carryover、round task scaffold / `prepare-round` 输入恢复，以及 history/archive 上剩余的 action/probe 读路径继续收拢到 deliberation plane，并让 phase-2 关键读路径在缺少 JSON 工件时可从 DB 恢复，下一步主要是决定 moderator action/probe/challenge/task 是否需要进一步拆成更细粒度对象与历史。
 3. `C` 路线已经完成 coverage、其上游 links/scopes、history/archive 读取面、剩余关键 export/read consumer 的 analysis-plane-first 迁移，以及 `C2` result-set lineage contract；下一步更多是把 cluster/merge family 继续纳入 analysis plane，并把 runtime-local query helper 提升成更正式的查询接口。
 4. `D` 路线现在已经有 master plan、progress log、以及生成式 dashboard 三层分工；下一步主要转向 `D4` 的固定里程碑包整理，而不是继续依赖人工通读整份 progress log 才能判断当前控制状态。
 

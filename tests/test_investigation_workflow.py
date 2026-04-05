@@ -390,6 +390,249 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertGreaterEqual(probes_payload["summary"]["probe_count"], 1)
             self.assertGreaterEqual(len(probes_artifact["probes"]), 1)
 
+    def test_d1_probe_skill_reads_db_backed_actions_when_next_actions_artifact_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            run_script(
+                script_path("eco-derive-claim-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-derive-observation-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            coverage_payload = run_script(
+                script_path("eco-score-evidence-coverage"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+
+            hypothesis_payload = run_script(
+                script_path("eco-update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "DB-backed next actions survive artifact deletion",
+                "--statement",
+                "Probe generation should recover the ranked next-action queue from the deliberation DB snapshot.",
+                "--status",
+                "active",
+                "--owner-role",
+                "moderator",
+                "--linked-claim-id",
+                outputs["cluster_claims"]["canonical_ids"][0],
+                "--confidence",
+                "0.52",
+            )
+            run_script(
+                script_path("eco-open-challenge-ticket"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Delete next actions after generation",
+                "--challenge-statement",
+                "The probe skill should load persisted moderator actions instead of rebuilding from scratch.",
+                "--target-claim-id",
+                outputs["cluster_claims"]["canonical_ids"][0],
+                "--target-hypothesis-id",
+                hypothesis_payload["canonical_ids"][0],
+                "--priority",
+                "high",
+                "--owner-role",
+                "challenger",
+                "--linked-artifact-ref",
+                coverage_ref,
+            )
+            run_script(
+                script_path("eco-propose-next-actions"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            investigation_path(run_dir, f"next_actions_{ROUND_ID}.json").unlink()
+
+            probes_payload = run_script(
+                script_path("eco-open-falsification-probe"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            probes_artifact = load_json(
+                investigation_path(run_dir, f"falsification_probes_{ROUND_ID}.json")
+            )
+
+            self.assertFalse((run_dir / "investigation" / f"next_actions_{ROUND_ID}.json").exists())
+            self.assertEqual("deliberation-plane-actions", probes_payload["summary"]["action_source"])
+            self.assertEqual("deliberation-plane-actions", probes_artifact["action_source"])
+            self.assertFalse(probes_artifact["observed_inputs"]["next_actions_artifact_present"])
+            self.assertTrue(probes_artifact["observed_inputs"]["next_actions_present"])
+            self.assertGreaterEqual(probes_payload["summary"]["probe_count"], 1)
+
+    def test_d2_reads_db_backed_actions_and_probes_when_artifacts_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            run_script(
+                script_path("eco-derive-claim-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-derive-observation-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            coverage_payload = run_script(
+                script_path("eco-score-evidence-coverage"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+
+            hypothesis_payload = run_script(
+                script_path("eco-update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Readiness should honor DB-backed action and probe state",
+                "--statement",
+                "Deleting JSON exports should not erase moderator work that already exists in the deliberation DB.",
+                "--status",
+                "active",
+                "--owner-role",
+                "moderator",
+                "--linked-claim-id",
+                outputs["cluster_claims"]["canonical_ids"][0],
+                "--confidence",
+                "0.52",
+            )
+            run_script(
+                script_path("eco-open-challenge-ticket"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Keep contradiction work open",
+                "--challenge-statement",
+                "The readiness skill should still see unresolved moderator work after artifact deletion.",
+                "--target-claim-id",
+                outputs["cluster_claims"]["canonical_ids"][0],
+                "--target-hypothesis-id",
+                hypothesis_payload["canonical_ids"][0],
+                "--priority",
+                "high",
+                "--owner-role",
+                "challenger",
+                "--linked-artifact-ref",
+                coverage_ref,
+            )
+            run_script(
+                script_path("eco-propose-next-actions"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-open-falsification-probe"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            investigation_path(run_dir, f"next_actions_{ROUND_ID}.json").unlink()
+            investigation_path(run_dir, f"falsification_probes_{ROUND_ID}.json").unlink()
+
+            readiness_payload = run_script(
+                script_path("eco-summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            promotion_payload = run_script(
+                script_path("eco-promote-evidence-basis"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            readiness_artifact = load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json"))
+            promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
+
+            self.assertEqual("needs-more-data", readiness_payload["summary"]["readiness_status"])
+            self.assertFalse(readiness_artifact["observed_inputs"]["next_actions_artifact_present"])
+            self.assertTrue(readiness_artifact["observed_inputs"]["next_actions_present"])
+            self.assertFalse(readiness_artifact["observed_inputs"]["probes_artifact_present"])
+            self.assertTrue(readiness_artifact["observed_inputs"]["probes_present"])
+            self.assertGreater(int(readiness_artifact["counts"]["open_probes"]), 0)
+            self.assertEqual("withheld", promotion_payload["summary"]["promotion_status"])
+            self.assertFalse(promotion_artifact["observed_inputs"]["next_actions_artifact_present"])
+            self.assertTrue(promotion_artifact["observed_inputs"]["next_actions_present"])
+            self.assertEqual("deliberation-plane-actions", promotion_artifact["next_actions_source"])
+
     def test_d2_marks_ready_and_promotes_basis_when_board_is_clean(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

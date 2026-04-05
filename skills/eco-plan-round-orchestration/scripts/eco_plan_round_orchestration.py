@@ -18,6 +18,10 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.deliberation_plane import load_round_snapshot  # noqa: E402
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_falsification_probe_wrapper,
+    load_next_actions_wrapper,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -369,10 +373,30 @@ def plan_round_orchestration_skill(
     if not isinstance(board, dict):
         warnings.append({"code": "missing-board", "message": f"No board artifact was found at {board_file}."})
     board_summary = load_json_if_exists(board_summary_file)
-    next_actions = load_json_if_exists(next_actions_file) or {}
+    next_actions_context = load_next_actions_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        next_actions_path=next_actions_path,
+    )
+    next_actions = (
+        next_actions_context.get("payload")
+        if isinstance(next_actions_context.get("payload"), dict)
+        else {}
+    )
     readiness = load_json_if_exists(readiness_file) or {}
     brief_text = load_text_if_exists(board_brief_file)
-    probes = load_json_if_exists(probes_file) or {}
+    probes_context = load_falsification_probe_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        probes_path=probes_path,
+    )
+    probes = (
+        probes_context.get("payload")
+        if isinstance(probes_context.get("payload"), dict)
+        else {}
+    )
     deliberation_sync = (
         round_snapshot.get("deliberation_sync")
         if isinstance(round_snapshot.get("deliberation_sync"), dict)
@@ -482,6 +506,8 @@ def plan_round_orchestration_skill(
             "board_exports_are_derived": True,
             "next_actions_present": isinstance(next_actions, dict) and bool(next_actions),
             "probes_present": isinstance(probes, dict) and bool(probes),
+            "next_actions_source": maybe_text(next_actions_context.get("source")),
+            "probes_source": maybe_text(probes_context.get("source")),
             "readiness_present": isinstance(readiness, dict) and bool(readiness),
             "board_state_source": maybe_text(snapshot.get("state_source")),
             "board_state_db_path": db_path,

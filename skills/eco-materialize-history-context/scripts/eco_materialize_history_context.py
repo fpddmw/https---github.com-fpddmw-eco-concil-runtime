@@ -24,6 +24,10 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_claim_scope_context,
     load_observation_scope_context,
 )
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_falsification_probe_wrapper,
+    load_next_actions_wrapper,
+)
 
 MAX_CASES = 3
 MAX_EXCERPTS_PER_CASE = 2
@@ -248,8 +252,26 @@ def build_history_query(
     board_summary = load_json_if_exists(run_dir / "board" / f"board_state_summary_{round_id}.json") or {}
     board_brief = read_text_if_exists(run_dir / "board" / f"board_brief_{round_id}.md")
     readiness = load_json_if_exists(run_dir / "reporting" / f"round_readiness_{round_id}.json") or {}
-    next_actions = load_json_if_exists(run_dir / "investigation" / f"next_actions_{round_id}.json") or {}
-    probes = load_json_if_exists(run_dir / "investigation" / f"falsification_probes_{round_id}.json") or {}
+    next_actions_wrapper = load_next_actions_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    probes_wrapper = load_falsification_probe_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    next_actions = (
+        next_actions_wrapper.get("payload")
+        if isinstance(next_actions_wrapper.get("payload"), dict)
+        else {}
+    )
+    probes = (
+        probes_wrapper.get("payload")
+        if isinstance(probes_wrapper.get("payload"), dict)
+        else {}
+    )
     promotion = load_json_if_exists(run_dir / "promotion" / f"promoted_evidence_basis_{round_id}.json") or {}
     analysis_warnings: list[dict[str, str]] = []
     claim_scope_context = load_claim_scope_context(
@@ -372,12 +394,18 @@ def build_history_query(
         "observation_scope_path": maybe_text(
             observation_scope_context.get("observation_scope_file")
         ),
+        "next_actions_path": maybe_text(next_actions_wrapper.get("artifact_path")),
+        "probes_path": maybe_text(probes_wrapper.get("artifact_path")),
         "claim_scope_source": maybe_text(claim_scope_context.get("claim_scope_source"))
         or "missing-claim-scope",
         "observation_scope_source": maybe_text(
             observation_scope_context.get("observation_scope_source")
         )
         or "missing-observation-scope",
+        "next_actions_source": maybe_text(next_actions_wrapper.get("source"))
+        or "missing-next-actions",
+        "probes_source": maybe_text(probes_wrapper.get("source"))
+        or "missing-probes",
         "analysis_db_path": maybe_text(observation_scope_context.get("db_path"))
         or maybe_text(claim_scope_context.get("db_path")),
         "observed_inputs": {
@@ -389,6 +417,12 @@ def build_history_query(
             "observation_scope_artifact_present": bool(
                 observation_scope_context.get("observation_scope_artifact_present")
             ),
+            "next_actions_present": bool(next_actions_wrapper.get("payload_present")),
+            "next_actions_artifact_present": bool(
+                next_actions_wrapper.get("artifact_present")
+            ),
+            "probes_present": bool(probes_wrapper.get("payload_present")),
+            "probes_artifact_present": bool(probes_wrapper.get("artifact_present")),
         },
         "input_analysis_sync": {
             "claim_scope": claim_scope_context.get("analysis_sync", {}),
@@ -679,12 +713,18 @@ def materialize_history_context_skill(
         "observation_scope_path": maybe_text(
             analysis_inputs.get("observation_scope_path")
         ),
+        "next_actions_path": maybe_text(analysis_inputs.get("next_actions_path")),
+        "probes_path": maybe_text(analysis_inputs.get("probes_path")),
         "claim_scope_source": maybe_text(analysis_inputs.get("claim_scope_source"))
         or "missing-claim-scope",
         "observation_scope_source": maybe_text(
             analysis_inputs.get("observation_scope_source")
         )
         or "missing-observation-scope",
+        "next_actions_source": maybe_text(analysis_inputs.get("next_actions_source"))
+        or "missing-next-actions",
+        "probes_source": maybe_text(analysis_inputs.get("probes_source"))
+        or "missing-probes",
         "analysis_db_path": maybe_text(analysis_inputs.get("analysis_db_path")),
         "observed_inputs": analysis_inputs.get("observed_inputs", {}),
         "input_analysis_sync": analysis_inputs.get("input_analysis_sync", {}),
@@ -735,6 +775,12 @@ def materialize_history_context_skill(
                 analysis_inputs.get("observation_scope_source")
             )
             or "missing-observation-scope",
+            "next_actions_source": maybe_text(
+                analysis_inputs.get("next_actions_source")
+            )
+            or "missing-next-actions",
+            "probes_source": maybe_text(analysis_inputs.get("probes_source"))
+            or "missing-probes",
             "analysis_db_path": maybe_text(analysis_inputs.get("analysis_db_path")),
         },
         "receipt_id": "archive-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, retrieval_file)[:20],

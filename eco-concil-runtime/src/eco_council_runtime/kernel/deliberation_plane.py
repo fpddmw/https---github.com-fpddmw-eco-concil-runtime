@@ -173,6 +173,52 @@ CREATE TABLE IF NOT EXISTS promotion_freezes (
 );
 CREATE INDEX IF NOT EXISTS idx_promotion_freezes_round_updated
 ON promotion_freezes(run_id, round_id, updated_at_utc, freeze_id);
+
+CREATE TABLE IF NOT EXISTS moderator_action_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    action_source TEXT NOT NULL DEFAULT '',
+    board_state_source TEXT NOT NULL DEFAULT '',
+    coverage_source TEXT NOT NULL DEFAULT '',
+    action_count INTEGER NOT NULL DEFAULT 0,
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_moderator_action_snapshots_round
+ON moderator_action_snapshots(run_id, round_id, generated_at_utc, snapshot_id);
+
+CREATE TABLE IF NOT EXISTS falsification_probe_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    action_source TEXT NOT NULL DEFAULT '',
+    board_state_source TEXT NOT NULL DEFAULT '',
+    coverage_source TEXT NOT NULL DEFAULT '',
+    probe_count INTEGER NOT NULL DEFAULT 0,
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_falsification_probe_snapshots_round
+ON falsification_probe_snapshots(run_id, round_id, generated_at_utc, snapshot_id);
+
+CREATE TABLE IF NOT EXISTS round_task_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    task_source TEXT NOT NULL DEFAULT '',
+    task_count INTEGER NOT NULL DEFAULT 0,
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_round_task_snapshots_round
+ON round_task_snapshots(run_id, round_id, generated_at_utc, snapshot_id);
 """
 
 
@@ -608,6 +654,55 @@ def write_promotion_freeze_row(connection: sqlite3.Connection, row: dict[str, An
     )
 
 
+def write_moderator_action_snapshot_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO moderator_action_snapshots (
+            snapshot_id, run_id, round_id, generated_at_utc, action_source,
+            board_state_source, coverage_source, action_count, artifact_path,
+            record_locator, raw_json
+        ) VALUES (
+            :snapshot_id, :run_id, :round_id, :generated_at_utc, :action_source,
+            :board_state_source, :coverage_source, :action_count, :artifact_path,
+            :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def write_falsification_probe_snapshot_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO falsification_probe_snapshots (
+            snapshot_id, run_id, round_id, generated_at_utc, action_source,
+            board_state_source, coverage_source, probe_count, artifact_path,
+            record_locator, raw_json
+        ) VALUES (
+            :snapshot_id, :run_id, :round_id, :generated_at_utc, :action_source,
+            :board_state_source, :coverage_source, :probe_count, :artifact_path,
+            :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def write_round_task_snapshot_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO round_task_snapshots (
+            snapshot_id, run_id, round_id, generated_at_utc, task_source,
+            task_count, artifact_path, record_locator, raw_json
+        ) VALUES (
+            :snapshot_id, :run_id, :round_id, :generated_at_utc, :task_source,
+            :task_count, :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
 def event_row_from_payload(
     event: dict[str, Any],
     *,
@@ -787,6 +882,18 @@ def promotion_freeze_record_id(run_id: str, round_id: str) -> str:
     return "freeze-" + stable_hash("promotion-freeze", run_id, round_id)[:12]
 
 
+def moderator_action_snapshot_id(run_id: str, round_id: str) -> str:
+    return "actions-" + stable_hash("moderator-actions", run_id, round_id)[:12]
+
+
+def falsification_probe_snapshot_id(run_id: str, round_id: str) -> str:
+    return "probes-" + stable_hash("falsification-probes", run_id, round_id)[:12]
+
+
+def round_task_snapshot_id(run_id: str, round_id: str) -> str:
+    return "round-tasks-" + stable_hash("round-task-snapshot", run_id, round_id)[:12]
+
+
 def promotion_freeze_row_from_payload(
     freeze_record: dict[str, Any],
     *,
@@ -815,6 +922,89 @@ def promotion_freeze_row_from_payload(
     }
 
 
+def moderator_action_snapshot_row_from_payload(
+    snapshot_payload: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    return {
+        "snapshot_id": maybe_text(snapshot_payload.get("snapshot_id")),
+        "run_id": maybe_text(snapshot_payload.get("run_id")),
+        "round_id": maybe_text(snapshot_payload.get("round_id")),
+        "generated_at_utc": maybe_text(snapshot_payload.get("generated_at_utc")),
+        "action_source": maybe_text(snapshot_payload.get("action_source")) or "next-actions-artifact",
+        "board_state_source": maybe_text(snapshot_payload.get("board_state_source")),
+        "coverage_source": maybe_text(snapshot_payload.get("coverage_source")),
+        "action_count": coerce_int(
+            snapshot_payload.get("action_count")
+            or (
+                len(snapshot_payload.get("ranked_actions", []))
+                if isinstance(snapshot_payload.get("ranked_actions"), list)
+                else 0
+            )
+        ),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(snapshot_payload),
+    }
+
+
+def falsification_probe_snapshot_row_from_payload(
+    snapshot_payload: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    return {
+        "snapshot_id": maybe_text(snapshot_payload.get("snapshot_id")),
+        "run_id": maybe_text(snapshot_payload.get("run_id")),
+        "round_id": maybe_text(snapshot_payload.get("round_id")),
+        "generated_at_utc": maybe_text(snapshot_payload.get("generated_at_utc")),
+        "action_source": maybe_text(snapshot_payload.get("action_source")) or "falsification-probes-artifact",
+        "board_state_source": maybe_text(snapshot_payload.get("board_state_source")),
+        "coverage_source": maybe_text(snapshot_payload.get("coverage_source")),
+        "probe_count": coerce_int(
+            snapshot_payload.get("probe_count")
+            or (
+                len(snapshot_payload.get("probes", []))
+                if isinstance(snapshot_payload.get("probes"), list)
+                else 0
+            )
+        ),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(snapshot_payload),
+    }
+
+
+def round_task_snapshot_row_from_payload(
+    snapshot_payload: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    return {
+        "snapshot_id": maybe_text(snapshot_payload.get("snapshot_id")),
+        "run_id": maybe_text(snapshot_payload.get("run_id")),
+        "round_id": maybe_text(snapshot_payload.get("round_id")),
+        "generated_at_utc": maybe_text(snapshot_payload.get("generated_at_utc")),
+        "task_source": maybe_text(snapshot_payload.get("task_source"))
+        or "round-tasks-artifact",
+        "task_count": coerce_int(
+            snapshot_payload.get("task_count")
+            or (
+                len(snapshot_payload.get("tasks", []))
+                if isinstance(snapshot_payload.get("tasks"), list)
+                else 0
+            )
+        ),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(snapshot_payload),
+    }
+
+
 def fetch_promotion_freeze(
     connection: sqlite3.Connection,
     *,
@@ -839,6 +1029,41 @@ def fetch_promotion_freeze(
         FROM promotion_freezes
         WHERE {' AND '.join(clauses)}
         ORDER BY updated_at_utc DESC, freeze_id DESC
+        LIMIT 1
+        """,
+        tuple(params),
+    ).fetchone()
+    if row is None:
+        return None
+    payload = decode_json(maybe_text(row["raw_json"]), {})
+    return payload if isinstance(payload, dict) else None
+
+
+def fetch_snapshot_payload(
+    connection: sqlite3.Connection,
+    *,
+    table_name: str,
+    run_id: str = "",
+    round_id: str = "",
+) -> dict[str, Any] | None:
+    normalized_run_id = maybe_text(run_id)
+    normalized_round_id = maybe_text(round_id)
+    clauses: list[str] = []
+    params: list[str] = []
+    if normalized_run_id:
+        clauses.append("run_id = ?")
+        params.append(normalized_run_id)
+    if normalized_round_id:
+        clauses.append("round_id = ?")
+        params.append(normalized_round_id)
+    if not clauses:
+        return None
+    row = connection.execute(
+        f"""
+        SELECT raw_json
+        FROM {table_name}
+        WHERE {' AND '.join(clauses)}
+        ORDER BY generated_at_utc DESC, snapshot_id DESC
         LIMIT 1
         """,
         tuple(params),
@@ -1089,6 +1314,188 @@ def store_promotion_freeze_record(
     finally:
         connection.close()
     return freeze_record
+
+
+def store_moderator_action_snapshot(
+    run_dir: str | Path,
+    *,
+    action_snapshot: dict[str, Any],
+    artifact_path: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    snapshot_payload = dict(action_snapshot) if isinstance(action_snapshot, dict) else {}
+    run_id = maybe_text(snapshot_payload.get("run_id"))
+    round_id = maybe_text(snapshot_payload.get("round_id"))
+    snapshot_payload["snapshot_id"] = (
+        maybe_text(snapshot_payload.get("snapshot_id"))
+        or moderator_action_snapshot_id(run_id, round_id)
+    )
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            write_moderator_action_snapshot_row(
+                connection,
+                moderator_action_snapshot_row_from_payload(
+                    snapshot_payload,
+                    artifact_path=artifact_path,
+                ),
+            )
+    finally:
+        connection.close()
+    return snapshot_payload
+
+
+def load_moderator_action_snapshot(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return fetch_snapshot_payload(
+            connection,
+            table_name="moderator_action_snapshots",
+            run_id=run_id,
+            round_id=round_id,
+        )
+    finally:
+        connection.close()
+
+
+def store_falsification_probe_snapshot(
+    run_dir: str | Path,
+    *,
+    probe_snapshot: dict[str, Any],
+    artifact_path: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    snapshot_payload = dict(probe_snapshot) if isinstance(probe_snapshot, dict) else {}
+    run_id = maybe_text(snapshot_payload.get("run_id"))
+    round_id = maybe_text(snapshot_payload.get("round_id"))
+    snapshot_payload["snapshot_id"] = (
+        maybe_text(snapshot_payload.get("snapshot_id"))
+        or falsification_probe_snapshot_id(run_id, round_id)
+    )
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            write_falsification_probe_snapshot_row(
+                connection,
+                falsification_probe_snapshot_row_from_payload(
+                    snapshot_payload,
+                    artifact_path=artifact_path,
+                ),
+            )
+    finally:
+        connection.close()
+    return snapshot_payload
+
+
+def load_falsification_probe_snapshot(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return fetch_snapshot_payload(
+            connection,
+            table_name="falsification_probe_snapshots",
+            run_id=run_id,
+            round_id=round_id,
+        )
+    finally:
+        connection.close()
+
+
+def store_round_task_snapshot(
+    run_dir: str | Path,
+    *,
+    task_snapshot: dict[str, Any],
+    artifact_path: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    snapshot_payload = dict(task_snapshot) if isinstance(task_snapshot, dict) else {}
+    run_id = maybe_text(snapshot_payload.get("run_id"))
+    round_id = maybe_text(snapshot_payload.get("round_id"))
+    snapshot_payload["snapshot_id"] = (
+        maybe_text(snapshot_payload.get("snapshot_id"))
+        or round_task_snapshot_id(run_id, round_id)
+    )
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            write_round_task_snapshot_row(
+                connection,
+                round_task_snapshot_row_from_payload(
+                    snapshot_payload,
+                    artifact_path=artifact_path,
+                ),
+            )
+    finally:
+        connection.close()
+    return snapshot_payload
+
+
+def load_round_task_snapshot(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return fetch_snapshot_payload(
+            connection,
+            table_name="round_task_snapshots",
+            run_id=run_id,
+            round_id=round_id,
+        )
+    finally:
+        connection.close()
+
+
+def load_moderator_work_surface(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    next_actions = load_moderator_action_snapshot(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    ) or {}
+    probes = load_falsification_probe_snapshot(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    ) or {}
+    round_tasks = load_round_task_snapshot(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    ) or {}
+    return {
+        "next_actions": next_actions,
+        "probes": probes,
+        "round_tasks": round_tasks,
+    }
 
 
 def load_promotion_freeze_record(

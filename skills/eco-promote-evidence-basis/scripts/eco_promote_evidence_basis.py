@@ -18,6 +18,9 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.analysis_plane import load_evidence_coverage_context  # noqa: E402
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_next_actions_wrapper,
+)
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
@@ -153,10 +156,18 @@ def promote_evidence_basis_skill(
         if isinstance(coverage_context.get("analysis_sync"), dict)
         else {}
     )
-    next_actions_payload = load_json_if_exists(next_actions_file)
-    next_actions = next_actions_payload
-    if not isinstance(next_actions, dict):
-        next_actions = {"ranked_actions": []}
+    next_actions_context = load_next_actions_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        next_actions_path=next_actions_path,
+    )
+    next_actions_payload = (
+        next_actions_context.get("payload")
+        if isinstance(next_actions_context.get("payload"), dict)
+        else None
+    )
+    next_actions = next_actions_payload if isinstance(next_actions_payload, dict) else {"ranked_actions": []}
     brief_text = maybe_text(load_text_if_exists(board_brief_file))
     contract_fields = reporting_contract_fields_from_payload(
         readiness_payload,
@@ -169,8 +180,10 @@ def promote_evidence_basis_skill(
                 coverage_context.get("coverage_artifact_present")
             ),
             "coverage_present": bool(coverages),
-            "next_actions_artifact_present": next_actions_file.exists(),
-            "next_actions_present": isinstance(next_actions_payload, dict),
+            "next_actions_artifact_present": bool(
+                next_actions_context.get("artifact_present")
+            ),
+            "next_actions_present": bool(next_actions_context.get("payload_present")),
         },
         field_overrides={
             "coverage_source": coverage_source or "missing-coverage",
@@ -185,11 +198,8 @@ def promote_evidence_basis_skill(
                 if board_brief_file.exists()
                 else "missing-board-brief"
             ),
-            "next_actions_source": (
-                "next-actions-artifact"
-                if next_actions_file.exists()
-                else "missing-next-actions"
-            ),
+            "next_actions_source": maybe_text(next_actions_context.get("source"))
+            or "missing-next-actions",
         },
     )
 

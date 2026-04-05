@@ -226,6 +226,55 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             self.assertEqual(["openaq-data-fetch", "airnow-hourly-obs-fetch"], plan_artifact["roles"]["environmentalist"]["selected_sources"])
             self.assertEqual("active", board_artifact["rounds"][ROUND_ID]["hypotheses"][0]["status"])
 
+    def test_prepare_round_reads_db_backed_round_tasks_when_export_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            artifacts = build_raw_artifacts(root)
+            mission_path = build_mission_file(root, artifacts)
+
+            run_script(
+                script_path("eco-scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+            )
+            tasks_path = run_dir / "investigation" / f"round_tasks_{ROUND_ID}.json"
+            tasks_path.unlink()
+
+            prepare_payload = run_script(
+                script_path("eco-prepare-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            plan_artifact = load_json(runtime_path(run_dir, f"fetch_plan_{ROUND_ID}.json"))
+            recreated_tasks = json.loads(tasks_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(
+                "deliberation-plane-round-tasks",
+                prepare_payload["summary"]["task_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-round-tasks",
+                plan_artifact["task_source"],
+            )
+            self.assertFalse(
+                plan_artifact["observed_inputs"]["round_tasks_artifact_present"]
+            )
+            self.assertTrue(plan_artifact["observed_inputs"]["round_tasks_present"])
+            self.assertEqual(2, len(recreated_tasks))
+            self.assertEqual(4, len(plan_artifact["steps"]))
+
     def test_ingress_import_execution_reconnects_to_reporting_mainline(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
