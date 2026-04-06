@@ -7,19 +7,19 @@
 
 | Signal | Value |
 | --- | --- |
-| Current active stages | none<br>Last completed delivery: 2026-04-06 `D4` Milestone / Demo Packaging |
-| Next recommended stage | `A4` Agent Entry Gate |
+| Current active stages | none<br>Last completed delivery: 2026-04-06 `A4` Agent Entry Gate |
+| Next recommended stage | none |
 | Blocked stages | none |
 | Deferred stages | none |
-| Latest delivered increment | 2026-04-06 `D4` Milestone / Demo Packaging |
-| Completed stage count | `24 / 25` |
-| Planned stage count | `1` |
+| Latest delivered increment | 2026-04-06 `A4` Agent Entry Gate |
+| Completed stage count | `25 / 25` |
+| Planned stage count | `0` |
 
 ## Route Snapshot
 
 | Route | Completed | In Progress | Blocked | Next Stage | Latest Delivery |
 | --- | --- | --- | --- | --- | --- |
-| `A` Runtime / Governance Stabilization | `5 / 6` | none | none | `A4` Agent Entry Gate | 2026-04-06 `A3` Governance Regression Hardening |
+| `A` Runtime / Governance Stabilization | `6 / 6` | none | none | none | 2026-04-06 `A4` Agent Entry Gate |
 | `B` Deliberation Plane / Moderator Loop | `8 / 8` | none | none | none | 2026-04-06 `B3` Moderator Control Consolidation Closeout |
 | `C` Analysis Plane / DB-First Analysis | `7 / 7` | none | none | none | 2026-04-06 `C2.2` Non-Python Query Surface |
 | `D` Program Control / Documentation | `4 / 4` | none | none | none | 2026-04-06 `D4` Milestone / Demo Packaging |
@@ -28,7 +28,6 @@
 
 | Order | Stage | Status | Route | Why Now | Expected Delivery |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `A4` Agent Entry Gate | `planned` | `A` | 里程碑包、dashboard、以及运行时/查询面已经稳定，适合把 operator-visible agent 入口闭环真正定型 | 至少一条 operator-visible 入口链路形成闭环 |
 
 ## Stage Index
 
@@ -39,7 +38,7 @@
 | `A2.1` | `A` | `completed` | D1 Contract Metadata Normalization | 2026-04-03 | 1 |
 | `A2.2` | `A` | `completed` | Cross-Plane Contract Adoption | 2026-04-04 | 2 |
 | `A3` | `A` | `completed` | Governance Regression Hardening | 2026-04-06 | 1 |
-| `A4` | `A` | `planned` | Agent Entry Gate | - | 0 |
+| `A4` | `A` | `completed` | Agent Entry Gate | 2026-04-06 | 1 |
 | `B1` | `B` | `completed` | Deliberation Plane Bootstrap | 2026-04-02 | 1 |
 | `B1.1` | `B` | `completed` | Board Read Path Migration | 2026-04-02 | 1 |
 | `B1.2` | `B` | `completed` | Moderator Handoff And Readiness Migration | 2026-04-02 | 1 |
@@ -64,6 +63,7 @@
 
 | Date | Stage | Status | Title |
 | --- | --- | --- | --- |
+| 2026-04-06 | `A4` | `completed` | Agent Entry Gate |
 | 2026-04-06 | `D4` | `completed` | Milestone / Demo Packaging |
 | 2026-04-06 | `C2.2` | `completed` | Non-Python Query Surface |
 | 2026-04-06 | `C2.1` | `completed` | Candidate / Cluster Result Migration |
@@ -71,4 +71,3 @@
 | 2026-04-06 | `B3` | `completed` | Moderator Control Consolidation Closeout |
 | 2026-04-05 | `B3` | `completed` | Round Task Snapshot Migration |
 | 2026-04-05 | `B3` | `completed` | Carryover / History Snapshot Read Migration |
-| 2026-04-05 | `B3` | `completed` | Moderator Action / Probe Snapshot Migration |

@@ -11,6 +11,7 @@ from .paths import (
     dead_letter_path,
     dead_letters_dir,
     ensure_runtime_dirs,
+    manifest_path,
     operator_runbook_path,
     runtime_health_path,
 )
@@ -728,9 +729,11 @@ def refresh_runtime_surfaces(run_dir: Path, *, round_id: str = "") -> dict[str, 
 
 def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
     policy = load_admission_policy(run_dir)
+    manifest = load_json_if_exists(manifest_path(run_dir)) or {}
     health = runtime_health_payload(run_dir, round_id=round_id)
     dead_letters = health.get("open_dead_letters", []) if isinstance(health.get("open_dead_letters"), list) else []
     rollback_policy = policy.get("rollback_policy", {}) if isinstance(policy.get("rollback_policy"), dict) else {}
+    run_id = maybe_text(manifest.get("run_id"))
     lines = [
         "# Runtime Operator Runbook",
         "",
@@ -750,9 +753,23 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
         f"- Refresh health surface: `materialize-runtime-health --run-dir {run_dir}{f' --round-id {round_id}' if round_id else ''}`",
         f"- Rebuild runbook: `materialize-operator-runbook --run-dir {run_dir}{f' --round-id {round_id}' if round_id else ''}`",
         "",
+    ]
+    if run_id and round_id:
+        lines.extend(
+            [
+                "## Agent Entry",
+                "",
+                f"- Materialize agent entry gate: `materialize-agent-entry-gate --run-dir {run_dir} --run-id {run_id} --round-id {round_id}`",
+                f"- Refresh agent advisory plan through runtime governance: `run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-plan-round-orchestration -- --planner-mode agent-advisory --output-path runtime/agent_advisory_plan_{round_id}.json`",
+                "",
+            ]
+        )
+    lines.extend(
+        [
         "## Failure Classes",
         "",
-    ]
+        ]
+    )
     for title in RUNBOOK_SECTIONS.values():
         steps = operator_resolution_steps(
             next(key for key, value in RUNBOOK_SECTIONS.items() if value == title),

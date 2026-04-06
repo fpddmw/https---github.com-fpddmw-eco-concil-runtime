@@ -24,29 +24,38 @@ class ProgressDashboardTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(model.stage_definitions), 10)
         self.assertIn(
-            "| Current active stages | none<br>Last completed delivery: 2026-04-06 `D4` Milestone / Demo Packaging |",
+            "| Current active stages | none<br>Last completed delivery: 2026-04-06 `A4` Agent Entry Gate |",
             markdown_text,
         )
         self.assertIn(
-            "| Next recommended stage | `A4` Agent Entry Gate |",
+            "| Next recommended stage | none |",
             markdown_text,
         )
         self.assertIn("| Blocked stages | none |", markdown_text)
         self.assertIn(
-            "2026-04-06 `D4` Milestone / Demo Packaging", markdown_text
+            "2026-04-06 `A4` Agent Entry Gate", markdown_text
         )
         self.assertIn(
             "| 2026-04-06 | `C2.1` | `completed` | Candidate / Cluster Result Migration |",
             markdown_text,
         )
-        self.assertIn("2026-04-06 `A3` Governance Regression Hardening", markdown_text)
-        self.assertIn("2026-04-06 `D4` Milestone / Demo Packaging", markdown_text)
+        self.assertIn(
+            "| 2026-04-06 | `A3` | `completed` | Governance Regression Hardening |",
+            markdown_text,
+        )
+        self.assertIn("2026-04-06 `A4` Agent Entry Gate", markdown_text)
         self.assertIn(
             "| `D` Program Control / Documentation | `4 / 4` | none | none | none | 2026-04-06 `D4` Milestone / Demo Packaging |",
             markdown_text,
         )
         self.assertIn("| `A3` | `A` | `completed` | Governance Regression Hardening | 2026-04-06 | 1 |", markdown_text)
-        self.assertIn("| `A4` | `A` | `planned` | Agent Entry Gate | - | 0 |", markdown_text)
+        self.assertIn(
+            "| `A` Runtime / Governance Stabilization | `6 / 6` | none | none | none | 2026-04-06 `A4` Agent Entry Gate |",
+            markdown_text,
+        )
+        self.assertIn("| `A4` | `A` | `completed` | Agent Entry Gate | 2026-04-06 | 1 |", markdown_text)
+        self.assertIn("| Completed stage count | `25 / 25` |", markdown_text)
+        self.assertIn("| Planned stage count | `0` |", markdown_text)
         self.assertIn(
             "| `C2.2` | `C` | `completed` | Non-Python Query Surface | 2026-04-06 | 1 |",
             markdown_text,

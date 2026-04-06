@@ -10,6 +10,7 @@ from .analysis_plane import (
     query_analysis_result_items,
     query_analysis_result_sets,
 )
+from .agent_entry import agent_entry_state, materialize_agent_entry_gate
 from .benchmark import (
     compare_benchmark_manifests,
     materialize_benchmark_manifest,
@@ -344,6 +345,11 @@ def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, An
         "cursor": cursor,
         "registry": registry,
         "operations": operations,
+        "agent_entry": agent_entry_state(
+            run_dir,
+            run_id=maybe_text(manifest.get("run_id")) or maybe_text(cursor.get("run_id")),
+            round_id=selected_round_id,
+        ),
         "phase2": phase2_state,
         "post_round": post_round_state,
         "benchmark": benchmark_state,
@@ -499,6 +505,15 @@ def build_parser() -> argparse.ArgumentParser:
     operator_runbook_cmd.add_argument("--run-dir", required=True)
     operator_runbook_cmd.add_argument("--round-id", default="")
     operator_runbook_cmd.add_argument("--pretty", action="store_true")
+
+    agent_entry_cmd = sub.add_parser("materialize-agent-entry-gate", help="Write one operator-visible agent entry gate contract for the selected round.")
+    agent_entry_cmd.add_argument("--run-dir", required=True)
+    agent_entry_cmd.add_argument("--run-id", required=True)
+    agent_entry_cmd.add_argument("--round-id", required=True)
+    agent_entry_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    agent_entry_cmd.add_argument("--refresh-advisory-plan", action="store_true")
+    agent_entry_cmd.add_argument("--pretty", action="store_true")
+    add_execution_policy_args(agent_entry_cmd)
 
     dead_letters_cmd = sub.add_parser("show-dead-letters", help="Show open runtime dead letters for the selected run or round.")
     dead_letters_cmd.add_argument("--run-dir", required=True)
@@ -850,6 +865,35 @@ def main(argv: list[str] | None = None) -> int:
             },
             "operator_runbook_path": materialize_operator_runbook(run_dir, round_id=args.round_id),
         }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "materialize-agent-entry-gate":
+        init_run(run_dir, args.run_id)
+        try:
+            payload = materialize_agent_entry_gate(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                contract_mode=args.contract_mode,
+                refresh_advisory_plan=args.refresh_advisory_plan,
+                timeout_seconds=args.timeout_seconds,
+                retry_budget=args.retry_budget,
+                retry_backoff_ms=args.retry_backoff_ms,
+                allow_side_effects=args.allow_side_effect,
+            )
+        except SkillExecutionError as exc:
+            failure = exc.payload or {
+                "status": "failed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "contract_mode": args.contract_mode,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
         print(pretty_json(payload, args.pretty))
         return 0
 

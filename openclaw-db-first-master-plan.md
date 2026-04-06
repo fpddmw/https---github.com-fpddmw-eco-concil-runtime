@@ -82,7 +82,7 @@
 | `A2.1` | D1 Contract Metadata Normalization | 收敛 `next-actions / falsification-probe / round-readiness` 的共享 trace contract，并明确区分 artifact presence 与 materialized presence | `completed` | D1 输出通过共享 runtime helper 发出一致的 `*_source / *_sync / observed_inputs` 字段 |
 | `A2.2` | Cross-Plane Contract Adoption | 将同一套归一化 contract 扩展到剩余 archive / reporting / promotion 等消费者 | `completed` | 剩余关键 consumer 不再各自手写 trace metadata 语义 |
 | `A3` | Governance Regression Hardening | 确保 replay、benchmark、archive、close-round 等治理命令不被 DB-first 迁移破坏 | `completed` | 全量工作流和治理回归稳定 |
-| `A4` | Agent Entry Gate | 定义从 runtime route 进入 DB-first agent route 的最小可控入口 | `planned` | 至少一条 operator-visible 入口链路形成闭环 |
+| `A4` | Agent Entry Gate | 定义从 runtime route 进入 DB-first agent route 的最小可控入口 | `completed` | 至少一条 operator-visible 入口链路形成闭环 |
 
 ### 5.2 Route B: Deliberation Plane / Moderator Loop
 
@@ -122,7 +122,7 @@
 
 截至现在，四条路线的成熟度可以概括为：
 
-1. `A` 路线已完成第一轮修复、`A2` 共享契约硬化、以及 `A3` 治理回归硬化；当前 D1、promotion/reporting draft、canonical publish、final publication、以及治理命令链上的 `show-run-state / close-round / benchmark / replay` 都已经对 DB-backed round task / moderator action / probe 恢复面与 frozen baseline replay 更稳健，下一步主要转向 `A4` agent entry gate。
+1. `A` 路线已完成第一轮修复、`A2` 共享契约硬化、`A3` 治理回归硬化，以及 `A4` agent entry gate；当前 runtime 已经能在不放弃 admission / sandbox / replay / publication gate 的前提下，向 operator 暴露一条受治理的 DB-first agent 入口链，并可在 `show-run-state`、operator runbook、agent advisory plan、以及 agent entry gate artifact 中统一查看。
 2. `B` 路线已经完成 deliberation-plane 读路径迁移、关键 board 写路径 DB-first 切换、`board_summary / board_brief` 的运行时降级，以及 `B3` moderator control consolidation 的当前计划范围；promotion freeze / controller / supervisor 控制快照、`next_actions / falsification_probes` 工作快照、source-round carryover、round task scaffold / `prepare-round` 输入恢复、以及 history/archive 上剩余的 moderator action/probe 读路径都已收口到 deliberation plane，使 moderator loop 的主要状态推进不再依赖线性工件顺序。是否继续把 action/probe/challenge/task 拆成更细粒度对象与历史，应视作后续扩展，而不是当前 `B3` 的阻塞项。
 3. `C` 路线已经完成 coverage、其上游 links/scopes、history/archive 读取面、剩余关键 export/read consumer 的 analysis-plane-first 迁移、`C2` result-set lineage contract、`C2.1` candidate / cluster / merge family migration，以及 `C2.2` non-Python query surface。现在 shell 和外部脚本已经可以通过 runtime CLI 直接列出 analysis result sets、查询 analysis items、读取 result contract，而不必再依赖 Python helper 导入；当前 master plan 下的 `Route C` 计划范围已全部交付。
 4. `D` 路线已经形成 master plan、progress log、生成式 dashboard、以及可重复物化的 milestone package 四层控制面；当前计划范围内的 `D1`-`D4` 已全部交付，仓内现可直接生成固定的阶段验收/汇报包，而不必继续依赖人工通读整份 progress log 判断当前控制状态。
@@ -131,9 +131,10 @@
 
 下面是建议的近端开发队列，也就是未来数次迭代最合适的推进顺序。
 
+当前 master plan 内已无未完成阶段；如需继续推进，请先在本文档补充新的阶段定义后再开始实施。
+
 | 顺序 | 阶段 | 路线 | 为什么先做 | 预期独立交付 |
 | --- | --- | --- | --- | --- |
-| `1` | `A4` | `A` | 里程碑包、dashboard、以及运行时/查询面已经稳定，适合把 operator-visible agent 入口闭环真正定型 | 至少一条 operator-visible 入口链路形成闭环 |
 
 ## 8. 每次开发交付的记录规范
 

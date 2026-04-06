@@ -1342,3 +1342,86 @@ Known limitations:
 Next:
 - Move to `A4` agent entry gate so the now-stable runtime, governance, analysis, and milestone-package surfaces gain a minimal operator-visible entry path.
 - After `A4`, re-evaluate whether the current master plan should grow new stages or transition into a closeout/maintenance mode.
+
+## 2026-04-06 A4: Agent Entry Gate
+
+Status: completed
+
+Objective:
+- Define one minimal but real operator-visible entry gate from the governed runtime route into the DB-first agent route.
+- Ensure this entry remains advisory-first for investigation work while still returning promotion, archive, replay, and publication decisions to the existing runtime hard gates.
+
+Implementation:
+- Added `eco-concil-runtime/src/eco_council_runtime/kernel/agent_entry.py`
+  - Added a dedicated `runtime-agent-entry-gate-v1` artifact builder that summarizes:
+    - governance posture
+    - board / deliberation surface availability
+    - analysis-plane availability
+    - advisory-plan status
+    - role-level read/write entry points
+    - runtime hard-gate return commands
+  - Added stable command templates for:
+    - `eco-read-board-delta`
+    - `eco-query-public-signals`
+    - `eco-query-environment-signals`
+    - analysis-plane query CLI reads
+    - `eco-post-board-note`
+    - `eco-update-hypothesis-status`
+    - `eco-open-challenge-ticket`
+    - `eco-open-falsification-probe`
+    - `eco-open-investigation-round`
+    - `supervise-round / apply-promotion-gate / close-round`
+  - Added logic that materializes a dedicated `agent_advisory_plan_<round>.json` through `eco-plan-round-orchestration --planner-mode agent-advisory --output-path ...` so agent entry does not overwrite the controller-owned phase-2 orchestration plan.
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/paths.py`
+  - Added runtime path helpers for:
+    - `mission_scaffold_<round>.json`
+    - `agent_advisory_plan_<round>.json`
+    - `agent_entry_gate_<round>.json`
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/cli.py`
+  - Added `materialize-agent-entry-gate` to the runtime kernel CLI.
+  - Added `agent_entry` state to `show-run-state` so operators can discover the entry gate even before materializing it.
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/operations.py`
+  - Extended the operator runbook with an `Agent Entry` section that shows:
+    - the runtime command to materialize the gate
+    - the runtime-governed advisory-plan refresh command
+- Added `tests/test_agent_entry_gate.py`
+  - Added end-to-end coverage proving a scaffolded `openclaw-agent` round can materialize:
+    - `agent_entry_gate_<round>.json`
+    - `agent_advisory_plan_<round>.json`
+  - Added coverage proving `show-run-state` surfaces entry commands even before the gate artifact exists.
+  - Added coverage proving the operator runbook now includes the new entry surface.
+- Updated `openclaw-db-first-master-plan.md`
+  - Marked `A4` as `completed`.
+  - Updated the Route `A` maturity summary to reflect that runtime now exposes a governed DB-first agent entry path.
+  - Cleared the near-term queue because the current master plan no longer has unfinished stages.
+- Updated repo-state expectations and generated surfaces so the control documents now treat `A4` as the latest delivered increment and show no remaining recommended stage:
+  - `tests/test_progress_dashboard.py`
+  - `tests/test_milestone_package.py`
+  - `openclaw-db-first-dashboard.md`
+  - `reports/2026-04-06-milestone-package/`
+
+Validation:
+- `python3 -m unittest tests/test_agent_entry_gate.py -q`
+- `python3 -m unittest tests/test_milestone_package.py -q`
+- `python3 -m unittest tests/test_progress_dashboard.py -q`
+- `python3 eco-concil-runtime/scripts/eco_progress_dashboard.py --pretty`
+- `python3 eco-concil-runtime/scripts/eco_milestone_package.py --output-dir reports/2026-04-06-milestone-package --package-date 2026-04-06 --pretty`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- Added `tests/test_agent_entry_gate.py`
+  - Verifies `materialize-agent-entry-gate` produces both the gate artifact and the dedicated advisory plan for an `openclaw-agent` round.
+  - Verifies `show-run-state` exposes entry-gate commands before the gate is materialized.
+  - Verifies `materialize-operator-runbook` now includes the agent-entry section for a selected round.
+- Updated `tests/test_progress_dashboard.py`
+  - Refreshes repo-state assertions after closing `A4` and emptying the current near-term queue.
+- Updated `tests/test_milestone_package.py`
+  - Refreshes repo-state package assertions so latest delivery is now `A4` and the next-stage field resolves to `none`.
+
+Known limitations:
+- The current entry gate is still operator-driven and command-book based; it does not yet introduce a persistent multi-session agent runtime that autonomously manages turn scheduling or long-lived agent memory.
+- Role boundaries are surfaced as governed command templates and advisory conventions, not as a separate identity/auth subsystem with hard technical write isolation per agent role.
+
+Next:
+- The current master plan has no remaining unfinished stages.
+- If development continues, first add new stages to `openclaw-db-first-master-plan.md` or explicitly transition the project into maintenance/closeout mode.

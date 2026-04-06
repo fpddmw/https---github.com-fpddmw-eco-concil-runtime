@@ -4,8 +4,8 @@
 
 | Route | Source Delivery | Residual Risk |
 | --- | --- | --- |
-| `A` Runtime / Governance Stabilization | `A3` Governance Regression Hardening | Benchmark/replay still treat `board_summary / board_brief` and the reporting/final-publication family as artifact-shaped outputs rather than plane-backed objects. |
-| `A` Runtime / Governance Stabilization | `A3` Governance Regression Hardening | Scenario replay still preserves the original `run_id / round_id` identity contract and does not yet support remapping one frozen fixture onto a different run/round namespace. |
+| `A` Runtime / Governance Stabilization | `A4` Agent Entry Gate | The current entry gate is still operator-driven and command-book based; it does not yet introduce a persistent multi-session agent runtime that autonomously manages turn scheduling or long-lived agent memory. |
+| `A` Runtime / Governance Stabilization | `A4` Agent Entry Gate | Role boundaries are surfaced as governed command templates and advisory conventions, not as a separate identity/auth subsystem with hard technical write isolation per agent role. |
 | `B` Deliberation Plane / Moderator Loop | `B3` Moderator Control Consolidation Closeout | `promotion_freezes`, `moderator_action_snapshots`, `falsification_probe_snapshots`, and `round_task_snapshots` remain latest-snapshot recovery surfaces rather than full per-item history logs. |
 | `B` Deliberation Plane / Moderator Loop | `B3` Moderator Control Consolidation Closeout | Some runtime lineage discovery still uses runtime/artifact footprints; `B3` closes the operational moderator control path, but it does not introduce a wholly new DB-native round-discovery model. |
 | `C` Analysis Plane / DB-First Analysis | `C2.2` Non-Python Query Surface | The current query surface is intentionally filtered JSON output, not a generic SQL or ad hoc expression language; callers still need to compose more complex joins client-side. |

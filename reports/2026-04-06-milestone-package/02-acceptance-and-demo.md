@@ -10,10 +10,13 @@ python3 eco-concil-runtime/scripts/eco_milestone_package.py --output-dir /home/f
 
 ### Route A
 
-Source delivery: `A3` Governance Regression Hardening
+Source delivery: `A4` Agent Entry Gate
 
-- `python3 -m unittest tests/test_archive_history_workflow.py -q`
-- `python3 -m unittest tests/test_runtime_kernel.py -q`
+- `python3 -m unittest tests/test_agent_entry_gate.py -q`
+- `python3 -m unittest tests/test_milestone_package.py -q`
+- `python3 -m unittest tests/test_progress_dashboard.py -q`
+- `python3 eco-concil-runtime/scripts/eco_progress_dashboard.py --pretty`
+- `python3 eco-concil-runtime/scripts/eco_milestone_package.py --output-dir reports/2026-04-06-milestone-package --package-date 2026-04-06 --pretty`
 - `python3 -m unittest discover -s tests -q`
 
 ### Route B

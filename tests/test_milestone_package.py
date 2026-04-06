@@ -164,7 +164,7 @@ class MilestonePackageTests(unittest.TestCase):
                 (output_dir / "03-risk-register.md").read_text(encoding="utf-8"),
             )
 
-    def test_repo_package_render_tracks_d4_completion(self) -> None:
+    def test_repo_package_render_tracks_a4_completion(self) -> None:
         rendered = render_milestone_package_from_paths(
             master_plan_path=WORKSPACE_ROOT / "openclaw-db-first-master-plan.md",
             progress_log_path=WORKSPACE_ROOT / "openclaw-db-first-progress-log.md",
@@ -173,8 +173,8 @@ class MilestonePackageTests(unittest.TestCase):
             output_dir=WORKSPACE_ROOT / "reports" / "repo-render-check",
         )
 
-        self.assertEqual("D4", rendered.manifest["latest_delivery"]["stage_id"])
-        self.assertEqual("A4", rendered.manifest["next_stage"]["stage_id"])
+        self.assertEqual("A4", rendered.manifest["latest_delivery"]["stage_id"])
+        self.assertEqual("", rendered.manifest["next_stage"]["stage_id"])
         self.assertEqual("completed", rendered.manifest["latest_delivery"]["status"])
         self.assertTrue(
             any(
@@ -183,11 +183,11 @@ class MilestonePackageTests(unittest.TestCase):
             )
         )
         self.assertIn(
-            "Immediate recommended stage: `A4` Agent Entry Gate",
+            "Immediate recommended stage: none",
             rendered.files["04-next-steps.md"],
         )
         self.assertIn(
-            "| `D` Program Control / Documentation | `4 / 4` | none | `D4` Milestone / Demo Packaging |",
+            "| `A` Runtime / Governance Stabilization | `6 / 6` | none | `A4` Agent Entry Gate |",
             rendered.files["01-executive-summary.md"],
         )
 

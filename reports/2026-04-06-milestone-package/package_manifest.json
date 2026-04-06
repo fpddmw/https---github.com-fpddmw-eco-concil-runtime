@@ -1,35 +1,31 @@
 {
-  "generated_at_utc": "2026-04-06T13:17:04Z",
+  "generated_at_utc": "2026-04-06T14:07:53Z",
   "latest_delivery": {
     "date": "2026-04-06",
-    "stage_id": "D4",
-    "status": "completed",
-    "title": "Milestone / Demo Packaging"
-  },
-  "latest_delivery_label": "`D4` Milestone / Demo Packaging",
-  "latest_delivery_next_steps": [
-    "Move to `A4` agent entry gate so the now-stable runtime, governance, analysis, and milestone-package surfaces gain a minimal operator-visible entry path.",
-    "After `A4`, re-evaluate whether the current master plan should grow new stages or transition into a closeout/maintenance mode."
-  ],
-  "next_stage": {
     "stage_id": "A4",
+    "status": "completed",
     "title": "Agent Entry Gate"
   },
-  "next_stage_label": "`A4` Agent Entry Gate",
+  "latest_delivery_label": "`A4` Agent Entry Gate",
+  "latest_delivery_next_steps": [
+    "The current master plan has no remaining unfinished stages.",
+    "If development continues, first add new stages to `openclaw-db-first-master-plan.md` or explicitly transition the project into maintenance/closeout mode."
+  ],
+  "next_stage": {
+    "stage_id": "",
+    "title": ""
+  },
+  "next_stage_label": "none",
   "output_dir": "/home/fpddmw/projects/openclaw-eco-concil_v1/reports/2026-04-06-milestone-package",
   "package_date": "2026-04-06",
-  "queue": [
-    {
-      "expected_delivery": "\u81f3\u5c11\u4e00\u6761 operator-visible \u5165\u53e3\u94fe\u8def\u5f62\u6210\u95ed\u73af",
-      "order": "1",
-      "reason": "\u91cc\u7a0b\u7891\u5305\u3001dashboard\u3001\u4ee5\u53ca\u8fd0\u884c\u65f6/\u67e5\u8be2\u9762\u5df2\u7ecf\u7a33\u5b9a\uff0c\u9002\u5408\u628a operator-visible agent \u5165\u53e3\u95ed\u73af\u771f\u6b63\u5b9a\u578b",
-      "route_code": "A",
-      "stage_id": "A4",
-      "stage_title": "Agent Entry Gate",
-      "status": "planned"
-    }
-  ],
+  "queue": [],
   "recent_deliveries": [
+    {
+      "date": "2026-04-06",
+      "stage_id": "A4",
+      "status": "completed",
+      "title": "Agent Entry Gate"
+    },
     {
       "date": "2026-04-06",
       "stage_id": "D4",
@@ -71,28 +67,22 @@
       "stage_id": "B3",
       "status": "completed",
       "title": "Carryover / History Snapshot Read Migration"
-    },
-    {
-      "date": "2026-04-05",
-      "stage_id": "B3",
-      "status": "completed",
-      "title": "Moderator Action / Probe Snapshot Migration"
     }
   ],
   "risks": [
     {
-      "risk": "Benchmark/replay still treat `board_summary / board_brief` and the reporting/final-publication family as artifact-shaped outputs rather than plane-backed objects.",
+      "risk": "The current entry gate is still operator-driven and command-book based; it does not yet introduce a persistent multi-session agent runtime that autonomously manages turn scheduling or long-lived agent memory.",
       "route_code": "A",
       "route_name": "Runtime / Governance Stabilization",
-      "stage_id": "A3",
-      "stage_title": "Governance Regression Hardening"
+      "stage_id": "A4",
+      "stage_title": "Agent Entry Gate"
     },
     {
-      "risk": "Scenario replay still preserves the original `run_id / round_id` identity contract and does not yet support remapping one frozen fixture onto a different run/round namespace.",
+      "risk": "Role boundaries are surfaced as governed command templates and advisory conventions, not as a separate identity/auth subsystem with hard technical write isolation per agent role.",
       "route_code": "A",
       "route_name": "Runtime / Governance Stabilization",
-      "stage_id": "A3",
-      "stage_title": "Governance Regression Hardening"
+      "stage_id": "A4",
+      "stage_title": "Agent Entry Gate"
     },
     {
       "risk": "`promotion_freezes`, `moderator_action_snapshots`, `falsification_probe_snapshots`, and `round_task_snapshots` remain latest-snapshot recovery surfaces rather than full per-item history logs.",
@@ -139,12 +129,12 @@
   ],
   "route_snapshot": [
     {
-      "completed_stage_count": 5,
+      "completed_stage_count": 6,
       "latest_delivery_date": "2026-04-06",
-      "latest_delivery_stage_id": "A3",
-      "latest_delivery_title": "Governance Regression Hardening",
-      "next_stage_id": "A4",
-      "next_stage_title": "Agent Entry Gate",
+      "latest_delivery_stage_id": "A4",
+      "latest_delivery_title": "Agent Entry Gate",
+      "next_stage_id": "",
+      "next_stage_title": "",
       "route_code": "A",
       "route_name": "Runtime / Governance Stabilization",
       "total_stage_count": 6
@@ -190,9 +180,9 @@
     "progress_log_path": "/home/fpddmw/projects/openclaw-eco-concil_v1/openclaw-db-first-progress-log.md"
   },
   "summary": {
-    "completed_stage_count": 24,
-    "delivery_count": 29,
-    "planned_stage_count": 1,
+    "completed_stage_count": 25,
+    "delivery_count": 30,
+    "planned_stage_count": 0,
     "route_count": 4,
     "stage_count": 25
   },
@@ -201,25 +191,46 @@
   ],
   "validation_commands": [
     {
-      "command": "python3 -m unittest tests/test_archive_history_workflow.py -q",
+      "command": "python3 -m unittest tests/test_agent_entry_gate.py -q",
       "route_code": "A",
       "route_name": "Runtime / Governance Stabilization",
-      "stage_id": "A3",
-      "stage_title": "Governance Regression Hardening"
+      "stage_id": "A4",
+      "stage_title": "Agent Entry Gate"
     },
     {
-      "command": "python3 -m unittest tests/test_runtime_kernel.py -q",
+      "command": "python3 -m unittest tests/test_milestone_package.py -q",
       "route_code": "A",
       "route_name": "Runtime / Governance Stabilization",
-      "stage_id": "A3",
-      "stage_title": "Governance Regression Hardening"
+      "stage_id": "A4",
+      "stage_title": "Agent Entry Gate"
+    },
+    {
+      "command": "python3 -m unittest tests/test_progress_dashboard.py -q",
+      "route_code": "A",
+      "route_name": "Runtime / Governance Stabilization",
+      "stage_id": "A4",
+      "stage_title": "Agent Entry Gate"
+    },
+    {
+      "command": "python3 eco-concil-runtime/scripts/eco_progress_dashboard.py --pretty",
+      "route_code": "A",
+      "route_name": "Runtime / Governance Stabilization",
+      "stage_id": "A4",
+      "stage_title": "Agent Entry Gate"
+    },
+    {
+      "command": "python3 eco-concil-runtime/scripts/eco_milestone_package.py --output-dir reports/2026-04-06-milestone-package --package-date 2026-04-06 --pretty",
+      "route_code": "A",
+      "route_name": "Runtime / Governance Stabilization",
+      "stage_id": "A4",
+      "stage_title": "Agent Entry Gate"
     },
     {
       "command": "python3 -m unittest discover -s tests -q",
       "route_code": "A",
       "route_name": "Runtime / Governance Stabilization",
-      "stage_id": "A3",
-      "stage_title": "Governance Regression Hardening"
+      "stage_id": "A4",
+      "stage_title": "Agent Entry Gate"
     },
     {
       "command": "python3 eco-concil-runtime/scripts/eco_progress_dashboard.py --pretty",
