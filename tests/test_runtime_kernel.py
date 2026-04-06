@@ -10,7 +10,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-from _workflow_support import kernel_script_path, load_json, run_kernel, run_kernel_process, run_script, runtime_src_path, script_path, seed_analysis_chain
+from _workflow_support import analytics_path, kernel_script_path, load_json, run_kernel, run_kernel_process, run_script, runtime_src_path, script_path, seed_analysis_chain
 
 RUN_ID = "run-kernel-001"
 ROUND_ID = "round-kernel-001"
@@ -130,6 +130,104 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertTrue((runtime_dir / "receipts" / f"{first_run['summary']['receipt_id']}.json").exists())
             self.assertTrue((runtime_dir / "receipts" / f"{second_run['summary']['receipt_id']}.json").exists())
             self.assertEqual(kernel_script_path().name, "eco_runtime_kernel.py")
+
+    def test_kernel_lists_analysis_result_sets_via_non_python_query_surface(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            payload = run_kernel(
+                "list-analysis-result-sets",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--analysis-kind",
+                "claim-cluster",
+                "--latest-only",
+                "--include-contract",
+            )
+
+            self.assertEqual("analysis-plane-result-set-query-v1", payload["schema_version"])
+            self.assertEqual(1, payload["summary"]["matching_result_set_count"])
+            self.assertEqual(1, payload["summary"]["returned_result_set_count"])
+            self.assertEqual(1, len(payload["result_sets"]))
+            result_set = payload["result_sets"][0]
+            self.assertEqual("claim-cluster", result_set["analysis_kind"])
+            self.assertEqual("clusters", result_set["items_key"])
+            self.assertGreaterEqual(result_set["item_count"], 1)
+            self.assertTrue(result_set["artifact_present"])
+            parent_kinds = {
+                parent["analysis_kind"]
+                for parent in result_set["result_contract"]["parent_result_sets"]
+            }
+            self.assertSetEqual({"claim-candidate"}, parent_kinds)
+
+    def test_kernel_queries_analysis_items_when_cluster_artifact_is_missing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+            cluster_id = outputs["cluster_claims"]["canonical_ids"][0]
+            analytics_path(run_dir, f"claim_candidate_clusters_{ROUND_ID}.json").unlink()
+
+            payload = run_kernel(
+                "query-analysis-result-items",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--analysis-kind",
+                "claim-cluster",
+                "--latest-only",
+                "--subject-id",
+                cluster_id,
+                "--include-result-sets",
+                "--include-contract",
+            )
+
+            self.assertEqual("analysis-plane-item-query-v1", payload["schema_version"])
+            self.assertEqual(1, payload["summary"]["matching_result_set_count"])
+            self.assertEqual(1, payload["summary"]["returned_item_count"])
+            self.assertEqual(1, len(payload["items"]))
+            self.assertEqual(cluster_id, payload["items"][0]["subject_id"])
+            self.assertFalse(payload["items"][0]["artifact_present"])
+            self.assertEqual(1, len(payload["result_sets"]))
+            self.assertFalse(payload["result_sets"][0]["artifact_present"])
+            parent_kinds = {
+                parent["analysis_kind"]
+                for parent in payload["result_sets"][0]["result_contract"][
+                    "parent_result_sets"
+                ]
+            }
+            self.assertSetEqual({"claim-candidate"}, parent_kinds)
+
+    def test_kernel_analysis_query_reports_invalid_analysis_kind(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+
+            completed = run_kernel_process(
+                "list-analysis-result-sets",
+                "--run-dir",
+                str(run_dir),
+                "--analysis-kind",
+                "not-a-real-kind",
+            )
+
+            self.assertEqual(1, completed.returncode)
+            payload = json.loads(completed.stdout)
+            self.assertEqual("failed", payload["status"])
+            self.assertIn("Unsupported analysis kind", payload["message"])
 
     def test_runtime_registry_and_ledger_capture_contract_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

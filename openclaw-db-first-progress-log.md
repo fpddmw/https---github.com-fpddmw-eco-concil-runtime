@@ -1216,3 +1216,69 @@ Known limitations:
 Next:
 - Move to `C2.2` so the now-stable analysis result families can be queried through a more formal interface than runtime-local helper imports.
 - After `C2.2`, continue `D4` milestone/demo packaging and then `A4` agent entry gate according to the refreshed dashboard order.
+
+## 2026-04-06 C2.2: Non-Python Query Surface
+
+Status: completed
+
+Objective:
+- Promote the analysis-plane query surface from Python-only runtime helper imports into a stable shell-facing interface that external tools and scripts can consume directly.
+- Preserve result-set lineage, contract, and artifact-presence visibility in that query surface so DB-backed recovery remains auditable outside Python callers.
+
+Implementation:
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py`
+  - Added versioned query payload builders:
+    - `analysis-plane-result-set-query-v1`
+    - `analysis-plane-item-query-v1`
+  - Added public query helpers for non-skill callers:
+    - `query_analysis_result_sets(...)`
+    - `query_analysis_result_items(...)`
+  - Added stable filtering and paging support across:
+    - `result_set_id`
+    - `run_id`
+    - `round_id`
+    - `analysis_kind`
+    - `source_skill`
+    - `artifact_path`
+    - `subject_id`
+    - `readiness`
+    - `latest_only`
+  - Added result serialization that exposes:
+    - `artifact_present`
+    - `summary`
+    - `result_contract`
+    - `items`
+    - `related_ids`
+    - `evidence_refs`
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/cli.py`
+  - Added `eco_runtime_kernel.py` commands:
+    - `list-analysis-result-sets`
+    - `query-analysis-result-items`
+  - Added stable failure handling for unsupported analysis kinds so external callers receive structured JSON failures instead of uncaught Python exceptions.
+- Updated `tests/test_runtime_kernel.py`
+  - Added end-to-end runtime CLI tests proving the new query surface can:
+    - list analysis result sets with contracts
+    - query items directly from DB after deleting the cluster artifact
+    - fail cleanly on invalid analysis-kind filters
+- Updated `openclaw-db-first-master-plan.md`
+  - Marked `C2.2` as `completed`.
+  - Advanced the near-term queue so `D4` becomes the next recommended delivery.
+
+Validation:
+- `python3 -m unittest tests/test_runtime_kernel.py -q`
+- `python3 -m unittest tests/test_progress_dashboard.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- `tests/test_runtime_kernel.py`
+  - Verifies `list-analysis-result-sets` exposes `claim-cluster` result-set metadata plus parent result-set contracts.
+  - Verifies `query-analysis-result-items` can still return `claim-cluster` items from the DB after deleting `claim_candidate_clusters_<round>.json`.
+  - Verifies invalid `analysis_kind` filters return a structured `failed` payload.
+
+Known limitations:
+- The current query surface is intentionally filtered JSON output, not a generic SQL or ad hoc expression language; callers still need to compose more complex joins client-side.
+- The runtime CLI currently exposes analysis-plane reads only; there is still no corresponding formal non-Python write or mutation surface for analysis objects.
+
+Next:
+- Move to `D4` milestone/demo packaging so the now-stable runtime, analysis, and moderator surfaces can be bundled into a repeatable acceptance/demo pack.
+- After `D4`, continue `A4` agent entry gate.

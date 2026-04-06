@@ -5,6 +5,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .analysis_plane import (
+    analysis_kind_names,
+    query_analysis_result_items,
+    query_analysis_result_sets,
+)
 from .benchmark import (
     compare_benchmark_manifests,
     materialize_benchmark_manifest,
@@ -346,6 +351,25 @@ def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, An
     }
 
 
+def add_analysis_query_args(command: argparse.ArgumentParser) -> None:
+    supported_kinds = ", ".join(analysis_kind_names())
+    command.add_argument("--run-dir", required=True)
+    command.add_argument("--result-set-id", default="")
+    command.add_argument("--run-id", default="")
+    command.add_argument("--round-id", default="")
+    command.add_argument(
+        "--analysis-kind",
+        default="",
+        help=f"Optional analysis kind filter. Supported kinds: {supported_kinds}.",
+    )
+    command.add_argument("--source-skill", default="")
+    command.add_argument("--artifact-path", default="")
+    command.add_argument("--latest-only", action="store_true")
+    command.add_argument("--limit", type=int, default=20)
+    command.add_argument("--offset", type=int, default=0)
+    command.add_argument("--pretty", action="store_true")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Minimal runtime kernel for skill-first investigation runs.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -481,6 +505,24 @@ def build_parser() -> argparse.ArgumentParser:
     dead_letters_cmd.add_argument("--round-id", default="")
     dead_letters_cmd.add_argument("--limit", type=int, default=20)
     dead_letters_cmd.add_argument("--pretty", action="store_true")
+
+    list_analysis_cmd = sub.add_parser(
+        "list-analysis-result-sets",
+        help="List analysis-plane result sets from the shared SQLite query surface.",
+    )
+    add_analysis_query_args(list_analysis_cmd)
+    list_analysis_cmd.add_argument("--include-contract", action="store_true")
+    list_analysis_cmd.add_argument("--include-items", action="store_true")
+
+    query_items_cmd = sub.add_parser(
+        "query-analysis-result-items",
+        help="Query analysis-plane result items from the shared SQLite query surface.",
+    )
+    add_analysis_query_args(query_items_cmd)
+    query_items_cmd.add_argument("--subject-id", default="")
+    query_items_cmd.add_argument("--readiness", default="")
+    query_items_cmd.add_argument("--include-result-sets", action="store_true")
+    query_items_cmd.add_argument("--include-contract", action="store_true")
 
     show_cmd = sub.add_parser("show-run-state", help="Show manifest, cursor, registry, and a tail of runtime ledger events.")
     show_cmd.add_argument("--run-dir", required=True)
@@ -822,6 +864,71 @@ def main(argv: list[str] | None = None) -> int:
             },
             "dead_letters": dead_letters,
         }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "list-analysis-result-sets":
+        try:
+            payload = query_analysis_result_sets(
+                run_dir,
+                result_set_id=args.result_set_id,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                analysis_kind=args.analysis_kind,
+                source_skill=args.source_skill,
+                artifact_path=args.artifact_path,
+                latest_only=args.latest_only,
+                include_contract=args.include_contract,
+                include_items=args.include_items,
+                limit=args.limit,
+                offset=args.offset,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_dir": str(run_dir),
+                    "analysis_kind": args.analysis_kind,
+                    "result_set_id": args.result_set_id,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "query-analysis-result-items":
+        try:
+            payload = query_analysis_result_items(
+                run_dir,
+                result_set_id=args.result_set_id,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                analysis_kind=args.analysis_kind,
+                source_skill=args.source_skill,
+                artifact_path=args.artifact_path,
+                subject_id=args.subject_id,
+                readiness=args.readiness,
+                latest_only=args.latest_only,
+                include_result_sets=args.include_result_sets,
+                include_contract=args.include_contract,
+                limit=args.limit,
+                offset=args.offset,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_dir": str(run_dir),
+                    "analysis_kind": args.analysis_kind,
+                    "result_set_id": args.result_set_id,
+                    "subject_id": args.subject_id,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
         print(pretty_json(payload, args.pretty))
         return 0
 

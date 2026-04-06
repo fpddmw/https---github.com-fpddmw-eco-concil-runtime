@@ -107,7 +107,7 @@
 | `C1.3` | Remaining Export Read Migration | 将仍直接读取 analysis JSON 的 reporting/export 消费端迁到 analysis plane | `completed` | 剩余关键 export/read consumers 不再依赖 analysis JSON 作为主输入 |
 | `C2` | Generic Result-Set Contract | 强化 `result_sets / result_items` 的通用契约与 lineage 语义 | `completed` | result set 可追溯 query basis、parent ids、artifact refs |
 | `C2.1` | Candidate / Cluster Result Migration | 将 claim/observation candidate、cluster、merge 等对象纳入 analysis plane | `completed` | 早期分析链的关键压缩对象可被统一查询 |
-| `C2.2` | Non-Python Query Surface | 把当前 runtime-local helper 提升为更正式的查询接口 | `planned` | 非 Python tooling 也能稳定消费 analysis-plane 结果 |
+| `C2.2` | Non-Python Query Surface | 把当前 runtime-local helper 提升为更正式的查询接口 | `completed` | 非 Python tooling 也能稳定消费 analysis-plane 结果 |
 
 ### 5.4 Route D: Program Control / Documentation
 
@@ -124,7 +124,7 @@
 
 1. `A` 路线已完成第一轮修复、`A2` 共享契约硬化、以及 `A3` 治理回归硬化；当前 D1、promotion/reporting draft、canonical publish、final publication、以及治理命令链上的 `show-run-state / close-round / benchmark / replay` 都已经对 DB-backed round task / moderator action / probe 恢复面与 frozen baseline replay 更稳健，下一步主要转向 `A4` agent entry gate。
 2. `B` 路线已经完成 deliberation-plane 读路径迁移、关键 board 写路径 DB-first 切换、`board_summary / board_brief` 的运行时降级，以及 `B3` moderator control consolidation 的当前计划范围；promotion freeze / controller / supervisor 控制快照、`next_actions / falsification_probes` 工作快照、source-round carryover、round task scaffold / `prepare-round` 输入恢复、以及 history/archive 上剩余的 moderator action/probe 读路径都已收口到 deliberation plane，使 moderator loop 的主要状态推进不再依赖线性工件顺序。是否继续把 action/probe/challenge/task 拆成更细粒度对象与历史，应视作后续扩展，而不是当前 `B3` 的阻塞项。
-3. `C` 路线已经完成 coverage、其上游 links/scopes、history/archive 读取面、剩余关键 export/read consumer 的 analysis-plane-first 迁移、`C2` result-set lineage contract，以及 `C2.1` candidate / cluster / merge family migration；claim/observation candidate、claim cluster、merged observation 现在都可被统一同步到 analysis plane，`derive-claim-scope / derive-observation-scope / link-claims-to-observations` 也能在缺少 cluster/merge JSON 时继续从 analysis plane 恢复。下一步主要转向 `C2.2`，把 runtime-local query helper 提升成更正式的查询接口。
+3. `C` 路线已经完成 coverage、其上游 links/scopes、history/archive 读取面、剩余关键 export/read consumer 的 analysis-plane-first 迁移、`C2` result-set lineage contract、`C2.1` candidate / cluster / merge family migration，以及 `C2.2` non-Python query surface。现在 shell 和外部脚本已经可以通过 runtime CLI 直接列出 analysis result sets、查询 analysis items、读取 result contract，而不必再依赖 Python helper 导入；当前 master plan 下的 `Route C` 计划范围已全部交付。
 4. `D` 路线现在已经有 master plan、progress log、以及生成式 dashboard 三层分工；下一步主要转向 `D4` 的固定里程碑包整理，而不是继续依赖人工通读整份 progress log 才能判断当前控制状态。
 
 ## 7. 推荐的未来数次开发顺序
@@ -133,9 +133,8 @@
 
 | 顺序 | 阶段 | 路线 | 为什么先做 | 预期独立交付 |
 | --- | --- | --- | --- | --- |
-| `1` | `C2.2` | `C` | candidate / cluster / merge family 已统一纳入 analysis plane，接下来把 runtime-local helper 提升为正式 query surface 返工最少 | 非 Python tooling 也能稳定消费 analysis-plane 结果 |
-| `2` | `D4` | `D` | 当 queue / blocker 可视化已经稳定后，再整理阶段验收与 demo 包更容易形成固定模板 | 能快速导出当前成果清单、风险、下一步 |
-| `3` | `A4` | `A` | 当治理回归与阶段里程碑都更稳定后，再定义 agent entry gate 可以减少入口设计返工 | 至少一条 operator-visible 入口链路形成闭环 |
+| `1` | `D4` | `D` | analysis / deliberation / governance 三条主线的当前计划范围已大体稳定，适合整理一份固定的阶段验收与 demo 包模板 | 能快速导出当前成果清单、风险、下一步 |
+| `2` | `A4` | `A` | 当里程碑包与当前运行时/查询面都更稳定后，再定义 agent entry gate 可以减少入口设计返工 | 至少一条 operator-visible 入口链路形成闭环 |
 
 ## 8. 每次开发交付的记录规范
 

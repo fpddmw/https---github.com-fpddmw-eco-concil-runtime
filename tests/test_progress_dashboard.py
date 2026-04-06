@@ -24,20 +24,28 @@ class ProgressDashboardTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(model.stage_definitions), 10)
         self.assertIn(
-            "| Current active stages | none<br>Last completed delivery: 2026-04-06 `C2.1` Candidate / Cluster Result Migration |",
+            "| Current active stages | none<br>Last completed delivery: 2026-04-06 `C2.2` Non-Python Query Surface |",
             markdown_text,
         )
         self.assertIn(
-            "| Next recommended stage | `C2.2` Non-Python Query Surface |",
+            "| Next recommended stage | `D4` Milestone / Demo Packaging |",
             markdown_text,
         )
         self.assertIn("| Blocked stages | none |", markdown_text)
         self.assertIn(
-            "2026-04-06 `C2.1` Candidate / Cluster Result Migration", markdown_text
+            "2026-04-06 `C2.2` Non-Python Query Surface", markdown_text
+        )
+        self.assertIn(
+            "| 2026-04-06 | `C2.1` | `completed` | Candidate / Cluster Result Migration |",
+            markdown_text,
         )
         self.assertIn("2026-04-06 `A3` Governance Regression Hardening", markdown_text)
         self.assertIn("2026-04-04 `D3` Progress Dashboard Conventions", markdown_text)
         self.assertIn("| `A3` | `A` | `completed` | Governance Regression Hardening | 2026-04-06 | 1 |", markdown_text)
+        self.assertIn(
+            "| `C2.2` | `C` | `completed` | Non-Python Query Surface | 2026-04-06 | 1 |",
+            markdown_text,
+        )
         self.assertIn(
             "| `C2.1` | `C` | `completed` | Candidate / Cluster Result Migration | 2026-04-06 | 1 |",
             markdown_text,
