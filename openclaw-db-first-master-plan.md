@@ -116,7 +116,7 @@
 | `D1` | Documentation Traceability Pack | 修复文档引用漂移并建立 progress log | `completed` | 每次交付有仓内记录 |
 | `D2` | Master Plan And Route Normalization | 统一 A/B/C/D 路线定义与阶段规划 | `completed` | 本文档成为唯一计划源 |
 | `D3` | Progress Dashboard Conventions | 给 progress log 增加更强的阶段索引、里程碑视图、状态汇总约束 | `completed` | 任意时刻都能看出“当前阶段、下一阶段、阻塞点” |
-| `D4` | Milestone / Demo Packaging | 面向中期汇报或阶段验收整理固定里程碑包 | `planned` | 能快速导出当前成果清单、风险、下一步 |
+| `D4` | Milestone / Demo Packaging | 面向中期汇报或阶段验收整理固定里程碑包 | `completed` | 能快速导出当前成果清单、风险、下一步 |
 
 ## 6. 当前总体判断
 
@@ -125,7 +125,7 @@
 1. `A` 路线已完成第一轮修复、`A2` 共享契约硬化、以及 `A3` 治理回归硬化；当前 D1、promotion/reporting draft、canonical publish、final publication、以及治理命令链上的 `show-run-state / close-round / benchmark / replay` 都已经对 DB-backed round task / moderator action / probe 恢复面与 frozen baseline replay 更稳健，下一步主要转向 `A4` agent entry gate。
 2. `B` 路线已经完成 deliberation-plane 读路径迁移、关键 board 写路径 DB-first 切换、`board_summary / board_brief` 的运行时降级，以及 `B3` moderator control consolidation 的当前计划范围；promotion freeze / controller / supervisor 控制快照、`next_actions / falsification_probes` 工作快照、source-round carryover、round task scaffold / `prepare-round` 输入恢复、以及 history/archive 上剩余的 moderator action/probe 读路径都已收口到 deliberation plane，使 moderator loop 的主要状态推进不再依赖线性工件顺序。是否继续把 action/probe/challenge/task 拆成更细粒度对象与历史，应视作后续扩展，而不是当前 `B3` 的阻塞项。
 3. `C` 路线已经完成 coverage、其上游 links/scopes、history/archive 读取面、剩余关键 export/read consumer 的 analysis-plane-first 迁移、`C2` result-set lineage contract、`C2.1` candidate / cluster / merge family migration，以及 `C2.2` non-Python query surface。现在 shell 和外部脚本已经可以通过 runtime CLI 直接列出 analysis result sets、查询 analysis items、读取 result contract，而不必再依赖 Python helper 导入；当前 master plan 下的 `Route C` 计划范围已全部交付。
-4. `D` 路线现在已经有 master plan、progress log、以及生成式 dashboard 三层分工；下一步主要转向 `D4` 的固定里程碑包整理，而不是继续依赖人工通读整份 progress log 才能判断当前控制状态。
+4. `D` 路线已经形成 master plan、progress log、生成式 dashboard、以及可重复物化的 milestone package 四层控制面；当前计划范围内的 `D1`-`D4` 已全部交付，仓内现可直接生成固定的阶段验收/汇报包，而不必继续依赖人工通读整份 progress log 判断当前控制状态。
 
 ## 7. 推荐的未来数次开发顺序
 
@@ -133,8 +133,7 @@
 
 | 顺序 | 阶段 | 路线 | 为什么先做 | 预期独立交付 |
 | --- | --- | --- | --- | --- |
-| `1` | `D4` | `D` | analysis / deliberation / governance 三条主线的当前计划范围已大体稳定，适合整理一份固定的阶段验收与 demo 包模板 | 能快速导出当前成果清单、风险、下一步 |
-| `2` | `A4` | `A` | 当里程碑包与当前运行时/查询面都更稳定后，再定义 agent entry gate 可以减少入口设计返工 | 至少一条 operator-visible 入口链路形成闭环 |
+| `1` | `A4` | `A` | 里程碑包、dashboard、以及运行时/查询面已经稳定，适合把 operator-visible agent 入口闭环真正定型 | 至少一条 operator-visible 入口链路形成闭环 |
 
 ## 8. 每次开发交付的记录规范
 

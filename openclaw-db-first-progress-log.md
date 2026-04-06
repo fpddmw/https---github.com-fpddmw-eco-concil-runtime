@@ -1282,3 +1282,63 @@ Known limitations:
 Next:
 - Move to `D4` milestone/demo packaging so the now-stable runtime, analysis, and moderator surfaces can be bundled into a repeatable acceptance/demo pack.
 - After `D4`, continue `A4` agent entry gate.
+
+## 2026-04-06 D4: Milestone / Demo Packaging
+
+Status: completed
+
+Objective:
+- Deliver a repeatable milestone-package generator so the current DB-first control state can be exported as one stable acceptance/demo bundle instead of another one-off briefing.
+- Ensure the package is derived from the master plan, progress log, and dashboard conventions already established by Route `D`, so future milestone exports stay consistent with the control source of truth.
+
+Implementation:
+- Added `eco-concil-runtime/src/eco_council_runtime/kernel/milestone_package.py`
+  - Added progress-log section parsing for `Validation / Known limitations / Next` so package content is derived from the latest route deliveries rather than hand-maintained notes.
+  - Added manifest/render/materialize support for a fixed package layout:
+    - `package_manifest.json`
+    - `README.md`
+    - `01-executive-summary.md`
+    - `02-acceptance-and-demo.md`
+    - `03-risk-register.md`
+    - `04-next-steps.md`
+  - Added route snapshot, recent-delivery, residual-risk, near-term queue, and validation-command extraction from the current control docs.
+  - Normalized validation-command capture so backticked progress-log commands still become executable package/demo instructions.
+- Added `eco-concil-runtime/scripts/eco_milestone_package.py`
+  - Added a repo-local CLI for materializing milestone packages from the current control docs.
+  - Defaulted package output to `reports/<date>-milestone-package` and return a structured JSON summary for automation callers.
+- Added `tests/test_milestone_package.py`
+  - Added synthetic render/materialize coverage for the package generator.
+  - Added CLI coverage for `eco_milestone_package.py`.
+  - Added repo-state assertions proving the rendered package now tracks `D4` as the latest delivered increment and `A4` as the next recommended stage.
+- Updated `tests/test_progress_dashboard.py`
+  - Refreshed the repo-state expectations so the generated dashboard now treats `D4` as completed and surfaces `A4` as the next recommended delivery.
+- Updated `openclaw-db-first-master-plan.md`
+  - Marked `D4` as `completed`.
+  - Advanced the near-term queue so `A4` becomes the next recommended stage.
+  - Updated the Route `D` maturity summary to reflect that the control/documentation route now includes a reusable milestone-package layer.
+- Regenerated `openclaw-db-first-dashboard.md` from the updated plan/log state.
+- Materialized `reports/2026-04-06-milestone-package/`
+  - Exported the first real milestone package from the generator so the repo now contains both the reusable toolchain and a concrete packaged snapshot.
+
+Validation:
+- `python3 -m unittest tests/test_milestone_package.py -q`
+- `python3 -m unittest tests/test_progress_dashboard.py -q`
+- `python3 eco-concil-runtime/scripts/eco_progress_dashboard.py --pretty`
+- `python3 eco-concil-runtime/scripts/eco_milestone_package.py --output-dir reports/2026-04-06-milestone-package --package-date 2026-04-06 --pretty`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- Added `tests/test_milestone_package.py`
+  - Verifies synthetic milestone packages render and materialize all expected files with manifest, risk, queue, and validation-command content.
+  - Verifies the CLI writes a package directory plus structured JSON summary.
+  - Verifies the repo-state render now points at latest delivery `D4` and next stage `A4`.
+- Updated `tests/test_progress_dashboard.py`
+  - Refreshes the repo control-view assertions after closing `D4` and advancing the queue to `A4`.
+
+Known limitations:
+- The milestone package is still a control/documentation snapshot generated from plan/log/dashboard inputs plus latest route-delivery notes; it does not embed a runnable runtime fixture, DB snapshot, or large artifact archive.
+- The acceptance/demo walkthrough intentionally stays at command-book level; operators still need to supply concrete `<run_dir> / <run_id> / <round_id>` values when demonstrating live runtime/query surfaces.
+
+Next:
+- Move to `A4` agent entry gate so the now-stable runtime, governance, analysis, and milestone-package surfaces gain a minimal operator-visible entry path.
+- After `A4`, re-evaluate whether the current master plan should grow new stages or transition into a closeout/maintenance mode.

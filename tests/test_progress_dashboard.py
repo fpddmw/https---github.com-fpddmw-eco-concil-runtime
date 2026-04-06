@@ -24,24 +24,29 @@ class ProgressDashboardTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(model.stage_definitions), 10)
         self.assertIn(
-            "| Current active stages | none<br>Last completed delivery: 2026-04-06 `C2.2` Non-Python Query Surface |",
+            "| Current active stages | none<br>Last completed delivery: 2026-04-06 `D4` Milestone / Demo Packaging |",
             markdown_text,
         )
         self.assertIn(
-            "| Next recommended stage | `D4` Milestone / Demo Packaging |",
+            "| Next recommended stage | `A4` Agent Entry Gate |",
             markdown_text,
         )
         self.assertIn("| Blocked stages | none |", markdown_text)
         self.assertIn(
-            "2026-04-06 `C2.2` Non-Python Query Surface", markdown_text
+            "2026-04-06 `D4` Milestone / Demo Packaging", markdown_text
         )
         self.assertIn(
             "| 2026-04-06 | `C2.1` | `completed` | Candidate / Cluster Result Migration |",
             markdown_text,
         )
         self.assertIn("2026-04-06 `A3` Governance Regression Hardening", markdown_text)
-        self.assertIn("2026-04-04 `D3` Progress Dashboard Conventions", markdown_text)
+        self.assertIn("2026-04-06 `D4` Milestone / Demo Packaging", markdown_text)
+        self.assertIn(
+            "| `D` Program Control / Documentation | `4 / 4` | none | none | none | 2026-04-06 `D4` Milestone / Demo Packaging |",
+            markdown_text,
+        )
         self.assertIn("| `A3` | `A` | `completed` | Governance Regression Hardening | 2026-04-06 | 1 |", markdown_text)
+        self.assertIn("| `A4` | `A` | `planned` | Agent Entry Gate | - | 0 |", markdown_text)
         self.assertIn(
             "| `C2.2` | `C` | `completed` | Non-Python Query Surface | 2026-04-06 | 1 |",
             markdown_text,
@@ -51,6 +56,7 @@ class ProgressDashboardTests(unittest.TestCase):
             markdown_text,
         )
         self.assertIn("| `D3` | `D` | `completed` | Progress Dashboard Conventions | 2026-04-04 | 1 |", markdown_text)
+        self.assertIn("| `D4` | `D` | `completed` | Milestone / Demo Packaging | 2026-04-06 | 1 |", markdown_text)
         self.assertIn("| `B2` | `B` | `completed` | Board Write-Path Migration | 2026-04-03 | 2 |", markdown_text)
         self.assertIn("| `B3` | `B` | `completed` | Moderator Control Consolidation | 2026-04-06 | 5 |", markdown_text)
         self.assertIn("| `C1` | `C` | `completed` | Coverage Analysis Query Surface | 2026-04-02 | 1 |", markdown_text)
