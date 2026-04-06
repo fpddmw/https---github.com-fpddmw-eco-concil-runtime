@@ -8,6 +8,10 @@ from typing import Any
 
 from .deliberation_plane import load_phase2_control_state
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
+from .investigation_planning import (
+    load_falsification_probe_wrapper,
+    load_next_actions_wrapper,
+)
 from .ledger import append_ledger_event, load_ledger_tail
 from .manifest import load_json_if_exists, write_json
 from .paths import (
@@ -20,9 +24,11 @@ from .paths import (
     promotion_gate_path,
     replay_report_path,
     round_close_state_path,
+    scenario_baseline_manifest_path,
     scenario_fixture_path,
     supervisor_state_path,
 )
+from .source_queue_history import load_round_tasks_wrapper
 
 BENCHMARK_EVENT_TYPES = {
     "benchmark-manifest",
@@ -94,6 +100,15 @@ RUN_ARTIFACT_ROOTS = (
     "receipts",
 )
 
+RECOVERABLE_INPUT_LOADERS = {
+    "round_tasks": load_round_tasks_wrapper,
+}
+
+RECOVERABLE_OUTPUT_LOADERS = {
+    "next_actions": load_next_actions_wrapper,
+    "falsification_probes": load_falsification_probe_wrapper,
+}
+
 
 def stable_hash(*parts: Any) -> str:
     joined = "||".join(maybe_text(part) for part in parts)
@@ -112,6 +127,13 @@ def artifact_specs(round_id: str, specs: tuple[tuple[str, str], ...]) -> list[di
         }
         for artifact_key, template in specs
     ]
+
+
+def artifact_preview(payload: Any) -> dict[str, Any]:
+    return {
+        "top_level_type": type(payload).__name__,
+        "item_count": len(payload) if isinstance(payload, (dict, list)) else 1,
+    }
 
 
 def try_parse_json(path: Path) -> Any | None:
@@ -218,30 +240,130 @@ def normalize_json_value(value: Any, run_dir: Path) -> Any:
     return value
 
 
+def drop_json_keys(value: Any, *, keys: set[str]) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: drop_json_keys(item, keys=keys)
+            for key, item in value.items()
+            if key not in keys
+        }
+    if isinstance(value, list):
+        return [drop_json_keys(item, keys=keys) for item in value]
+    return value
+
+
+def benchmark_payload_value(artifact_key: str, payload: Any) -> Any:
+    if artifact_key in {"next_actions", "falsification_probes"}:
+        return drop_json_keys(payload, keys={"action_source", "snapshot_id"})
+    return payload
+
+
+def payload_semantic_fingerprint(
+    artifact_key: str,
+    payload: Any,
+    run_dir: Path,
+) -> tuple[str, dict[str, Any]]:
+    normalized_payload = normalize_json_value(
+        benchmark_payload_value(artifact_key, payload),
+        run_dir,
+    )
+    canonical = json.dumps(
+        normalized_payload,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return stable_hash(canonical), artifact_preview(payload)
+
+
 def file_semantic_fingerprint(path: Path, run_dir: Path) -> tuple[str, str, dict[str, Any]]:
     payload = try_parse_json(path)
     if payload is not None:
-        normalized_payload = normalize_json_value(payload, run_dir)
-        canonical = json.dumps(normalized_payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
-        preview = {
-            "top_level_type": type(payload).__name__,
-            "item_count": len(payload) if isinstance(payload, (dict, list)) else 1,
-        }
-        return "json", stable_hash(canonical), preview
+        semantic_hash, preview = payload_semantic_fingerprint("", payload, run_dir)
+        return "json", semantic_hash, preview
     normalized_text = normalize_string_value(path.read_text(encoding="utf-8"), run_dir)
     line_count = 0 if not normalized_text else normalized_text.count("\n") + 1
     preview = {"top_level_type": "text", "line_count": line_count}
     return "text", stable_hash(normalized_text), preview
 
 
-def digest_artifact(run_dir: Path, artifact_key: str, relative_path: str, category: str) -> dict[str, Any]:
+def recoverable_loader(*, artifact_key: str, category: str):
+    if category == "input":
+        return RECOVERABLE_INPUT_LOADERS.get(artifact_key)
+    return RECOVERABLE_OUTPUT_LOADERS.get(artifact_key)
+
+
+def digest_artifact(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    artifact_key: str,
+    relative_path: str,
+    category: str,
+) -> dict[str, Any]:
     path = (run_dir / relative_path).resolve()
+    loader = recoverable_loader(artifact_key=artifact_key, category=category)
+    if loader is not None:
+        wrapper = loader(run_dir, run_id=run_id, round_id=round_id)
+        payload_present = bool(wrapper.get("payload_present"))
+        if payload_present:
+            payload = wrapper.get("payload")
+            semantic_hash, preview = payload_semantic_fingerprint(
+                artifact_key,
+                payload,
+                run_dir,
+            )
+            return {
+                "artifact_key": artifact_key,
+                "category": category,
+                "relative_path": relative_path,
+                "exists": path.exists(),
+                "artifact_present": path.exists(),
+                "payload_present": True,
+                "payload_source": maybe_text(wrapper.get("source")) or "artifact",
+                "format": "json",
+                "semantic_hash": semantic_hash,
+                "byte_size": path.stat().st_size if path.exists() else 0,
+                "preview": preview,
+            }
+        if path.exists():
+            file_format, semantic_hash, preview = file_semantic_fingerprint(path, run_dir)
+            return {
+                "artifact_key": artifact_key,
+                "category": category,
+                "relative_path": relative_path,
+                "exists": True,
+                "artifact_present": True,
+                "payload_present": False,
+                "payload_source": "invalid-artifact",
+                "format": file_format,
+                "semantic_hash": semantic_hash,
+                "byte_size": path.stat().st_size,
+                "preview": preview,
+            }
+        return {
+            "artifact_key": artifact_key,
+            "category": category,
+            "relative_path": relative_path,
+            "exists": False,
+            "artifact_present": False,
+            "payload_present": False,
+            "payload_source": maybe_text(wrapper.get("source")) or "missing",
+            "format": "",
+            "semantic_hash": "",
+            "byte_size": 0,
+            "preview": {},
+        }
     if not path.exists():
         return {
             "artifact_key": artifact_key,
             "category": category,
             "relative_path": relative_path,
             "exists": False,
+            "artifact_present": False,
+            "payload_present": False,
+            "payload_source": "missing",
             "format": "",
             "semantic_hash": "",
             "byte_size": 0,
@@ -253,6 +375,9 @@ def digest_artifact(run_dir: Path, artifact_key: str, relative_path: str, catego
         "category": category,
         "relative_path": relative_path,
         "exists": True,
+        "artifact_present": True,
+        "payload_present": True,
+        "payload_source": "artifact",
         "format": file_format,
         "semantic_hash": semantic_hash,
         "byte_size": path.stat().st_size,
@@ -260,10 +385,36 @@ def digest_artifact(run_dir: Path, artifact_key: str, relative_path: str, catego
     }
 
 
-def artifact_rows(run_dir: Path, round_id: str, specs: tuple[tuple[str, str], ...], category: str) -> list[dict[str, Any]]:
+def artifact_rows(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    specs: tuple[tuple[str, str], ...],
+    category: str,
+) -> list[dict[str, Any]]:
     return [
-        digest_artifact(run_dir, spec["artifact_key"], spec["relative_path"], category)
+        digest_artifact(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            artifact_key=spec["artifact_key"],
+            relative_path=spec["relative_path"],
+            category=category,
+        )
         for spec in artifact_specs(round_id, specs)
+    ]
+
+
+def comparison_artifact_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "artifact_key": maybe_text(row.get("artifact_key")),
+            "present": bool(row.get("payload_present")),
+            "semantic_hash": maybe_text(row.get("semantic_hash")),
+        }
+        for row in rows
+        if maybe_text(row.get("artifact_key"))
     ]
 
 
@@ -649,40 +800,39 @@ def failure_summary(
 
 
 def benchmark_manifest_payload(run_dir: Path, run_id: str, round_id: str) -> dict[str, Any]:
-    input_artifacts = artifact_rows(run_dir, round_id, INPUT_ARTIFACT_SPECS, "input")
-    output_artifacts = artifact_rows(run_dir, round_id, OUTPUT_ARTIFACT_SPECS, "output")
+    input_artifacts = artifact_rows(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        specs=INPUT_ARTIFACT_SPECS,
+        category="input",
+    )
+    output_artifacts = artifact_rows(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        specs=OUTPUT_ARTIFACT_SPECS,
+        category="output",
+    )
     output_hashes = artifact_hash_lookup(output_artifacts)
     phase2 = phase2_state_snapshot(run_dir, round_id, output_hashes)
     post_round = post_round_state_snapshot(run_dir, round_id, output_hashes)
     events = core_ledger_events(run_dir, round_id)
     failure = failure_summary(events, phase2=phase2, post_round=post_round)
+    comparison_inputs = comparison_artifact_rows(input_artifacts)
+    comparison_outputs = comparison_artifact_rows(output_artifacts)
     comparison_basis = {
-        "scenario_fingerprint": json_hash(
-            [
-                {
-                    "artifact_key": row["artifact_key"],
-                    "exists": row["exists"],
-                    "semantic_hash": row["semantic_hash"],
-                }
-                for row in input_artifacts
-            ]
-        ),
+        "scenario_fingerprint": json_hash(comparison_inputs),
         "phase2": phase2["comparison"],
         "post_round": post_round["comparison"],
-        "artifact_outputs": [
-            {
-                "artifact_key": row["artifact_key"],
-                "exists": row["exists"],
-                "semantic_hash": row["semantic_hash"],
-            }
-            for row in output_artifacts
-        ],
+        "artifact_outputs": comparison_outputs,
     }
     output_fingerprint = json_hash(comparison_basis)
     summary = {
         "scenario_input_count": len(input_artifacts),
         "output_artifact_count": len(output_artifacts),
-        "present_output_artifact_count": len([row for row in output_artifacts if bool(row.get("exists"))]),
+        "present_output_artifact_count": len([row for row in output_artifacts if bool(row.get("payload_present"))]),
+        "artifact_file_output_count": len([row for row in output_artifacts if bool(row.get("artifact_present"))]),
         "failed_event_count": failure["failed_event_count"],
         "blocked_event_count": failure["blocked_event_count"],
         "controller_status": phase2["summary"]["controller_status"],
@@ -817,6 +967,8 @@ def materialize_scenario_fixture(
     if not baseline_payload:
         raise ValueError(f"Missing benchmark manifest for scenario fixture: {baseline_manifest_path_value}")
     fixture_path = scenario_fixture_path(run_dir, round_id)
+    frozen_baseline_path = scenario_baseline_manifest_path(run_dir, round_id)
+    write_json(frozen_baseline_path, baseline_payload)
     resolved_scenario_id = maybe_text(scenario_id) or f"scenario-{stable_hash(run_id, round_id, baseline_payload.get('scenario_fingerprint'))[:12]}"
     payload = {
         "schema_version": "runtime-scenario-fixture-v1",
@@ -837,13 +989,14 @@ def materialize_scenario_fixture(
         },
         "expected_artifacts": baseline_payload.get("comparison_basis", {}).get("artifact_outputs", []),
         "baseline_manifest": {
-            "path": str(baseline_manifest_path_value),
+            "path": str(frozen_baseline_path),
+            "source_path": str(baseline_manifest_path_value),
             "output_fingerprint": maybe_text(baseline_payload.get("output_fingerprint")),
             "scenario_fingerprint": maybe_text(baseline_payload.get("scenario_fingerprint")),
         },
         "replay_contract": {
             "benchmark_command_template": f"python3 eco-concil-runtime/scripts/eco_runtime_kernel.py materialize-benchmark-manifest --run-dir <candidate-run-dir> --run-id {run_id} --round-id {round_id}",
-            "compare_command_template": f"python3 eco-concil-runtime/scripts/eco_runtime_kernel.py compare-benchmark-manifests --run-dir <candidate-run-dir> --run-id {run_id} --round-id {round_id} --left-manifest-path {baseline_manifest_path_value} --right-manifest-path <candidate-run-dir>/runtime/benchmark_manifest_{round_id}.json",
+            "compare_command_template": f"python3 eco-concil-runtime/scripts/eco_runtime_kernel.py compare-benchmark-manifests --run-dir <candidate-run-dir> --run-id {run_id} --round-id {round_id} --left-manifest-path {frozen_baseline_path} --right-manifest-path <candidate-run-dir>/runtime/benchmark_manifest_{round_id}.json",
             "replay_command_template": f"python3 eco-concil-runtime/scripts/eco_runtime_kernel.py replay-runtime-scenario --run-dir <candidate-run-dir> --run-id {run_id} --round-id {round_id} --fixture-path {fixture_path.resolve()}",
             "replay_steps": [
                 "Re-run the fixed scenario with the same run_id and round_id.",

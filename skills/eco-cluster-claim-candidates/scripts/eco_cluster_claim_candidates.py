@@ -7,11 +7,21 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "eco-cluster-claim-candidates"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
+    sync_claim_cluster_result_set,
+)
+
 STOPWORDS = {
     "a",
     "an",
@@ -245,9 +255,28 @@ def cluster_claim_candidates_skill(
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
+        "query_basis": {
+            "input_path": str(input_file),
+            "claim_type": wanted_claim_type,
+            "keyword_any": keywords,
+            "min_member_count": max(1, min_member_count),
+            "max_clusters": max(1, max_clusters),
+            "selection_mode": "group-claim-candidates-by-claim-type-and-semantic-fingerprint",
+            "method": "heuristic-claim-cluster-v1",
+        },
+        "input_path": str(input_file),
         "cluster_count": len(clusters),
         "clusters": clusters,
     }
+    write_json(output_file, wrapper)
+    analysis_sync = sync_claim_cluster_result_set(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        claim_cluster_path=output_file,
+    )
+    wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
+    wrapper["analysis_sync"] = analysis_sync
     write_json(output_file, wrapper)
     artifact_refs: list[dict[str, str]] = [
         {
@@ -276,12 +305,14 @@ def cluster_claim_candidates_skill(
             "output_path": str(output_file),
             "cluster_count": len(clusters),
             "input_candidate_count": len(candidates),
+            "db_path": maybe_text(analysis_sync.get("db_path")),
         },
         "receipt_id": "evidence-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
         "batch_id": "evbatch-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:16],
         "artifact_refs": unique_refs(artifact_refs, 40),
         "canonical_ids": [cluster["cluster_id"] for cluster in clusters],
         "warnings": warnings,
+        "analysis_sync": analysis_sync,
         "board_handoff": {
             "candidate_ids": [cluster["cluster_id"] for cluster in clusters],
             "evidence_refs": unique_refs(artifact_refs, 20),

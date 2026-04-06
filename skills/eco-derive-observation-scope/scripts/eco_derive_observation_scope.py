@@ -17,7 +17,11 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.analysis_plane import sync_observation_scope_result_set  # noqa: E402
+from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
+    load_merged_observation_context,
+    load_observation_candidate_context,
+    sync_observation_scope_result_set,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -101,6 +105,96 @@ def observation_items_from_payload(payload: Any) -> list[dict[str, Any]]:
     return [item for item in payload.get("candidates", []) if isinstance(item, dict)] if isinstance(payload.get("candidates"), list) else []
 
 
+def source_available(value: Any) -> bool:
+    text = maybe_text(value)
+    return bool(text) and not text.startswith("missing-")
+
+
+def select_observation_input_context(
+    run_dir_path: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    merged_observations_path: str,
+    observation_candidates_path: str,
+) -> dict[str, Any]:
+    merged_context = load_merged_observation_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        merged_observations_path=merged_observations_path,
+    )
+    candidate_context = load_observation_candidate_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        observation_candidates_path=observation_candidates_path,
+        db_path=maybe_text(merged_context.get("db_path")),
+    )
+    merged_available = source_available(
+        merged_context.get("merged_observation_source")
+    )
+    candidate_available = source_available(
+        candidate_context.get("observation_candidate_source")
+    )
+
+    if merged_available:
+        return {
+            "selected_kind": "merged-observation",
+            "selected_source": maybe_text(
+                merged_context.get("merged_observation_source")
+            ),
+            "selected_file": maybe_text(
+                merged_context.get("merged_observations_file")
+            ),
+            "selected_wrapper": merged_context.get(
+                "merged_observations_wrapper", {}
+            ),
+            "db_path": maybe_text(candidate_context.get("db_path"))
+            or maybe_text(merged_context.get("db_path")),
+            "merged_context": merged_context,
+            "candidate_context": candidate_context,
+            "warnings": [],
+        }
+    if candidate_available:
+        return {
+            "selected_kind": "observation-candidate",
+            "selected_source": maybe_text(
+                candidate_context.get("observation_candidate_source")
+            ),
+            "selected_file": maybe_text(
+                candidate_context.get("observation_candidates_file")
+            ),
+            "selected_wrapper": candidate_context.get(
+                "observation_candidates_wrapper", {}
+            ),
+            "db_path": maybe_text(candidate_context.get("db_path"))
+            or maybe_text(merged_context.get("db_path")),
+            "merged_context": merged_context,
+            "candidate_context": candidate_context,
+            "warnings": [],
+        }
+    merged_file = maybe_text(merged_context.get("merged_observations_file"))
+    candidates_file = maybe_text(candidate_context.get("observation_candidates_file"))
+    return {
+        "selected_kind": "missing-observation-input",
+        "selected_source": "missing-observation-input",
+        "selected_file": candidates_file or merged_file,
+        "selected_wrapper": candidate_context.get("observation_candidates_wrapper", {}),
+        "db_path": maybe_text(candidate_context.get("db_path"))
+        or maybe_text(merged_context.get("db_path")),
+        "merged_context": merged_context,
+        "candidate_context": candidate_context,
+        "warnings": [
+            {
+                "code": "missing-observation-input",
+                "message": "No observation-side artifact or analysis result was "
+                f"found at {merged_file} or {candidates_file}.",
+            }
+        ],
+    }
+
+
 def metric_tags(metric: str) -> list[str]:
     name = maybe_text(metric)
     if name in {"pm2_5", "pm10", "o3"}:
@@ -121,19 +215,23 @@ def derive_observation_scope_skill(
     output_path: str,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
-    merged_file = resolve_path(run_dir_path, merged_observations_path, f"merged_observation_candidates_{round_id}.json")
-    candidates_file = resolve_path(run_dir_path, observation_candidates_path, f"observation_candidates_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"observation_scope_proposals_{round_id}.json")
-
-    payload = load_json_if_exists(merged_file)
-    input_file = merged_file
-    if payload is None:
-        payload = load_json_if_exists(candidates_file)
-        input_file = candidates_file
-    warnings: list[dict[str, str]] = []
-    if payload is None:
-        warnings.append({"code": "missing-observation-input", "message": f"No observation-side artifact was found at {merged_file} or {candidates_file}."})
-    observation_items = observation_items_from_payload(payload)
+    input_selection = select_observation_input_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        merged_observations_path=merged_observations_path,
+        observation_candidates_path=observation_candidates_path,
+    )
+    merged_context = input_selection["merged_context"]
+    candidate_context = input_selection["candidate_context"]
+    input_file = Path(maybe_text(input_selection.get("selected_file")))
+    observation_input_source = maybe_text(input_selection.get("selected_source"))
+    observation_input_kind = maybe_text(input_selection.get("selected_kind"))
+    warnings: list[dict[str, str]] = list(input_selection.get("warnings", []))
+    observation_items = observation_items_from_payload(
+        input_selection.get("selected_wrapper")
+    )
     scopes: list[dict[str, Any]] = []
     for item in observation_items:
         observation_id = maybe_text(item.get("merged_observation_id") or item.get("observation_id"))
@@ -170,10 +268,36 @@ def derive_observation_scope_skill(
         "generated_at_utc": utc_now_iso(),
         "query_basis": {
             "input_path": str(input_file),
+            "input_source": observation_input_source
+            or "missing-observation-input",
+            "input_kind": observation_input_kind
+            or "missing-observation-input",
             "selection_mode": "prefer-merged-observations-then-candidates",
             "method": "heuristic-observation-scope-v1",
         },
         "input_path": str(input_file),
+        "observation_input_source": observation_input_source
+        or "missing-observation-input",
+        "observation_input_kind": observation_input_kind
+        or "missing-observation-input",
+        "observed_inputs": {
+            "merged_observations_present": source_available(
+                merged_context.get("merged_observation_source")
+            ),
+            "merged_observations_artifact_present": bool(
+                merged_context.get("merged_observations_artifact_present")
+            ),
+            "observation_candidates_present": source_available(
+                candidate_context.get("observation_candidate_source")
+            ),
+            "observation_candidates_artifact_present": bool(
+                candidate_context.get("observation_candidates_artifact_present")
+            ),
+        },
+        "input_analysis_sync": {
+            "merged_observations": merged_context.get("analysis_sync", {}),
+            "observation_candidates": candidate_context.get("analysis_sync", {}),
+        },
         "scope_count": len(scopes),
         "scopes": scopes,
     }
@@ -183,6 +307,7 @@ def derive_observation_scope_skill(
         expected_run_id=run_id,
         round_id=round_id,
         observation_scope_path=output_file,
+        db_path=maybe_text(input_selection.get("db_path")),
     )
     wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
     wrapper["analysis_sync"] = analysis_sync
@@ -201,6 +326,8 @@ def derive_observation_scope_skill(
             "input_path": str(input_file),
             "output_path": str(output_file),
             "scope_count": len(scopes),
+            "observation_input_source": observation_input_source
+            or "missing-observation-input",
             "db_path": maybe_text(analysis_sync.get("db_path")),
         },
         "receipt_id": "scope-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
@@ -209,6 +336,7 @@ def derive_observation_scope_skill(
         "canonical_ids": [scope["observation_scope_id"] for scope in scopes],
         "warnings": warnings,
         "analysis_sync": analysis_sync,
+        "input_analysis_sync": wrapper.get("input_analysis_sync", {}),
         "board_handoff": {
             "candidate_ids": [scope["observation_scope_id"] for scope in scopes],
             "evidence_refs": unique_refs(artifact_refs, 20),

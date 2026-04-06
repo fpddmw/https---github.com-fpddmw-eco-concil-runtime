@@ -18,7 +18,13 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.analysis_plane import sync_claim_observation_link_result_set  # noqa: E402
+from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
+    load_claim_candidate_context,
+    load_claim_cluster_context,
+    load_merged_observation_context,
+    load_observation_candidate_context,
+    sync_claim_observation_link_result_set,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -101,6 +107,11 @@ def unique_refs(refs: list[dict[str, Any]], limit: int) -> list[dict[str, str]]:
         if len(deduped) >= limit:
             break
     return deduped
+
+
+def source_available(value: Any) -> bool:
+    text = maybe_text(value)
+    return bool(text) and not text.startswith("missing-")
 
 
 def parse_utc(value: str) -> datetime | None:
@@ -194,6 +205,154 @@ def normalize_observation_items(payload: Any) -> list[dict[str, Any]]:
     return normalized
 
 
+def select_claim_input_context(
+    run_dir_path: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    claim_cluster_path: str,
+    claim_candidates_path: str,
+) -> dict[str, Any]:
+    cluster_context = load_claim_cluster_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        claim_cluster_path=claim_cluster_path,
+    )
+    candidate_context = load_claim_candidate_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        claim_candidates_path=claim_candidates_path,
+        db_path=maybe_text(cluster_context.get("db_path")),
+    )
+    if source_available(cluster_context.get("claim_cluster_source")):
+        return {
+            "selected_kind": "claim-cluster",
+            "selected_source": maybe_text(cluster_context.get("claim_cluster_source")),
+            "selected_file": maybe_text(cluster_context.get("claim_cluster_file")),
+            "selected_wrapper": cluster_context.get("claim_cluster_wrapper", {}),
+            "db_path": maybe_text(candidate_context.get("db_path"))
+            or maybe_text(cluster_context.get("db_path")),
+            "cluster_context": cluster_context,
+            "candidate_context": candidate_context,
+            "warnings": [],
+        }
+    if source_available(candidate_context.get("claim_candidate_source")):
+        return {
+            "selected_kind": "claim-candidate",
+            "selected_source": maybe_text(
+                candidate_context.get("claim_candidate_source")
+            ),
+            "selected_file": maybe_text(candidate_context.get("claim_candidates_file")),
+            "selected_wrapper": candidate_context.get("claim_candidates_wrapper", {}),
+            "db_path": maybe_text(candidate_context.get("db_path"))
+            or maybe_text(cluster_context.get("db_path")),
+            "cluster_context": cluster_context,
+            "candidate_context": candidate_context,
+            "warnings": [],
+        }
+    cluster_file = maybe_text(cluster_context.get("claim_cluster_file"))
+    candidate_file = maybe_text(candidate_context.get("claim_candidates_file"))
+    return {
+        "selected_kind": "missing-claim-input",
+        "selected_source": "missing-claim-input",
+        "selected_file": candidate_file or cluster_file,
+        "selected_wrapper": candidate_context.get("claim_candidates_wrapper", {}),
+        "db_path": maybe_text(candidate_context.get("db_path"))
+        or maybe_text(cluster_context.get("db_path")),
+        "cluster_context": cluster_context,
+        "candidate_context": candidate_context,
+        "warnings": [
+            {
+                "code": "missing-claim-input",
+                "message": "No claim-side artifact or analysis result was found "
+                f"at {cluster_file} or {candidate_file}.",
+            }
+        ],
+    }
+
+
+def select_observation_input_context(
+    run_dir_path: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    merged_observations_path: str,
+    observation_candidates_path: str,
+    db_path: str = "",
+) -> dict[str, Any]:
+    merged_context = load_merged_observation_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        merged_observations_path=merged_observations_path,
+        db_path=db_path,
+    )
+    candidate_context = load_observation_candidate_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        observation_candidates_path=observation_candidates_path,
+        db_path=maybe_text(merged_context.get("db_path")) or db_path,
+    )
+    if source_available(merged_context.get("merged_observation_source")):
+        return {
+            "selected_kind": "merged-observation",
+            "selected_source": maybe_text(
+                merged_context.get("merged_observation_source")
+            ),
+            "selected_file": maybe_text(
+                merged_context.get("merged_observations_file")
+            ),
+            "selected_wrapper": merged_context.get(
+                "merged_observations_wrapper", {}
+            ),
+            "db_path": maybe_text(candidate_context.get("db_path"))
+            or maybe_text(merged_context.get("db_path")),
+            "merged_context": merged_context,
+            "candidate_context": candidate_context,
+            "warnings": [],
+        }
+    if source_available(candidate_context.get("observation_candidate_source")):
+        return {
+            "selected_kind": "observation-candidate",
+            "selected_source": maybe_text(
+                candidate_context.get("observation_candidate_source")
+            ),
+            "selected_file": maybe_text(
+                candidate_context.get("observation_candidates_file")
+            ),
+            "selected_wrapper": candidate_context.get(
+                "observation_candidates_wrapper", {}
+            ),
+            "db_path": maybe_text(candidate_context.get("db_path"))
+            or maybe_text(merged_context.get("db_path")),
+            "merged_context": merged_context,
+            "candidate_context": candidate_context,
+            "warnings": [],
+        }
+    merged_file = maybe_text(merged_context.get("merged_observations_file"))
+    candidates_file = maybe_text(candidate_context.get("observation_candidates_file"))
+    return {
+        "selected_kind": "missing-observation-input",
+        "selected_source": "missing-observation-input",
+        "selected_file": candidates_file or merged_file,
+        "selected_wrapper": candidate_context.get("observation_candidates_wrapper", {}),
+        "db_path": maybe_text(candidate_context.get("db_path"))
+        or maybe_text(merged_context.get("db_path")),
+        "merged_context": merged_context,
+        "candidate_context": candidate_context,
+        "warnings": [
+            {
+                "code": "missing-observation-input",
+                "message": "No observation-side artifact or analysis result was "
+                f"found at {merged_file} or {candidates_file}.",
+            }
+        ],
+    }
+
+
 def infer_metric_preferences(text: str) -> dict[str, float]:
     folded = maybe_text(text).casefold()
     preferences: dict[str, float] = {}
@@ -283,30 +442,38 @@ def link_claims_to_observations_skill(
     top_links_per_claim: int,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
-    claim_clusters_file = resolve_path(run_dir_path, claim_cluster_path, f"claim_candidate_clusters_{round_id}.json")
-    claim_candidates_file = resolve_path(run_dir_path, claim_candidates_path, f"claim_candidates_{round_id}.json")
-    merged_observations_file = resolve_path(run_dir_path, merged_observations_path, f"merged_observation_candidates_{round_id}.json")
-    observation_candidates_file = resolve_path(run_dir_path, observation_candidates_path, f"observation_candidates_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"claim_observation_links_{round_id}.json")
 
-    warnings: list[dict[str, str]] = []
-    claim_payload = load_json_if_exists(claim_clusters_file)
-    claim_source_file = claim_clusters_file
-    if claim_payload is None:
-        claim_payload = load_json_if_exists(claim_candidates_file)
-        claim_source_file = claim_candidates_file
-    observation_payload = load_json_if_exists(merged_observations_file)
-    observation_source_file = merged_observations_file
-    if observation_payload is None:
-        observation_payload = load_json_if_exists(observation_candidates_file)
-        observation_source_file = observation_candidates_file
-    if claim_payload is None:
-        warnings.append({"code": "missing-claim-input", "message": f"No claim-side artifact was found at {claim_clusters_file} or {claim_candidates_file}."})
-    if observation_payload is None:
-        warnings.append({"code": "missing-observation-input", "message": f"No observation-side artifact was found at {merged_observations_file} or {observation_candidates_file}."})
+    claim_input = select_claim_input_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        claim_cluster_path=claim_cluster_path,
+        claim_candidates_path=claim_candidates_path,
+    )
+    observation_input = select_observation_input_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        merged_observations_path=merged_observations_path,
+        observation_candidates_path=observation_candidates_path,
+        db_path=maybe_text(claim_input.get("db_path")),
+    )
+    claim_cluster_context = claim_input["cluster_context"]
+    claim_candidate_context = claim_input["candidate_context"]
+    merged_context = observation_input["merged_context"]
+    observation_candidate_context = observation_input["candidate_context"]
+    claim_source_file = Path(maybe_text(claim_input.get("selected_file")))
+    observation_source_file = Path(maybe_text(observation_input.get("selected_file")))
+    claim_input_source = maybe_text(claim_input.get("selected_source"))
+    observation_input_source = maybe_text(observation_input.get("selected_source"))
+    claim_input_kind = maybe_text(claim_input.get("selected_kind"))
+    observation_input_kind = maybe_text(observation_input.get("selected_kind"))
+    warnings: list[dict[str, str]] = list(claim_input.get("warnings", []))
+    warnings.extend(observation_input.get("warnings", []))
 
-    claims = normalize_claim_items(claim_payload)
-    observations = normalize_observation_items(observation_payload)
+    claims = normalize_claim_items(claim_input.get("selected_wrapper"))
+    observations = normalize_observation_items(observation_input.get("selected_wrapper"))
     links: list[dict[str, Any]] = []
     unmatched_claim_count = 0
     contradiction_count = 0
@@ -351,6 +518,12 @@ def link_claims_to_observations_skill(
         "query_basis": {
             "claim_input_path": str(claim_source_file),
             "observation_input_path": str(observation_source_file),
+            "claim_input_source": claim_input_source or "missing-claim-input",
+            "claim_input_kind": claim_input_kind or "missing-claim-input",
+            "observation_input_source": observation_input_source
+            or "missing-observation-input",
+            "observation_input_kind": observation_input_kind
+            or "missing-observation-input",
             "min_score": float(min_score),
             "top_links_per_claim": max(1, int(top_links_per_claim)),
             "selection_mode": "rank-observations-per-claim",
@@ -358,6 +531,48 @@ def link_claims_to_observations_skill(
         },
         "claim_input_path": str(claim_source_file),
         "observation_input_path": str(observation_source_file),
+        "claim_input_source": claim_input_source or "missing-claim-input",
+        "claim_input_kind": claim_input_kind or "missing-claim-input",
+        "observation_input_source": observation_input_source
+        or "missing-observation-input",
+        "observation_input_kind": observation_input_kind
+        or "missing-observation-input",
+        "observed_inputs": {
+            "claim_clusters_present": source_available(
+                claim_cluster_context.get("claim_cluster_source")
+            ),
+            "claim_clusters_artifact_present": bool(
+                claim_cluster_context.get("claim_cluster_artifact_present")
+            ),
+            "claim_candidates_present": source_available(
+                claim_candidate_context.get("claim_candidate_source")
+            ),
+            "claim_candidates_artifact_present": bool(
+                claim_candidate_context.get("claim_candidates_artifact_present")
+            ),
+            "merged_observations_present": source_available(
+                merged_context.get("merged_observation_source")
+            ),
+            "merged_observations_artifact_present": bool(
+                merged_context.get("merged_observations_artifact_present")
+            ),
+            "observation_candidates_present": source_available(
+                observation_candidate_context.get("observation_candidate_source")
+            ),
+            "observation_candidates_artifact_present": bool(
+                observation_candidate_context.get(
+                    "observation_candidates_artifact_present"
+                )
+            ),
+        },
+        "input_analysis_sync": {
+            "claim_clusters": claim_cluster_context.get("analysis_sync", {}),
+            "claim_candidates": claim_candidate_context.get("analysis_sync", {}),
+            "merged_observations": merged_context.get("analysis_sync", {}),
+            "observation_candidates": observation_candidate_context.get(
+                "analysis_sync", {}
+            ),
+        },
         "link_count": len(links),
         "links": links,
     }
@@ -367,6 +582,8 @@ def link_claims_to_observations_skill(
         expected_run_id=run_id,
         round_id=round_id,
         links_path=output_file,
+        db_path=maybe_text(observation_input.get("db_path"))
+        or maybe_text(claim_input.get("db_path")),
     )
     wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
     wrapper["analysis_sync"] = analysis_sync
@@ -401,6 +618,9 @@ def link_claims_to_observations_skill(
             "observation_input_count": len(observations),
             "link_count": len(links),
             "output_path": str(output_file),
+            "claim_input_source": claim_input_source or "missing-claim-input",
+            "observation_input_source": observation_input_source
+            or "missing-observation-input",
             "db_path": maybe_text(analysis_sync.get("db_path")),
         },
         "receipt_id": "evidence-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
@@ -409,6 +629,7 @@ def link_claims_to_observations_skill(
         "canonical_ids": [link["link_id"] for link in links],
         "warnings": warnings,
         "analysis_sync": analysis_sync,
+        "input_analysis_sync": wrapper.get("input_analysis_sync", {}),
         "board_handoff": {
             "candidate_ids": [link["link_id"] for link in links],
             "evidence_refs": unique_refs(artifact_refs, 20),

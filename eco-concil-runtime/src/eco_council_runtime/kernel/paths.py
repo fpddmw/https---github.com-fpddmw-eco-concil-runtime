@@ -67,6 +67,10 @@ def scenario_fixture_path(run_dir: Path, round_id: str) -> Path:
     return runtime_dir(run_dir) / f"scenario_fixture_{round_id}.json"
 
 
+def scenario_baseline_manifest_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"scenario_baseline_manifest_{round_id}.json"
+
+
 def benchmark_manifest_path(run_dir: Path, round_id: str) -> Path:
     return runtime_dir(run_dir) / f"benchmark_manifest_{round_id}.json"
 

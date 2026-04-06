@@ -1099,3 +1099,120 @@ Known limitations:
 Next:
 - Continue `B3` by deciding whether moderator action/probe/challenge/task coordination should evolve beyond latest-round snapshots into finer-grained DB-backed history.
 - After that, continue `A3` governance hardening and `C2.1` candidate/cluster migration according to the refreshed dashboard order.
+
+## 2026-04-06 B3: Moderator Control Consolidation Closeout
+
+Status: completed
+
+Objective:
+- Formally close `B3` now that moderator control snapshots, action/probe recovery, source-round carryover, history/archive reads, and round-task orchestration recovery all have DB-backed operational paths.
+- Reclassify finer-grained moderator object history as future scope rather than a blocker for the current Route `B` exit criterion.
+
+Implementation:
+- Reviewed the accumulated `B3` deliveries against the Route `B` exit criterion and confirmed that the moderator loop's primary state progression no longer depends on linear JSON artifact ordering.
+- Updated `openclaw-db-first-master-plan.md`
+  - Marked `B3` as `completed`.
+  - Refreshed the Route `B` maturity summary so the remaining finer-grained history discussion is explicitly treated as post-`B3` expansion space.
+  - Advanced the near-term queue so `A3` becomes the next recommended delivery, followed by `C2.1`, `C2.2`, `D4`, and `A4`.
+- Regenerated `openclaw-db-first-dashboard.md` from the updated master plan and progress log so the control view reflects the closed `B3` state.
+
+Validation:
+- `python3 eco-concil-runtime/scripts/eco_progress_dashboard.py --pretty`
+- `python3 -m unittest discover -s tests -q`
+
+Known limitations:
+- `promotion_freezes`, `moderator_action_snapshots`, `falsification_probe_snapshots`, and `round_task_snapshots` remain latest-snapshot recovery surfaces rather than full per-item history logs.
+- Some runtime lineage discovery still uses runtime/artifact footprints; `B3` closes the operational moderator control path, but it does not introduce a wholly new DB-native round-discovery model.
+
+Next:
+- Move to `A3` governance regression hardening so replay, benchmark, archive, and close-round style governance commands are revalidated against the DB-first runtime.
+- After `A3`, continue with `C2.1` candidate/cluster result migration and then `C2.2` query-surface formalization according to the refreshed queue.
+
+## 2026-04-06 A3: Governance Regression Hardening
+
+Status: completed
+
+Objective:
+- Harden governance commands so benchmark/replay no longer treat DB-backed compatibility-export deletion as a semantic regression.
+- Ensure runtime replay compares against a frozen scenario baseline instead of a mutable benchmark manifest path, and confirm close-round still completes from DB-backed phase-2 control snapshots when runtime JSON is absent.
+
+Implementation:
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/benchmark.py`
+  - `materialize-scenario-fixture` now freezes an immutable baseline manifest copy at `runtime/scenario_baseline_manifest_<round>.json` and points replay/compare workflows at that frozen snapshot.
+  - Benchmark artifact digestion now treats these governance-recoverable surfaces as payload-first inputs/outputs instead of raw file-existence checks:
+    - `round_tasks`
+    - `next_actions`
+    - `falsification_probes`
+  - Benchmark manifest rows now expose:
+    - `artifact_present`
+    - `payload_present`
+    - `payload_source`
+  - Scenario and output comparison fingerprints now use recoverable payload presence plus semantic hashes, so deleting compatibility exports no longer creates false `scenario-mismatch` or false output regressions when the DB-backed state is unchanged.
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/paths.py`
+  - Added a dedicated path helper for the frozen scenario baseline manifest snapshot.
+- Updated `tests/test_archive_history_workflow.py`
+  - Added a replay/benchmark regression test that deletes `round_tasks / next_actions / falsification_probes` exports and verifies the governance commands still match.
+  - Added a replay regression test proving that a real post-fixture artifact mutation is detected because the baseline is now frozen.
+  - Added a close-round regression test verifying the command still completes after deleting `round_controller / promotion_gate / supervisor_state` JSON artifacts.
+- Updated `openclaw-db-first-master-plan.md`
+  - Marked `A3` as `completed`.
+  - Advanced the near-term queue so `C2.1` becomes the next recommended delivery.
+
+Validation:
+- `python3 -m unittest tests/test_archive_history_workflow.py -q`
+- `python3 -m unittest tests/test_runtime_kernel.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Known limitations:
+- Benchmark/replay still treat `board_summary / board_brief` and the reporting/final-publication family as artifact-shaped outputs rather than plane-backed objects.
+- Scenario replay still preserves the original `run_id / round_id` identity contract and does not yet support remapping one frozen fixture onto a different run/round namespace.
+
+Next:
+- Move to `C2.1` candidate/cluster result migration so earlier analysis-chain compression objects become queryable from the shared analysis plane.
+- After `C2.1`, continue `C2.2` query-surface formalization, then `D4` milestone/demo packaging, and finally `A4` agent entry gate.
+
+## 2026-04-06 C2.1: Candidate / Cluster Result Migration
+
+Status: completed
+
+Objective:
+- Finish migrating the early analysis-chain compression family into the shared analysis plane so claim/observation candidates, claim clusters, and merged observations can all be queried through one result-set contract.
+- Remove the remaining hard JSON dependence from `claim scope / observation scope / claim-observation link` generation when cluster/merge exports are absent.
+
+Implementation:
+- Updated `eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py`
+  - Added `claim-cluster` and `merged-observation` analysis kinds with result-set configs, lineage support, and shared `sync_* / load_*` wrappers.
+  - Wired cluster/merge objects into the same `result_sets / result_items / result_lineage` contract already used by candidates, scopes, links, and coverage.
+- Updated `skills/eco-cluster-claim-candidates/scripts/eco_cluster_claim_candidates.py`
+  - Added `query_basis` and `input_path` trace metadata to cluster exports.
+  - Syncs `claim_candidate_clusters_<round>.json` into the analysis plane immediately after writing the artifact.
+- Updated `skills/eco-merge-observation-candidates/scripts/eco_merge_observation_candidates.py`
+  - Added `query_basis` and `input_path` trace metadata to merged-observation exports.
+  - Syncs `merged_observation_candidates_<round>.json` into the analysis plane immediately after writing the artifact.
+- Updated the following analysis consumers to load preferred upstreams from the analysis plane first and fall back only when the preferred result kind is truly missing:
+  - `skills/eco-derive-claim-scope/scripts/eco_derive_claim_scope.py`
+  - `skills/eco-derive-observation-scope/scripts/eco_derive_observation_scope.py`
+  - `skills/eco-link-claims-to-observations/scripts/eco_link_claims_to_observations.py`
+  - Added normalized `*_input_source`, `*_input_kind`, `observed_inputs`, and `input_analysis_sync` trace fields so downstream operators can see whether cluster/merge objects came from artifacts or DB-backed recovery.
+- Updated `openclaw-db-first-master-plan.md`
+  - Marked `C2.1` as `completed`.
+  - Advanced the near-term queue so `C2.2` becomes the next recommended delivery.
+
+Validation:
+- `python3 -m unittest tests/test_analysis_workflow.py -q`
+- `python3 -m unittest tests/test_progress_dashboard.py -q`
+- `python3 -m unittest discover -s tests -q`
+
+Tests added or extended:
+- `tests/test_analysis_workflow.py`
+  - Verifies `claim-cluster` and `merged-observation` result sets are persisted in the analysis plane alongside the existing candidate/scope/link/coverage families.
+  - Verifies cluster/merge lineage now records parent result-set relationships back to the candidate result sets.
+  - Verifies `eco-derive-claim-scope`, `eco-derive-observation-scope`, and `eco-link-claims-to-observations` still run with `analysis-plane` input sources after deleting the cluster/merge JSON artifacts.
+
+Known limitations:
+- `eco-cluster-claim-candidates` and `eco-merge-observation-candidates` still read their own upstream candidate artifacts directly before syncing results into the analysis plane; they are not yet able to rebuild from candidate result sets alone when those artifacts are missing.
+- The shared query surface is still runtime-local Python helper code; `C2.2` remains the stage that formalizes non-Python consumption and a more explicit external query contract.
+
+Next:
+- Move to `C2.2` so the now-stable analysis result families can be queried through a more formal interface than runtime-local helper imports.
+- After `C2.2`, continue `D4` milestone/demo packaging and then `A4` agent entry gate according to the refreshed dashboard order.

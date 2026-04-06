@@ -18,6 +18,7 @@ description: Cluster previously extracted claim candidates into board-reviewable
 ## Read/Write Contract
 - Reads `claim_candidates_<round_id>.json` by default.
 - Writes `runs/<run_id>/analytics/claim_candidate_clusters_<round_id>.json` by default.
+- Syncs the same claim-cluster result set into `runs/<run_id>/analytics/signal_plane.sqlite` as analysis-plane state.
 
 ## Required Input
 - `run_dir`
@@ -39,6 +40,7 @@ description: Cluster previously extracted claim candidates into board-reviewable
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `analysis_sync`
 - `board_handoff`
 
 ## References

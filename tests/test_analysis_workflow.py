@@ -35,6 +35,12 @@ class AnalysisWorkflowTests(unittest.TestCase):
             self.assertEqual(
                 "completed", outputs["extract_observations"]["analysis_sync"]["status"]
             )
+            self.assertEqual(
+                "completed", outputs["cluster_claims"]["analysis_sync"]["status"]
+            )
+            self.assertEqual(
+                "completed", outputs["merge_observations"]["analysis_sync"]["status"]
+            )
 
             claim_scope_payload = run_script(
                 script_path("eco-derive-claim-scope"),
@@ -105,13 +111,17 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ).fetchall()
                 result_set_map = {row[0]: row for row in result_sets}
                 self.assertIn("claim-candidate", result_set_map)
+                self.assertIn("claim-cluster", result_set_map)
                 self.assertIn("claim-observation-link", result_set_map)
+                self.assertIn("merged-observation", result_set_map)
                 self.assertIn("observation-candidate", result_set_map)
                 self.assertIn("claim-scope", result_set_map)
                 self.assertIn("observation-scope", result_set_map)
                 self.assertIn("evidence-coverage", result_set_map)
                 self.assertGreaterEqual(int(result_set_map["claim-candidate"][1]), 1)
+                self.assertGreaterEqual(int(result_set_map["claim-cluster"][1]), 1)
                 self.assertGreaterEqual(int(result_set_map["claim-observation-link"][1]), 1)
+                self.assertGreaterEqual(int(result_set_map["merged-observation"][1]), 1)
                 self.assertGreaterEqual(
                     int(result_set_map["observation-candidate"][1]), 1
                 )
@@ -133,6 +143,122 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 self.assertIsNotNone(item_count)
                 assert item_count is not None
                 self.assertGreaterEqual(int(item_count[0]), 1)
+
+    def test_scope_and_link_can_read_cluster_and_merge_from_analysis_plane_without_artifacts(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            self.assertEqual(
+                "completed", outputs["cluster_claims"]["analysis_sync"]["status"]
+            )
+            self.assertEqual(
+                "completed", outputs["merge_observations"]["analysis_sync"]["status"]
+            )
+
+            analytics_path(run_dir, f"claim_candidate_clusters_{ROUND_ID}.json").unlink()
+            analytics_path(
+                run_dir, f"merged_observation_candidates_{ROUND_ID}.json"
+            ).unlink()
+
+            claim_scope_payload = run_script(
+                script_path("eco-derive-claim-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            observation_scope_payload = run_script(
+                script_path("eco-derive-observation-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            link_payload = run_script(
+                script_path("eco-link-claims-to-observations"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            claim_scope_artifact = load_json(
+                analytics_path(run_dir, f"claim_scope_proposals_{ROUND_ID}.json")
+            )
+            observation_scope_artifact = load_json(
+                analytics_path(run_dir, f"observation_scope_proposals_{ROUND_ID}.json")
+            )
+            link_artifact = load_json(
+                analytics_path(run_dir, f"claim_observation_links_{ROUND_ID}.json")
+            )
+
+            self.assertEqual(
+                "analysis-plane", claim_scope_payload["summary"]["claim_input_source"]
+            )
+            self.assertEqual(
+                "analysis-plane",
+                observation_scope_payload["summary"]["observation_input_source"],
+            )
+            self.assertEqual(
+                "analysis-plane", link_payload["summary"]["claim_input_source"]
+            )
+            self.assertEqual(
+                "analysis-plane", link_payload["summary"]["observation_input_source"]
+            )
+            self.assertEqual("analysis-plane", claim_scope_artifact["claim_input_source"])
+            self.assertEqual(
+                "analysis-plane",
+                observation_scope_artifact["observation_input_source"],
+            )
+            self.assertEqual("analysis-plane", link_artifact["claim_input_source"])
+            self.assertEqual(
+                "analysis-plane", link_artifact["observation_input_source"]
+            )
+            self.assertFalse(
+                claim_scope_artifact["observed_inputs"][
+                    "claim_clusters_artifact_present"
+                ]
+            )
+            self.assertFalse(
+                observation_scope_artifact["observed_inputs"][
+                    "merged_observations_artifact_present"
+                ]
+            )
+            self.assertFalse(
+                link_artifact["observed_inputs"]["claim_clusters_artifact_present"]
+            )
+            self.assertFalse(
+                link_artifact["observed_inputs"][
+                    "merged_observations_artifact_present"
+                ]
+            )
+            self.assertTrue(
+                claim_scope_artifact["observed_inputs"]["claim_clusters_present"]
+            )
+            self.assertTrue(
+                observation_scope_artifact["observed_inputs"][
+                    "merged_observations_present"
+                ]
+            )
+            self.assertTrue(
+                link_artifact["observed_inputs"]["claim_clusters_present"]
+            )
+            self.assertTrue(
+                link_artifact["observed_inputs"]["merged_observations_present"]
+            )
+            self.assertGreaterEqual(claim_scope_artifact["scope_count"], 1)
+            self.assertEqual(1, observation_scope_artifact["scope_count"])
+            self.assertGreaterEqual(link_artifact["link_count"], 1)
 
     def test_analysis_outputs_support_custom_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -321,6 +447,18 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ],
                 1,
             )
+            self.assertGreaterEqual(
+                outputs["cluster_claims"]["analysis_sync"]["lineage_counts"][
+                    "parent_result_set_count"
+                ],
+                1,
+            )
+            self.assertGreaterEqual(
+                outputs["merge_observations"]["analysis_sync"]["lineage_counts"][
+                    "parent_result_set_count"
+                ],
+                1,
+            )
 
             db_file = analytics_path(run_dir, "signal_plane.sqlite")
             with sqlite3.connect(db_file) as connection:
@@ -417,6 +555,36 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 self.assertIsNotNone(claim_candidate_artifact_ref_count)
                 assert claim_candidate_artifact_ref_count is not None
                 self.assertGreaterEqual(int(claim_candidate_artifact_ref_count[0]), 1)
+                claim_cluster_parent_kinds = {
+                    row["source_analysis_kind"]
+                    for row in connection.execute(
+                        """
+                        SELECT source_analysis_kind
+                        FROM analysis_result_lineage
+                        WHERE result_set_id = ?
+                          AND lineage_scope = 'result-set'
+                          AND lineage_type = 'parent-result-set'
+                        """,
+                        (result_set_ids["claim-cluster"],),
+                    ).fetchall()
+                }
+                self.assertSetEqual({"claim-candidate"}, claim_cluster_parent_kinds)
+                merged_observation_parent_kinds = {
+                    row["source_analysis_kind"]
+                    for row in connection.execute(
+                        """
+                        SELECT source_analysis_kind
+                        FROM analysis_result_lineage
+                        WHERE result_set_id = ?
+                          AND lineage_scope = 'result-set'
+                          AND lineage_type = 'parent-result-set'
+                        """,
+                        (result_set_ids["merged-observation"],),
+                    ).fetchall()
+                }
+                self.assertSetEqual(
+                    {"observation-candidate"}, merged_observation_parent_kinds
+                )
 
     def test_analysis_context_returns_lineage_contract_from_db(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

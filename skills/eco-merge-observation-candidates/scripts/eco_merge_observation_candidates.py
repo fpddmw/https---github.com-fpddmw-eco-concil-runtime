@@ -6,12 +6,21 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import fmean, median
 from typing import Any
 
 SKILL_NAME = "eco-merge-observation-candidates"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
+    sync_merged_observation_result_set,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -252,9 +261,28 @@ def merge_observation_candidates_skill(
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
+        "query_basis": {
+            "input_path": str(input_file),
+            "metric": wanted_metric,
+            "source_skill": wanted_source_skill,
+            "point_precision": max(0, point_precision),
+            "max_groups": max(1, max_groups),
+            "selection_mode": "group-observation-candidates-by-metric-point-bucket-and-time-bucket",
+            "method": "heuristic-observation-merge-v1",
+        },
+        "input_path": str(input_file),
         "merged_count": len(merged_items),
         "merged_observations": merged_items,
     }
+    write_json(output_file, wrapper)
+    analysis_sync = sync_merged_observation_result_set(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        merged_observations_path=output_file,
+    )
+    wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
+    wrapper["analysis_sync"] = analysis_sync
     write_json(output_file, wrapper)
     artifact_refs: list[dict[str, str]] = [
         {
@@ -283,12 +311,14 @@ def merge_observation_candidates_skill(
             "output_path": str(output_file),
             "merged_count": len(merged_items),
             "input_candidate_count": len(observations),
+            "db_path": maybe_text(analysis_sync.get("db_path")),
         },
         "receipt_id": "evidence-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
         "batch_id": "evbatch-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:16],
         "artifact_refs": unique_refs(artifact_refs, 40),
         "canonical_ids": [item["merged_observation_id"] for item in merged_items],
         "warnings": warnings,
+        "analysis_sync": analysis_sync,
         "board_handoff": {
             "candidate_ids": [item["merged_observation_id"] for item in merged_items],
             "evidence_refs": unique_refs(artifact_refs, 20),

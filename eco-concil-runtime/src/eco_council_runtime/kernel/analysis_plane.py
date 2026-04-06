@@ -11,6 +11,8 @@ ANALYSIS_KIND_EVIDENCE_COVERAGE = "evidence-coverage"
 ANALYSIS_KIND_CLAIM_SCOPE = "claim-scope"
 ANALYSIS_KIND_OBSERVATION_SCOPE = "observation-scope"
 ANALYSIS_KIND_CLAIM_OBSERVATION_LINK = "claim-observation-link"
+ANALYSIS_KIND_CLAIM_CLUSTER = "claim-cluster"
+ANALYSIS_KIND_MERGED_OBSERVATION = "merged-observation"
 ANALYSIS_KIND_CLAIM_CANDIDATE = "claim-candidate"
 ANALYSIS_KIND_OBSERVATION_CANDIDATE = "observation-candidate"
 
@@ -104,6 +106,38 @@ ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
         ],
         "item_parent_id_fields": ["claim_id", "observation_id"],
         "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_CLAIM_CLUSTER: {
+        "artifact_label": "claim-cluster",
+        "default_relative": "analytics/claim_candidate_clusters_{round_id}.json",
+        "items_key": "clusters",
+        "count_key": "cluster_count",
+        "id_field": "cluster_id",
+        "subject_field": "cluster_id",
+        "state_field": "status",
+        "related_id_fields": ["cluster_id", "claim_type", "semantic_fingerprint"],
+        "default_source_skill": "eco-cluster-claim-candidates",
+        "summary_fields": ["input_path"],
+        "query_basis_fields": ["input_path"],
+        "parent_artifact_fields": ["input_path"],
+        "item_parent_id_list_fields": ["member_claim_ids", "source_signal_ids"],
+        "item_artifact_ref_fields": ["public_refs"],
+    },
+    ANALYSIS_KIND_MERGED_OBSERVATION: {
+        "artifact_label": "merged-observation",
+        "default_relative": "analytics/merged_observation_candidates_{round_id}.json",
+        "items_key": "merged_observations",
+        "count_key": "merged_count",
+        "id_field": "merged_observation_id",
+        "subject_field": "merged_observation_id",
+        "state_field": "aggregation",
+        "related_id_fields": ["merged_observation_id", "metric"],
+        "default_source_skill": "eco-merge-observation-candidates",
+        "summary_fields": ["input_path"],
+        "query_basis_fields": ["input_path"],
+        "parent_artifact_fields": ["input_path"],
+        "item_parent_id_list_fields": ["member_observation_ids", "source_signal_ids"],
+        "item_artifact_ref_fields": ["provenance_refs"],
     },
     ANALYSIS_KIND_CLAIM_CANDIDATE: {
         "artifact_label": "claim-candidate",
@@ -1595,6 +1629,112 @@ def load_claim_observation_link_context(
         "analysis_sync": context.get("analysis_sync", {}),
         "result_contract": context.get("result_contract", empty_result_contract()),
         "links_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_claim_cluster_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    claim_cluster_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_CLAIM_CLUSTER,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=claim_cluster_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "claim_cluster_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_claim_cluster_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    claim_cluster_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_CLAIM_CLUSTER,
+        artifact_path=claim_cluster_path,
+        db_path=db_path,
+    )
+    return {
+        "claim_cluster_wrapper": context.get("payload_wrapper", {}),
+        "claim_clusters": context.get("items", []),
+        "claim_cluster_count": int(context.get("item_count") or 0),
+        "claim_cluster_source": maybe_text(context.get("source")),
+        "claim_cluster_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "claim_cluster_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_merged_observation_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    merged_observations_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_MERGED_OBSERVATION,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=merged_observations_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "merged_observations_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_merged_observation_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    merged_observations_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_MERGED_OBSERVATION,
+        artifact_path=merged_observations_path,
+        db_path=db_path,
+    )
+    return {
+        "merged_observations_wrapper": context.get("payload_wrapper", {}),
+        "merged_observations": context.get("items", []),
+        "merged_observation_count": int(context.get("item_count") or 0),
+        "merged_observation_source": maybe_text(context.get("source")),
+        "merged_observations_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "merged_observations_artifact_present": bool(
+            context.get("artifact_present")
+        ),
         "warnings": context.get("warnings", []),
     }
 

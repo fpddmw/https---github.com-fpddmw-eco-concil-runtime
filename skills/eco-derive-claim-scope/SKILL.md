@@ -6,7 +6,7 @@ description: Derive matching-oriented claim scope proposals from claim-side evid
 # Eco Derive Claim Scope
 
 ## Core Goal
-- Read claim clusters if available, otherwise fall back to claim candidates.
+- Read claim clusters from the analysis plane when available, otherwise fall back to claim candidates.
 - Infer compact claim scope proposals for matching and challenge review.
 - Persist a scope artifact for evidence coverage and board workflows.
 
@@ -16,7 +16,8 @@ description: Derive matching-oriented claim scope proposals from claim-side evid
 - Need a bridge artifact before evidence coverage scoring or board work.
 
 ## Read/Write Contract
-- Reads `claim_candidate_clusters_<round_id>.json` by default and falls back to `claim_candidates_<round_id>.json`.
+- Loads `claim-cluster` result sets from the analysis plane first and falls back to `claim-candidate` results only when the preferred cluster result is missing.
+- Uses `claim_candidate_clusters_<round_id>.json` / `claim_candidates_<round_id>.json` as the default artifact paths behind those result kinds.
 - Writes `runs/<run_id>/analytics/claim_scope_proposals_<round_id>.json` by default.
 - Syncs the same claim-scope result set into `runs/<run_id>/analytics/signal_plane.sqlite` as analysis-plane state.
 
@@ -38,6 +39,7 @@ description: Derive matching-oriented claim scope proposals from claim-side evid
 - `canonical_ids`
 - `warnings`
 - `analysis_sync`
+- `input_analysis_sync`
 - `board_handoff`
 
 ## References

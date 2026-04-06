@@ -18,6 +18,7 @@ description: Merge nearby observation candidates into stable observation groups,
 ## Read/Write Contract
 - Reads `observation_candidates_<round_id>.json` by default.
 - Writes `runs/<run_id>/analytics/merged_observation_candidates_<round_id>.json` by default.
+- Syncs the same merged-observation result set into `runs/<run_id>/analytics/signal_plane.sqlite` as analysis-plane state.
 
 ## Required Input
 - `run_dir`
@@ -39,6 +40,7 @@ description: Merge nearby observation candidates into stable observation groups,
 - `artifact_refs`
 - `canonical_ids`
 - `warnings`
+- `analysis_sync`
 - `board_handoff`
 
 ## References

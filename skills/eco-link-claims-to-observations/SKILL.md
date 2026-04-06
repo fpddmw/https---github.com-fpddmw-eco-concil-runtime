@@ -6,7 +6,7 @@ description: Link claim-side evidence objects to observation-side evidence objec
 # Eco Link Claims To Observations
 
 ## Core Goal
-- Read claim-side and observation-side candidate or grouped artifacts.
+- Read claim-side and observation-side candidate or grouped result sets from the analysis plane, with artifact-compatible fallback behavior.
 - Propose support, contradiction, or contextual links between them.
 - Persist a link artifact for board review, challenge work, and later promotion gates.
 
@@ -16,8 +16,9 @@ description: Link claim-side evidence objects to observation-side evidence objec
 - Need stable link ids, rule traces, and provenance refs for auditability.
 
 ## Read/Write Contract
-- Reads claim clusters if available, otherwise falls back to claim candidates.
-- Reads merged observations if available, otherwise falls back to observation candidates.
+- Loads `claim-cluster` result sets from the analysis plane first and falls back to `claim-candidate` results only when the preferred claim-side grouping is missing.
+- Loads `merged-observation` result sets from the analysis plane first and falls back to `observation-candidate` results only when the preferred observation-side grouping is missing.
+- Uses `claim_candidate_clusters_<round_id>.json`, `claim_candidates_<round_id>.json`, `merged_observation_candidates_<round_id>.json`, and `observation_candidates_<round_id>.json` as the default artifact paths behind those result kinds.
 - Writes `runs/<run_id>/analytics/claim_observation_links_<round_id>.json` by default.
 - Syncs the same link result set into `runs/<run_id>/analytics/signal_plane.sqlite` as analysis-plane state.
 
@@ -43,6 +44,7 @@ description: Link claim-side evidence objects to observation-side evidence objec
 - `canonical_ids`
 - `warnings`
 - `analysis_sync`
+- `input_analysis_sync`
 - `board_handoff`
 
 ## References

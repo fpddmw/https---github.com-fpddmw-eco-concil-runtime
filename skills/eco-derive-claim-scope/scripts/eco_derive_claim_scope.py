@@ -18,7 +18,11 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.analysis_plane import sync_claim_scope_result_set  # noqa: E402
+from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
+    load_claim_candidate_context,
+    load_claim_cluster_context,
+    sync_claim_scope_result_set,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -102,6 +106,84 @@ def claim_items_from_payload(payload: Any) -> list[dict[str, Any]]:
     return [item for item in payload.get("candidates", []) if isinstance(item, dict)] if isinstance(payload.get("candidates"), list) else []
 
 
+def source_available(value: Any) -> bool:
+    text = maybe_text(value)
+    return bool(text) and not text.startswith("missing-")
+
+
+def select_claim_input_context(
+    run_dir_path: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    claim_cluster_path: str,
+    claim_candidates_path: str,
+) -> dict[str, Any]:
+    cluster_context = load_claim_cluster_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        claim_cluster_path=claim_cluster_path,
+    )
+    candidate_context = load_claim_candidate_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        claim_candidates_path=claim_candidates_path,
+        db_path=maybe_text(cluster_context.get("db_path")),
+    )
+    cluster_available = source_available(cluster_context.get("claim_cluster_source"))
+    candidate_available = source_available(
+        candidate_context.get("claim_candidate_source")
+    )
+
+    if cluster_available:
+        return {
+            "selected_kind": "claim-cluster",
+            "selected_source": maybe_text(cluster_context.get("claim_cluster_source")),
+            "selected_file": maybe_text(cluster_context.get("claim_cluster_file")),
+            "selected_wrapper": cluster_context.get("claim_cluster_wrapper", {}),
+            "db_path": maybe_text(candidate_context.get("db_path"))
+            or maybe_text(cluster_context.get("db_path")),
+            "cluster_context": cluster_context,
+            "candidate_context": candidate_context,
+            "warnings": [],
+        }
+    if candidate_available:
+        return {
+            "selected_kind": "claim-candidate",
+            "selected_source": maybe_text(
+                candidate_context.get("claim_candidate_source")
+            ),
+            "selected_file": maybe_text(candidate_context.get("claim_candidates_file")),
+            "selected_wrapper": candidate_context.get("claim_candidates_wrapper", {}),
+            "db_path": maybe_text(candidate_context.get("db_path"))
+            or maybe_text(cluster_context.get("db_path")),
+            "cluster_context": cluster_context,
+            "candidate_context": candidate_context,
+            "warnings": [],
+        }
+    cluster_file = maybe_text(cluster_context.get("claim_cluster_file"))
+    candidate_file = maybe_text(candidate_context.get("claim_candidates_file"))
+    return {
+        "selected_kind": "missing-claim-input",
+        "selected_source": "missing-claim-input",
+        "selected_file": candidate_file or cluster_file,
+        "selected_wrapper": candidate_context.get("claim_candidates_wrapper", {}),
+        "db_path": maybe_text(candidate_context.get("db_path"))
+        or maybe_text(cluster_context.get("db_path")),
+        "cluster_context": cluster_context,
+        "candidate_context": candidate_context,
+        "warnings": [
+            {
+                "code": "missing-claim-input",
+                "message": "No claim-side artifact or analysis result was found "
+                f"at {cluster_file} or {candidate_file}.",
+            }
+        ],
+    }
+
+
 def infer_location_scope(text: str) -> tuple[str, str, bool]:
     folded = maybe_text(text).casefold()
     if any(token in folded for token in ("new york", "nyc", "los angeles", "beijing", "shanghai", "city")):
@@ -137,19 +219,21 @@ def derive_claim_scope_skill(
     output_path: str,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
-    cluster_file = resolve_path(run_dir_path, claim_cluster_path, f"claim_candidate_clusters_{round_id}.json")
-    candidate_file = resolve_path(run_dir_path, claim_candidates_path, f"claim_candidates_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"claim_scope_proposals_{round_id}.json")
-
-    payload = load_json_if_exists(cluster_file)
-    input_file = cluster_file
-    if payload is None:
-        payload = load_json_if_exists(candidate_file)
-        input_file = candidate_file
-    warnings: list[dict[str, str]] = []
-    if payload is None:
-        warnings.append({"code": "missing-claim-input", "message": f"No claim-side artifact was found at {cluster_file} or {candidate_file}."})
-    claim_items = claim_items_from_payload(payload)
+    input_selection = select_claim_input_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        claim_cluster_path=claim_cluster_path,
+        claim_candidates_path=claim_candidates_path,
+    )
+    cluster_context = input_selection["cluster_context"]
+    candidate_context = input_selection["candidate_context"]
+    input_file = Path(maybe_text(input_selection.get("selected_file")))
+    claim_input_source = maybe_text(input_selection.get("selected_source"))
+    claim_input_kind = maybe_text(input_selection.get("selected_kind"))
+    warnings: list[dict[str, str]] = list(input_selection.get("warnings", []))
+    claim_items = claim_items_from_payload(input_selection.get("selected_wrapper"))
     scopes: list[dict[str, Any]] = []
     for item in claim_items:
         claim_id = maybe_text(item.get("cluster_id") or item.get("claim_id"))
@@ -184,10 +268,32 @@ def derive_claim_scope_skill(
         "generated_at_utc": utc_now_iso(),
         "query_basis": {
             "input_path": str(input_file),
+            "input_source": claim_input_source or "missing-claim-input",
+            "input_kind": claim_input_kind or "missing-claim-input",
             "selection_mode": "prefer-clusters-then-candidates",
             "method": "heuristic-text-scope-v1",
         },
         "input_path": str(input_file),
+        "claim_input_source": claim_input_source or "missing-claim-input",
+        "claim_input_kind": claim_input_kind or "missing-claim-input",
+        "observed_inputs": {
+            "claim_clusters_present": source_available(
+                cluster_context.get("claim_cluster_source")
+            ),
+            "claim_clusters_artifact_present": bool(
+                cluster_context.get("claim_cluster_artifact_present")
+            ),
+            "claim_candidates_present": source_available(
+                candidate_context.get("claim_candidate_source")
+            ),
+            "claim_candidates_artifact_present": bool(
+                candidate_context.get("claim_candidates_artifact_present")
+            ),
+        },
+        "input_analysis_sync": {
+            "claim_clusters": cluster_context.get("analysis_sync", {}),
+            "claim_candidates": candidate_context.get("analysis_sync", {}),
+        },
         "scope_count": len(scopes),
         "scopes": scopes,
     }
@@ -197,6 +303,7 @@ def derive_claim_scope_skill(
         expected_run_id=run_id,
         round_id=round_id,
         claim_scope_path=output_file,
+        db_path=maybe_text(input_selection.get("db_path")),
     )
     wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
     wrapper["analysis_sync"] = analysis_sync
@@ -215,6 +322,7 @@ def derive_claim_scope_skill(
             "input_path": str(input_file),
             "output_path": str(output_file),
             "scope_count": len(scopes),
+            "claim_input_source": claim_input_source or "missing-claim-input",
             "db_path": maybe_text(analysis_sync.get("db_path")),
         },
         "receipt_id": "scope-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
@@ -223,6 +331,7 @@ def derive_claim_scope_skill(
         "canonical_ids": [scope["claim_scope_id"] for scope in scopes],
         "warnings": warnings,
         "analysis_sync": analysis_sync,
+        "input_analysis_sync": wrapper.get("input_analysis_sync", {}),
         "board_handoff": {
             "candidate_ids": [scope["claim_scope_id"] for scope in scopes],
             "evidence_refs": unique_refs(artifact_refs, 20),

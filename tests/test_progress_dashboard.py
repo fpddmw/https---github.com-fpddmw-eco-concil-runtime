@@ -23,11 +23,28 @@ class ProgressDashboardTests(unittest.TestCase):
         )
 
         self.assertGreaterEqual(len(model.stage_definitions), 10)
-        self.assertIn("| Next recommended stage | `B3` Moderator Control Consolidation |", markdown_text)
+        self.assertIn(
+            "| Current active stages | none<br>Last completed delivery: 2026-04-06 `C2.1` Candidate / Cluster Result Migration |",
+            markdown_text,
+        )
+        self.assertIn(
+            "| Next recommended stage | `C2.2` Non-Python Query Surface |",
+            markdown_text,
+        )
         self.assertIn("| Blocked stages | none |", markdown_text)
+        self.assertIn(
+            "2026-04-06 `C2.1` Candidate / Cluster Result Migration", markdown_text
+        )
+        self.assertIn("2026-04-06 `A3` Governance Regression Hardening", markdown_text)
         self.assertIn("2026-04-04 `D3` Progress Dashboard Conventions", markdown_text)
+        self.assertIn("| `A3` | `A` | `completed` | Governance Regression Hardening | 2026-04-06 | 1 |", markdown_text)
+        self.assertIn(
+            "| `C2.1` | `C` | `completed` | Candidate / Cluster Result Migration | 2026-04-06 | 1 |",
+            markdown_text,
+        )
         self.assertIn("| `D3` | `D` | `completed` | Progress Dashboard Conventions | 2026-04-04 | 1 |", markdown_text)
         self.assertIn("| `B2` | `B` | `completed` | Board Write-Path Migration | 2026-04-03 | 2 |", markdown_text)
+        self.assertIn("| `B3` | `B` | `completed` | Moderator Control Consolidation | 2026-04-06 | 5 |", markdown_text)
         self.assertIn("| `C1` | `C` | `completed` | Coverage Analysis Query Surface | 2026-04-02 | 1 |", markdown_text)
 
     def test_dashboard_surfaces_active_and_blocked_stages(self) -> None:

@@ -852,6 +852,256 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 retrieval_artifact["budget"]["selected_signal_count"], 1
             )
 
+    def test_benchmark_and_replay_ignore_missing_db_backed_task_action_probe_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "historical-run"
+
+            prepare_ready_round(
+                run_dir,
+                root / "historical-fixtures",
+                HISTORICAL_RUN_ID,
+                HISTORICAL_ROUND_ID,
+                publish=True,
+            )
+
+            baseline_manifest = run_kernel(
+                "materialize-benchmark-manifest",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+            )
+            fixture_payload = run_kernel(
+                "materialize-scenario-fixture",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+            )
+
+            investigation_path(
+                run_dir, f"round_tasks_{HISTORICAL_ROUND_ID}.json"
+            ).unlink()
+            investigation_path(
+                run_dir, f"next_actions_{HISTORICAL_ROUND_ID}.json"
+            ).unlink()
+            investigation_path(
+                run_dir, f"falsification_probes_{HISTORICAL_ROUND_ID}.json"
+            ).unlink()
+
+            current_manifest = run_kernel(
+                "materialize-benchmark-manifest",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+            )
+            replay_payload = run_kernel(
+                "replay-runtime-scenario",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+            )
+
+            benchmark_artifact = load_json(
+                run_dir / "runtime" / f"benchmark_manifest_{HISTORICAL_ROUND_ID}.json"
+            )
+            scenario_fixture = load_json(
+                run_dir / "runtime" / f"scenario_fixture_{HISTORICAL_ROUND_ID}.json"
+            )
+            round_tasks_row = next(
+                row
+                for row in benchmark_artifact["scenario_inputs"]
+                if row["artifact_key"] == "round_tasks"
+            )
+            next_actions_row = next(
+                row
+                for row in benchmark_artifact["artifact_outputs"]
+                if row["artifact_key"] == "next_actions"
+            )
+            probes_row = next(
+                row
+                for row in benchmark_artifact["artifact_outputs"]
+                if row["artifact_key"] == "falsification_probes"
+            )
+
+            self.assertEqual(
+                baseline_manifest["benchmark_manifest"]["scenario_fingerprint"],
+                current_manifest["benchmark_manifest"]["scenario_fingerprint"],
+            )
+            self.assertEqual(
+                baseline_manifest["benchmark_manifest"]["output_fingerprint"],
+                current_manifest["benchmark_manifest"]["output_fingerprint"],
+            )
+            self.assertEqual(
+                "match",
+                replay_payload["replay_report"]["compare_verdict"],
+            )
+            self.assertEqual(
+                "matched",
+                replay_payload["replay_report"]["replay_verdict"],
+            )
+            self.assertFalse(round_tasks_row["exists"])
+            self.assertTrue(round_tasks_row["payload_present"])
+            self.assertEqual(
+                "deliberation-plane-round-tasks",
+                round_tasks_row["payload_source"],
+            )
+            self.assertFalse(next_actions_row["exists"])
+            self.assertTrue(next_actions_row["payload_present"])
+            self.assertEqual(
+                "deliberation-plane-actions",
+                next_actions_row["payload_source"],
+            )
+            self.assertFalse(probes_row["exists"])
+            self.assertTrue(probes_row["payload_present"])
+            self.assertEqual(
+                "deliberation-plane-probes",
+                probes_row["payload_source"],
+            )
+            self.assertNotEqual(
+                scenario_fixture["baseline_manifest"]["path"],
+                scenario_fixture["baseline_manifest"]["source_path"],
+            )
+            self.assertTrue(
+                Path(scenario_fixture["baseline_manifest"]["path"]).exists()
+            )
+
+    def test_replay_runtime_scenario_uses_frozen_baseline_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "historical-run"
+
+            prepare_ready_round(
+                run_dir,
+                root / "historical-fixtures",
+                HISTORICAL_RUN_ID,
+                HISTORICAL_ROUND_ID,
+                publish=True,
+            )
+
+            run_kernel(
+                "materialize-benchmark-manifest",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+            )
+            fixture_payload = run_kernel(
+                "materialize-scenario-fixture",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+            )
+
+            publication_path = (
+                run_dir / "reporting" / f"final_publication_{HISTORICAL_ROUND_ID}.json"
+            )
+            final_publication = load_json(publication_path)
+            final_publication["publication_status"] = "manual-regression"
+            write_json(publication_path, final_publication)
+
+            replay_payload = run_kernel(
+                "replay-runtime-scenario",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+            )
+            compare_artifact = load_json(
+                run_dir / "runtime" / f"benchmark_compare_{HISTORICAL_ROUND_ID}.json"
+            )
+
+            self.assertEqual(
+                "regression",
+                replay_payload["replay_report"]["compare_verdict"],
+            )
+            self.assertEqual(
+                "regression-detected",
+                replay_payload["replay_report"]["replay_verdict"],
+            )
+            self.assertEqual("regression", compare_artifact["verdict"])
+            self.assertTrue(compare_artifact["output_match"] is False)
+            self.assertTrue(
+                Path(
+                    fixture_payload["scenario_fixture"]["baseline_manifest"]["path"]
+                ).exists()
+            )
+
+    def test_close_round_uses_db_backed_phase2_snapshots_when_runtime_json_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "historical-run"
+
+            prepare_ready_round(
+                run_dir,
+                root / "historical-fixtures",
+                HISTORICAL_RUN_ID,
+                HISTORICAL_ROUND_ID,
+                publish=True,
+            )
+
+            for relative_path in (
+                f"runtime/round_controller_{HISTORICAL_ROUND_ID}.json",
+                f"runtime/promotion_gate_{HISTORICAL_ROUND_ID}.json",
+                f"runtime/supervisor_state_{HISTORICAL_ROUND_ID}.json",
+            ):
+                (run_dir / relative_path).unlink()
+
+            close_payload = run_kernel(
+                "close-round",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+                "--contract-mode",
+                "strict",
+            )
+            state_payload = run_kernel(
+                "show-run-state",
+                "--run-dir",
+                str(run_dir),
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+                "--tail",
+                "20",
+            )
+
+            close_artifact = load_json(
+                run_dir / "runtime" / f"round_close_{HISTORICAL_ROUND_ID}.json"
+            )
+
+            self.assertEqual("completed", close_payload["status"])
+            self.assertEqual("completed", close_artifact["close_status"])
+            self.assertEqual("completed", close_artifact["archive_status"])
+            self.assertEqual(
+                "completed",
+                state_payload["post_round"]["round_close"]["close_status"],
+            )
+            self.assertEqual(
+                "completed",
+                state_payload["post_round"]["operator"]["round_close_status"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,7 +6,7 @@ description: Derive matching-oriented observation scope proposals from observati
 # Eco Derive Observation Scope
 
 ## Core Goal
-- Read merged observations if available, otherwise fall back to observation candidates.
+- Read merged observations from the analysis plane when available, otherwise fall back to observation candidates.
 - Infer compact observation scope proposals for matching and challenge review.
 - Persist a scope artifact for evidence coverage and board workflows.
 
@@ -16,7 +16,8 @@ description: Derive matching-oriented observation scope proposals from observati
 - Need a bridge artifact between evidence linking and board review.
 
 ## Read/Write Contract
-- Reads `merged_observation_candidates_<round_id>.json` by default and falls back to `observation_candidates_<round_id>.json`.
+- Loads `merged-observation` result sets from the analysis plane first and falls back to `observation-candidate` results only when the preferred merged result is missing.
+- Uses `merged_observation_candidates_<round_id>.json` / `observation_candidates_<round_id>.json` as the default artifact paths behind those result kinds.
 - Writes `runs/<run_id>/analytics/observation_scope_proposals_<round_id>.json` by default.
 - Syncs the same observation-scope result set into `runs/<run_id>/analytics/signal_plane.sqlite` as analysis-plane state.
 
@@ -38,6 +39,7 @@ description: Derive matching-oriented observation scope proposals from observati
 - `canonical_ids`
 - `warnings`
 - `analysis_sync`
+- `input_analysis_sync`
 - `board_handoff`
 
 ## References
