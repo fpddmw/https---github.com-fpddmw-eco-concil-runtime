@@ -48,8 +48,8 @@ description: Open compact falsification probes from the next-action queue so con
 - The emitted artifact also carries normalized D1 trace metadata in `action_source`, `board_state_source`, `coverage_source`, `db_path`, and `observed_inputs`, including explicit `next_actions_artifact_present` handling on both artifact and fallback paths.
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-db-first-agent-runtime-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/eco_open_falsification_probe.py`

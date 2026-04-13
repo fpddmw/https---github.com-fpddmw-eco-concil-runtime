@@ -47,8 +47,8 @@ description: Query archived historical cases from the shared case library so cur
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_query_case_library.py`

@@ -45,8 +45,8 @@ description: Query archived cross-run public and environment signals from the si
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_query_signal_corpus.py`

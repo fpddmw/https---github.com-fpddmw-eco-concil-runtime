@@ -50,8 +50,8 @@ description: Promote the current round into a compact evidence-basis artifact by
 - The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `readiness_source`, `board_brief_source`, `next_actions_source`, `db_path`, and `observed_inputs`, including explicit `*_artifact_present` and `*_present` flags for promotion inputs.
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-db-first-agent-runtime-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/eco_promote_evidence_basis.py`

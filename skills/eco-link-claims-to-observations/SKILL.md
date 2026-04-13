@@ -48,8 +48,8 @@ description: Link claim-side evidence objects to observation-side evidence objec
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-db-first-agent-runtime-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/eco_link_claims_to_observations.py`

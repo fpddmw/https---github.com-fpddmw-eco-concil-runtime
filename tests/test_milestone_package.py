@@ -106,7 +106,7 @@ class MilestonePackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             master_plan_path, progress_log_path, dashboard_path = write_synthetic_docs(root)
-            output_dir = root / "reports" / "2026-04-06-milestone-package"
+            output_dir = root / "docs" / "archive" / "2026-04-06-milestone-package"
 
             rendered = render_milestone_package_from_paths(
                 master_plan_path=master_plan_path,
@@ -166,11 +166,11 @@ class MilestonePackageTests(unittest.TestCase):
 
     def test_repo_package_render_tracks_a4_completion(self) -> None:
         rendered = render_milestone_package_from_paths(
-            master_plan_path=WORKSPACE_ROOT / "openclaw-db-first-master-plan.md",
-            progress_log_path=WORKSPACE_ROOT / "openclaw-db-first-progress-log.md",
-            dashboard_path=WORKSPACE_ROOT / "openclaw-db-first-dashboard.md",
+            master_plan_path=WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-master-plan.md",
+            progress_log_path=WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-progress-log.md",
+            dashboard_path=WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-dashboard.md",
             package_date="2026-04-06",
-            output_dir=WORKSPACE_ROOT / "reports" / "repo-render-check",
+            output_dir=WORKSPACE_ROOT / "docs" / "archive" / "repo-render-check",
         )
 
         self.assertEqual("A4", rendered.manifest["latest_delivery"]["stage_id"])
@@ -178,7 +178,7 @@ class MilestonePackageTests(unittest.TestCase):
         self.assertEqual("completed", rendered.manifest["latest_delivery"]["status"])
         self.assertTrue(
             any(
-                Path(item).name == "2026-04-06-lab-briefing"
+                Path(item).name == "2026-04-06-milestone-package"
                 for item in rendered.manifest["supplementary_report_dirs"]
             )
         )

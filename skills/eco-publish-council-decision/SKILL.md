@@ -47,8 +47,8 @@ description: Publish a canonical council decision from the current decision draf
 - The emitted canonical decision preserves normalized reporting-chain trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `promotion_source`, `decision_source`, `sociologist_report_source`, `environmentalist_report_source`, `db_path`, and `observed_inputs`.
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-db-first-agent-runtime-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/eco_publish_council_decision.py`

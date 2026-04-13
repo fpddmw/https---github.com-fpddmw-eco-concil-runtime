@@ -44,7 +44,7 @@ description: Normalize gdelt-gkg-fetch export snapshots into unified public sign
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_gdelt_gkg_public_signals.py`

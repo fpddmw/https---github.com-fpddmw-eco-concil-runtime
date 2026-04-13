@@ -40,7 +40,7 @@ description: Normalize regulationsgov-comment-detail-fetch results into unified 
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_regulationsgov_comment_detail_public_signals.py`

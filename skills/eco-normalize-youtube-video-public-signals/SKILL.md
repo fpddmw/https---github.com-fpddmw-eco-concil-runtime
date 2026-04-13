@@ -41,7 +41,7 @@ description: Normalize youtube-video-search results into unified public signals 
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_youtube_video_public_signals.py`

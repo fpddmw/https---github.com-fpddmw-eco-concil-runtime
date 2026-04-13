@@ -47,8 +47,8 @@ description: Draft a compact role-specific expert report from the reporting hand
 - The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `decision_source`, `board_brief_source`, `db_path`, and `observed_inputs`, preserving upstream trace fields from the reporting chain.
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-db-first-agent-runtime-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/eco_draft_expert_report.py`

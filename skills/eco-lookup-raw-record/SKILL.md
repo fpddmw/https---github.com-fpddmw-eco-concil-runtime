@@ -39,7 +39,7 @@ description: Look up one raw record by signal_id or artifact path and record loc
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_lookup_raw_record.py`

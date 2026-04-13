@@ -52,8 +52,8 @@ description: Materialize one final publication artifact from the canonical decis
 - The emitted final publication preserves normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `decision_source`, `promotion_source`, `supervisor_state_source`, role-report sources, `db_path`, and `observed_inputs`.
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-db-first-agent-runtime-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/eco_materialize_final_publication.py`

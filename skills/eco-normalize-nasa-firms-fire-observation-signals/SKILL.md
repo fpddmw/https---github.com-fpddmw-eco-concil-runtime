@@ -40,7 +40,7 @@ description: Normalize nasa-firms-fire-fetch results into unified environment si
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_nasa_firms_fire_observation_signals.py`

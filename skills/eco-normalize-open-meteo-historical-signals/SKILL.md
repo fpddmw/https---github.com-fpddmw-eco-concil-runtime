@@ -41,7 +41,7 @@ description: Normalize open-meteo-historical-fetch results into unified environm
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_open_meteo_historical_signals.py`

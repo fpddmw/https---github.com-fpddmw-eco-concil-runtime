@@ -51,8 +51,8 @@ description: Claim or upsert a board follow-up task on the local investigation b
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-db-first-agent-runtime-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/eco_claim_board_task.py`

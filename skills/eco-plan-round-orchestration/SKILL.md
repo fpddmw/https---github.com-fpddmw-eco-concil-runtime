@@ -52,8 +52,8 @@ description: Build one runtime orchestration plan from shared board state, D1/D2
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-db-first-agent-runtime-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/eco_plan_round_orchestration.py`

@@ -44,8 +44,8 @@ description: Draft a compact council decision object from the reporting handoff 
 - The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `promotion_source`, `db_path`, and `observed_inputs`, preserving upstream trace fields from the reporting chain.
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-db-first-agent-runtime-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/eco_draft_council_decision.py`

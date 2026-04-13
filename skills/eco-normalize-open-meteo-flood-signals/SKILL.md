@@ -40,7 +40,7 @@ description: Normalize open-meteo-flood-fetch results into unified environment s
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_open_meteo_flood_signals.py`

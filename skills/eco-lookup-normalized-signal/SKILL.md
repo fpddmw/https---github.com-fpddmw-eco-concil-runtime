@@ -37,7 +37,7 @@ description: Look up one normalized signal by signal_id from the unified signal 
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_lookup_normalized_signal.py`

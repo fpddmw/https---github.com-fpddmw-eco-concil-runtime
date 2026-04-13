@@ -40,7 +40,7 @@ description: Normalize usgs-water-iv-fetch results into unified environment sign
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_usgs_water_observation_signals.py`

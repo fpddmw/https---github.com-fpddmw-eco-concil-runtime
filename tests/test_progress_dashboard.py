@@ -18,8 +18,8 @@ from eco_council_runtime.kernel.progress_dashboard import render_dashboard_from_
 class ProgressDashboardTests(unittest.TestCase):
     def test_repo_dashboard_renders_current_control_view(self) -> None:
         model, markdown_text = render_dashboard_from_paths(
-            master_plan_path=WORKSPACE_ROOT / "openclaw-db-first-master-plan.md",
-            progress_log_path=WORKSPACE_ROOT / "openclaw-db-first-progress-log.md",
+            master_plan_path=WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-master-plan.md",
+            progress_log_path=WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-progress-log.md",
         )
 
         self.assertGreaterEqual(len(model.stage_definitions), 10)

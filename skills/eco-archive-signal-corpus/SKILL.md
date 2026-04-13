@@ -41,8 +41,8 @@ description: Archive one run's normalized signal-plane rows into a cross-run sig
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_archive_signal_corpus.py`

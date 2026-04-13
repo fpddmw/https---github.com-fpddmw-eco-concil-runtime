@@ -8,8 +8,8 @@
 
 路线说明、当前实现说明、未来蓝图说明，都已经收敛到另外两份文档：
 
-1. `openclaw-first-refactor-blueprint.md`
-2. `openclaw-db-first-agent-runtime-blueprint.md`
+1. `../openclaw-project-overview.md`
+2. `../openclaw-next-phase-development-plan.md`
 
 当前工作区共有 `73` 个 skill 目录。这里按“运行时编排、数据抓取、归一化、检索回溯、分析加工、议会状态、报告发布”七类整理。
 

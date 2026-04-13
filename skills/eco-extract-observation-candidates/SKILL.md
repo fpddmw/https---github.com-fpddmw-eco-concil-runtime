@@ -43,7 +43,7 @@ description: Extract board-ready environmental observation candidates from norma
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_extract_observation_candidates.py`

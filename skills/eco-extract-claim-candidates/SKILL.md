@@ -43,7 +43,7 @@ description: Extract board-ready public claim candidates from normalized public 
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_extract_claim_candidates.py`

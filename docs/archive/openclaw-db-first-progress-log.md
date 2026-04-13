@@ -23,8 +23,8 @@ Normalization note:
 - Historical `B2 / B2.1` entries remain unchanged in this log, but they are treated as `C1 / C1.1` in the master plan because they belong to the analysis-plane route semantically.
 
 Reference blueprints:
-- `openclaw-first-refactor-blueprint.md`
-- `openclaw-db-first-agent-runtime-blueprint.md`
+- `../openclaw-project-overview.md`
+- `../openclaw-next-phase-development-plan.md`
 - `openclaw-db-first-master-plan.md`
 
 ## 2026-04-02 A1: Review Fix Pack
@@ -252,7 +252,7 @@ Objective:
 
 Implementation:
 - Added this file: `openclaw-db-first-progress-log.md`
-- Replaced stale `../../openclaw-skill-phase-plan.md` references in skill docs with `../../openclaw-db-first-agent-runtime-blueprint.md`
+- Replaced stale `../../openclaw-skill-phase-plan.md` references in skill docs with `../../docs/openclaw-next-phase-development-plan.md`
 - Updated `skills/eco-read-board-delta/SKILL.md` to match the current output contract.
 
 Validation:
@@ -1305,7 +1305,7 @@ Implementation:
   - Normalized validation-command capture so backticked progress-log commands still become executable package/demo instructions.
 - Added `eco-concil-runtime/scripts/eco_milestone_package.py`
   - Added a repo-local CLI for materializing milestone packages from the current control docs.
-  - Defaulted package output to `reports/<date>-milestone-package` and return a structured JSON summary for automation callers.
+  - Defaulted package output to `docs/archive/<date>-milestone-package` and return a structured JSON summary for automation callers.
 - Added `tests/test_milestone_package.py`
   - Added synthetic render/materialize coverage for the package generator.
   - Added CLI coverage for `eco_milestone_package.py`.
@@ -1317,14 +1317,14 @@ Implementation:
   - Advanced the near-term queue so `A4` becomes the next recommended stage.
   - Updated the Route `D` maturity summary to reflect that the control/documentation route now includes a reusable milestone-package layer.
 - Regenerated `openclaw-db-first-dashboard.md` from the updated plan/log state.
-- Materialized `reports/2026-04-06-milestone-package/`
+- Materialized `docs/archive/2026-04-06-milestone-package/`
   - Exported the first real milestone package from the generator so the repo now contains both the reusable toolchain and a concrete packaged snapshot.
 
 Validation:
 - `python3 -m unittest tests/test_milestone_package.py -q`
 - `python3 -m unittest tests/test_progress_dashboard.py -q`
 - `python3 eco-concil-runtime/scripts/eco_progress_dashboard.py --pretty`
-- `python3 eco-concil-runtime/scripts/eco_milestone_package.py --output-dir reports/2026-04-06-milestone-package --package-date 2026-04-06 --pretty`
+- `python3 eco-concil-runtime/scripts/eco_milestone_package.py --output-dir docs/archive/2026-04-06-milestone-package --package-date 2026-04-06 --pretty`
 - `python3 -m unittest discover -s tests -q`
 
 Tests added or extended:
@@ -1398,14 +1398,14 @@ Implementation:
   - `tests/test_progress_dashboard.py`
   - `tests/test_milestone_package.py`
   - `openclaw-db-first-dashboard.md`
-  - `reports/2026-04-06-milestone-package/`
+  - `docs/archive/2026-04-06-milestone-package/`
 
 Validation:
 - `python3 -m unittest tests/test_agent_entry_gate.py -q`
 - `python3 -m unittest tests/test_milestone_package.py -q`
 - `python3 -m unittest tests/test_progress_dashboard.py -q`
 - `python3 eco-concil-runtime/scripts/eco_progress_dashboard.py --pretty`
-- `python3 eco-concil-runtime/scripts/eco_milestone_package.py --output-dir reports/2026-04-06-milestone-package --package-date 2026-04-06 --pretty`
+- `python3 eco-concil-runtime/scripts/eco_milestone_package.py --output-dir docs/archive/2026-04-06-milestone-package --package-date 2026-04-06 --pretty`
 - `python3 -m unittest discover -s tests -q`
 
 Tests added or extended:

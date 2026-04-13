@@ -9,9 +9,9 @@
 - Route completion snapshot: A 6/6, B 8/8, C 7/7, D 4/4
 
 输入来源：
-- `/home/fpddmw/projects/openclaw-eco-concil_v1/openclaw-db-first-master-plan.md`
-- `/home/fpddmw/projects/openclaw-eco-concil_v1/openclaw-db-first-progress-log.md`
-- `/home/fpddmw/projects/openclaw-eco-concil_v1/openclaw-db-first-dashboard.md`
+- `/home/fpddmw/projects/openclaw-eco-concil_v1/docs/archive/openclaw-db-first-master-plan.md`
+- `/home/fpddmw/projects/openclaw-eco-concil_v1/docs/archive/openclaw-db-first-progress-log.md`
+- `/home/fpddmw/projects/openclaw-eco-concil_v1/docs/archive/openclaw-db-first-dashboard.md`
 
 包内文件：
 1. `package_manifest.json`
@@ -19,6 +19,3 @@
 3. `02-acceptance-and-demo.md`
 4. `03-risk-register.md`
 5. `04-next-steps.md`
-
-仓内已发现的补充汇报目录：
-- `/home/fpddmw/projects/openclaw-eco-concil_v1/reports/2026-04-06-lab-briefing`

@@ -42,7 +42,7 @@ description: Normalize gdelt-doc-search article results into unified public sign
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_gdelt_doc_public_signals.py`

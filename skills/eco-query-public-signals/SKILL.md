@@ -46,7 +46,7 @@ name: eco-query-public-signals
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_query_public_signals.py`

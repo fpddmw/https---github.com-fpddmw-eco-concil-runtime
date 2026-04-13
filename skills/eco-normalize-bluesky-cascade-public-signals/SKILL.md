@@ -41,7 +41,7 @@ description: Normalize bluesky-cascade-fetch thread and post results into unifie
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_bluesky_cascade_public_signals.py`

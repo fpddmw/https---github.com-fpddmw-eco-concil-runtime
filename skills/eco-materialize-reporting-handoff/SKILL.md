@@ -48,8 +48,8 @@ description: Materialize a compact reporting handoff from promoted evidence basi
 - The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `promotion_source`, `readiness_source`, `board_brief_source`, `supervisor_state_source`, `db_path`, and `observed_inputs`, including explicit artifact-versus-materialized flags for each upstream input.
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-db-first-agent-runtime-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/eco_materialize_reporting_handoff.py`

@@ -35,15 +35,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--master-plan-path",
-        default=str(WORKSPACE_ROOT / "openclaw-db-first-master-plan.md"),
+        default=str(WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-master-plan.md"),
     )
     parser.add_argument(
         "--progress-log-path",
-        default=str(WORKSPACE_ROOT / "openclaw-db-first-progress-log.md"),
+        default=str(WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-progress-log.md"),
     )
     parser.add_argument(
         "--output-path",
-        default=str(WORKSPACE_ROOT / "openclaw-db-first-dashboard.md"),
+        default=str(WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-dashboard.md"),
     )
     parser.add_argument("--stdout", action="store_true")
     parser.add_argument("--pretty", action="store_true")

@@ -40,7 +40,7 @@ description: Normalize open-meteo-air-quality-fetch results into unified environ
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_open_meteo_air_quality_signals.py`

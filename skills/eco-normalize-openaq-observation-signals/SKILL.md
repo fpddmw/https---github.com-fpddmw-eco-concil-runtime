@@ -41,7 +41,7 @@ description: Normalize openaq-data-fetch results into unified environment signal
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_openaq_observation_signals.py`

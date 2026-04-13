@@ -41,7 +41,7 @@ description: Normalize airnow-hourly-obs-fetch results into unified environment 
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_airnow_observation_signals.py`

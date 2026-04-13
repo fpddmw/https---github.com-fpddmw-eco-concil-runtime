@@ -38,15 +38,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--master-plan-path",
-        default=str(WORKSPACE_ROOT / "openclaw-db-first-master-plan.md"),
+        default=str(WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-master-plan.md"),
     )
     parser.add_argument(
         "--progress-log-path",
-        default=str(WORKSPACE_ROOT / "openclaw-db-first-progress-log.md"),
+        default=str(WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-progress-log.md"),
     )
     parser.add_argument(
         "--dashboard-path",
-        default=str(WORKSPACE_ROOT / "openclaw-db-first-dashboard.md"),
+        default=str(WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-dashboard.md"),
     )
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--package-date", default="")
@@ -60,7 +60,7 @@ def main() -> int:
     output_dir = (
         Path(args.output_dir).expanduser().resolve()
         if maybe_text(args.output_dir)
-        else (WORKSPACE_ROOT / "reports" / f"{package_date}-milestone-package").resolve()
+        else (WORKSPACE_ROOT / "docs" / "archive" / f"{package_date}-milestone-package").resolve()
     )
     payload = materialize_milestone_package_from_paths(
         master_plan_path=Path(args.master_plan_path).expanduser().resolve(),

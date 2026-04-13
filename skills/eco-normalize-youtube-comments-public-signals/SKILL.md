@@ -40,7 +40,7 @@ description: Normalize youtube-comments-fetch results into unified public signal
 - `board_handoff`
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/eco_normalize_youtube_comments_public_signals.py`

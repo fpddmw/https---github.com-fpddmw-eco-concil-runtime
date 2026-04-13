@@ -51,8 +51,8 @@ description: Summarize round-level readiness from board, next-action, probe, and
 - The emitted artifact also carries normalized D1/D2 trace metadata in `board_state_source`, `coverage_source`, `db_path`, and `observed_inputs`, including explicit `*_artifact_present` and `*_present` flags for board, action, probe, and coverage inputs.
 
 ## References
-- `../../openclaw-first-refactor-blueprint.md`
-- `../../openclaw-db-first-agent-runtime-blueprint.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/eco_summarize_round_readiness.py`
