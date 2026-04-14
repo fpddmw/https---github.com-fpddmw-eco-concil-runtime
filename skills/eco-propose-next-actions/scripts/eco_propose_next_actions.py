@@ -23,6 +23,7 @@ from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     maybe_text,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_moderator_action_records,
     store_moderator_action_snapshot,
 )
 
@@ -144,12 +145,17 @@ def propose_next_actions_skill(
         ),
         "ranked_actions": ranked_actions,
     }
-    write_json_file(output_file, wrapper)
+    wrapper = store_moderator_action_records(
+        run_dir_path,
+        action_snapshot=wrapper,
+        artifact_path=str(output_file),
+    )
     store_moderator_action_snapshot(
         run_dir_path,
         action_snapshot=wrapper,
         artifact_path=str(output_file),
     )
+    write_json_file(output_file, wrapper)
 
     artifact_refs = [
         {

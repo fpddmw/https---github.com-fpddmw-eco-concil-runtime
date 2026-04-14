@@ -27,6 +27,7 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
+    load_round_readiness_wrapper,
 )
 
 MAX_CASES = 3
@@ -251,7 +252,16 @@ def build_history_query(
         mission = {"run_id": run_id}
     board_summary = load_json_if_exists(run_dir / "board" / f"board_state_summary_{round_id}.json") or {}
     board_brief = read_text_if_exists(run_dir / "board" / f"board_brief_{round_id}.md")
-    readiness = load_json_if_exists(run_dir / "reporting" / f"round_readiness_{round_id}.json") or {}
+    readiness_wrapper = load_round_readiness_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    readiness = (
+        readiness_wrapper.get("payload")
+        if isinstance(readiness_wrapper.get("payload"), dict)
+        else {}
+    )
     next_actions_wrapper = load_next_actions_wrapper(
         run_dir,
         run_id=run_id,

@@ -1,15 +1,15 @@
 # OpenClaw Docs
 
-当前文档结构已经收敛为两层：
+当前文档结构分为两层：
 
 ## 当前主文档
 
 1. `openclaw-project-overview.md`
-   - 当前项目定位、真实强项、真实限制、下一阶段问题导向。
+   - 当前系统是什么、主要问题是什么、目标架构是什么。
 2. `openclaw-next-phase-development-plan.md`
-   - 下一阶段分批开发路线。
+   - 下一阶段如何同时修正研究方向、架构边界、数据契约与 DB-native 状态面。
 3. `openclaw-skill-refactor-checklist.md`
-   - skill 保留、降级、重构、新增的逐项清单。
+   - 按迁移、重写、降级与删除兼容债的方式执行下一阶段工作。
 
 建议阅读顺序：
 
@@ -19,7 +19,7 @@
 
 ## 历史与过程文档
 
-`archive/` 用于保留仍有工程用途、但不再作为主叙事入口的历史过程文档，包括：
+`archive/` 用于保留仍有工程用途、但不再作为当前方向入口的历史过程文档，包括：
 
 1. `openclaw-db-first-master-plan.md`
 2. `openclaw-db-first-progress-log.md`
@@ -29,5 +29,4 @@
 
 使用原则：
 
-`当前说明与后续规划看 docs 根目录；历史计划、交付日志和里程碑包看 archive/。`
-
+`当前方向、目标架构与迁移约束看 docs 根目录；历史路线与交付记录看 archive/。`

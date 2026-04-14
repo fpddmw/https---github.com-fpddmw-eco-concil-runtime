@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Any
 
 from .deliberation_plane import store_promotion_freeze_record
-from .manifest import load_json_if_exists, write_json
+from .investigation_planning import load_round_readiness_wrapper
+from .manifest import write_json
 from .paths import promotion_gate_path
 
 
@@ -41,7 +42,17 @@ def apply_promotion_gate(
     readiness_file = resolve_path(run_dir, readiness_path_override, run_dir / "reporting" / f"round_readiness_{round_id}.json")
     output_file = resolve_path(run_dir, output_path_override, promotion_gate_path(run_dir, round_id))
 
-    readiness = load_json_if_exists(readiness_file) or {}
+    readiness_context = load_round_readiness_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        readiness_path=readiness_path_override,
+    )
+    readiness = (
+        readiness_context.get("payload")
+        if isinstance(readiness_context.get("payload"), dict)
+        else {}
+    )
     readiness_status = maybe_text(readiness.get("readiness_status")) or "blocked"
     gate_reasons = readiness.get("gate_reasons", []) if isinstance(readiness.get("gate_reasons"), list) else []
     recommended_next_skills = (
@@ -49,7 +60,7 @@ def apply_promotion_gate(
     )
     warnings: list[dict[str, str]] = []
     if not readiness:
-        warnings.append({"code": "missing-readiness", "message": f"No round readiness artifact was found at {readiness_file}."})
+        warnings.append({"code": "missing-readiness", "message": f"No round readiness artifact or DB assessment was found at {readiness_file}."})
     promote_allowed = readiness_status == "ready"
     gate_status = "allow-promote" if promote_allowed else "freeze-withheld"
 

@@ -22,6 +22,7 @@ from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     load_d1_shared_context,
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
+    load_round_readiness_wrapper,
 )
 
 
@@ -610,7 +611,17 @@ def plan_round_orchestration_skill(
         if isinstance(next_actions_context.get("payload"), dict)
         else {}
     )
-    readiness = load_json_if_exists(readiness_file) or {}
+    readiness_context = load_round_readiness_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        readiness_path=readiness_path,
+    )
+    readiness = (
+        readiness_context.get("payload")
+        if isinstance(readiness_context.get("payload"), dict)
+        else {}
+    )
     brief_text = load_text_if_exists(board_brief_file)
     probes_context = load_falsification_probe_wrapper(
         run_dir_path,
@@ -771,7 +782,8 @@ def plan_round_orchestration_skill(
             "probes_present": isinstance(probes, dict) and bool(probes),
             "next_actions_source": maybe_text(next_actions_context.get("source")),
             "probes_source": maybe_text(probes_context.get("source")),
-            "readiness_present": isinstance(readiness, dict) and bool(readiness),
+            "readiness_present": bool(readiness_context.get("payload_present")),
+            "readiness_source": maybe_text(readiness_context.get("source")),
             "board_state_source": maybe_text(snapshot.get("state_source")),
             "board_state_db_path": db_path,
             "status_rollup": maybe_text(snapshot.get("status_rollup")),

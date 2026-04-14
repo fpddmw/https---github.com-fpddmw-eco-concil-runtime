@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -144,7 +145,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertEqual("deliberation-plane", actions_payload["summary"]["board_state_source"])
             self.assertEqual("completed", actions_payload["deliberation_sync"]["status"])
             self.assertGreaterEqual(probes_payload["summary"]["probe_count"], 1)
-            self.assertEqual("next-actions-artifact", probes_payload["summary"]["action_source"])
+            self.assertEqual("deliberation-plane-actions", probes_payload["summary"]["action_source"])
             actions = actions_artifact["ranked_actions"]
             self.assertEqual("deliberation-plane", actions_artifact["board_state_source"])
             self.assertTrue(actions_artifact["observed_inputs"]["board_summary_artifact_present"])
@@ -155,6 +156,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertTrue(any(bool(action["probe_candidate"]) for action in actions))
             self.assertTrue(any("controversy_gap" in action for action in actions))
             probes = probes_artifact["probes"]
+            self.assertEqual("deliberation-plane-actions", probes_artifact["action_source"])
             self.assertTrue(probes_artifact["observed_inputs"]["next_actions_artifact_present"])
             self.assertTrue(probes_artifact["observed_inputs"]["next_actions_present"])
             self.assertTrue(any(probe["target_hypothesis_id"] == hypothesis_payload["canonical_ids"][0] for probe in probes))
@@ -601,6 +603,20 @@ class InvestigationWorkflowTests(unittest.TestCase):
             )
             investigation_path(run_dir, f"next_actions_{ROUND_ID}.json").unlink()
             investigation_path(run_dir, f"falsification_probes_{ROUND_ID}.json").unlink()
+            connection = sqlite3.connect(
+                (run_dir / "analytics" / "signal_plane.sqlite").resolve()
+            )
+            try:
+                action_count = connection.execute(
+                    "SELECT COUNT(*) FROM moderator_actions WHERE run_id = ? AND round_id = ?",
+                    (RUN_ID, ROUND_ID),
+                ).fetchone()[0]
+                probe_count = connection.execute(
+                    "SELECT COUNT(*) FROM falsification_probes WHERE run_id = ? AND round_id = ?",
+                    (RUN_ID, ROUND_ID),
+                ).fetchone()[0]
+            finally:
+                connection.close()
 
             readiness_payload = run_script(
                 script_path("eco-summarize-round-readiness"),
@@ -629,6 +645,8 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertTrue(readiness_artifact["observed_inputs"]["next_actions_present"])
             self.assertFalse(readiness_artifact["observed_inputs"]["probes_artifact_present"])
             self.assertTrue(readiness_artifact["observed_inputs"]["probes_present"])
+            self.assertGreater(action_count, 0)
+            self.assertGreater(probe_count, 0)
             self.assertGreater(int(readiness_artifact["counts"]["open_probes"]), 0)
             self.assertIn("controversy_gap_counts", readiness_artifact)
             self.assertIn("probe_type_counts", readiness_artifact)
@@ -636,6 +654,107 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertFalse(promotion_artifact["observed_inputs"]["next_actions_artifact_present"])
             self.assertTrue(promotion_artifact["observed_inputs"]["next_actions_present"])
             self.assertEqual("deliberation-plane-actions", promotion_artifact["next_actions_source"])
+
+    def test_d2_promotion_reads_db_backed_readiness_when_artifact_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            run_script(
+                script_path("eco-derive-claim-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-derive-observation-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-score-evidence-coverage"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Smoke over NYC was materially significant",
+                "--statement",
+                "Public smoke reports are backed by elevated PM2.5 observations.",
+                "--status",
+                "active",
+                "--owner-role",
+                "environmentalist",
+                "--linked-claim-id",
+                outputs["cluster_claims"]["canonical_ids"][0],
+                "--confidence",
+                "0.91",
+            )
+
+            readiness_payload = run_script(
+                script_path("eco-summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json").unlink()
+            connection = sqlite3.connect(
+                (run_dir / "analytics" / "signal_plane.sqlite").resolve()
+            )
+            try:
+                readiness_count = connection.execute(
+                    "SELECT COUNT(*) FROM round_readiness_assessments WHERE run_id = ? AND round_id = ?",
+                    (RUN_ID, ROUND_ID),
+                ).fetchone()[0]
+            finally:
+                connection.close()
+
+            promotion_payload = run_script(
+                script_path("eco-promote-evidence-basis"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            promotion_artifact = load_json(
+                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("ready", readiness_payload["summary"]["readiness_status"])
+            self.assertGreater(readiness_count, 0)
+            self.assertEqual("promoted", promotion_payload["summary"]["promotion_status"])
+            self.assertEqual(
+                "deliberation-plane-readiness",
+                promotion_artifact["readiness_source"],
+            )
+            self.assertFalse(
+                promotion_artifact["observed_inputs"]["readiness_artifact_present"]
+            )
+            self.assertTrue(promotion_artifact["observed_inputs"]["readiness_present"])
 
     def test_d2_marks_ready_and_promotes_basis_when_board_is_clean(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -1,289 +1,263 @@
-# OpenClaw 项目总览、当前判断与下一阶段方向
+# OpenClaw 项目总览、当前问题与目标架构
 
 ## 1. 文档定位
 
-本文件用于替代原先分散的：
+本文件只承担三件事：
 
-1. `01-overall-workflow-report.md`
-2. `02-agent-roles-report.md`
-3. `03-data-layer-conventions-report.md`
-4. `05-skills-summary-report.md`
+1. 说明 OpenClaw 当前已经做成了什么。
+2. 明确当前系统真正存在的问题，而不是只写能力亮点。
+3. 作为下一阶段规划与迁移清单的统一基线。
 
-它现在是本目录唯一的主说明文档，承担三项职责：
-
-1. 说明 OpenClaw 当前到底已经做成了什么。
-2. 明确当前系统的真实强项、真实限制和研究边界。
-3. 为下一阶段开发规划提供统一基线。
-
-后续如果继续推进，不再为“总体介绍”重复拆散说明，而是在本文件基础上增补少量执行型规划文件。
+与历史文档不同，本文件不再把“多 agent 平台”当成默认正确方向；它首先回答系统当前是什么，其次回答系统下一步应该改成什么。
 
 ## 2. 一句话定位
 
 OpenClaw 当前更准确的定位是：
 
-`一个面向生态议题调查的、可治理的 DB-first 多 agent 运行系统。`
+`一个受治理的、DB-first 的环境调查 workflow engine。`
 
-但如果进入下一阶段，项目的主问题不应再抽象地停留在“多 agent 调查平台”，而应进一步收束为：
+下一阶段希望把它推进为：
 
-`一个面向环境争议的“争议地图 + 调查分诊”系统。`
+`一个受治理但高自主、DB-native 的环境争议议会系统。`
 
-这意味着下一阶段的重点不是继续证明“系统可以跑完整流程”，而是回答：
+这里的关键区别不是宣传口径，而是职责分配：
 
-1. 系统能否把正式评论与开放平台舆情组织成结构化的环境争议图谱。
-2. 系统能否据此判断哪些内容值得继续核实、回应或升级调查。
-3. 系统能否区分“可外部核实的问题”和“更适合做立场/关切/代表性分析的问题”。
+1. `runtime kernel` 只负责治理、执行、持久化、查询与审计。
+2. `agent council` 负责实质性的争议判断、提案、挑战与分诊。
+3. `database` 是议会状态与流程推进的真实状态源。
+4. `artifact` 只承担导出、handoff 与人类可读展示。
 
-## 3. 当前项目已经完成什么
+## 3. 当前已经完成什么
 
-截至当前仓库状态，OpenClaw 已经完成本轮 DB-first 主计划收口。此前文档中的总阶段完成度为 `25 / 25`，`Route A / B / C / D` 四条路线都已完成。
-
-当前已经落下来的核心成果，不是单个 skill 的数量，而是四个工作面：
+截至当前仓库状态，OpenClaw 已经完成上一轮 DB-first 主计划的基础收口。真正落下来的不是 skill 数量，而是四个工作面：
 
 1. `runtime / governance`
-   - 已能管理 run、round、source governance、admission、execution、receipt、replay 与 milestone packaging。
+   - 已能管理 run、round、source governance、admission、execution、receipt、replay 与 archive/publication 边界。
 2. `signal plane`
-   - 已能把 public 与 environment 两类异构数据写入统一的 `normalized_signals` 工作面。
+   - 已能把 public 与 environment 两类异构输入写入统一的 `normalized_signals` 工作面。
 3. `analysis plane`
-   - 已能把 candidate、cluster、scope、link、coverage 等分析对象写入统一 result-set / lineage 结构。
+   - 已能把 candidate、cluster、scope、link、coverage 等对象写入统一 result-set / lineage 结构。
 4. `deliberation plane`
-   - 已能把 hypothesis、challenge、task、probe、round transition 等议会状态写入 DB-first 状态面。
+   - 已能把 hypothesis、challenge、task、probe、round transition 等 board 状态写入 DB-first 状态面。
 
-因此，OpenClaw 当前已经不是“抓数据再写报告”的脚本集合，而是一个能围绕共享状态持续推进调查的系统骨架。
+这说明系统已经脱离“抓数据 + 生成文档”的脚本集合，具备了共享状态、受治理执行和跨轮次恢复的骨架。
 
-## 4. 当前系统的端到端结构
+## 4. 当前工作流与状态面
 
-### 4.1 工作流主干
+### 4.1 当前主干
 
-当前主干可以概括为：
+当前工作流主干可以概括为：
 
-`mission / run -> round / source governance -> fetch -> normalize -> query -> analysis -> board -> reporting / archive`
+`mission / run -> round / source governance -> fetch / import -> normalize -> analysis -> board / moderation -> reporting / archive`
 
-对应到系统内部，大致分为：
+对应的数据层级大致是：
 
-1. run 初始化与 round 脚手架
-2. 受治理的数据抓取与导入
-3. 统一信号写入与检索
-4. 分析结果集生成与 lineage 追踪
-5. board 状态推进与 moderator 协调
-6. readiness、promotion、reporting、publication
-7. archive、history、benchmark、replay
+`raw -> normalized -> analytics -> deliberation -> reporting -> archive/history`
 
-### 4.2 数据层级
+### 4.2 当前状态源的真实情况
 
-当前数据主干仍可概括为：
+当前系统已经明显转向 DB-first，但还不能说完全 DB-native。
 
-`raw -> normalized -> analytics -> board -> reporting -> archive/history`
+已经成立的部分：
 
-但更重要的变化是：
+1. SQLite 已经是 signal、analysis、board 状态查询与恢复的主工作面。
+2. result-set / lineage 与 deliberation state 已经形成稳定的 DB 写入面。
+3. 部分导出物已经可以在 artifact 缺失时从 DB 恢复。
 
-1. 文件继续保留，主要承担 raw evidence、snapshot、handoff、human-readable export 的作用。
-2. SQLite 已成为统一查询、恢复和追踪的主工作面。
-3. JSON / Markdown 正在从“状态源”降级为“导出物”。
+尚未完全成立的部分：
 
-### 4.3 当前 analysis plane 的默认对象
+1. phase-2 的 `next-actions / probes / readiness / promotion-basis` 仍带有明显的 artifact wrapper 习惯。
+2. 某些控制与报告链路仍默认存在 summary / handoff / export 文件。
+3. formal comments 进入系统后，底层仍更像“generic public signal”，而不是一等 formal-comment 契约对象。
 
-当前 analysis plane 已稳定支持的对象主要包括：
+因此，当前最准确的判断不是“议会已经完全基于数据库运作”，而是：
 
-1. `claim-candidate`
-2. `claim-cluster`
-3. `observation-candidate`
-4. `merged-observation`
-5. `claim-scope`
-6. `observation-scope`
-7. `claim-observation-link`
-8. `evidence-coverage`
+`议会状态大体已 DB-first，议会流程还没有完全 DB-native。`
 
-这套对象说明了一个重要事实：
+## 5. 当前系统的关键问题
 
-`当前系统默认把环境调查理解为“公众说法 - 环境观测 - 链接 - 覆盖度”的分析过程。`
+### 5.1 Agent 自主权不足
 
-这也是下一阶段最需要调整的地方。
+当前系统里的角色语义是清楚的，但 agent 主要仍是“受治理执行端”而不是“实质性议会参与者”。
 
-## 5. 角色与 skill 结构
+当前主要问题：
 
-### 5.1 角色边界
+1. 议会流程的核心推进仍主要依赖 runtime 预定义阶段与 skill 链。
+2. agent 的写入能力主要表现为执行预设 command/skill，而不是基于共享状态自主形成可对抗的 deliberation proposal。
+3. promotion、publication、archive 仍完全在 agent 外环。
 
-当前角色设计仍然成立，而且应继续保留：
+这意味着当前系统适合“治理内协作”，不适合被称为“高自主议会”。
 
-1. `sociologist`
-   - 负责公共叙事、平台讨论、正式评论等公共表达侧分析。
-2. `environmentalist`
-   - 负责环境观测、指标、时空背景和物理证据侧分析。
-3. `challenger`
-   - 负责反驳、挑错、施压、证伪和矛盾检查。
-4. `moderator`
-   - 负责 board 状态推进、调查协调和轮次判断。
-5. `runtime`
-   - 负责 admission、side effect、ledger、publication、archive 等治理边界。
+### 5.2 Runtime kernel 边界过宽
 
-当前真正已经实现的，不是完整持久的多 session agent 社会，而是：
+如果把 `runtime kernel` 理解为最小执行内核，那么当前边界明显过宽。
 
-1. 角色语义明确。
-2. 部分写边界和状态对象明确。
-3. runtime 已有最小可控 agent entry gate。
-4. moderator 与 board 的核心控制面已 DB-first 化。
+当前 kernel 同时承担了：
 
-### 5.2 当前 skill surface
+1. admission / execution / ledger / replay
+2. phase-2 stage contract 与 controller
+3. operator health surface
+4. 部分议会流程语义与阶段推进假设
 
-当前仓库共有 `73` 个 skill 目录，可压缩为七类：
+这更像一个完整的 workflow engine，而不是最小 kernel。下一阶段如果不收边界，系统会持续把 domain policy、heuristic scoring 和 moderation logic 堆进 kernel。
 
-| 类别 | 数量 | 当前作用 |
-| --- | ---: | --- |
-| Runtime 编排 | `5` | 初始化 run、round、fetch/import、plan |
-| 数据抓取 | `16` | 拉取 public / environment 原始证据 |
-| 数据归一化 | `16` | 将异构数据写入统一信号层 |
-| 检索回溯与归档 | `9` | query、lookup、history、archive |
-| 分析与证据加工 | `10` | 候选抽取、聚类、合并、scope、link、coverage |
-| 议会状态与看板 | `10` | notes、tasks、challenges、probes、readiness |
-| 报告与发布 | `7` | handoff、decision、report、publication |
+### 5.3 启发式与规则占比过高
 
-需要强调的是：
+当前 public-side 主链仍高度依赖规则与固定公式：
 
-`当前 skill 数量已经足够多，下一阶段不应再以“继续补 skill surface”为主，而应转向“重定义核心分析对象和主问题”。`
+1. claim/issue 抽取依赖规则表和文本 pattern。
+2. cluster、scope、routing、readiness、probe typing 里有大量固定阈值和公式。
+3. 议会流程稳定性主要靠规则化流程，而不是靠 agent 在共享状态上的自主判断。
 
-## 6. 当前系统的真实强项
+规则不是问题本身；问题在于它们当前仍是主判断来源，而不是 fallback、bootstrap 或 audit。
 
-基于仓库现状，OpenClaw 当前最强的是以下几项：
+### 5.4 数据契约还不够硬
 
-1. 多源数据接入与统一归一化
-   - public source 和 environment source 都已有较完整抓取与 normalizer。
-2. DB-first 调查编排
-   - round、board、analysis、reporting 已有相对完整的状态面与恢复面。
-3. 证据回查与 lineage
-   - 从结果回到原始 artifact 的路径比较清楚。
-4. 事件式核实
-   - 对烟雾、空气质量、洪水、降水、火点等“可观测、可对照”的 case，系统已经具备较强的调查骨架。
+当前契约在运行治理层已经比较完整，但在领域语义层仍不够硬。
 
-如果要给当前系统一个最真实的能力判断，可以表述为：
+已有基础：
 
-`OpenClaw 现在已经像一个“可治理的事件调查与核实系统”，还不是一个成熟的环境争议分析系统。`
+1. runtime admission/preflight 边界较清楚。
+2. analysis result-set / lineage 已有通用 contract。
+3. observed inputs / trace metadata 已开始统一。
 
-## 7. 当前系统的主要限制
+主要缺口：
 
-### 7.1 研究问题仍偏“事件核实”
+1. formal comment 没有成为一等 schema。
+2. `next-action / probe / readiness / promotion-basis` 还不是稳定、可查询的 canonical 对象。
+3. 很多 skill 仍依赖 envelope 兼容字段和松散 dict 约定。
+4. board / reporting 还未完全以新 controversy 对象为中心运作。
 
-当前 benchmark 和主分析链，仍然把问题默认理解成：
+### 5.5 议会尚未真正以数据库为唯一工作面
 
-`公众说法能否被物理观测支持或反驳。`
+当前系统已经能够把很多状态写入数据库，但“基于数据库运作”需要更强的标准：
 
-这对于烟雾、火灾、洪水、污染事件有用，但不足以支撑更广义的环境争议研究。
+1. 没有中间 artifact 时，round 仍能继续推进。
+2. 关键 phase-2 对象可以 item-level 查询，而不是只存整包 snapshot。
+3. reporting 与 publication 可以从 DB 重新物化，而不是依赖历史 handoff 文件。
 
-### 7.2 public-side 分析过度依赖启发式
+这一标准目前还没有完全达到。
 
-当前 public claim 抽取、聚类、scope 推导和 claim-observation 匹配都偏强规则、轻语义。这使系统更像一个“规则驱动的核实流水线”，而不是一个能处理复杂环境争议的分析框架。
+## 6. 下一阶段的目标架构
 
-### 7.3 formal comments 仍只是 generic public signals
+下一阶段不是继续补更多 surface，而是同时修正研究方向和架构方向。
 
-`regulations.gov` 评论已经能进系统，但目前主要被当作普通文本信号写入统一表面，还没有被结构化为：
+### 6.1 最小 runtime kernel
 
-1. 立场
-2. 关切面
-3. 主体类型
-4. 引证类型
-5. 程序性与经验性问题的区别
+目标中的 `runtime kernel` 只保留以下职责：
 
-### 7.4 board / readiness / reporting 继承了旧主线
+1. run / round 生命周期管理
+2. admission、capability、side-effect governance
+3. 执行调度、receipt、ledger、replay
+4. DB persistence 与 query surface
+5. operator-visible health 与审计入口
 
-因为 analysis 的主对象仍然是 `claim / observation / link / coverage`，所以 next actions、probe、readiness、promotion、reporting 也自然围绕“补证据覆盖度”来组织，而不是围绕“争议结构”来组织。
+以下内容不应继续属于 kernel 本体：
 
-## 8. 下一阶段的问题导向
+1. 具体领域 stage 语义
+2. 争议判断公式
+3. board posture 评分逻辑
+4. 过多的 phase-specific handoff 约定
 
-下一阶段最需要解决的不是“系统还能接多少源”，而是：
+这些内容应下沉到 `council policy / domain workflow / typed plane objects`。
 
-`OpenClaw 在环境领域究竟要解决什么问题。`
+### 6.2 更高自主的议会回路
 
-当前最合适的收束方向是：
+目标不是无治理放权，而是把“实质判断”从 runtime 规则链移回 agent council。
 
-`环境争议地图 / 调查分诊`
+下一阶段的议会回路应满足：
 
-这一定义在环境领域是有明确用途的，至少适用于：
+1. agent 在共享 DB 状态上形成 `proposal / challenge / task / probe / readiness opinion`。
+2. 每个 proposal 都带有 `rationale / confidence / evidence refs / provenance`。
+3. runtime 负责治理和执行，不负责替议会做实质判断。
+4. 规则化 heuristic 只在 agent 缺席、输入不足或审计模式下作为 fallback。
 
-1. 环境政策征求意见与正式评论分析
-2. 污染投诉、环境谣言与突发事件舆情分诊
-3. 设施选址、治理方案、地方环境冲突等争议场景
-4. 正式政策反馈与开放平台讨论之间的错位分析
+### 6.3 一等领域对象与数据契约
 
-围绕这个方向，系统要回答的核心问题应改写为：
+下一阶段的 canonical 对象应明确分层：
 
-1. 当前争议围绕哪些 issue cluster 展开。
-2. 各平台与正式评论中的主要立场是什么。
-3. 各立场的核心关切面是什么。
-4. 哪些主体在发声，哪些主体缺位。
-5. 哪些说法在跨平台扩散，哪些只是局部表达。
-6. 哪些内容适合继续做外部核实，哪些本质上是程序、价值、信任或代表性问题。
+1. `signal plane`
+   - `public-discourse-signal`
+   - `formal-comment-signal`
+   - `environment-observation-signal`
+2. `analysis plane`
+   - `issue-cluster`
+   - `stance-group`
+   - `concern-facet`
+   - `actor-profile`
+   - `evidence-citation-type`
+   - `verifiability-assessment`
+   - `verification-route`
+   - `formal-public-link`
+   - `representation-gap`
+   - `diffusion-edge`
+3. `deliberation plane`
+   - `hypothesis`
+   - `challenge`
+   - `board-task`
+   - `next-action`
+   - `probe`
+   - `readiness-assessment`
+   - `promotion-basis`
 
-## 9. 下一阶段的设计原则
+这里的关键是：议会关键对象不能只存在于导出物里，必须进入可查询的 plane。
 
-### 9.1 核心对象需要改写
+### 6.4 数据库是真实状态源
 
-下一阶段默认对象不应再只是：
+下一阶段的硬方向应是：
 
-`claim / observation / link / coverage`
+1. 所有 council-critical 对象先写 DB，再导出 artifact。
+2. artifact 缺失时，系统仍能从 DB-only 状态恢复同等语义。
+3. JSON / Markdown 是 export，不再是 phase-2 控制流程的隐性依赖。
 
-而应逐步转向：
+### 6.5 Verification lane 降为可选支路
 
-1. `issue cluster`
-2. `stance group`
-3. `concern facet`
-4. `actor profile`
-5. `evidence citation type`
-6. `diffusion edge`
-7. `verifiability flag`
-8. `optional verification task`
+环境观测链应保留，但必须从默认主链降为 optional lane。
 
-### 9.2 “物理与舆情匹配”应从核心降为支路
+只有在以下条件同时满足时才进入 observation matching：
 
-这一能力不是不要，而是不能再当成通用主线。
+1. 问题本质上是经验性的。
+2. 有明确时间范围。
+3. 有明确地点范围。
+4. 存在可对照的外部观测源。
 
-它应只在以下条件下触发：
+程序争议、代表性缺口、价值冲突、信任问题和 formal/public 错位，默认不应被硬塞进 observation coverage 流程。
 
-1. 说法是经验性的
-2. 说法有时间范围
-3. 说法有地点范围
-4. 外部数据源确实可提供可对照观测
+## 7. 下一阶段优先级
 
-对于下列问题，它不应是默认路径：
+下一阶段的优先级必须是：
 
-1. 立场冲突
-2. 程序正义争议
-3. 政策解释分歧
-4. 信任与代表性问题
-5. 社区关切与公共情绪结构
+1. 先写清目标架构、边界与验收标准。
+2. 先硬化 canonical contract，再重写主分析链。
+3. 先让议会对象 DB-native，再去改 reporting 和 publication。
+4. 先提升 agent 在议会中的实质作用，再考虑更复杂的外层 runtime 包装。
 
-### 9.3 先改 public-side 主链，再改 reporting
+不应继续优先的事项：
 
-下一阶段最优先的不是继续扩张 reporting 模板，而是先把 public analysis 主链重构为：
+1. 再扩一批数据源。
+2. 继续堆 publication 样式。
+3. 仅靠改名或加字段来掩盖旧规则链。
+4. 继续把 kernel 当成 domain workflow 的默认承载体。
 
-1. 争议议题抽取
-2. 立场抽取
-3. 关切抽取
-4. 主体识别
-5. formal-public linkage
-6. diffusion detection
-7. verifiability routing
+## 8. 完成定义
 
-reporting 和 publication 应放在第二阶段之后再调整。
+当以下条件同时满足时，才能说 OpenClaw 方向真正被纠正：
 
-## 10. 汇报时建议使用的主叙事
+1. 至少一轮议会可以依靠 agent 形成 `next-action / probe / readiness` 提案，而不是只靠固定公式输出。
+2. 删除中间 `next_actions / probes / readiness / board_summary / board_brief` artifact 后，round 仍能从 DB-only 状态继续推进。
+3. formal comments 不再只是 generic public signal，而是能生成结构化的争议对象。
+4. heuristic 在主链里降为 fallback，并且每次触发都有可审计标记。
+5. runtime kernel 的职责边界被明确收紧，domain workflow 不再继续向 kernel 内部膨胀。
 
-如果需要用最少的文字讲清当前项目及下一步，可以使用下面四句话：
+## 9. 文档分工
 
-1. OpenClaw 当前最重要的成果，不是又新增了多少技能，而是已经把调查系统的关键工作面迁到了 DB-first 的 runtime、analysis 和 deliberation 平面。
-2. 当前系统最强的是受治理的数据接入、状态推进和事件式核实，而不是一般性的政策评估或成熟的舆情理解。
-3. 因此，下一阶段不应再泛泛谈“多 agent 平台”，而应把问题收束为环境争议地图与调查分诊。
-4. 在这个方向下，物理证据匹配保留为可选核实支路，而立场、关切、主体、扩散和可核实性判断将成为新的主分析对象。
+从现在开始，`docs/` 根目录只保留三类 active 文档：
 
-## 11. 本目录后续文档分工
-
-从现在开始，本目录只保留三类文件：
-
-1. 本文件
-   - 作为唯一的主说明文档。
+1. `openclaw-project-overview.md`
+   - 当前状态、问题与目标架构。
 2. `openclaw-next-phase-development-plan.md`
-   - 作为下一阶段的分批开发规划。
+   - 下一阶段的工作流、架构与验收计划。
 3. `openclaw-skill-refactor-checklist.md`
-   - 作为逐项 skill 改造与新增清单。
+   - 迁移、替换、降级与清债清单。
 
-这意味着本目录不再继续扩散“并列介绍性文档”，而转向：
-
-`一个主文档 + 少量执行清单`
+历史路线、进度与里程碑包继续留在 `archive/`，但不再作为当前方向定义的主入口。

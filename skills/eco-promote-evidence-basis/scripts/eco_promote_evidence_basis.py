@@ -20,6 +20,7 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     load_d1_shared_context,
     load_next_actions_wrapper,
+    load_round_readiness_wrapper,
 )
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
@@ -376,10 +377,30 @@ def promote_evidence_basis_skill(
     output_file = resolve_path(run_dir_path, output_path, f"promotion/promoted_evidence_basis_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
-    readiness_payload = load_json_if_exists(readiness_file)
+    readiness_context = load_round_readiness_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        readiness_path=readiness_path,
+    )
+    readiness_payload = (
+        readiness_context.get("payload")
+        if isinstance(readiness_context.get("payload"), dict)
+        else None
+    )
     if not isinstance(readiness_payload, dict):
-        warnings.append({"code": "missing-readiness", "message": f"No round readiness artifact was found at {readiness_file}."})
-        readiness = {"readiness_status": "blocked", "gate_reasons": ["Missing round readiness artifact."], "counts": {}, "recommended_next_skills": []}
+        warnings.append(
+            {
+                "code": "missing-readiness",
+                "message": f"No round readiness artifact or DB assessment was found at {readiness_file}.",
+            }
+        )
+        readiness = {
+            "readiness_status": "blocked",
+            "gate_reasons": ["Missing round readiness artifact or DB assessment."],
+            "counts": {},
+            "recommended_next_skills": [],
+        }
     else:
         readiness = readiness_payload
     shared_context = load_d1_shared_context(
@@ -459,8 +480,10 @@ def promote_evidence_basis_skill(
     contract_fields = reporting_contract_fields_from_payload(
         readiness_payload,
         observed_inputs_overrides={
-            "readiness_artifact_present": readiness_file.exists(),
-            "readiness_present": isinstance(readiness_payload, dict),
+            "readiness_artifact_present": bool(
+                readiness_context.get("artifact_present")
+            ),
+            "readiness_present": bool(readiness_context.get("payload_present")),
             "board_brief_artifact_present": board_brief_file.exists(),
             "board_brief_present": bool(brief_text),
             "coverage_artifact_present": bool(
@@ -475,11 +498,8 @@ def promote_evidence_basis_skill(
         field_overrides={
             "coverage_source": coverage_source or "missing-coverage",
             "db_path": db_path,
-            "readiness_source": (
-                "round-readiness-artifact"
-                if readiness_file.exists()
-                else "missing-readiness"
-            ),
+            "readiness_source": maybe_text(readiness_context.get("source"))
+            or "missing-readiness",
             "board_brief_source": (
                 "board-brief-artifact"
                 if board_brief_file.exists()

@@ -26,6 +26,7 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
+    load_round_readiness_wrapper,
 )
 
 SIGNAL_TABLE = "normalized_signals"
@@ -658,7 +659,16 @@ def archive_case_library_skill(
         if isinstance(probes_wrapper.get("payload"), dict)
         else {}
     )
-    readiness = load_json_if_exists(run_dir_path / "reporting" / f"round_readiness_{round_id}.json") or {}
+    readiness_wrapper = load_round_readiness_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    readiness = (
+        readiness_wrapper.get("payload")
+        if isinstance(readiness_wrapper.get("payload"), dict)
+        else {}
+    )
     promotion = load_json_if_exists(run_dir_path / "promotion" / f"promoted_evidence_basis_{round_id}.json") or {}
     handoff = load_json_if_exists(run_dir_path / "reporting" / f"reporting_handoff_{round_id}.json") or {}
     decision = load_json_if_exists(run_dir_path / "reporting" / f"council_decision_{round_id}.json") or load_json_if_exists(run_dir_path / "reporting" / f"council_decision_draft_{round_id}.json") or {}

@@ -20,6 +20,9 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_round_readiness_wrapper,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -244,9 +247,19 @@ def materialize_reporting_handoff_skill(
         promotion_basis = {"promotion_status": "withheld", "selected_coverages": [], "selected_evidence_refs": [], "remaining_risks": []}
     else:
         promotion_basis = promotion_payload
-    readiness_payload = load_json_if_exists(readiness_file)
+    readiness_context = load_round_readiness_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        readiness_path=readiness_path,
+    )
+    readiness_payload = (
+        readiness_context.get("payload")
+        if isinstance(readiness_context.get("payload"), dict)
+        else None
+    )
     if not isinstance(readiness_payload, dict):
-        warnings.append({"code": "missing-readiness", "message": f"No round readiness artifact was found at {readiness_file}."})
+        warnings.append({"code": "missing-readiness", "message": f"No round readiness artifact or DB assessment was found at {readiness_file}."})
         readiness = {"readiness_status": "blocked", "gate_reasons": []}
     else:
         readiness = readiness_payload
@@ -262,8 +275,10 @@ def materialize_reporting_handoff_skill(
         observed_inputs_overrides={
             "promotion_artifact_present": promotion_file.exists(),
             "promotion_present": isinstance(promotion_payload, dict),
-            "readiness_artifact_present": readiness_file.exists(),
-            "readiness_present": isinstance(readiness_payload, dict),
+            "readiness_artifact_present": bool(
+                readiness_context.get("artifact_present")
+            ),
+            "readiness_present": bool(readiness_context.get("payload_present")),
             "board_brief_artifact_present": board_brief_file.exists(),
             "board_brief_present": bool(maybe_text(board_brief_text)),
             "supervisor_state_artifact_present": supervisor_file.exists(),
@@ -276,9 +291,8 @@ def materialize_reporting_handoff_skill(
                 else "missing-promotion"
             ),
             "readiness_source": (
-                "round-readiness-artifact"
-                if readiness_file.exists()
-                else "missing-readiness"
+                maybe_text(readiness_context.get("source"))
+                or "missing-readiness"
             ),
             "board_brief_source": (
                 "board-brief-artifact"

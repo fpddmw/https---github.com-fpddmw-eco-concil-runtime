@@ -26,6 +26,7 @@ from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     unique_texts,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_falsification_probe_records,
     store_falsification_probe_snapshot,
 )
 
@@ -454,12 +455,17 @@ def open_falsification_probe_skill(
         "probe_count": len(probes),
         "probes": probes,
     }
-    write_json_file(output_file, wrapper)
+    wrapper = store_falsification_probe_records(
+        run_dir_path,
+        probe_snapshot=wrapper,
+        artifact_path=str(output_file),
+    )
     store_falsification_probe_snapshot(
         run_dir_path,
         probe_snapshot=wrapper,
         artifact_path=str(output_file),
     )
+    write_json_file(output_file, wrapper)
 
     artifact_refs = [
         {

@@ -123,7 +123,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertEqual("deliberation-plane", promotion_artifact["board_state_source"])
             self.assertEqual("analysis-plane", promotion_artifact["coverage_source"])
             self.assertEqual(
-                "round-readiness-artifact",
+                "deliberation-plane-readiness",
                 promotion_artifact["readiness_source"],
             )
             self.assertEqual(
@@ -150,7 +150,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertEqual("analysis-plane", handoff_artifact["coverage_source"])
             self.assertEqual("promotion-artifact", handoff_artifact["promotion_source"])
             self.assertEqual(
-                "round-readiness-artifact",
+                "deliberation-plane-readiness",
                 handoff_artifact["readiness_source"],
             )
             self.assertEqual(

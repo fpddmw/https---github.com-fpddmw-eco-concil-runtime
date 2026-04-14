@@ -15,8 +15,13 @@ from .analysis_plane import (
     load_verification_route_context,
 )
 from .deliberation_plane import (
+    build_falsification_probe_payload,
+    build_moderator_action_payload,
+    load_falsification_probe_records,
     load_falsification_probe_snapshot,
+    load_moderator_action_records,
     load_moderator_action_snapshot,
+    load_round_readiness_assessment,
     load_round_snapshot,
 )
 
@@ -121,6 +126,30 @@ def load_next_actions_wrapper(
         next_actions_path,
         f"investigation/next_actions_{round_id}.json",
     )
+    record_payload = load_moderator_action_records(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    snapshot_payload = load_moderator_action_snapshot(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if record_payload or isinstance(snapshot_payload, dict):
+        payload = build_moderator_action_payload(
+            record_payload,
+            snapshot_payload=snapshot_payload if isinstance(snapshot_payload, dict) else None,
+            run_id=run_id,
+            round_id=round_id,
+        )
+        return {
+            "payload": payload,
+            "source": "deliberation-plane-actions",
+            "artifact_path": str(next_actions_file),
+            "artifact_present": next_actions_file.exists(),
+            "payload_present": True,
+        }
     artifact_payload = load_json_if_exists(next_actions_file)
     if isinstance(artifact_payload, dict):
         return {
@@ -129,24 +158,6 @@ def load_next_actions_wrapper(
             or "next-actions-artifact",
             "artifact_path": str(next_actions_file),
             "artifact_present": True,
-            "payload_present": True,
-        }
-    snapshot_payload = load_moderator_action_snapshot(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-    )
-    if isinstance(snapshot_payload, dict):
-        payload = dict(snapshot_payload)
-        payload["action_source"] = (
-            maybe_text(payload.get("action_source"))
-            or "deliberation-plane-actions"
-        )
-        return {
-            "payload": payload,
-            "source": "deliberation-plane-actions",
-            "artifact_path": str(next_actions_file),
-            "artifact_present": False,
             "payload_present": True,
         }
     return {
@@ -171,6 +182,34 @@ def load_falsification_probe_wrapper(
         probes_path,
         f"investigation/falsification_probes_{round_id}.json",
     )
+    record_payload = load_falsification_probe_records(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    snapshot_payload = load_falsification_probe_snapshot(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if record_payload or isinstance(snapshot_payload, dict):
+        payload = build_falsification_probe_payload(
+            record_payload,
+            snapshot_payload=snapshot_payload if isinstance(snapshot_payload, dict) else None,
+            run_id=run_id,
+            round_id=round_id,
+        )
+        payload["action_source"] = (
+            maybe_text(payload.get("action_source"))
+            or "deliberation-plane-probes"
+        )
+        return {
+            "payload": payload,
+            "source": "deliberation-plane-probes",
+            "artifact_path": str(probes_file),
+            "artifact_present": probes_file.exists(),
+            "payload_present": True,
+        }
     artifact_payload = load_json_if_exists(probes_file)
     if isinstance(artifact_payload, dict):
         return {
@@ -181,28 +220,60 @@ def load_falsification_probe_wrapper(
             "artifact_present": True,
             "payload_present": True,
         }
-    snapshot_payload = load_falsification_probe_snapshot(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-    )
-    if isinstance(snapshot_payload, dict):
-        payload = dict(snapshot_payload)
-        payload["action_source"] = (
-            maybe_text(payload.get("action_source"))
-            or "deliberation-plane-probes"
-        )
-        return {
-            "payload": payload,
-            "source": "deliberation-plane-probes",
-            "artifact_path": str(probes_file),
-            "artifact_present": False,
-            "payload_present": True,
-        }
     return {
         "payload": None,
         "source": "missing-probes",
         "artifact_path": str(probes_file),
+        "artifact_present": False,
+        "payload_present": False,
+    }
+
+
+def load_round_readiness_wrapper(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    readiness_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = Path(run_dir).expanduser().resolve()
+    readiness_file = resolve_path(
+        run_dir_path,
+        readiness_path,
+        f"reporting/round_readiness_{round_id}.json",
+    )
+    readiness_payload = load_round_readiness_assessment(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if isinstance(readiness_payload, dict):
+        payload = dict(readiness_payload)
+        payload["readiness_source"] = (
+            maybe_text(payload.get("readiness_source"))
+            or "deliberation-plane-readiness"
+        )
+        return {
+            "payload": payload,
+            "source": "deliberation-plane-readiness",
+            "artifact_path": str(readiness_file),
+            "artifact_present": readiness_file.exists(),
+            "payload_present": True,
+        }
+    artifact_payload = load_json_if_exists(readiness_file)
+    if isinstance(artifact_payload, dict):
+        return {
+            "payload": artifact_payload,
+            "source": maybe_text(artifact_payload.get("readiness_source"))
+            or "round-readiness-artifact",
+            "artifact_path": str(readiness_file),
+            "artifact_present": True,
+            "payload_present": True,
+        }
+    return {
+        "payload": None,
+        "source": "missing-readiness",
+        "artifact_path": str(readiness_file),
         "artifact_present": False,
         "payload_present": False,
     }

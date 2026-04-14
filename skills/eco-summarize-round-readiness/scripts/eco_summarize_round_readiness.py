@@ -25,6 +25,9 @@ from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     maybe_text,
     resolve_path,
 )
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_round_readiness_assessment,
+)
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -325,6 +328,10 @@ def summarize_round_readiness_skill(
         "probes_path": str(probes_file),
         "coverage_path": str(coverage_file),
         **contract_fields,
+        "next_actions_source": maybe_text(next_actions_context.get("source"))
+        or "missing-next-actions",
+        "probes_source": maybe_text(probes_context.get("source"))
+        or "missing-probes",
         "readiness_status": status_value,
         "sufficient_for_promotion": status_value == "ready",
         "agenda_counts": agenda_counts,
@@ -354,8 +361,15 @@ def summarize_round_readiness_skill(
         "findings": findings[:4],
         "recommended_next_skills": recommended_next_skills,
     }
+    wrapper = store_round_readiness_assessment(
+        run_dir_path,
+        readiness_payload=wrapper,
+        artifact_path=str(output_file),
+    )
     write_json_file(output_file, wrapper)
-    readiness_id = "round-readiness-" + stable_hash(run_id, round_id, status_value)[:12]
+    readiness_id = maybe_text(wrapper.get("readiness_id")) or (
+        "round-readiness-" + stable_hash(run_id, round_id, status_value)[:12]
+    )
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
     return {
         "status": "completed",
