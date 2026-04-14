@@ -822,6 +822,115 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("fresh-run", payload["controller"]["resume_status"])
             self.assertEqual("eco-summarize-board-state", payload["controller"]["stage_contracts"]["board-summary"]["expected_skill_name"])
 
+    def test_controller_prefers_agent_advisory_plan_over_runtime_planner(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            runtime_dir = run_dir / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+
+            advisory_plan_path = runtime_dir / f"agent_advisory_plan_{ROUND_ID}.json"
+            advisory_plan_path.write_text(
+                json.dumps(
+                    {
+                        "plan_id": "agent-plan-001",
+                        "planning_status": "advisory-plan-ready",
+                        "planning_mode": "agent-advisory",
+                        "controller_authority": "advisory-only",
+                        "execution_queue": [
+                            {
+                                "stage_name": "round-readiness",
+                                "skill_name": "eco-summarize-round-readiness",
+                                "skill_args": [],
+                                "assigned_role_hint": "moderator",
+                                "reason": "Agent judged the board ready for direct readiness review.",
+                                "expected_output_path": str(root / "readiness.json"),
+                            }
+                        ],
+                        "post_gate_steps": [
+                            {
+                                "stage_name": "promotion-basis",
+                                "skill_name": "eco-promote-evidence-basis",
+                                "skill_args": [],
+                                "assigned_role_hint": "moderator",
+                                "reason": "Freeze the agent-selected gate outcome.",
+                                "expected_output_path": str(root / "basis.json"),
+                            }
+                        ],
+                        "fallback_path": [],
+                    },
+                    ensure_ascii=True,
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            readiness_result = {
+                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
+                "event": {"status": "completed"},
+                "skill_payload": {
+                    "artifact_refs": [],
+                    "canonical_ids": [],
+                    "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"},
+                },
+            }
+            promotion_result = {
+                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "event": {"status": "completed"},
+                "skill_payload": {
+                    "artifact_refs": [],
+                    "canonical_ids": [],
+                    "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"},
+                },
+            }
+            gate_payload = {
+                "generated_at_utc": "2024-01-01T00:00:00Z",
+                "gate_status": "allow-promote",
+                "readiness_status": "ready",
+                "promote_allowed": True,
+                "output_path": str(root / "promotion_gate.json"),
+                "gate_reasons": [],
+                "recommended_next_skills": [],
+            }
+
+            with (
+                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.controller.apply_promotion_gate", return_value=gate_payload),
+                mock.patch(
+                    "eco_council_runtime.kernel.controller.run_skill",
+                    side_effect=[readiness_result, promotion_result],
+                ) as run_skill_mock,
+            ):
+                payload = run_phase2_round_with_contract_mode(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    contract_mode="strict",
+                )
+
+            self.assertEqual(
+                ["eco-summarize-round-readiness", "eco-promote-evidence-basis"],
+                [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
+            )
+            self.assertEqual("agent-advisory", payload["controller"]["planning_mode"])
+            self.assertEqual("agent-advisory", payload["controller"]["planning"]["planning_mode"])
+            self.assertEqual("advisory-only", payload["controller"]["planning"]["controller_authority"])
+            self.assertEqual("agent-advisory", payload["controller"]["planning"]["plan_source"])
+            self.assertEqual(str(advisory_plan_path.resolve()), payload["controller"]["planning"]["plan_path"])
+            self.assertEqual(
+                ["orchestration-planner", "round-readiness", "promotion-gate", "promotion-basis"],
+                payload["controller"]["completed_stage_names"],
+            )
+            self.assertEqual(
+                str(advisory_plan_path.resolve()),
+                payload["controller"]["steps"][0]["artifact_path"],
+            )
+
     def test_controller_resume_skips_completed_stages_after_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

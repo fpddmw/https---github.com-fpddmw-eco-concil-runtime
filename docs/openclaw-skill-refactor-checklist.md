@@ -20,18 +20,19 @@
 - 已新增并交付 formal/public 联动技能：
   - `eco-link-formal-comments-to-public-discourse`
   - `eco-identify-representation-gaps`
+  - `eco-detect-cross-platform-diffusion`
 - analysis plane 已落地的新对象：
   - `claim-verifiability`
   - `verification-route`
   - `controversy-map`
   - `formal-public-link`
   - `representation-gap`
+  - `diffusion-edge`
 - 本次交付原则：
   - 保留旧 skill 名称、CLI 参数、核心 artifact envelope 与主要 ID 字段。
   - 在旧结构上新增 `issue / stance / concern / verifiability / dispute` 等字段。
   - 将 `next actions / probe / readiness` 的解释口径切向“争议结构缺口与 routing”，但不一次性拆掉旧的 `coverage` 兼容链。
 - 仍待后续批次完成的内容：
-  - cross-platform diffusion 的独立 skill 化。
   - board/reporting 对新对象的全面消费。
 
 状态约定：
@@ -191,6 +192,7 @@
 - 当前状态：已实现首版，可输出 `aligned / formal-only / public-only` 的 issue linkage artifact。
 - `[新增]` `eco-detect-cross-platform-diffusion`
   - 分析议题或说法的跨平台传播关系。
+- 当前状态：已实现首版，可输出 `cross-public-diffusion / public-to-formal-spillover / formal-to-public-spillover`。
 - `[新增]` `eco-identify-representation-gaps`
   - 识别哪些关切在正式评论里被放大或被忽略。
 - 当前状态：已实现首版，可输出 `formal-underrepresentation / public-underrepresentation / attention-imbalance / route-mismatch`。
@@ -219,14 +221,14 @@
 
 - `[x]` 先定义新的 analysis 对象与 contract
 - `[x]` 再改 public-side 主分析链
-- `[ ]` 再做 formal-public linkage 与 diffusion
+- `[x]` 再做 formal-public linkage 与 diffusion
 - `[ ]` 再把 environment verification 改成 optional lane
 - `[ ]` 最后重构 board / readiness / reporting
 
 当前解释：
 
-- `formal-public linkage` 已实现。
-- `diffusion` 仍未实现，因此本项暂不勾满。
+- `formal-public linkage / diffusion / representation gap` 已具备首版独立 skill。
+- 下一步主矛盾变成 `board / next actions / reporting` 对新对象的消费。
 
 ## 9. 完成判断
 

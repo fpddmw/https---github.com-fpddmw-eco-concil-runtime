@@ -8,17 +8,12 @@ from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run
 from .gate import apply_promotion_gate
 from .ledger import append_ledger_event
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists, write_json
-from .paths import controller_state_path, ensure_runtime_dirs, orchestration_plan_path, promotion_gate_path
+from .paths import agent_advisory_plan_path, controller_state_path, ensure_runtime_dirs, orchestration_plan_path, promotion_gate_path
 from .phase2_contract import expected_output_path as resolve_expected_output_path
 from .phase2_contract import stage_contract, validate_skill_stage, validate_stage_sequence
 from .registry import write_registry
 
 PLANNER_SKILL_NAME = "eco-plan-round-orchestration"
-STATIC_PHASE2_STAGES: list[tuple[str, str]] = [
-    ("next-actions", "eco-propose-next-actions"),
-    ("falsification-probes", "eco-open-falsification-probe"),
-    ("round-readiness", "eco-summarize-round-readiness"),
-]
 
 
 def unique_texts(values: list[Any]) -> list[str]:
@@ -45,19 +40,6 @@ def phase2_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
         "promotion_basis_path": str((run_dir / "promotion" / f"promoted_evidence_basis_{round_id}.json").resolve()),
         "controller_state_path": str(controller_state_path(run_dir, round_id).resolve()),
     }
-
-
-def default_execution_queue() -> list[dict[str, Any]]:
-    return [
-        {
-            "stage_name": stage_name,
-            "skill_name": skill_name,
-            "skill_args": [],
-            "assigned_role_hint": "moderator",
-            "reason": "Fallback static phase-2 step.",
-        }
-        for stage_name, skill_name in STATIC_PHASE2_STAGES
-    ]
 
 
 def default_post_gate_steps() -> list[dict[str, Any]]:
@@ -108,19 +90,19 @@ def resolve_plan_path(run_dir: Path, round_id: str, plan_payload: dict[str, Any]
 def planning_bundle_from_payload(run_dir: Path, round_id: str, plan_path: str, plan_payload: dict[str, Any]) -> dict[str, Any]:
     explicit_execution_queue = normalized_planned_steps(plan_payload.get("execution_queue"))
     explicit_post_gate_steps = normalized_planned_steps(plan_payload.get("post_gate_steps"))
-    execution_queue = explicit_execution_queue or default_execution_queue()
     post_gate_steps = explicit_post_gate_steps or default_post_gate_steps()
     fallback_path = plan_payload.get("fallback_path", []) if isinstance(plan_payload.get("fallback_path"), list) else []
-    planning_mode = "planner-backed" if explicit_execution_queue else "fallback-static"
     return {
         "plan_id": maybe_text(plan_payload.get("plan_id")),
         "plan_path": plan_path,
         "planning_status": maybe_text(plan_payload.get("planning_status")) or "ready-for-controller",
-        "planning_mode": planning_mode,
+        "planning_mode": maybe_text(plan_payload.get("planning_mode")) or "planner-backed",
         "planner_skill_name": PLANNER_SKILL_NAME,
+        "controller_authority": maybe_text(plan_payload.get("controller_authority")) or "queue-owner",
+        "plan_source": "runtime-planner",
         "probe_stage_included": bool(plan_payload.get("probe_stage_included")),
         "assigned_role_hints": plan_payload.get("assigned_role_hints", []) if isinstance(plan_payload.get("assigned_role_hints"), list) else [],
-        "execution_queue": execution_queue,
+        "execution_queue": explicit_execution_queue,
         "post_gate_steps": post_gate_steps,
         "stop_conditions": plan_payload.get("stop_conditions", []) if isinstance(plan_payload.get("stop_conditions"), list) else [],
         "fallback_path": fallback_path,
@@ -138,20 +120,42 @@ def planning_bundle(run_dir: Path, round_id: str, planner_result: dict[str, Any]
     return planning_bundle_from_payload(run_dir, round_id, plan_path, plan_payload)
 
 
+def advisory_planning_bundle(run_dir: Path, round_id: str) -> dict[str, Any]:
+    advisory_path = agent_advisory_plan_path(run_dir, round_id)
+    advisory_payload = load_json_if_exists(advisory_path) or {}
+    if not advisory_payload:
+        return {}
+    if (
+        maybe_text(advisory_payload.get("planning_mode")) not in {"agent-advisory", ""}
+        and maybe_text(advisory_payload.get("controller_authority")) != "advisory-only"
+    ):
+        return {}
+    execution_queue = normalized_planned_steps(advisory_payload.get("execution_queue"))
+    if not execution_queue:
+        return {}
+    planning = planning_bundle_from_payload(run_dir, round_id, str(advisory_path.resolve()), advisory_payload)
+    planning["planning_mode"] = maybe_text(advisory_payload.get("planning_mode")) or "agent-advisory"
+    planning["controller_authority"] = maybe_text(advisory_payload.get("controller_authority")) or "advisory-only"
+    planning["plan_source"] = "agent-advisory"
+    return planning
+
+
 def planning_from_controller(run_dir: Path, round_id: str, controller_payload: dict[str, Any]) -> dict[str, Any]:
     planning = controller_payload.get("planning", {}) if isinstance(controller_payload.get("planning"), dict) else {}
     execution_queue = normalized_planned_steps(planning.get("execution_queue"))
     post_gate_steps = normalized_planned_steps(planning.get("post_gate_steps"))
-    if execution_queue or post_gate_steps:
+    if execution_queue:
         return {
             "plan_id": maybe_text(planning.get("plan_id")),
             "plan_path": maybe_text(planning.get("plan_path")) or str(orchestration_plan_path(run_dir, round_id).resolve()),
             "planning_status": maybe_text(planning.get("planning_status")) or "ready-for-controller",
             "planning_mode": maybe_text(controller_payload.get("planning_mode")) or maybe_text(planning.get("planning_mode")) or "planner-backed",
             "planner_skill_name": maybe_text(planning.get("planner_skill_name")) or PLANNER_SKILL_NAME,
+            "controller_authority": maybe_text(planning.get("controller_authority")) or "queue-owner",
+            "plan_source": maybe_text(planning.get("plan_source")) or "controller-snapshot",
             "probe_stage_included": bool(planning.get("probe_stage_included")),
             "assigned_role_hints": planning.get("assigned_role_hints", []) if isinstance(planning.get("assigned_role_hints"), list) else [],
-            "execution_queue": execution_queue or default_execution_queue(),
+            "execution_queue": execution_queue,
             "post_gate_steps": post_gate_steps or default_post_gate_steps(),
             "stop_conditions": planning.get("stop_conditions", []) if isinstance(planning.get("stop_conditions"), list) else [],
             "fallback_path": planning.get("fallback_path", []) if isinstance(planning.get("fallback_path"), list) else [],
@@ -165,6 +169,16 @@ def planning_from_controller(run_dir: Path, round_id: str, controller_payload: d
     if not plan_payload:
         return {}
     return planning_bundle_from_payload(run_dir, round_id, plan_path, plan_payload)
+
+
+def ensure_executable_planning(planning: dict[str, Any]) -> None:
+    execution_queue = planning.get("execution_queue", []) if isinstance(planning.get("execution_queue"), list) else []
+    if execution_queue:
+        return
+    plan_path = maybe_text(planning.get("plan_path")) or "<unknown>"
+    raise ValueError(
+        f"Planning artifact {plan_path} does not define an execution_queue; runtime kernel will not synthesize phase-2 deliberation stages."
+    )
 
 
 def stage_blueprint(
@@ -250,6 +264,28 @@ def stage_blueprints(planning: dict[str, Any], artifacts: dict[str, Any]) -> lis
     return blueprints
 
 
+def controller_planning_state(planning: dict[str, Any], blueprints: list[dict[str, Any]]) -> dict[str, Any]:
+    execution_queue = planning.get("execution_queue", []) if isinstance(planning.get("execution_queue"), list) else []
+    post_gate_steps = planning.get("post_gate_steps", []) if isinstance(planning.get("post_gate_steps"), list) else []
+    return {
+        "plan_id": planning.get("plan_id", ""),
+        "plan_path": planning.get("plan_path", ""),
+        "planning_status": planning.get("planning_status", ""),
+        "planning_mode": planning.get("planning_mode", ""),
+        "planner_skill_name": planning.get("planner_skill_name", ""),
+        "controller_authority": planning.get("controller_authority", ""),
+        "plan_source": planning.get("plan_source", ""),
+        "probe_stage_included": planning.get("probe_stage_included", False),
+        "assigned_role_hints": planning.get("assigned_role_hints", []),
+        "planned_skill_count": len(execution_queue) + len(post_gate_steps),
+        "stop_conditions": planning.get("stop_conditions", []),
+        "fallback_path": planning.get("fallback_path", []),
+        "execution_queue": execution_queue,
+        "post_gate_steps": post_gate_steps,
+        "stage_sequence": [maybe_text(item.get("stage")) for item in blueprints],
+    }
+
+
 def stage_contracts_from_blueprints(blueprints: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     contracts: dict[str, dict[str, Any]] = {}
     for blueprint in blueprints:
@@ -268,6 +304,34 @@ def stage_contracts_from_blueprints(blueprints: list[dict[str, Any]]) -> dict[st
             "expected_output_path": maybe_text(blueprint.get("expected_output_path")),
         }
     return contracts
+
+
+def adopted_planner_stage_summary(
+    *,
+    run_id: str,
+    round_id: str,
+    blueprint: dict[str, Any],
+    planning: dict[str, Any],
+    started_at: str,
+    completed_at: str,
+) -> dict[str, Any]:
+    return {
+        **blueprint,
+        "status": "completed",
+        "event_id": "",
+        "receipt_id": "",
+        "started_at_utc": started_at,
+        "completed_at_utc": completed_at,
+        "artifact_path": maybe_text(planning.get("plan_path")) or maybe_text(blueprint.get("expected_output_path")),
+        "artifact_refs": [],
+        "canonical_ids": unique_texts([maybe_text(planning.get("plan_id"))]),
+        "payload_status": maybe_text(planning.get("planning_status")) or "ready-for-controller",
+        "planning_mode": maybe_text(planning.get("planning_mode")),
+        "controller_authority": maybe_text(planning.get("controller_authority")),
+        "plan_source": maybe_text(planning.get("plan_source")),
+        "run_id": run_id,
+        "round_id": round_id,
+    }
 
 
 def merge_existing_steps(blueprints: list[dict[str, Any]], existing_steps: Any) -> list[dict[str, Any]]:
@@ -634,6 +698,7 @@ def run_phase2_round_with_contract_mode(
     if not force_restart and existing_status in {"running", "failed"}:
         recovered_planning = planning_from_controller(run_dir, round_id, existing_controller)
         if recovered_planning:
+            ensure_executable_planning(recovered_planning)
             planning = recovered_planning
             blueprints = stage_blueprints(planning, artifacts)
             controller_payload = {
@@ -649,21 +714,7 @@ def run_phase2_round_with_contract_mode(
                 "started_at_utc": maybe_text(existing_controller.get("started_at_utc")) or started_at,
                 "failure": {},
                 "planning_mode": maybe_text(existing_controller.get("planning_mode")) or maybe_text(recovered_planning.get("planning_mode")) or "planner-backed",
-                "planning": {
-                    "plan_id": recovered_planning.get("plan_id", ""),
-                    "plan_path": recovered_planning.get("plan_path", ""),
-                    "planning_status": recovered_planning.get("planning_status", ""),
-                    "planning_mode": recovered_planning.get("planning_mode", ""),
-                    "planner_skill_name": recovered_planning.get("planner_skill_name", ""),
-                    "probe_stage_included": recovered_planning.get("probe_stage_included", False),
-                    "assigned_role_hints": recovered_planning.get("assigned_role_hints", []),
-                    "planned_skill_count": len(recovered_planning.get("execution_queue", [])) + len(recovered_planning.get("post_gate_steps", [])),
-                    "stop_conditions": recovered_planning.get("stop_conditions", []),
-                    "fallback_path": recovered_planning.get("fallback_path", []),
-                    "execution_queue": recovered_planning.get("execution_queue", []),
-                    "post_gate_steps": recovered_planning.get("post_gate_steps", []),
-                    "stage_sequence": [maybe_text(item.get("stage")) for item in blueprints],
-                },
+                "planning": controller_planning_state(recovered_planning, blueprints),
                 "stage_contracts": stage_contracts_from_blueprints(blueprints),
                 "steps": merge_existing_steps(blueprints, existing_controller.get("steps")),
                 "artifacts": artifacts,
@@ -672,6 +723,29 @@ def run_phase2_round_with_contract_mode(
 
     planner_stage_ran = False
     planner_result: dict[str, Any] | None = None
+    if not planning:
+        advisory_planning = advisory_planning_bundle(run_dir, round_id)
+        if advisory_planning:
+            ensure_executable_planning(advisory_planning)
+            planning = advisory_planning
+            blueprints = stage_blueprints(planning, artifacts)
+            controller_payload["planning_mode"] = maybe_text(planning.get("planning_mode")) or "agent-advisory"
+            controller_payload["planning"] = controller_planning_state(planning, blueprints)
+            controller_payload["stage_contracts"] = stage_contracts_from_blueprints(blueprints)
+            controller_payload["steps"] = merge_existing_steps(blueprints, controller_payload.get("steps"))
+            adopted_started_at = started_at
+            adopted_completed_at = utc_now_iso()
+            controller_payload["steps"][step_index(controller_payload["steps"], "orchestration-planner")] = adopted_planner_stage_summary(
+                run_id=run_id,
+                round_id=round_id,
+                blueprint=blueprints[0],
+                planning=planning,
+                started_at=adopted_started_at,
+                completed_at=adopted_completed_at,
+            )
+            persist_controller_state(run_dir, round_id, controller_payload)
+            planner_stage_ran = True
+
     if not planning:
         planner_blueprint = stage_blueprint(
             "orchestration-planner",
@@ -733,23 +807,10 @@ def run_phase2_round_with_contract_mode(
             raise SkillExecutionError(failure_payload["message"], failure_payload)
 
         planning = planning_bundle(run_dir, round_id, planner_result)
+        ensure_executable_planning(planning)
         blueprints = stage_blueprints(planning, artifacts)
         controller_payload["planning_mode"] = maybe_text(planning.get("planning_mode")) or "planner-backed"
-        controller_payload["planning"] = {
-            "plan_id": planning.get("plan_id", ""),
-            "plan_path": planning.get("plan_path", ""),
-            "planning_status": planning.get("planning_status", ""),
-            "planning_mode": planning.get("planning_mode", ""),
-            "planner_skill_name": planning.get("planner_skill_name", ""),
-            "probe_stage_included": planning.get("probe_stage_included", False),
-            "assigned_role_hints": planning.get("assigned_role_hints", []),
-            "planned_skill_count": len(planning.get("execution_queue", [])) + len(planning.get("post_gate_steps", [])),
-            "stop_conditions": planning.get("stop_conditions", []),
-            "fallback_path": planning.get("fallback_path", []),
-            "execution_queue": planning.get("execution_queue", []),
-            "post_gate_steps": planning.get("post_gate_steps", []),
-            "stage_sequence": [maybe_text(item.get("stage")) for item in blueprints],
-        }
+        controller_payload["planning"] = controller_planning_state(planning, blueprints)
         controller_payload["stage_contracts"] = stage_contracts_from_blueprints(blueprints)
         controller_payload["steps"] = merge_existing_steps(blueprints, controller_payload.get("steps"))
         controller_payload["steps"][step_index(controller_payload["steps"], "orchestration-planner")] = stage_summary_from_result(

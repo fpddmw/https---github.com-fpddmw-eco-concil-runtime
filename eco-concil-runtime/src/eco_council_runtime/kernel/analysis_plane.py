@@ -13,6 +13,7 @@ ANALYSIS_KIND_VERIFICATION_ROUTE = "verification-route"
 ANALYSIS_KIND_CLAIM_VERIFIABILITY = "claim-verifiability"
 ANALYSIS_KIND_FORMAL_PUBLIC_LINK = "formal-public-link"
 ANALYSIS_KIND_REPRESENTATION_GAP = "representation-gap"
+ANALYSIS_KIND_DIFFUSION_EDGE = "diffusion-edge"
 ANALYSIS_KIND_CLAIM_SCOPE = "claim-scope"
 ANALYSIS_KIND_OBSERVATION_SCOPE = "observation-scope"
 ANALYSIS_KIND_CLAIM_OBSERVATION_LINK = "claim-observation-link"
@@ -22,6 +23,37 @@ ANALYSIS_KIND_CLAIM_CANDIDATE = "claim-candidate"
 ANALYSIS_KIND_OBSERVATION_CANDIDATE = "observation-candidate"
 
 ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
+    ANALYSIS_KIND_DIFFUSION_EDGE: {
+        "artifact_label": "diffusion-edge",
+        "default_relative": "analytics/diffusion_edges_{round_id}.json",
+        "items_key": "edges",
+        "count_key": "edge_count",
+        "id_field": "edge_id",
+        "subject_field": "issue_label",
+        "score_field": "confidence",
+        "state_field": "edge_type",
+        "related_id_fields": [
+            "edge_id",
+            "issue_label",
+            "source_platform",
+            "target_platform",
+            "edge_type",
+        ],
+        "default_source_skill": "eco-detect-cross-platform-diffusion",
+        "summary_fields": ["formal_public_links_path"],
+        "query_basis_fields": [
+            "formal_public_links_path",
+            "formal_public_links_source",
+        ],
+        "parent_artifact_fields": ["formal_public_links_path"],
+        "item_parent_id_list_fields": [
+            "cluster_ids",
+            "claim_ids",
+            "source_signal_ids",
+            "target_signal_ids",
+        ],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
     ANALYSIS_KIND_FORMAL_PUBLIC_LINK: {
         "artifact_label": "formal-public-link",
         "default_relative": "analytics/formal_public_links_{round_id}.json",
@@ -2056,6 +2088,58 @@ def load_evidence_coverage_context(
         "analysis_sync": context.get("analysis_sync", {}),
         "result_contract": context.get("result_contract", empty_result_contract()),
         "coverage_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_diffusion_edge_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    diffusion_edges_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_DIFFUSION_EDGE,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=diffusion_edges_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "diffusion_edges_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_diffusion_edge_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    diffusion_edges_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_DIFFUSION_EDGE,
+        artifact_path=diffusion_edges_path,
+        db_path=db_path,
+    )
+    return {
+        "diffusion_edges_wrapper": context.get("payload_wrapper", {}),
+        "edges": context.get("items", []),
+        "edge_count": int(context.get("item_count") or 0),
+        "diffusion_edge_source": maybe_text(context.get("source")),
+        "diffusion_edges_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "diffusion_edges_artifact_present": bool(context.get("artifact_present")),
         "warnings": context.get("warnings", []),
     }
 
