@@ -63,6 +63,45 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
     suggestions: list[str] = []
     if action_kind in {"resolve-challenge", "resolve-contradiction"}:
         suggestions.extend(["eco-post-board-note", "eco-close-challenge-ticket"])
+    if action_kind == "clarify-verification-route":
+        suggestions.extend(["eco-route-verification-lane", "eco-post-board-note"])
+    if action_kind == "advance-empirical-verification":
+        suggestions.extend(
+            [
+                "eco-link-claims-to-observations",
+                "eco-score-evidence-coverage",
+                "eco-post-board-note",
+            ]
+        )
+    if action_kind == "review-formal-record":
+        suggestions.extend(
+            [
+                "eco-link-formal-comments-to-public-discourse",
+                "eco-post-board-note",
+            ]
+        )
+    if action_kind in {
+        "analyze-public-discourse",
+        "analyze-stakeholder-deliberation",
+        "review-formal-public-linkage",
+    }:
+        suggestions.extend(
+            [
+                "eco-link-formal-comments-to-public-discourse",
+                "eco-identify-representation-gaps",
+                "eco-post-board-note",
+            ]
+        )
+    if action_kind == "address-representation-gap":
+        suggestions.extend(
+            [
+                "eco-identify-representation-gaps",
+                "eco-link-formal-comments-to-public-discourse",
+                "eco-post-board-note",
+            ]
+        )
+    if action_kind == "trace-cross-platform-diffusion":
+        suggestions.extend(["eco-detect-cross-platform-diffusion", "eco-post-board-note"])
     if action_kind in {"resolve-contradiction", "expand-coverage"}:
         suggestions.extend(["eco-query-environment-signals", "eco-query-public-signals"])
     if action_kind == "classify-verifiability":
@@ -79,16 +118,33 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
 def probe_type_for_action(action: dict[str, Any]) -> str:
     action_kind = maybe_text(action.get("action_kind"))
     controversy_gap = maybe_text(action.get("controversy_gap"))
-    if action_kind == "classify-verifiability" or controversy_gap == "verification-routing-gap":
+    if action_kind in {"classify-verifiability", "clarify-verification-route"} or controversy_gap == "verification-routing-gap":
         return "routing-probe"
-    if action_kind == "resolve-contradiction" or controversy_gap == "formal-public-misalignment":
+    if action_kind in {"resolve-contradiction", "advance-empirical-verification"} and controversy_gap == "formal-public-misalignment":
         return "misalignment-probe"
     if controversy_gap == "unresolved-contestation":
         return "contestation-probe"
     if controversy_gap == "issue-structure-gap":
         return "issue-structure-probe"
-    if action_kind == "expand-coverage":
+    if action_kind in {"expand-coverage", "advance-empirical-verification"}:
         return "coverage-probe"
+    if action_kind in {"review-formal-record", "review-formal-public-linkage"} or controversy_gap in {
+        "formal-record-gap",
+        "formal-public-linkage-gap",
+    }:
+        return "formal-record-probe"
+    if action_kind in {
+        "analyze-public-discourse",
+        "analyze-stakeholder-deliberation",
+        "address-representation-gap",
+    } or controversy_gap in {
+        "public-discourse-gap",
+        "stakeholder-deliberation-gap",
+        "representation-gap",
+    }:
+        return "representation-probe"
+    if action_kind == "trace-cross-platform-diffusion" or controversy_gap == "cross-platform-diffusion":
+        return "diffusion-probe"
     return "uncertainty-probe"
 
 
@@ -101,6 +157,18 @@ def falsification_question_for_action(action: dict[str, Any], objective: str) ->
     if probe_type == "misalignment-probe":
         return (
             f"What evidence would show the apparent mismatch between public discourse and available signals is overstated: {objective}"
+        )
+    if probe_type == "formal-record-probe":
+        return (
+            f"What evidence would show the current formal-record interpretation is incomplete, misframed, or not the right lane: {objective}"
+        )
+    if probe_type == "representation-probe":
+        return (
+            f"What evidence would show the current representation or discourse gap is overstated, misdiagnosed, or mis-scoped: {objective}"
+        )
+    if probe_type == "diffusion-probe":
+        return (
+            f"What evidence would show the inferred cross-platform diffusion path is misleading or not materially relevant: {objective}"
         )
     if probe_type == "issue-structure-probe":
         return (
@@ -122,6 +190,21 @@ def success_criteria_for_action(action: dict[str, Any]) -> list[str]:
         return [
             "Collect at least one comparison between public narrative and available signals.",
             "Explain whether the contradiction is substantive, partial, or only apparent.",
+        ]
+    if probe_type == "formal-record-probe":
+        return [
+            "Identify which formal record elements are actually present versus merely assumed.",
+            "Explain whether the issue should stay in formal review or be rerouted.",
+        ]
+    if probe_type == "representation-probe":
+        return [
+            "Identify which voices, platforms, or discourse positions are over- or underrepresented.",
+            "Explain whether the representation diagnosis should change, narrow, or escalate.",
+        ]
+    if probe_type == "diffusion-probe":
+        return [
+            "Confirm whether the inferred diffusion path survives timestamp and platform checks.",
+            "Explain whether the diffusion pattern materially changes how the issue should be interpreted.",
         ]
     if probe_type == "issue-structure-probe":
         return [
@@ -145,6 +228,21 @@ def disconfirm_signals_for_action(action: dict[str, Any]) -> list[str]:
         return [
             "The supposed contradiction is explained by timing, scope, or framing mismatch rather than by conflicting evidence.",
             "Public narrative and available signals converge after comparison.",
+        ]
+    if probe_type == "formal-record-probe":
+        return [
+            "The missing formal-record concern is resolved by evidence already present in the docket or policy record.",
+            "The issue turns out to belong in public discourse or mixed review rather than in formal record review.",
+        ]
+    if probe_type == "representation-probe":
+        return [
+            "The apparent representation imbalance is explained by sampling, platform mix, or issue scoping rather than by a substantive gap.",
+            "The issue is adequately represented once signals are regrouped at the right issue granularity.",
+        ]
+    if probe_type == "diffusion-probe":
+        return [
+            "The inferred diffusion path disappears after checking timestamps, aliases, or issue assignment.",
+            "Cross-platform spread exists but is not material to the current controversy decision.",
         ]
     if probe_type == "issue-structure-probe":
         return [
@@ -170,7 +268,16 @@ def probe_candidates(actions: list[dict[str, Any]], action_id: str) -> list[dict
         for action in filtered
         if bool(action.get("probe_candidate"))
         or maybe_text(action.get("action_kind"))
-        in {"resolve-challenge", "resolve-contradiction", "stabilize-hypothesis"}
+        in {
+            "resolve-challenge",
+            "resolve-contradiction",
+            "stabilize-hypothesis",
+            "clarify-verification-route",
+            "advance-empirical-verification",
+            "review-formal-record",
+            "review-formal-public-linkage",
+            "address-representation-gap",
+        }
     ]
 
 

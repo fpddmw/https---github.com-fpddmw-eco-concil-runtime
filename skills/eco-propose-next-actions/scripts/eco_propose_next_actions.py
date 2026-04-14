@@ -120,11 +120,20 @@ def propose_next_actions_skill(
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
+        "action_source": maybe_text(action_context.get("action_source"))
+        or "controversy-agenda-materialization",
         "board_summary_path": maybe_text(action_context.get("board_summary_file")),
         "board_brief_path": maybe_text(action_context.get("board_brief_file")),
         "coverage_path": maybe_text(action_context.get("coverage_file")),
         **contract_fields,
         "action_count": len(ranked_actions),
+        "agenda_counts": action_context.get("agenda_counts", {})
+        if isinstance(action_context.get("agenda_counts"), dict)
+        else {},
+        "agenda_source_counts": summarize_action_counts(
+            ranked_actions,
+            field_name="agenda_source",
+        ),
         "controversy_gap_counts": summarize_action_counts(
             ranked_actions,
             field_name="controversy_gap",

@@ -66,6 +66,8 @@ def summarize_counts(items: list[dict[str, Any]], *, field_name: str) -> dict[st
 def readiness_status(
     *,
     active_hypotheses: int,
+    issue_cluster_count: int,
+    empirical_issue_count: int,
     strong_coverages: int,
     moderate_coverages: int,
     open_challenges: int,
@@ -73,15 +75,17 @@ def readiness_status(
     open_probes: int,
     high_priority_actions: int,
     routing_actions: int,
-    misalignment_actions: int,
+    empirical_gap_actions: int,
+    representation_gap_actions: int,
+    formal_linkage_actions: int,
     issue_gap_actions: int,
 ) -> tuple[str, list[str]]:
     reasons: list[str] = []
-    if active_hypotheses == 0:
-        reasons.append("No active controversy objects are available for round-level review.")
+    if active_hypotheses == 0 and issue_cluster_count == 0:
+        reasons.append("No active board hypotheses or controversy-map issues are available for round-level review.")
         return "blocked", reasons
-    if strong_coverages + moderate_coverages == 0:
-        reasons.append("No moderate-or-strong evidence coverage objects are available to anchor the controversy map.")
+    if empirical_issue_count > 0 and strong_coverages + moderate_coverages == 0:
+        reasons.append("Empirical controversy issues are present but no moderate-or-strong evidence coverage objects are available.")
         return "blocked", reasons
     if open_challenges > 0:
         reasons.append(f"{open_challenges} contested points remain open.")
@@ -91,8 +95,12 @@ def readiness_status(
         reasons.append(f"{open_probes} controversy probes remain open.")
     if routing_actions > 0:
         reasons.append(f"{routing_actions} verification-routing actions remain unresolved.")
-    if misalignment_actions > 0:
-        reasons.append(f"{misalignment_actions} formal-public misalignment actions remain unresolved.")
+    if empirical_gap_actions > 0:
+        reasons.append(f"{empirical_gap_actions} empirical verification or contradiction-resolution actions remain unresolved.")
+    if representation_gap_actions > 0:
+        reasons.append(f"{representation_gap_actions} representation-gap actions remain unresolved.")
+    if formal_linkage_actions > 0 and representation_gap_actions == 0:
+        reasons.append(f"{formal_linkage_actions} formal/public linkage actions remain unresolved.")
     if issue_gap_actions > 0:
         reasons.append(f"{issue_gap_actions} issue-structure or contestation actions remain unresolved.")
     if high_priority_actions > 0 and not reasons:
@@ -101,9 +109,13 @@ def readiness_status(
         return "needs-more-data", reasons
     if strong_coverages > 0:
         reasons.append("At least one strong evidence coverage object is available and no controversy-routing blockers remain.")
-        return "ready", reasons
-    reasons.append("Coverage is only moderate and the round should remain open for additional controversy review.")
-    return "needs-more-data", reasons
+    elif moderate_coverages > 0 and empirical_issue_count == 0:
+        reasons.append("No empirical blockers remain and the current non-empirical issue set is coherent enough for promotion review.")
+    elif moderate_coverages > 0:
+        reasons.append("Empirical issues are covered at least moderately and no remaining blockers are visible.")
+    else:
+        reasons.append("No empirical blockers remain and the current issue map is coherent enough for promotion review.")
+    return "ready", reasons
 
 
 def summarize_round_readiness_skill(
@@ -187,6 +199,11 @@ def summarize_round_readiness_skill(
         if isinstance(shared_context.get("board_state"), dict)
         else {}
     )
+    agenda_counts = (
+        shared_context.get("agenda_counts")
+        if isinstance(shared_context.get("agenda_counts"), dict)
+        else {}
+    )
 
     strong_coverages = len([item for item in coverages if maybe_text(item.get("readiness")) == "strong"])
     moderate_coverages = len([item for item in coverages if maybe_text(item.get("readiness")) == "moderate"])
@@ -196,6 +213,10 @@ def summarize_round_readiness_skill(
     active_hypotheses = int(counts.get("hypotheses_active") or len(board_state.get("active_hypotheses", [])))
     open_challenges = int(counts.get("challenge_open") or len(board_state.get("open_challenges", [])))
     open_tasks = int(counts.get("tasks_open") or len(board_state.get("open_tasks", [])))
+    issue_cluster_count = int(agenda_counts.get("issue_cluster_count") or 0)
+    empirical_issue_count = int(agenda_counts.get("empirical_issue_count") or 0)
+    non_empirical_issue_count = int(agenda_counts.get("non_empirical_issue_count") or 0)
+    mixed_issue_count = int(agenda_counts.get("mixed_issue_count") or 0)
     open_probes = len([item for item in probes.get("probes", []) if isinstance(item, dict) and maybe_text(item.get("probe_status")) not in {"closed", "cancelled"}]) if isinstance(probes.get("probes"), list) else 0
     high_priority_actions = len(
         [
@@ -216,14 +237,35 @@ def summarize_round_readiness_skill(
         probes.get("probes", []) if isinstance(probes.get("probes"), list) else [],
         field_name="probe_type",
     )
-    routing_actions = int(action_gap_counts.get("verification-routing-gap", 0))
-    misalignment_actions = int(action_gap_counts.get("formal-public-misalignment", 0))
+    routing_actions = max(
+        int(action_gap_counts.get("verification-routing-gap", 0)),
+        int(agenda_counts.get("routing_issue_count") or 0),
+    )
+    empirical_gap_actions = max(
+        int(action_gap_counts.get("verification-gap", 0))
+        + int(action_gap_counts.get("formal-public-misalignment", 0)),
+        int(agenda_counts.get("empirical_issue_gap_count") or 0),
+    )
+    representation_gap_actions = max(
+        int(action_gap_counts.get("representation-gap", 0)),
+        int(agenda_counts.get("representation_gap_count") or 0),
+    )
+    formal_linkage_actions = max(
+        int(action_gap_counts.get("formal-record-gap", 0))
+        + int(action_gap_counts.get("formal-public-linkage-gap", 0))
+        + int(action_gap_counts.get("public-discourse-gap", 0))
+        + int(action_gap_counts.get("stakeholder-deliberation-gap", 0)),
+        int(agenda_counts.get("formal_public_linkage_gap_count") or 0),
+    )
     issue_gap_actions = int(action_gap_counts.get("issue-structure-gap", 0)) + int(
         action_gap_counts.get("unresolved-contestation", 0)
     )
+    diffusion_focus_count = int(agenda_counts.get("diffusion_focus_count") or 0)
 
     status_value, reasons = readiness_status(
         active_hypotheses=active_hypotheses,
+        issue_cluster_count=issue_cluster_count,
+        empirical_issue_count=empirical_issue_count,
         strong_coverages=strong_coverages,
         moderate_coverages=moderate_coverages,
         open_challenges=open_challenges,
@@ -231,7 +273,9 @@ def summarize_round_readiness_skill(
         open_probes=open_probes,
         high_priority_actions=high_priority_actions,
         routing_actions=routing_actions,
-        misalignment_actions=misalignment_actions,
+        empirical_gap_actions=empirical_gap_actions,
+        representation_gap_actions=representation_gap_actions,
+        formal_linkage_actions=formal_linkage_actions,
         issue_gap_actions=issue_gap_actions,
     )
     findings = [
@@ -240,20 +284,35 @@ def summarize_round_readiness_skill(
         {
             "finding_id": "readiness-investigation",
             "title": "Investigation posture",
-            "summary": f"open_probes={open_probes}, high_priority_actions={high_priority_actions}, routing_actions={routing_actions}, misalignment_actions={misalignment_actions}",
+            "summary": f"open_probes={open_probes}, high_priority_actions={high_priority_actions}, routing_actions={routing_actions}, empirical_gap_actions={empirical_gap_actions}, representation_gap_actions={representation_gap_actions}",
             "confidence": "medium",
         },
         {
             "finding_id": "readiness-controversy-map",
             "title": "Controversy map posture",
-            "summary": f"issue_gap_actions={issue_gap_actions}, action_gaps={json.dumps(action_gap_counts, ensure_ascii=True, sort_keys=True)}",
+            "summary": f"issue_clusters={issue_cluster_count}, empirical_issues={empirical_issue_count}, non_empirical_issues={non_empirical_issue_count}, mixed_issues={mixed_issue_count}, formal_linkage_actions={formal_linkage_actions}, diffusion_focus_count={diffusion_focus_count}, action_gaps={json.dumps(action_gap_counts, ensure_ascii=True, sort_keys=True)}",
             "confidence": "medium",
         },
     ]
     if brief_excerpt:
         findings.append({"finding_id": "readiness-brief", "title": "Board brief context", "summary": brief_excerpt, "confidence": "low"})
 
-    recommended_next_skills = ["eco-promote-evidence-basis"] if status_value == "ready" else ["eco-propose-next-actions", "eco-open-falsification-probe", "eco-post-board-note"]
+    if status_value == "ready":
+        recommended_next_skills = ["eco-promote-evidence-basis"]
+    else:
+        recommended_next_skills = ["eco-propose-next-actions", "eco-post-board-note"]
+        if open_probes > 0 or routing_actions > 0 or empirical_gap_actions > 0:
+            recommended_next_skills.append("eco-open-falsification-probe")
+        if representation_gap_actions > 0 or formal_linkage_actions > 0:
+            recommended_next_skills.append("eco-link-formal-comments-to-public-discourse")
+            recommended_next_skills.append("eco-identify-representation-gaps")
+        if diffusion_focus_count > 0:
+            recommended_next_skills.append("eco-detect-cross-platform-diffusion")
+        deduped: list[str] = []
+        for skill_name in recommended_next_skills:
+            if skill_name not in deduped:
+                deduped.append(skill_name)
+        recommended_next_skills = deduped
     wrapper = {
         "schema_version": "d2.1",
         "skill": SKILL_NAME,
@@ -268,8 +327,13 @@ def summarize_round_readiness_skill(
         **contract_fields,
         "readiness_status": status_value,
         "sufficient_for_promotion": status_value == "ready",
+        "agenda_counts": agenda_counts,
         "counts": {
             "active_hypotheses": active_hypotheses,
+            "issue_clusters": issue_cluster_count,
+            "empirical_issues": empirical_issue_count,
+            "non_empirical_issues": non_empirical_issue_count,
+            "mixed_issues": mixed_issue_count,
             "open_challenges": open_challenges,
             "open_tasks": open_tasks,
             "open_probes": open_probes,
@@ -278,8 +342,11 @@ def summarize_round_readiness_skill(
             "weak_coverages": weak_coverages,
             "high_priority_actions": high_priority_actions,
             "routing_actions": routing_actions,
-            "misalignment_actions": misalignment_actions,
+            "empirical_gap_actions": empirical_gap_actions,
+            "representation_gap_actions": representation_gap_actions,
+            "formal_linkage_actions": formal_linkage_actions,
             "issue_gap_actions": issue_gap_actions,
+            "diffusion_focus_count": diffusion_focus_count,
         },
         "controversy_gap_counts": action_gap_counts,
         "probe_type_counts": probe_type_counts,
