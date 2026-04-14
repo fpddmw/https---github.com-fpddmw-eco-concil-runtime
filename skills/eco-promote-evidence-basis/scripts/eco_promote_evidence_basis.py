@@ -17,8 +17,8 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.analysis_plane import load_evidence_coverage_context  # noqa: E402
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_d1_shared_context,
     load_next_actions_wrapper,
 )
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
@@ -106,6 +106,257 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def list_field(item: dict[str, Any], key: str) -> list[str]:
+    values = item.get(key)
+    if not isinstance(values, list):
+        return []
+    return [maybe_text(value) for value in values if maybe_text(value)]
+
+
+def artifact_ref_text(value: Any) -> str:
+    if isinstance(value, dict):
+        artifact_ref = maybe_text(value.get("artifact_ref"))
+        if artifact_ref:
+            return artifact_ref
+        artifact_path = maybe_text(value.get("artifact_path"))
+        record_locator = maybe_text(value.get("record_locator"))
+        if artifact_path and record_locator:
+            return f"{artifact_path}:{record_locator}"
+        return artifact_path
+    return maybe_text(value)
+
+
+def unique_artifact_ref_texts(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = artifact_ref_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
+
+
+def normalize_issue_cluster(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "object_type": "issue-cluster",
+        "object_id": maybe_text(item.get("map_issue_id")) or maybe_text(item.get("cluster_id")),
+        "issue_label": maybe_text(item.get("issue_label")),
+        "cluster_id": maybe_text(item.get("cluster_id")),
+        "claim_ids": list_field(item, "claim_ids"),
+        "dominant_stance": maybe_text(item.get("dominant_stance")),
+        "controversy_posture": maybe_text(item.get("controversy_posture")),
+        "recommended_lane": maybe_text(item.get("recommended_lane")),
+        "route_status": maybe_text(item.get("route_status")),
+        "concern_facets": list_field(item, "concern_facets"),
+        "actor_hints": list_field(item, "actor_hints"),
+        "summary": maybe_text(item.get("controversy_summary")),
+        "evidence_refs": unique_artifact_ref_texts(
+            item.get("evidence_refs", [])
+            if isinstance(item.get("evidence_refs"), list)
+            else []
+        ),
+    }
+
+
+def normalize_verification_route(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "object_type": "verification-route",
+        "object_id": maybe_text(item.get("route_id")),
+        "issue_label": maybe_text(item.get("issue_hint")) or maybe_text(item.get("claim_id")),
+        "claim_id": maybe_text(item.get("claim_id")),
+        "recommended_lane": maybe_text(item.get("recommended_lane")),
+        "route_status": maybe_text(item.get("route_status")),
+        "verifiability_kind": maybe_text(item.get("verifiability_kind")),
+        "summary": maybe_text(item.get("route_reason")),
+        "evidence_refs": unique_artifact_ref_texts(
+            item.get("evidence_refs", [])
+            if isinstance(item.get("evidence_refs"), list)
+            else []
+        ),
+    }
+
+
+def normalize_formal_public_link(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "object_type": "formal-public-link",
+        "object_id": maybe_text(item.get("linkage_id")),
+        "issue_label": maybe_text(item.get("issue_label")),
+        "claim_ids": list_field(item, "claim_ids"),
+        "cluster_ids": list_field(item, "cluster_ids"),
+        "link_status": maybe_text(item.get("link_status")),
+        "recommended_lane": maybe_text(item.get("recommended_lane")),
+        "route_status": maybe_text(item.get("route_status")),
+        "formal_signal_count": int(item.get("formal_signal_count") or 0),
+        "public_signal_count": int(item.get("public_signal_count") or 0),
+        "summary": maybe_text(item.get("linkage_summary")),
+        "evidence_refs": unique_artifact_ref_texts(
+            item.get("evidence_refs", [])
+            if isinstance(item.get("evidence_refs"), list)
+            else []
+        ),
+    }
+
+
+def normalize_representation_gap(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "object_type": "representation-gap",
+        "object_id": maybe_text(item.get("gap_id")),
+        "issue_label": maybe_text(item.get("issue_label")),
+        "claim_ids": list_field(item, "claim_ids"),
+        "cluster_ids": list_field(item, "cluster_ids"),
+        "gap_type": maybe_text(item.get("gap_type")),
+        "severity": maybe_text(item.get("severity")),
+        "severity_score": float(item.get("severity_score") or 0.0),
+        "recommended_lane": maybe_text(item.get("recommended_lane")),
+        "route_status": maybe_text(item.get("route_status")),
+        "summary": maybe_text(item.get("gap_summary")) or maybe_text(item.get("recommended_action")),
+        "evidence_refs": unique_artifact_ref_texts(
+            item.get("evidence_refs", [])
+            if isinstance(item.get("evidence_refs"), list)
+            else []
+        ),
+    }
+
+
+def normalize_diffusion_edge(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "object_type": "diffusion-edge",
+        "object_id": maybe_text(item.get("edge_id")),
+        "issue_label": maybe_text(item.get("issue_label")),
+        "claim_ids": list_field(item, "claim_ids"),
+        "cluster_ids": list_field(item, "cluster_ids"),
+        "edge_type": maybe_text(item.get("edge_type")),
+        "confidence": float(item.get("confidence") or 0.0),
+        "recommended_lane": maybe_text(item.get("recommended_lane")),
+        "route_status": maybe_text(item.get("route_status")),
+        "source_platform": maybe_text(item.get("source_platform")),
+        "target_platform": maybe_text(item.get("target_platform")),
+        "summary": maybe_text(item.get("edge_summary")),
+        "evidence_refs": unique_artifact_ref_texts(
+            item.get("evidence_refs", [])
+            if isinstance(item.get("evidence_refs"), list)
+            else []
+        ),
+    }
+
+
+def selected_issue_clusters(issue_clusters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = [
+        normalize_issue_cluster(item)
+        for item in issue_clusters
+        if isinstance(item, dict)
+    ]
+    return sorted(
+        [row for row in rows if maybe_text(row.get("object_id"))],
+        key=lambda row: (maybe_text(row.get("issue_label")), maybe_text(row.get("object_id"))),
+    )
+
+
+def selected_verification_routes(routes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in routes:
+        if not isinstance(item, dict):
+            continue
+        lane = maybe_text(item.get("recommended_lane"))
+        route_status = maybe_text(item.get("route_status"))
+        if route_status != "mixed-routing-review" and lane == "environmental-observation":
+            continue
+        normalized = normalize_verification_route(item)
+        if maybe_text(normalized.get("object_id")):
+            rows.append(normalized)
+    return sorted(
+        rows,
+        key=lambda row: (maybe_text(row.get("issue_label")), maybe_text(row.get("object_id"))),
+    )
+
+
+def selected_formal_public_links(links: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = [
+        normalize_formal_public_link(item)
+        for item in links
+        if isinstance(item, dict)
+        and maybe_text(item.get("link_status")) not in {"", "aligned"}
+    ]
+    return sorted(
+        [row for row in rows if maybe_text(row.get("object_id"))],
+        key=lambda row: (maybe_text(row.get("issue_label")), maybe_text(row.get("object_id"))),
+    )
+
+
+def selected_representation_gaps(gaps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = [
+        normalize_representation_gap(item)
+        for item in gaps
+        if isinstance(item, dict)
+    ]
+    return sorted(
+        [row for row in rows if maybe_text(row.get("object_id"))],
+        key=lambda row: (
+            -(maybe_number(row.get("severity_score")) or 0.0),
+            maybe_text(row.get("issue_label")),
+            maybe_text(row.get("object_id")),
+        ),
+    )
+
+
+def selected_diffusion_edges(edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in edges:
+        if not isinstance(item, dict):
+            continue
+        edge_type = maybe_text(item.get("edge_type"))
+        confidence = maybe_number(item.get("confidence")) or 0.0
+        if edge_type not in {
+            "public-to-formal-spillover",
+            "formal-to-public-spillover",
+            "cross-public-diffusion",
+        }:
+            continue
+        if confidence < 0.72:
+            continue
+        normalized = normalize_diffusion_edge(item)
+        if maybe_text(normalized.get("object_id")):
+            rows.append(normalized)
+    return sorted(
+        rows,
+        key=lambda row: (
+            -(maybe_number(row.get("confidence")) or 0.0),
+            maybe_text(row.get("issue_label")),
+            maybe_text(row.get("object_id")),
+        ),
+    )
+
+
+def basis_object_ids(
+    frozen_basis: dict[str, Any],
+    selected_coverages: list[dict[str, Any]],
+) -> list[str]:
+    ids: list[Any] = []
+    for key in (
+        "issue_clusters",
+        "verification_routes",
+        "formal_public_links",
+        "representation_gaps",
+        "diffusion_edges",
+    ):
+        rows = frozen_basis.get(key, [])
+        if not isinstance(rows, list):
+            continue
+        ids.extend(
+            row.get("object_id")
+            for row in rows
+            if isinstance(row, dict)
+        )
+    ids.extend(
+        coverage.get("coverage_id")
+        for coverage in selected_coverages
+        if isinstance(coverage, dict)
+    )
+    return unique_texts(ids)
+
+
 def promote_evidence_basis_skill(
     run_dir: str,
     run_id: str,
@@ -131,29 +382,60 @@ def promote_evidence_basis_skill(
         readiness = {"readiness_status": "blocked", "gate_reasons": ["Missing round readiness artifact."], "counts": {}, "recommended_next_skills": []}
     else:
         readiness = readiness_payload
-    coverage_context = load_evidence_coverage_context(
+    shared_context = load_d1_shared_context(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
+        board_brief_path=board_brief_path,
         coverage_path=coverage_path,
     )
-    coverage_warnings = (
-        coverage_context.get("warnings", [])
-        if isinstance(coverage_context.get("warnings"), list)
+    shared_warnings = (
+        shared_context.get("warnings", [])
+        if isinstance(shared_context.get("warnings"), list)
         else []
     )
-    warnings.extend(coverage_warnings)
+    warnings.extend(shared_warnings)
     coverages = (
-        coverage_context.get("coverages", [])
-        if isinstance(coverage_context.get("coverages"), list)
+        shared_context.get("coverages", [])
+        if isinstance(shared_context.get("coverages"), list)
         else []
     )
-    coverage_file = maybe_text(coverage_context.get("coverage_file"))
-    coverage_source = maybe_text(coverage_context.get("coverage_source")) or "missing-coverage"
-    db_path = maybe_text(coverage_context.get("db_path"))
+    issue_clusters = (
+        shared_context.get("issue_clusters", [])
+        if isinstance(shared_context.get("issue_clusters"), list)
+        else []
+    )
+    routes = (
+        shared_context.get("routes", [])
+        if isinstance(shared_context.get("routes"), list)
+        else []
+    )
+    links = (
+        shared_context.get("formal_public_links", [])
+        if isinstance(shared_context.get("formal_public_links"), list)
+        else []
+    )
+    gaps = (
+        shared_context.get("representation_gaps", [])
+        if isinstance(shared_context.get("representation_gaps"), list)
+        else []
+    )
+    edges = (
+        shared_context.get("diffusion_edges", [])
+        if isinstance(shared_context.get("diffusion_edges"), list)
+        else []
+    )
+    agenda_counts = (
+        shared_context.get("agenda_counts")
+        if isinstance(shared_context.get("agenda_counts"), dict)
+        else {}
+    )
+    coverage_file = maybe_text(shared_context.get("coverage_file"))
+    coverage_source = maybe_text(shared_context.get("coverage_source")) or "missing-coverage"
+    db_path = maybe_text(shared_context.get("db_path"))
     analysis_sync = (
-        coverage_context.get("analysis_sync")
-        if isinstance(coverage_context.get("analysis_sync"), dict)
+        shared_context.get("analysis_sync")
+        if isinstance(shared_context.get("analysis_sync"), dict)
         else {}
     )
     next_actions_context = load_next_actions_wrapper(
@@ -169,6 +451,11 @@ def promote_evidence_basis_skill(
     )
     next_actions = next_actions_payload if isinstance(next_actions_payload, dict) else {"ranked_actions": []}
     brief_text = maybe_text(load_text_if_exists(board_brief_file))
+    shared_observed_inputs = (
+        shared_context.get("observed_inputs")
+        if isinstance(shared_context.get("observed_inputs"), dict)
+        else {}
+    )
     contract_fields = reporting_contract_fields_from_payload(
         readiness_payload,
         observed_inputs_overrides={
@@ -177,7 +464,7 @@ def promote_evidence_basis_skill(
             "board_brief_artifact_present": board_brief_file.exists(),
             "board_brief_present": bool(brief_text),
             "coverage_artifact_present": bool(
-                coverage_context.get("coverage_artifact_present")
+                shared_observed_inputs.get("coverage_artifact_present")
             ),
             "coverage_present": bool(coverages),
             "next_actions_artifact_present": bool(
@@ -217,17 +504,62 @@ def promote_evidence_basis_skill(
             "readiness": maybe_text(item.get("readiness")),
             "support_link_count": int(item.get("support_link_count") or 0),
             "contradiction_link_count": int(item.get("contradiction_link_count") or 0),
-            "evidence_refs": unique_texts(item.get("evidence_refs", []) if isinstance(item.get("evidence_refs"), list) else []),
+            "evidence_refs": unique_artifact_ref_texts(
+                item.get("evidence_refs", [])
+                if isinstance(item.get("evidence_refs"), list)
+                else []
+            ),
         }
         for item in ranked_coverages
     ]
-    selected_evidence_refs = unique_texts([ref for item in selected_coverages for ref in item.get("evidence_refs", [])])
+    frozen_basis = {
+        "issue_clusters": selected_issue_clusters(issue_clusters),
+        "verification_routes": selected_verification_routes(routes),
+        "formal_public_links": selected_formal_public_links(links),
+        "representation_gaps": selected_representation_gaps(gaps),
+        "diffusion_edges": selected_diffusion_edges(edges),
+        "coverages": selected_coverages,
+    }
+    basis_counts = {
+        "issue_cluster_count": len(frozen_basis["issue_clusters"]),
+        "verification_route_count": len(frozen_basis["verification_routes"]),
+        "formal_public_link_count": len(frozen_basis["formal_public_links"]),
+        "representation_gap_count": len(frozen_basis["representation_gaps"]),
+        "diffusion_edge_count": len(frozen_basis["diffusion_edges"]),
+        "coverage_count": len(selected_coverages),
+    }
+    selected_basis_object_ids = basis_object_ids(
+        frozen_basis,
+        selected_coverages,
+    )
+    selected_evidence_refs = unique_artifact_ref_texts(
+        [
+            ref
+            for item in selected_coverages
+            for ref in item.get("evidence_refs", [])
+        ]
+        + [
+            ref
+            for key in (
+                "issue_clusters",
+                "verification_routes",
+                "formal_public_links",
+                "representation_gaps",
+                "diffusion_edges",
+            )
+            for row in frozen_basis.get(key, [])
+            if isinstance(row, dict)
+            for ref in row.get("evidence_refs", [])
+        ]
+    )
     remaining_risks = [
         {
             "action_id": maybe_text(item.get("action_id")),
             "action_kind": maybe_text(item.get("action_kind")),
             "priority": maybe_text(item.get("priority")),
             "reason": maybe_text(item.get("reason")),
+            "controversy_gap": maybe_text(item.get("controversy_gap")),
+            "recommended_lane": maybe_text(item.get("recommended_lane")),
         }
         for item in next_actions.get("ranked_actions", [])
         if isinstance(item, dict) and maybe_text(item.get("action_kind")) != "prepare-promotion"
@@ -247,15 +579,20 @@ def promote_evidence_basis_skill(
         "board_brief_path": str(board_brief_file),
         "coverage_path": str(coverage_file),
         **contract_fields,
+        "agenda_counts": agenda_counts,
+        "basis_selection_mode": "freeze-controversy-basis-v1",
+        "basis_counts": basis_counts,
+        "selected_basis_object_ids": selected_basis_object_ids,
+        "frozen_basis": frozen_basis,
         "selected_coverages": selected_coverages,
         "selected_evidence_refs": selected_evidence_refs,
         "board_brief_excerpt": brief_text[:300],
         "gate_reasons": readiness.get("gate_reasons", []) if isinstance(readiness.get("gate_reasons"), list) else [],
         "remaining_risks": remaining_risks,
         "promotion_notes": (
-            "Round is ready and a compact evidence basis has been frozen for downstream reporting."
+            "Round is ready and a compact controversy basis has been frozen for downstream reporting."
             if promotion_status == "promoted"
-            else "Round is not yet ready; the basis artifact records the strongest available evidence but remains withheld."
+            else "Round is not yet ready; the basis artifact freezes the current controversy basis and strongest available evidence while promotion remains withheld."
         ),
     }
     write_json_file(output_file, wrapper)
@@ -285,7 +622,7 @@ def promote_evidence_basis_skill(
         "deliberation_sync": contract_fields["deliberation_sync"],
         "analysis_sync": contract_fields["analysis_sync"],
         "board_handoff": {
-            "candidate_ids": unique_texts([basis_id] + [item.get("coverage_id") for item in selected_coverages]),
+            "candidate_ids": unique_texts([basis_id] + selected_basis_object_ids),
             "evidence_refs": artifact_refs,
             "gap_hints": [] if promotion_status == "promoted" else [maybe_text(reason) for reason in readiness.get("gate_reasons", [])[:3]] if isinstance(readiness.get("gate_reasons"), list) else ["Round readiness is not yet sufficient for promotion."],
             "challenge_hints": [],

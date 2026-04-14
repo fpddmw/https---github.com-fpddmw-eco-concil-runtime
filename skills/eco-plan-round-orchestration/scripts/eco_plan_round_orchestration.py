@@ -19,6 +19,7 @@ if str(RUNTIME_SRC) not in sys.path:
 
 from eco_council_runtime.kernel.deliberation_plane import load_round_snapshot  # noqa: E402
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_d1_shared_context,
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
 )
@@ -200,42 +201,239 @@ def top_actions(next_actions: dict[str, Any]) -> list[dict[str, str]]:
     return rows
 
 
-def include_probe_stage(snapshot: dict[str, Any], next_actions: dict[str, Any], readiness: dict[str, Any]) -> bool:
-    counts = snapshot.get("counts", {}) if isinstance(snapshot.get("counts"), dict) else {}
-    if int(counts.get("challenge_open") or 0) > 0:
-        return True
-    if int(counts.get("hypotheses_low_confidence") or 0) > 0:
-        return True
-    readiness_status = maybe_text(readiness.get("readiness_status"))
-    if readiness_status in {"blocked", "needs-more-data"}:
-        return True
-    ranked_actions = next_actions.get("ranked_actions", []) if isinstance(next_actions.get("ranked_actions"), list) else []
-    for action in ranked_actions[:5]:
-        if not isinstance(action, dict):
+def safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def summarize_counts(items: list[dict[str, Any]], *, field_name: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in items:
+        if not isinstance(item, dict):
             continue
-        if bool(action.get("probe_candidate")):
-            return True
-        if maybe_text(action.get("action_kind")) in {"resolve-challenge", "resolve-contradiction", "stabilize-hypothesis"}:
-            return True
-    return False
+        value = maybe_text(item.get(field_name))
+        if not value:
+            continue
+        counts[value] = counts.get(value, 0) + 1
+    return counts
 
 
-def downstream_posture(snapshot: dict[str, Any], readiness: dict[str, Any], include_probe: bool) -> str:
-    readiness_status = maybe_text(readiness.get("readiness_status"))
-    if readiness_status == "ready":
-        return "promote-candidate"
-    if readiness_status in {"blocked", "needs-more-data"}:
-        return "hold-investigation-open"
+def normalized_counts(payload: dict[str, Any], field_name: str) -> dict[str, int]:
+    raw_counts = payload.get(field_name)
+    if not isinstance(raw_counts, dict):
+        return {}
+    counts: dict[str, int] = {}
+    for key, value in raw_counts.items():
+        normalized_key = maybe_text(key)
+        if not normalized_key:
+            continue
+        counts[normalized_key] = safe_int(value)
+    return counts
+
+
+def count_open_probes(probes: dict[str, Any]) -> int:
+    if not isinstance(probes.get("probes"), list):
+        return 0
+    return len(
+        [
+            item
+            for item in probes.get("probes", [])
+            if isinstance(item, dict)
+            and maybe_text(item.get("probe_status")) not in {"closed", "cancelled"}
+        ]
+    )
+
+
+def planning_signal_counts(
+    snapshot: dict[str, Any],
+    next_actions: dict[str, Any],
+    probes: dict[str, Any],
+    readiness: dict[str, Any],
+    shared_context: dict[str, Any],
+) -> dict[str, Any]:
+    agenda_counts = normalized_counts(next_actions, "agenda_counts")
+    if not agenda_counts:
+        agenda_counts = normalized_counts(readiness, "agenda_counts")
+    if not agenda_counts:
+        agenda_counts = normalized_counts(shared_context, "agenda_counts")
+
+    controversy_gap_counts = summarize_counts(
+        next_actions.get("ranked_actions", [])
+        if isinstance(next_actions.get("ranked_actions"), list)
+        else [],
+        field_name="controversy_gap",
+    )
+    if not controversy_gap_counts:
+        controversy_gap_counts = normalized_counts(
+            next_actions,
+            "controversy_gap_counts",
+        )
+    if not controversy_gap_counts:
+        controversy_gap_counts = normalized_counts(
+            readiness,
+            "controversy_gap_counts",
+        )
+
+    probe_type_counts = summarize_counts(
+        probes.get("probes", [])
+        if isinstance(probes.get("probes"), list)
+        else [],
+        field_name="probe_type",
+    )
+    if not probe_type_counts:
+        probe_type_counts = normalized_counts(readiness, "probe_type_counts")
+
+    ranked_actions = (
+        next_actions.get("ranked_actions", [])
+        if isinstance(next_actions.get("ranked_actions"), list)
+        else []
+    )
+    non_promotion_actions = [
+        item
+        for item in ranked_actions
+        if isinstance(item, dict)
+        and maybe_text(item.get("action_kind")) != "prepare-promotion"
+    ]
+    probe_candidate_actions = len(
+        [
+            item
+            for item in non_promotion_actions
+            if bool(item.get("probe_candidate"))
+        ]
+    )
     counts = snapshot.get("counts", {}) if isinstance(snapshot.get("counts"), dict) else {}
-    if include_probe:
-        return "hold-investigation-open"
-    if int(counts.get("challenge_open") or 0) > 0:
-        return "hold-investigation-open"
-    if int(counts.get("tasks_open") or 0) > 0:
-        return "hold-investigation-open"
-    if int(counts.get("hypotheses_active") or 0) == 0:
-        return "hold-investigation-open"
-    return "promote-candidate"
+    routing_actions = max(
+        safe_int(controversy_gap_counts.get("verification-routing-gap")),
+        safe_int(agenda_counts.get("routing_issue_count")),
+    )
+    empirical_gap_actions = max(
+        safe_int(controversy_gap_counts.get("verification-gap"))
+        + safe_int(controversy_gap_counts.get("formal-public-misalignment")),
+        safe_int(agenda_counts.get("empirical_issue_gap_count")),
+    )
+    representation_gap_actions = max(
+        safe_int(controversy_gap_counts.get("representation-gap")),
+        safe_int(agenda_counts.get("representation_gap_count")),
+    )
+    formal_linkage_actions = max(
+        safe_int(controversy_gap_counts.get("formal-record-gap"))
+        + safe_int(controversy_gap_counts.get("formal-public-linkage-gap"))
+        + safe_int(controversy_gap_counts.get("public-discourse-gap"))
+        + safe_int(controversy_gap_counts.get("stakeholder-deliberation-gap")),
+        safe_int(agenda_counts.get("formal_public_linkage_gap_count")),
+    )
+    diffusion_focus_count = max(
+        safe_int(controversy_gap_counts.get("cross-platform-diffusion")),
+        safe_int(agenda_counts.get("diffusion_focus_count")),
+    )
+    return {
+        "agenda_counts": agenda_counts,
+        "controversy_gap_counts": controversy_gap_counts,
+        "probe_type_counts": probe_type_counts,
+        "open_probe_count": count_open_probes(probes),
+        "probe_candidate_actions": probe_candidate_actions,
+        "pending_non_promotion_actions": len(non_promotion_actions),
+        "issue_cluster_count": safe_int(agenda_counts.get("issue_cluster_count")),
+        "routing_actions": routing_actions,
+        "empirical_gap_actions": empirical_gap_actions,
+        "representation_gap_actions": representation_gap_actions,
+        "formal_linkage_actions": formal_linkage_actions,
+        "diffusion_focus_count": diffusion_focus_count,
+        "board_open_challenges": safe_int(counts.get("challenge_open")),
+        "board_open_tasks": safe_int(counts.get("tasks_open")),
+        "board_low_confidence_hypotheses": safe_int(
+            counts.get("hypotheses_low_confidence")
+        ),
+        "board_active_hypotheses": safe_int(counts.get("hypotheses_active")),
+        "readiness_status": maybe_text(readiness.get("readiness_status")),
+    }
+
+
+def probe_stage_decision(
+    snapshot: dict[str, Any],
+    next_actions: dict[str, Any],
+    probes: dict[str, Any],
+    readiness: dict[str, Any],
+    shared_context: dict[str, Any],
+) -> tuple[bool, list[str], dict[str, Any]]:
+    signal_counts = planning_signal_counts(
+        snapshot,
+        next_actions,
+        probes,
+        readiness,
+        shared_context,
+    )
+    reason_codes: list[str] = []
+    if signal_counts["open_probe_count"] > 0:
+        reason_codes.append("open-probes")
+    if signal_counts["probe_candidate_actions"] > 0:
+        reason_codes.append("probe-candidate-actions")
+    if signal_counts["routing_actions"] > 0:
+        reason_codes.append("agenda-routing-blockers")
+    if signal_counts["empirical_gap_actions"] > 0:
+        reason_codes.append("agenda-empirical-gaps")
+    if signal_counts["representation_gap_actions"] > 0:
+        reason_codes.append("agenda-representation-gaps")
+    if signal_counts["formal_linkage_actions"] > 0:
+        reason_codes.append("agenda-formal-public-linkage-gaps")
+    if signal_counts["diffusion_focus_count"] > 0:
+        reason_codes.append("agenda-diffusion-focus")
+
+    agenda_signal_available = (
+        any(
+            safe_int(value) > 0
+            for value in signal_counts["agenda_counts"].values()
+        )
+        or signal_counts["pending_non_promotion_actions"] > 0
+        or signal_counts["open_probe_count"] > 0
+        or bool(signal_counts["readiness_status"])
+    )
+    if not reason_codes and not agenda_signal_available:
+        if signal_counts["board_open_challenges"] > 0:
+            reason_codes.append("board-open-challenges-fallback")
+        if signal_counts["board_low_confidence_hypotheses"] > 0:
+            reason_codes.append("board-low-confidence-fallback")
+
+    include_probe = (
+        signal_counts["readiness_status"] != "ready" and bool(reason_codes)
+    )
+    return include_probe, reason_codes, signal_counts
+
+
+def downstream_posture(
+    signal_counts: dict[str, Any],
+    probe_reason_codes: list[str],
+) -> tuple[str, list[str]]:
+    readiness_status = maybe_text(signal_counts.get("readiness_status"))
+    if readiness_status == "ready":
+        return "promote-candidate", ["ready-readiness-artifact"]
+    if readiness_status in {"blocked", "needs-more-data"}:
+        return "hold-investigation-open", [
+            f"readiness-{readiness_status}",
+        ]
+
+    reason_codes: list[str] = []
+    if signal_counts.get("open_probe_count", 0) > 0:
+        reason_codes.append("open-probes")
+    if signal_counts.get("pending_non_promotion_actions", 0) > 0:
+        reason_codes.append("pending-investigation-actions")
+    if probe_reason_codes:
+        reason_codes.append("probe-stage-retained")
+    if not reason_codes:
+        if signal_counts.get("board_open_challenges", 0) > 0:
+            reason_codes.append("board-open-challenges-fallback")
+        if signal_counts.get("board_open_tasks", 0) > 0:
+            reason_codes.append("board-open-tasks-fallback")
+        if signal_counts.get("board_active_hypotheses", 0) == 0 and signal_counts.get(
+            "issue_cluster_count",
+            0,
+        ) == 0:
+            reason_codes.append("no-active-issue-to-promote")
+    if reason_codes:
+        return "hold-investigation-open", reason_codes
+    return "promote-candidate", ["no-visible-blockers"]
 
 
 def step_entry(stage_name: str, skill_name: str, reason: str, assigned_role_hint: str, expected_output_path: Path) -> dict[str, Any]:
@@ -284,14 +482,20 @@ def stop_conditions(include_probe: bool) -> list[dict[str, str]]:
             1,
             {
                 "condition_id": "probe-stage-required",
-                "trigger": "Board state still contains open challenges or low-confidence hypotheses.",
+                "trigger": "Agenda artifacts still show unresolved routing, verification, representation, linkage, diffusion, or open probe pressure.",
                 "effect": "Keep falsification-probe materialization in the controller queue before readiness review.",
             },
         )
     return rows
 
 
-def fallback_path(snapshot: dict[str, Any], next_actions: dict[str, Any], posture: str, include_probe: bool) -> list[dict[str, Any]]:
+def fallback_path(
+    snapshot: dict[str, Any],
+    next_actions: dict[str, Any],
+    posture: str,
+    probe_reason_codes: list[str],
+    signal_counts: dict[str, Any],
+) -> list[dict[str, Any]]:
     counts = snapshot.get("counts", {}) if isinstance(snapshot.get("counts"), dict) else {}
     fallback_rows: list[dict[str, Any]] = []
     if int(counts.get("challenge_open") or 0) > 0:
@@ -302,12 +506,27 @@ def fallback_path(snapshot: dict[str, Any], next_actions: dict[str, Any], postur
                 "suggested_next_skills": ["eco-post-board-note", "eco-close-challenge-ticket", "eco-propose-next-actions"],
             }
         )
-    if include_probe or int(counts.get("hypotheses_low_confidence") or 0) > 0:
+    if probe_reason_codes:
+        suggested_next_skills = ["eco-open-falsification-probe", "eco-post-board-note"]
+        if signal_counts.get("routing_actions", 0) > 0:
+            suggested_next_skills.insert(0, "eco-route-verification-lane")
+        if signal_counts.get("representation_gap_actions", 0) > 0 or signal_counts.get(
+            "formal_linkage_actions",
+            0,
+        ) > 0:
+            suggested_next_skills.extend(
+                [
+                    "eco-link-formal-comments-to-public-discourse",
+                    "eco-identify-representation-gaps",
+                ]
+            )
+        if signal_counts.get("diffusion_focus_count", 0) > 0:
+            suggested_next_skills.append("eco-detect-cross-platform-diffusion")
         fallback_rows.append(
             {
-                "when": "Low-confidence hypotheses or contradiction-leaning actions persist.",
-                "reason": "The round still needs explicit falsification work before a clean promotion path exists.",
-                "suggested_next_skills": ["eco-open-falsification-probe", "eco-post-board-note", "eco-update-hypothesis-status"],
+                "when": "Controversy agenda still carries unresolved probe-worthy work.",
+                "reason": "Planner kept probe materialization because the agenda still shows unresolved routing, verification, representation, linkage, or diffusion pressure.",
+                "suggested_next_skills": unique_texts(suggested_next_skills),
             }
         )
     if posture == "promote-candidate":
@@ -373,6 +592,13 @@ def plan_round_orchestration_skill(
     if not isinstance(board, dict):
         warnings.append({"code": "missing-board", "message": f"No board artifact was found at {board_file}."})
     board_summary = load_json_if_exists(board_summary_file)
+    shared_context = load_d1_shared_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        board_summary_path=board_summary_path,
+        board_brief_path=board_brief_path,
+    )
     next_actions_context = load_next_actions_wrapper(
         run_dir_path,
         run_id=run_id,
@@ -412,8 +638,17 @@ def plan_round_orchestration_skill(
 
     snapshot = board_snapshot(round_state, board_summary if isinstance(board_summary, dict) else None)
     counts = snapshot.get("counts", {}) if isinstance(snapshot.get("counts"), dict) else {}
-    probe_stage_included = include_probe_stage(snapshot, next_actions, readiness)
-    posture = downstream_posture(snapshot, readiness, probe_stage_included)
+    probe_stage_included, probe_reason_codes, signal_counts = probe_stage_decision(
+        snapshot,
+        next_actions,
+        probes,
+        readiness,
+        shared_context,
+    )
+    posture, posture_reason_codes = downstream_posture(
+        signal_counts,
+        probe_reason_codes,
+    )
     top_action_rows = top_actions(next_actions)
     primary_action_role = top_action_rows[0]["assigned_role"] if top_action_rows else "moderator"
 
@@ -421,7 +656,7 @@ def plan_round_orchestration_skill(
         step_entry(
             "next-actions",
             "eco-propose-next-actions",
-            "Re-rank investigation actions directly from shared board state and coverage context.",
+            "Re-rank investigation actions directly from shared board state and controversy agenda context.",
             primary_action_role or "moderator",
             next_actions_file,
         ),
@@ -431,7 +666,7 @@ def plan_round_orchestration_skill(
             step_entry(
                 "falsification-probes",
                 "eco-open-falsification-probe",
-                "Open or refresh probe objects because the current round still carries contradiction or low-confidence signals.",
+                "Open or refresh probe objects because the current round still carries unresolved agenda-level controversy pressure.",
                 "challenger",
                 probes_file,
             )
@@ -472,11 +707,38 @@ def plan_round_orchestration_skill(
     ]
 
     role_hints = unique_texts(["moderator", primary_action_role, "challenger" if probe_stage_included else ""])
-    fallback_rows = fallback_path(snapshot, next_actions, posture, probe_stage_included)
+    phase_decision_basis = {
+        "probe_stage_reason_codes": probe_reason_codes,
+        "posture_reason_codes": posture_reason_codes,
+        "agenda_counts": signal_counts.get("agenda_counts", {}),
+        "controversy_gap_counts": signal_counts.get("controversy_gap_counts", {}),
+        "probe_type_counts": signal_counts.get("probe_type_counts", {}),
+        "signal_counts": {
+            "open_probe_count": signal_counts.get("open_probe_count", 0),
+            "probe_candidate_actions": signal_counts.get("probe_candidate_actions", 0),
+            "pending_non_promotion_actions": signal_counts.get("pending_non_promotion_actions", 0),
+            "issue_cluster_count": signal_counts.get("issue_cluster_count", 0),
+            "routing_actions": signal_counts.get("routing_actions", 0),
+            "empirical_gap_actions": signal_counts.get("empirical_gap_actions", 0),
+            "representation_gap_actions": signal_counts.get("representation_gap_actions", 0),
+            "formal_linkage_actions": signal_counts.get("formal_linkage_actions", 0),
+            "diffusion_focus_count": signal_counts.get("diffusion_focus_count", 0),
+            "board_open_challenges": signal_counts.get("board_open_challenges", 0),
+            "board_open_tasks": signal_counts.get("board_open_tasks", 0),
+            "board_low_confidence_hypotheses": signal_counts.get("board_low_confidence_hypotheses", 0),
+        },
+    }
+    fallback_rows = fallback_path(
+        snapshot,
+        next_actions,
+        posture,
+        probe_reason_codes,
+        signal_counts,
+    )
     plan_id = "orchestration-plan-" + stable_hash(run_id, round_id, posture, *(step["skill_name"] for step in execution_queue))[:12]
     planning_notes = [
         "Planner artifact exists to make the phase-2 controller queue explicit and auditable.",
-        "Probe materialization is only kept in the queue when the current board state still shows contradiction or low-confidence pressure.",
+        "Probe materialization is decided from agenda artifacts first; direct board heuristics only remain as a compatibility fallback when those artifacts are absent.",
         "Board summary and board brief are treated as derived exports rather than controller prerequisites.",
     ]
     if brief_text:
@@ -493,6 +755,7 @@ def plan_round_orchestration_skill(
         "controller_authority": "advisory-only" if planner_mode == "agent-advisory" else "queue-owner",
         "probe_stage_included": probe_stage_included,
         "downstream_posture": posture,
+        "phase_decision_basis": phase_decision_basis,
         "assigned_role_hints": role_hints,
         "agent_turn_hints": {
             "primary_role": primary_action_role or "moderator",
@@ -515,6 +778,7 @@ def plan_round_orchestration_skill(
             "readiness_status": maybe_text(readiness.get("readiness_status")),
             "counts": counts,
             "top_actions": top_action_rows,
+            "agenda_counts": phase_decision_basis["agenda_counts"],
         },
         "inputs": {
             "board_path": str(board_file),

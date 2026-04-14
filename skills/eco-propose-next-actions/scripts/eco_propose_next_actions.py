@@ -120,7 +120,7 @@ def propose_next_actions_skill(
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
-        "action_source": maybe_text(action_context.get("action_source"))
+        "agenda_source": maybe_text(action_context.get("action_source"))
         or "controversy-agenda-materialization",
         "board_summary_path": maybe_text(action_context.get("board_summary_file")),
         "board_brief_path": maybe_text(action_context.get("board_brief_file")),

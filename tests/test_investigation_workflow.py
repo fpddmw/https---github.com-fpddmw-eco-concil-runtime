@@ -765,6 +765,14 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertTrue(readiness_artifact["sufficient_for_promotion"])
             self.assertEqual("promoted", promotion_payload["summary"]["promotion_status"])
             self.assertEqual("promoted", promotion_artifact["promotion_status"])
+            self.assertEqual(
+                "freeze-controversy-basis-v1",
+                promotion_artifact["basis_selection_mode"],
+            )
+            self.assertGreaterEqual(
+                promotion_artifact["basis_counts"]["coverage_count"],
+                1,
+            )
             self.assertGreaterEqual(len(promotion_artifact["selected_coverages"]), 1)
             available_coverage_ids = {coverage["coverage_id"] for coverage in coverage_artifact["coverages"]}
             self.assertIn(promotion_artifact["selected_coverages"][0]["coverage_id"], available_coverage_ids)
@@ -955,6 +963,14 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertEqual("analysis-plane", promotion_payload["summary"]["coverage_source"])
             self.assertFalse(promotion_artifact["observed_inputs"]["coverage_artifact_present"])
             self.assertTrue(promotion_artifact["observed_inputs"]["coverage_present"])
+            self.assertEqual(
+                "freeze-controversy-basis-v1",
+                promotion_artifact["basis_selection_mode"],
+            )
+            self.assertGreaterEqual(
+                promotion_artifact["basis_counts"]["coverage_count"],
+                1,
+            )
             self.assertGreaterEqual(len(promotion_artifact["selected_coverages"]), 1)
 
 

@@ -87,6 +87,17 @@ def resolve_plan_path(run_dir: Path, round_id: str, plan_payload: dict[str, Any]
     return str(orchestration_plan_path(run_dir, round_id).resolve())
 
 
+def normalized_controller_planning_mode(value: Any, *, default: str = "planner-backed") -> str:
+    mode = maybe_text(value)
+    if mode == "agent-advisory":
+        return mode
+    if mode == "planner-pending":
+        return mode
+    if mode:
+        return "planner-backed"
+    return default
+
+
 def planning_bundle_from_payload(run_dir: Path, round_id: str, plan_path: str, plan_payload: dict[str, Any]) -> dict[str, Any]:
     explicit_execution_queue = normalized_planned_steps(plan_payload.get("execution_queue"))
     explicit_post_gate_steps = normalized_planned_steps(plan_payload.get("post_gate_steps"))
@@ -96,7 +107,9 @@ def planning_bundle_from_payload(run_dir: Path, round_id: str, plan_path: str, p
         "plan_id": maybe_text(plan_payload.get("plan_id")),
         "plan_path": plan_path,
         "planning_status": maybe_text(plan_payload.get("planning_status")) or "ready-for-controller",
-        "planning_mode": maybe_text(plan_payload.get("planning_mode")) or "planner-backed",
+        "planning_mode": normalized_controller_planning_mode(
+            plan_payload.get("planning_mode")
+        ),
         "planner_skill_name": PLANNER_SKILL_NAME,
         "controller_authority": maybe_text(plan_payload.get("controller_authority")) or "queue-owner",
         "plan_source": "runtime-planner",
@@ -149,7 +162,10 @@ def planning_from_controller(run_dir: Path, round_id: str, controller_payload: d
             "plan_id": maybe_text(planning.get("plan_id")),
             "plan_path": maybe_text(planning.get("plan_path")) or str(orchestration_plan_path(run_dir, round_id).resolve()),
             "planning_status": maybe_text(planning.get("planning_status")) or "ready-for-controller",
-            "planning_mode": maybe_text(controller_payload.get("planning_mode")) or maybe_text(planning.get("planning_mode")) or "planner-backed",
+            "planning_mode": normalized_controller_planning_mode(
+                maybe_text(controller_payload.get("planning_mode"))
+                or maybe_text(planning.get("planning_mode"))
+            ),
             "planner_skill_name": maybe_text(planning.get("planner_skill_name")) or PLANNER_SKILL_NAME,
             "controller_authority": maybe_text(planning.get("controller_authority")) or "queue-owner",
             "plan_source": maybe_text(planning.get("plan_source")) or "controller-snapshot",
@@ -713,7 +729,10 @@ def run_phase2_round_with_contract_mode(
                 "resume_count": int(existing_controller.get("resume_count") or 0) + 1,
                 "started_at_utc": maybe_text(existing_controller.get("started_at_utc")) or started_at,
                 "failure": {},
-                "planning_mode": maybe_text(existing_controller.get("planning_mode")) or maybe_text(recovered_planning.get("planning_mode")) or "planner-backed",
+                "planning_mode": normalized_controller_planning_mode(
+                    maybe_text(existing_controller.get("planning_mode"))
+                    or maybe_text(recovered_planning.get("planning_mode"))
+                ),
                 "planning": controller_planning_state(recovered_planning, blueprints),
                 "stage_contracts": stage_contracts_from_blueprints(blueprints),
                 "steps": merge_existing_steps(blueprints, existing_controller.get("steps")),
@@ -809,7 +828,9 @@ def run_phase2_round_with_contract_mode(
         planning = planning_bundle(run_dir, round_id, planner_result)
         ensure_executable_planning(planning)
         blueprints = stage_blueprints(planning, artifacts)
-        controller_payload["planning_mode"] = maybe_text(planning.get("planning_mode")) or "planner-backed"
+        controller_payload["planning_mode"] = normalized_controller_planning_mode(
+            planning.get("planning_mode")
+        )
         controller_payload["planning"] = controller_planning_state(planning, blueprints)
         controller_payload["stage_contracts"] = stage_contracts_from_blueprints(blueprints)
         controller_payload["steps"] = merge_existing_steps(blueprints, controller_payload.get("steps"))
@@ -996,7 +1017,10 @@ def run_phase2_round_with_contract_mode(
         load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id).get("promotion_gate", {})
     )
     controller_payload["controller_status"] = "completed"
-    controller_payload["planning_mode"] = maybe_text(planning.get("planning_mode")) or maybe_text(controller_payload.get("planning_mode")) or "planner-backed"
+    controller_payload["planning_mode"] = normalized_controller_planning_mode(
+        maybe_text(planning.get("planning_mode"))
+        or maybe_text(controller_payload.get("planning_mode"))
+    )
     controller_payload["readiness_status"] = maybe_text(gate_payload.get("readiness_status")) or maybe_text(controller_payload.get("readiness_status")) or "blocked"
     controller_payload["gate_status"] = maybe_text(gate_payload.get("gate_status")) or maybe_text(controller_payload.get("gate_status")) or "freeze-withheld"
     if maybe_text(controller_payload.get("promotion_status")) in {"", "not-evaluated"}:

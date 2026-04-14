@@ -4,7 +4,7 @@
 
 本清单只服务下一阶段开发，不再承担“总体介绍”功能。
 
-## 1.1 当前进度（2026-04-13）
+## 1.1 当前进度（2026-04-14）
 
 - 已交付第一批的首版兼容重构：
   - `eco-extract-claim-candidates`
@@ -13,6 +13,9 @@
   - `eco-propose-next-actions`
   - `eco-open-falsification-probe`
   - `eco-summarize-round-readiness`
+- 已交付第二批的首版兼容重构：
+  - `eco-plan-round-orchestration`
+  - `eco-promote-evidence-basis`
 - 已新增并交付首版新主链技能：
   - `eco-classify-claim-verifiability`
   - `eco-route-verification-lane`
@@ -32,6 +35,7 @@
   - 保留旧 skill 名称、CLI 参数、核心 artifact envelope 与主要 ID 字段。
   - 在旧结构上新增 `issue / stance / concern / verifiability / dispute` 等字段。
   - 将 `next actions / probe / readiness` 的解释口径切向“争议结构缺口与 routing”，但不一次性拆掉旧的 `coverage` 兼容链。
+  - 将 `planner / promotion` 的核心冻结对象切向“controversy agenda / controversy basis”，避免 runtime 与 reporting 层继续默认围绕 coverage 单轴展开。
 - 仍待后续批次完成的内容：
   - board/reporting 对新对象的全面消费。
 
@@ -53,7 +57,8 @@
 - `[保留]` `eco-open-investigation-round`
   - 保留 round 推进，不作为方向问题。
 - `[保留]` `eco-plan-round-orchestration`
-  - 保留编排骨架，后续再适配新对象。
+  - 保留编排骨架。
+  - 当前状态：已改为优先读取 `agenda_counts / controversy_gap_counts / probes / readiness` 决定 probe 阶段与 posture；`board` 只保留兼容兜底作用；plan artifact 会显式写出 `phase_decision_basis`。
 - `[保留]` `eco-prepare-round`
   - 保留 source governance 与 fetch plan 编译。
 - `[保留]` `eco-import-fetch-execution`
@@ -132,10 +137,13 @@
   - 改造方向：从轻量 location/tag 猜测转向 `verifiability / dispute type` 评估。
 - `[第一批重构]` `eco-propose-next-actions`
   - 改造方向：从补 coverage 转向补争议结构缺口。
+  - 当前状态：已改为 `board + controversy agenda` 的议程生成，优先消费 `controversy-map / verification-route / formal-public-link / representation-gap / diffusion-edge`，coverage 仅保留兜底作用。
 - `[第一批重构]` `eco-open-falsification-probe`
   - 改造方向：从 generic falsification 改为面向争议不确定点、主体缺口和扩散疑点的 probe。
+  - 当前状态：已支持 `clarify-verification-route / advance-empirical-verification / address-representation-gap / trace-cross-platform-diffusion` 等新议程动作的 probe 类型与下游 skill 建议。
 - `[第一批重构]` `eco-summarize-round-readiness`
   - 改造方向：从 coverage gating 改为 controversy map readiness。
+  - 当前状态：已直接读取 `agenda_counts`，把 `issue cluster / routing blocker / representation gap / formal-public linkage gap` 纳入 readiness gate，而不再只依赖 coverage 与 probe 数量。
 
 ### 第一批重构的预期替换逻辑
 
@@ -160,6 +168,7 @@
   - 改为输出 controversy-oriented board brief。
 - `[第二批重构]` `eco-promote-evidence-basis`
   - 不再只冻结 coverages，应冻结争议地图中的关键对象。
+  - 当前状态：已实现首版兼容改造；artifact 现在会额外冻结 `issue_clusters / verification_routes / formal_public_links / representation_gaps / diffusion_edges`，并保留 `selected_coverages` 兼容 reporting。
 - `[第二批重构]` `eco-materialize-reporting-handoff`
   - 输出结构应从 evidence basis 扩展为 controversy map handoff。
 - `[第二批重构]` `eco-draft-council-decision`
@@ -228,7 +237,8 @@
 当前解释：
 
 - `formal-public linkage / diffusion / representation gap` 已具备首版独立 skill。
-- 下一步主矛盾变成 `board / next actions / reporting` 对新对象的消费。
+- `planner / promotion` 已进入第二批兼容改造，运行时默认不再只围绕 coverage 单轴做阶段推进。
+- 下一步主矛盾变成 `board summary / board brief / reporting handoff / expert report / council decision` 对新对象的消费。
 
 ## 9. 完成判断
 

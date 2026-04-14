@@ -1,13 +1,13 @@
 ---
 name: eco-propose-next-actions
-description: Propose a ranked next-action queue from shared board state and evidence coverage, with board summary and board brief retained only as compatible fallback context.
+description: Propose a ranked next-action queue from shared board state and controversy-agenda artifacts, with board summary and board brief retained only as compatible fallback context.
 ---
 
 # Eco Propose Next Actions
 
 ## Core Goal
 - Convert the current round's board state into a compact next-action queue.
-- Rank actions by board urgency, contradiction pressure, and coverage readiness.
+- Rank actions by controversy pressure, routing blockers, representation gaps, formal/public linkage gaps, diffusion focus, and empirical verification pressure.
 - Emit a durable investigation artifact that downstream probe and readiness skills can consume.
 
 ## Triggering Conditions

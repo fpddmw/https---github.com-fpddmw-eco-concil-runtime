@@ -1,4 +1,4 @@
 interface:
   display_name: "Eco Promote Evidence Basis"
   short_description: "Freeze the current round into a compact evidence-basis artifact"
-  default_prompt: "Use $eco-promote-evidence-basis to freeze the current round into a compact evidence-basis artifact by combining round readiness, board brief, and strongest coverage objects."
+  default_prompt: "Use $eco-promote-evidence-basis to freeze the current round into a compact controversy-basis artifact by combining round readiness, board brief, issue clusters, routing posture, formal/public linkage, representation gaps, diffusion edges, and strongest coverage objects."

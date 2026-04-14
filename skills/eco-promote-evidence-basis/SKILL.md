@@ -1,18 +1,18 @@
 ---
 name: eco-promote-evidence-basis
-description: Promote the current round into a compact evidence-basis artifact by combining round readiness, board brief, and strongest coverage objects.
+description: Promote the current round into a compact controversy-basis artifact by combining round readiness, board brief, controversy agenda objects, and strongest coverage objects.
 ---
 
 # Eco Promote Evidence Basis
 
 ## Core Goal
-- Freeze the strongest round evidence into a promotion-ready basis artifact.
+- Freeze the strongest round evidence and controversy objects into a promotion-ready basis artifact.
 - Respect round-readiness gate results while still producing an auditable promotion decision.
 - Emit a compact artifact that later reporting and decision layers can consume.
 
 ## Triggering Conditions
 - A round-readiness artifact exists and needs to be turned into a promotion decision.
-- Need to freeze strongest coverage refs together with board context.
+- Need to freeze strongest coverage refs together with issue clusters, routing posture, formal/public linkage, representation gaps, and diffusion edges when available.
 - Need a durable basis artifact for the eventual canonical reporting layer.
 
 ## Read/Write Contract
@@ -48,6 +48,7 @@ description: Promote the current round into a compact evidence-basis artifact by
 - `analysis_sync`
 - `board_handoff`
 - The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `readiness_source`, `board_brief_source`, `next_actions_source`, `db_path`, and `observed_inputs`, including explicit `*_artifact_present` and `*_present` flags for promotion inputs.
+- The emitted artifact also records `basis_selection_mode`, `basis_counts`, `selected_basis_object_ids`, and `frozen_basis` so downstream layers can read controversy objects directly instead of only reading coverage rows.
 
 ## References
 - `../../docs/openclaw-project-overview.md`

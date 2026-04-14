@@ -4,7 +4,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import load_json, run_script, runtime_path, script_path, seed_analysis_chain
+from _workflow_support import (
+    investigation_path,
+    load_json,
+    run_script,
+    runtime_path,
+    script_path,
+    seed_analysis_chain,
+    write_json,
+)
 
 RUN_ID = "run-planner-001"
 ROUND_ID = "round-planner-001"
@@ -153,6 +161,67 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             self.assertTrue(plan["observed_state"]["board_exports_are_derived"])
             self.assertEqual(2, payload["summary"]["derived_export_count"])
             self.assertEqual("eco-promote-evidence-basis", plan["post_gate_steps"][0]["skill_name"])
+
+    def test_planner_uses_agenda_diffusion_signal_to_keep_probe_stage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_board_state(run_dir, root)
+
+            write_json(
+                investigation_path(run_dir, f"next_actions_{ROUND_ID}.json"),
+                {
+                    "schema_version": "d1.1",
+                    "skill": "eco-propose-next-actions",
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "agenda_source": "controversy-agenda-materialization",
+                    "agenda_counts": {
+                        "issue_cluster_count": 1,
+                        "diffusion_focus_count": 1,
+                    },
+                    "controversy_gap_counts": {
+                        "cross-platform-diffusion": 1,
+                    },
+                    "ranked_actions": [
+                        {
+                            "action_id": "action-diffusion-001",
+                            "action_kind": "trace-cross-platform-diffusion",
+                            "assigned_role": "sociologist",
+                            "priority": "medium",
+                            "objective": "Trace how the smoke issue is moving across platforms.",
+                            "reason": "Cross-platform diffusion may be changing how the controversy is represented.",
+                            "controversy_gap": "cross-platform-diffusion",
+                            "probe_candidate": False,
+                            "recommended_lane": "public-discourse-analysis",
+                        }
+                    ],
+                },
+            )
+
+            payload = run_script(
+                script_path("eco-plan-round-orchestration"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
+            stage_names = [item["stage_name"] for item in plan["execution_queue"]]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertTrue(plan["probe_stage_included"])
+            self.assertIn("falsification-probes", stage_names)
+            self.assertIn(
+                "agenda-diffusion-focus",
+                plan["phase_decision_basis"]["probe_stage_reason_codes"],
+            )
+            self.assertEqual(
+                1,
+                plan["phase_decision_basis"]["signal_counts"]["diffusion_focus_count"],
+            )
 
     def test_hold_round_planner_keeps_probe_stage_and_fallbacks(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
