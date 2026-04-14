@@ -210,6 +210,82 @@ def infer_tags(text: str, claim_type: str) -> list[str]:
     return sorted(tags)
 
 
+def list_field(item: dict[str, Any], key: str) -> list[str]:
+    values = item.get(key)
+    if not isinstance(values, list):
+        return []
+    return [maybe_text(value) for value in values if maybe_text(value)]
+
+
+def infer_verifiability_kind(item: dict[str, Any], text: str) -> str:
+    explicit = maybe_text(item.get("verifiability_hint") or item.get("verifiability_posture"))
+    if explicit:
+        return explicit
+    issue_hint = maybe_text(item.get("issue_hint") or item.get("issue_label"))
+    concern_facets = list_field(item, "concern_facets")
+    folded = maybe_text(text).casefold()
+    if issue_hint in {
+        "air-quality-smoke",
+        "heat-risk",
+        "flood-water",
+        "water-contamination",
+    }:
+        return "empirical-observable"
+    if issue_hint == "permit-process" or "procedure-governance" in concern_facets:
+        return "procedural-record"
+    if issue_hint == "representation-trust" or "trust-credibility" in concern_facets:
+        return "discourse-representation"
+    if "fairness-equity" in concern_facets or "cost-livelihood" in concern_facets:
+        return "normative-distribution"
+    if any(token in folded for token in ("forecast", "projection", "future", "model")):
+        return "predictive-uncertainty"
+    return "mixed-public-claim"
+
+
+def infer_dispute_type(item: dict[str, Any], *, verifiability_kind: str) -> str:
+    explicit = maybe_text(item.get("dispute_type"))
+    if explicit:
+        return explicit
+    if verifiability_kind == "empirical-observable":
+        return "impact-severity"
+    if verifiability_kind == "procedural-record":
+        return "governance-procedure"
+    if verifiability_kind == "discourse-representation":
+        return "representation-gap"
+    if verifiability_kind == "normative-distribution":
+        return "distributional-conflict"
+    if verifiability_kind == "predictive-uncertainty":
+        return "forecast-dispute"
+    return "mixed-controversy"
+
+
+def required_evidence_lane(verifiability_kind: str) -> str:
+    if verifiability_kind == "empirical-observable":
+        return "environmental-observation"
+    if verifiability_kind == "procedural-record":
+        return "formal-comment-and-policy-record"
+    if verifiability_kind == "discourse-representation":
+        return "public-discourse-analysis"
+    if verifiability_kind == "normative-distribution":
+        return "stakeholder-deliberation-analysis"
+    if verifiability_kind == "predictive-uncertainty":
+        return "mixed-review"
+    return "route-before-matching"
+
+
+def verification_route_recommended(
+    verifiability_kind: str,
+    *,
+    has_location: bool,
+    tags: list[str],
+) -> bool:
+    empirical_tags = {"air-quality", "smoke", "temperature", "heat", "precipitation", "hydrology"}
+    return (
+        verifiability_kind == "empirical-observable"
+        and (has_location or any(tag in empirical_tags for tag in tags))
+    )
+
+
 def derive_claim_scope_skill(
     run_dir: str,
     run_id: str,
@@ -235,13 +311,28 @@ def derive_claim_scope_skill(
     warnings: list[dict[str, str]] = list(input_selection.get("warnings", []))
     claim_items = claim_items_from_payload(input_selection.get("selected_wrapper"))
     scopes: list[dict[str, Any]] = []
+    routed_to_verification_count = 0
     for item in claim_items:
         claim_id = maybe_text(item.get("cluster_id") or item.get("claim_id"))
         text = maybe_text(item.get("representative_statement") or item.get("statement") or item.get("cluster_label") or item.get("summary"))
         claim_type = maybe_text(item.get("claim_type"))
         location_label, scope_kind, has_location = infer_location_scope(text)
         tags = infer_tags(text, claim_type)
-        usable_for_matching = has_location or bool(tags)
+        verifiability_kind = infer_verifiability_kind(item, text)
+        dispute_kind = infer_dispute_type(item, verifiability_kind=verifiability_kind)
+        route_recommended = verification_route_recommended(
+            verifiability_kind,
+            has_location=has_location,
+            tags=tags,
+        )
+        if route_recommended:
+            routed_to_verification_count += 1
+        lane = required_evidence_lane(verifiability_kind)
+        concern_facets = list_field(item, "concern_facets")
+        evidence_citation_types = list_field(item, "evidence_citation_types")
+        actor_hints = list_field(item, "actor_hints")
+        issue_hint = maybe_text(item.get("issue_hint") or item.get("issue_label"))
+        issue_terms = list_field(item, "issue_terms")
         scopes.append(
             {
                 "schema_version": "n2.2",
@@ -253,10 +344,24 @@ def derive_claim_scope_skill(
                 "scope_label": location_label,
                 "scope_kind": scope_kind,
                 "matching_tags": tags,
-                "claim_scope": {"label": location_label, "geometry": {}, "usable_for_matching": usable_for_matching},
+                "issue_hint": issue_hint,
+                "issue_terms": issue_terms,
+                "concern_facets": concern_facets,
+                "actor_hints": actor_hints,
+                "evidence_citation_types": evidence_citation_types,
+                "verifiability_kind": verifiability_kind,
+                "dispute_type": dispute_kind,
+                "verification_route_recommended": route_recommended,
+                "required_evidence_lane": lane,
+                "matching_eligibility_reason": (
+                    "Empirical, place-sensitive issue suitable for optional observation matching."
+                    if route_recommended
+                    else "Route through controversy analysis or formal records before any observation matching."
+                ),
+                "claim_scope": {"label": location_label, "geometry": {}, "usable_for_matching": route_recommended},
                 "place_scope": {"label": location_label, "geometry": {}},
-                "method": "heuristic-text-scope-v1",
-                "confidence": 0.8 if usable_for_matching else 0.45,
+                "method": "controversy-routing-scope-v1",
+                "confidence": 0.82 if route_recommended else 0.58,
                 "evidence_refs": unique_refs(item.get("public_refs", []) if isinstance(item.get("public_refs"), list) else [], 10),
             }
         )
@@ -271,7 +376,7 @@ def derive_claim_scope_skill(
             "input_source": claim_input_source or "missing-claim-input",
             "input_kind": claim_input_kind or "missing-claim-input",
             "selection_mode": "prefer-clusters-then-candidates",
-            "method": "heuristic-text-scope-v1",
+            "method": "controversy-routing-scope-v1",
         },
         "input_path": str(input_file),
         "claim_input_source": claim_input_source or "missing-claim-input",
@@ -335,9 +440,23 @@ def derive_claim_scope_skill(
         "board_handoff": {
             "candidate_ids": [scope["claim_scope_id"] for scope in scopes],
             "evidence_refs": unique_refs(artifact_refs, 20),
-            "gap_hints": ["Some claim scopes still have no explicit geometry and remain label-only."] if scopes else ["No claim scopes are available for board review."],
-            "challenge_hints": ["Review whether derived claim scope labels are too broad for localized evidence."] if scopes else [],
-            "suggested_next_skills": ["eco-score-evidence-coverage", "eco-post-board-note"],
+            "gap_hints": (
+                [
+                    "Some claim scopes remain non-empirical and should not enter observation matching by default."
+                ]
+                if scopes and routed_to_verification_count < len(scopes)
+                else (
+                    ["No claim scopes are available for board review."]
+                    if not scopes
+                    else []
+                )
+            ),
+            "challenge_hints": [
+                "Review whether any issue classified as empirical is actually procedural or representational."
+            ]
+            if scopes
+            else [],
+            "suggested_next_skills": ["eco-score-evidence-coverage", "eco-post-board-note", "eco-propose-next-actions"],
         },
     }
 

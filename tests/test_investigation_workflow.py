@@ -153,11 +153,13 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertTrue(actions_artifact["observed_inputs"]["board_brief_present"])
             self.assertTrue(any(action["action_kind"] == "resolve-challenge" for action in actions))
             self.assertTrue(any(bool(action["probe_candidate"]) for action in actions))
+            self.assertTrue(any("controversy_gap" in action for action in actions))
             probes = probes_artifact["probes"]
             self.assertTrue(probes_artifact["observed_inputs"]["next_actions_artifact_present"])
             self.assertTrue(probes_artifact["observed_inputs"]["next_actions_present"])
             self.assertTrue(any(probe["target_hypothesis_id"] == hypothesis_payload["canonical_ids"][0] for probe in probes))
             self.assertTrue(any("eco-close-challenge-ticket" in probe["requested_skills"] for probe in probes))
+            self.assertTrue(any("probe_type" in probe for probe in probes))
 
     def test_d1_next_actions_and_probes_work_without_board_summary_or_brief(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -628,6 +630,8 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertFalse(readiness_artifact["observed_inputs"]["probes_artifact_present"])
             self.assertTrue(readiness_artifact["observed_inputs"]["probes_present"])
             self.assertGreater(int(readiness_artifact["counts"]["open_probes"]), 0)
+            self.assertIn("controversy_gap_counts", readiness_artifact)
+            self.assertIn("probe_type_counts", readiness_artifact)
             self.assertEqual("withheld", promotion_payload["summary"]["promotion_status"])
             self.assertFalse(promotion_artifact["observed_inputs"]["next_actions_artifact_present"])
             self.assertTrue(promotion_artifact["observed_inputs"]["next_actions_present"])

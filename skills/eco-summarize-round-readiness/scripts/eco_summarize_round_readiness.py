@@ -51,28 +51,58 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def readiness_status(*, active_hypotheses: int, strong_coverages: int, moderate_coverages: int, open_challenges: int, open_tasks: int, open_probes: int, high_priority_actions: int) -> tuple[str, list[str]]:
+def summarize_counts(items: list[dict[str, Any]], *, field_name: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        value = maybe_text(item.get(field_name))
+        if not value:
+            continue
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def readiness_status(
+    *,
+    active_hypotheses: int,
+    strong_coverages: int,
+    moderate_coverages: int,
+    open_challenges: int,
+    open_tasks: int,
+    open_probes: int,
+    high_priority_actions: int,
+    routing_actions: int,
+    misalignment_actions: int,
+    issue_gap_actions: int,
+) -> tuple[str, list[str]]:
     reasons: list[str] = []
     if active_hypotheses == 0:
-        reasons.append("No active hypotheses are available for round-level review.")
+        reasons.append("No active controversy objects are available for round-level review.")
         return "blocked", reasons
     if strong_coverages + moderate_coverages == 0:
-        reasons.append("No moderate-or-strong evidence coverage objects are available.")
+        reasons.append("No moderate-or-strong evidence coverage objects are available to anchor the controversy map.")
         return "blocked", reasons
     if open_challenges > 0:
-        reasons.append(f"{open_challenges} challenge tickets remain open.")
+        reasons.append(f"{open_challenges} contested points remain open.")
     if open_tasks > 0:
-        reasons.append(f"{open_tasks} board tasks remain in flight.")
+        reasons.append(f"{open_tasks} board coordination tasks remain in flight.")
     if open_probes > 0:
-        reasons.append(f"{open_probes} falsification probes remain open.")
-    if high_priority_actions > 0:
+        reasons.append(f"{open_probes} controversy probes remain open.")
+    if routing_actions > 0:
+        reasons.append(f"{routing_actions} verification-routing actions remain unresolved.")
+    if misalignment_actions > 0:
+        reasons.append(f"{misalignment_actions} formal-public misalignment actions remain unresolved.")
+    if issue_gap_actions > 0:
+        reasons.append(f"{issue_gap_actions} issue-structure or contestation actions remain unresolved.")
+    if high_priority_actions > 0 and not reasons:
         reasons.append(f"{high_priority_actions} high-priority investigation actions remain unresolved.")
     if reasons:
         return "needs-more-data", reasons
     if strong_coverages > 0:
-        reasons.append("At least one strong evidence coverage object is available and no blocking board objects remain.")
+        reasons.append("At least one strong evidence coverage object is available and no controversy-routing blockers remain.")
         return "ready", reasons
-    reasons.append("Coverage is only moderate and the round should remain open for additional investigation.")
+    reasons.append("Coverage is only moderate and the round should remain open for additional controversy review.")
     return "needs-more-data", reasons
 
 
@@ -176,6 +206,21 @@ def summarize_round_readiness_skill(
             and maybe_text(item.get("action_kind")) != "prepare-promotion"
         ]
     ) if isinstance(next_actions.get("ranked_actions"), list) else 0
+    action_gap_counts = summarize_counts(
+        next_actions.get("ranked_actions", [])
+        if isinstance(next_actions.get("ranked_actions"), list)
+        else [],
+        field_name="controversy_gap",
+    )
+    probe_type_counts = summarize_counts(
+        probes.get("probes", []) if isinstance(probes.get("probes"), list) else [],
+        field_name="probe_type",
+    )
+    routing_actions = int(action_gap_counts.get("verification-routing-gap", 0))
+    misalignment_actions = int(action_gap_counts.get("formal-public-misalignment", 0))
+    issue_gap_actions = int(action_gap_counts.get("issue-structure-gap", 0)) + int(
+        action_gap_counts.get("unresolved-contestation", 0)
+    )
 
     status_value, reasons = readiness_status(
         active_hypotheses=active_hypotheses,
@@ -185,11 +230,25 @@ def summarize_round_readiness_skill(
         open_tasks=open_tasks,
         open_probes=open_probes,
         high_priority_actions=high_priority_actions,
+        routing_actions=routing_actions,
+        misalignment_actions=misalignment_actions,
+        issue_gap_actions=issue_gap_actions,
     )
     findings = [
         {"finding_id": "readiness-coverage", "title": "Coverage posture", "summary": f"strong={strong_coverages}, moderate={moderate_coverages}, weak={weak_coverages}", "confidence": "medium"},
         {"finding_id": "readiness-board", "title": "Board posture", "summary": f"active_hypotheses={active_hypotheses}, open_challenges={open_challenges}, open_tasks={open_tasks}", "confidence": "medium"},
-        {"finding_id": "readiness-investigation", "title": "Investigation posture", "summary": f"open_probes={open_probes}, high_priority_actions={high_priority_actions}", "confidence": "medium"},
+        {
+            "finding_id": "readiness-investigation",
+            "title": "Investigation posture",
+            "summary": f"open_probes={open_probes}, high_priority_actions={high_priority_actions}, routing_actions={routing_actions}, misalignment_actions={misalignment_actions}",
+            "confidence": "medium",
+        },
+        {
+            "finding_id": "readiness-controversy-map",
+            "title": "Controversy map posture",
+            "summary": f"issue_gap_actions={issue_gap_actions}, action_gaps={json.dumps(action_gap_counts, ensure_ascii=True, sort_keys=True)}",
+            "confidence": "medium",
+        },
     ]
     if brief_excerpt:
         findings.append({"finding_id": "readiness-brief", "title": "Board brief context", "summary": brief_excerpt, "confidence": "low"})
@@ -218,7 +277,12 @@ def summarize_round_readiness_skill(
             "moderate_coverages": moderate_coverages,
             "weak_coverages": weak_coverages,
             "high_priority_actions": high_priority_actions,
+            "routing_actions": routing_actions,
+            "misalignment_actions": misalignment_actions,
+            "issue_gap_actions": issue_gap_actions,
         },
+        "controversy_gap_counts": action_gap_counts,
+        "probe_type_counts": probe_type_counts,
         "gate_reasons": reasons,
         "findings": findings[:4],
         "recommended_next_skills": recommended_next_skills,

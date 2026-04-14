@@ -47,6 +47,18 @@ STOPWORDS = {
     "with",
 }
 
+CLAIM_TYPE_ALIASES = {
+    "hazard-impact": {"hazard-impact"},
+    "verification": {"verification", "evidence-dispute"},
+    "evidence-dispute": {"verification", "evidence-dispute"},
+    "social-response": {"social-response", "trust-conflict", "representation-conflict"},
+    "trust-conflict": {"social-response", "trust-conflict", "representation-conflict"},
+    "procedure-legitimacy": {"procedure-legitimacy"},
+    "cost-distribution": {"cost-distribution", "distributional-conflict"},
+    "distributional-conflict": {"cost-distribution", "distributional-conflict"},
+    "public-claim": {"public-claim"},
+}
+
 
 def normalize_space(value: Any) -> str:
     return " ".join(str(value).split())
@@ -126,6 +138,80 @@ def semantic_fingerprint(text: str) -> str:
     return "-".join(tokens[:12])
 
 
+def unique_texts(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
+
+
+def list_field(candidate: dict[str, Any], key: str) -> list[str]:
+    values = candidate.get(key)
+    if not isinstance(values, list):
+        return []
+    return [maybe_text(value) for value in values if maybe_text(value)]
+
+
+def humanize_label(value: str) -> str:
+    text = maybe_text(value)
+    if not text:
+        return ""
+    return text.replace("-", " ")
+
+
+def dominant_value(values: list[str], default: str) -> str:
+    counts: dict[str, int] = {}
+    for value in values:
+        text = maybe_text(value)
+        if not text:
+            continue
+        counts[text] = counts.get(text, 0) + 1
+    if not counts:
+        return default
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    return ranked[0][0]
+
+
+def stance_distribution(values: list[str]) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for value in values:
+        text = maybe_text(value)
+        if not text:
+            continue
+        counts[text] = counts.get(text, 0) + 1
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    return [{"stance": label, "count": count} for label, count in ranked[:4]]
+
+
+def claim_type_matches_filter(requested: str, actual: str) -> bool:
+    requested_value = maybe_text(requested)
+    actual_value = maybe_text(actual)
+    if not requested_value:
+        return True
+    allowed = CLAIM_TYPE_ALIASES.get(requested_value, {requested_value})
+    return actual_value in allowed
+
+
+def controversy_group_key(candidate: dict[str, Any], text: str) -> str:
+    concerns = list_field(candidate, "concern_facets")
+    issue = maybe_text(candidate.get("issue_hint")) or maybe_text(candidate.get("claim_type")) or "general-public-controversy"
+    stance = maybe_text(candidate.get("stance_hint")) or "unclear"
+    signature = ",".join(concerns[:2]) or semantic_fingerprint(text)
+    return "|".join(
+        [
+            maybe_text(candidate.get("claim_type")),
+            issue,
+            stance,
+            signature,
+        ]
+    )
+
+
 def unique_refs(refs: list[dict[str, Any]], limit: int) -> list[dict[str, str]]:
     deduped: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -179,16 +265,17 @@ def cluster_claim_candidates_skill(
         if maybe_text(candidate.get("round_id")) and maybe_text(candidate.get("round_id")) != round_id:
             continue
         candidate_type = maybe_text(candidate.get("claim_type"))
-        if wanted_claim_type and candidate_type != wanted_claim_type:
+        if not claim_type_matches_filter(wanted_claim_type, candidate_type):
             continue
         text = maybe_text(candidate.get("statement") or candidate.get("summary"))
         if keywords and not any(keyword in text.casefold() for keyword in keywords):
             continue
-        group_key = f"{candidate_type}|{semantic_fingerprint(text)}"
+        group_key = controversy_group_key(candidate, text)
         groups.setdefault(group_key, []).append(candidate)
     ordered_groups = sorted(groups.values(), key=lambda items: (-len(items), maybe_text(items[0].get("claim_id"))))
     clusters: list[dict[str, Any]] = []
     singleton_count = 0
+    verification_routing_count = 0
     for group in ordered_groups:
         if len(group) < max(1, min_member_count):
             continue
@@ -197,6 +284,22 @@ def cluster_claim_candidates_skill(
         lead = group[0]
         statements = [maybe_text(item.get("statement") or item.get("summary")) for item in group if maybe_text(item.get("statement") or item.get("summary"))]
         label_source = max(statements, key=len) if statements else maybe_text(lead.get("summary"))
+        issue_values = [
+            maybe_text(item.get("issue_hint"))
+            for item in group
+            if maybe_text(item.get("issue_hint"))
+        ]
+        stance_values = [
+            maybe_text(item.get("stance_hint"))
+            for item in group
+            if maybe_text(item.get("stance_hint"))
+        ]
+        concern_values: list[str] = []
+        actor_values: list[str] = []
+        citation_values: list[str] = []
+        verification_values: list[str] = []
+        dispute_values: list[str] = []
+        issue_terms_values: list[str] = []
         start_times = sorted(maybe_text(item.get("time_window", {}).get("start_utc")) for item in group if isinstance(item.get("time_window"), dict) and maybe_text(item.get("time_window", {}).get("start_utc")))
         end_times = sorted(maybe_text(item.get("time_window", {}).get("end_utc")) for item in group if isinstance(item.get("time_window"), dict) and maybe_text(item.get("time_window", {}).get("end_utc")))
         refs: list[dict[str, Any]] = []
@@ -212,6 +315,39 @@ def cluster_claim_candidates_skill(
             public_refs = item.get("public_refs")
             if isinstance(public_refs, list):
                 refs.extend(public_refs)
+            concern_values.extend(list_field(item, "concern_facets"))
+            actor_values.extend(list_field(item, "actor_hints"))
+            citation_values.extend(list_field(item, "evidence_citation_types"))
+            issue_terms_values.extend(list_field(item, "issue_terms"))
+            if maybe_text(item.get("verifiability_hint")):
+                verification_values.append(maybe_text(item.get("verifiability_hint")))
+            if maybe_text(item.get("dispute_type")):
+                dispute_values.append(maybe_text(item.get("dispute_type")))
+        dominant_issue = dominant_value(
+            issue_values,
+            maybe_text(lead.get("issue_hint")) or maybe_text(lead.get("claim_type")) or "general-public-controversy",
+        )
+        dominant_stance = dominant_value(
+            stance_values,
+            maybe_text(lead.get("stance_hint")) or "unclear",
+        )
+        dominant_verification = dominant_value(
+            verification_values,
+            maybe_text(lead.get("verifiability_hint")) or "mixed-public-claim",
+        )
+        dominant_dispute = dominant_value(
+            dispute_values,
+            maybe_text(lead.get("dispute_type")) or "mixed-controversy",
+        )
+        concern_facets = unique_texts(concern_values)[:4]
+        actor_hints = unique_texts(actor_values)[:4]
+        evidence_citation_types = unique_texts(citation_values)[:4]
+        issue_terms = unique_texts(issue_terms_values)[:4]
+        if dominant_verification != "empirical-observable":
+            verification_routing_count += 1
+        cluster_title = humanize_label(dominant_issue) or truncate_text(label_source, 160)
+        if dominant_stance not in {"", "unclear"}:
+            cluster_title = f"{cluster_title} [{humanize_label(dominant_stance)}]"
         fingerprint = semantic_fingerprint(label_source)
         cluster_id = "claimcluster-" + stable_hash(run_id, round_id, lead.get("claim_type"), fingerprint)[:12]
         clusters.append(
@@ -222,9 +358,22 @@ def cluster_claim_candidates_skill(
                 "round_id": round_id,
                 "claim_type": maybe_text(lead.get("claim_type")),
                 "status": "cluster-candidate",
-                "cluster_label": truncate_text(label_source, 160),
+                "cluster_label": truncate_text(cluster_title, 160),
                 "representative_statement": truncate_text(label_source, 320),
                 "semantic_fingerprint": fingerprint,
+                "issue_label": dominant_issue,
+                "issue_terms": issue_terms,
+                "dominant_stance": dominant_stance,
+                "stance_distribution": stance_distribution(stance_values),
+                "concern_facets": concern_facets,
+                "actor_hints": actor_hints,
+                "evidence_citation_types": evidence_citation_types,
+                "verifiability_posture": dominant_verification,
+                "dispute_type": dominant_dispute,
+                "controversy_summary": (
+                    f"Cluster centers on {humanize_label(dominant_issue) or 'a public controversy'} "
+                    f"with a dominant {humanize_label(dominant_stance) or 'unclear'} posture."
+                ),
                 "member_claim_ids": claim_ids,
                 "member_count": len(group),
                 "aggregate_source_signal_count": total_source_signal_count,
@@ -239,10 +388,13 @@ def cluster_claim_candidates_skill(
                     "representative": len(group) > 1,
                     "retained_count": min(len(group), 8),
                     "total_candidate_count": len(group),
-                    "coverage_summary": f"Grouped {len(group)} claim candidates into one board-reviewable cluster.",
+                    "coverage_summary": (
+                        f"Grouped {len(group)} claim candidates into one issue cluster "
+                        f"centered on {humanize_label(dominant_issue) or 'a public controversy'}."
+                    ),
                     "concentration_flags": ["singleton-cluster"] if len(group) == 1 else [],
-                    "coverage_dimensions": ["claim-type", "statement-semantics", "publication-time"],
-                    "missing_dimensions": ["claim-scope"] if not bool((lead.get("claim_scope") or {}).get("usable_for_matching")) else [],
+                    "coverage_dimensions": ["issue-hint", "stance-hint", "concern-facets", "publication-time"],
+                    "missing_dimensions": ["verification-route"] if dominant_verification != "empirical-observable" else [],
                     "sampling_notes": [],
                 },
             }
@@ -261,8 +413,8 @@ def cluster_claim_candidates_skill(
             "keyword_any": keywords,
             "min_member_count": max(1, min_member_count),
             "max_clusters": max(1, max_clusters),
-            "selection_mode": "group-claim-candidates-by-claim-type-and-semantic-fingerprint",
-            "method": "heuristic-claim-cluster-v1",
+            "selection_mode": "group-claim-candidates-by-issue-stance-concern",
+            "method": "controversy-issue-cluster-v1",
         },
         "input_path": str(input_file),
         "cluster_count": len(clusters),
@@ -292,9 +444,13 @@ def cluster_claim_candidates_skill(
         warnings.append({"code": "no-clusters", "message": "No claim clusters were produced from the available claim candidates."})
     gap_hints: list[str] = []
     if not clusters:
-        gap_hints.append("No claim clusters are available for downstream evidence linking.")
+        gap_hints.append("No issue clusters are available for downstream controversy mapping.")
     elif singleton_count == len(clusters):
-        gap_hints.append("Most claim clusters are still singletons; additional scope derivation or wider grouping rules may be needed.")
+        gap_hints.append("Most issue clusters are still singletons; issue grouping may still be too fine-grained.")
+    if verification_routing_count > 0:
+        gap_hints.append(
+            f"{verification_routing_count} clusters look non-empirical and should be routed before observation matching."
+        )
     return {
         "status": "completed",
         "summary": {
@@ -317,8 +473,16 @@ def cluster_claim_candidates_skill(
             "candidate_ids": [cluster["cluster_id"] for cluster in clusters],
             "evidence_refs": unique_refs(artifact_refs, 20),
             "gap_hints": gap_hints,
-            "challenge_hints": ["Check whether semantically close claims are still split across adjacent clusters."] if clusters else [],
-            "suggested_next_skills": ["eco-derive-claim-scope", "eco-link-claims-to-observations"],
+            "challenge_hints": [
+                "Check whether competing stances on the same issue were incorrectly merged into one cluster."
+            ]
+            if clusters
+            else [],
+            "suggested_next_skills": [
+                "eco-derive-claim-scope",
+                "eco-post-board-note",
+                "eco-link-claims-to-observations",
+            ],
         },
     }
 

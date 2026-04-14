@@ -65,6 +65,8 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
         suggestions.extend(["eco-post-board-note", "eco-close-challenge-ticket"])
     if action_kind in {"resolve-contradiction", "expand-coverage"}:
         suggestions.extend(["eco-query-environment-signals", "eco-query-public-signals"])
+    if action_kind == "classify-verifiability":
+        suggestions.extend(["eco-post-board-note", "eco-query-public-signals"])
     if action_kind == "stabilize-hypothesis":
         suggestions.extend(["eco-update-hypothesis-status", "eco-post-board-note"])
     if assigned_role == "environmentalist":
@@ -72,6 +74,87 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
     if assigned_role == "sociologist":
         suggestions.append("eco-query-public-signals")
     return unique_texts(suggestions)
+
+
+def probe_type_for_action(action: dict[str, Any]) -> str:
+    action_kind = maybe_text(action.get("action_kind"))
+    controversy_gap = maybe_text(action.get("controversy_gap"))
+    if action_kind == "classify-verifiability" or controversy_gap == "verification-routing-gap":
+        return "routing-probe"
+    if action_kind == "resolve-contradiction" or controversy_gap == "formal-public-misalignment":
+        return "misalignment-probe"
+    if controversy_gap == "unresolved-contestation":
+        return "contestation-probe"
+    if controversy_gap == "issue-structure-gap":
+        return "issue-structure-probe"
+    if action_kind == "expand-coverage":
+        return "coverage-probe"
+    return "uncertainty-probe"
+
+
+def falsification_question_for_action(action: dict[str, Any], objective: str) -> str:
+    probe_type = probe_type_for_action(action)
+    if probe_type == "routing-probe":
+        return (
+            f"What evidence would show that this issue should not be routed into external verification yet: {objective}"
+        )
+    if probe_type == "misalignment-probe":
+        return (
+            f"What evidence would show the apparent mismatch between public discourse and available signals is overstated: {objective}"
+        )
+    if probe_type == "issue-structure-probe":
+        return (
+            f"What evidence would show the current issue framing should be split, merged, or retired: {objective}"
+        )
+    if probe_type == "coverage-probe":
+        return f"What missing evidence would most likely overturn the current weak support picture: {objective}"
+    return f"What evidence would materially weaken: {objective}"
+
+
+def success_criteria_for_action(action: dict[str, Any]) -> list[str]:
+    probe_type = probe_type_for_action(action)
+    if probe_type == "routing-probe":
+        return [
+            "Classify the target as empirical, procedural, representational, or mixed.",
+            "Explain which lane should be used next and why direct matching is or is not justified.",
+        ]
+    if probe_type == "misalignment-probe":
+        return [
+            "Collect at least one comparison between public narrative and available signals.",
+            "Explain whether the contradiction is substantive, partial, or only apparent.",
+        ]
+    if probe_type == "issue-structure-probe":
+        return [
+            "Clarify whether the current hypothesis is too broad, too narrow, or misplaced.",
+            "Record whether the board should split or consolidate the active issue framing.",
+        ]
+    return [
+        "Collect at least one new observation or contradiction-aware note.",
+        "Explain whether the target remains credible after focused challenge review.",
+    ]
+
+
+def disconfirm_signals_for_action(action: dict[str, Any]) -> list[str]:
+    probe_type = probe_type_for_action(action)
+    if probe_type == "routing-probe":
+        return [
+            "The target turns out to be primarily procedural, normative, or representational rather than empirical.",
+            "No place-sensitive claim remains after tightening the issue framing.",
+        ]
+    if probe_type == "misalignment-probe":
+        return [
+            "The supposed contradiction is explained by timing, scope, or framing mismatch rather than by conflicting evidence.",
+            "Public narrative and available signals converge after comparison.",
+        ]
+    if probe_type == "issue-structure-probe":
+        return [
+            "The current hypothesis collapses multiple distinct issues into one board item.",
+            "The target should be reframed as representation, process, or value conflict instead of verification.",
+        ]
+    return [
+        "A contradiction-leaning evidence link becomes more plausible than the current support path.",
+        "The target can no longer be defended with matching-ready evidence scope.",
+    ]
 
 
 def probe_candidates(actions: list[dict[str, Any]], action_id: str) -> list[dict[str, Any]]:
@@ -108,6 +191,7 @@ def build_probe(
         or maybe_text(action.get("reason"))
         or "Probe the current contradiction or uncertainty."
     )
+    probe_type = probe_type_for_action(action)
     return {
         "probe_id": probe_id,
         "run_id": maybe_text(action.get("run_id")) or maybe_text(default_run_id),
@@ -120,16 +204,13 @@ def build_probe(
         "target_hypothesis_id": hypothesis_id,
         "target_claim_id": claim_id,
         "target_ticket_id": ticket_id,
+        "probe_type": probe_type,
+        "controversy_gap": maybe_text(action.get("controversy_gap")),
+        "recommended_lane": maybe_text(action.get("recommended_lane")),
         "probe_goal": objective,
-        "falsification_question": f"What evidence would materially weaken: {objective}",
-        "success_criteria": [
-            "Collect at least one new observation or contradiction-aware note.",
-            "Explain whether the target remains credible after focused challenge review.",
-        ],
-        "disconfirm_signals": [
-            "A contradiction-leaning evidence link becomes more plausible than the current support path.",
-            "The target can no longer be defended with matching-ready evidence scope.",
-        ],
+        "falsification_question": falsification_question_for_action(action, objective),
+        "success_criteria": success_criteria_for_action(action),
+        "disconfirm_signals": disconfirm_signals_for_action(action),
         "requested_skills": requested_skills_for_action(action),
         "evidence_refs": unique_texts(
             action.get("evidence_refs", [])
@@ -315,9 +396,9 @@ def open_falsification_probe_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": []
             if probes
-            else ["No falsification probes are open for this round yet."],
+            else ["No controversy probes are open for this round yet."],
             "challenge_hints": [
-                "Open probes should be reviewed before marking the round fully ready."
+                "Open routing, contradiction, or issue-structure probes should be reviewed before marking the round fully ready."
             ]
             if probes
             else [],

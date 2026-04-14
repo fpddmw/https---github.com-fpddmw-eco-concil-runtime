@@ -88,11 +88,31 @@ class AnalysisWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", coverage_payload["analysis_sync"]["status"])
             self.assertEqual("completed", audit_payload["status"])
 
+            claim_candidates_artifact = load_json(
+                analytics_path(run_dir, f"claim_candidates_{ROUND_ID}.json")
+            )
+            cluster_artifact = load_json(
+                analytics_path(run_dir, f"claim_candidate_clusters_{ROUND_ID}.json")
+            )
             claim_scope_artifact = load_json(analytics_path(run_dir, f"claim_scope_proposals_{ROUND_ID}.json"))
             observation_scope_artifact = load_json(analytics_path(run_dir, f"observation_scope_proposals_{ROUND_ID}.json"))
             coverage_artifact = load_json(analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json"))
             db_file = analytics_path(run_dir, "signal_plane.sqlite")
 
+            first_candidate = claim_candidates_artifact["candidates"][0]
+            first_cluster = cluster_artifact["clusters"][0]
+            first_scope = claim_scope_artifact["scopes"][0]
+            self.assertIn("issue_hint", first_candidate)
+            self.assertIn("stance_hint", first_candidate)
+            self.assertIn("concern_facets", first_candidate)
+            self.assertIn("verifiability_hint", first_candidate)
+            self.assertIn("issue_label", first_cluster)
+            self.assertIn("dominant_stance", first_cluster)
+            self.assertIn("concern_facets", first_cluster)
+            self.assertIn("verifiability_posture", first_cluster)
+            self.assertIn("verifiability_kind", first_scope)
+            self.assertIn("required_evidence_lane", first_scope)
+            self.assertIn("verification_route_recommended", first_scope)
             self.assertGreaterEqual(claim_scope_artifact["scope_count"], 1)
             self.assertEqual(1, observation_scope_artifact["scope_count"])
             self.assertGreaterEqual(coverage_artifact["coverage_count"], 1)

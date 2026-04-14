@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 ANALYSIS_KIND_EVIDENCE_COVERAGE = "evidence-coverage"
+ANALYSIS_KIND_CONTROVERSY_MAP = "controversy-map"
+ANALYSIS_KIND_VERIFICATION_ROUTE = "verification-route"
+ANALYSIS_KIND_CLAIM_VERIFIABILITY = "claim-verifiability"
+ANALYSIS_KIND_FORMAL_PUBLIC_LINK = "formal-public-link"
+ANALYSIS_KIND_REPRESENTATION_GAP = "representation-gap"
 ANALYSIS_KIND_CLAIM_SCOPE = "claim-scope"
 ANALYSIS_KIND_OBSERVATION_SCOPE = "observation-scope"
 ANALYSIS_KIND_CLAIM_OBSERVATION_LINK = "claim-observation-link"
@@ -17,6 +22,163 @@ ANALYSIS_KIND_CLAIM_CANDIDATE = "claim-candidate"
 ANALYSIS_KIND_OBSERVATION_CANDIDATE = "observation-candidate"
 
 ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
+    ANALYSIS_KIND_FORMAL_PUBLIC_LINK: {
+        "artifact_label": "formal-public-link",
+        "default_relative": "analytics/formal_public_links_{round_id}.json",
+        "items_key": "links",
+        "count_key": "link_count",
+        "id_field": "linkage_id",
+        "subject_field": "issue_label",
+        "score_field": "alignment_score",
+        "state_field": "link_status",
+        "related_id_fields": [
+            "linkage_id",
+            "issue_label",
+            "link_status",
+            "route_status",
+            "recommended_lane",
+        ],
+        "default_source_skill": "eco-link-formal-comments-to-public-discourse",
+        "summary_fields": [
+            "claim_cluster_path",
+            "claim_candidates_path",
+            "verification_route_path",
+        ],
+        "query_basis_fields": [
+            "claim_cluster_path",
+            "claim_candidates_path",
+            "verification_route_path",
+            "claim_cluster_source",
+            "claim_candidates_source",
+            "verification_route_source",
+        ],
+        "parent_artifact_fields": [
+            "claim_cluster_path",
+            "claim_candidates_path",
+            "verification_route_path",
+        ],
+        "item_parent_id_list_fields": [
+            "cluster_ids",
+            "claim_ids",
+            "formal_signal_ids",
+            "public_signal_ids",
+        ],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_REPRESENTATION_GAP: {
+        "artifact_label": "representation-gap",
+        "default_relative": "analytics/representation_gaps_{round_id}.json",
+        "items_key": "gaps",
+        "count_key": "gap_count",
+        "id_field": "gap_id",
+        "subject_field": "issue_label",
+        "score_field": "severity_score",
+        "state_field": "gap_type",
+        "related_id_fields": [
+            "gap_id",
+            "issue_label",
+            "linkage_id",
+            "gap_type",
+            "severity",
+        ],
+        "default_source_skill": "eco-identify-representation-gaps",
+        "summary_fields": ["formal_public_links_path"],
+        "query_basis_fields": [
+            "formal_public_links_path",
+            "formal_public_links_source",
+        ],
+        "parent_artifact_fields": ["formal_public_links_path"],
+        "item_parent_id_fields": ["linkage_id"],
+        "item_parent_id_list_fields": ["cluster_ids", "claim_ids"],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_CONTROVERSY_MAP: {
+        "artifact_label": "controversy-map",
+        "default_relative": "analytics/controversy_map_{round_id}.json",
+        "items_key": "issue_clusters",
+        "count_key": "issue_cluster_count",
+        "id_field": "map_issue_id",
+        "subject_field": "issue_label",
+        "state_field": "route_status",
+        "related_id_fields": [
+            "map_issue_id",
+            "cluster_id",
+            "issue_label",
+            "recommended_lane",
+            "route_status",
+        ],
+        "default_source_skill": "eco-materialize-controversy-map",
+        "summary_fields": [
+            "cluster_input_path",
+            "claim_scope_path",
+            "verifiability_path",
+            "route_path",
+        ],
+        "query_basis_fields": [
+            "cluster_input_path",
+            "claim_scope_path",
+            "verifiability_path",
+            "route_path",
+            "cluster_source",
+            "claim_scope_source",
+            "verifiability_source",
+            "route_source",
+        ],
+        "parent_artifact_fields": [
+            "cluster_input_path",
+            "claim_scope_path",
+            "verifiability_path",
+            "route_path",
+        ],
+        "item_parent_id_fields": ["cluster_id"],
+        "item_parent_id_list_fields": ["claim_ids"],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_VERIFICATION_ROUTE: {
+        "artifact_label": "verification-route",
+        "default_relative": "investigation/verification_routes_{round_id}.json",
+        "items_key": "routes",
+        "count_key": "route_count",
+        "id_field": "route_id",
+        "subject_field": "claim_id",
+        "state_field": "route_status",
+        "related_id_fields": [
+            "route_id",
+            "claim_id",
+            "assessment_id",
+            "recommended_lane",
+            "route_status",
+        ],
+        "default_source_skill": "eco-route-verification-lane",
+        "summary_fields": ["input_path"],
+        "query_basis_fields": ["input_path", "input_source"],
+        "parent_artifact_fields": ["input_path"],
+        "item_parent_id_fields": ["claim_id", "assessment_id", "claim_scope_id"],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_CLAIM_VERIFIABILITY: {
+        "artifact_label": "claim-verifiability",
+        "default_relative": "analytics/claim_verifiability_assessments_{round_id}.json",
+        "items_key": "assessments",
+        "count_key": "assessment_count",
+        "id_field": "assessment_id",
+        "subject_field": "claim_id",
+        "score_field": "confidence",
+        "state_field": "verifiability_kind",
+        "related_id_fields": [
+            "assessment_id",
+            "claim_id",
+            "claim_scope_id",
+            "verifiability_kind",
+            "recommended_lane",
+        ],
+        "default_source_skill": "eco-classify-claim-verifiability",
+        "summary_fields": ["input_path"],
+        "query_basis_fields": ["input_path", "input_source"],
+        "parent_artifact_fields": ["input_path"],
+        "item_parent_id_fields": ["claim_id", "claim_scope_id"],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
     ANALYSIS_KIND_EVIDENCE_COVERAGE: {
         "artifact_label": "coverage",
         "default_relative": "analytics/evidence_coverage_{round_id}.json",
@@ -1894,6 +2056,268 @@ def load_evidence_coverage_context(
         "analysis_sync": context.get("analysis_sync", {}),
         "result_contract": context.get("result_contract", empty_result_contract()),
         "coverage_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_formal_public_link_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    formal_public_links_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_FORMAL_PUBLIC_LINK,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=formal_public_links_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "formal_public_links_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_formal_public_link_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    formal_public_links_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_FORMAL_PUBLIC_LINK,
+        artifact_path=formal_public_links_path,
+        db_path=db_path,
+    )
+    return {
+        "formal_public_links_wrapper": context.get("payload_wrapper", {}),
+        "links": context.get("items", []),
+        "link_count": int(context.get("item_count") or 0),
+        "formal_public_link_source": maybe_text(context.get("source")),
+        "formal_public_links_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "formal_public_links_artifact_present": bool(
+            context.get("artifact_present")
+        ),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_representation_gap_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    representation_gap_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_REPRESENTATION_GAP,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=representation_gap_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "representation_gap_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_representation_gap_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    representation_gap_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_REPRESENTATION_GAP,
+        artifact_path=representation_gap_path,
+        db_path=db_path,
+    )
+    return {
+        "representation_gap_wrapper": context.get("payload_wrapper", {}),
+        "gaps": context.get("items", []),
+        "gap_count": int(context.get("item_count") or 0),
+        "representation_gap_source": maybe_text(context.get("source")),
+        "representation_gap_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "representation_gap_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_controversy_map_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    controversy_map_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_CONTROVERSY_MAP,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=controversy_map_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "controversy_map_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_controversy_map_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    controversy_map_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_CONTROVERSY_MAP,
+        artifact_path=controversy_map_path,
+        db_path=db_path,
+    )
+    return {
+        "controversy_map_wrapper": context.get("payload_wrapper", {}),
+        "issue_clusters": context.get("items", []),
+        "issue_cluster_count": int(context.get("item_count") or 0),
+        "controversy_map_source": maybe_text(context.get("source")),
+        "controversy_map_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "controversy_map_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_verification_route_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    verification_route_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_VERIFICATION_ROUTE,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=verification_route_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "verification_route_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_verification_route_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    verification_route_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_VERIFICATION_ROUTE,
+        artifact_path=verification_route_path,
+        db_path=db_path,
+    )
+    return {
+        "verification_route_wrapper": context.get("payload_wrapper", {}),
+        "routes": context.get("items", []),
+        "route_count": int(context.get("item_count") or 0),
+        "verification_route_source": maybe_text(context.get("source")),
+        "verification_route_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "verification_route_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_claim_verifiability_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    claim_verifiability_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_CLAIM_VERIFIABILITY,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=claim_verifiability_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "claim_verifiability_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_claim_verifiability_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    claim_verifiability_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_CLAIM_VERIFIABILITY,
+        artifact_path=claim_verifiability_path,
+        db_path=db_path,
+    )
+    return {
+        "claim_verifiability_wrapper": context.get("payload_wrapper", {}),
+        "assessments": context.get("items", []),
+        "assessment_count": int(context.get("item_count") or 0),
+        "claim_verifiability_source": maybe_text(context.get("source")),
+        "claim_verifiability_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "claim_verifiability_artifact_present": bool(context.get("artifact_present")),
         "warnings": context.get("warnings", []),
     }
 

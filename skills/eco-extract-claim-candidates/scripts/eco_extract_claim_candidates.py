@@ -23,6 +23,190 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     sync_claim_candidate_result_set,
 )
 
+STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "but",
+    "by",
+    "for",
+    "from",
+    "has",
+    "have",
+    "in",
+    "into",
+    "is",
+    "it",
+    "its",
+    "of",
+    "on",
+    "or",
+    "our",
+    "that",
+    "the",
+    "their",
+    "this",
+    "to",
+    "was",
+    "were",
+    "with",
+    "today",
+}
+
+CLAIM_TYPE_ALIASES = {
+    "hazard-impact": {"hazard-impact"},
+    "verification": {"verification", "evidence-dispute"},
+    "evidence-dispute": {"verification", "evidence-dispute"},
+    "social-response": {"social-response", "trust-conflict", "representation-conflict"},
+    "trust-conflict": {"social-response", "trust-conflict", "representation-conflict"},
+    "procedure-legitimacy": {"procedure-legitimacy"},
+    "cost-distribution": {"cost-distribution", "distributional-conflict"},
+    "distributional-conflict": {"cost-distribution", "distributional-conflict"},
+    "public-claim": {"public-claim"},
+}
+
+ISSUE_RULES: dict[str, tuple[str, ...]] = {
+    "air-quality-smoke": (
+        "smoke",
+        "wildfire",
+        "haze",
+        "air quality",
+        "pm2.5",
+        "pollution",
+    ),
+    "heat-risk": ("heat", "temperature", "hot", "heatwave"),
+    "flood-water": ("flood", "stormwater", "overflow", "rainfall", "precipitation"),
+    "water-contamination": (
+        "contamination",
+        "toxic",
+        "water quality",
+        "drinking water",
+        "chemical",
+        "spill",
+    ),
+    "permit-process": (
+        "permit",
+        "hearing",
+        "comment period",
+        "rulemaking",
+        "agency",
+        "review process",
+        "eis",
+    ),
+    "waste-facility": (
+        "landfill",
+        "incinerator",
+        "waste facility",
+        "dump",
+        "plant",
+    ),
+    "energy-infrastructure": (
+        "pipeline",
+        "solar",
+        "wind farm",
+        "battery",
+        "grid",
+        "power plant",
+    ),
+    "representation-trust": (
+        "community voice",
+        "ignored",
+        "misleading",
+        "rumor",
+        "trust",
+        "representation",
+    ),
+}
+
+CONCERN_RULES: dict[str, tuple[str, ...]] = {
+    "health-safety": (
+        "health",
+        "asthma",
+        "respiratory",
+        "toxic",
+        "unsafe",
+        "dangerous",
+    ),
+    "ecology": (
+        "ecosystem",
+        "wildlife",
+        "river",
+        "forest",
+        "water quality",
+        "habitat",
+    ),
+    "cost-livelihood": (
+        "cost",
+        "expensive",
+        "jobs",
+        "business",
+        "livelihood",
+        "income",
+    ),
+    "procedure-governance": (
+        "permit",
+        "hearing",
+        "rulemaking",
+        "comment period",
+        "transparency",
+        "agency",
+    ),
+    "fairness-equity": (
+        "justice",
+        "equity",
+        "unfair",
+        "burden",
+        "low-income",
+        "community",
+    ),
+    "trust-credibility": (
+        "official",
+        "media",
+        "misleading",
+        "rumor",
+        "false",
+        "trust",
+    ),
+    "daily-life": (
+        "school",
+        "outdoor",
+        "visibility",
+        "commute",
+        "home",
+        "children",
+    ),
+}
+
+ACTOR_RULES: dict[str, tuple[str, ...]] = {
+    "agency": ("agency", "epa", "department", "regulator", "city hall"),
+    "resident": ("resident", "neighbor", "family", "community", "people here"),
+    "company": ("company", "developer", "operator", "industry", "utility"),
+    "ngo": ("ngo", "activist", "environmental group", "coalition"),
+    "expert": ("scientist", "researcher", "expert", "doctor", "professor"),
+    "media": ("reporter", "news", "media", "channel", "press"),
+}
+
+CITATION_RULES: dict[str, tuple[str, ...]] = {
+    "official-document": ("official", "agency", "permit", "rulemaking", "filing"),
+    "scientific-study": ("study", "research", "scientist", "peer reviewed", "paper"),
+    "news-report": ("report", "reported", "news", "article", "headline"),
+    "firsthand-observation": ("i saw", "we saw", "look outside", "skyline", "smell", "visibility"),
+    "personal-experience": ("my kids", "my family", "at my home", "my neighborhood"),
+    "platform-amplification": ("viral", "repost", "shared", "trending"),
+    "rumor-hearsay": ("heard that", "rumor", "someone said", "they say"),
+}
+
+STANCE_RULES: dict[str, tuple[str, ...]] = {
+    "oppose": ("oppose", "against", "reject", "stop", "ban", "harmful", "unacceptable"),
+    "support": ("support", "approve", "benefit", "needed", "necessary", "protect", "helps"),
+    "verify": ("verify", "evidence", "data", "official", "confirmed", "check", "investigate", "whether", "unclear"),
+    "report-impact": ("intense", "covered", "haze", "smoke over", "affected", "flooded", "hot", "today"),
+}
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
     signal_id TEXT PRIMARY KEY,
@@ -135,22 +319,216 @@ def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def claim_type_from_text(text: str) -> str:
-    folded = text.casefold()
-    if any(token in folded for token in ("smoke", "wildfire", "fire", "flood", "pollution", "contamination")):
+def semantic_tokens(text: str) -> list[str]:
+    tokens = re.findall(r"[a-z0-9]+", text.casefold())
+    return [token for token in tokens if token not in STOPWORDS]
+
+
+def semantic_fingerprint(text: str, *, limit: int = 8) -> str:
+    tokens = semantic_tokens(text)
+    if not tokens:
+        return "empty"
+    return "-".join(tokens[:limit])
+
+
+def count_rule_hits(folded: str, terms: tuple[str, ...]) -> int:
+    return sum(1 for term in terms if term in folded)
+
+
+def top_rule_matches(
+    folded: str,
+    rules: dict[str, tuple[str, ...]],
+    *,
+    limit: int,
+) -> list[str]:
+    scored = [
+        (count_rule_hits(folded, terms), label)
+        for label, terms in rules.items()
+        if count_rule_hits(folded, terms) > 0
+    ]
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [label for _, label in scored[:limit]]
+
+
+def evidence_citation_types(text: str) -> list[str]:
+    folded = maybe_text(text).casefold()
+    values = top_rule_matches(folded, CITATION_RULES, limit=3)
+    return values or ["uncited-platform-discourse"]
+
+
+def concern_facets(text: str) -> list[str]:
+    folded = maybe_text(text).casefold()
+    values = top_rule_matches(folded, CONCERN_RULES, limit=4)
+    if values:
+        return values
+    if "smoke" in folded or "wildfire" in folded:
+        return ["health-safety", "daily-life"]
+    return ["general-public-concern"]
+
+
+def actor_hints(text: str) -> list[str]:
+    folded = maybe_text(text).casefold()
+    values = top_rule_matches(folded, ACTOR_RULES, limit=3)
+    if values:
+        return values
+    return ["public-participants"]
+
+
+def issue_hint(text: str) -> str:
+    folded = maybe_text(text).casefold()
+    matches = top_rule_matches(folded, ISSUE_RULES, limit=1)
+    return matches[0] if matches else "general-public-controversy"
+
+
+def issue_terms(text: str, primary_issue: str) -> list[str]:
+    folded = maybe_text(text).casefold()
+    matched_terms: list[str] = []
+    for term in ISSUE_RULES.get(primary_issue, ()):
+        if term in folded:
+            matched_terms.extend(
+                [part for part in re.findall(r"[a-z0-9]+", term.casefold()) if part not in STOPWORDS]
+            )
+    if matched_terms:
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for token in matched_terms:
+            if token in seen:
+                continue
+            seen.add(token)
+            deduped.append(token)
+        return deduped[:4]
+    return semantic_tokens(text)[:4]
+
+
+def stance_hint(text: str) -> str:
+    folded = maybe_text(text).casefold()
+    scores = {
+        label: count_rule_hits(folded, terms) for label, terms in STANCE_RULES.items()
+    }
+    ranked = sorted(
+        [(score, label) for label, score in scores.items() if score > 0],
+        key=lambda item: (-item[0], item[1]),
+    )
+    return ranked[0][1] if ranked else "unclear"
+
+
+def verifiability_hint(text: str, *, primary_issue: str, concerns: list[str]) -> str:
+    folded = maybe_text(text).casefold()
+    if primary_issue in {
+        "air-quality-smoke",
+        "heat-risk",
+        "flood-water",
+        "water-contamination",
+    }:
+        return "empirical-observable"
+    if primary_issue in {"permit-process"} or "procedure-governance" in concerns:
+        return "procedural-record"
+    if primary_issue in {"representation-trust"} or "trust-credibility" in concerns:
+        return "discourse-representation"
+    if "cost-livelihood" in concerns or "fairness-equity" in concerns:
+        return "normative-distribution"
+    if any(token in folded for token in ("forecast", "projection", "future", "model")):
+        return "predictive-uncertainty"
+    return "mixed-public-claim"
+
+
+def dispute_type(
+    *,
+    primary_issue: str,
+    concerns: list[str],
+    citations: list[str],
+    verification_hint: str,
+) -> str:
+    if verification_hint == "empirical-observable":
+        return "impact-severity"
+    if verification_hint == "procedural-record":
+        return "governance-procedure"
+    if verification_hint == "discourse-representation":
+        return "representation-gap"
+    if verification_hint == "normative-distribution":
+        return "distributional-conflict"
+    if "rumor-hearsay" in citations or "official-document" in citations:
+        return "evidence-quality"
+    if primary_issue == "representation-trust" or "trust-credibility" in concerns:
+        return "trust-conflict"
+    return "mixed-controversy"
+
+
+def claim_type_from_profile(profile: dict[str, Any]) -> str:
+    verification = maybe_text(profile.get("verifiability_hint"))
+    concerns = profile.get("concern_facets", [])
+    if verification == "empirical-observable":
         return "hazard-impact"
-    if any(token in folded for token in ("fear", "concern", "anger", "protest", "panic")):
-        return "social-response"
-    if any(token in folded for token in ("confirmed", "report", "official", "evidence")):
-        return "verification"
+    if verification == "procedural-record":
+        return "procedure-legitimacy"
+    if verification == "discourse-representation":
+        return "trust-conflict"
+    if verification == "normative-distribution":
+        return "cost-distribution"
+    if maybe_text(profile.get("dispute_type")) == "evidence-quality":
+        return "evidence-dispute"
+    if isinstance(concerns, list) and "trust-credibility" in concerns:
+        return "trust-conflict"
     return "public-claim"
 
 
-def semantic_fingerprint(text: str) -> str:
-    tokens = re.findall(r"[a-z0-9]+", text.casefold())
-    if not tokens:
-        return "empty"
-    return "-".join(tokens[:12])
+def claim_type_matches_filter(requested: str, actual: str) -> bool:
+    requested_value = maybe_text(requested)
+    actual_value = maybe_text(actual)
+    if not requested_value:
+        return True
+    allowed = CLAIM_TYPE_ALIASES.get(requested_value, {requested_value})
+    return actual_value in allowed
+
+
+def controversy_profile(text: str) -> dict[str, Any]:
+    primary_issue = issue_hint(text)
+    concerns = concern_facets(text)
+    citations = evidence_citation_types(text)
+    verification = verifiability_hint(
+        text,
+        primary_issue=primary_issue,
+        concerns=concerns,
+    )
+    profile = {
+        "issue_hint": primary_issue,
+        "issue_terms": issue_terms(text, primary_issue),
+        "stance_hint": stance_hint(text),
+        "concern_facets": concerns,
+        "actor_hints": actor_hints(text),
+        "evidence_citation_types": citations,
+        "verifiability_hint": verification,
+    }
+    profile["dispute_type"] = dispute_type(
+        primary_issue=primary_issue,
+        concerns=concerns,
+        citations=citations,
+        verification_hint=verification,
+    )
+    profile["claim_type"] = claim_type_from_profile(profile)
+    profile["group_signature"] = "|".join(
+        [
+            maybe_text(profile["claim_type"]),
+            maybe_text(profile["issue_hint"]),
+            maybe_text(profile["stance_hint"]),
+            ",".join(profile["concern_facets"][:2]),
+        ]
+    )
+    return profile
+
+
+def controversy_summary(profile: dict[str, Any], *, signal_count: int) -> str:
+    issue_value = maybe_text(profile.get("issue_hint")).replace("-", " ")
+    stance_value = maybe_text(profile.get("stance_hint")).replace("-", " ")
+    concerns = profile.get("concern_facets", [])
+    concern_value = ", ".join(
+        maybe_text(item).replace("-", " ") for item in concerns[:2] if maybe_text(item)
+    )
+    concern_text = concern_value or "general public concern"
+    return (
+        f"Grouped {signal_count} public signals around {issue_value or 'a public issue'} "
+        f"with a dominant {stance_value or 'unclear'} posture and concerns about {concern_text}."
+    )
 
 
 def signal_ref(row: sqlite3.Row) -> dict[str, str]:
@@ -194,19 +572,48 @@ def extract_claim_candidates_skill(
             continue
         if keywords and not any(keyword in text.casefold() for keyword in keywords):
             continue
-        derived_claim_type = claim_type_from_text(text)
-        if wanted_claim_type and derived_claim_type != wanted_claim_type:
+        profile = controversy_profile(text)
+        derived_claim_type = maybe_text(profile.get("claim_type"))
+        if not claim_type_matches_filter(wanted_claim_type, derived_claim_type):
             continue
-        group_key = f"{derived_claim_type}|{semantic_fingerprint(text)}"
+        group_key = maybe_text(profile.get("group_signature"))
         groups.setdefault(group_key, []).append(row)
     ordered_groups = sorted(groups.values(), key=lambda items: (-len(items), maybe_text(items[0]["signal_id"])))
     candidates: list[dict[str, Any]] = []
     for group in ordered_groups[: max(1, max_candidates)]:
         lead = group[0]
         source_text = " ".join(part for part in (maybe_text(lead["title"]), maybe_text(lead["body_text"])) if part)
-        derived_claim_type = claim_type_from_text(source_text)
-        candidate_id = "claimcand-" + stable_hash(run_id, round_id, derived_claim_type, semantic_fingerprint(source_text))[:12]
+        profile = controversy_profile(source_text)
+        derived_claim_type = maybe_text(profile.get("claim_type"))
+        candidate_id = "claimcand-" + stable_hash(
+            run_id,
+            round_id,
+            derived_claim_type,
+            maybe_text(profile.get("issue_hint")),
+            maybe_text(profile.get("stance_hint")),
+            maybe_text(profile.get("dispute_type")),
+        )[:12]
         time_values = sorted(maybe_text(row["published_at_utc"]) for row in group if maybe_text(row["published_at_utc"]))
+        concern_values = (
+            profile.get("concern_facets", [])
+            if isinstance(profile.get("concern_facets"), list)
+            else []
+        )
+        actor_values = (
+            profile.get("actor_hints", [])
+            if isinstance(profile.get("actor_hints"), list)
+            else []
+        )
+        citation_values = (
+            profile.get("evidence_citation_types", [])
+            if isinstance(profile.get("evidence_citation_types"), list)
+            else []
+        )
+        issue_terms_value = (
+            profile.get("issue_terms", [])
+            if isinstance(profile.get("issue_terms"), list)
+            else []
+        )
         candidates.append(
             {
                 "schema_version": "n2",
@@ -218,6 +625,23 @@ def extract_claim_candidates_skill(
                 "status": "candidate",
                 "summary": truncate_text(lead["title"] or lead["body_text"], 180),
                 "statement": truncate_text(source_text, 320),
+                "issue_hint": maybe_text(profile.get("issue_hint")),
+                "issue_terms": issue_terms_value,
+                "stance_hint": maybe_text(profile.get("stance_hint")),
+                "concern_facets": concern_values,
+                "actor_hints": actor_values,
+                "evidence_citation_types": citation_values,
+                "verifiability_hint": maybe_text(profile.get("verifiability_hint")),
+                "dispute_type": maybe_text(profile.get("dispute_type")),
+                "controversy_seed": {
+                    "issue_hint": maybe_text(profile.get("issue_hint")),
+                    "stance_hint": maybe_text(profile.get("stance_hint")),
+                    "concern_facets": concern_values,
+                    "actor_hints": actor_values,
+                    "evidence_citation_types": citation_values,
+                    "verifiability_hint": maybe_text(profile.get("verifiability_hint")),
+                    "dispute_type": maybe_text(profile.get("dispute_type")),
+                },
                 "time_window": {
                     "start_utc": time_values[0] if time_values else "",
                     "end_utc": time_values[-1] if time_values else "",
@@ -231,10 +655,10 @@ def extract_claim_candidates_skill(
                     "representative": len(group) > 1,
                     "retained_count": min(len(group), 8),
                     "total_candidate_count": len(group),
-                    "coverage_summary": f"Grouped {len(group)} public signals into one claim candidate.",
+                    "coverage_summary": controversy_summary(profile, signal_count=len(group)),
                     "concentration_flags": [],
-                    "coverage_dimensions": ["source-skill", "publication-time"],
-                    "missing_dimensions": ["place-scope"],
+                    "coverage_dimensions": ["issue-hint", "stance-hint", "concern-facets", "publication-time"],
+                    "missing_dimensions": ["verification-route", "place-scope"],
                     "sampling_notes": [],
                 },
             }
@@ -254,8 +678,9 @@ def extract_claim_candidates_skill(
                 maybe_text(keyword) for keyword in keyword_any if maybe_text(keyword)
             ],
             "max_candidates": max(1, int(max_candidates)),
-            "selection_mode": "group-by-claim-type-and-semantic-fingerprint",
+            "selection_mode": "group-by-issue-stance-concern-seed",
             "order_by": "COALESCE(published_at_utc, captured_at_utc) DESC, signal_id",
+            "method": "controversy-seed-extraction-v1",
         },
         "candidate_count": len(candidates),
         "candidates": candidates,
@@ -285,7 +710,24 @@ def extract_claim_candidates_skill(
         "canonical_ids": [candidate["claim_id"] for candidate in candidates],
         "warnings": warnings,
         "analysis_sync": analysis_sync,
-        "board_handoff": {"candidate_ids": [candidate["claim_id"] for candidate in candidates], "evidence_refs": artifact_refs[:20], "gap_hints": ["Claim candidates still need scope derivation before direct matching."] if candidates else [], "challenge_hints": ["Check whether repeated public narratives are still collapsing distinct sub-claims."] if candidates else [], "suggested_next_skills": ["eco-cluster-claim-candidates", "eco-build-normalization-audit"]},
+        "board_handoff": {
+            "candidate_ids": [candidate["claim_id"] for candidate in candidates],
+            "evidence_refs": artifact_refs[:20],
+            "gap_hints": [
+                "Issue and stance seeds still need clustering before they can support controversy mapping."
+            ]
+            if candidates
+            else [],
+            "challenge_hints": [
+                "Review whether multiple public narratives with different stances were merged into one seed."
+            ]
+            if candidates
+            else [],
+            "suggested_next_skills": [
+                "eco-cluster-claim-candidates",
+                "eco-build-normalization-audit",
+            ],
+        },
     }
 
 

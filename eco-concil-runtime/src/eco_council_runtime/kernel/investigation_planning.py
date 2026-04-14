@@ -17,6 +17,7 @@ ACTION_KIND_WEIGHT = {
     "resolve-challenge": 2.6,
     "resolve-contradiction": 2.4,
     "finish-board-task": 2.1,
+    "classify-verifiability": 1.95,
     "stabilize-hypothesis": 1.8,
     "expand-coverage": 1.7,
     "prepare-promotion": 1.2,
@@ -470,15 +471,19 @@ def action_from_open_challenge(challenge: dict[str, Any], brief_context: str) ->
         "action_kind": "resolve-challenge",
         "priority": maybe_text(challenge.get("priority")) or "high",
         "assigned_role": maybe_text(challenge.get("owner_role")) or "challenger",
-        "objective": maybe_text(challenge.get("title")) or "Resolve an open challenge ticket.",
+        "objective": maybe_text(challenge.get("title"))
+        or "Resolve an open controversy point before closing the round.",
         "reason": maybe_text(challenge.get("title"))
-        or "An open challenge ticket still needs explicit follow-up.",
+        or "An open contested point still needs follow-up before the controversy map is stable.",
         "source_ids": unique_texts([ticket_id, target_claim_id, target_hypothesis_id]),
         "target": {
             "ticket_id": ticket_id,
             "claim_id": target_claim_id,
             "hypothesis_id": target_hypothesis_id,
         },
+        "controversy_gap": "unresolved-contestation",
+        "recommended_lane": "probe-before-closure",
+        "expected_outcome": "Decide whether the contested point needs verification, rebuttal, or reframing.",
         "evidence_refs": unique_texts(
             challenge.get("linked_artifact_refs", [])
             if isinstance(challenge.get("linked_artifact_refs"), list)
@@ -499,10 +504,11 @@ def action_from_open_task(task: dict[str, Any], brief_context: str) -> dict[str,
         "action_kind": "finish-board-task",
         "priority": maybe_text(task.get("priority")) or "medium",
         "assigned_role": maybe_text(task.get("owner_role")) or "moderator",
-        "objective": maybe_text(task.get("title")) or "Finish a claimed board task.",
+        "objective": maybe_text(task.get("title"))
+        or "Finish a board task that blocks controversy-map completion.",
         "reason": maybe_text(task.get("title"))
         or maybe_text(task.get("task_text"))
-        or "A claimed task is still in flight.",
+        or "A board coordination task is still in flight.",
         "source_ids": unique_texts(
             [task_id, task.get("source_ticket_id"), task.get("source_hypothesis_id")]
         ),
@@ -511,6 +517,9 @@ def action_from_open_task(task: dict[str, Any], brief_context: str) -> dict[str,
             "ticket_id": maybe_text(task.get("source_ticket_id")),
             "hypothesis_id": maybe_text(task.get("source_hypothesis_id")),
         },
+        "controversy_gap": "board-coordination-gap",
+        "recommended_lane": "board-followthrough",
+        "expected_outcome": "Finish the coordination work needed to advance the round.",
         "evidence_refs": unique_texts(
             task.get("linked_artifact_refs", [])
             if isinstance(task.get("linked_artifact_refs"), list)
@@ -543,13 +552,17 @@ def action_from_hypothesis(
         "action_kind": "stabilize-hypothesis",
         "priority": "high" if (confidence or 0.0) < 0.6 else "medium",
         "assigned_role": maybe_text(hypothesis.get("owner_role")) or "moderator",
-        "objective": maybe_text(hypothesis.get("title")) or "Stabilize an active hypothesis.",
+        "objective": maybe_text(hypothesis.get("title"))
+        or "Stabilize an active issue interpretation.",
         "reason": "The board still carries an active hypothesis with limited confidence.",
         "source_ids": unique_texts([hypothesis_id] + linked_claim_ids),
         "target": {
             "hypothesis_id": hypothesis_id,
             "claim_id": linked_claim_ids[0] if linked_claim_ids else "",
         },
+        "controversy_gap": "issue-structure-gap",
+        "recommended_lane": "clarify-board-position",
+        "expected_outcome": "Clarify whether the active interpretation should stay open, split, or be retired.",
         "evidence_refs": [],
         "probe_candidate": (confidence or 0.0) < 0.6,
         "contradiction_link_count": 0,
@@ -577,36 +590,57 @@ def action_from_coverage(
         return None
     coverage_id = maybe_text(coverage.get("coverage_id"))
     claim_id = maybe_text(coverage.get("claim_id"))
-    action_kind = (
-        "resolve-contradiction" if contradiction_count > 0 else "expand-coverage"
-    )
-    priority = "high" if contradiction_count > 0 or readiness == "weak" else "medium"
-    objective = (
-        "Resolve contradiction-leaning evidence."
-        if contradiction_count > 0
-        else "Expand evidence coverage for a still-weak claim."
-    )
-    reason = (
-        f"Claim {claim_id} has {contradiction_count} contradiction links."
-        if contradiction_count > 0
-        else f"Claim {claim_id} is only {readiness or 'unknown'} on evidence coverage."
-    )
+    claim_scope_ready = bool(coverage.get("claim_scope_ready"))
+    if contradiction_count > 0:
+        action_kind = "resolve-contradiction"
+        priority = "high"
+        assigned_role = role_from_coverage(coverage)
+        objective = "Check whether empirical signals materially contradict the current public narrative."
+        reason = f"Claim {claim_id} has {contradiction_count} contradiction links."
+        controversy_gap = "formal-public-misalignment"
+        recommended_lane = "mixed-verification-review"
+        expected_outcome = "Decide whether the contradiction is real, partial, or due to weak framing."
+    elif not claim_scope_ready:
+        action_kind = "classify-verifiability"
+        priority = "high" if readiness == "weak" else "medium"
+        assigned_role = "moderator"
+        objective = "Clarify whether this controversy point should enter the verification lane."
+        reason = (
+            f"Claim {claim_id} lacks matching-ready scope and should be routed before more evidence expansion."
+        )
+        controversy_gap = "verification-routing-gap"
+        recommended_lane = "route-before-matching"
+        expected_outcome = "Classify the issue as empirical, procedural, representational, or mixed."
+    else:
+        action_kind = "expand-coverage"
+        priority = "high" if readiness == "weak" else "medium"
+        assigned_role = role_from_coverage(coverage)
+        objective = "Expand verification coverage for a claim that still lacks enough support."
+        reason = f"Claim {claim_id} is only {readiness or 'unknown'} on evidence coverage."
+        controversy_gap = "verification-gap"
+        recommended_lane = "environmental-observation"
+        expected_outcome = "Add enough support to decide whether the claim should remain active."
     return {
         "action_id": "action-"
         + stable_hash("d1-action", coverage_id, action_kind)[:12],
         "action_kind": action_kind,
         "priority": priority,
-        "assigned_role": role_from_coverage(coverage),
+        "assigned_role": assigned_role,
         "objective": objective,
         "reason": reason,
         "source_ids": unique_texts([coverage_id, claim_id]),
         "target": {"coverage_id": coverage_id, "claim_id": claim_id},
+        "controversy_gap": controversy_gap,
+        "recommended_lane": recommended_lane,
+        "expected_outcome": expected_outcome,
         "evidence_refs": unique_texts(
             coverage.get("evidence_refs", [])
             if isinstance(coverage.get("evidence_refs"), list)
             else []
         ),
-        "probe_candidate": contradiction_count > 0 or readiness == "weak",
+        "probe_candidate": contradiction_count > 0
+        or readiness == "weak"
+        or action_kind == "classify-verifiability",
         "contradiction_link_count": contradiction_count,
         "coverage_score": float(coverage.get("coverage_score") or 0.0),
         "confidence": None,
@@ -626,10 +660,13 @@ def prepare_promotion_action(
         "action_kind": "prepare-promotion",
         "priority": "medium",
         "assigned_role": "moderator",
-        "objective": "Prepare the round for readiness and promotion review.",
+        "objective": "Prepare the round for readiness review once the controversy map is stable.",
         "reason": f"Claim {claim_id} already has strong evidence coverage and can move toward readiness gating.",
         "source_ids": unique_texts([coverage_id, claim_id]),
         "target": {"coverage_id": coverage_id, "claim_id": claim_id},
+        "controversy_gap": "promotion-readiness",
+        "recommended_lane": "promotion-review",
+        "expected_outcome": "Freeze the strongest support path for board and reporting review.",
         "evidence_refs": unique_texts(
             coverage.get("evidence_refs", [])
             if isinstance(coverage.get("evidence_refs"), list)

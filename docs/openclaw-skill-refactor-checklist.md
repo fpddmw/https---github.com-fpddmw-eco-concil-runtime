@@ -4,6 +4,36 @@
 
 本清单只服务下一阶段开发，不再承担“总体介绍”功能。
 
+## 1.1 当前进度（2026-04-13）
+
+- 已交付第一批的首版兼容重构：
+  - `eco-extract-claim-candidates`
+  - `eco-cluster-claim-candidates`
+  - `eco-derive-claim-scope`
+  - `eco-propose-next-actions`
+  - `eco-open-falsification-probe`
+  - `eco-summarize-round-readiness`
+- 已新增并交付首版新主链技能：
+  - `eco-classify-claim-verifiability`
+  - `eco-route-verification-lane`
+  - `eco-materialize-controversy-map`
+- 已新增并交付 formal/public 联动技能：
+  - `eco-link-formal-comments-to-public-discourse`
+  - `eco-identify-representation-gaps`
+- analysis plane 已落地的新对象：
+  - `claim-verifiability`
+  - `verification-route`
+  - `controversy-map`
+  - `formal-public-link`
+  - `representation-gap`
+- 本次交付原则：
+  - 保留旧 skill 名称、CLI 参数、核心 artifact envelope 与主要 ID 字段。
+  - 在旧结构上新增 `issue / stance / concern / verifiability / dispute` 等字段。
+  - 将 `next actions / probe / readiness` 的解释口径切向“争议结构缺口与 routing”，但不一次性拆掉旧的 `coverage` 兼容链。
+- 仍待后续批次完成的内容：
+  - cross-platform diffusion 的独立 skill 化。
+  - board/reporting 对新对象的全面消费。
+
 状态约定：
 
 1. `[保留]`
@@ -88,6 +118,11 @@
 
 ## 4. 第一批必须重构
 
+说明：
+
+- 以下 6 项已完成首版兼容重构。
+- 目前仍保留旧 artifact 名称与部分旧字段，后续还要继续做对象层收束。
+
 - `[第一批重构]` `eco-extract-claim-candidates`
   - 改造方向：从 claim 抽取转向 `issue / stance / concern` 的初步抽取入口。
 - `[第一批重构]` `eco-cluster-claim-candidates`
@@ -153,16 +188,21 @@
   - 区分法规文本、科研、媒体、个人经历、二手传言等引证类型。
 - `[新增]` `eco-link-formal-comments-to-public-discourse`
   - 连接正式评论与开放平台争议表达。
+- 当前状态：已实现首版，可输出 `aligned / formal-only / public-only` 的 issue linkage artifact。
 - `[新增]` `eco-detect-cross-platform-diffusion`
   - 分析议题或说法的跨平台传播关系。
 - `[新增]` `eco-identify-representation-gaps`
   - 识别哪些关切在正式评论里被放大或被忽略。
+- 当前状态：已实现首版，可输出 `formal-underrepresentation / public-underrepresentation / attention-imbalance / route-mismatch`。
 - `[新增]` `eco-classify-claim-verifiability`
   - 判断哪些说法可进入外部数据核实。
+  - 当前状态：已实现首版，可输出 `verifiability assessment` artifact。
 - `[新增]` `eco-route-verification-lane`
   - 作为主链到核实支路的路由器。
+  - 当前状态：已实现首版，可阻止程序性 / 代表性争议默认进入 observation matching。
 - `[新增]` `eco-materialize-controversy-map`
   - 汇总 issue、stance、concern、actor、diffusion、verifiability，形成最终争议地图。
+  - 当前状态：已实现首版，可汇总 issue cluster、routing posture 与可操作缺口。
 
 ## 7. 暂缓事项
 
@@ -177,11 +217,16 @@
 
 ## 8. 开发顺序检查表
 
-- `[ ]` 先定义新的 analysis 对象与 contract
-- `[ ]` 再改 public-side 主分析链
+- `[x]` 先定义新的 analysis 对象与 contract
+- `[x]` 再改 public-side 主分析链
 - `[ ]` 再做 formal-public linkage 与 diffusion
 - `[ ]` 再把 environment verification 改成 optional lane
 - `[ ]` 最后重构 board / readiness / reporting
+
+当前解释：
+
+- `formal-public linkage` 已实现。
+- `diffusion` 仍未实现，因此本项暂不勾满。
 
 ## 9. 完成判断
 

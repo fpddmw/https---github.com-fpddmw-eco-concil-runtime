@@ -64,6 +64,22 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
+def summarize_action_counts(
+    actions: list[dict[str, Any]],
+    *,
+    field_name: str,
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for action in actions:
+        if not isinstance(action, dict):
+            continue
+        value = maybe_text(action.get(field_name))
+        if not value:
+            continue
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
 def propose_next_actions_skill(
     run_dir: str,
     run_id: str,
@@ -109,6 +125,14 @@ def propose_next_actions_skill(
         "coverage_path": maybe_text(action_context.get("coverage_file")),
         **contract_fields,
         "action_count": len(ranked_actions),
+        "controversy_gap_counts": summarize_action_counts(
+            ranked_actions,
+            field_name="controversy_gap",
+        ),
+        "recommended_lane_counts": summarize_action_counts(
+            ranked_actions,
+            field_name="recommended_lane",
+        ),
         "ranked_actions": ranked_actions,
     }
     write_json_file(output_file, wrapper)
@@ -158,10 +182,10 @@ def propose_next_actions_skill(
             "gap_hints": []
             if ranked_actions
             else [
-                "No next actions could be proposed from the current board and coverage context."
+                "No next actions could be proposed from the current board and controversy-routing context."
             ],
             "challenge_hints": [
-                "Open a falsification probe for contradiction-heavy or low-confidence actions."
+                "Open a probe for contradiction-heavy, routing-heavy, or low-confidence controversy actions."
             ]
             if any(
                 isinstance(action, dict) and bool(action.get("probe_candidate"))
