@@ -103,7 +103,11 @@ def round_terminal_state(run_dir: Path, round_id: str, artifacts: dict[str, str]
         if isinstance(control_state.get("supervisor"), dict)
         else {}
     )
-    promotion = load_json_if_exists(Path(artifacts["promotion_basis_path"])) or {}
+    promotion = load_json_if_exists(Path(artifacts["promotion_basis_path"])) or (
+        control_state.get("promotion_basis", {})
+        if isinstance(control_state.get("promotion_basis"), dict)
+        else {}
+    )
     handoff = load_json_if_exists(Path(artifacts["reporting_handoff_path"])) or {}
     decision = selected_decision_artifact(run_dir, round_id)
     final_publication = load_json_if_exists(Path(artifacts["final_publication_path"])) or {}

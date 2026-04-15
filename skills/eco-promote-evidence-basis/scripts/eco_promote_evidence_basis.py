@@ -22,6 +22,9 @@ from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     load_next_actions_wrapper,
     load_round_readiness_wrapper,
 )
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_promotion_basis_record,
+)
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
@@ -615,6 +618,11 @@ def promote_evidence_basis_skill(
             else "Round is not yet ready; the basis artifact freezes the current controversy basis and strongest available evidence while promotion remains withheld."
         ),
     }
+    wrapper = store_promotion_basis_record(
+        run_dir_path,
+        promotion_payload=wrapper,
+        artifact_path=str(output_file),
+    )
     write_json_file(output_file, wrapper)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]

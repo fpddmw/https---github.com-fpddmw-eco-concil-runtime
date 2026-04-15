@@ -21,6 +21,9 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_promotion_basis_wrapper,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -192,9 +195,19 @@ def materialize_final_publication_skill(
         }
     decision = decision_payload
 
-    promotion_payload = load_json_if_exists(promotion_file)
+    promotion_context = load_promotion_basis_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        promotion_path=promotion_path,
+    )
+    promotion_payload = (
+        promotion_context.get("payload")
+        if isinstance(promotion_context.get("payload"), dict)
+        else None
+    )
     if not isinstance(promotion_payload, dict):
-        warnings.append({"code": "missing-promotion-basis", "message": f"No promotion basis artifact was found at {promotion_file}."})
+        warnings.append({"code": "missing-promotion-basis", "message": f"No promotion basis artifact or DB record was found at {promotion_file}."})
         return {
             "status": "blocked",
             "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "operation": "blocked", "output_path": str(output_file)},
@@ -248,8 +261,10 @@ def materialize_final_publication_skill(
             "reporting_handoff_present": isinstance(handoff_payload, dict),
             "decision_artifact_present": decision_file.exists(),
             "decision_present": isinstance(decision_payload, dict),
-            "promotion_artifact_present": promotion_file.exists(),
-            "promotion_present": isinstance(promotion_payload, dict),
+            "promotion_artifact_present": bool(
+                promotion_context.get("artifact_present")
+            ),
+            "promotion_present": bool(promotion_context.get("payload_present")),
             "supervisor_state_artifact_present": supervisor_file.exists(),
             "supervisor_state_present": isinstance(supervisor_state_payload, dict),
             "sociologist_report_artifact_present": report_files["sociologist"].exists(),
@@ -274,11 +289,8 @@ def materialize_final_publication_skill(
                 if decision_file.exists()
                 else "missing-canonical-decision"
             ),
-            "promotion_source": (
-                "promotion-artifact"
-                if promotion_file.exists()
-                else "missing-promotion"
-            ),
+            "promotion_source": maybe_text(promotion_context.get("source"))
+            or "missing-promotion",
             "supervisor_state_source": (
                 "supervisor-state-artifact"
                 if supervisor_file.exists()

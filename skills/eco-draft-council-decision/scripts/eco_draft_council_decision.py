@@ -20,6 +20,9 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_promotion_basis_wrapper,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -149,7 +152,17 @@ def draft_council_decision_skill(
         }
     else:
         handoff = handoff_payload
-    promotion_payload = load_json_if_exists(promotion_file)
+    promotion_context = load_promotion_basis_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        promotion_path=promotion_path,
+    )
+    promotion_payload = (
+        promotion_context.get("payload")
+        if isinstance(promotion_context.get("payload"), dict)
+        else None
+    )
     if not isinstance(promotion_payload, dict):
         promotion_basis = {"selected_evidence_refs": [], "basis_id": ""}
     else:
@@ -160,8 +173,10 @@ def draft_council_decision_skill(
         observed_inputs_overrides={
             "reporting_handoff_artifact_present": handoff_file.exists(),
             "reporting_handoff_present": isinstance(handoff_payload, dict),
-            "promotion_artifact_present": promotion_file.exists(),
-            "promotion_present": isinstance(promotion_payload, dict),
+            "promotion_artifact_present": bool(
+                promotion_context.get("artifact_present")
+            ),
+            "promotion_present": bool(promotion_context.get("payload_present")),
         },
         field_overrides={
             "reporting_handoff_source": (
@@ -169,11 +184,8 @@ def draft_council_decision_skill(
                 if handoff_file.exists()
                 else "missing-reporting-handoff"
             ),
-            "promotion_source": (
-                "promotion-artifact"
-                if promotion_file.exists()
-                else "missing-promotion"
-            ),
+            "promotion_source": maybe_text(promotion_context.get("source"))
+            or "missing-promotion",
         },
     )
 

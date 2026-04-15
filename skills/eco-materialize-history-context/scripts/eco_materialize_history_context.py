@@ -27,6 +27,7 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
+    load_promotion_basis_wrapper,
     load_round_readiness_wrapper,
 )
 
@@ -282,7 +283,16 @@ def build_history_query(
         if isinstance(probes_wrapper.get("payload"), dict)
         else {}
     )
-    promotion = load_json_if_exists(run_dir / "promotion" / f"promoted_evidence_basis_{round_id}.json") or {}
+    promotion_wrapper = load_promotion_basis_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    promotion = (
+        promotion_wrapper.get("payload")
+        if isinstance(promotion_wrapper.get("payload"), dict)
+        else {}
+    )
     analysis_warnings: list[dict[str, str]] = []
     claim_scope_context = load_claim_scope_context(
         run_dir,

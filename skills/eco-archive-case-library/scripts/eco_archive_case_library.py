@@ -26,6 +26,7 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
+    load_promotion_basis_wrapper,
     load_round_readiness_wrapper,
 )
 
@@ -669,7 +670,16 @@ def archive_case_library_skill(
         if isinstance(readiness_wrapper.get("payload"), dict)
         else {}
     )
-    promotion = load_json_if_exists(run_dir_path / "promotion" / f"promoted_evidence_basis_{round_id}.json") or {}
+    promotion_wrapper = load_promotion_basis_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    promotion = (
+        promotion_wrapper.get("payload")
+        if isinstance(promotion_wrapper.get("payload"), dict)
+        else {}
+    )
     handoff = load_json_if_exists(run_dir_path / "reporting" / f"reporting_handoff_{round_id}.json") or {}
     decision = load_json_if_exists(run_dir_path / "reporting" / f"council_decision_{round_id}.json") or load_json_if_exists(run_dir_path / "reporting" / f"council_decision_draft_{round_id}.json") or {}
     final_publication = load_json_if_exists(run_dir_path / "reporting" / f"final_publication_{round_id}.json") or {}

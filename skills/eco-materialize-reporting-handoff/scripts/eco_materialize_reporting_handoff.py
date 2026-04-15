@@ -21,6 +21,7 @@ from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_promotion_basis_wrapper,
     load_round_readiness_wrapper,
 )
 
@@ -241,9 +242,19 @@ def materialize_reporting_handoff_skill(
     output_file = resolve_path(run_dir_path, output_path, f"reporting/reporting_handoff_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
-    promotion_payload = load_json_if_exists(promotion_file)
+    promotion_context = load_promotion_basis_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        promotion_path=promotion_path,
+    )
+    promotion_payload = (
+        promotion_context.get("payload")
+        if isinstance(promotion_context.get("payload"), dict)
+        else None
+    )
     if not isinstance(promotion_payload, dict):
-        warnings.append({"code": "missing-promotion-basis", "message": f"No promotion basis artifact was found at {promotion_file}."})
+        warnings.append({"code": "missing-promotion-basis", "message": f"No promotion basis artifact or DB record was found at {promotion_file}."})
         promotion_basis = {"promotion_status": "withheld", "selected_coverages": [], "selected_evidence_refs": [], "remaining_risks": []}
     else:
         promotion_basis = promotion_payload
@@ -273,8 +284,10 @@ def materialize_reporting_handoff_skill(
         promotion_payload,
         fallback_payload=readiness_payload,
         observed_inputs_overrides={
-            "promotion_artifact_present": promotion_file.exists(),
-            "promotion_present": isinstance(promotion_payload, dict),
+            "promotion_artifact_present": bool(
+                promotion_context.get("artifact_present")
+            ),
+            "promotion_present": bool(promotion_context.get("payload_present")),
             "readiness_artifact_present": bool(
                 readiness_context.get("artifact_present")
             ),
@@ -285,11 +298,8 @@ def materialize_reporting_handoff_skill(
             "supervisor_state_present": isinstance(supervisor_state_payload, dict),
         },
         field_overrides={
-            "promotion_source": (
-                "promotion-artifact"
-                if promotion_file.exists()
-                else "missing-promotion"
-            ),
+            "promotion_source": maybe_text(promotion_context.get("source"))
+            or "missing-promotion",
             "readiness_source": (
                 maybe_text(readiness_context.get("source"))
                 or "missing-readiness"

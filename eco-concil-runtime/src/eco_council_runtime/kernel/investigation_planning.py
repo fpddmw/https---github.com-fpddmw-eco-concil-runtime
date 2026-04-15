@@ -21,6 +21,7 @@ from .deliberation_plane import (
     load_falsification_probe_snapshot,
     load_moderator_action_records,
     load_moderator_action_snapshot,
+    load_promotion_basis_record,
     load_round_readiness_assessment,
     load_round_snapshot,
 )
@@ -274,6 +275,56 @@ def load_round_readiness_wrapper(
         "payload": None,
         "source": "missing-readiness",
         "artifact_path": str(readiness_file),
+        "artifact_present": False,
+        "payload_present": False,
+    }
+
+
+def load_promotion_basis_wrapper(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    promotion_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = Path(run_dir).expanduser().resolve()
+    promotion_file = resolve_path(
+        run_dir_path,
+        promotion_path,
+        f"promotion/promoted_evidence_basis_{round_id}.json",
+    )
+    promotion_payload = load_promotion_basis_record(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if isinstance(promotion_payload, dict):
+        payload = dict(promotion_payload)
+        payload["promotion_source"] = (
+            maybe_text(payload.get("promotion_source"))
+            or "deliberation-plane-promotion-basis"
+        )
+        return {
+            "payload": payload,
+            "source": "deliberation-plane-promotion-basis",
+            "artifact_path": str(promotion_file),
+            "artifact_present": promotion_file.exists(),
+            "payload_present": True,
+        }
+    artifact_payload = load_json_if_exists(promotion_file)
+    if isinstance(artifact_payload, dict):
+        return {
+            "payload": artifact_payload,
+            "source": maybe_text(artifact_payload.get("promotion_source"))
+            or "promotion-artifact",
+            "artifact_path": str(promotion_file),
+            "artifact_present": True,
+            "payload_present": True,
+        }
+    return {
+        "payload": None,
+        "source": "missing-promotion",
+        "artifact_path": str(promotion_file),
         "artifact_present": False,
         "payload_present": False,
     }

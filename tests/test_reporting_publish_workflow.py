@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import load_json, reporting_path, run_kernel, run_script, script_path, seed_analysis_chain, write_json
+from _workflow_support import load_json, promotion_path, reporting_path, run_kernel, run_script, script_path, seed_analysis_chain, write_json
 
 RUN_ID = "run-reporting-publish-001"
 ROUND_ID = "round-reporting-publish-001"
@@ -133,7 +133,10 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 "reporting-handoff-artifact",
                 decision["reporting_handoff_source"],
             )
-            self.assertEqual("promotion-artifact", decision["promotion_source"])
+            self.assertEqual(
+                "deliberation-plane-promotion-basis",
+                decision["promotion_source"],
+            )
             self.assertEqual(
                 "expert-report-artifact",
                 decision["sociologist_report_source"],
@@ -245,7 +248,10 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 publication["reporting_handoff_source"],
             )
             self.assertEqual("council-decision-artifact", publication["decision_source"])
-            self.assertEqual("promotion-artifact", publication["promotion_source"])
+            self.assertEqual(
+                "deliberation-plane-promotion-basis",
+                publication["promotion_source"],
+            )
             self.assertEqual(
                 "supervisor-state-artifact",
                 publication["supervisor_state_source"],
@@ -273,6 +279,40 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual(2, len(publication["role_reports"]))
             self.assertIn("role-reports", publication["published_sections"])
             self.assertEqual(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json").resolve().as_posix(), Path(publication["audit_refs"]["decision_path"]).resolve().as_posix())
+
+    def test_final_publication_recovers_from_db_when_promotion_artifact_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_round(run_dir, root)
+
+            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json").unlink()
+
+            publication_payload = run_script(
+                script_path("eco-materialize-final-publication"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            publication = load_json(reporting_path(run_dir, f"final_publication_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", publication_payload["status"])
+            self.assertEqual(
+                "deliberation-plane-promotion-basis",
+                publication["promotion_source"],
+            )
+            self.assertFalse(
+                publication["observed_inputs"]["promotion_artifact_present"]
+            )
+            self.assertTrue(publication["observed_inputs"]["promotion_present"])
 
     def test_final_publication_hold_round_materializes_hold_artifact_and_guards_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

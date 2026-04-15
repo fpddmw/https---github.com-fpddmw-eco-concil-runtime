@@ -283,6 +283,54 @@ CREATE TABLE IF NOT EXISTS round_readiness_assessments (
 CREATE INDEX IF NOT EXISTS idx_round_readiness_assessments_round
 ON round_readiness_assessments(run_id, round_id, generated_at_utc, readiness_id);
 
+CREATE TABLE IF NOT EXISTS promotion_basis_records (
+    basis_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    promotion_status TEXT NOT NULL DEFAULT '',
+    readiness_status TEXT NOT NULL DEFAULT '',
+    board_state_source TEXT NOT NULL DEFAULT '',
+    coverage_source TEXT NOT NULL DEFAULT '',
+    readiness_source TEXT NOT NULL DEFAULT '',
+    next_actions_source TEXT NOT NULL DEFAULT '',
+    board_brief_source TEXT NOT NULL DEFAULT '',
+    basis_selection_mode TEXT NOT NULL DEFAULT '',
+    basis_counts_json TEXT NOT NULL DEFAULT '{}',
+    selected_basis_object_ids_json TEXT NOT NULL DEFAULT '[]',
+    selected_evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    gate_reasons_json TEXT NOT NULL DEFAULT '[]',
+    remaining_risks_json TEXT NOT NULL DEFAULT '[]',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_promotion_basis_records_round
+ON promotion_basis_records(run_id, round_id, generated_at_utc, basis_id);
+
+CREATE TABLE IF NOT EXISTS promotion_basis_items (
+    item_row_id TEXT PRIMARY KEY,
+    basis_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    item_group TEXT NOT NULL DEFAULT '',
+    item_index INTEGER NOT NULL DEFAULT 0,
+    object_type TEXT NOT NULL DEFAULT '',
+    object_id TEXT NOT NULL DEFAULT '',
+    issue_label TEXT NOT NULL DEFAULT '',
+    claim_id TEXT NOT NULL DEFAULT '',
+    recommended_lane TEXT NOT NULL DEFAULT '',
+    route_status TEXT NOT NULL DEFAULT '',
+    readiness TEXT NOT NULL DEFAULT '',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_promotion_basis_items_round
+ON promotion_basis_items(run_id, round_id, item_group, object_type, object_id, item_row_id);
+
 CREATE TABLE IF NOT EXISTS round_task_snapshots (
     snapshot_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,
@@ -833,6 +881,54 @@ def write_round_readiness_assessment_row(
     )
 
 
+def write_promotion_basis_record_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO promotion_basis_records (
+            basis_id, run_id, round_id, generated_at_utc, promotion_status,
+            readiness_status, board_state_source, coverage_source, readiness_source,
+            next_actions_source, board_brief_source, basis_selection_mode,
+            basis_counts_json, selected_basis_object_ids_json,
+            selected_evidence_refs_json, gate_reasons_json, remaining_risks_json,
+            artifact_path, record_locator, raw_json
+        ) VALUES (
+            :basis_id, :run_id, :round_id, :generated_at_utc, :promotion_status,
+            :readiness_status, :board_state_source, :coverage_source, :readiness_source,
+            :next_actions_source, :board_brief_source, :basis_selection_mode,
+            :basis_counts_json, :selected_basis_object_ids_json,
+            :selected_evidence_refs_json, :gate_reasons_json, :remaining_risks_json,
+            :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def write_promotion_basis_item_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO promotion_basis_items (
+            item_row_id, basis_id, run_id, round_id, generated_at_utc, item_group,
+            item_index, object_type, object_id, issue_label, claim_id,
+            recommended_lane, route_status, readiness, evidence_refs_json,
+            artifact_path, record_locator, raw_json
+        ) VALUES (
+            :item_row_id, :basis_id, :run_id, :round_id, :generated_at_utc, :item_group,
+            :item_index, :object_type, :object_id, :issue_label, :claim_id,
+            :recommended_lane, :route_status, :readiness, :evidence_refs_json,
+            :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
 def write_round_task_snapshot_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
     connection.execute(
         """
@@ -1143,6 +1239,123 @@ def normalized_readiness_payload(
     return normalized
 
 
+PROMOTION_BASIS_ITEM_GROUPS = (
+    "issue_clusters",
+    "verification_routes",
+    "formal_public_links",
+    "representation_gaps",
+    "diffusion_edges",
+    "coverages",
+)
+
+
+def normalized_promotion_basis_payload(
+    promotion_payload: dict[str, Any],
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
+    normalized = dict(promotion_payload)
+    normalized["run_id"] = maybe_text(normalized.get("run_id")) or run_id
+    normalized["round_id"] = maybe_text(normalized.get("round_id")) or round_id
+    normalized["generated_at_utc"] = (
+        maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    )
+    normalized["promotion_status"] = (
+        maybe_text(normalized.get("promotion_status")) or "withheld"
+    )
+    normalized["basis_id"] = (
+        maybe_text(normalized.get("basis_id"))
+        or "evidence-basis-"
+        + stable_hash(
+            "promotion-basis",
+            normalized["run_id"],
+            normalized["round_id"],
+            normalized["promotion_status"],
+        )[:12]
+    )
+    return normalized
+
+
+def promotion_basis_item_object_type(item_group: str, item: dict[str, Any]) -> str:
+    explicit = maybe_text(item.get("object_type"))
+    if explicit:
+        return explicit
+    if item_group == "coverages":
+        return "coverage"
+    return item_group.rstrip("s").replace("_", "-")
+
+
+def promotion_basis_item_object_id(item_group: str, item: dict[str, Any]) -> str:
+    for key in (
+        "object_id",
+        "coverage_id",
+        "claim_id",
+        "route_id",
+        "linkage_id",
+        "gap_id",
+        "edge_id",
+        "cluster_id",
+        "map_issue_id",
+    ):
+        value = maybe_text(item.get(key))
+        if value:
+            return value
+    return (
+        item_group
+        + "-"
+        + stable_hash(
+            "promotion-basis-item",
+            item_group,
+            maybe_text(item.get("summary")),
+            maybe_text(item.get("issue_label")),
+            json_text(item),
+        )[:12]
+    )
+
+
+def iter_promotion_basis_items(
+    promotion_payload: dict[str, Any],
+) -> list[tuple[str, int, dict[str, Any]]]:
+    frozen_basis = (
+        promotion_payload.get("frozen_basis", {})
+        if isinstance(promotion_payload.get("frozen_basis"), dict)
+        else {}
+    )
+    results: list[tuple[str, int, dict[str, Any]]] = []
+    for item_group in PROMOTION_BASIS_ITEM_GROUPS:
+        rows = (
+            frozen_basis.get(item_group, [])
+            if isinstance(frozen_basis.get(item_group), list)
+            else []
+        )
+        if item_group == "coverages" and not rows:
+            rows = (
+                promotion_payload.get("selected_coverages", [])
+                if isinstance(promotion_payload.get("selected_coverages"), list)
+                else []
+            )
+        for index, item in enumerate(rows):
+            if isinstance(item, dict):
+                results.append((item_group, index, item))
+    return results
+
+
+def promotion_basis_item_row_id(
+    basis_id: str,
+    item_group: str,
+    item_index: int,
+    object_id: str,
+) -> str:
+    return "promotion-item-" + stable_hash(
+        "promotion-basis-item-row",
+        basis_id,
+        item_group,
+        item_index,
+        object_id,
+    )[:12]
+
+
 def moderator_action_row_from_payload(
     action: dict[str, Any],
     *,
@@ -1262,6 +1475,91 @@ def round_readiness_assessment_row_from_payload(
         "artifact_path": maybe_text(artifact_path),
         "record_locator": maybe_text(record_locator) or "$",
         "raw_json": json_text(readiness_payload),
+    }
+
+
+def promotion_basis_record_row_from_payload(
+    promotion_payload: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    return {
+        "basis_id": maybe_text(promotion_payload.get("basis_id")),
+        "run_id": maybe_text(promotion_payload.get("run_id")),
+        "round_id": maybe_text(promotion_payload.get("round_id")),
+        "generated_at_utc": maybe_text(promotion_payload.get("generated_at_utc")),
+        "promotion_status": maybe_text(promotion_payload.get("promotion_status")),
+        "readiness_status": maybe_text(promotion_payload.get("readiness_status")),
+        "board_state_source": maybe_text(promotion_payload.get("board_state_source")),
+        "coverage_source": maybe_text(promotion_payload.get("coverage_source")),
+        "readiness_source": maybe_text(promotion_payload.get("readiness_source")),
+        "next_actions_source": maybe_text(promotion_payload.get("next_actions_source")),
+        "board_brief_source": maybe_text(promotion_payload.get("board_brief_source")),
+        "basis_selection_mode": maybe_text(
+            promotion_payload.get("basis_selection_mode")
+        ),
+        "basis_counts_json": json_text(promotion_payload.get("basis_counts", {})),
+        "selected_basis_object_ids_json": json_text(
+            promotion_payload.get("selected_basis_object_ids", [])
+        ),
+        "selected_evidence_refs_json": json_text(
+            promotion_payload.get("selected_evidence_refs", [])
+        ),
+        "gate_reasons_json": json_text(promotion_payload.get("gate_reasons", [])),
+        "remaining_risks_json": json_text(
+            promotion_payload.get("remaining_risks", [])
+        ),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(promotion_payload),
+    }
+
+
+def promotion_basis_item_row_from_payload(
+    item: dict[str, Any],
+    *,
+    basis_id: str,
+    run_id: str,
+    round_id: str,
+    generated_at_utc: str,
+    item_group: str,
+    item_index: int,
+    artifact_path: str,
+    record_locator: str,
+) -> dict[str, Any]:
+    object_id = promotion_basis_item_object_id(item_group, item)
+    claim_id = maybe_text(item.get("claim_id"))
+    if not claim_id and isinstance(item.get("claim_ids"), list):
+        claim_id = maybe_text((item.get("claim_ids") or [""])[0])
+    return {
+        "item_row_id": promotion_basis_item_row_id(
+            basis_id,
+            item_group,
+            item_index,
+            object_id,
+        ),
+        "basis_id": maybe_text(basis_id),
+        "run_id": maybe_text(run_id),
+        "round_id": maybe_text(round_id),
+        "generated_at_utc": maybe_text(generated_at_utc),
+        "item_group": maybe_text(item_group),
+        "item_index": coerce_int(item_index),
+        "object_type": promotion_basis_item_object_type(item_group, item),
+        "object_id": object_id,
+        "issue_label": maybe_text(item.get("issue_label")),
+        "claim_id": claim_id,
+        "recommended_lane": maybe_text(item.get("recommended_lane")),
+        "route_status": maybe_text(item.get("route_status")),
+        "readiness": maybe_text(item.get("readiness")),
+        "evidence_refs_json": json_text(
+            item.get("evidence_refs", [])
+            if isinstance(item.get("evidence_refs"), list)
+            else []
+        ),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator),
+        "raw_json": json_text(item),
     }
 
 
@@ -1847,6 +2145,39 @@ def fetch_round_readiness_assessment(
     )
 
 
+def fetch_promotion_basis_record(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+) -> dict[str, Any] | None:
+    return latest_json_row(
+        connection,
+        table_name="promotion_basis_records",
+        id_column="basis_id",
+        timestamp_column="generated_at_utc",
+        run_id=run_id,
+        round_id=round_id,
+    )
+
+
+def fetch_promotion_basis_items(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+) -> list[dict[str, Any]]:
+    return fetch_json_rows(
+        connection,
+        table_name="promotion_basis_items",
+        id_column="item_row_id",
+        timestamp_column="generated_at_utc",
+        run_id=run_id,
+        round_id=round_id,
+        extra_order_by="item_group, item_index",
+    )
+
+
 def store_moderator_action_records(
     run_dir: str | Path,
     *,
@@ -2146,6 +2477,108 @@ def load_round_readiness_assessment(
         connection.close()
 
 
+def store_promotion_basis_record(
+    run_dir: str | Path,
+    *,
+    promotion_payload: dict[str, Any],
+    artifact_path: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    normalized_payload = normalized_promotion_basis_payload(
+        promotion_payload if isinstance(promotion_payload, dict) else {},
+        run_id=maybe_text(
+            promotion_payload.get("run_id")
+            if isinstance(promotion_payload, dict)
+            else ""
+        ),
+        round_id=maybe_text(
+            promotion_payload.get("round_id")
+            if isinstance(promotion_payload, dict)
+            else ""
+        ),
+    )
+    basis_id = maybe_text(normalized_payload.get("basis_id"))
+    run_id = maybe_text(normalized_payload.get("run_id"))
+    round_id = maybe_text(normalized_payload.get("round_id"))
+    generated_at_utc = maybe_text(normalized_payload.get("generated_at_utc"))
+    item_rows = iter_promotion_basis_items(normalized_payload)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            connection.execute(
+                "DELETE FROM promotion_basis_records WHERE run_id = ? AND round_id = ?",
+                (run_id, round_id),
+            )
+            connection.execute(
+                "DELETE FROM promotion_basis_items WHERE run_id = ? AND round_id = ?",
+                (run_id, round_id),
+            )
+            write_promotion_basis_record_row(
+                connection,
+                promotion_basis_record_row_from_payload(
+                    normalized_payload,
+                    artifact_path=artifact_path,
+                ),
+            )
+            for item_group, item_index, item in item_rows:
+                write_promotion_basis_item_row(
+                    connection,
+                    promotion_basis_item_row_from_payload(
+                        item,
+                        basis_id=basis_id,
+                        run_id=run_id,
+                        round_id=round_id,
+                        generated_at_utc=generated_at_utc,
+                        item_group=item_group,
+                        item_index=item_index,
+                        artifact_path=artifact_path,
+                        record_locator=f"$.frozen_basis.{item_group}[{item_index}]",
+                    ),
+                )
+    finally:
+        connection.close()
+    return normalized_payload
+
+
+def load_promotion_basis_record(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return fetch_promotion_basis_record(
+            connection,
+            run_id=run_id,
+            round_id=round_id,
+        )
+    finally:
+        connection.close()
+
+
+def load_promotion_basis_items(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> list[dict[str, Any]]:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return fetch_promotion_basis_items(
+            connection,
+            run_id=run_id,
+            round_id=round_id,
+        )
+    finally:
+        connection.close()
+
+
 def store_round_task_snapshot(
     run_dir: str | Path,
     *,
@@ -2290,9 +2723,16 @@ def load_phase2_control_state(
         round_id=round_id,
         db_path=db_path,
     ) or {}
+    promotion_basis_record = load_promotion_basis_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    ) or {}
     return {
         "promotion_freeze": freeze_record,
         "round_readiness": readiness_record,
+        "promotion_basis": promotion_basis_record,
         "controller": (
             freeze_record.get("controller_snapshot", {})
             if isinstance(freeze_record.get("controller_snapshot"), dict)
@@ -3310,6 +3750,8 @@ __all__ = [
     "load_moderator_action_records",
     "load_moderator_action_snapshot",
     "load_phase2_control_state",
+    "load_promotion_basis_items",
+    "load_promotion_basis_record",
     "load_promotion_freeze_record",
     "load_raw_board_record",
     "load_round_readiness_assessment",
@@ -3322,6 +3764,7 @@ __all__ = [
     "store_falsification_probe_snapshot",
     "store_moderator_action_records",
     "store_moderator_action_snapshot",
+    "store_promotion_basis_record",
     "store_promotion_freeze_record",
     "store_round_transition_record",
     "store_round_readiness_assessment",

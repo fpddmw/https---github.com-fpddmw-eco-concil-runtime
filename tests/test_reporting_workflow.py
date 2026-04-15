@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -148,7 +149,10 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
             self.assertEqual("deliberation-plane", handoff_artifact["board_state_source"])
             self.assertEqual("analysis-plane", handoff_artifact["coverage_source"])
-            self.assertEqual("promotion-artifact", handoff_artifact["promotion_source"])
+            self.assertEqual(
+                "deliberation-plane-promotion-basis",
+                handoff_artifact["promotion_source"],
+            )
             self.assertEqual(
                 "deliberation-plane-readiness",
                 handoff_artifact["readiness_source"],
@@ -185,7 +189,10 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "reporting-handoff-artifact",
                 decision_artifact["reporting_handoff_source"],
             )
-            self.assertEqual("promotion-artifact", decision_artifact["promotion_source"])
+            self.assertEqual(
+                "deliberation-plane-promotion-basis",
+                decision_artifact["promotion_source"],
+            )
             self.assertEqual("deliberation-plane", decision_artifact["board_state_source"])
             self.assertEqual("analysis-plane", decision_artifact["coverage_source"])
             self.assertTrue(
@@ -197,6 +204,147 @@ class ReportingWorkflowTests(unittest.TestCase):
                 decision_artifact["observed_inputs"]["reporting_handoff_present"]
             )
             self.assertEqual(promotion_artifact["basis_id"], handoff_artifact["promoted_basis_id"])
+
+    def test_reporting_handoff_and_decision_recover_from_db_when_promotion_artifact_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            run_script(
+                script_path("eco-derive-claim-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-derive-observation-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            coverage_payload = run_script(
+                script_path("eco-score-evidence-coverage"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            run_script(
+                script_path("eco-post-board-note"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--author-role",
+                "moderator",
+                "--category",
+                "analysis",
+                "--note-text",
+                "Round is ready to move into reporting even if promotion export is removed.",
+                "--linked-artifact-ref",
+                coverage_ref,
+            )
+            run_script(
+                script_path("eco-update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Smoke over NYC was materially significant",
+                "--statement",
+                "Public smoke reports are backed by elevated PM2.5 observations.",
+                "--status",
+                "active",
+                "--owner-role",
+                "environmentalist",
+                "--linked-claim-id",
+                outputs["cluster_claims"]["canonical_ids"][0],
+                "--confidence",
+                "0.93",
+            )
+
+            run_kernel(
+                "supervise-round",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json").unlink()
+            connection = sqlite3.connect(
+                (run_dir / "analytics" / "signal_plane.sqlite").resolve()
+            )
+            try:
+                basis_count = connection.execute(
+                    "SELECT COUNT(*) FROM promotion_basis_records WHERE run_id = ? AND round_id = ?",
+                    (RUN_ID, ROUND_ID),
+                ).fetchone()[0]
+                item_count = connection.execute(
+                    "SELECT COUNT(*) FROM promotion_basis_items WHERE run_id = ? AND round_id = ?",
+                    (RUN_ID, ROUND_ID),
+                ).fetchone()[0]
+            finally:
+                connection.close()
+
+            handoff_payload = run_script(
+                script_path("eco-materialize-reporting-handoff"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            decision_payload = run_script(
+                script_path("eco-draft-council-decision"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            handoff_artifact = load_json(
+                reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json")
+            )
+            decision_artifact = load_json(
+                reporting_path(run_dir, f"council_decision_draft_{ROUND_ID}.json")
+            )
+
+            self.assertGreater(basis_count, 0)
+            self.assertGreater(item_count, 0)
+            self.assertEqual("ready-for-reporting", handoff_payload["summary"]["handoff_status"])
+            self.assertEqual(
+                "deliberation-plane-promotion-basis",
+                handoff_artifact["promotion_source"],
+            )
+            self.assertFalse(
+                handoff_artifact["observed_inputs"]["promotion_artifact_present"]
+            )
+            self.assertTrue(handoff_artifact["observed_inputs"]["promotion_present"])
+            self.assertEqual("finalize", decision_payload["summary"]["moderator_status"])
+            self.assertEqual(
+                "deliberation-plane-promotion-basis",
+                decision_artifact["promotion_source"],
+            )
 
     def test_reporting_handoff_and_decision_hold_withheld_round(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

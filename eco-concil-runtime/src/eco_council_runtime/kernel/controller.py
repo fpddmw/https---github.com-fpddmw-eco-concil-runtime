@@ -1024,7 +1024,12 @@ def run_phase2_round_with_contract_mode(
     controller_payload["readiness_status"] = maybe_text(gate_payload.get("readiness_status")) or maybe_text(controller_payload.get("readiness_status")) or "blocked"
     controller_payload["gate_status"] = maybe_text(gate_payload.get("gate_status")) or maybe_text(controller_payload.get("gate_status")) or "freeze-withheld"
     if maybe_text(controller_payload.get("promotion_status")) in {"", "not-evaluated"}:
-        promotion_basis_payload = load_json_if_exists(Path(artifacts["promotion_basis_path"])) or {}
+        promotion_basis_payload = load_json_if_exists(Path(artifacts["promotion_basis_path"])) or (
+            load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id).get(
+                "promotion_basis",
+                {},
+            )
+        )
         controller_payload["promotion_status"] = maybe_text(promotion_basis_payload.get("promotion_status")) or "withheld"
     if controller_payload["promotion_status"] == "promoted":
         controller_payload["recommended_next_skills"] = ["eco-materialize-reporting-handoff", "eco-draft-council-decision"]
