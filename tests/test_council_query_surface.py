@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import run_kernel, runtime_src_path
+from _workflow_support import run_kernel, run_script, runtime_src_path, script_path
 
 RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
@@ -27,7 +27,7 @@ RUN_ID = "run-council-query-001"
 ROUND_ID = "round-council-query-001"
 
 
-def seed_council_query_state(run_dir: Path) -> str:
+def seed_council_query_state(run_dir: Path) -> dict[str, str]:
     store_moderator_action_records(
         run_dir,
         action_snapshot={
@@ -174,7 +174,76 @@ def seed_council_query_state(run_dir: Path) -> str:
             ],
         },
     )
-    return proposal_id
+    hypothesis_payload = run_script(
+        script_path("eco-update-hypothesis-status"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--title",
+        "Query-surface hypothesis",
+        "--statement",
+        "A board hypothesis should be queryable as a canonical deliberation object.",
+        "--status",
+        "active",
+        "--owner-role",
+        "moderator",
+        "--confidence",
+        "0.67",
+    )
+    hypothesis_id = hypothesis_payload["canonical_ids"][0]
+    challenge_payload = run_script(
+        script_path("eco-open-challenge-ticket"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--title",
+        "Query-surface challenge",
+        "--challenge-statement",
+        "A board challenge should be queryable via the council object surface.",
+        "--target-hypothesis-id",
+        hypothesis_id,
+        "--priority",
+        "high",
+        "--owner-role",
+        "challenger",
+    )
+    challenge_id = challenge_payload["canonical_ids"][0]
+    task_payload = run_script(
+        script_path("eco-claim-board-task"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--title",
+        "Query-surface board task",
+        "--task-text",
+        "A board task should be queryable as a canonical deliberation object.",
+        "--task-type",
+        "challenge-follow-up",
+        "--owner-role",
+        "moderator",
+        "--priority",
+        "high",
+        "--source-ticket-id",
+        challenge_id,
+        "--source-hypothesis-id",
+        hypothesis_id,
+    )
+    task_id = task_payload["canonical_ids"][0]
+    return {
+        "proposal_id": proposal_id,
+        "hypothesis_id": hypothesis_id,
+        "challenge_id": challenge_id,
+        "task_id": task_id,
+    }
 
 
 class CouncilQuerySurfaceTests(unittest.TestCase):
@@ -191,7 +260,8 @@ class CouncilQuerySurfaceTests(unittest.TestCase):
     def test_kernel_queries_new_and_existing_council_objects(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
-            proposal_id = seed_council_query_state(run_dir)
+            seeded = seed_council_query_state(run_dir)
+            proposal_id = seeded["proposal_id"]
 
             proposal_payload = run_kernel(
                 "query-council-objects",
@@ -228,6 +298,84 @@ class CouncilQuerySurfaceTests(unittest.TestCase):
             self.assertEqual(
                 "advance-empirical-verification",
                 action_payload["objects"][0]["action_kind"],
+            )
+
+            hypothesis_payload = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "hypothesis",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--status",
+                "active",
+            )
+            self.assertEqual(1, hypothesis_payload["summary"]["returned_object_count"])
+            self.assertEqual(
+                seeded["hypothesis_id"],
+                hypothesis_payload["objects"][0]["hypothesis_id"],
+            )
+            self.assertEqual(
+                "operator-command",
+                hypothesis_payload["objects"][0]["decision_source"],
+            )
+
+            challenge_payload = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "challenge",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--agent-role",
+                "challenger",
+                "--status",
+                "open",
+                "--include-contract",
+            )
+            self.assertEqual(1, challenge_payload["summary"]["returned_object_count"])
+            self.assertEqual("challenge", challenge_payload["contract"]["object_kind"])
+            self.assertEqual(
+                seeded["challenge_id"],
+                challenge_payload["objects"][0]["ticket_id"],
+            )
+            self.assertEqual(
+                "operator-command",
+                challenge_payload["objects"][0]["decision_source"],
+            )
+
+            task_payload = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "board-task",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--agent-role",
+                "moderator",
+                "--status",
+                "claimed",
+                "--include-contract",
+            )
+            self.assertEqual(1, task_payload["summary"]["returned_object_count"])
+            self.assertEqual("board-task", task_payload["contract"]["object_kind"])
+            self.assertEqual(seeded["task_id"], task_payload["objects"][0]["task_id"])
+            self.assertEqual(
+                seeded["challenge_id"],
+                task_payload["objects"][0]["source_ticket_id"],
+            )
+            self.assertEqual(
+                "operator-command",
+                task_payload["objects"][0]["decision_source"],
             )
 
             opinion_payload = run_kernel(

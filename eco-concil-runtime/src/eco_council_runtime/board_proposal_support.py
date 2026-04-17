@@ -28,6 +28,31 @@ UPDATE_HYPOTHESIS_PROPOSAL_KINDS = {
     "retire-hypothesis",
 }
 UPDATE_HYPOTHESIS_TARGET_KINDS = {"hypothesis", "hypothesis-card"}
+CLAIM_BOARD_TASK_PROPOSAL_KINDS = {
+    "claim-board-task",
+    "create-board-task",
+    "open-board-task",
+    "assign-board-task",
+    "update-board-task",
+    "board-follow-up-task",
+    "follow-up-task",
+}
+CLAIM_BOARD_TASK_TARGET_KINDS = {
+    "task",
+    "board-task",
+    "challenge-ticket",
+    "ticket",
+    "hypothesis",
+    "hypothesis-card",
+    "claim",
+    "claim-cluster",
+    "issue-cluster",
+    "probe",
+    "proposal",
+    "verification-route",
+    "representation-gap",
+    "actor-profile",
+}
 
 
 def normalize_space(value: Any) -> str:
@@ -82,12 +107,16 @@ def proposal_target(proposal: dict[str, Any]) -> dict[str, Any]:
         resolved["hypothesis_id"] = maybe_text(proposal.get("target_hypothesis_id"))
     if maybe_text(proposal.get("target_ticket_id")):
         resolved["ticket_id"] = maybe_text(proposal.get("target_ticket_id"))
+    if maybe_text(proposal.get("target_task_id")):
+        resolved["task_id"] = maybe_text(proposal.get("target_task_id"))
     if target_kind in {"claim", "claim-candidate", "claim-cluster"} and target_id:
         resolved.setdefault("claim_id", target_id)
     if target_kind in {"hypothesis", "hypothesis-card"} and target_id:
         resolved.setdefault("hypothesis_id", target_id)
     if target_kind in {"challenge-ticket", "ticket"} and target_id:
         resolved.setdefault("ticket_id", target_id)
+    if target_kind in {"task", "board-task"} and target_id:
+        resolved.setdefault("task_id", target_id)
     return resolved
 
 
@@ -183,6 +212,21 @@ def resolved_ticket_id_from_proposal(proposal: dict[str, Any]) -> str:
         or (
             maybe_text(target.get("object_id"))
             if maybe_text(target.get("object_kind")) in CLOSE_CHALLENGE_TARGET_KINDS
+            else ""
+        )
+    )
+
+
+def resolved_task_id_from_proposal(proposal: dict[str, Any]) -> str:
+    target = proposal_target(proposal)
+    return (
+        maybe_text(proposal.get("task_id"))
+        or maybe_text(proposal.get("proposed_task_id"))
+        or maybe_text(proposal.get("target_task_id"))
+        or maybe_text(target.get("task_id"))
+        or (
+            maybe_text(target.get("object_id"))
+            if maybe_text(target.get("object_kind")) in {"task", "board-task"}
             else ""
         )
     )

@@ -20,6 +20,9 @@ from .kernel.deliberation_plane import (
 )
 
 OBJECT_KIND_PROPOSAL = "proposal"
+OBJECT_KIND_HYPOTHESIS = "hypothesis"
+OBJECT_KIND_CHALLENGE = "challenge"
+OBJECT_KIND_BOARD_TASK = "board-task"
 OBJECT_KIND_NEXT_ACTION = "next-action"
 OBJECT_KIND_PROBE = "probe"
 OBJECT_KIND_READINESS_OPINION = "readiness-opinion"
@@ -115,6 +118,33 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
         "timestamp_column": "generated_at_utc",
         "order_by": "generated_at_utc DESC, proposal_id DESC",
         "agent_role_column": "agent_role",
+        "status_column": "status",
+        "decision_id_column": "",
+    },
+    OBJECT_KIND_HYPOTHESIS: {
+        "table_name": "hypothesis_cards",
+        "id_column": "hypothesis_id",
+        "timestamp_column": "updated_at_utc",
+        "order_by": "updated_at_utc DESC, hypothesis_id DESC",
+        "agent_role_column": "owner_role",
+        "status_column": "status",
+        "decision_id_column": "",
+    },
+    OBJECT_KIND_CHALLENGE: {
+        "table_name": "challenge_tickets",
+        "id_column": "ticket_id",
+        "timestamp_column": "created_at_utc",
+        "order_by": "created_at_utc DESC, ticket_id DESC",
+        "agent_role_column": "owner_role",
+        "status_column": "status",
+        "decision_id_column": "",
+    },
+    OBJECT_KIND_BOARD_TASK: {
+        "table_name": "board_tasks",
+        "id_column": "task_id",
+        "timestamp_column": "updated_at_utc",
+        "order_by": "updated_at_utc DESC, task_id DESC",
+        "agent_role_column": "owner_role",
         "status_column": "status",
         "decision_id_column": "",
     },

@@ -129,6 +129,11 @@ CREATE TABLE IF NOT EXISTS board_tasks (
     source_hypothesis_id TEXT NOT NULL DEFAULT '',
     carryover_from_round_id TEXT NOT NULL DEFAULT '',
     carryover_from_task_id TEXT NOT NULL DEFAULT '',
+    decision_source TEXT NOT NULL DEFAULT '',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    source_ids_json TEXT NOT NULL DEFAULT '[]',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
     linked_artifact_refs_json TEXT NOT NULL DEFAULT '[]',
     related_ids_json TEXT NOT NULL DEFAULT '[]',
     created_at_utc TEXT NOT NULL DEFAULT '',
@@ -592,7 +597,7 @@ def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
         "event_index",
         "INTEGER NOT NULL DEFAULT 0",
     )
-    for table_name in ("hypothesis_cards", "challenge_tickets"):
+    for table_name in ("hypothesis_cards", "challenge_tickets", "board_tasks"):
         ensure_column(
             connection,
             table_name,
@@ -919,14 +924,16 @@ def write_board_task_row(connection: sqlite3.Connection, row: dict[str, Any]) ->
         INSERT OR REPLACE INTO board_tasks (
             task_id, run_id, round_id, title, task_text, task_type, status, owner_role,
             priority, source_round_id, source_ticket_id, source_hypothesis_id,
-            carryover_from_round_id, carryover_from_task_id, linked_artifact_refs_json,
-            related_ids_json, created_at_utc, updated_at_utc, claimed_at_utc, history_json,
+            carryover_from_round_id, carryover_from_task_id, decision_source,
+            evidence_refs_json, source_ids_json, provenance_json, lineage_json,
+            linked_artifact_refs_json, related_ids_json, created_at_utc, updated_at_utc, claimed_at_utc, history_json,
             board_revision, artifact_path, record_locator, raw_json
         ) VALUES (
             :task_id, :run_id, :round_id, :title, :task_text, :task_type, :status, :owner_role,
             :priority, :source_round_id, :source_ticket_id, :source_hypothesis_id,
-            :carryover_from_round_id, :carryover_from_task_id, :linked_artifact_refs_json,
-            :related_ids_json, :created_at_utc, :updated_at_utc, :claimed_at_utc, :history_json,
+            :carryover_from_round_id, :carryover_from_task_id, :decision_source,
+            :evidence_refs_json, :source_ids_json, :provenance_json, :lineage_json,
+            :linked_artifact_refs_json, :related_ids_json, :created_at_utc, :updated_at_utc, :claimed_at_utc, :history_json,
             :board_revision, :artifact_path, :record_locator, :raw_json
         )
         """,
@@ -1385,6 +1392,11 @@ def board_task_row_from_payload(
         "source_hypothesis_id": maybe_text(task.get("source_hypothesis_id")),
         "carryover_from_round_id": maybe_text(task.get("carryover_from_round_id")),
         "carryover_from_task_id": maybe_text(task.get("carryover_from_task_id")),
+        "decision_source": maybe_text(task.get("decision_source")),
+        "evidence_refs_json": json_text(task.get("evidence_refs", [])),
+        "source_ids_json": json_text(task.get("source_ids", [])),
+        "provenance_json": json_text(task.get("provenance", {})),
+        "lineage_json": json_text(task.get("lineage", [])),
         "linked_artifact_refs_json": json_text(task.get("linked_artifact_refs", [])),
         "related_ids_json": json_text(task.get("related_ids", [])),
         "created_at_utc": maybe_text(task.get("created_at_utc")),
@@ -4816,6 +4828,7 @@ def fetch_round_state(
     ).fetchall()
     hypothesis_sql = """
         SELECT hypothesis_id, title, statement, status, owner_role, linked_claim_ids_json,
+               decision_source, evidence_refs_json, source_ids_json, provenance_json, lineage_json,
                confidence, created_at_utc, updated_at_utc,
                carryover_from_round_id, carryover_from_hypothesis_id
         FROM hypothesis_cards
@@ -4824,6 +4837,7 @@ def fetch_round_state(
     challenge_sql = """
         SELECT ticket_id, created_at_utc, status, priority, owner_role, title,
                challenge_statement, target_claim_id, target_hypothesis_id,
+               decision_source, evidence_refs_json, source_ids_json, provenance_json, lineage_json,
                linked_artifact_refs_json, related_task_ids_json,
                closed_at_utc, closed_by_role, resolution, resolution_note
         FROM challenge_tickets
@@ -4833,7 +4847,8 @@ def fetch_round_state(
         SELECT task_id, title, task_text, task_type, status, owner_role, priority,
                source_round_id, source_ticket_id, source_hypothesis_id,
                carryover_from_round_id, carryover_from_task_id,
-               linked_artifact_refs_json, related_ids_json,
+               decision_source, evidence_refs_json, source_ids_json,
+               provenance_json, lineage_json, linked_artifact_refs_json, related_ids_json,
                created_at_utc, updated_at_utc, claimed_at_utc
         FROM board_tasks
         WHERE run_id = ? AND round_id = ?
@@ -4882,6 +4897,17 @@ def fetch_round_state(
                 "linked_claim_ids": decode_json(
                     maybe_text(row["linked_claim_ids_json"]), []
                 ),
+                "decision_source": maybe_text(row["decision_source"]),
+                "evidence_refs": decode_json(
+                    maybe_text(row["evidence_refs_json"]), []
+                ),
+                "source_ids": decode_json(
+                    maybe_text(row["source_ids_json"]), []
+                ),
+                "provenance": decode_json(
+                    maybe_text(row["provenance_json"]), {}
+                ),
+                "lineage": decode_json(maybe_text(row["lineage_json"]), []),
                 "confidence": row["confidence"],
                 "created_at_utc": maybe_text(row["created_at_utc"]),
                 "updated_at_utc": maybe_text(row["updated_at_utc"]),
@@ -4903,6 +4929,17 @@ def fetch_round_state(
                 "challenge_statement": maybe_text(row["challenge_statement"]),
                 "target_claim_id": maybe_text(row["target_claim_id"]),
                 "target_hypothesis_id": maybe_text(row["target_hypothesis_id"]),
+                "decision_source": maybe_text(row["decision_source"]),
+                "evidence_refs": decode_json(
+                    maybe_text(row["evidence_refs_json"]), []
+                ),
+                "source_ids": decode_json(
+                    maybe_text(row["source_ids_json"]), []
+                ),
+                "provenance": decode_json(
+                    maybe_text(row["provenance_json"]), {}
+                ),
+                "lineage": decode_json(maybe_text(row["lineage_json"]), []),
                 "linked_artifact_refs": decode_json(
                     maybe_text(row["linked_artifact_refs_json"]), []
                 ),
@@ -4930,6 +4967,17 @@ def fetch_round_state(
                 "source_hypothesis_id": maybe_text(row["source_hypothesis_id"]),
                 "carryover_from_round_id": maybe_text(row["carryover_from_round_id"]),
                 "carryover_from_task_id": maybe_text(row["carryover_from_task_id"]),
+                "decision_source": maybe_text(row["decision_source"]),
+                "evidence_refs": decode_json(
+                    maybe_text(row["evidence_refs_json"]), []
+                ),
+                "source_ids": decode_json(
+                    maybe_text(row["source_ids_json"]), []
+                ),
+                "provenance": decode_json(
+                    maybe_text(row["provenance_json"]), {}
+                ),
+                "lineage": decode_json(maybe_text(row["lineage_json"]), []),
                 "linked_artifact_refs": decode_json(
                     maybe_text(row["linked_artifact_refs_json"]), []
                 ),

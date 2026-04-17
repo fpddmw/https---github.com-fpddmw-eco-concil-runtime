@@ -78,10 +78,11 @@
 ### 2.8 Batch 4 当前状态
 
 - `已完成` `board_proposal_support.py`，board judgement 现在直接消费 DB 中的 council proposal，并统一生成 canonical judgement metadata。
-- `已完成` `hypothesis_cards / challenge_tickets` 的 `decision_source / evidence_refs_json / source_ids_json / provenance_json / lineage_json` 落库与迁移。
-- `已完成` `[重写]` `eco-open-challenge-ticket / eco-close-challenge-ticket / eco-update-hypothesis-status` 的 proposal-first 执行路径。
-- `已完成` proposal-only board workflow 回归，覆盖 hypothesis update、challenge open、challenge close，并断言 DB 列与 `raw_json` judgement metadata。
-- `已完成` 本地大回归 `74` 项通过，board proposal-first 改造未击穿 council / reporting / runtime 主链。
+- `已完成` `hypothesis_cards / challenge_tickets / board_tasks` 的 `decision_source / evidence_refs_json / source_ids_json / provenance_json / lineage_json` 落库与迁移。
+- `已完成` `[重写]` `eco-open-challenge-ticket / eco-close-challenge-ticket / eco-update-hypothesis-status / eco-claim-board-task` 的 proposal-first 执行路径。
+- `已完成` `hypothesis / challenge / board-task` canonical contract 与 `query-council-objects` 查询面。
+- `已完成` proposal-only board workflow 回归，覆盖 hypothesis update、challenge open、challenge close、board task claim，并断言 DB 列与 `raw_json` judgement metadata。
+- `已完成` 本地大回归 `75` 项通过，board proposal-first 改造未击穿 council / reporting / runtime 主链。
 
 ## 3. Work Package 0: 冻结旧错误增长
 
@@ -115,6 +116,9 @@
 
 ### 4.3 Deliberation plane
 
+- `[x]` 建立 `hypothesis`
+- `[x]` 建立 `challenge`
+- `[x]` 建立 `board-task`
 - `[x]` 建立 `proposal`
 - `[x]` 建立 `next-action`
 - `[x]` 建立 `probe`
@@ -178,7 +182,7 @@
 
 ### 7.2 重写 board skills
 
-- `[ ]` `[重写]` `eco-claim-board-task`
+- `[x]` `[重写]` `eco-claim-board-task`
 - `[x]` `[重写]` `eco-open-challenge-ticket`
 - `[x]` `[重写]` `eco-close-challenge-ticket`
 - `[x]` `[重写]` `eco-update-hypothesis-status`
@@ -190,12 +194,12 @@
 - `[x]` `readiness-assessment` 能表达多 agent 分歧
 - `[x]` `promotion-basis` 冻结的是 controversy judgement，而不是只冻结 coverages
 - `[x]` `decision-trace` 记录采纳了哪个 proposal、拒绝了哪些 proposal、理由是什么
-- `[x]` `hypothesis / challenge` DB 行与 `raw_json` 已显式承载 `decision_source / evidence_refs / source_ids / provenance / lineage`
+- `[x]` `hypothesis / challenge / board-task` DB 行与 `raw_json` 已显式承载 `decision_source / evidence_refs / source_ids / provenance / lineage`
 
 ## 8. Work Package 5: 建立 agent council loop
 
 - `[x]` 定义 `proposal contract`
-- `[ ]` 定义 `challenge contract`
+- `[x]` 定义 `challenge contract`
 - `[x]` 定义 `readiness opinion contract`
 - `[x]` 定义 `decision trace contract`
 - `[x]` 允许多个 agent 对同一问题提交相互冲突的 judgement
@@ -264,6 +268,7 @@
 - `[ ]` 删除或重写固化旧 coverage-first 语义的测试
 - `[x]` 新增 DB-only recovery tests
 - `[x]` 新增 agent proposal-driven round tests
+- `[x]` 新增 board canonical query-surface tests
 - `[ ]` 新增 kernel boundary tests
 - `[ ]` 新增 optional verification lane tests
 - `[ ]` 准备争议型政策 case
@@ -274,7 +279,7 @@
 
 - `[ ]` canonical signal / analysis / deliberation 对象已经定义并落库
 - `[ ]` formal comments 已成为一等结构化输入
-- `[x]` `proposal / next-action / probe / readiness-opinion / readiness-assessment / promotion-basis / decision-trace` 已可 item-level 查询
+- `[x]` `hypothesis / challenge / board-task / proposal / next-action / probe / readiness-opinion / readiness-assessment / promotion-basis / decision-trace` 已可 item-level 查询
 - `[ ]` 删除 `board_summary / board_brief / next_actions / probes / readiness` artifact 后，round 仍可继续
 - `[ ]` 主链默认输出已不再是 `claim-observation-link-coverage`
 - `[ ]` observation matching 只在明确可核实时触发

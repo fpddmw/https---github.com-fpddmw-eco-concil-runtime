@@ -35,6 +35,9 @@ class CanonicalContractTests(unittest.TestCase):
             "diffusion-edge",
             "controversy-map",
             "proposal",
+            "hypothesis",
+            "challenge",
+            "board-task",
             "next-action",
             "probe",
             "readiness-opinion",
@@ -46,6 +49,9 @@ class CanonicalContractTests(unittest.TestCase):
         self.assertSetEqual(
             {
                 "proposal",
+                "hypothesis",
+                "challenge",
+                "board-task",
                 "next-action",
                 "probe",
                 "readiness-opinion",

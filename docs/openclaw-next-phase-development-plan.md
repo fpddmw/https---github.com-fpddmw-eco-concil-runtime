@@ -63,10 +63,11 @@
 第四批已把 board judgement 从“操作员参数优先 + artifact 同步”推进到“proposal-first + DB judgement metadata 优先”，已落地以下硬改动：
 
 1. 新增 `board_proposal_support.py`，board judgement 现在直接从 deliberation DB 查询 council proposal，并统一生成 `decision_source / evidence_refs / source_ids / response_to_ids / provenance / lineage`。
-2. `hypothesis_cards / challenge_tickets` schema 与迁移链已补齐 `decision_source / evidence_refs_json / source_ids_json / provenance_json / lineage_json`，board judgement 不再只写在导出 JSON 上。
-3. `eco-update-hypothesis-status / eco-open-challenge-ticket / eco-close-challenge-ticket` 已改为 proposal-first；当 proposal 提供足够信息时，不再要求额外输入 `title / status / ticket-id` 才能推进。
-4. board 状态更新现在把 canonical judgement metadata 同时写入表列和 `raw_json`，board JSON 只作为 DB-backed 导出视图存在。
-5. 已新增 proposal-only board workflow 回归，覆盖 hypothesis update、challenge open、challenge close 三条路径，并显式断言 DB 列与 `raw_json` 中的 judgement metadata；当前相关核心回归共 74 项，已在本地全部通过。
+2. `hypothesis_cards / challenge_tickets / board_tasks` schema 与迁移链已补齐 `decision_source / evidence_refs_json / source_ids_json / provenance_json / lineage_json`，board judgement 不再只写在导出 JSON 上。
+3. `eco-update-hypothesis-status / eco-open-challenge-ticket / eco-close-challenge-ticket / eco-claim-board-task` 已改为 proposal-first；当 proposal 提供足够信息时，不再要求额外输入 `title / status / ticket-id` 才能推进。
+4. `hypothesis / challenge / board-task` 已进入 deliberation canonical contract registry，并可通过 `query-council-objects` 直接查询，不再只是 board JSON 内部结构。
+5. board 状态更新现在把 canonical judgement metadata 同时写入表列和 `raw_json`，board JSON 只作为 DB-backed 导出视图存在。
+6. 已新增 proposal-only board workflow 回归，覆盖 hypothesis update、challenge open、challenge close、board task claim 四条路径，并显式断言 DB 列与 `raw_json` 中的 judgement metadata；当前相关核心回归共 75 项，已在本地全部通过。
 
 ## 3. 本轮必须解决的核心问题
 
@@ -379,8 +380,9 @@ observation matching 不再是默认主链。
 当前状态：
 
 1. `proposal / next-action / probe / readiness-opinion / readiness-assessment / promotion-basis / decision-trace` 已完成 canonical 化与 query surface。
-2. `hypothesis / challenge` 已完成 proposal-first judgement 重写，并补齐 DB judgement metadata；`board-task` 仍待重写。
-3. board 读取、summary、brief 已能从 deliberation DB 导出；artifact 不再是唯一状态源。
+2. `hypothesis / challenge / board-task` 已完成 proposal-first judgement 重写，并补齐 DB judgement metadata。
+3. `hypothesis / challenge / board-task` 已完成 canonical contract 与 query surface，对应对象不再只能通过 board artifact 间接读取。
+4. board 读取、summary、brief 已能从 deliberation DB 导出；artifact 不再是唯一状态源。
 
 完成标志：
 
@@ -401,6 +403,12 @@ observation matching 不再是默认主链。
 3. 定义 `readiness opinion contract`。
 4. 定义 `decision trace contract`。
 5. 允许多个 agent 对同一 issue 给出不同 readiness opinion。
+
+当前状态：
+
+1. `proposal / challenge / readiness opinion / decision trace` contract 已全部定义。
+2. 至少一轮 round 已由 agent proposal 驱动 next actions、probe、board judgement 与 readiness judgement。
+3. heuristic 仍未完全降级为 fallback-only，这一项仍留在后续 batch。
 
 完成标志：
 

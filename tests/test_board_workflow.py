@@ -839,6 +839,166 @@ class BoardWorkflowTests(unittest.TestCase):
             self.assertIn(close_proposal_id, row["raw_json"]["source_ids"])
             self.assertIn(open_proposal_id, row["raw_json"]["lineage"])
 
+    def test_board_task_executes_from_council_proposal_only_and_persists_metadata(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            coverage_payload = run_script(
+                script_path("eco-score-evidence-coverage"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            claim_id = outputs["cluster_claims"]["canonical_ids"][0]
+            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            hypothesis_payload = run_script(
+                script_path("eco-update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Smoke over NYC was materially significant",
+                "--statement",
+                "Public smoke reports are backed by elevated PM2.5 observations.",
+                "--status",
+                "active",
+                "--owner-role",
+                "environmentalist",
+                "--linked-claim-id",
+                claim_id,
+                "--confidence",
+                "0.82",
+            )
+            hypothesis_id = hypothesis_payload["canonical_ids"][0]
+            challenge_payload = run_script(
+                script_path("eco-open-challenge-ticket"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Check whether reported smoke impact is overstated",
+                "--challenge-statement",
+                "Evaluate whether public narratives overstate the severity relative to observation coverage.",
+                "--target-claim-id",
+                claim_id,
+                "--target-hypothesis-id",
+                hypothesis_id,
+                "--priority",
+                "high",
+                "--owner-role",
+                "challenger",
+                "--linked-artifact-ref",
+                coverage_ref,
+            )
+            challenge_id = challenge_payload["canonical_ids"][0]
+
+            proposal_bundle = store_council_proposal_records(
+                run_dir,
+                proposal_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "proposals": [
+                        {
+                            "proposal_kind": "claim-board-task",
+                            "action_kind": "claim-board-task",
+                            "agent_role": "moderator",
+                            "assigned_role": "moderator",
+                            "target_kind": "challenge-ticket",
+                            "target_id": challenge_id,
+                            "target_hypothesis_id": hypothesis_id,
+                            "target_claim_id": claim_id,
+                            "proposed_task_id": "boardtask-proposal-001",
+                            "title": "Review contradiction-leaning evidence links",
+                            "task_text": "Compare contradiction-leaning links against coverage summary before the ticket is closed.",
+                            "task_type": "challenge-follow-up",
+                            "priority": "high",
+                            "rationale": "The challenge should not close until the contradiction-leaning evidence set is reviewed explicitly.",
+                            "decision_source": "agent-council",
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": [coverage_ref],
+                            "lineage": [challenge_id, hypothesis_id, claim_id],
+                            "related_ids": [claim_id],
+                        }
+                    ],
+                },
+            )
+            proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
+
+            payload = run_script(
+                script_path("eco-claim-board-task"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--proposal-id",
+                proposal_id,
+            )
+            delta_payload = run_script(
+                script_path("eco-read-board-delta"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            board = load_json(board_path(run_dir))
+            task = board["rounds"][ROUND_ID]["tasks"][0]
+            row = load_deliberation_row(
+                run_dir,
+                table_name="board_tasks",
+                id_column="task_id",
+                record_id=payload["canonical_ids"][0],
+            )
+            round_task = delta_payload["round_state"]["tasks"][0]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("created", payload["summary"]["operation"])
+            self.assertEqual("boardtask-proposal-001", payload["canonical_ids"][0])
+            self.assertEqual("deliberation-plane", payload["summary"]["write_surface"])
+            self.assertEqual("agent-council", payload["summary"]["decision_source"])
+            self.assertEqual(proposal_id, payload["summary"]["proposal_id"])
+            self.assertEqual("agent-council", task["decision_source"])
+            self.assertEqual("challenge-follow-up", task["task_type"])
+            self.assertEqual("high", task["priority"])
+            self.assertEqual(challenge_id, task["source_ticket_id"])
+            self.assertEqual(hypothesis_id, task["source_hypothesis_id"])
+            self.assertIn(claim_id, task["related_ids"])
+            self.assertIn(coverage_ref, task["evidence_refs"])
+            self.assertIn(proposal_id, task["source_ids"])
+            self.assertIn(proposal_id, task["lineage"])
+            self.assertEqual(proposal_id, task["provenance"]["proposal_id"])
+            self.assertEqual("unit-test", task["provenance"]["source"])
+            self.assertEqual("agent-council", round_task["decision_source"])
+            self.assertIn(proposal_id, round_task["source_ids"])
+            self.assertIn(proposal_id, round_task["lineage"])
+            self.assertEqual("agent-council", row["decision_source"])
+            self.assertIn(coverage_ref, json.loads(row["evidence_refs_json"]))
+            self.assertIn(proposal_id, json.loads(row["source_ids_json"]))
+            self.assertIn(proposal_id, json.loads(row["lineage_json"]))
+            self.assertEqual(proposal_id, json.loads(row["provenance_json"])["proposal_id"])
+            self.assertEqual("agent-council", row["raw_json"]["decision_source"])
+            self.assertEqual(challenge_id, row["raw_json"]["source_ticket_id"])
+            self.assertEqual(hypothesis_id, row["raw_json"]["source_hypothesis_id"])
+            self.assertIn(proposal_id, row["raw_json"]["source_ids"])
+            self.assertIn(proposal_id, row["raw_json"]["lineage"])
+
     def test_open_investigation_round_preserves_prior_round_and_carries_state_from_db(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

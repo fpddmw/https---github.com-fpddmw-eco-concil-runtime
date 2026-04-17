@@ -38,7 +38,7 @@ OpenClaw 当前更准确的定位是：
 3. `analysis plane`
    - 已能把 candidate、cluster、scope、link、coverage 等对象写入统一 result-set / lineage 结构。
 4. `deliberation plane`
-   - 已能把 hypothesis、challenge、task、probe、round transition 等 board 状态写入 DB-first 状态面。
+   - 已能把 hypothesis、challenge、board-task、proposal、next-action、probe、readiness、decision trace、round transition 等议会状态写入 DB-first 状态面。
 
 这说明系统已经脱离“抓数据 + 生成文档”的脚本集合，具备了共享状态、受治理执行和跨轮次恢复的骨架。
 
@@ -124,7 +124,7 @@ OpenClaw 当前更准确的定位是：
 主要缺口：
 
 1. formal comment 没有成为一等 schema。
-2. `next-action / probe / readiness / promotion-basis` 还不是稳定、可查询的 canonical 对象。
+2. analysis plane 的 controversy objects 仍未建成；虽然 `hypothesis / challenge / board-task / proposal / next-action / probe / readiness / promotion-basis / decision-trace` 已可查询，但信号与分析层契约仍不够硬。
 3. 很多 skill 仍依赖 envelope 兼容字段和松散 dict 约定。
 4. board / reporting 还未完全以新 controversy 对象为中心运作。
 
