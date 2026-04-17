@@ -56,7 +56,26 @@ def round_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
     }
 
 
-def selected_decision_artifact(run_dir: Path, round_id: str) -> dict[str, Any]:
+def selected_decision_artifact(
+    run_dir: Path,
+    round_id: str,
+    control_state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if isinstance(control_state, dict):
+        decision = (
+            control_state.get("decision", {})
+            if isinstance(control_state.get("decision"), dict)
+            else {}
+        )
+        if decision:
+            return decision
+        draft = (
+            control_state.get("decision_draft", {})
+            if isinstance(control_state.get("decision_draft"), dict)
+            else {}
+        )
+        if draft:
+            return draft
     decision = load_json_if_exists(run_dir / "reporting" / f"council_decision_{round_id}.json")
     if isinstance(decision, dict):
         return decision
@@ -93,24 +112,32 @@ def infer_close_posture(*, promotion_status: str, publication_posture: str, publ
 
 def round_terminal_state(run_dir: Path, round_id: str, artifacts: dict[str, str]) -> dict[str, Any]:
     control_state = load_phase2_control_state(run_dir, round_id=round_id)
-    controller = load_json_if_exists(Path(artifacts["controller_state_path"])) or (
+    controller = (
         control_state.get("controller", {})
         if isinstance(control_state.get("controller"), dict)
         else {}
-    )
-    supervisor = load_json_if_exists(Path(artifacts["supervisor_state_path"])) or (
+    ) or load_json_if_exists(Path(artifacts["controller_state_path"])) or {}
+    supervisor = (
         control_state.get("supervisor", {})
         if isinstance(control_state.get("supervisor"), dict)
         else {}
-    )
-    promotion = load_json_if_exists(Path(artifacts["promotion_basis_path"])) or (
+    ) or load_json_if_exists(Path(artifacts["supervisor_state_path"])) or {}
+    promotion = (
         control_state.get("promotion_basis", {})
         if isinstance(control_state.get("promotion_basis"), dict)
         else {}
-    )
-    handoff = load_json_if_exists(Path(artifacts["reporting_handoff_path"])) or {}
-    decision = selected_decision_artifact(run_dir, round_id)
-    final_publication = load_json_if_exists(Path(artifacts["final_publication_path"])) or {}
+    ) or load_json_if_exists(Path(artifacts["promotion_basis_path"])) or {}
+    handoff = (
+        control_state.get("reporting_handoff", {})
+        if isinstance(control_state.get("reporting_handoff"), dict)
+        else {}
+    ) or load_json_if_exists(Path(artifacts["reporting_handoff_path"])) or {}
+    decision = selected_decision_artifact(run_dir, round_id, control_state)
+    final_publication = (
+        control_state.get("final_publication", {})
+        if isinstance(control_state.get("final_publication"), dict)
+        else {}
+    ) or load_json_if_exists(Path(artifacts["final_publication_path"])) or {}
     controller_status = maybe_text(controller.get("controller_status"))
     supervisor_status = maybe_text(supervisor.get("supervisor_status"))
     promotion_status = maybe_text(final_publication.get("promotion_status")) or maybe_text(promotion.get("promotion_status")) or maybe_text(supervisor.get("promotion_status"))
@@ -122,7 +149,7 @@ def round_terminal_state(run_dir: Path, round_id: str, artifacts: dict[str, str]
     if not supervisor:
         block_close = True
         block_reason = "missing-supervisor-state"
-        block_message = "Round close requires a supervisor artifact so the terminal posture is explicit."
+        block_message = "Round close requires a supervisor state record so the terminal posture is explicit."
     elif supervisor_status == "controller-failed" or controller_status == "failed":
         block_close = True
         block_reason = "controller-failed"

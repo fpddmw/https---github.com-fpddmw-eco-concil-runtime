@@ -17,6 +17,9 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
+from eco_council_runtime.council_objects import (  # noqa: E402
+    query_council_objects,
+)
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     d1_contract_fields_from_payload,
     load_falsification_probe_wrapper,
@@ -54,6 +57,22 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
+def unique_texts(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
+
+
 def summarize_counts(items: list[dict[str, Any]], *, field_name: str) -> dict[str, int]:
     counts: dict[str, int] = {}
     for item in items:
@@ -64,6 +83,119 @@ def summarize_counts(items: list[dict[str, Any]], *, field_name: str) -> dict[st
             continue
         counts[value] = counts.get(value, 0) + 1
     return counts
+
+
+def collected_evidence_refs(items: list[dict[str, Any]]) -> list[str]:
+    values: list[Any] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        values.extend(list_items(item.get("evidence_refs")))
+    return unique_texts(values)
+
+
+def load_council_readiness_opinions(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    payload = query_council_objects(
+        run_dir,
+        object_kind="readiness-opinion",
+        run_id=run_id,
+        round_id=round_id,
+        limit=200,
+    )
+    opinions = (
+        payload.get("objects", [])
+        if isinstance(payload.get("objects"), list)
+        else []
+    )
+    return [
+        opinion
+        for opinion in opinions
+        if isinstance(opinion, dict)
+        and maybe_text(opinion.get("opinion_status")) not in {"withdrawn", "retracted"}
+    ]
+
+
+def readiness_bucket(opinion: dict[str, Any]) -> str:
+    readiness_value = maybe_text(opinion.get("readiness_status"))
+    if bool(opinion.get("sufficient_for_promotion")) or readiness_value in {
+        "ready",
+        "ready-for-promotion",
+        "promote",
+    }:
+        return "ready"
+    if readiness_value in {"blocked", "reject", "rejected"}:
+        return "blocked"
+    return "needs-more-data"
+
+
+def aggregate_council_readiness_opinions(
+    opinions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    ready_opinions = [
+        opinion for opinion in opinions if readiness_bucket(opinion) == "ready"
+    ]
+    blocked_opinions = [
+        opinion for opinion in opinions if readiness_bucket(opinion) == "blocked"
+    ]
+    needs_more_data_opinions = [
+        opinion
+        for opinion in opinions
+        if readiness_bucket(opinion) == "needs-more-data"
+    ]
+    if ready_opinions and not blocked_opinions and not needs_more_data_opinions:
+        readiness_value = "ready"
+        lead_reason = (
+            f"Council submitted {len(ready_opinions)} readiness opinions and all support promotion."
+        )
+    elif blocked_opinions and not ready_opinions:
+        readiness_value = "blocked"
+        lead_reason = (
+            f"Council submitted {len(opinions)} readiness opinions and none support promotion."
+        )
+    else:
+        readiness_value = "needs-more-data"
+        lead_reason = (
+            f"Council readiness opinions are mixed across {len(opinions)} submitted opinions, so the round stays open."
+        )
+    detailed_reasons = [
+        f"{maybe_text(opinion.get('agent_role')) or 'agent'}: {maybe_text(opinion.get('rationale'))}"
+        for opinion in opinions
+        if maybe_text(opinion.get("rationale"))
+    ]
+    opinion_ids = unique_texts(
+        [opinion.get("opinion_id") for opinion in opinions]
+    )
+    basis_object_ids = unique_texts(
+        [
+            basis_object_id
+            for opinion in opinions
+            for basis_object_id in list_items(opinion.get("basis_object_ids"))
+        ]
+    )
+    evidence_refs = unique_texts(
+        [
+            evidence_ref
+            for opinion in opinions
+            for evidence_ref in list_items(opinion.get("evidence_refs"))
+        ]
+    )
+    return {
+        "readiness_status": readiness_value,
+        "reasons": [lead_reason, *detailed_reasons[:3]],
+        "opinion_ids": opinion_ids,
+        "basis_object_ids": basis_object_ids,
+        "evidence_refs": evidence_refs,
+        "opinion_status_counts": {
+            "ready": len(ready_opinions),
+            "blocked": len(blocked_opinions),
+            "needs-more-data": len(needs_more_data_opinions),
+        },
+    }
 
 
 def readiness_status(
@@ -181,6 +313,11 @@ def summarize_round_readiness_skill(
     probes_artifact_present = bool(probes_context.get("artifact_present"))
     probes_present = bool(probes_context.get("payload_present"))
     probes = probes_payload if isinstance(probes_payload, dict) else {"probes": [], "probe_count": 0}
+    council_opinions = load_council_readiness_opinions(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
     contract_fields = d1_contract_fields_from_payload(
         shared_context,
         observed_inputs_overrides={
@@ -281,6 +418,58 @@ def summarize_round_readiness_skill(
         formal_linkage_actions=formal_linkage_actions,
         issue_gap_actions=issue_gap_actions,
     )
+    decision_source = "policy-fallback"
+    readiness_lineage = unique_texts(
+        [
+            item.get("action_id")
+            for item in next_actions.get("ranked_actions", [])
+            if isinstance(item, dict)
+        ]
+        + [
+            item.get("probe_id")
+            for item in probes.get("probes", [])
+            if isinstance(item, dict)
+        ]
+    )
+    readiness_evidence_refs = unique_texts(
+        collected_evidence_refs(coverages)
+        + collected_evidence_refs(
+            next_actions.get("ranked_actions", [])
+            if isinstance(next_actions.get("ranked_actions"), list)
+            else []
+        )
+        + collected_evidence_refs(
+            probes.get("probes", [])
+            if isinstance(probes.get("probes"), list)
+            else []
+        )
+    )
+    selected_basis_object_ids: list[str] = []
+    opinion_ids: list[str] = []
+    opinion_status_counts: dict[str, int] = {}
+    if council_opinions:
+        council_summary = aggregate_council_readiness_opinions(council_opinions)
+        status_value = maybe_text(council_summary.get("readiness_status")) or status_value
+        reasons = (
+            council_summary.get("reasons", [])
+            if isinstance(council_summary.get("reasons"), list)
+            else reasons
+        )
+        decision_source = "agent-council"
+        selected_basis_object_ids = list_items(
+            council_summary.get("basis_object_ids")
+        )
+        opinion_ids = list_items(council_summary.get("opinion_ids"))
+        opinion_status_counts = (
+            council_summary.get("opinion_status_counts", {})
+            if isinstance(council_summary.get("opinion_status_counts"), dict)
+            else {}
+        )
+        readiness_evidence_refs = unique_texts(
+            list_items(council_summary.get("evidence_refs"))
+            + readiness_evidence_refs
+        )
+        readiness_lineage = unique_texts(opinion_ids + selected_basis_object_ids)
     findings = [
         {"finding_id": "readiness-coverage", "title": "Coverage posture", "summary": f"strong={strong_coverages}, moderate={moderate_coverages}, weak={weak_coverages}", "confidence": "medium"},
         {"finding_id": "readiness-board", "title": "Board posture", "summary": f"active_hypotheses={active_hypotheses}, open_challenges={open_challenges}, open_tasks={open_tasks}", "confidence": "medium"},
@@ -332,8 +521,26 @@ def summarize_round_readiness_skill(
         or "missing-next-actions",
         "probes_source": maybe_text(probes_context.get("source"))
         or "missing-probes",
+        "decision_source": decision_source,
         "readiness_status": status_value,
         "sufficient_for_promotion": status_value == "ready",
+        "evidence_refs": readiness_evidence_refs,
+        "lineage": readiness_lineage,
+        "provenance": {
+            "source_skill": SKILL_NAME,
+            "decision_source": decision_source,
+            "board_state_source": contract_fields["board_state_source"],
+            "coverage_source": contract_fields["coverage_source"],
+            "next_actions_source": maybe_text(next_actions_context.get("source"))
+            or "missing-next-actions",
+            "probes_source": maybe_text(probes_context.get("source"))
+            or "missing-probes",
+            "council_opinion_count": len(council_opinions),
+        },
+        "opinion_ids": opinion_ids,
+        "selected_basis_object_ids": selected_basis_object_ids,
+        "readiness_opinion_count": len(council_opinions),
+        "readiness_opinion_status_counts": opinion_status_counts,
         "agenda_counts": agenda_counts,
         "counts": {
             "active_hypotheses": active_hypotheses,
@@ -354,6 +561,7 @@ def summarize_round_readiness_skill(
             "formal_linkage_actions": formal_linkage_actions,
             "issue_gap_actions": issue_gap_actions,
             "diffusion_focus_count": diffusion_focus_count,
+            "agent_readiness_opinions": len(council_opinions),
         },
         "controversy_gap_counts": action_gap_counts,
         "probe_type_counts": probe_type_counts,

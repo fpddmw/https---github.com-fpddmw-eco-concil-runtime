@@ -93,15 +93,15 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("environmentalist", env_report["agent_role"])
             self.assertEqual("expert-report", soc_report["canonical_artifact"])
             self.assertEqual(
-                "expert-report-draft-artifact",
+                "deliberation-plane-expert-report-draft",
                 soc_report["expert_report_draft_source"],
             )
             self.assertEqual(
-                "reporting-handoff-artifact",
+                "deliberation-plane-reporting-handoff",
                 soc_report["reporting_handoff_source"],
             )
             self.assertEqual(
-                "council-decision-draft-artifact",
+                "deliberation-plane-council-decision-draft",
                 soc_report["decision_source"],
             )
             self.assertTrue(
@@ -112,8 +112,8 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertTrue(
                 soc_report["observed_inputs"]["expert_report_draft_present"]
             )
-            self.assertEqual("reporting-handoff-artifact", soc_draft["reporting_handoff_source"])
-            self.assertEqual("council-decision-draft-artifact", soc_draft["decision_source"])
+            self.assertEqual("deliberation-plane-reporting-handoff", soc_draft["reporting_handoff_source"])
+            self.assertEqual("deliberation-plane-council-decision-draft", soc_draft["decision_source"])
             self.assertEqual("missing-board-brief", soc_draft["board_brief_source"])
             self.assertEqual("deliberation-plane", soc_draft["board_state_source"])
             self.assertEqual("analysis-plane", soc_draft["coverage_source"])
@@ -126,11 +126,11 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("ready", decision["publication_readiness"])
             self.assertEqual("council-decision", decision["canonical_artifact"])
             self.assertEqual(
-                "council-decision-draft-artifact",
+                "deliberation-plane-council-decision-draft",
                 decision["decision_source"],
             )
             self.assertEqual(
-                "reporting-handoff-artifact",
+                "deliberation-plane-reporting-handoff",
                 decision["reporting_handoff_source"],
             )
             self.assertEqual(
@@ -138,11 +138,11 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 decision["promotion_source"],
             )
             self.assertEqual(
-                "expert-report-artifact",
+                "deliberation-plane-expert-report",
                 decision["sociologist_report_source"],
             )
             self.assertEqual(
-                "expert-report-artifact",
+                "deliberation-plane-expert-report",
                 decision["environmentalist_report_source"],
             )
             self.assertTrue(decision["observed_inputs"]["decision_artifact_present"])
@@ -175,7 +175,99 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("blocked", payload["summary"]["operation"])
             self.assertTrue(any(item["code"] == "missing-canonical-report" for item in payload["warnings"]))
 
-    def test_hold_decision_can_publish_without_reports_and_report_overwrite_is_guarded(self) -> None:
+    def test_expert_report_draft_recovers_from_db_when_handoff_and_decision_artifacts_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_round(run_dir, root)
+
+            reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json").unlink()
+            reporting_path(run_dir, f"council_decision_draft_{ROUND_ID}.json").unlink()
+
+            draft_payload = run_script(
+                script_path("eco-draft-expert-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--role",
+                "sociologist",
+            )
+            draft_artifact = load_json(
+                reporting_path(run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("ready-to-publish", draft_payload["summary"]["report_status"])
+            self.assertEqual(
+                "deliberation-plane-reporting-handoff",
+                draft_artifact["reporting_handoff_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-council-decision-draft",
+                draft_artifact["decision_source"],
+            )
+            self.assertFalse(
+                draft_artifact["observed_inputs"]["reporting_handoff_artifact_present"]
+            )
+            self.assertTrue(
+                draft_artifact["observed_inputs"]["reporting_handoff_present"]
+            )
+            self.assertFalse(
+                draft_artifact["observed_inputs"]["decision_artifact_present"]
+            )
+            self.assertTrue(draft_artifact["observed_inputs"]["decision_present"])
+
+    def test_publish_expert_report_recovers_from_db_when_draft_artifact_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_round(run_dir, root)
+
+            run_script(
+                script_path("eco-draft-expert-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--role",
+                "sociologist",
+            )
+            reporting_path(run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json").unlink()
+
+            publish_payload = run_script(
+                script_path("eco-publish-expert-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--role",
+                "sociologist",
+            )
+            report_artifact = load_json(
+                reporting_path(run_dir, f"expert_report_sociologist_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("published", publish_payload["summary"]["operation"])
+            self.assertEqual(
+                "deliberation-plane-expert-report-draft",
+                report_artifact["expert_report_draft_source"],
+            )
+            self.assertFalse(
+                report_artifact["observed_inputs"][
+                    "expert_report_draft_artifact_present"
+                ]
+            )
+            self.assertTrue(
+                report_artifact["observed_inputs"]["expert_report_draft_present"]
+            )
+
+    def test_hold_decision_can_publish_without_reports_and_draft_artifact_drift_is_ignored(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -197,7 +289,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", decision_publish["status"])
             self.assertEqual("hold", decision_publish["summary"]["publication_readiness"])
             self.assertEqual(
-                "expert-report-artifact",
+                "deliberation-plane-expert-report",
                 decision["sociologist_report_source"],
             )
             self.assertEqual(
@@ -218,8 +310,8 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertFalse(
                 decision["observed_inputs"]["environmentalist_report_present"]
             )
-            self.assertEqual("blocked", second_publish["status"])
-            self.assertTrue(any(item["code"] == "overwrite-blocked" for item in second_publish["warnings"]))
+            self.assertEqual("completed", second_publish["status"])
+            self.assertEqual("noop", second_publish["summary"]["operation"])
 
     def test_final_publication_ready_round_collects_reports_and_decision(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -244,10 +336,10 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("deliberation-plane", publication["board_state_source"])
             self.assertEqual("analysis-plane", publication["coverage_source"])
             self.assertEqual(
-                "reporting-handoff-artifact",
+                "deliberation-plane-reporting-handoff",
                 publication["reporting_handoff_source"],
             )
-            self.assertEqual("council-decision-artifact", publication["decision_source"])
+            self.assertEqual("deliberation-plane-council-decision", publication["decision_source"])
             self.assertEqual(
                 "deliberation-plane-promotion-basis",
                 publication["promotion_source"],
@@ -257,11 +349,11 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 publication["supervisor_state_source"],
             )
             self.assertEqual(
-                "expert-report-artifact",
+                "deliberation-plane-expert-report",
                 publication["sociologist_report_source"],
             )
             self.assertEqual(
-                "expert-report-artifact",
+                "deliberation-plane-expert-report",
                 publication["environmentalist_report_source"],
             )
             self.assertTrue(
@@ -313,6 +405,70 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 publication["observed_inputs"]["promotion_artifact_present"]
             )
             self.assertTrue(publication["observed_inputs"]["promotion_present"])
+
+    def test_final_publication_recovers_from_db_when_reporting_artifacts_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_round(run_dir, root)
+
+            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+
+            reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json").unlink()
+            reporting_path(run_dir, f"council_decision_{ROUND_ID}.json").unlink()
+            reporting_path(run_dir, f"expert_report_sociologist_{ROUND_ID}.json").unlink()
+            reporting_path(run_dir, f"expert_report_environmentalist_{ROUND_ID}.json").unlink()
+
+            publication_payload = run_script(
+                script_path("eco-materialize-final-publication"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            publication = load_json(reporting_path(run_dir, f"final_publication_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", publication_payload["status"])
+            self.assertEqual(
+                "deliberation-plane-reporting-handoff",
+                publication["reporting_handoff_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-council-decision",
+                publication["decision_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-expert-report",
+                publication["sociologist_report_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-expert-report",
+                publication["environmentalist_report_source"],
+            )
+            self.assertFalse(
+                publication["observed_inputs"]["reporting_handoff_artifact_present"]
+            )
+            self.assertFalse(publication["observed_inputs"]["decision_artifact_present"])
+            self.assertFalse(
+                publication["observed_inputs"]["sociologist_report_artifact_present"]
+            )
+            self.assertFalse(
+                publication["observed_inputs"][
+                    "environmentalist_report_artifact_present"
+                ]
+            )
+            self.assertTrue(publication["observed_inputs"]["reporting_handoff_present"])
+            self.assertTrue(publication["observed_inputs"]["decision_present"])
+            self.assertTrue(publication["observed_inputs"]["sociologist_report_present"])
+            self.assertTrue(
+                publication["observed_inputs"]["environmentalist_report_present"]
+            )
 
     def test_final_publication_hold_round_materializes_hold_artifact_and_guards_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

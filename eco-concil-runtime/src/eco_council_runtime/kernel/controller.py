@@ -672,25 +672,21 @@ def run_phase2_round_with_contract_mode(
         "allow_side_effects": allow_side_effects,
     }
 
-    existing_controller = load_json_if_exists(controller_state_path(run_dir, round_id)) or {}
-    existing_gate = load_json_if_exists(Path(artifacts["promotion_gate_path"])) or {}
-    phase2_control_state = (
-        load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id)
-        if (not existing_controller or not existing_gate)
-        else {}
+    phase2_control_state = load_phase2_control_state(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
     )
-    if not existing_controller:
-        existing_controller = (
-            phase2_control_state.get("controller", {})
-            if isinstance(phase2_control_state.get("controller"), dict)
-            else {}
-        )
-    if not existing_gate:
-        existing_gate = (
-            phase2_control_state.get("promotion_gate", {})
-            if isinstance(phase2_control_state.get("promotion_gate"), dict)
-            else {}
-        )
+    existing_controller = (
+        phase2_control_state.get("controller", {})
+        if isinstance(phase2_control_state.get("controller"), dict)
+        else {}
+    ) or load_json_if_exists(controller_state_path(run_dir, round_id)) or {}
+    existing_gate = (
+        phase2_control_state.get("promotion_gate", {})
+        if isinstance(phase2_control_state.get("promotion_gate"), dict)
+        else {}
+    ) or load_json_if_exists(Path(artifacts["promotion_gate_path"])) or {}
     existing_status = maybe_text(existing_controller.get("controller_status"))
     if not force_restart and existing_status == "completed":
         return controller_result_payload(existing_controller, existing_gate)
@@ -1013,9 +1009,16 @@ def run_phase2_round_with_contract_mode(
         )
         raise SkillExecutionError(failure_payload["message"], failure_payload)
 
-    gate_payload = load_json_if_exists(Path(artifacts["promotion_gate_path"])) or (
-        load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id).get("promotion_gate", {})
+    phase2_control_state = load_phase2_control_state(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
     )
+    gate_payload = (
+        phase2_control_state.get("promotion_gate", {})
+        if isinstance(phase2_control_state.get("promotion_gate"), dict)
+        else {}
+    ) or load_json_if_exists(Path(artifacts["promotion_gate_path"])) or {}
     controller_payload["controller_status"] = "completed"
     controller_payload["planning_mode"] = normalized_controller_planning_mode(
         maybe_text(planning.get("planning_mode"))
@@ -1024,12 +1027,11 @@ def run_phase2_round_with_contract_mode(
     controller_payload["readiness_status"] = maybe_text(gate_payload.get("readiness_status")) or maybe_text(controller_payload.get("readiness_status")) or "blocked"
     controller_payload["gate_status"] = maybe_text(gate_payload.get("gate_status")) or maybe_text(controller_payload.get("gate_status")) or "freeze-withheld"
     if maybe_text(controller_payload.get("promotion_status")) in {"", "not-evaluated"}:
-        promotion_basis_payload = load_json_if_exists(Path(artifacts["promotion_basis_path"])) or (
-            load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id).get(
-                "promotion_basis",
-                {},
-            )
-        )
+        promotion_basis_payload = (
+            phase2_control_state.get("promotion_basis", {})
+            if isinstance(phase2_control_state.get("promotion_basis"), dict)
+            else {}
+        ) or load_json_if_exists(Path(artifacts["promotion_basis_path"])) or {}
         controller_payload["promotion_status"] = maybe_text(promotion_basis_payload.get("promotion_status")) or "withheld"
     if controller_payload["promotion_status"] == "promoted":
         controller_payload["recommended_next_skills"] = ["eco-materialize-reporting-handoff", "eco-draft-council-decision"]

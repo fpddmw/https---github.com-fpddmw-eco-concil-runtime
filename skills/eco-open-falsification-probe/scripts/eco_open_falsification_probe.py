@@ -17,6 +17,9 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
+from eco_council_runtime.council_objects import (  # noqa: E402
+    query_council_objects,
+)
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     d1_contract_fields_from_payload,
     load_next_actions_wrapper,
@@ -29,6 +32,23 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_falsification_probe_records,
     store_falsification_probe_snapshot,
 )
+
+PROBE_ACTION_KINDS = {
+    "resolve-challenge",
+    "resolve-contradiction",
+    "stabilize-hypothesis",
+    "clarify-verification-route",
+    "advance-empirical-verification",
+    "review-formal-record",
+    "review-formal-public-linkage",
+    "address-representation-gap",
+    "analyze-public-discourse",
+    "analyze-stakeholder-deliberation",
+    "trace-cross-platform-diffusion",
+    "classify-verifiability",
+    "expand-coverage",
+    "open-probe",
+}
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -48,6 +68,10 @@ def utc_now_iso() -> str:
 
 def resolve_run_dir(run_dir: str) -> Path:
     return Path(run_dir).expanduser().resolve()
+
+
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
 
 
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
@@ -114,6 +138,174 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
     if assigned_role == "sociologist":
         suggestions.append("eco-query-public-signals")
     return unique_texts(suggestions)
+
+
+def proposal_target(proposal: dict[str, Any]) -> dict[str, Any]:
+    target = proposal.get("target", {})
+    if isinstance(target, dict) and target:
+        return dict(target)
+    target_kind = maybe_text(proposal.get("target_kind"))
+    target_id = maybe_text(proposal.get("target_id"))
+    resolved: dict[str, Any] = {}
+    if target_kind:
+        resolved["object_kind"] = target_kind
+    if target_id:
+        resolved["object_id"] = target_id
+    if maybe_text(proposal.get("target_claim_id")):
+        resolved["claim_id"] = maybe_text(proposal.get("target_claim_id"))
+    if maybe_text(proposal.get("target_hypothesis_id")):
+        resolved["hypothesis_id"] = maybe_text(proposal.get("target_hypothesis_id"))
+    if maybe_text(proposal.get("target_ticket_id")):
+        resolved["ticket_id"] = maybe_text(proposal.get("target_ticket_id"))
+    if target_kind in {"claim", "claim-candidate", "claim-cluster"} and target_id:
+        resolved.setdefault("claim_id", target_id)
+    if target_kind in {"hypothesis", "hypothesis-card"} and target_id:
+        resolved.setdefault("hypothesis_id", target_id)
+    if target_kind in {"challenge-ticket", "ticket"} and target_id:
+        resolved.setdefault("ticket_id", target_id)
+    if target_kind == "issue-cluster" and target_id:
+        resolved.setdefault("map_issue_id", target_id)
+    return resolved
+
+
+def action_signature(action: dict[str, Any]) -> str:
+    target = action.get("target", {}) if isinstance(action.get("target"), dict) else {}
+    return "|".join(
+        [
+            maybe_text(action.get("action_kind")),
+            maybe_text(action.get("assigned_role")),
+            maybe_text(target.get("object_kind")),
+            maybe_text(target.get("object_id")),
+            maybe_text(target.get("claim_id")),
+            maybe_text(target.get("hypothesis_id")),
+            maybe_text(target.get("ticket_id")),
+            maybe_text(action.get("issue_label")),
+        ]
+    )
+
+
+def action_from_council_proposal(proposal: dict[str, Any]) -> dict[str, Any]:
+    proposal_id = maybe_text(proposal.get("proposal_id"))
+    target = proposal_target(proposal)
+    response_to_ids = unique_texts(list_items(proposal.get("response_to_ids")))
+    decision_source = maybe_text(proposal.get("decision_source")) or "agent-council"
+    action_kind = (
+        maybe_text(proposal.get("action_kind"))
+        or maybe_text(proposal.get("proposed_action_kind"))
+        or maybe_text(proposal.get("proposal_kind"))
+        or "follow-council-proposal"
+    )
+    objective = (
+        maybe_text(proposal.get("objective"))
+        or maybe_text(proposal.get("summary"))
+        or maybe_text(proposal.get("rationale"))
+        or f"Execute council proposal {proposal_id or 'for this round'}."
+    )
+    reason = (
+        maybe_text(proposal.get("rationale"))
+        or maybe_text(proposal.get("summary"))
+        or f"Council proposal {proposal_id or '<missing>'} requested this action."
+    )
+    return {
+        "action_id": (
+            maybe_text(proposal.get("proposed_action_id"))
+            or maybe_text(proposal.get("action_id"))
+            or "action-"
+            + stable_hash(
+                "council-proposal-action",
+                proposal_id,
+                action_kind,
+                maybe_text(proposal.get("agent_role")),
+                maybe_text(target.get("object_id")),
+                maybe_text(target.get("claim_id")),
+                maybe_text(target.get("hypothesis_id")),
+                maybe_text(target.get("ticket_id")),
+            )[:12]
+        ),
+        "action_kind": action_kind,
+        "priority": maybe_text(proposal.get("priority")) or "high",
+        "assigned_role": (
+            maybe_text(proposal.get("assigned_role"))
+            or maybe_text(proposal.get("agent_role"))
+            or "challenger"
+        ),
+        "objective": objective,
+        "reason": reason,
+        "source_ids": unique_texts(
+            [proposal_id, maybe_text(proposal.get("target_id")), *response_to_ids]
+        ),
+        "target": target,
+        "controversy_gap": maybe_text(proposal.get("controversy_gap")),
+        "recommended_lane": maybe_text(proposal.get("recommended_lane")),
+        "evidence_refs": unique_texts(list_items(proposal.get("evidence_refs"))),
+        "probe_candidate": bool(proposal.get("probe_candidate"))
+        or action_kind in PROBE_ACTION_KINDS,
+        "issue_label": (
+            maybe_text(proposal.get("issue_label"))
+            or maybe_text(target.get("issue_label"))
+            or maybe_text(target.get("map_issue_id"))
+        ),
+        "decision_source": decision_source,
+        "lineage": unique_texts(
+            [proposal_id, *response_to_ids, *list_items(proposal.get("lineage"))]
+        ),
+        "provenance": (
+            proposal.get("provenance")
+            if isinstance(proposal.get("provenance"), dict)
+            else {
+                "source_skill": "council-proposal",
+                "proposal_id": proposal_id,
+                "decision_source": decision_source,
+            }
+        ),
+    }
+
+
+def load_council_probe_actions(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    payload = query_council_objects(
+        run_dir,
+        object_kind="proposal",
+        run_id=run_id,
+        round_id=round_id,
+        limit=200,
+    )
+    proposals = (
+        payload.get("objects", [])
+        if isinstance(payload.get("objects"), list)
+        else []
+    )
+    results: list[dict[str, Any]] = []
+    for proposal in proposals:
+        if not isinstance(proposal, dict):
+            continue
+        if maybe_text(proposal.get("status")) in {"rejected", "withdrawn", "closed"}:
+            continue
+        action = action_from_council_proposal(proposal)
+        if bool(action.get("probe_candidate")):
+            results.append(action)
+    return results
+
+
+def merged_probe_actions(
+    proposal_actions: list[dict[str, Any]],
+    fallback_actions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen_signatures: set[str] = set()
+    for action in [*proposal_actions, *fallback_actions]:
+        if not isinstance(action, dict):
+            continue
+        signature = action_signature(action)
+        if signature in seen_signatures:
+            continue
+        seen_signatures.add(signature)
+        merged.append(dict(action))
+    return merged
 
 
 def probe_type_for_action(action: dict[str, Any]) -> str:
@@ -268,17 +460,7 @@ def probe_candidates(actions: list[dict[str, Any]], action_id: str) -> list[dict
         action
         for action in filtered
         if bool(action.get("probe_candidate"))
-        or maybe_text(action.get("action_kind"))
-        in {
-            "resolve-challenge",
-            "resolve-contradiction",
-            "stabilize-hypothesis",
-            "clarify-verification-route",
-            "advance-empirical-verification",
-            "review-formal-record",
-            "review-formal-public-linkage",
-            "address-representation-gap",
-        }
+        or maybe_text(action.get("action_kind")) in PROBE_ACTION_KINDS
     ]
 
 
@@ -300,6 +482,8 @@ def build_probe(
         or "Probe the current contradiction or uncertainty."
     )
     probe_type = probe_type_for_action(action)
+    decision_source = maybe_text(action.get("decision_source")) or "heuristic-fallback"
+    source_ids = unique_texts(list_items(action.get("source_ids")))
     return {
         "probe_id": probe_id,
         "run_id": maybe_text(action.get("run_id")) or maybe_text(default_run_id),
@@ -325,10 +509,21 @@ def build_probe(
             if isinstance(action.get("evidence_refs"), list)
             else []
         ),
-        "source_ids": unique_texts(
-            action.get("source_ids", [])
-            if isinstance(action.get("source_ids"), list)
-            else []
+        "source_ids": source_ids,
+        "decision_source": decision_source,
+        "lineage": unique_texts(
+            list_items(action.get("lineage"))
+            + source_ids
+            + [action_id, hypothesis_id, claim_id, ticket_id]
+        ),
+        "provenance": (
+            action.get("provenance")
+            if isinstance(action.get("provenance"), dict)
+            else {
+                "source_skill": SKILL_NAME,
+                "decision_source": decision_source,
+                "action_id": action_id,
+            }
         ),
     }
 
@@ -359,6 +554,11 @@ def open_falsification_probe_skill(
     )
 
     warnings: list[dict[str, Any]] = []
+    proposal_actions = load_council_probe_actions(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
     next_actions_context = load_next_actions_wrapper(
         run_dir_path,
         run_id=run_id,
@@ -371,7 +571,8 @@ def open_falsification_probe_skill(
         else None
     )
     next_actions_artifact_present = bool(next_actions_context.get("artifact_present"))
-    action_source = "next-actions-artifact"
+    fallback_actions: list[dict[str, Any]] = []
+    action_source = ""
     contract_fields = d1_contract_fields_from_payload(
         None,
         observed_inputs_overrides={
@@ -380,7 +581,7 @@ def open_falsification_probe_skill(
         },
     )
     if isinstance(next_actions_wrapper, dict):
-        ranked_actions = (
+        fallback_actions = (
             next_actions_wrapper.get("ranked_actions", [])
             if isinstance(next_actions_wrapper.get("ranked_actions"), list)
             else []
@@ -398,12 +599,6 @@ def open_falsification_probe_skill(
             },
         )
     else:
-        warnings.append(
-            {
-                "code": "missing-next-actions",
-                "message": f"No next-actions artifact or DB snapshot was found for {next_actions_file}. Rebuilding action context from deliberation state.",
-            }
-        )
         action_context = load_ranked_actions_context(
             run_dir_path,
             run_id=run_id,
@@ -413,18 +608,11 @@ def open_falsification_probe_skill(
             coverage_path=coverage_path,
             max_actions=max_actions,
         )
-        ranked_actions = (
-            action_context.get("ranked_actions", [])
-            if isinstance(action_context.get("ranked_actions"), list)
-            else []
-        )
         context_warnings = (
             action_context.get("warnings", [])
             if isinstance(action_context.get("warnings"), list)
             else []
         )
-        warnings.extend(context_warnings)
-        action_source = "derived-from-deliberation"
         contract_fields = d1_contract_fields_from_payload(
             action_context,
             observed_inputs_overrides={
@@ -432,8 +620,37 @@ def open_falsification_probe_skill(
                 "next_actions_present": False,
             },
         )
+        if proposal_actions:
+            action_source = "agent-proposal-execution"
+        else:
+            warnings.append(
+                {
+                    "code": "missing-next-actions",
+                    "message": (
+                        f"No next-actions artifact or DB snapshot was found for "
+                        f"{next_actions_file}. Rebuilding action context from "
+                        "deliberation state."
+                    ),
+                }
+            )
+            warnings.extend(context_warnings)
+            fallback_actions = (
+                action_context.get("ranked_actions", [])
+                if isinstance(action_context.get("ranked_actions"), list)
+                else []
+            )
+            action_source = "derived-from-deliberation"
 
-    candidates = probe_candidates(ranked_actions, action_id)[: max(1, max_probes)]
+    if proposal_actions and fallback_actions:
+        if not action_source.startswith("agent-proposal"):
+            action_source = "agent-proposal-augmented"
+    elif proposal_actions:
+        action_source = "agent-proposal-execution"
+    elif not action_source:
+        action_source = "next-actions-artifact"
+
+    probe_input_actions = merged_probe_actions(proposal_actions, fallback_actions)
+    candidates = probe_candidates(probe_input_actions, action_id)[: max(1, max_probes)]
     probes = [
         build_probe(
             action,
@@ -452,6 +669,8 @@ def open_falsification_probe_skill(
         "next_actions_path": str(next_actions_file),
         "action_source": action_source,
         **contract_fields,
+        "proposal_probe_candidate_count": len(proposal_actions),
+        "fallback_probe_candidate_count": len(probe_candidates(fallback_actions, "")),
         "probe_count": len(probes),
         "probes": probes,
     }

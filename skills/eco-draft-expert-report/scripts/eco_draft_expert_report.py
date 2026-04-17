@@ -21,6 +21,13 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_expert_report_record,
+)
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_council_decision_wrapper,
+    load_reporting_handoff_wrapper,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -195,37 +202,64 @@ def draft_expert_report_skill(
     output_file = resolve_path(run_dir_path, output_path, f"reporting/expert_report_draft_{role}_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
-    handoff_payload = load_json_if_exists(handoff_file)
+    handoff_context = load_reporting_handoff_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        reporting_handoff_path=reporting_handoff_path,
+    )
+    handoff_payload = (
+        handoff_context.get("payload")
+        if isinstance(handoff_context.get("payload"), dict)
+        else None
+    )
     if not isinstance(handoff_payload, dict):
-        warnings.append({"code": "missing-reporting-handoff", "message": f"No reporting handoff artifact was found at {handoff_file}."})
+        warnings.append(
+            {
+                "code": "missing-reporting-handoff",
+                "message": (
+                    "No reporting handoff artifact or DB record was found "
+                    f"at {handoff_file}."
+                ),
+            }
+        )
         handoff = {"handoff_status": "pending-more-investigation", "promotion_status": "withheld", "key_findings": [], "open_risks": [], "recommended_next_actions": []}
     else:
         handoff = handoff_payload
-    decision_payload = load_json_if_exists(decision_file)
+    decision_context = load_council_decision_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="draft",
+        decision_path=decision_path,
+    )
+    decision_payload = (
+        decision_context.get("payload")
+        if isinstance(decision_context.get("payload"), dict)
+        else None
+    )
     decision = decision_payload or {}
     board_excerpt = maybe_text(load_text_if_exists(board_brief_file))[:220]
     contract_fields = reporting_contract_fields_from_payload(
         decision_payload,
         fallback_payload=handoff_payload,
         observed_inputs_overrides={
-            "reporting_handoff_artifact_present": handoff_file.exists(),
-            "reporting_handoff_present": isinstance(handoff_payload, dict),
-            "decision_artifact_present": decision_file.exists(),
-            "decision_present": isinstance(decision_payload, dict),
+            "reporting_handoff_artifact_present": bool(
+                handoff_context.get("artifact_present")
+            ),
+            "reporting_handoff_present": bool(handoff_context.get("payload_present")),
+            "decision_artifact_present": bool(
+                decision_context.get("artifact_present")
+            ),
+            "decision_present": bool(decision_context.get("payload_present")),
             "board_brief_artifact_present": board_brief_file.exists(),
             "board_brief_present": bool(board_excerpt),
         },
         field_overrides={
-            "reporting_handoff_source": (
-                "reporting-handoff-artifact"
-                if handoff_file.exists()
-                else "missing-reporting-handoff"
-            ),
-            "decision_source": (
-                "council-decision-draft-artifact"
-                if decision_file.exists()
-                else "missing-decision"
-            ),
+            "reporting_handoff_source": maybe_text(handoff_context.get("source"))
+            or "missing-reporting-handoff",
+            "decision_source": maybe_text(decision_context.get("source"))
+            or "missing-decision",
             "board_brief_source": (
                 "board-brief-artifact"
                 if board_brief_file.exists()
@@ -272,6 +306,11 @@ def draft_expert_report_skill(
         },
         "selected_evidence_refs": unique_texts(handoff.get("selected_evidence_refs", []) if isinstance(handoff.get("selected_evidence_refs"), list) else []),
     }
+    store_expert_report_record(
+        run_dir_path,
+        report_payload=payload,
+        artifact_path=str(output_file),
+    )
     write_json_file(output_file, payload)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]

@@ -20,6 +20,9 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_reporting_handoff_record,
+)
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     load_promotion_basis_wrapper,
     load_round_readiness_wrapper,
@@ -346,6 +349,27 @@ def materialize_reporting_handoff_skill(
         "supervisor_state_path": str(supervisor_file),
         **contract_fields,
         "promoted_basis_id": maybe_text(promotion_basis.get("basis_id")),
+        "basis_selection_mode": maybe_text(promotion_basis.get("basis_selection_mode")),
+        "selected_basis_object_ids": unique_texts(
+            promotion_basis.get("selected_basis_object_ids", [])
+            if isinstance(promotion_basis.get("selected_basis_object_ids"), list)
+            else []
+        ),
+        "supporting_proposal_ids": unique_texts(
+            promotion_basis.get("supporting_proposal_ids", [])
+            if isinstance(promotion_basis.get("supporting_proposal_ids"), list)
+            else []
+        ),
+        "supporting_opinion_ids": unique_texts(
+            promotion_basis.get("supporting_opinion_ids", [])
+            if isinstance(promotion_basis.get("supporting_opinion_ids"), list)
+            else []
+        ),
+        "rejected_opinion_ids": unique_texts(
+            promotion_basis.get("rejected_opinion_ids", [])
+            if isinstance(promotion_basis.get("rejected_opinion_ids"), list)
+            else []
+        ),
         "selected_evidence_refs": unique_texts(promotion_basis.get("selected_evidence_refs", []) if isinstance(promotion_basis.get("selected_evidence_refs"), list) else []),
         "board_brief_excerpt": board_excerpt,
         "key_findings": key_findings,
@@ -354,6 +378,11 @@ def materialize_reporting_handoff_skill(
         "recommended_sections": recommended_sections(handoff_status),
         "report_targets": ["expert-report-draft", "council-decision-draft"] if handoff_status == "ready-for-reporting" else ["expert-report-draft", "another-round-decision"],
     }
+    store_reporting_handoff_record(
+        run_dir_path,
+        handoff_payload=wrapper,
+        artifact_path=str(output_file),
+    )
     write_json_file(output_file, wrapper)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]

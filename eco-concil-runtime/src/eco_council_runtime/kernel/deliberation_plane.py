@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ..canonical_contracts import validate_canonical_payload
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS board_runs (
     run_id TEXT PRIMARY KEY,
@@ -61,6 +63,11 @@ CREATE TABLE IF NOT EXISTS hypothesis_cards (
     status TEXT NOT NULL DEFAULT '',
     owner_role TEXT NOT NULL DEFAULT '',
     linked_claim_ids_json TEXT NOT NULL DEFAULT '[]',
+    decision_source TEXT NOT NULL DEFAULT '',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    source_ids_json TEXT NOT NULL DEFAULT '[]',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
     confidence REAL,
     created_at_utc TEXT NOT NULL DEFAULT '',
     updated_at_utc TEXT NOT NULL DEFAULT '',
@@ -87,6 +94,11 @@ CREATE TABLE IF NOT EXISTS challenge_tickets (
     challenge_statement TEXT NOT NULL DEFAULT '',
     target_claim_id TEXT NOT NULL DEFAULT '',
     target_hypothesis_id TEXT NOT NULL DEFAULT '',
+    decision_source TEXT NOT NULL DEFAULT '',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    source_ids_json TEXT NOT NULL DEFAULT '[]',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
     linked_artifact_refs_json TEXT NOT NULL DEFAULT '[]',
     related_task_ids_json TEXT NOT NULL DEFAULT '[]',
     closed_at_utc TEXT NOT NULL DEFAULT '',
@@ -331,6 +343,106 @@ CREATE TABLE IF NOT EXISTS promotion_basis_items (
 CREATE INDEX IF NOT EXISTS idx_promotion_basis_items_round
 ON promotion_basis_items(run_id, round_id, item_group, object_type, object_id, item_row_id);
 
+CREATE TABLE IF NOT EXISTS reporting_handoffs (
+    handoff_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    handoff_status TEXT NOT NULL DEFAULT '',
+    promotion_status TEXT NOT NULL DEFAULT '',
+    readiness_status TEXT NOT NULL DEFAULT '',
+    supervisor_status TEXT NOT NULL DEFAULT '',
+    board_state_source TEXT NOT NULL DEFAULT '',
+    coverage_source TEXT NOT NULL DEFAULT '',
+    promotion_source TEXT NOT NULL DEFAULT '',
+    readiness_source TEXT NOT NULL DEFAULT '',
+    board_brief_source TEXT NOT NULL DEFAULT '',
+    supervisor_state_source TEXT NOT NULL DEFAULT '',
+    selected_evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_reporting_handoffs_round
+ON reporting_handoffs(run_id, round_id, generated_at_utc, handoff_id);
+
+CREATE TABLE IF NOT EXISTS council_decision_records (
+    record_id TEXT PRIMARY KEY,
+    decision_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    decision_stage TEXT NOT NULL DEFAULT '',
+    moderator_status TEXT NOT NULL DEFAULT '',
+    publication_readiness TEXT NOT NULL DEFAULT '',
+    next_round_required INTEGER NOT NULL DEFAULT 0,
+    canonical_artifact TEXT NOT NULL DEFAULT '',
+    board_state_source TEXT NOT NULL DEFAULT '',
+    coverage_source TEXT NOT NULL DEFAULT '',
+    reporting_handoff_source TEXT NOT NULL DEFAULT '',
+    promotion_source TEXT NOT NULL DEFAULT '',
+    decision_source TEXT NOT NULL DEFAULT '',
+    sociologist_report_source TEXT NOT NULL DEFAULT '',
+    environmentalist_report_source TEXT NOT NULL DEFAULT '',
+    selected_evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    published_report_refs_json TEXT NOT NULL DEFAULT '[]',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_council_decision_records_round
+ON council_decision_records(run_id, round_id, decision_stage, generated_at_utc, record_id);
+
+CREATE TABLE IF NOT EXISTS expert_report_records (
+    record_id TEXT PRIMARY KEY,
+    report_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    report_stage TEXT NOT NULL DEFAULT '',
+    agent_role TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    handoff_status TEXT NOT NULL DEFAULT '',
+    publication_readiness TEXT NOT NULL DEFAULT '',
+    canonical_artifact TEXT NOT NULL DEFAULT '',
+    board_state_source TEXT NOT NULL DEFAULT '',
+    coverage_source TEXT NOT NULL DEFAULT '',
+    reporting_handoff_source TEXT NOT NULL DEFAULT '',
+    decision_source TEXT NOT NULL DEFAULT '',
+    expert_report_draft_source TEXT NOT NULL DEFAULT '',
+    board_brief_source TEXT NOT NULL DEFAULT '',
+    selected_evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_expert_report_records_round
+ON expert_report_records(run_id, round_id, report_stage, agent_role, generated_at_utc, record_id);
+
+CREATE TABLE IF NOT EXISTS final_publications (
+    publication_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    publication_status TEXT NOT NULL DEFAULT '',
+    publication_posture TEXT NOT NULL DEFAULT '',
+    board_state_source TEXT NOT NULL DEFAULT '',
+    coverage_source TEXT NOT NULL DEFAULT '',
+    reporting_handoff_source TEXT NOT NULL DEFAULT '',
+    decision_source TEXT NOT NULL DEFAULT '',
+    promotion_source TEXT NOT NULL DEFAULT '',
+    supervisor_state_source TEXT NOT NULL DEFAULT '',
+    sociologist_report_source TEXT NOT NULL DEFAULT '',
+    environmentalist_report_source TEXT NOT NULL DEFAULT '',
+    selected_evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    published_report_refs_json TEXT NOT NULL DEFAULT '[]',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_final_publications_round
+ON final_publications(run_id, round_id, generated_at_utc, publication_id);
+
 CREATE TABLE IF NOT EXISTS round_task_snapshots (
     snapshot_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,
@@ -367,6 +479,52 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
+def dict_items(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def normalized_provenance(
+    value: Any,
+    *,
+    source_skill: str = "",
+    decision_source: str = "",
+    artifact_path: str = "",
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized = dict_items(value)
+    if source_skill and "source_skill" not in normalized:
+        normalized["source_skill"] = source_skill
+    if decision_source and "decision_source" not in normalized:
+        normalized["decision_source"] = decision_source
+    if artifact_path and "artifact_path" not in normalized:
+        normalized["artifact_path"] = artifact_path
+    if isinstance(extra, dict):
+        for key, raw_value in extra.items():
+            key_text = maybe_text(key)
+            if (
+                not key_text
+                or key_text in normalized
+                or raw_value in (None, "", [], {})
+            ):
+                continue
+            normalized[key_text] = raw_value
+    return normalized
+
+
+def merged_lineage(existing: Any, *sources: Any) -> list[str]:
+    values = list_items(existing)
+    for source in sources:
+        if isinstance(source, list):
+            values.extend(source)
+            continue
+        values.append(source)
+    return unique_texts(values)
 
 
 def utc_now_iso() -> str:
@@ -434,6 +592,37 @@ def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
         "event_index",
         "INTEGER NOT NULL DEFAULT 0",
     )
+    for table_name in ("hypothesis_cards", "challenge_tickets"):
+        ensure_column(
+            connection,
+            table_name,
+            "decision_source",
+            "TEXT NOT NULL DEFAULT ''",
+        )
+        ensure_column(
+            connection,
+            table_name,
+            "evidence_refs_json",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )
+        ensure_column(
+            connection,
+            table_name,
+            "source_ids_json",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )
+        ensure_column(
+            connection,
+            table_name,
+            "provenance_json",
+            "TEXT NOT NULL DEFAULT '{}'",
+        )
+        ensure_column(
+            connection,
+            table_name,
+            "lineage_json",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )
     connection.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_board_events_round_sequence
@@ -685,12 +874,14 @@ def write_hypothesis_row(connection: sqlite3.Connection, row: dict[str, Any]) ->
         """
         INSERT OR REPLACE INTO hypothesis_cards (
             hypothesis_id, run_id, round_id, title, statement, status, owner_role,
-            linked_claim_ids_json, confidence, created_at_utc, updated_at_utc,
+            linked_claim_ids_json, decision_source, evidence_refs_json, source_ids_json,
+            provenance_json, lineage_json, confidence, created_at_utc, updated_at_utc,
             carryover_from_round_id, carryover_from_hypothesis_id, history_json,
             board_revision, artifact_path, record_locator, raw_json
         ) VALUES (
             :hypothesis_id, :run_id, :round_id, :title, :statement, :status, :owner_role,
-            :linked_claim_ids_json, :confidence, :created_at_utc, :updated_at_utc,
+            :linked_claim_ids_json, :decision_source, :evidence_refs_json, :source_ids_json,
+            :provenance_json, :lineage_json, :confidence, :created_at_utc, :updated_at_utc,
             :carryover_from_round_id, :carryover_from_hypothesis_id, :history_json,
             :board_revision, :artifact_path, :record_locator, :raw_json
         )
@@ -704,13 +895,15 @@ def write_challenge_row(connection: sqlite3.Connection, row: dict[str, Any]) -> 
         """
         INSERT OR REPLACE INTO challenge_tickets (
             ticket_id, run_id, round_id, created_at_utc, status, priority, owner_role,
-            title, challenge_statement, target_claim_id, target_hypothesis_id,
+            title, challenge_statement, target_claim_id, target_hypothesis_id, decision_source,
+            evidence_refs_json, source_ids_json, provenance_json, lineage_json,
             linked_artifact_refs_json, related_task_ids_json, closed_at_utc, closed_by_role,
             resolution, resolution_note, history_json, board_revision, artifact_path,
             record_locator, raw_json
         ) VALUES (
             :ticket_id, :run_id, :round_id, :created_at_utc, :status, :priority, :owner_role,
-            :title, :challenge_statement, :target_claim_id, :target_hypothesis_id,
+            :title, :challenge_statement, :target_claim_id, :target_hypothesis_id, :decision_source,
+            :evidence_refs_json, :source_ids_json, :provenance_json, :lineage_json,
             :linked_artifact_refs_json, :related_task_ids_json, :closed_at_utc, :closed_by_role,
             :resolution, :resolution_note, :history_json, :board_revision, :artifact_path,
             :record_locator, :raw_json
@@ -929,6 +1122,112 @@ def write_promotion_basis_item_row(
     )
 
 
+def write_reporting_handoff_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO reporting_handoffs (
+            handoff_id, run_id, round_id, generated_at_utc, handoff_status,
+            promotion_status, readiness_status, supervisor_status,
+            board_state_source, coverage_source, promotion_source,
+            readiness_source, board_brief_source, supervisor_state_source,
+            selected_evidence_refs_json, artifact_path, record_locator, raw_json
+        ) VALUES (
+            :handoff_id, :run_id, :round_id, :generated_at_utc, :handoff_status,
+            :promotion_status, :readiness_status, :supervisor_status,
+            :board_state_source, :coverage_source, :promotion_source,
+            :readiness_source, :board_brief_source, :supervisor_state_source,
+            :selected_evidence_refs_json, :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def write_council_decision_record_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO council_decision_records (
+            record_id, decision_id, run_id, round_id, generated_at_utc,
+            decision_stage, moderator_status, publication_readiness,
+            next_round_required, canonical_artifact, board_state_source,
+            coverage_source, reporting_handoff_source, promotion_source,
+            decision_source, sociologist_report_source,
+            environmentalist_report_source, selected_evidence_refs_json,
+            published_report_refs_json, artifact_path, record_locator, raw_json
+        ) VALUES (
+            :record_id, :decision_id, :run_id, :round_id, :generated_at_utc,
+            :decision_stage, :moderator_status, :publication_readiness,
+            :next_round_required, :canonical_artifact, :board_state_source,
+            :coverage_source, :reporting_handoff_source, :promotion_source,
+            :decision_source, :sociologist_report_source,
+            :environmentalist_report_source, :selected_evidence_refs_json,
+            :published_report_refs_json, :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def write_expert_report_record_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO expert_report_records (
+            record_id, report_id, run_id, round_id, generated_at_utc,
+            report_stage, agent_role, status, handoff_status,
+            publication_readiness, canonical_artifact, board_state_source,
+            coverage_source, reporting_handoff_source, decision_source,
+            expert_report_draft_source, board_brief_source,
+            selected_evidence_refs_json, artifact_path, record_locator, raw_json
+        ) VALUES (
+            :record_id, :report_id, :run_id, :round_id, :generated_at_utc,
+            :report_stage, :agent_role, :status, :handoff_status,
+            :publication_readiness, :canonical_artifact, :board_state_source,
+            :coverage_source, :reporting_handoff_source, :decision_source,
+            :expert_report_draft_source, :board_brief_source,
+            :selected_evidence_refs_json, :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def write_final_publication_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO final_publications (
+            publication_id, run_id, round_id, generated_at_utc,
+            publication_status, publication_posture, board_state_source,
+            coverage_source, reporting_handoff_source, decision_source,
+            promotion_source, supervisor_state_source,
+            sociologist_report_source, environmentalist_report_source,
+            selected_evidence_refs_json, published_report_refs_json,
+            artifact_path, record_locator, raw_json
+        ) VALUES (
+            :publication_id, :run_id, :round_id, :generated_at_utc,
+            :publication_status, :publication_posture, :board_state_source,
+            :coverage_source, :reporting_handoff_source, :decision_source,
+            :promotion_source, :supervisor_state_source,
+            :sociologist_report_source, :environmentalist_report_source,
+            :selected_evidence_refs_json, :published_report_refs_json,
+            :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
 def write_round_task_snapshot_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
     connection.execute(
         """
@@ -1008,6 +1307,11 @@ def hypothesis_row_from_payload(
         "status": maybe_text(hypothesis.get("status")),
         "owner_role": maybe_text(hypothesis.get("owner_role")),
         "linked_claim_ids_json": json_text(hypothesis.get("linked_claim_ids", [])),
+        "decision_source": maybe_text(hypothesis.get("decision_source")),
+        "evidence_refs_json": json_text(hypothesis.get("evidence_refs", [])),
+        "source_ids_json": json_text(hypothesis.get("source_ids", [])),
+        "provenance_json": json_text(hypothesis.get("provenance", {})),
+        "lineage_json": json_text(hypothesis.get("lineage", [])),
         "confidence": hypothesis.get("confidence"),
         "created_at_utc": maybe_text(hypothesis.get("created_at_utc")),
         "updated_at_utc": maybe_text(hypothesis.get("updated_at_utc")),
@@ -1040,6 +1344,11 @@ def challenge_row_from_payload(
         "challenge_statement": maybe_text(ticket.get("challenge_statement")),
         "target_claim_id": maybe_text(ticket.get("target_claim_id")),
         "target_hypothesis_id": maybe_text(ticket.get("target_hypothesis_id")),
+        "decision_source": maybe_text(ticket.get("decision_source")),
+        "evidence_refs_json": json_text(ticket.get("evidence_refs", [])),
+        "source_ids_json": json_text(ticket.get("source_ids", [])),
+        "provenance_json": json_text(ticket.get("provenance", {})),
+        "lineage_json": json_text(ticket.get("lineage", [])),
         "linked_artifact_refs_json": json_text(ticket.get("linked_artifact_refs", [])),
         "related_task_ids_json": json_text(ticket.get("related_task_ids", [])),
         "closed_at_utc": maybe_text(ticket.get("closed_at_utc")),
@@ -1144,6 +1453,71 @@ def readiness_assessment_id(run_id: str, round_id: str, readiness_status: str) -
     )[:12]
 
 
+def reporting_handoff_id(
+    run_id: str,
+    round_id: str,
+    handoff_status: str,
+    promotion_status: str,
+) -> str:
+    return "reporting-handoff-" + stable_hash(
+        "reporting-handoff",
+        run_id,
+        round_id,
+        handoff_status,
+        promotion_status,
+    )[:12]
+
+
+def council_decision_record_id(
+    run_id: str,
+    round_id: str,
+    decision_stage: str,
+    decision_id: str,
+) -> str:
+    return "decision-record-" + stable_hash(
+        "council-decision-record",
+        run_id,
+        round_id,
+        decision_stage,
+        decision_id,
+    )[:12]
+
+
+def expert_report_record_id(
+    run_id: str,
+    round_id: str,
+    report_stage: str,
+    agent_role: str,
+    report_id: str,
+) -> str:
+    return "expert-report-record-" + stable_hash(
+        "expert-report-record",
+        run_id,
+        round_id,
+        report_stage,
+        agent_role,
+        report_id,
+    )[:12]
+
+
+def decision_stage_from_payload(payload: dict[str, Any]) -> str:
+    explicit_stage = maybe_text(payload.get("decision_stage"))
+    if explicit_stage in {"draft", "canonical"}:
+        return explicit_stage
+    if maybe_text(payload.get("canonical_artifact")) == "council-decision":
+        return "canonical"
+    return "draft"
+
+
+def expert_report_stage_from_payload(payload: dict[str, Any]) -> str:
+    explicit_stage = maybe_text(payload.get("report_stage"))
+    if explicit_stage in {"draft", "canonical"}:
+        return explicit_stage
+    if maybe_text(payload.get("canonical_artifact")) == "expert-report":
+        return "canonical"
+    return "draft"
+
+
 def action_target_id(action: dict[str, Any], field_name: str) -> str:
     target = action.get("target", {}) if isinstance(action.get("target"), dict) else {}
     direct_field_name = f"target_{field_name}"
@@ -1161,10 +1535,18 @@ def normalized_action_payload(
     run_id: str,
     round_id: str,
     action_rank: int,
+    generated_at_utc: str = "",
+    source_skill: str = "",
+    artifact_path: str = "",
 ) -> dict[str, Any]:
     normalized = dict(action)
     normalized["run_id"] = maybe_text(normalized.get("run_id")) or run_id
     normalized["round_id"] = maybe_text(normalized.get("round_id")) or round_id
+    normalized["generated_at_utc"] = (
+        maybe_text(normalized.get("generated_at_utc"))
+        or maybe_text(generated_at_utc)
+        or utc_now_iso()
+    )
     normalized["action_id"] = (
         maybe_text(normalized.get("action_id"))
         or "action-"
@@ -1181,7 +1563,35 @@ def normalized_action_payload(
             action_target_id(normalized, "ticket_id"),
         )[:12]
     )
-    return normalized
+    decision_source = (
+        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+    )
+    normalized["decision_source"] = decision_source
+    normalized["evidence_refs"] = list_items(normalized.get("evidence_refs"))
+    normalized["lineage"] = merged_lineage(
+        normalized.get("lineage"),
+        normalized.get("source_ids"),
+        action_target_id(normalized, "hypothesis_id"),
+        action_target_id(normalized, "claim_id"),
+        action_target_id(normalized, "ticket_id"),
+        (
+            normalized.get("target", {}).get("object_id")
+            if isinstance(normalized.get("target"), dict)
+            else ""
+        ),
+    )
+    normalized["provenance"] = normalized_provenance(
+        normalized.get("provenance"),
+        source_skill=source_skill,
+        decision_source=decision_source,
+        artifact_path=artifact_path,
+        extra={
+            "agenda_source": maybe_text(normalized.get("agenda_source")),
+            "assigned_role": maybe_text(normalized.get("assigned_role")),
+            "action_kind": maybe_text(normalized.get("action_kind")),
+        },
+    )
+    return validate_canonical_payload("next-action", normalized)
 
 
 def normalized_probe_payload(
@@ -1190,10 +1600,18 @@ def normalized_probe_payload(
     run_id: str,
     round_id: str,
     probe_index: int,
+    generated_at_utc: str = "",
+    source_skill: str = "",
+    artifact_path: str = "",
 ) -> dict[str, Any]:
     normalized = dict(probe)
     normalized["run_id"] = maybe_text(normalized.get("run_id")) or run_id
     normalized["round_id"] = maybe_text(normalized.get("round_id")) or round_id
+    normalized["opened_at_utc"] = (
+        maybe_text(normalized.get("opened_at_utc"))
+        or maybe_text(generated_at_utc)
+        or utc_now_iso()
+    )
     normalized["probe_id"] = (
         maybe_text(normalized.get("probe_id"))
         or "probe-"
@@ -1210,7 +1628,31 @@ def normalized_probe_payload(
             maybe_text(normalized.get("target_ticket_id")),
         )[:12]
     )
-    return normalized
+    decision_source = (
+        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+    )
+    normalized["decision_source"] = decision_source
+    normalized["evidence_refs"] = list_items(normalized.get("evidence_refs"))
+    normalized["lineage"] = merged_lineage(
+        normalized.get("lineage"),
+        normalized.get("source_ids"),
+        maybe_text(normalized.get("action_id")),
+        maybe_text(normalized.get("target_hypothesis_id")),
+        maybe_text(normalized.get("target_claim_id")),
+        maybe_text(normalized.get("target_ticket_id")),
+    )
+    normalized["provenance"] = normalized_provenance(
+        normalized.get("provenance"),
+        source_skill=source_skill,
+        decision_source=decision_source,
+        artifact_path=artifact_path,
+        extra={
+            "owner_role": maybe_text(normalized.get("owner_role")),
+            "probe_status": maybe_text(normalized.get("probe_status")),
+            "probe_type": maybe_text(normalized.get("probe_type")),
+        },
+    )
+    return validate_canonical_payload("probe", normalized)
 
 
 def normalized_readiness_payload(
@@ -1218,6 +1660,8 @@ def normalized_readiness_payload(
     *,
     run_id: str,
     round_id: str,
+    source_skill: str = "",
+    artifact_path: str = "",
 ) -> dict[str, Any]:
     normalized = dict(readiness_payload)
     normalized["run_id"] = maybe_text(normalized.get("run_id")) or run_id
@@ -1236,7 +1680,37 @@ def normalized_readiness_payload(
             normalized["readiness_status"],
         )
     )
-    return normalized
+    decision_source = (
+        maybe_text(normalized.get("decision_source")) or "policy-fallback"
+    )
+    normalized["decision_source"] = decision_source
+    normalized["selected_basis_object_ids"] = list_items(
+        normalized.get("selected_basis_object_ids")
+    )
+    normalized["basis_object_ids"] = list_items(normalized.get("basis_object_ids"))
+    normalized["opinion_ids"] = list_items(normalized.get("opinion_ids"))
+    normalized["evidence_refs"] = list_items(
+        normalized.get("evidence_refs")
+    ) or list_items(normalized.get("selected_evidence_refs"))
+    normalized["lineage"] = merged_lineage(
+        normalized.get("lineage"),
+        normalized.get("selected_basis_object_ids"),
+        normalized.get("basis_object_ids"),
+        normalized.get("opinion_ids"),
+    )
+    normalized["provenance"] = normalized_provenance(
+        normalized.get("provenance"),
+        source_skill=source_skill,
+        decision_source=decision_source,
+        artifact_path=artifact_path,
+        extra={
+            "board_state_source": maybe_text(normalized.get("board_state_source")),
+            "coverage_source": maybe_text(normalized.get("coverage_source")),
+            "next_actions_source": maybe_text(normalized.get("next_actions_source")),
+            "probes_source": maybe_text(normalized.get("probes_source")),
+        },
+    )
+    return validate_canonical_payload("readiness-assessment", normalized)
 
 
 PROMOTION_BASIS_ITEM_GROUPS = (
@@ -1254,6 +1728,8 @@ def normalized_promotion_basis_payload(
     *,
     run_id: str,
     round_id: str,
+    source_skill: str = "",
+    artifact_path: str = "",
 ) -> dict[str, Any]:
     normalized = dict(promotion_payload)
     normalized["run_id"] = maybe_text(normalized.get("run_id")) or run_id
@@ -1264,6 +1740,15 @@ def normalized_promotion_basis_payload(
     normalized["promotion_status"] = (
         maybe_text(normalized.get("promotion_status")) or "withheld"
     )
+    normalized["readiness_status"] = (
+        maybe_text(normalized.get("readiness_status")) or "blocked"
+    )
+    normalized["selected_basis_object_ids"] = list_items(
+        normalized.get("selected_basis_object_ids")
+    )
+    normalized["selected_evidence_refs"] = list_items(
+        normalized.get("selected_evidence_refs")
+    )
     normalized["basis_id"] = (
         maybe_text(normalized.get("basis_id"))
         or "evidence-basis-"
@@ -1272,6 +1757,190 @@ def normalized_promotion_basis_payload(
             normalized["run_id"],
             normalized["round_id"],
             normalized["promotion_status"],
+        )[:12]
+    )
+    decision_source = (
+        maybe_text(normalized.get("decision_source")) or "policy-fallback"
+    )
+    normalized["decision_source"] = decision_source
+    normalized["evidence_refs"] = list_items(
+        normalized.get("evidence_refs")
+    ) or list_items(normalized.get("selected_evidence_refs"))
+    item_object_ids = [
+        promotion_basis_item_object_id(item_group, item)
+        for item_group, _item_index, item in iter_promotion_basis_items(normalized)
+    ]
+    normalized["lineage"] = merged_lineage(
+        normalized.get("lineage"),
+        normalized.get("selected_basis_object_ids"),
+        item_object_ids,
+    )
+    normalized["provenance"] = normalized_provenance(
+        normalized.get("provenance"),
+        source_skill=source_skill,
+        decision_source=decision_source,
+        artifact_path=artifact_path,
+        extra={
+            "basis_selection_mode": maybe_text(
+                normalized.get("basis_selection_mode")
+            ),
+            "board_state_source": maybe_text(normalized.get("board_state_source")),
+            "coverage_source": maybe_text(normalized.get("coverage_source")),
+            "readiness_source": maybe_text(normalized.get("readiness_source")),
+            "next_actions_source": maybe_text(normalized.get("next_actions_source")),
+            "board_brief_source": maybe_text(normalized.get("board_brief_source")),
+        },
+    )
+    return validate_canonical_payload("promotion-basis", normalized)
+
+
+REPORT_AGENT_ROLES = ("sociologist", "environmentalist")
+
+
+def normalized_reporting_handoff_payload(
+    handoff_payload: dict[str, Any],
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
+    normalized = dict(handoff_payload)
+    normalized["run_id"] = maybe_text(normalized.get("run_id")) or run_id
+    normalized["round_id"] = maybe_text(normalized.get("round_id")) or round_id
+    normalized["generated_at_utc"] = (
+        maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    )
+    normalized["handoff_status"] = (
+        maybe_text(normalized.get("handoff_status"))
+        or "pending-more-investigation"
+    )
+    normalized["promotion_status"] = (
+        maybe_text(normalized.get("promotion_status")) or "withheld"
+    )
+    normalized["handoff_id"] = (
+        maybe_text(normalized.get("handoff_id"))
+        or reporting_handoff_id(
+            normalized["run_id"],
+            normalized["round_id"],
+            normalized["handoff_status"],
+            normalized["promotion_status"],
+        )
+    )
+    return normalized
+
+
+def normalized_council_decision_payload(
+    decision_payload: dict[str, Any],
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
+    normalized = dict(decision_payload)
+    normalized["run_id"] = maybe_text(normalized.get("run_id")) or run_id
+    normalized["round_id"] = maybe_text(normalized.get("round_id")) or round_id
+    normalized["generated_at_utc"] = (
+        maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    )
+    normalized["decision_stage"] = decision_stage_from_payload(normalized)
+    normalized["decision_id"] = (
+        maybe_text(normalized.get("decision_id"))
+        or "council-decision-"
+        + stable_hash(
+            "council-decision",
+            normalized["run_id"],
+            normalized["round_id"],
+            normalized["decision_stage"],
+            maybe_text(normalized.get("moderator_status")),
+            maybe_text(normalized.get("publication_readiness")),
+        )[:12]
+    )
+    normalized["record_id"] = (
+        maybe_text(normalized.get("record_id"))
+        or council_decision_record_id(
+            normalized["run_id"],
+            normalized["round_id"],
+            normalized["decision_stage"],
+            normalized["decision_id"],
+        )
+    )
+    return normalized
+
+
+def normalized_expert_report_payload(
+    report_payload: dict[str, Any],
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
+    normalized = dict(report_payload)
+    normalized["run_id"] = maybe_text(normalized.get("run_id")) or run_id
+    normalized["round_id"] = maybe_text(normalized.get("round_id")) or round_id
+    normalized["generated_at_utc"] = (
+        maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    )
+    normalized["report_stage"] = expert_report_stage_from_payload(normalized)
+    normalized["agent_role"] = (
+        maybe_text(normalized.get("agent_role"))
+        or maybe_text(normalized.get("canonical_role"))
+    )
+    normalized["report_id"] = (
+        maybe_text(normalized.get("report_id"))
+        or (
+            f"expert-report-{normalized['agent_role']}-{normalized['round_id']}"
+            if normalized["agent_role"]
+            else "expert-report-"
+            + stable_hash(
+                "expert-report",
+                normalized["run_id"],
+                normalized["round_id"],
+                normalized["report_stage"],
+            )[:12]
+        )
+    )
+    normalized["record_id"] = (
+        maybe_text(normalized.get("record_id"))
+        or expert_report_record_id(
+            normalized["run_id"],
+            normalized["round_id"],
+            normalized["report_stage"],
+            normalized["agent_role"],
+            normalized["report_id"],
+        )
+    )
+    return normalized
+
+
+def normalized_final_publication_payload(
+    publication_payload: dict[str, Any],
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
+    normalized = dict(publication_payload)
+    normalized["run_id"] = maybe_text(normalized.get("run_id")) or run_id
+    normalized["round_id"] = maybe_text(normalized.get("round_id")) or round_id
+    normalized["generated_at_utc"] = (
+        maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    )
+    normalized["publication_status"] = (
+        maybe_text(normalized.get("publication_status")) or "hold-release"
+    )
+    normalized["publication_posture"] = (
+        maybe_text(normalized.get("publication_posture"))
+        or (
+            "release"
+            if normalized["publication_status"] == "ready-for-release"
+            else "withhold"
+        )
+    )
+    normalized["publication_id"] = (
+        maybe_text(normalized.get("publication_id"))
+        or "final-publication-"
+        + stable_hash(
+            "final-publication",
+            normalized["run_id"],
+            normalized["round_id"],
+            normalized["publication_posture"],
+            maybe_text(normalized.get("decision_id")),
         )[:12]
     )
     return normalized
@@ -1563,6 +2232,170 @@ def promotion_basis_item_row_from_payload(
     }
 
 
+def reporting_handoff_row_from_payload(
+    handoff_payload: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    return {
+        "handoff_id": maybe_text(handoff_payload.get("handoff_id")),
+        "run_id": maybe_text(handoff_payload.get("run_id")),
+        "round_id": maybe_text(handoff_payload.get("round_id")),
+        "generated_at_utc": maybe_text(handoff_payload.get("generated_at_utc")),
+        "handoff_status": maybe_text(handoff_payload.get("handoff_status")),
+        "promotion_status": maybe_text(handoff_payload.get("promotion_status")),
+        "readiness_status": maybe_text(handoff_payload.get("readiness_status")),
+        "supervisor_status": maybe_text(handoff_payload.get("supervisor_status")),
+        "board_state_source": maybe_text(handoff_payload.get("board_state_source")),
+        "coverage_source": maybe_text(handoff_payload.get("coverage_source")),
+        "promotion_source": maybe_text(handoff_payload.get("promotion_source")),
+        "readiness_source": maybe_text(handoff_payload.get("readiness_source")),
+        "board_brief_source": maybe_text(handoff_payload.get("board_brief_source")),
+        "supervisor_state_source": maybe_text(
+            handoff_payload.get("supervisor_state_source")
+        ),
+        "selected_evidence_refs_json": json_text(
+            handoff_payload.get("selected_evidence_refs", [])
+        ),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(handoff_payload),
+    }
+
+
+def council_decision_record_row_from_payload(
+    decision_payload: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    return {
+        "record_id": maybe_text(decision_payload.get("record_id")),
+        "decision_id": maybe_text(decision_payload.get("decision_id")),
+        "run_id": maybe_text(decision_payload.get("run_id")),
+        "round_id": maybe_text(decision_payload.get("round_id")),
+        "generated_at_utc": maybe_text(decision_payload.get("generated_at_utc")),
+        "decision_stage": maybe_text(decision_payload.get("decision_stage")),
+        "moderator_status": maybe_text(decision_payload.get("moderator_status")),
+        "publication_readiness": maybe_text(
+            decision_payload.get("publication_readiness")
+        ),
+        "next_round_required": 1
+        if bool(decision_payload.get("next_round_required"))
+        else 0,
+        "canonical_artifact": maybe_text(decision_payload.get("canonical_artifact")),
+        "board_state_source": maybe_text(decision_payload.get("board_state_source")),
+        "coverage_source": maybe_text(decision_payload.get("coverage_source")),
+        "reporting_handoff_source": maybe_text(
+            decision_payload.get("reporting_handoff_source")
+        ),
+        "promotion_source": maybe_text(decision_payload.get("promotion_source")),
+        "decision_source": maybe_text(decision_payload.get("decision_source")),
+        "sociologist_report_source": maybe_text(
+            decision_payload.get("sociologist_report_source")
+        ),
+        "environmentalist_report_source": maybe_text(
+            decision_payload.get("environmentalist_report_source")
+        ),
+        "selected_evidence_refs_json": json_text(
+            decision_payload.get("selected_evidence_refs", [])
+        ),
+        "published_report_refs_json": json_text(
+            decision_payload.get("published_report_refs", [])
+        ),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(decision_payload),
+    }
+
+
+def expert_report_record_row_from_payload(
+    report_payload: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    return {
+        "record_id": maybe_text(report_payload.get("record_id")),
+        "report_id": maybe_text(report_payload.get("report_id")),
+        "run_id": maybe_text(report_payload.get("run_id")),
+        "round_id": maybe_text(report_payload.get("round_id")),
+        "generated_at_utc": maybe_text(report_payload.get("generated_at_utc")),
+        "report_stage": maybe_text(report_payload.get("report_stage")),
+        "agent_role": maybe_text(report_payload.get("agent_role")),
+        "status": maybe_text(report_payload.get("status")),
+        "handoff_status": maybe_text(report_payload.get("handoff_status")),
+        "publication_readiness": maybe_text(
+            report_payload.get("publication_readiness")
+        ),
+        "canonical_artifact": maybe_text(report_payload.get("canonical_artifact")),
+        "board_state_source": maybe_text(report_payload.get("board_state_source")),
+        "coverage_source": maybe_text(report_payload.get("coverage_source")),
+        "reporting_handoff_source": maybe_text(
+            report_payload.get("reporting_handoff_source")
+        ),
+        "decision_source": maybe_text(report_payload.get("decision_source")),
+        "expert_report_draft_source": maybe_text(
+            report_payload.get("expert_report_draft_source")
+        ),
+        "board_brief_source": maybe_text(report_payload.get("board_brief_source")),
+        "selected_evidence_refs_json": json_text(
+            report_payload.get("selected_evidence_refs", [])
+        ),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(report_payload),
+    }
+
+
+def final_publication_row_from_payload(
+    publication_payload: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    return {
+        "publication_id": maybe_text(publication_payload.get("publication_id")),
+        "run_id": maybe_text(publication_payload.get("run_id")),
+        "round_id": maybe_text(publication_payload.get("round_id")),
+        "generated_at_utc": maybe_text(publication_payload.get("generated_at_utc")),
+        "publication_status": maybe_text(
+            publication_payload.get("publication_status")
+        ),
+        "publication_posture": maybe_text(
+            publication_payload.get("publication_posture")
+        ),
+        "board_state_source": maybe_text(
+            publication_payload.get("board_state_source")
+        ),
+        "coverage_source": maybe_text(publication_payload.get("coverage_source")),
+        "reporting_handoff_source": maybe_text(
+            publication_payload.get("reporting_handoff_source")
+        ),
+        "decision_source": maybe_text(publication_payload.get("decision_source")),
+        "promotion_source": maybe_text(publication_payload.get("promotion_source")),
+        "supervisor_state_source": maybe_text(
+            publication_payload.get("supervisor_state_source")
+        ),
+        "sociologist_report_source": maybe_text(
+            publication_payload.get("sociologist_report_source")
+        ),
+        "environmentalist_report_source": maybe_text(
+            publication_payload.get("environmentalist_report_source")
+        ),
+        "selected_evidence_refs_json": json_text(
+            publication_payload.get("selected_evidence_refs", [])
+        ),
+        "published_report_refs_json": json_text(
+            publication_payload.get("published_report_refs", [])
+        ),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(publication_payload),
+    }
+
+
 def promotion_freeze_row_from_payload(
     freeze_record: dict[str, Any],
     *,
@@ -1803,6 +2636,40 @@ def latest_json_row(
         round_id=round_id,
     )
     return rows[-1] if rows else None
+
+
+def latest_json_row_where(
+    connection: sqlite3.Connection,
+    *,
+    table_name: str,
+    id_column: str,
+    timestamp_column: str,
+    filters: dict[str, Any],
+) -> dict[str, Any] | None:
+    clauses: list[str] = []
+    params: list[str] = []
+    for column_name, value in filters.items():
+        text = maybe_text(value)
+        if not text:
+            continue
+        clauses.append(f"{column_name} = ?")
+        params.append(text)
+    if not clauses:
+        return None
+    row = connection.execute(
+        f"""
+        SELECT raw_json
+        FROM {table_name}
+        WHERE {' AND '.join(clauses)}
+        ORDER BY {timestamp_column} DESC, {id_column} DESC
+        LIMIT 1
+        """,
+        tuple(params),
+    ).fetchone()
+    if row is None:
+        return None
+    payload = decode_json(maybe_text(row["raw_json"]), {})
+    return payload if isinstance(payload, dict) else None
 
 
 def build_moderator_action_payload(
@@ -2178,6 +3045,78 @@ def fetch_promotion_basis_items(
     )
 
 
+def fetch_reporting_handoff_record(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+) -> dict[str, Any] | None:
+    return latest_json_row_where(
+        connection,
+        table_name="reporting_handoffs",
+        id_column="handoff_id",
+        timestamp_column="generated_at_utc",
+        filters={"run_id": run_id, "round_id": round_id},
+    )
+
+
+def fetch_council_decision_record(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    decision_stage: str = "",
+) -> dict[str, Any] | None:
+    return latest_json_row_where(
+        connection,
+        table_name="council_decision_records",
+        id_column="record_id",
+        timestamp_column="generated_at_utc",
+        filters={
+            "run_id": run_id,
+            "round_id": round_id,
+            "decision_stage": decision_stage,
+        },
+    )
+
+
+def fetch_expert_report_record(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    report_stage: str = "",
+    agent_role: str = "",
+) -> dict[str, Any] | None:
+    return latest_json_row_where(
+        connection,
+        table_name="expert_report_records",
+        id_column="record_id",
+        timestamp_column="generated_at_utc",
+        filters={
+            "run_id": run_id,
+            "round_id": round_id,
+            "report_stage": report_stage,
+            "agent_role": agent_role,
+        },
+    )
+
+
+def fetch_final_publication_record(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+) -> dict[str, Any] | None:
+    return latest_json_row_where(
+        connection,
+        table_name="final_publications",
+        id_column="publication_id",
+        timestamp_column="generated_at_utc",
+        filters={"run_id": run_id, "round_id": round_id},
+    )
+
+
 def store_moderator_action_records(
     run_dir: str | Path,
     *,
@@ -2201,6 +3140,9 @@ def store_moderator_action_records(
             run_id=run_id,
             round_id=round_id,
             action_rank=index,
+            generated_at_utc=generated_at_utc,
+            source_skill=maybe_text(snapshot_payload.get("skill")),
+            artifact_path=artifact_path,
         )
         for index, action in enumerate(ranked_actions)
         if isinstance(action, dict)
@@ -2322,6 +3264,9 @@ def store_falsification_probe_records(
             run_id=run_id,
             round_id=round_id,
             probe_index=index,
+            generated_at_utc=maybe_text(snapshot_payload.get("generated_at_utc")),
+            source_skill=maybe_text(snapshot_payload.get("skill")),
+            artifact_path=artifact_path,
         )
         for index, probe in enumerate(probes)
         if isinstance(probe, dict)
@@ -2442,6 +3387,12 @@ def store_round_readiness_assessment(
             if isinstance(readiness_payload, dict)
             else ""
         ),
+        source_skill=maybe_text(
+            readiness_payload.get("skill")
+            if isinstance(readiness_payload, dict)
+            else ""
+        ),
+        artifact_path=artifact_path,
     )
     connection, _db_file = connect_db(run_dir_path, db_path)
     try:
@@ -2497,6 +3448,12 @@ def store_promotion_basis_record(
             if isinstance(promotion_payload, dict)
             else ""
         ),
+        source_skill=maybe_text(
+            promotion_payload.get("skill")
+            if isinstance(promotion_payload, dict)
+            else ""
+        ),
+        artifact_path=artifact_path,
     )
     basis_id = maybe_text(normalized_payload.get("basis_id"))
     run_id = maybe_text(normalized_payload.get("run_id"))
@@ -2571,6 +3528,265 @@ def load_promotion_basis_items(
     connection, _db_file = connect_db(run_dir_path, db_path)
     try:
         return fetch_promotion_basis_items(
+            connection,
+            run_id=run_id,
+            round_id=round_id,
+        )
+    finally:
+        connection.close()
+
+
+def store_reporting_handoff_record(
+    run_dir: str | Path,
+    *,
+    handoff_payload: dict[str, Any],
+    artifact_path: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    normalized_payload = normalized_reporting_handoff_payload(
+        handoff_payload if isinstance(handoff_payload, dict) else {},
+        run_id=maybe_text(
+            handoff_payload.get("run_id")
+            if isinstance(handoff_payload, dict)
+            else ""
+        ),
+        round_id=maybe_text(
+            handoff_payload.get("round_id")
+            if isinstance(handoff_payload, dict)
+            else ""
+        ),
+    )
+    run_id = maybe_text(normalized_payload.get("run_id"))
+    round_id = maybe_text(normalized_payload.get("round_id"))
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            connection.execute(
+                "DELETE FROM reporting_handoffs WHERE run_id = ? AND round_id = ?",
+                (run_id, round_id),
+            )
+            write_reporting_handoff_row(
+                connection,
+                reporting_handoff_row_from_payload(
+                    normalized_payload,
+                    artifact_path=artifact_path,
+                ),
+            )
+    finally:
+        connection.close()
+    return normalized_payload
+
+
+def load_reporting_handoff_record(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return fetch_reporting_handoff_record(
+            connection,
+            run_id=run_id,
+            round_id=round_id,
+        )
+    finally:
+        connection.close()
+
+
+def store_council_decision_record(
+    run_dir: str | Path,
+    *,
+    decision_payload: dict[str, Any],
+    artifact_path: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    normalized_payload = normalized_council_decision_payload(
+        decision_payload if isinstance(decision_payload, dict) else {},
+        run_id=maybe_text(
+            decision_payload.get("run_id")
+            if isinstance(decision_payload, dict)
+            else ""
+        ),
+        round_id=maybe_text(
+            decision_payload.get("round_id")
+            if isinstance(decision_payload, dict)
+            else ""
+        ),
+    )
+    run_id = maybe_text(normalized_payload.get("run_id"))
+    round_id = maybe_text(normalized_payload.get("round_id"))
+    decision_stage = maybe_text(normalized_payload.get("decision_stage"))
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            connection.execute(
+                """
+                DELETE FROM council_decision_records
+                WHERE run_id = ? AND round_id = ? AND decision_stage = ?
+                """,
+                (run_id, round_id, decision_stage),
+            )
+            write_council_decision_record_row(
+                connection,
+                council_decision_record_row_from_payload(
+                    normalized_payload,
+                    artifact_path=artifact_path,
+                ),
+            )
+    finally:
+        connection.close()
+    return normalized_payload
+
+
+def load_council_decision_record(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    decision_stage: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return fetch_council_decision_record(
+            connection,
+            run_id=run_id,
+            round_id=round_id,
+            decision_stage=decision_stage,
+        )
+    finally:
+        connection.close()
+
+
+def store_expert_report_record(
+    run_dir: str | Path,
+    *,
+    report_payload: dict[str, Any],
+    artifact_path: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    normalized_payload = normalized_expert_report_payload(
+        report_payload if isinstance(report_payload, dict) else {},
+        run_id=maybe_text(
+            report_payload.get("run_id")
+            if isinstance(report_payload, dict)
+            else ""
+        ),
+        round_id=maybe_text(
+            report_payload.get("round_id")
+            if isinstance(report_payload, dict)
+            else ""
+        ),
+    )
+    run_id = maybe_text(normalized_payload.get("run_id"))
+    round_id = maybe_text(normalized_payload.get("round_id"))
+    report_stage = maybe_text(normalized_payload.get("report_stage"))
+    agent_role = maybe_text(normalized_payload.get("agent_role"))
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            connection.execute(
+                """
+                DELETE FROM expert_report_records
+                WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
+                """,
+                (run_id, round_id, report_stage, agent_role),
+            )
+            write_expert_report_record_row(
+                connection,
+                expert_report_record_row_from_payload(
+                    normalized_payload,
+                    artifact_path=artifact_path,
+                ),
+            )
+    finally:
+        connection.close()
+    return normalized_payload
+
+
+def load_expert_report_record(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    report_stage: str = "",
+    agent_role: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return fetch_expert_report_record(
+            connection,
+            run_id=run_id,
+            round_id=round_id,
+            report_stage=report_stage,
+            agent_role=agent_role,
+        )
+    finally:
+        connection.close()
+
+
+def store_final_publication_record(
+    run_dir: str | Path,
+    *,
+    publication_payload: dict[str, Any],
+    artifact_path: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    normalized_payload = normalized_final_publication_payload(
+        publication_payload if isinstance(publication_payload, dict) else {},
+        run_id=maybe_text(
+            publication_payload.get("run_id")
+            if isinstance(publication_payload, dict)
+            else ""
+        ),
+        round_id=maybe_text(
+            publication_payload.get("round_id")
+            if isinstance(publication_payload, dict)
+            else ""
+        ),
+    )
+    run_id = maybe_text(normalized_payload.get("run_id"))
+    round_id = maybe_text(normalized_payload.get("round_id"))
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            connection.execute(
+                "DELETE FROM final_publications WHERE run_id = ? AND round_id = ?",
+                (run_id, round_id),
+            )
+            write_final_publication_row(
+                connection,
+                final_publication_row_from_payload(
+                    normalized_payload,
+                    artifact_path=artifact_path,
+                ),
+            )
+    finally:
+        connection.close()
+    return normalized_payload
+
+
+def load_final_publication_record(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return fetch_final_publication_record(
             connection,
             run_id=run_id,
             round_id=round_id,
@@ -2729,10 +3945,70 @@ def load_phase2_control_state(
         round_id=round_id,
         db_path=db_path,
     ) or {}
+    reporting_handoff_record = load_reporting_handoff_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    ) or {}
+    decision_draft_record = load_council_decision_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="draft",
+        db_path=db_path,
+    ) or {}
+    decision_record = load_council_decision_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="canonical",
+        db_path=db_path,
+    ) or {}
+    expert_report_drafts = {
+        role: (
+            load_expert_report_record(
+                run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                report_stage="draft",
+                agent_role=role,
+                db_path=db_path,
+            )
+            or {}
+        )
+        for role in REPORT_AGENT_ROLES
+    }
+    expert_reports = {
+        role: (
+            load_expert_report_record(
+                run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                report_stage="canonical",
+                agent_role=role,
+                db_path=db_path,
+            )
+            or {}
+        )
+        for role in REPORT_AGENT_ROLES
+    }
+    final_publication_record = load_final_publication_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    ) or {}
     return {
         "promotion_freeze": freeze_record,
         "round_readiness": readiness_record,
         "promotion_basis": promotion_basis_record,
+        "reporting_handoff": reporting_handoff_record,
+        "decision_draft": decision_draft_record,
+        "decision": decision_record,
+        "expert_report_drafts": expert_report_drafts,
+        "expert_reports": expert_reports,
+        "final_publication": final_publication_record,
         "controller": (
             freeze_record.get("controller_snapshot", {})
             if isinstance(freeze_record.get("controller_snapshot"), dict)
@@ -3745,8 +5021,11 @@ __all__ = [
     "default_db_path",
     "fetch_round_events",
     "fetch_round_state",
+    "load_council_decision_record",
+    "load_expert_report_record",
     "load_falsification_probe_records",
     "load_falsification_probe_snapshot",
+    "load_final_publication_record",
     "load_moderator_action_records",
     "load_moderator_action_snapshot",
     "load_phase2_control_state",
@@ -3754,18 +5033,23 @@ __all__ = [
     "load_promotion_basis_record",
     "load_promotion_freeze_record",
     "load_raw_board_record",
+    "load_reporting_handoff_record",
     "load_round_readiness_assessment",
     "load_round_snapshot",
     "maybe_text",
     "resolve_board_path",
     "resolve_db_path",
     "resolve_run_dir",
+    "store_council_decision_record",
+    "store_expert_report_record",
     "store_falsification_probe_records",
     "store_falsification_probe_snapshot",
+    "store_final_publication_record",
     "store_moderator_action_records",
     "store_moderator_action_snapshot",
     "store_promotion_basis_record",
     "store_promotion_freeze_record",
+    "store_reporting_handoff_record",
     "store_round_transition_record",
     "store_round_readiness_assessment",
     "sync_board_to_deliberation_plane",

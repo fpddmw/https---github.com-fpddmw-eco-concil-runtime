@@ -16,8 +16,20 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
+from eco_council_runtime.council_objects import (  # noqa: E402
+    query_council_objects,
+    store_decision_trace_records,
+)
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
+)
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_council_decision_record,
+)
+from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_council_decision_wrapper,
+    load_expert_report_wrapper,
+    load_promotion_basis_wrapper,
 )
 
 
@@ -41,6 +53,19 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
+def maybe_number(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -82,6 +107,71 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def load_round_council_objects(
+    run_dir: Path,
+    *,
+    object_kind: str,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    payload = query_council_objects(
+        run_dir,
+        object_kind=object_kind,
+        run_id=run_id,
+        round_id=round_id,
+        limit=200,
+    )
+    rows = payload.get("objects", []) if isinstance(payload.get("objects"), list) else []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def deterministic_trace_id(
+    run_id: str,
+    round_id: str,
+    decision_id: str,
+    trace_index: int,
+) -> str:
+    return "decision-trace-" + stable_hash(
+        "decision-trace",
+        run_id,
+        round_id,
+        decision_id,
+        trace_index,
+    )[:12]
+
+
+def readiness_bucket(opinion: dict[str, Any]) -> str:
+    readiness_value = maybe_text(opinion.get("readiness_status"))
+    if bool(opinion.get("sufficient_for_promotion")) or readiness_value in {
+        "ready",
+        "ready-for-promotion",
+        "promote",
+    }:
+        return "ready"
+    if readiness_value in {"blocked", "reject", "rejected"}:
+        return "blocked"
+    return "needs-more-data"
+
+
+def selected_trace_object(
+    *,
+    publication_readiness: str,
+    promoted_basis_id: str,
+    supporting_proposal_ids: list[str],
+    supporting_opinion_ids: list[str],
+    rejected_opinion_ids: list[str],
+) -> tuple[str, str]:
+    if publication_readiness != "ready" and rejected_opinion_ids:
+        return "readiness-opinion", rejected_opinion_ids[0]
+    if supporting_opinion_ids:
+        return "readiness-opinion", supporting_opinion_ids[0]
+    if supporting_proposal_ids:
+        return "proposal", supporting_proposal_ids[0]
+    if promoted_basis_id:
+        return "promotion-basis", promoted_basis_id
+    return "promotion-basis", ""
+
+
 def publish_council_decision_skill(
     run_dir: str,
     run_id: str,
@@ -98,11 +188,35 @@ def publish_council_decision_skill(
     sociologist_file = resolve_path(run_dir_path, sociologist_report_path, f"reporting/expert_report_sociologist_{round_id}.json")
     environmentalist_file = resolve_path(run_dir_path, environmentalist_report_path, f"reporting/expert_report_environmentalist_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"reporting/council_decision_{round_id}.json")
+    promotion_file = resolve_path(
+        run_dir_path,
+        "",
+        f"promotion/promoted_evidence_basis_{round_id}.json",
+    )
 
     warnings: list[dict[str, Any]] = []
-    draft_payload = load_json_if_exists(draft_file)
+    draft_context = load_council_decision_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="draft",
+        decision_path=draft_path,
+    )
+    draft_payload = (
+        draft_context.get("payload")
+        if isinstance(draft_context.get("payload"), dict)
+        else None
+    )
     if not isinstance(draft_payload, dict):
-        warnings.append({"code": "missing-decision-draft", "message": f"No council decision draft was found at {draft_file}."})
+        warnings.append(
+            {
+                "code": "missing-decision-draft",
+                "message": (
+                    "No council decision draft artifact or DB record was found "
+                    f"at {draft_file}."
+                ),
+            }
+        )
         return {
             "status": "blocked",
             "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "operation": "blocked", "output_path": str(output_file)},
@@ -129,23 +243,57 @@ def publish_council_decision_skill(
         }
 
     publication_readiness = maybe_text(draft_payload.get("publication_readiness")) or "hold"
+    promotion_context = load_promotion_basis_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    promotion_payload = (
+        promotion_context.get("payload")
+        if isinstance(promotion_context.get("payload"), dict)
+        else None
+    )
     report_refs: list[str] = []
     report_payloads: dict[str, dict[str, Any]] = {}
-    sociologist_payload = load_json_if_exists(sociologist_file)
+    sociologist_context = load_expert_report_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        agent_role="sociologist",
+        report_stage="canonical",
+        report_path=sociologist_report_path,
+    )
+    sociologist_payload = (
+        sociologist_context.get("payload")
+        if isinstance(sociologist_context.get("payload"), dict)
+        else None
+    )
     if isinstance(sociologist_payload, dict):
         report_payloads["sociologist"] = sociologist_payload
-    environmentalist_payload = load_json_if_exists(environmentalist_file)
+    environmentalist_context = load_expert_report_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        agent_role="environmentalist",
+        report_stage="canonical",
+        report_path=environmentalist_report_path,
+    )
+    environmentalist_payload = (
+        environmentalist_context.get("payload")
+        if isinstance(environmentalist_context.get("payload"), dict)
+        else None
+    )
     if isinstance(environmentalist_payload, dict):
         report_payloads["environmentalist"] = environmentalist_payload
     if publication_readiness == "ready" and not skip_report_check:
-        for path, payload in (
-            (sociologist_file, sociologist_payload),
-            (environmentalist_file, environmentalist_payload),
+        for context, payload in (
+            (sociologist_context, sociologist_payload),
+            (environmentalist_context, environmentalist_payload),
         ):
             if not isinstance(payload, dict):
-                warnings.append({"code": "missing-canonical-report", "message": f"Required canonical expert report is missing at {path}."})
+                warnings.append({"code": "missing-canonical-report", "message": f"Required canonical expert report is missing at {context.get('artifact_path', '')}."})
             else:
-                report_refs.append(str(path))
+                report_refs.append(str(context.get("artifact_path", "")))
         if warnings:
             return {
                 "status": "blocked",
@@ -161,38 +309,158 @@ def publish_council_decision_skill(
     contract_fields = reporting_contract_fields_from_payload(
         draft_payload,
         observed_inputs_overrides={
-            "decision_artifact_present": draft_file.exists(),
-            "decision_present": isinstance(draft_payload, dict),
-            "sociologist_report_artifact_present": sociologist_file.exists(),
-            "sociologist_report_present": isinstance(sociologist_payload, dict),
-            "environmentalist_report_artifact_present": environmentalist_file.exists(),
-            "environmentalist_report_present": isinstance(
-                environmentalist_payload, dict
+            "decision_artifact_present": bool(draft_context.get("artifact_present")),
+            "decision_present": bool(draft_context.get("payload_present")),
+            "sociologist_report_artifact_present": bool(
+                sociologist_context.get("artifact_present")
+            ),
+            "sociologist_report_present": bool(
+                sociologist_context.get("payload_present")
+            ),
+            "environmentalist_report_artifact_present": bool(
+                environmentalist_context.get("artifact_present")
+            ),
+            "environmentalist_report_present": bool(
+                environmentalist_context.get("payload_present")
             ),
         },
         field_overrides={
-            "decision_source": (
-                "council-decision-draft-artifact"
-                if draft_file.exists()
-                else "missing-decision-draft"
-            ),
-            "sociologist_report_source": (
-                "expert-report-artifact"
-                if sociologist_file.exists()
-                else "missing-sociologist-report"
-            ),
-            "environmentalist_report_source": (
-                "expert-report-artifact"
-                if environmentalist_file.exists()
-                else "missing-environmentalist-report"
-            ),
+            "decision_source": maybe_text(draft_context.get("source"))
+            or "missing-decision-draft",
+            "sociologist_report_source": maybe_text(sociologist_context.get("source"))
+            or "missing-sociologist-report",
+            "environmentalist_report_source": maybe_text(
+                environmentalist_context.get("source")
+            )
+            or "missing-environmentalist-report",
         },
     )
+    draft_supporting_proposal_ids = unique_texts(
+        list_items(draft_payload.get("supporting_proposal_ids"))
+    )
+    draft_supporting_opinion_ids = unique_texts(
+        list_items(draft_payload.get("supporting_opinion_ids"))
+    )
+    draft_rejected_opinion_ids = unique_texts(
+        list_items(draft_payload.get("rejected_opinion_ids"))
+    )
+    promoted_basis_id = maybe_text(draft_payload.get("promoted_basis_id")) or (
+        maybe_text(promotion_payload.get("basis_id"))
+        if isinstance(promotion_payload, dict)
+        else ""
+    )
+    selected_basis_object_ids = unique_texts(
+        list_items(draft_payload.get("selected_basis_object_ids"))
+        + list_items(
+            promotion_payload.get("selected_basis_object_ids")
+            if isinstance(promotion_payload, dict)
+            else []
+        )
+    )
+    all_proposals = load_round_council_objects(
+        run_dir_path,
+        object_kind="proposal",
+        run_id=run_id,
+        round_id=round_id,
+    )
+    all_opinions = load_round_council_objects(
+        run_dir_path,
+        object_kind="readiness-opinion",
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if publication_readiness == "ready":
+        fallback_supporting_opinion_ids = unique_texts(
+            [
+                opinion.get("opinion_id")
+                for opinion in all_opinions
+                if readiness_bucket(opinion) == "ready"
+            ]
+        )
+        fallback_rejected_opinion_ids = unique_texts(
+            [
+                opinion.get("opinion_id")
+                for opinion in all_opinions
+                if readiness_bucket(opinion) != "ready"
+            ]
+        )
+    else:
+        fallback_supporting_opinion_ids = unique_texts(
+            [
+                opinion.get("opinion_id")
+                for opinion in all_opinions
+                if readiness_bucket(opinion) != "ready"
+            ]
+        )
+        fallback_rejected_opinion_ids = unique_texts(
+            [
+                opinion.get("opinion_id")
+                for opinion in all_opinions
+                if readiness_bucket(opinion) == "ready"
+            ]
+        )
+    supporting_proposal_ids = draft_supporting_proposal_ids or unique_texts(
+        [
+            proposal.get("proposal_id")
+            for proposal in all_proposals
+            if maybe_text(proposal.get("target_id")) in selected_basis_object_ids
+        ]
+    )
+    supporting_opinion_ids = (
+        draft_supporting_opinion_ids or fallback_supporting_opinion_ids
+    )
+    rejected_opinion_ids = (
+        draft_rejected_opinion_ids or fallback_rejected_opinion_ids
+    )
+    selected_object_kind, selected_object_id = selected_trace_object(
+        publication_readiness=publication_readiness,
+        promoted_basis_id=promoted_basis_id,
+        supporting_proposal_ids=supporting_proposal_ids,
+        supporting_opinion_ids=supporting_opinion_ids,
+        rejected_opinion_ids=rejected_opinion_ids,
+    )
+    accepted_object_ids = unique_texts(
+        [promoted_basis_id, *selected_basis_object_ids]
+        + supporting_proposal_ids
+        + supporting_opinion_ids
+    )
+    rejected_object_ids = unique_texts(rejected_opinion_ids)
+    accepted_proposals = [
+        proposal
+        for proposal in all_proposals
+        if maybe_text(proposal.get("proposal_id")) in supporting_proposal_ids
+    ]
+    accepted_opinions = [
+        opinion
+        for opinion in all_opinions
+        if maybe_text(opinion.get("opinion_id")) in supporting_opinion_ids
+    ]
+    rejected_opinions = [
+        opinion
+        for opinion in all_opinions
+        if maybe_text(opinion.get("opinion_id")) in rejected_opinion_ids
+    ]
+    trace_confidence = None
+    for row in [*accepted_opinions, *accepted_proposals, *rejected_opinions]:
+        candidate = maybe_number(row.get("confidence"))
+        if candidate is not None:
+            trace_confidence = candidate
+            break
+    decision_id = maybe_text(draft_payload.get("decision_id"))
+    trace_id = deterministic_trace_id(run_id, round_id, decision_id, 0)
     canonical_payload = {
         **draft_payload,
         **contract_fields,
         "canonical_artifact": "council-decision",
         "published_report_refs": unique_texts(report_refs),
+        "promoted_basis_id": promoted_basis_id,
+        "selected_basis_object_ids": selected_basis_object_ids,
+        "supporting_proposal_ids": supporting_proposal_ids,
+        "supporting_opinion_ids": supporting_opinion_ids,
+        "rejected_opinion_ids": rejected_opinion_ids,
+        "accepted_object_ids": accepted_object_ids,
+        "rejected_object_ids": rejected_object_ids,
+        "decision_trace_ids": [trace_id] if decision_id else [],
     }
     existing = load_json_if_exists(output_file)
     operation = "published"
@@ -214,10 +482,66 @@ def publish_council_decision_skill(
                 "warnings": warnings,
                 "board_handoff": {"candidate_ids": [maybe_text(draft_payload.get("decision_id"))] if maybe_text(draft_payload.get("decision_id")) else [], "evidence_refs": [], "gap_hints": [warnings[0]["message"]], "challenge_hints": [], "suggested_next_skills": ["eco-publish-council-decision"]},
             }
+    decision_trace_bundle = {
+        "run_id": run_id,
+        "round_id": round_id,
+        "traces": [
+            {
+                "trace_id": trace_id,
+                "decision_id": decision_id,
+                "decision_kind": "council-decision",
+                "status": "published" if publication_readiness == "ready" else "withheld",
+                "selected_object_kind": selected_object_kind,
+                "selected_object_id": selected_object_id,
+                "confidence": trace_confidence,
+                "rationale": maybe_text(canonical_payload.get("decision_summary"))
+                or maybe_text(draft_payload.get("decision_summary"))
+                or "Council decision was published from the current draft state.",
+                "decision_source": "council-trace",
+                "accepted_object_ids": accepted_object_ids,
+                "rejected_object_ids": rejected_object_ids,
+                "evidence_refs": unique_texts(
+                    list_items(canonical_payload.get("selected_evidence_refs"))
+                    + [
+                        ref
+                        for row in [*accepted_proposals, *accepted_opinions, *rejected_opinions]
+                        for ref in list_items(row.get("evidence_refs"))
+                    ]
+                ),
+                "lineage": unique_texts(
+                    [decision_id, promoted_basis_id, *selected_basis_object_ids]
+                    + accepted_object_ids
+                    + rejected_object_ids
+                ),
+                "provenance": {
+                    "source_skill": SKILL_NAME,
+                    "decision_source": maybe_text(canonical_payload.get("decision_source"))
+                    or "deliberation-plane-council-decision-draft",
+                    "publication_readiness": publication_readiness,
+                    "promotion_source": maybe_text(contract_fields.get("promotion_source"))
+                    or "missing-promotion",
+                    "promoted_basis_id": promoted_basis_id,
+                    "promotion_basis_path": str(promotion_file),
+                    "supporting_proposal_count": len(supporting_proposal_ids),
+                    "supporting_opinion_count": len(supporting_opinion_ids),
+                    "rejected_opinion_count": len(rejected_opinion_ids),
+                },
+            }
+        ],
+    }
+    store_council_decision_record(
+        run_dir_path,
+        decision_payload=canonical_payload,
+        artifact_path=str(output_file),
+    )
+    store_decision_trace_records(
+        run_dir_path,
+        trace_bundle=decision_trace_bundle,
+        artifact_path=str(output_file),
+    )
     if operation != "noop":
         write_json_file(output_file, canonical_payload)
 
-    decision_id = maybe_text(draft_payload.get("decision_id"))
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
     return {
         "status": "completed",
@@ -236,7 +560,9 @@ def publish_council_decision_skill(
                 contract_fields.get("reporting_handoff_source")
             ),
             "promotion_source": maybe_text(contract_fields.get("promotion_source")),
+            "promotion_basis_path": str(promotion_file),
             "decision_source": maybe_text(contract_fields.get("decision_source")),
+            "decision_trace_id": trace_id,
             "sociologist_report_source": maybe_text(
                 contract_fields.get("sociologist_report_source")
             ),

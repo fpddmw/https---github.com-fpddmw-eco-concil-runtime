@@ -1,254 +1,285 @@
-# OpenClaw 下一阶段迁移与清债清单
+# OpenClaw 彻底重构执行清单
 
 ## 1. 使用方式
 
-本清单不再只是“改哪些 skill”的目录，而是下一阶段的迁移与清债约束。
+本清单不是“兼容性维护目录”，而是彻底重构的执行清单。
 
-阅读方法：
+使用原则：
 
-1. 先看 `openclaw-project-overview.md`
-2. 再看 `openclaw-next-phase-development-plan.md`
-3. 最后用本清单执行迁移、替换、降级与删除兼容债
+1. 只要旧实现阻碍目标架构，就改写或删除。
+2. 只要兼容层开始变成长期依赖，就判定为失败。
+3. 每一项完成都必须减少旧链真实职责，而不是只新增一条平行路径。
 
-## 2. 状态约定
+## 2. 硬迁移规则
 
-1. `[保留底座]`
-   - 保留，但不扩大职责。
-2. `[重写]`
-   - 保留 skill 名称或入口，但重写语义与 canonical 输出。
-3. `[降级为 optional lane]`
-   - 不再作为默认主链。
-4. `[新增 canonical]`
-   - 必须补上的新对象或新 skill。
-5. `[删除兼容债]`
-   - 当前为了兼容保留，但下一阶段必须移除或降为 export-only。
+### 2.1 可以 breaking change
 
-## 3. 迁移原则
+本轮允许：
 
-### 3.1 Canonical object 优先于兼容 envelope
+1. 改 schema
+2. 改 query surface
+3. 改 skill 输出
+4. 删旧 artifact wrapper
+5. 重写测试
 
-下一阶段允许暂时保留兼容 envelope，但不允许继续把它当成真实 schema。
+### 2.2 不以稳定性和兼容性为目标
 
-### 3.2 Database 优先于 artifact
+本轮不接受以下说法：
 
-所有 council-critical 对象必须先写 DB，再导出 artifact。
+1. “先保留旧链，之后再看要不要删”
+2. “先不动 kernel，外面再包一层”
+3. “先让 artifact 继续工作，等后面再 DB-native”
 
-### 3.3 Heuristic 只能做 fallback
+### 2.3 一次只允许一个 canonical
 
-启发式实现可以保留，但只能作为 bootstrap、fallback、audit 或 guardrail。
+每类对象只能有一个真实 canonical shape。
 
-### 3.4 Runtime 不再继续吸收 domain policy
+允许存在：
 
-任何新的领域流程语义，优先落到 canonical object、workflow layer 或 council policy，不应默认写进 runtime kernel。
+1. 迁移期兼容视图
+2. export-only envelope
+3. fallback-only heuristic object
 
-## 4. 必须保留的底座
+不允许存在：
 
-### 4.1 Runtime 与 round 编排
+1. 两套长期并行 canonical
+2. 旧 wrapper 和新对象都被当成真实状态源
 
-以下能力保留，但不应继续扩大 kernel 边界：
+### 2.4 任何兼容层都必须带删除条件
 
-1. `[保留底座]` `eco-scaffold-mission-run`
-2. `[保留底座]` `eco-open-investigation-round`
-3. `[保留底座]` `eco-prepare-round`
-4. `[保留底座]` `eco-import-fetch-execution`
-5. `[保留底座]` runtime query / lookup / replay / archive 相关 CLI
+每个兼容层必须明确：
 
-约束：
+1. 保留理由
+2. 退出条件
+3. 删除时机
 
-1. runtime 负责治理、执行、持久化、查询。
-2. runtime 不负责长期承载新的争议判断公式。
+### 2.5 Batch 1 当前状态
 
-### 4.2 数据抓取与查询底座
+- `已完成` deliberation canonical contract registry、council object query surface、reporting DB 恢复链。
+- `已完成` `next-action / probe / readiness-assessment / promotion-basis` 主存储入口 canonical 化与 fallback source 显式标注。
+- `已完成` `eco-propose-next-actions` 对 `proposal` 的优先消费。
+- `已完成` `eco-summarize-round-readiness` 对 `readiness-opinion` 的优先消费。
+- `已完成` phase-2 controller / post-round 的 DB-first 控制读取。
 
-以下能力保留为输入与回查底座：
+### 2.6 Batch 2 当前状态
 
-1. `[保留底座]` public fetchers
-2. `[保留底座]` environment fetchers
-3. `[保留底座]` query / lookup / corpus / case library / history / archive
+- `已完成` `eco-promote-evidence-basis` 对 `proposal / readiness-opinion` 的 judgement 吸收，并产出 `supporting_* / rejected_* / council_input_counts`。
+- `已完成` `eco-materialize-reporting-handoff / eco-draft-council-decision / eco-publish-council-decision / eco-materialize-final-publication` 对 trace 链字段的显式透传。
+- `已完成` canonical `decision-trace` 写库、查询与 final publication 暴露。
+- `已完成` `tests/test_decision_trace_workflow.py`，覆盖 ready/hold 两类 decision trace 工作流。
 
-这些能力不是当前主矛盾，不应在下一阶段被误删。
+### 2.7 Batch 3 当前状态
 
-## 5. 必须建立或硬化的 canonical contract
+- `已完成` `eco-open-falsification-probe` 对 council proposal 的直接消费，probe 打开不再必须依赖 `next_actions` wrapper。
+- `已完成` proposal-first probe candidate 合并逻辑；存在 proposal 时优先于 DB-backed heuristic action。
+- `已完成` canonical probe 对 `decision_source / provenance / lineage / source_ids` 的显式继承。
+- `已完成` `tests/test_council_autonomy_flow.py` 中的 council-driven probe autonomy 回归。
 
-### 5.1 Signal plane
+### 2.8 Batch 4 当前状态
 
-下一阶段必须明确以下一等输入对象：
+- `已完成` `board_proposal_support.py`，board judgement 现在直接消费 DB 中的 council proposal，并统一生成 canonical judgement metadata。
+- `已完成` `hypothesis_cards / challenge_tickets` 的 `decision_source / evidence_refs_json / source_ids_json / provenance_json / lineage_json` 落库与迁移。
+- `已完成` `[重写]` `eco-open-challenge-ticket / eco-close-challenge-ticket / eco-update-hypothesis-status` 的 proposal-first 执行路径。
+- `已完成` proposal-only board workflow 回归，覆盖 hypothesis update、challenge open、challenge close，并断言 DB 列与 `raw_json` judgement metadata。
+- `已完成` 本地大回归 `74` 项通过，board proposal-first 改造未击穿 council / reporting / runtime 主链。
 
-1. `[新增 canonical]` `public-discourse-signal`
-2. `[新增 canonical]` `formal-comment-signal`
-3. `[新增 canonical]` `environment-observation-signal`
+## 3. Work Package 0: 冻结旧错误增长
 
-最低要求：
+- `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
+- `[ ]` 冻结 kernel 内新增 domain policy
+- `[ ]` 给 legacy 模块标明迁移状态
+- `[ ]` 禁止新增依赖 summary artifact 的流程控制逻辑
 
-1. formal comments 不再只是 generic public signal。
-2. formal comment 至少要有 docket / agency / submitter / issue / stance / concern / citation / route 相关字段或派生对象。
+## 4. Work Package 1: Canonical contracts 与 DB schema
 
-### 5.2 Analysis plane
+### 4.1 Signal plane
 
-下一阶段必须把主分析对象收束到以下 canonical kinds：
+- `[ ]` 建立 `formal-comment-signal`
+- `[ ]` 建立 `public-discourse-signal`
+- `[ ]` 建立 `environment-observation-signal`
+- `[ ]` 每类 signal 都带 provenance、artifact refs、source metadata
 
-1. `[新增 canonical]` `issue-cluster`
-2. `[新增 canonical]` `stance-group`
-3. `[新增 canonical]` `concern-facet`
-4. `[新增 canonical]` `actor-profile`
-5. `[新增 canonical]` `evidence-citation-type`
-6. `[新增 canonical]` `verifiability-assessment`
-7. `[新增 canonical]` `verification-route`
-8. `[新增 canonical]` `formal-public-link`
-9. `[新增 canonical]` `representation-gap`
-10. `[新增 canonical]` `diffusion-edge`
-11. `[新增 canonical]` `controversy-map`
+### 4.2 Analysis plane
 
-约束：
-
-1. 每个对象必须有 ID、provenance、evidence refs、lineage。
-2. 不允许只靠 artifact wrapper 表达对象存在。
-
-### 5.3 Deliberation plane
-
-下一阶段必须把以下对象变成真正可查询的议会对象：
-
-1. `[新增 canonical]` `next-action`
-2. `[新增 canonical]` `probe`
-3. `[新增 canonical]` `readiness-assessment`
-4. `[新增 canonical]` `promotion-basis`
-
-并继续保留并升级：
-
-1. `[重写]` `hypothesis`
-2. `[重写]` `challenge`
-3. `[重写]` `board-task`
-
-约束：
-
-1. `next_actions / probes / readiness / promotion_basis` 不能继续只是整包 snapshot。
-2. board 关键对象要能锚定 issue / route / gap / actor 等新争议对象。
-
-## 6. 需要重写的主链技能
-
-### 6.1 从 claim 主链迁移到争议主链
-
-以下 skill 不应继续按旧语义运作：
-
-1. `[重写]` `eco-extract-claim-candidates`
-   - 方向：从 claim 抽取改为 issue / stance / concern 的 bootstrap extractor。
-   - 约束：旧 claim 输出只能作为兼容视图或 fallback。
-2. `[重写]` `eco-cluster-claim-candidates`
-   - 方向：从 lexical cluster 改为 issue-cluster materialization。
-3. `[重写]` `eco-derive-claim-scope`
-   - 方向：从轻量 location/tag 猜测改为 verifiability / dispute / route assessment。
-
-### 6.2 必须新增或完成的新主链技能
-
-以下能力必须存在，并输出 canonical 对象：
-
-1. `[新增 canonical]` `eco-extract-issue-candidates`
-2. `[新增 canonical]` `eco-cluster-issue-candidates`
-3. `[新增 canonical]` `eco-extract-stance-candidates`
-4. `[新增 canonical]` `eco-extract-concern-facets`
-5. `[新增 canonical]` `eco-extract-actor-profiles`
-6. `[新增 canonical]` `eco-extract-evidence-citation-types`
-7. `[新增 canonical]` `eco-link-formal-comments-to-public-discourse`
-8. `[新增 canonical]` `eco-identify-representation-gaps`
-9. `[新增 canonical]` `eco-detect-cross-platform-diffusion`
-10. `[新增 canonical]` `eco-classify-claim-verifiability`
-11. `[新增 canonical]` `eco-route-verification-lane`
-12. `[新增 canonical]` `eco-materialize-controversy-map`
-
-要求：
-
-1. 每个 extractor 或 materializer 都要输出 `confidence`、`rationale`、`provenance`。
-2. heuristic 版本必须显式标记 `decision_source = heuristic-fallback`。
-
-## 7. 需要重写的议会与 phase-2 技能
-
-以下技能必须改成“先写 canonical DB 对象，再导出 artifact”：
-
-1. `[重写]` `eco-propose-next-actions`
-   - 不再主要围绕补 coverage；要基于争议结构缺口、route、challenge 与 agent proposal 形成 `next-action` 对象。
-2. `[重写]` `eco-open-falsification-probe`
-   - 不再只从固定 action kind 映射 probe type；要支持 agent- or policy-backed probe proposal。
-3. `[重写]` `eco-summarize-round-readiness`
-   - 不再主要靠 coverage / open count 公式；要形成结构化 `readiness-assessment`，允许记录分歧与理由。
-4. `[重写]` `eco-claim-board-task`
-   - 必须能基于 issue / gap / route / probe 生成 board task。
-5. `[重写]` `eco-open-challenge-ticket`
-   - 必须能对 issue cluster、actor profile、diffusion edge、route judgement 提 challenge。
-6. `[重写]` `eco-close-challenge-ticket`
-   - 必须能记录 challenge resolution 的依据与 decision trace。
-7. `[重写]` `eco-plan-round-orchestration`
-   - 不再默认把 runtime 阶段逻辑编码成固定 skill 链；应更多承担 policy assembly，而不是实质判断。
-8. `[重写]` `eco-promote-evidence-basis`
-   - 必须升级为 `promotion-basis`，冻结争议对象与理由，而不是只冻结 coverages。
-
-## 8. 需要重写的 board / reporting / publication 技能
-
-以下技能必须改成消费新对象，而不是继续消费旧 coverage 主线：
-
-1. `[重写]` `eco-summarize-board-state`
-2. `[重写]` `eco-materialize-board-brief`
-3. `[重写]` `eco-materialize-reporting-handoff`
-4. `[重写]` `eco-draft-council-decision`
-5. `[重写]` `eco-draft-expert-report`
-6. `[重写]` `eco-publish-council-decision`
-7. `[重写]` `eco-publish-expert-report`
-8. `[重写]` `eco-materialize-final-publication`
-
-约束：
-
-1. `board summary / board brief` 必须是 DB 导出物，不再是流程控制前提。
-2. reporting / publication 默认从 canonical DB 对象重新物化。
-
-## 9. 需要降级为 optional verification lane 的技能
-
-以下技能保留，但不再是默认主线：
-
-1. `[降级为 optional lane]` `eco-extract-observation-candidates`
-2. `[降级为 optional lane]` `eco-merge-observation-candidates`
-3. `[降级为 optional lane]` `eco-derive-observation-scope`
-4. `[降级为 optional lane]` `eco-link-claims-to-observations`
-5. `[降级为 optional lane]` `eco-score-evidence-coverage`
-
-约束：
-
-1. 这些技能只在 `verifiability + route` 明确允许时触发。
-2. 它们不再构成全局 readiness 的默认主轴。
-
-## 10. 必须删除的兼容债
-
-以下内容不能再被写成长期合理状态：
-
-1. `[删除兼容债]` formal comments 仅作为 generic public signal 进入系统
-2. `[删除兼容债]` `next_actions / probes / readiness` 只以 artifact wrapper 或 snapshot 整包存在
-3. `[删除兼容债]` coverage 作为默认主链与默认 readiness 主轴
-4. `[删除兼容债]` board/reporting 依赖 summary artifact 才能继续
-5. `[删除兼容债]` runtime kernel 默认承载新增的 domain policy
-6. `[删除兼容债]` 无限期保留旧 envelope 作为 canonical 输出
-
-这意味着兼容层只能是迁移期措施，必须带有明确移除条件。
-
-## 11. 暂不优先的事项
-
-以下事项重要，但不是下一阶段主矛盾：
-
-1. `[保留底座]` 更复杂的长生命周期 multi-session runtime
-2. `[保留底座]` 更细的 auth / hard isolation
-3. `[保留底座]` 新一轮数据源扩张
-4. `[保留底座]` publication 样式继续打磨
-
-注意：
-
-1. 这些事项是优先级后移，不是方向替代。
-2. 它们不能取代对 autonomy、kernel、contracts、DB-native 的修正。
-
-## 12. 硬完成检查表
+- `[ ]` 建立 `issue-cluster`
+- `[ ]` 建立 `stance-group`
+- `[ ]` 建立 `concern-facet`
+- `[ ]` 建立 `actor-profile`
+- `[ ]` 建立 `evidence-citation-type`
+- `[ ]` 建立 `verifiability-assessment`
+- `[ ]` 建立 `verification-route`
+- `[ ]` 建立 `formal-public-link`
+- `[ ]` 建立 `representation-gap`
+- `[ ]` 建立 `diffusion-edge`
+- `[ ]` 建立 `controversy-map`
+
+### 4.3 Deliberation plane
+
+- `[x]` 建立 `proposal`
+- `[x]` 建立 `next-action`
+- `[x]` 建立 `probe`
+- `[x]` 建立 `readiness-opinion`
+- `[x]` 建立 `readiness-assessment`
+- `[x]` 建立 `promotion-basis`
+- `[x]` 建立 `decision-trace`
+
+### 4.4 通用要求
+
+- `[ ]` 每个关键对象支持 item-level query
+- `[ ]` 每个关键对象有 ID、provenance、evidence refs、lineage、decision source
+- `[ ]` phase-2 对象不再只作为整包 snapshot 存在
+
+## 5. Work Package 2: Signal plane 重构
+
+- `[ ]` 停止把 formal comments 仅作为 generic public signal 写入系统
+- `[ ]` 为 formal comments 增加 docket / agency / submitter / stance / concern / citation / route 维度
+- `[ ]` 保留 formal/public/environment 三类输入的 source-specific provenance
+- `[ ]` 为 typed signals 提供统一 query surface
+
+## 6. Work Package 3: Analysis plane 改写为 controversy chain
+
+### 6.1 重写旧主链 skills
+
+- `[ ]` `[重写]` `eco-extract-claim-candidates`
+- `[ ]` `[重写]` `eco-cluster-claim-candidates`
+- `[ ]` `[重写]` `eco-derive-claim-scope`
+
+### 6.2 新增 controversy 主链 skills
+
+- `[ ]` `[新增 canonical]` `eco-extract-issue-candidates`
+- `[ ]` `[新增 canonical]` `eco-cluster-issue-candidates`
+- `[ ]` `[新增 canonical]` `eco-extract-stance-candidates`
+- `[ ]` `[新增 canonical]` `eco-extract-concern-facets`
+- `[ ]` `[新增 canonical]` `eco-extract-actor-profiles`
+- `[ ]` `[新增 canonical]` `eco-extract-evidence-citation-types`
+- `[ ]` `[新增 canonical]` `eco-link-formal-comments-to-public-discourse`
+- `[ ]` `[新增 canonical]` `eco-identify-representation-gaps`
+- `[ ]` `[新增 canonical]` `eco-detect-cross-platform-diffusion`
+- `[ ]` `[新增 canonical]` `eco-classify-claim-verifiability`
+- `[ ]` `[新增 canonical]` `eco-route-verification-lane`
+- `[ ]` `[新增 canonical]` `eco-materialize-controversy-map`
+
+### 6.3 强约束
+
+- `[ ]` 每个 extractor 输出 `confidence`
+- `[ ]` 每个 extractor 输出 `rationale`
+- `[ ]` 每个 extractor 输出 `provenance`
+- `[ ]` heuristic 输出显式标记 `decision_source = heuristic-fallback`
+- `[ ]` 旧 claim 输出只保留为兼容视图或 fallback，不再是 canonical 主轴
+
+## 7. Work Package 4: Deliberation plane 与 council objects
+
+### 7.1 重写 phase-2 skills
+
+- `[x]` `[重写]` `eco-propose-next-actions`
+- `[x]` `[重写]` `eco-open-falsification-probe`
+- `[x]` `[重写]` `eco-summarize-round-readiness`
+- `[x]` `[重写]` `eco-promote-evidence-basis`
+
+### 7.2 重写 board skills
+
+- `[ ]` `[重写]` `eco-claim-board-task`
+- `[x]` `[重写]` `eco-open-challenge-ticket`
+- `[x]` `[重写]` `eco-close-challenge-ticket`
+- `[x]` `[重写]` `eco-update-hypothesis-status`
+
+### 7.3 结构性要求
+
+- `[ ]` `next-action` 可锚定 `issue / route / gap / actor / proposal`
+- `[x]` `probe` 可由 agent proposal 或 policy fallback 生成
+- `[x]` `readiness-assessment` 能表达多 agent 分歧
+- `[x]` `promotion-basis` 冻结的是 controversy judgement，而不是只冻结 coverages
+- `[x]` `decision-trace` 记录采纳了哪个 proposal、拒绝了哪些 proposal、理由是什么
+- `[x]` `hypothesis / challenge` DB 行与 `raw_json` 已显式承载 `decision_source / evidence_refs / source_ids / provenance / lineage`
+
+## 8. Work Package 5: 建立 agent council loop
+
+- `[x]` 定义 `proposal contract`
+- `[ ]` 定义 `challenge contract`
+- `[x]` 定义 `readiness opinion contract`
+- `[x]` 定义 `decision trace contract`
+- `[x]` 允许多个 agent 对同一问题提交相互冲突的 judgement
+- `[ ]` runtime 默认执行 agent proposal，而不是替 agent 先算出结论
+- `[ ]` heuristic 只在 proposal 缺失、失败或审计模式下触发
+
+## 9. Work Package 6: Runtime kernel 收边界
+
+### 9.1 必须收缩或迁出的模块
+
+- `[ ]` 收缩或迁出 `eco-concil-runtime/src/eco_council_runtime/kernel/phase2_contract.py`
+- `[ ]` 收缩或迁出 `eco-concil-runtime/src/eco_council_runtime/kernel/controller.py`
+- `[ ]` 迁出 `eco-concil-runtime/src/eco_council_runtime/kernel/investigation_planning.py`
+- `[ ]` 重写 `eco-concil-runtime/src/eco_council_runtime/kernel/agent_entry.py`
+
+### 9.2 必须保留在 kernel 的职责
+
+- `[ ]` admission / capability / side-effect governance
+- `[ ]` execution / retry / receipt
+- `[ ]` ledger / replay / audit
+- `[ ]` persistence / query surface
+- `[ ]` operator-visible health
+
+### 9.3 不再允许留在 kernel 的职责
+
+- `[ ]` readiness 主判断逻辑
+- `[ ]` promotion 主判断逻辑
+- `[ ]` controversy scoring formula
+- `[ ]` fixed phase policy
+- `[ ]` 默认议会编排假设
+
+## 10. Work Package 7: Reporting / publication 重建
+
+- `[x]` `[重写]` `eco-summarize-board-state`
+- `[x]` `[重写]` `eco-materialize-board-brief`
+- `[x]` `[重写]` `eco-materialize-reporting-handoff`
+- `[x]` `[重写]` `eco-draft-council-decision`
+- `[x]` `[重写]` `eco-draft-expert-report`
+- `[x]` `[重写]` `eco-publish-council-decision`
+- `[x]` `[重写]` `eco-publish-expert-report`
+- `[x]` `[重写]` `eco-materialize-final-publication`
+- `[x]` board summary / brief 只作为 DB 导出物存在
+- `[x]` reporting / publication 默认从 canonical DB 对象物化
+
+## 11. Work Package 8: Verification lane 降级为 optional lane
+
+- `[ ]` `[降级为 optional lane]` `eco-extract-observation-candidates`
+- `[ ]` `[降级为 optional lane]` `eco-merge-observation-candidates`
+- `[ ]` `[降级为 optional lane]` `eco-derive-observation-scope`
+- `[ ]` `[降级为 optional lane]` `eco-link-claims-to-observations`
+- `[ ]` `[降级为 optional lane]` `eco-score-evidence-coverage`
+- `[ ]` observation chain 只在 verifiability + route 明确允许时触发
+- `[ ]` readiness 默认不再围绕 coverage 公式展开
+
+## 12. Work Package 9: 删除兼容债
+
+- `[ ]` 删除“formal comments 只是 generic public signal”的长期假设
+- `[ ]` 删除“next_actions / probes / readiness 只以 artifact wrapper 存在”的长期假设
+- `[ ]` 删除“coverage 是默认主链”的长期假设
+- `[ ]` 删除“board / reporting 依赖 summary artifact 才能推进”的长期假设
+- `[ ]` 删除“kernel 默认承载新增 domain policy”的长期假设
+- `[ ]` 删除“旧 envelope 可以无限期作为 canonical 输出”的长期假设
+
+## 13. Work Package 10: 测试与 benchmark 改写
+
+- `[ ]` 删除或重写固化旧 coverage-first 语义的测试
+- `[x]` 新增 DB-only recovery tests
+- `[x]` 新增 agent proposal-driven round tests
+- `[ ]` 新增 kernel boundary tests
+- `[ ]` 新增 optional verification lane tests
+- `[ ]` 准备争议型政策 case
+- `[ ]` 准备混合型争议 case
+- `[ ]` 准备可核实事件 case
+
+## 14. 硬完成检查表
 
 - `[ ]` canonical signal / analysis / deliberation 对象已经定义并落库
-- `[ ]` formal comments 已成为一等结构化输入，而不是 generic text signal
-- `[ ]` `next-action / probe / readiness-assessment / promotion-basis` 已可 item-level 查询
-- `[ ]` `board summary / board brief / next_actions / probes / readiness` 在 artifact 删除后仍可从 DB 重建
+- `[ ]` formal comments 已成为一等结构化输入
+- `[x]` `proposal / next-action / probe / readiness-opinion / readiness-assessment / promotion-basis / decision-trace` 已可 item-level 查询
+- `[ ]` 删除 `board_summary / board_brief / next_actions / probes / readiness` artifact 后，round 仍可继续
 - `[ ]` 主链默认输出已不再是 `claim-observation-link-coverage`
 - `[ ]` observation matching 只在明确可核实时触发
 - `[ ]` agent proposal 已带 `rationale / confidence / evidence refs / provenance`
 - `[ ]` heuristic 已降为 fallback，并带显式 trace
-- `[ ]` 至少一个争议型 case 和一个可核实事件 case 稳定跑通
+- `[x]` reporting / publication 默认从 DB canonical 对象物化
+- `[ ]` kernel 已不再承载 readiness / promotion / controversy judgement 的主语义
+- `[ ]` 至少一个争议型政策 case、一个混合型争议 case、一个可核实事件 case 稳定通过新验收

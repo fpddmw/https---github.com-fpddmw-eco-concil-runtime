@@ -20,8 +20,12 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_council_decision_record,
+)
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     load_promotion_basis_wrapper,
+    load_reporting_handoff_wrapper,
 )
 
 
@@ -140,9 +144,27 @@ def draft_council_decision_skill(
     output_file = resolve_path(run_dir_path, output_path, f"reporting/council_decision_draft_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
-    handoff_payload = load_json_if_exists(handoff_file)
+    handoff_context = load_reporting_handoff_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        reporting_handoff_path=reporting_handoff_path,
+    )
+    handoff_payload = (
+        handoff_context.get("payload")
+        if isinstance(handoff_context.get("payload"), dict)
+        else None
+    )
     if not isinstance(handoff_payload, dict):
-        warnings.append({"code": "missing-reporting-handoff", "message": f"No reporting handoff artifact was found at {handoff_file}."})
+        warnings.append(
+            {
+                "code": "missing-reporting-handoff",
+                "message": (
+                    "No reporting handoff artifact or DB record was found "
+                    f"at {handoff_file}."
+                ),
+            }
+        )
         handoff = {
             "handoff_status": "pending-more-investigation",
             "promotion_status": "withheld",
@@ -171,19 +193,18 @@ def draft_council_decision_skill(
         handoff_payload,
         fallback_payload=promotion_payload,
         observed_inputs_overrides={
-            "reporting_handoff_artifact_present": handoff_file.exists(),
-            "reporting_handoff_present": isinstance(handoff_payload, dict),
+            "reporting_handoff_artifact_present": bool(
+                handoff_context.get("artifact_present")
+            ),
+            "reporting_handoff_present": bool(handoff_context.get("payload_present")),
             "promotion_artifact_present": bool(
                 promotion_context.get("artifact_present")
             ),
             "promotion_present": bool(promotion_context.get("payload_present")),
         },
         field_overrides={
-            "reporting_handoff_source": (
-                "reporting-handoff-artifact"
-                if handoff_file.exists()
-                else "missing-reporting-handoff"
-            ),
+            "reporting_handoff_source": maybe_text(handoff_context.get("source"))
+            or "missing-reporting-handoff",
             "promotion_source": maybe_text(promotion_context.get("source"))
             or "missing-promotion",
         },
@@ -216,6 +237,38 @@ def draft_council_decision_skill(
         "next_round_required": moderator_status != "finalize",
         "decision_summary": summary_text,
         **contract_fields,
+        "promoted_basis_id": maybe_text(handoff.get("promoted_basis_id"))
+        or maybe_text(promotion_basis.get("basis_id")),
+        "basis_selection_mode": maybe_text(handoff.get("basis_selection_mode"))
+        or maybe_text(promotion_basis.get("basis_selection_mode")),
+        "selected_basis_object_ids": unique_texts(
+            handoff.get("selected_basis_object_ids", [])
+            if isinstance(handoff.get("selected_basis_object_ids"), list)
+            else promotion_basis.get("selected_basis_object_ids", [])
+            if isinstance(promotion_basis.get("selected_basis_object_ids"), list)
+            else []
+        ),
+        "supporting_proposal_ids": unique_texts(
+            handoff.get("supporting_proposal_ids", [])
+            if isinstance(handoff.get("supporting_proposal_ids"), list)
+            else promotion_basis.get("supporting_proposal_ids", [])
+            if isinstance(promotion_basis.get("supporting_proposal_ids"), list)
+            else []
+        ),
+        "supporting_opinion_ids": unique_texts(
+            handoff.get("supporting_opinion_ids", [])
+            if isinstance(handoff.get("supporting_opinion_ids"), list)
+            else promotion_basis.get("supporting_opinion_ids", [])
+            if isinstance(promotion_basis.get("supporting_opinion_ids"), list)
+            else []
+        ),
+        "rejected_opinion_ids": unique_texts(
+            handoff.get("rejected_opinion_ids", [])
+            if isinstance(handoff.get("rejected_opinion_ids"), list)
+            else promotion_basis.get("rejected_opinion_ids", [])
+            if isinstance(promotion_basis.get("rejected_opinion_ids"), list)
+            else []
+        ),
         "decision_gating": {
             "reason_codes": reason_codes(handoff_status, promotion_status, open_risks),
             "reasons": [maybe_text(item.get("summary")) for item in open_risks[:4] if maybe_text(item.get("summary"))],
@@ -233,6 +286,11 @@ def draft_council_decision_skill(
             "supervisor_state_path": maybe_text(handoff.get("supervisor_state_path")),
         },
     }
+    store_council_decision_record(
+        run_dir_path,
+        decision_payload=wrapper,
+        artifact_path=str(output_file),
+    )
     write_json_file(output_file, wrapper)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]

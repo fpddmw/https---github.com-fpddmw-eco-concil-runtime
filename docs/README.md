@@ -7,15 +7,23 @@
 1. `openclaw-project-overview.md`
    - 当前系统是什么、主要问题是什么、目标架构是什么。
 2. `openclaw-next-phase-development-plan.md`
-   - 下一阶段如何同时修正研究方向、架构边界、数据契约与 DB-native 状态面。
+   - 彻底修正的施工路线图，定义最终目标、硬边界、批次顺序与仓库级拆改方向。
 3. `openclaw-skill-refactor-checklist.md`
-   - 按迁移、重写、降级与删除兼容债的方式执行下一阶段工作。
+   - 按工作包执行重写、迁移、删除兼容债与验收收口的工程清单。
 
 建议阅读顺序：
 
 1. `openclaw-project-overview.md`
 2. `openclaw-next-phase-development-plan.md`
 3. `openclaw-skill-refactor-checklist.md`
+
+当前根目录文档的定位不是“稳定版本说明”，而是“彻底修正施工入口”。
+
+使用原则：
+
+1. `overview` 负责说明当前系统、问题和目标终态。
+2. `development plan` 负责说明彻底重构的施工路径与批次依赖。
+3. `checklist` 负责把施工路径落成可执行清单。
 
 ## 历史与过程文档
 

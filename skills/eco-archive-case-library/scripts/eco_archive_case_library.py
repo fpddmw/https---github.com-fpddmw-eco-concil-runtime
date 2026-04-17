@@ -24,9 +24,13 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_observation_scope_context,
 )
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_council_decision_wrapper,
+    load_expert_report_wrapper,
+    load_final_publication_wrapper,
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
     load_promotion_basis_wrapper,
+    load_reporting_handoff_wrapper,
     load_round_readiness_wrapper,
 )
 
@@ -680,13 +684,64 @@ def archive_case_library_skill(
         if isinstance(promotion_wrapper.get("payload"), dict)
         else {}
     )
-    handoff = load_json_if_exists(run_dir_path / "reporting" / f"reporting_handoff_{round_id}.json") or {}
-    decision = load_json_if_exists(run_dir_path / "reporting" / f"council_decision_{round_id}.json") or load_json_if_exists(run_dir_path / "reporting" / f"council_decision_draft_{round_id}.json") or {}
-    final_publication = load_json_if_exists(run_dir_path / "reporting" / f"final_publication_{round_id}.json") or {}
-    role_reports = [
-        load_json_if_exists(run_dir_path / "reporting" / f"expert_report_sociologist_{round_id}.json") or {},
-        load_json_if_exists(run_dir_path / "reporting" / f"expert_report_environmentalist_{round_id}.json") or {},
-    ]
+    handoff_wrapper = load_reporting_handoff_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    handoff = (
+        handoff_wrapper.get("payload")
+        if isinstance(handoff_wrapper.get("payload"), dict)
+        else {}
+    )
+    decision_wrapper = load_council_decision_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="canonical",
+    )
+    decision = (
+        decision_wrapper.get("payload")
+        if isinstance(decision_wrapper.get("payload"), dict)
+        else {}
+    )
+    if not decision:
+        decision_wrapper = load_council_decision_wrapper(
+            run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            decision_stage="draft",
+        )
+        decision = (
+            decision_wrapper.get("payload")
+            if isinstance(decision_wrapper.get("payload"), dict)
+            else {}
+        )
+    publication_wrapper = load_final_publication_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    final_publication = (
+        publication_wrapper.get("payload")
+        if isinstance(publication_wrapper.get("payload"), dict)
+        else {}
+    )
+    role_reports = []
+    for role in ("sociologist", "environmentalist"):
+        report_wrapper = load_expert_report_wrapper(
+            run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            agent_role=role,
+            report_stage="canonical",
+        )
+        report_payload = (
+            report_wrapper.get("payload")
+            if isinstance(report_wrapper.get("payload"), dict)
+            else {}
+        )
+        role_reports.append(report_payload)
     signal_rows = load_signal_rows((run_dir_path / "analytics" / "signal_plane.sqlite").resolve(), run_id)
 
     claim_scopes = [

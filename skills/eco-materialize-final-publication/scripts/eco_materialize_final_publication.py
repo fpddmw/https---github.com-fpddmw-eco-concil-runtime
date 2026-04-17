@@ -18,11 +18,20 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
+from eco_council_runtime.council_objects import (  # noqa: E402
+    query_council_objects,
+)
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_final_publication_record,
+)
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+    load_council_decision_wrapper,
+    load_expert_report_wrapper,
     load_promotion_basis_wrapper,
+    load_reporting_handoff_wrapper,
 )
 
 
@@ -46,6 +55,10 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -140,6 +153,40 @@ def operator_review_hints(supervisor_state: dict[str, Any], handoff: dict[str, A
     return unique_texts(results)[:5]
 
 
+def load_decision_traces(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    decision_id: str,
+) -> list[dict[str, Any]]:
+    payload = query_council_objects(
+        run_dir,
+        object_kind="decision-trace",
+        run_id=run_id,
+        round_id=round_id,
+        decision_id=decision_id,
+        limit=50,
+    )
+    rows = payload.get("objects", []) if isinstance(payload.get("objects"), list) else []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def summarized_decision_traces(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "trace_id": maybe_text(trace.get("trace_id")),
+            "decision_kind": maybe_text(trace.get("decision_kind")),
+            "status": maybe_text(trace.get("status")),
+            "selected_object_kind": maybe_text(trace.get("selected_object_kind")),
+            "selected_object_id": maybe_text(trace.get("selected_object_id")),
+            "accepted_object_ids": list_items(trace.get("accepted_object_ids")),
+            "rejected_object_ids": list_items(trace.get("rejected_object_ids")),
+        }
+        for trace in traces
+    ]
+
+
 def materialize_final_publication_skill(
     run_dir: str,
     run_id: str,
@@ -165,9 +212,27 @@ def materialize_final_publication_skill(
     output_file = resolve_path(run_dir_path, output_path, f"reporting/final_publication_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
-    handoff_payload = load_json_if_exists(handoff_file)
+    handoff_context = load_reporting_handoff_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        reporting_handoff_path=reporting_handoff_path,
+    )
+    handoff_payload = (
+        handoff_context.get("payload")
+        if isinstance(handoff_context.get("payload"), dict)
+        else None
+    )
     if not isinstance(handoff_payload, dict):
-        warnings.append({"code": "missing-reporting-handoff", "message": f"No reporting handoff artifact was found at {handoff_file}."})
+        warnings.append(
+            {
+                "code": "missing-reporting-handoff",
+                "message": (
+                    "No reporting handoff artifact or DB record was found "
+                    f"at {handoff_file}."
+                ),
+            }
+        )
         return {
             "status": "blocked",
             "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "operation": "blocked", "output_path": str(output_file)},
@@ -180,9 +245,28 @@ def materialize_final_publication_skill(
         }
     handoff = handoff_payload
 
-    decision_payload = load_json_if_exists(decision_file)
+    decision_context = load_council_decision_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="canonical",
+        decision_path=decision_path,
+    )
+    decision_payload = (
+        decision_context.get("payload")
+        if isinstance(decision_context.get("payload"), dict)
+        else None
+    )
     if not isinstance(decision_payload, dict):
-        warnings.append({"code": "missing-canonical-decision", "message": f"No canonical council decision was found at {decision_file}."})
+        warnings.append(
+            {
+                "code": "missing-canonical-decision",
+                "message": (
+                    "No canonical council decision artifact or DB record was "
+                    f"found at {decision_file}."
+                ),
+            }
+        )
         return {
             "status": "blocked",
             "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "operation": "blocked", "output_path": str(output_file)},
@@ -228,18 +312,42 @@ def materialize_final_publication_skill(
     publication_readiness = maybe_text(decision.get("publication_readiness")) or "hold"
     publication_posture = "release" if publication_readiness == "ready" else "withhold"
     report_rows: list[dict[str, Any]] = []
+    report_contexts: dict[str, dict[str, Any]] = {}
     missing_ready_reports: list[str] = []
     report_payloads: dict[str, dict[str, Any]] = {}
     published_report_refs = decision.get("published_report_refs", []) if isinstance(decision.get("published_report_refs"), list) else []
     for role in ROLE_VALUES:
-        report_payload = load_json_if_exists(report_files[role])
+        report_context = load_expert_report_wrapper(
+            run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            agent_role=role,
+            report_stage="canonical",
+            report_path=(
+                sociologist_report_path
+                if role == "sociologist"
+                else environmentalist_report_path
+            ),
+        )
+        report_contexts[role] = report_context
+        report_payload = (
+            report_context.get("payload")
+            if isinstance(report_context.get("payload"), dict)
+            else None
+        )
         if isinstance(report_payload, dict):
             report_payloads[role] = report_payload
-            report_rows.append(report_summary(role, report_payload, report_files[role]))
+            report_rows.append(
+                report_summary(
+                    role,
+                    report_payload,
+                    Path(str(report_context.get("artifact_path", report_files[role]))),
+                )
+            )
         elif publication_posture == "release":
-            missing_ready_reports.append(str(report_files[role]))
+            missing_ready_reports.append(str(report_context.get("artifact_path", report_files[role])))
         else:
-            warnings.append({"code": "missing-canonical-report", "message": f"Canonical expert report is missing at {report_files[role]} but release posture is still withheld."})
+            warnings.append({"code": "missing-canonical-report", "message": f"Canonical expert report is missing at {report_context.get('artifact_path', report_files[role])} but release posture is still withheld."})
     if missing_ready_reports:
         warnings.extend({"code": "missing-canonical-report", "message": f"Required canonical expert report is missing at {path}."} for path in missing_ready_reports)
         return {
@@ -252,43 +360,54 @@ def materialize_final_publication_skill(
             "warnings": warnings,
             "board_handoff": {"candidate_ids": [maybe_text(decision.get("decision_id"))] if maybe_text(decision.get("decision_id")) else [], "evidence_refs": [], "gap_hints": [item["message"] for item in warnings], "challenge_hints": [], "suggested_next_skills": ["eco-publish-expert-report"]},
         }
+    decision_traces = load_decision_traces(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        decision_id=maybe_text(decision.get("decision_id")),
+    )
+    if not decision_traces:
+        warnings.append(
+            {
+                "code": "missing-decision-trace",
+                "message": "No decision-trace objects were found for the canonical council decision.",
+            }
+        )
 
     contract_fields = reporting_contract_fields_from_payload(
         decision_payload,
         fallback_payload=handoff_payload,
         observed_inputs_overrides={
-            "reporting_handoff_artifact_present": handoff_file.exists(),
-            "reporting_handoff_present": isinstance(handoff_payload, dict),
-            "decision_artifact_present": decision_file.exists(),
-            "decision_present": isinstance(decision_payload, dict),
+            "reporting_handoff_artifact_present": bool(
+                handoff_context.get("artifact_present")
+            ),
+            "reporting_handoff_present": bool(handoff_context.get("payload_present")),
+            "decision_artifact_present": bool(decision_context.get("artifact_present")),
+            "decision_present": bool(decision_context.get("payload_present")),
             "promotion_artifact_present": bool(
                 promotion_context.get("artifact_present")
             ),
             "promotion_present": bool(promotion_context.get("payload_present")),
             "supervisor_state_artifact_present": supervisor_file.exists(),
             "supervisor_state_present": isinstance(supervisor_state_payload, dict),
-            "sociologist_report_artifact_present": report_files["sociologist"].exists(),
+            "sociologist_report_artifact_present": bool(
+                report_contexts.get("sociologist", {}).get("artifact_present")
+            ),
             "sociologist_report_present": isinstance(
                 report_payloads.get("sociologist"), dict
             ),
-            "environmentalist_report_artifact_present": report_files[
-                "environmentalist"
-            ].exists(),
+            "environmentalist_report_artifact_present": bool(
+                report_contexts.get("environmentalist", {}).get("artifact_present")
+            ),
             "environmentalist_report_present": isinstance(
                 report_payloads.get("environmentalist"), dict
             ),
         },
         field_overrides={
-            "reporting_handoff_source": (
-                "reporting-handoff-artifact"
-                if handoff_file.exists()
-                else "missing-reporting-handoff"
-            ),
-            "decision_source": (
-                "council-decision-artifact"
-                if decision_file.exists()
-                else "missing-canonical-decision"
-            ),
+            "reporting_handoff_source": maybe_text(handoff_context.get("source"))
+            or "missing-reporting-handoff",
+            "decision_source": maybe_text(decision_context.get("source"))
+            or "missing-canonical-decision",
             "promotion_source": maybe_text(promotion_context.get("source"))
             or "missing-promotion",
             "supervisor_state_source": (
@@ -296,16 +415,14 @@ def materialize_final_publication_skill(
                 if supervisor_file.exists()
                 else "missing-supervisor-state"
             ),
-            "sociologist_report_source": (
-                "expert-report-artifact"
-                if report_files["sociologist"].exists()
-                else "missing-sociologist-report"
-            ),
-            "environmentalist_report_source": (
-                "expert-report-artifact"
-                if report_files["environmentalist"].exists()
-                else "missing-environmentalist-report"
-            ),
+            "sociologist_report_source": maybe_text(
+                report_contexts.get("sociologist", {}).get("source")
+            )
+            or "missing-sociologist-report",
+            "environmentalist_report_source": maybe_text(
+                report_contexts.get("environmentalist", {}).get("source")
+            )
+            or "missing-environmentalist-report",
         },
     )
     publication_id = "final-publication-" + stable_hash(run_id, round_id, publication_posture, maybe_text(decision.get("decision_id")))[:12]
@@ -316,6 +433,14 @@ def materialize_final_publication_skill(
         selected_evidence_refs = unique_texts(
             decision.get("selected_evidence_refs", []) if isinstance(decision.get("selected_evidence_refs"), list) else promotion_basis.get("selected_evidence_refs", []) if isinstance(promotion_basis.get("selected_evidence_refs"), list) else []
         )
+    selected_evidence_refs = unique_texts(
+        selected_evidence_refs
+        + [
+            ref
+            for trace in decision_traces
+            for ref in list_items(trace.get("evidence_refs"))
+        ]
+    )
 
     publication_payload = {
         "schema_version": "e1.2",
@@ -340,6 +465,11 @@ def materialize_final_publication_skill(
             "publication_readiness": publication_readiness,
             "decision_summary": maybe_text(decision.get("decision_summary")),
         },
+        "decision_trace_ids": unique_texts(
+            [trace.get("trace_id") for trace in decision_traces]
+        ),
+        "decision_trace_count": len(decision_traces),
+        "decision_traces": summarized_decision_traces(decision_traces),
         "role_reports": report_rows,
         "published_report_refs": unique_texts(published_report_refs or [row["report_path"] for row in report_rows]),
         "key_findings": handoff.get("key_findings", []) if isinstance(handoff.get("key_findings"), list) else [],
@@ -352,6 +482,9 @@ def materialize_final_publication_skill(
             "decision_path": str(decision_file),
             "promotion_path": str(promotion_file),
             "supervisor_state_path": str(supervisor_file),
+            "decision_trace_ids": unique_texts(
+                [trace.get("trace_id") for trace in decision_traces]
+            ),
             "role_report_paths": {
                 role: str(path)
                 for role, path in report_files.items()
@@ -382,6 +515,11 @@ def materialize_final_publication_skill(
                 "board_handoff": {"candidate_ids": [publication_id], "evidence_refs": [], "gap_hints": [warnings[-1]["message"]], "challenge_hints": [], "suggested_next_skills": ["eco-materialize-final-publication"]},
             }
 
+    store_final_publication_record(
+        run_dir_path,
+        publication_payload=publication_payload,
+        artifact_path=str(output_file),
+    )
     if operation != "noop":
         write_json_file(output_file, publication_payload)
 
@@ -399,6 +537,7 @@ def materialize_final_publication_skill(
             "publication_id": publication_id,
             "publication_status": publication_payload["publication_status"],
             "publication_posture": publication_posture,
+            "decision_trace_count": len(decision_traces),
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
             "reporting_handoff_source": maybe_text(

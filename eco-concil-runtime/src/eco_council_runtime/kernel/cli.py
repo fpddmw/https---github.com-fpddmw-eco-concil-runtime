@@ -5,6 +5,16 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ..canonical_contracts import (
+    PLANE_ANALYSIS,
+    PLANE_DELIBERATION,
+    PLANE_SIGNAL,
+    canonical_contracts_for_plane,
+)
+from ..council_objects import (
+    council_queryable_object_kinds,
+    query_council_objects,
+)
 from .analysis_plane import (
     analysis_kind_names,
     query_analysis_result_items,
@@ -376,6 +386,26 @@ def add_analysis_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--pretty", action="store_true")
 
 
+def add_council_query_args(command: argparse.ArgumentParser) -> None:
+    supported_kinds = ", ".join(council_queryable_object_kinds())
+    command.add_argument("--run-dir", required=True)
+    command.add_argument(
+        "--object-kind",
+        required=True,
+        help=f"Canonical deliberation object kind. Supported kinds: {supported_kinds}.",
+    )
+    command.add_argument("--run-id", default="")
+    command.add_argument("--round-id", default="")
+    command.add_argument("--agent-role", default="")
+    command.add_argument("--status", default="")
+    command.add_argument("--decision-id", default="")
+    command.add_argument("--include-contract", action="store_true")
+    command.add_argument("--include-items", action="store_true")
+    command.add_argument("--limit", type=int, default=20)
+    command.add_argument("--offset", type=int, default=0)
+    command.add_argument("--pretty", action="store_true")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Minimal runtime kernel for skill-first investigation runs.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -539,6 +569,23 @@ def build_parser() -> argparse.ArgumentParser:
     query_items_cmd.add_argument("--include-result-sets", action="store_true")
     query_items_cmd.add_argument("--include-contract", action="store_true")
 
+    council_query_cmd = sub.add_parser(
+        "query-council-objects",
+        help="Query canonical deliberation objects from the shared SQLite query surface.",
+    )
+    add_council_query_args(council_query_cmd)
+
+    contract_list_cmd = sub.add_parser(
+        "list-canonical-contracts",
+        help="List target canonical contracts for the selected plane or all planes.",
+    )
+    contract_list_cmd.add_argument(
+        "--plane",
+        default="",
+        choices=["", PLANE_SIGNAL, PLANE_ANALYSIS, PLANE_DELIBERATION],
+    )
+    contract_list_cmd.add_argument("--pretty", action="store_true")
+
     show_cmd = sub.add_parser("show-run-state", help="Show manifest, cursor, registry, and a tail of runtime ledger events.")
     show_cmd.add_argument("--run-dir", required=True)
     show_cmd.add_argument("--round-id", default="")
@@ -550,6 +597,22 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "list-canonical-contracts":
+        contracts = canonical_contracts_for_plane(plane=args.plane)
+        payload = {
+            "schema_version": "canonical-contract-list-v1",
+            "status": "completed",
+            "plane": args.plane or "all",
+            "contracts": contracts,
+            "summary": {
+                "plane": args.plane or "all",
+                "contract_count": len(contracts),
+            },
+        }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
     run_dir = resolve_run_dir(args.run_dir)
 
     if args.command == "init-run":
@@ -968,6 +1031,37 @@ def main(argv: list[str] | None = None) -> int:
                     "analysis_kind": args.analysis_kind,
                     "result_set_id": args.result_set_id,
                     "subject_id": args.subject_id,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "query-council-objects":
+        try:
+            payload = query_council_objects(
+                run_dir,
+                object_kind=args.object_kind,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                agent_role=args.agent_role,
+                status=args.status,
+                decision_id=args.decision_id,
+                include_contract=args.include_contract,
+                include_items=args.include_items,
+                limit=args.limit,
+                offset=args.offset,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_dir": str(run_dir),
+                    "object_kind": args.object_kind,
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
                 },
                 "message": str(exc),
             }
