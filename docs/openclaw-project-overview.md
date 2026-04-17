@@ -39,6 +39,8 @@ OpenClaw 当前更准确的定位是：
    - 已能把 candidate、cluster、scope、link、coverage 等对象写入统一 result-set / lineage 结构。
 4. `deliberation plane`
    - 已能把 hypothesis、challenge、board-task、proposal、next-action、probe、readiness、decision trace、round transition 等议会状态写入 DB-first 状态面。
+5. `agent entry / phase-2 orchestration`
+   - `openclaw-agent` 轮次进入 phase-2 时，controller 与 agent entry 已能优先采用 `direct-council-advisory` plan，并把 `plan_source / planning_attempts` 写入 controller 状态；当 DB 中已有直接 `proposal / readiness-opinion / probe` 时，advisory queue 已能直接由这些对象编译，不再强制重跑 planner skill。
 
 这说明系统已经脱离“抓数据 + 生成文档”的脚本集合，具备了共享状态、受治理执行和跨轮次恢复的骨架。
 
@@ -66,7 +68,7 @@ OpenClaw 当前更准确的定位是：
 
 尚未完全成立的部分：
 
-1. phase-2 的 `next-actions / probes / readiness / promotion-basis` 仍带有明显的 artifact wrapper 习惯。
+1. `openclaw-agent` 的 advisory 主路径已基本 DB-native，但 planner-backed phase-2 与部分 investigation / reporting 链仍带有明显的 artifact wrapper 习惯。
 2. 某些控制与报告链路仍默认存在 summary / handoff / export 文件。
 3. formal comments 进入系统后，底层仍更像“generic public signal”，而不是一等 formal-comment 契约对象。
 
@@ -85,6 +87,7 @@ OpenClaw 当前更准确的定位是：
 1. 议会流程的核心推进仍主要依赖 runtime 预定义阶段与 skill 链。
 2. agent 的写入能力主要表现为执行预设 command/skill，而不是基于共享状态自主形成可对抗的 deliberation proposal。
 3. promotion、publication、archive 仍完全在 agent 外环。
+4. 虽然 `openclaw-agent` 轮次已能由 DB 中的 council objects 直接编译 advisory queue，但 controller 主执行骨架仍被固定在 `falsification-probes -> round-readiness -> promotion-gate -> promotion-basis` 等预定义 contract 上，agent 还不能真正自定义 phase-2 queue 结构。
 
 这意味着当前系统适合“治理内协作”，不适合被称为“高自主议会”。
 

@@ -198,6 +198,15 @@
 
 ## 8. Work Package 5: 建立 agent council loop
 
+### 8.1 当前状态
+
+- `[x]` `openclaw-agent` 轮次进入 phase-2 时，controller 与 agent entry 现在都会先尝试 `direct-council-advisory` compiler，只有 direct council inputs 不足或 compiler 失败时才回退 `agent-advisory` planner skill。
+- `[x]` advisory plan 已存在时会直接采用；advisory 物化失败时才会回退 `planner-backed` phase-2。
+- `[x]` controller 状态现在显式记录 `plan_source / planning_attempts / agent_advisory_plan_path`，agent 路径与 fallback 路径不再混在一条隐式 planner 语义里。
+- `[x]` `eco-plan-round-orchestration` 在 `agent-advisory` 模式下，若 DB 中已存在直接 `proposal / readiness-opinion`，现在可以跳过 `next-actions` 重算，直接产出 `probe -> readiness` 或 `readiness-only` 队列。
+- `[x]` advisory plan 现在会显式暴露 `direct_council_queue / next_actions_stage_skipped / council_input_counts`，能区分“由 council inputs 直接驱动的 advisory”与“仍依赖 wrapper/action snapshot 的 advisory”。
+- `[x]` `eco-concil-runtime/src/eco_council_runtime/phase2_direct_advisory.py` 已接入主链，能把 DB 中的 `proposal / readiness-opinion / probe` 直接编译为 advisory queue，并把 `plan_source = direct-council-advisory` 写入 advisory artifact、controller 状态与 planning attempts。
+
 - `[x]` 定义 `proposal contract`
 - `[x]` 定义 `challenge contract`
 - `[x]` 定义 `readiness opinion contract`
@@ -207,6 +216,13 @@
 - `[ ]` heuristic 只在 proposal 缺失、失败或审计模式下触发
 
 ## 9. Work Package 6: Runtime kernel 收边界
+
+### 9.0 当前状态
+
+- `[x]` `controller.py` 已把 `openclaw-agent` 轮次改成 `direct-council-advisory -> agent-advisory -> runtime-planner` 的三级回退链；`runtime planner` 不再是默认入口。
+- `[x]` phase-2 controller artifact 与 round-controller ledger 事件现在都会暴露 `plan_source`，controller 已能区分 `direct-council-advisory / agent-advisory / runtime-planner`。
+- `[ ]` `controller.py` 仍强依赖固定 stage contract 与固定 gate/post-gate 序列，尚未退化为真正的 generic execution queue runner。
+- `[ ]` `investigation_planning.py` 与 readiness/promotion fallback 仍保留较多 heuristic 主语义，kernel 边界尚未收干净。
 
 ### 9.1 必须收缩或迁出的模块
 

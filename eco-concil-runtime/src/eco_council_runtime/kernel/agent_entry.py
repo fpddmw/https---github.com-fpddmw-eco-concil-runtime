@@ -4,6 +4,7 @@ import shlex
 from pathlib import Path
 from typing import Any
 
+from ..phase2_direct_advisory import materialize_direct_council_advisory_plan
 from .analysis_plane import query_analysis_result_sets
 from .deliberation_plane import load_round_snapshot
 from .executor import (
@@ -152,18 +153,16 @@ def advisory_plan_command(
     round_id: str,
     contract_mode: str,
 ) -> str:
-    return run_skill_command(
-        run_dir=run_dir,
-        run_id=run_id,
-        round_id=round_id,
-        skill_name="eco-plan-round-orchestration",
-        contract_mode=contract_mode,
-        skill_args=[
-            "--planner-mode",
-            "agent-advisory",
-            "--output-path",
-            advisory_plan_relative_path(run_dir, round_id),
-        ],
+    return kernel_command(
+        "materialize-agent-entry-gate",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--refresh-advisory-plan",
+        "--pretty",
     )
 
 
@@ -330,7 +329,11 @@ def advisory_plan_surface(run_dir: Path, round_id: str) -> dict[str, Any]:
         "path": str(agent_advisory_plan_path(run_dir, round_id).resolve()),
         "planning_mode": maybe_text(payload.get("planning_mode")),
         "controller_authority": maybe_text(payload.get("controller_authority")),
+        "plan_source": maybe_text(payload.get("plan_source")),
         "downstream_posture": maybe_text(payload.get("downstream_posture")),
+        "direct_council_queue": bool(payload.get("observed_state", {}).get("direct_council_queue"))
+        if isinstance(payload.get("observed_state"), dict)
+        else False,
         "recommended_skill_sequence": payload.get("agent_turn_hints", {}).get("recommended_skill_sequence", [])
         if isinstance(payload.get("agent_turn_hints"), dict)
         and isinstance(payload.get("agent_turn_hints", {}).get("recommended_skill_sequence"), list)
@@ -738,6 +741,8 @@ def operator_notes(
         notes.append(
             f"Advisory plan posture is `{maybe_text(advisory_plan.get('downstream_posture')) or 'unspecified'}` with primary role `{maybe_text(advisory_plan.get('primary_role')) or 'moderator'}`."
         )
+        if maybe_text(advisory_plan.get("plan_source")) == "direct-council-advisory":
+            notes.append("Current advisory queue was compiled directly from DB-backed council objects instead of a planner skill subprocess.")
     if int(analysis.get("matching_result_set_count") or 0) > 0:
         notes.append(
             f"Analysis plane currently exposes {int(analysis.get('matching_result_set_count') or 0)} latest result sets for this round."
@@ -1006,23 +1011,34 @@ def materialize_agent_entry_gate(
     if maybe_text(initial_payload.get("entry_status")) != "blocked" and (
         refresh_advisory_plan or not advisory_plan_file.exists()
     ):
-        plan_result = run_skill(
-            resolved_run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            skill_name="eco-plan-round-orchestration",
-            skill_args=[
-                "--planner-mode",
-                "agent-advisory",
-                "--output-path",
-                advisory_plan_relative_path(resolved_run_dir, round_id),
-            ],
-            contract_mode=contract_mode,
-            timeout_seconds=timeout_seconds,
-            retry_budget=retry_budget,
-            retry_backoff_ms=retry_backoff_ms,
-            allow_side_effects=allow_side_effects,
-        )
+        try:
+            plan_result = materialize_direct_council_advisory_plan(
+                resolved_run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                output_path=advisory_plan_relative_path(resolved_run_dir, round_id),
+                contract_mode=contract_mode,
+            )
+        except Exception:
+            plan_result = {}
+        if not plan_result:
+            plan_result = run_skill(
+                resolved_run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                skill_name="eco-plan-round-orchestration",
+                skill_args=[
+                    "--planner-mode",
+                    "agent-advisory",
+                    "--output-path",
+                    advisory_plan_relative_path(resolved_run_dir, round_id),
+                ],
+                contract_mode=contract_mode,
+                timeout_seconds=timeout_seconds,
+                retry_budget=retry_budget,
+                retry_backoff_ms=retry_backoff_ms,
+                allow_side_effects=allow_side_effects,
+            )
         advisory_plan_materialized = True
         advisory_plan_receipt_id = maybe_text(plan_result.get("summary", {}).get("receipt_id"))
     payload = build_agent_entry_payload(
@@ -1057,6 +1073,9 @@ def materialize_agent_entry_gate(
             "agent_advisory_plan_path": str(advisory_plan_file.resolve()),
             "advisory_plan_materialized": advisory_plan_materialized,
             "advisory_plan_receipt_id": advisory_plan_receipt_id,
+            "advisory_plan_source": maybe_text(payload.get("advisory_plan", {}).get("plan_source"))
+            if isinstance(payload.get("advisory_plan"), dict)
+            else "",
         },
     )
     return {
@@ -1073,6 +1092,9 @@ def materialize_agent_entry_gate(
             if isinstance(payload.get("advisory_plan"), dict)
             else False,
             "advisory_plan_materialized": advisory_plan_materialized,
+            "advisory_plan_source": maybe_text(payload.get("advisory_plan", {}).get("plan_source"))
+            if isinstance(payload.get("advisory_plan"), dict)
+            else "",
             "analysis_kind_count": int(payload.get("analysis_surface", {}).get("analysis_kind_count") or 0)
             if isinstance(payload.get("analysis_surface"), dict)
             else 0,

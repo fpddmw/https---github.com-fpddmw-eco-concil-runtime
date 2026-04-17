@@ -1,19 +1,26 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from _workflow_support import (
     kernel_script_path,
     load_json,
     run_kernel,
     run_script,
+    runtime_src_path,
     runtime_path,
     script_path,
     seed_analysis_chain,
     write_json,
 )
+
+RUNTIME_SRC = runtime_src_path()
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
 
 RUN_ID = "run-agent-entry-001"
 ROUND_ID = "round-agent-entry-001"
@@ -220,6 +227,68 @@ class AgentEntryGateTests(unittest.TestCase):
                 state_payload["agent_entry"]["operator"]["return_to_supervisor_command"],
             )
             self.assertEqual("eco_runtime_kernel.py", kernel_script_path().name)
+
+    def test_materialize_agent_entry_gate_prefers_direct_council_advisory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            artifacts = build_raw_artifacts(root)
+            mission_path = build_mission_file(root, artifacts)
+
+            run_script(
+                script_path("eco-scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+                "--orchestration-mode",
+                "openclaw-agent",
+            )
+            seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            from eco_council_runtime.council_objects import store_readiness_opinion_records
+            from eco_council_runtime.kernel.agent_entry import materialize_agent_entry_gate
+
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_promotion": True,
+                            "rationale": "The council has already converged on promotion readiness.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["issue-001"],
+                            "evidence_refs": ["evidence://issue-001"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+
+            with mock.patch("eco_council_runtime.kernel.agent_entry.run_skill") as run_skill_mock:
+                payload = materialize_agent_entry_gate(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    contract_mode="warn",
+                )
+
+            advisory_plan = load_json(runtime_path(run_dir, f"agent_advisory_plan_{ROUND_ID}.json"))
+            run_skill_mock.assert_not_called()
+            self.assertEqual("completed", payload["status"])
+            self.assertTrue(payload["summary"]["advisory_plan_materialized"])
+            self.assertEqual("direct-council-advisory", payload["summary"]["advisory_plan_source"])
+            self.assertEqual("direct-council-advisory", payload["agent_entry"]["advisory_plan"]["plan_source"])
+            self.assertEqual("direct-council-advisory", advisory_plan["plan_source"])
+            self.assertTrue(payload["agent_entry"]["advisory_plan"]["direct_council_queue"])
 
     def test_show_run_state_surfaces_agent_entry_commands_before_gate_materialization(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

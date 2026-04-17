@@ -408,12 +408,18 @@ observation matching 不再是默认主链。
 
 1. `proposal / challenge / readiness opinion / decision trace` contract 已全部定义。
 2. 至少一轮 round 已由 agent proposal 驱动 next actions、probe、board judgement 与 readiness judgement。
-3. heuristic 仍未完全降级为 fallback-only，这一项仍留在后续 batch。
+3. `openclaw-agent` 轮次进入 phase-2 时，controller 与 agent entry 已默认先尝试 `direct-council-advisory` compiler；只有 direct council inputs 不足或 compiler 失败时才回退 `agent-advisory` planner skill，再失败才回退 runtime planner。
+4. `eco-concil-runtime/src/eco_council_runtime/phase2_direct_advisory.py` 已能把 DB 中现成的 `proposal / readiness-opinion / probe` 直接编译成 advisory queue，不再强制经过 planner skill 子进程。
+5. `eco-plan-round-orchestration` 在 `agent-advisory` 模式下，若 DB 中已存在直接 `proposal / readiness-opinion`，现在也可以跳过 `next-actions` 重算，直接生成 `readiness-only` 或 `probe -> readiness` 执行队列，作为 direct compiler 不可用时的 fallback。
+6. controller 状态与 round-controller ledger 事件已显式记录 `plan_source / planning_attempts`，advisory plan 本身也会暴露 `direct_council_queue / next_actions_stage_skipped / council_input_counts`。
+7. heuristic 仍未完全降级为 fallback-only，这一项仍留在后续 batch。
 
 完成标志：
 
 1. 至少一轮 round 由 agent proposal 驱动 next actions 和 readiness judgement。
-2. heuristic 只在 proposal 缺失时兜底。
+2. `openclaw-agent` 轮次的 phase-2 controller 默认执行 advisory 路径，而不是先执行 planner-backed queue。
+3. advisory plan 在存在直接 council inputs 时，不再强制插入 `next-actions` 重算。
+4. heuristic 只在 proposal 缺失时兜底。
 
 ### Batch 6: Runtime kernel 收边界
 
@@ -427,6 +433,13 @@ observation matching 不再是默认主链。
 1. 把 phase policy、routing policy、readiness policy、promotion policy 移到 `policy / workflow` 层。
 2. 清理 kernel 对固定 stage 语义的依赖。
 3. 让 controller 只做 generic execution queue，而不是领域编排器。
+
+当前状态：
+
+1. `controller.py` 已把 `openclaw-agent` 轮次改为 `direct-council-advisory -> agent-advisory -> runtime-planner` 的显式选择链。
+2. `agent_entry.py` 也已接入同一条 direct compiler 优先路径，agent 入口不再先调用 planner skill。
+3. phase-2 controller artifact 已暴露 `plan_source / planning_attempts / agent_advisory_plan_path`，controller 选择链不再是隐式 planner 语义。
+4. `controller.py / phase2_contract.py / investigation_planning.py` 仍明显绑定固定阶段假设，这一块仍是后续收边界的主战场。
 
 完成标志：
 

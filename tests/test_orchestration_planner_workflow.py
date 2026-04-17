@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,10 +9,20 @@ from _workflow_support import (
     investigation_path,
     load_json,
     run_script,
+    runtime_src_path,
     runtime_path,
     script_path,
     seed_analysis_chain,
     write_json,
+)
+
+RUNTIME_SRC = runtime_src_path()
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.council_objects import (  # noqa: E402
+    store_council_proposal_records,
+    store_readiness_opinion_records,
 )
 
 RUN_ID = "run-planner-001"
@@ -140,6 +151,135 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             self.assertEqual("agent-advisory", plan["planning_mode"])
             self.assertEqual("advisory-only", plan["controller_authority"])
             self.assertIn("recommended_skill_sequence", plan["agent_turn_hints"])
+
+    def test_agent_advisory_plan_can_skip_next_actions_from_council_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_promotion": True,
+                            "rationale": "The active controversy has converged enough for promotion review.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["issue-001"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://issue-001"],
+                            "lineage": [],
+                        },
+                        {
+                            "agent_role": "challenger",
+                            "readiness_status": "ready",
+                            "sufficient_for_promotion": True,
+                            "rationale": "No remaining contradiction justifies another investigation round.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["issue-001"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://issue-001"],
+                            "lineage": [],
+                        },
+                    ],
+                },
+            )
+
+            payload = run_script(
+                script_path("eco-plan-round-orchestration"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--planner-mode",
+                "agent-advisory",
+            )
+            plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
+            stage_names = [item["stage_name"] for item in plan["execution_queue"]]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual(["round-readiness"], stage_names)
+            self.assertEqual("promote-candidate", plan["downstream_posture"])
+            self.assertTrue(plan["observed_state"]["direct_council_queue"])
+            self.assertTrue(plan["observed_state"]["next_actions_stage_skipped"])
+            self.assertEqual(2, plan["observed_state"]["council_readiness_opinion_count"])
+            self.assertEqual("ready", plan["observed_state"]["council_readiness_status"])
+            self.assertEqual(
+                2,
+                plan["phase_decision_basis"]["council_input_counts"]["readiness_ready_count"],
+            )
+            self.assertEqual(
+                ["eco-summarize-round-readiness"],
+                plan["agent_turn_hints"]["recommended_skill_sequence"],
+            )
+
+    def test_agent_advisory_plan_can_execute_probe_queue_directly_from_council_proposals(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            store_council_proposal_records(
+                run_dir,
+                proposal_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "proposals": [
+                        {
+                            "proposal_kind": "open-probe",
+                            "action_kind": "resolve-challenge",
+                            "agent_role": "challenger",
+                            "assigned_role": "challenger",
+                            "objective": "Stress-test the contradiction around ticket-001 before any promotion move.",
+                            "rationale": "The council wants contradiction pressure applied before readiness is reconsidered.",
+                            "target_kind": "challenge-ticket",
+                            "target_id": "ticket-001",
+                            "target_hypothesis_id": "hypothesis-001",
+                            "target_claim_id": "claim-001",
+                            "probe_candidate": True,
+                            "controversy_gap": "unresolved-contestation",
+                            "recommended_lane": "mixed-review",
+                            "decision_source": "agent-council",
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://ticket-001"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+
+            payload = run_script(
+                script_path("eco-plan-round-orchestration"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--planner-mode",
+                "agent-advisory",
+            )
+            plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
+            stage_names = [item["stage_name"] for item in plan["execution_queue"]]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual(["falsification-probes", "round-readiness"], stage_names)
+            self.assertTrue(plan["probe_stage_included"])
+            self.assertEqual("hold-investigation-open", plan["downstream_posture"])
+            self.assertTrue(plan["observed_state"]["direct_council_queue"])
+            self.assertTrue(plan["observed_state"]["next_actions_stage_skipped"])
+            self.assertEqual(1, plan["observed_state"]["council_proposal_count"])
+            self.assertEqual(1, plan["observed_state"]["council_proposal_action_count"])
+            self.assertEqual(
+                1,
+                plan["phase_decision_basis"]["signal_counts"]["probe_candidate_actions"],
+            )
+            self.assertEqual("challenger", plan["agent_turn_hints"]["primary_role"])
+            self.assertIn(
+                "probe-candidate-actions",
+                plan["phase_decision_basis"]["probe_stage_reason_codes"],
+            )
 
     def test_ready_round_planner_skips_probe_stage(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -3,12 +3,21 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ..phase2_direct_advisory import materialize_direct_council_advisory_plan
 from .deliberation_plane import load_phase2_control_state, store_promotion_freeze_record
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill, utc_now_iso
 from .gate import apply_promotion_gate
 from .ledger import append_ledger_event
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists, write_json
-from .paths import agent_advisory_plan_path, controller_state_path, ensure_runtime_dirs, orchestration_plan_path, promotion_gate_path
+from .paths import (
+    agent_advisory_plan_path,
+    agent_entry_gate_path,
+    controller_state_path,
+    ensure_runtime_dirs,
+    mission_scaffold_path,
+    orchestration_plan_path,
+    promotion_gate_path,
+)
 from .phase2_contract import expected_output_path as resolve_expected_output_path
 from .phase2_contract import stage_contract, validate_skill_stage, validate_stage_sequence
 from .registry import write_registry
@@ -30,8 +39,11 @@ def unique_texts(values: list[Any]) -> list[str]:
 
 def phase2_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
     return {
+        "agent_advisory_plan_path": str(agent_advisory_plan_path(run_dir, round_id).resolve()),
+        "agent_entry_gate_path": str(agent_entry_gate_path(run_dir, round_id).resolve()),
         "board_summary_path": str((run_dir / "board" / f"board_state_summary_{round_id}.json").resolve()),
         "board_brief_path": str((run_dir / "board" / f"board_brief_{round_id}.md").resolve()),
+        "mission_scaffold_path": str(mission_scaffold_path(run_dir, round_id).resolve()),
         "next_actions_path": str((run_dir / "investigation" / f"next_actions_{round_id}.json").resolve()),
         "probes_path": str((run_dir / "investigation" / f"falsification_probes_{round_id}.json").resolve()),
         "readiness_path": str((run_dir / "reporting" / f"round_readiness_{round_id}.json").resolve()),
@@ -98,6 +110,62 @@ def normalized_controller_planning_mode(value: Any, *, default: str = "planner-b
     return default
 
 
+def planning_source_from_payload(plan_payload: dict[str, Any]) -> str:
+    explicit_source = maybe_text(plan_payload.get("plan_source"))
+    if explicit_source:
+        return explicit_source
+    planning_mode = maybe_text(plan_payload.get("planning_mode"))
+    controller_authority = maybe_text(plan_payload.get("controller_authority"))
+    if planning_mode == "agent-advisory" or controller_authority == "advisory-only":
+        return "agent-advisory"
+    return "runtime-planner"
+
+
+def relative_runtime_path(run_dir: Path, path: Path) -> str:
+    try:
+        return str(path.relative_to(run_dir))
+    except ValueError:
+        return str(path)
+
+
+def agent_orchestration_requested(run_dir: Path, round_id: str) -> bool:
+    mission_payload = load_json_if_exists(mission_scaffold_path(run_dir, round_id)) or {}
+    if maybe_text(mission_payload.get("orchestration_mode")) == "openclaw-agent":
+        return True
+    entry_gate_payload = load_json_if_exists(agent_entry_gate_path(run_dir, round_id)) or {}
+    return maybe_text(entry_gate_payload.get("orchestration_mode")) in {"openclaw-agent", "openclaw-agent-compatible"}
+
+
+def planning_attempt_record(
+    *,
+    source: str,
+    status: str,
+    plan_path: str = "",
+    planning_mode: str = "",
+    controller_authority: str = "",
+    receipt_id: str = "",
+    event_id: str = "",
+    message: str = "",
+) -> dict[str, Any]:
+    return {
+        "recorded_at_utc": utc_now_iso(),
+        "source": source,
+        "status": status,
+        "plan_path": plan_path,
+        "planning_mode": planning_mode,
+        "controller_authority": controller_authority,
+        "receipt_id": receipt_id,
+        "event_id": event_id,
+        "message": message,
+    }
+
+
+def append_planning_attempt(controller_payload: dict[str, Any], attempt: dict[str, Any]) -> None:
+    attempts = controller_payload.setdefault("planning_attempts", [])
+    if isinstance(attempts, list):
+        attempts.append(attempt)
+
+
 def planning_bundle_from_payload(run_dir: Path, round_id: str, plan_path: str, plan_payload: dict[str, Any]) -> dict[str, Any]:
     explicit_execution_queue = normalized_planned_steps(plan_payload.get("execution_queue"))
     explicit_post_gate_steps = normalized_planned_steps(plan_payload.get("post_gate_steps"))
@@ -112,7 +180,7 @@ def planning_bundle_from_payload(run_dir: Path, round_id: str, plan_path: str, p
         ),
         "planner_skill_name": PLANNER_SKILL_NAME,
         "controller_authority": maybe_text(plan_payload.get("controller_authority")) or "queue-owner",
-        "plan_source": "runtime-planner",
+        "plan_source": planning_source_from_payload(plan_payload),
         "probe_stage_included": bool(plan_payload.get("probe_stage_included")),
         "assigned_role_hints": plan_payload.get("assigned_role_hints", []) if isinstance(plan_payload.get("assigned_role_hints"), list) else [],
         "execution_queue": explicit_execution_queue,
@@ -149,7 +217,7 @@ def advisory_planning_bundle(run_dir: Path, round_id: str) -> dict[str, Any]:
     planning = planning_bundle_from_payload(run_dir, round_id, str(advisory_path.resolve()), advisory_payload)
     planning["planning_mode"] = maybe_text(advisory_payload.get("planning_mode")) or "agent-advisory"
     planning["controller_authority"] = maybe_text(advisory_payload.get("controller_authority")) or "advisory-only"
-    planning["plan_source"] = "agent-advisory"
+    planning["plan_source"] = maybe_text(advisory_payload.get("plan_source")) or "agent-advisory"
     return planning
 
 
@@ -290,7 +358,7 @@ def controller_planning_state(planning: dict[str, Any], blueprints: list[dict[st
         "planning_mode": planning.get("planning_mode", ""),
         "planner_skill_name": planning.get("planner_skill_name", ""),
         "controller_authority": planning.get("controller_authority", ""),
-        "plan_source": planning.get("plan_source", ""),
+        "plan_source": maybe_text(planning.get("plan_source")) or planning_source_from_payload(planning),
         "probe_stage_included": planning.get("probe_stage_included", False),
         "assigned_role_hints": planning.get("assigned_role_hints", []),
         "planned_skill_count": len(execution_queue) + len(post_gate_steps),
@@ -344,10 +412,25 @@ def adopted_planner_stage_summary(
         "payload_status": maybe_text(planning.get("planning_status")) or "ready-for-controller",
         "planning_mode": maybe_text(planning.get("planning_mode")),
         "controller_authority": maybe_text(planning.get("controller_authority")),
-        "plan_source": maybe_text(planning.get("plan_source")),
+        "plan_source": maybe_text(planning.get("plan_source")) or planning_source_from_payload(planning),
         "run_id": run_id,
         "round_id": round_id,
     }
+
+
+def planner_stage_summary_from_result(
+    result: dict[str, Any],
+    blueprint: dict[str, Any],
+    planning: dict[str, Any],
+) -> dict[str, Any]:
+    summary = stage_summary_from_result("orchestration-planner", result, blueprint)
+    existing_canonical_ids = summary.get("canonical_ids", []) if isinstance(summary.get("canonical_ids"), list) else []
+    summary["artifact_path"] = maybe_text(planning.get("plan_path")) or maybe_text(summary.get("artifact_path"))
+    summary["canonical_ids"] = unique_texts(existing_canonical_ids + [maybe_text(planning.get("plan_id"))])
+    summary["planning_mode"] = maybe_text(planning.get("planning_mode"))
+    summary["controller_authority"] = maybe_text(planning.get("controller_authority"))
+    summary["plan_source"] = maybe_text(planning.get("plan_source")) or planning_source_from_payload(planning)
+    return summary
 
 
 def merge_existing_steps(blueprints: list[dict[str, Any]], existing_steps: Any) -> list[dict[str, Any]]:
@@ -526,6 +609,7 @@ def base_controller_payload(
         "recommended_next_skills": [],
         "gate_reasons": [],
         "planning": {},
+        "planning_attempts": [],
         "stage_contracts": {},
         "steps": [],
         "artifacts": artifacts,
@@ -542,6 +626,9 @@ def controller_result_payload(controller_payload: dict[str, Any], gate_payload: 
             "round_id": controller_payload.get("round_id"),
             "controller_path": artifacts.get("controller_state_path", ""),
             "planning_mode": controller_payload.get("planning_mode"),
+            "plan_source": controller_payload.get("planning", {}).get("plan_source", "")
+            if isinstance(controller_payload.get("planning"), dict)
+            else "",
             "plan_path": controller_payload.get("planning", {}).get("plan_path", "")
             if isinstance(controller_payload.get("planning"), dict)
             else "",
@@ -579,8 +666,12 @@ def round_controller_event(
         "contract_mode": contract_mode,
         "execution_policy": controller_payload.get("execution_policy", {}),
         "planning_mode": controller_payload.get("planning_mode"),
+        "plan_source": planning.get("plan_source", ""),
         "plan_id": planning.get("plan_id", ""),
         "plan_path": planning.get("plan_path", ""),
+        "planning_attempt_count": len(controller_payload.get("planning_attempts", []))
+        if isinstance(controller_payload.get("planning_attempts"), list)
+        else 0,
         "readiness_status": controller_payload.get("readiness_status"),
         "gate_status": controller_payload.get("gate_status"),
         "promotion_status": controller_payload.get("promotion_status"),
@@ -744,6 +835,7 @@ def run_phase2_round_with_contract_mode(
             ensure_executable_planning(advisory_planning)
             planning = advisory_planning
             blueprints = stage_blueprints(planning, artifacts)
+            adopted_plan_source = maybe_text(planning.get("plan_source")) or "agent-advisory"
             controller_payload["planning_mode"] = maybe_text(planning.get("planning_mode")) or "agent-advisory"
             controller_payload["planning"] = controller_planning_state(planning, blueprints)
             controller_payload["stage_contracts"] = stage_contracts_from_blueprints(blueprints)
@@ -758,8 +850,205 @@ def run_phase2_round_with_contract_mode(
                 started_at=adopted_started_at,
                 completed_at=adopted_completed_at,
             )
+            append_planning_attempt(
+                controller_payload,
+                planning_attempt_record(
+                    source=adopted_plan_source,
+                    status="adopted",
+                    plan_path=maybe_text(planning.get("plan_path")),
+                    planning_mode=maybe_text(planning.get("planning_mode")),
+                    controller_authority=maybe_text(planning.get("controller_authority")),
+                    message=(
+                        "Controller adopted a pre-materialized direct council advisory plan."
+                        if adopted_plan_source == "direct-council-advisory"
+                        else "Controller adopted a pre-materialized advisory plan."
+                    ),
+                ),
+            )
             persist_controller_state(run_dir, round_id, controller_payload)
             planner_stage_ran = True
+
+    if not planning and agent_orchestration_requested(run_dir, round_id):
+        advisory_path = agent_advisory_plan_path(run_dir, round_id)
+        planner_blueprint = stage_blueprint(
+            "orchestration-planner",
+            skill_name=PLANNER_SKILL_NAME,
+            artifacts=artifacts,
+            explicit_output_path=str(advisory_path.resolve()),
+        )
+        controller_payload["steps"] = merge_existing_steps([planner_blueprint], controller_payload.get("steps"))
+        controller_payload["stage_contracts"] = stage_contracts_from_blueprints([planner_blueprint])
+        controller_payload["planning_mode"] = "planner-pending"
+        controller_payload["controller_status"] = "running"
+        planner_index = step_index(controller_payload["steps"], "orchestration-planner")
+        controller_payload["steps"][planner_index]["status"] = "running"
+        controller_payload["steps"][planner_index]["started_at_utc"] = started_at
+        persist_controller_state(run_dir, round_id, controller_payload)
+        try:
+            direct_advisory_result = materialize_direct_council_advisory_plan(
+                run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                output_path=relative_runtime_path(run_dir, advisory_path),
+                contract_mode=contract_mode,
+            )
+        except Exception as exc:
+            append_planning_attempt(
+                controller_payload,
+                planning_attempt_record(
+                    source="direct-council-advisory",
+                    status="failed",
+                    plan_path=str(advisory_path.resolve()),
+                    message=str(exc),
+                ),
+            )
+            persist_controller_state(run_dir, round_id, controller_payload)
+        else:
+            advisory_planning = advisory_planning_bundle(run_dir, round_id)
+            if direct_advisory_result and advisory_planning:
+                ensure_executable_planning(advisory_planning)
+                planning = advisory_planning
+                blueprints = stage_blueprints(planning, artifacts)
+                controller_payload["planning_mode"] = maybe_text(planning.get("planning_mode")) or "agent-advisory"
+                controller_payload["planning"] = controller_planning_state(planning, blueprints)
+                controller_payload["stage_contracts"] = stage_contracts_from_blueprints(blueprints)
+                controller_payload["steps"] = merge_existing_steps(blueprints, controller_payload.get("steps"))
+                controller_payload["steps"][step_index(controller_payload["steps"], "orchestration-planner")] = planner_stage_summary_from_result(
+                    direct_advisory_result,
+                    blueprints[0],
+                    planning,
+                )
+                append_planning_attempt(
+                    controller_payload,
+                    planning_attempt_record(
+                        source=maybe_text(planning.get("plan_source")) or "direct-council-advisory",
+                        status="materialized",
+                        plan_path=maybe_text(planning.get("plan_path")),
+                        planning_mode=maybe_text(planning.get("planning_mode")),
+                        controller_authority=maybe_text(planning.get("controller_authority")),
+                        receipt_id=maybe_text(direct_advisory_result.get("summary", {}).get("receipt_id"))
+                        if isinstance(direct_advisory_result.get("summary"), dict)
+                        else "",
+                        event_id=maybe_text(direct_advisory_result.get("summary", {}).get("event_id"))
+                        if isinstance(direct_advisory_result.get("summary"), dict)
+                        else "",
+                        message="Controller compiled and selected a direct council advisory plan.",
+                    ),
+                )
+                persist_controller_state(run_dir, round_id, controller_payload)
+                planner_stage_ran = True
+            elif direct_advisory_result:
+                append_planning_attempt(
+                    controller_payload,
+                    planning_attempt_record(
+                        source="direct-council-advisory",
+                        status="failed",
+                        plan_path=str(advisory_path.resolve()),
+                        message="Direct council advisory compiler completed but did not produce a usable execution_queue.",
+                    ),
+                )
+                persist_controller_state(run_dir, round_id, controller_payload)
+            else:
+                append_planning_attempt(
+                    controller_payload,
+                    planning_attempt_record(
+                        source="direct-council-advisory",
+                        status="unavailable",
+                        plan_path=str(advisory_path.resolve()),
+                        message="Direct council advisory compiler found no usable proposal or readiness inputs.",
+                    ),
+                )
+                persist_controller_state(run_dir, round_id, controller_payload)
+
+        if not planning:
+            try:
+                advisory_result = run_skill(
+                    run_dir,
+                    run_id=run_id,
+                    round_id=round_id,
+                    skill_name=PLANNER_SKILL_NAME,
+                    skill_args=[
+                        "--planner-mode",
+                        "agent-advisory",
+                        "--output-path",
+                        relative_runtime_path(run_dir, advisory_path),
+                    ],
+                    contract_mode=contract_mode,
+                    **execution_kwargs,
+                )
+                advisory_planning = advisory_planning_bundle(run_dir, round_id)
+                if advisory_planning:
+                    ensure_executable_planning(advisory_planning)
+                    planning = advisory_planning
+                    blueprints = stage_blueprints(planning, artifacts)
+                    controller_payload["planning_mode"] = maybe_text(planning.get("planning_mode")) or "agent-advisory"
+                    controller_payload["planning"] = controller_planning_state(planning, blueprints)
+                    controller_payload["stage_contracts"] = stage_contracts_from_blueprints(blueprints)
+                    controller_payload["steps"] = merge_existing_steps(blueprints, controller_payload.get("steps"))
+                    controller_payload["steps"][step_index(controller_payload["steps"], "orchestration-planner")] = planner_stage_summary_from_result(
+                        advisory_result,
+                        blueprints[0],
+                        planning,
+                    )
+                    append_planning_attempt(
+                        controller_payload,
+                        planning_attempt_record(
+                            source="agent-advisory",
+                            status="materialized",
+                            plan_path=maybe_text(planning.get("plan_path")),
+                            planning_mode=maybe_text(planning.get("planning_mode")),
+                            controller_authority=maybe_text(planning.get("controller_authority")),
+                            receipt_id=maybe_text(advisory_result.get("summary", {}).get("receipt_id"))
+                            if isinstance(advisory_result.get("summary"), dict)
+                            else "",
+                            event_id=maybe_text(advisory_result.get("summary", {}).get("event_id"))
+                            if isinstance(advisory_result.get("summary"), dict)
+                            else "",
+                            message="Controller materialized and selected an agent-advisory plan.",
+                        ),
+                    )
+                    persist_controller_state(run_dir, round_id, controller_payload)
+                    planner_stage_ran = True
+                else:
+                    controller_payload["steps"][planner_index].update(
+                        {
+                            "status": "pending",
+                            "event_id": "",
+                            "receipt_id": "",
+                            "started_at_utc": "",
+                            "completed_at_utc": "",
+                        }
+                    )
+                    append_planning_attempt(
+                        controller_payload,
+                        planning_attempt_record(
+                            source="agent-advisory",
+                            status="failed",
+                            plan_path=str(advisory_path.resolve()),
+                            message="Advisory planning completed but did not produce a usable execution_queue.",
+                        ),
+                    )
+                    persist_controller_state(run_dir, round_id, controller_payload)
+            except SkillExecutionError as exc:
+                controller_payload["steps"][planner_index].update(
+                    {
+                        "status": "pending",
+                        "event_id": "",
+                        "receipt_id": "",
+                        "started_at_utc": "",
+                        "completed_at_utc": "",
+                    }
+                )
+                append_planning_attempt(
+                    controller_payload,
+                    planning_attempt_record(
+                        source="agent-advisory",
+                        status="failed",
+                        plan_path=str(advisory_path.resolve()),
+                        message="Advisory planning completed but did not produce a usable execution_queue.",
+                    ),
+                )
+                persist_controller_state(run_dir, round_id, controller_payload)
 
     if not planning:
         planner_blueprint = stage_blueprint(
@@ -768,7 +1057,7 @@ def run_phase2_round_with_contract_mode(
             artifacts=artifacts,
             explicit_output_path=artifacts.get("orchestration_plan_path", ""),
         )
-        controller_payload["steps"] = merge_existing_steps([planner_blueprint], [])
+        controller_payload["steps"] = merge_existing_steps([planner_blueprint], controller_payload.get("steps"))
         controller_payload["stage_contracts"] = stage_contracts_from_blueprints([planner_blueprint])
         controller_payload["planning_mode"] = "planner-pending"
         controller_payload["controller_status"] = "running"
@@ -788,6 +1077,15 @@ def run_phase2_round_with_contract_mode(
             )
             planner_stage_ran = True
         except SkillExecutionError as exc:
+            append_planning_attempt(
+                controller_payload,
+                planning_attempt_record(
+                    source="runtime-planner",
+                    status="failed",
+                    plan_path=artifacts.get("orchestration_plan_path", ""),
+                    message=exc.payload.get("message", str(exc)),
+                ),
+            )
             controller_payload["controller_status"] = "failed"
             controller_payload["steps"][planner_index].update(
                 {
@@ -830,10 +1128,27 @@ def run_phase2_round_with_contract_mode(
         controller_payload["planning"] = controller_planning_state(planning, blueprints)
         controller_payload["stage_contracts"] = stage_contracts_from_blueprints(blueprints)
         controller_payload["steps"] = merge_existing_steps(blueprints, controller_payload.get("steps"))
-        controller_payload["steps"][step_index(controller_payload["steps"], "orchestration-planner")] = stage_summary_from_result(
-            "orchestration-planner",
+        controller_payload["steps"][step_index(controller_payload["steps"], "orchestration-planner")] = planner_stage_summary_from_result(
             planner_result,
             blueprints[0],
+            planning,
+        )
+        append_planning_attempt(
+            controller_payload,
+            planning_attempt_record(
+                source="runtime-planner",
+                status="materialized",
+                plan_path=maybe_text(planning.get("plan_path")),
+                planning_mode=maybe_text(planning.get("planning_mode")),
+                controller_authority=maybe_text(planning.get("controller_authority")),
+                receipt_id=maybe_text(planner_result.get("summary", {}).get("receipt_id"))
+                if isinstance(planner_result.get("summary"), dict)
+                else "",
+                event_id=maybe_text(planner_result.get("summary", {}).get("event_id"))
+                if isinstance(planner_result.get("summary"), dict)
+                else "",
+                message="Controller fell back to the runtime planner queue.",
+            ),
         )
         persist_controller_state(run_dir, round_id, controller_payload)
 

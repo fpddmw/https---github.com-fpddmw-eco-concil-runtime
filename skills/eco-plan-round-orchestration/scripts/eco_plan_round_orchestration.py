@@ -18,12 +18,34 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.deliberation_plane import load_round_snapshot  # noqa: E402
+from eco_council_runtime.council_objects import query_council_objects  # noqa: E402
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     load_d1_shared_context,
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
     load_round_readiness_wrapper,
 )
+
+
+NON_EXECUTION_PROPOSAL_KINDS = {
+    "claim-board-task",
+    "close-challenge",
+    "create-board-task",
+    "create-hypothesis",
+    "dismiss-challenge",
+    "open-board-task",
+    "open-challenge",
+}
+NON_EXECUTION_ACTION_KINDS = {
+    "claim-board-task",
+    "close-challenge-ticket",
+    "create-board-task",
+    "create-hypothesis",
+    "dismiss-challenge",
+    "dismiss-challenge-ticket",
+    "open-board-task",
+    "open-challenge-ticket",
+}
 
 
 def normalize_space(value: Any) -> str:
@@ -55,6 +77,10 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -202,11 +228,222 @@ def top_actions(next_actions: dict[str, Any]) -> list[dict[str, str]]:
     return rows
 
 
+def top_action_rows_from_actions(actions: list[dict[str, Any]]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for action in actions[:3]:
+        if not isinstance(action, dict):
+            continue
+        rows.append(
+            {
+                "action_id": maybe_text(action.get("action_id")),
+                "action_kind": maybe_text(action.get("action_kind")),
+                "assigned_role": maybe_text(action.get("assigned_role")),
+                "priority": maybe_text(action.get("priority")),
+                "objective": maybe_text(action.get("objective")),
+            }
+        )
+    return rows
+
+
 def safe_int(value: Any) -> int:
     try:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def proposal_target(proposal: dict[str, Any]) -> dict[str, Any]:
+    target = proposal.get("target", {})
+    if isinstance(target, dict) and target:
+        return dict(target)
+    target_kind = maybe_text(proposal.get("target_kind"))
+    target_id = maybe_text(proposal.get("target_id"))
+    resolved: dict[str, Any] = {}
+    if target_kind:
+        resolved["object_kind"] = target_kind
+    if target_id:
+        resolved["object_id"] = target_id
+    if maybe_text(proposal.get("target_claim_id")):
+        resolved["claim_id"] = maybe_text(proposal.get("target_claim_id"))
+    if maybe_text(proposal.get("target_hypothesis_id")):
+        resolved["hypothesis_id"] = maybe_text(proposal.get("target_hypothesis_id"))
+    if maybe_text(proposal.get("target_ticket_id")):
+        resolved["ticket_id"] = maybe_text(proposal.get("target_ticket_id"))
+    if target_kind in {"claim", "claim-candidate", "claim-cluster"} and target_id:
+        resolved.setdefault("claim_id", target_id)
+    if target_kind in {"hypothesis", "hypothesis-card"} and target_id:
+        resolved.setdefault("hypothesis_id", target_id)
+    if target_kind in {"challenge-ticket", "ticket"} and target_id:
+        resolved.setdefault("ticket_id", target_id)
+    if target_kind == "issue-cluster" and target_id:
+        resolved.setdefault("map_issue_id", target_id)
+    return resolved
+
+
+def proposal_drives_phase2_action_queue(proposal: dict[str, Any]) -> bool:
+    proposal_kind = maybe_text(proposal.get("proposal_kind"))
+    action_kind = (
+        maybe_text(proposal.get("action_kind"))
+        or maybe_text(proposal.get("proposed_action_kind"))
+        or proposal_kind
+    )
+    if proposal_kind in NON_EXECUTION_PROPOSAL_KINDS or action_kind in NON_EXECUTION_ACTION_KINDS:
+        return False
+    target_kind = maybe_text(proposal.get("target_kind"))
+    return bool(action_kind or proposal_kind) and (
+        bool(proposal.get("probe_candidate"))
+        or bool(proposal.get("readiness_blocker"))
+        or bool(maybe_text(proposal.get("recommended_lane")))
+        or bool(maybe_text(proposal.get("controversy_gap")))
+        or target_kind in {"issue-cluster", "claim", "claim-candidate", "claim-cluster", "challenge-ticket", "ticket", "round"}
+    )
+
+
+def action_from_council_proposal(proposal: dict[str, Any]) -> dict[str, Any]:
+    proposal_id = maybe_text(proposal.get("proposal_id"))
+    target = proposal_target(proposal)
+    response_to_ids = list_items(proposal.get("response_to_ids"))
+    decision_source = maybe_text(proposal.get("decision_source")) or "agent-council"
+    action_kind = (
+        maybe_text(proposal.get("action_kind"))
+        or maybe_text(proposal.get("proposed_action_kind"))
+        or maybe_text(proposal.get("proposal_kind"))
+        or "follow-council-proposal"
+    )
+    objective = (
+        maybe_text(proposal.get("objective"))
+        or maybe_text(proposal.get("summary"))
+        or maybe_text(proposal.get("rationale"))
+        or f"Execute council proposal {proposal_id or 'for this round'}."
+    )
+    reason = (
+        maybe_text(proposal.get("rationale"))
+        or maybe_text(proposal.get("summary"))
+        or f"Council proposal {proposal_id or '<missing>'} requested this action."
+    )
+    confidence = maybe_number(proposal.get("confidence"))
+    pressure_score = 0.95 if confidence is None else max(0.55, min(1.0, float(confidence)))
+    return {
+        "action_id": (
+            maybe_text(proposal.get("proposed_action_id"))
+            or maybe_text(proposal.get("action_id"))
+            or "action-"
+            + stable_hash(
+                "council-proposal-action",
+                proposal_id,
+                action_kind,
+                maybe_text(proposal.get("agent_role")),
+                maybe_text(target.get("object_id")),
+                maybe_text(target.get("claim_id")),
+                maybe_text(target.get("hypothesis_id")),
+                maybe_text(target.get("ticket_id")),
+            )[:12]
+        ),
+        "action_kind": action_kind,
+        "priority": maybe_text(proposal.get("priority")) or "high",
+        "assigned_role": maybe_text(proposal.get("assigned_role")) or maybe_text(proposal.get("agent_role")) or "moderator",
+        "objective": objective,
+        "reason": reason,
+        "source_ids": unique_texts([proposal_id, maybe_text(proposal.get("target_id")), *response_to_ids]),
+        "target": target,
+        "controversy_gap": maybe_text(proposal.get("controversy_gap")),
+        "recommended_lane": maybe_text(proposal.get("recommended_lane")),
+        "expected_outcome": (
+            maybe_text(proposal.get("expected_outcome"))
+            or maybe_text(proposal.get("desired_outcome"))
+            or "Execute the council-proposed next step."
+        ),
+        "evidence_refs": unique_texts(list_items(proposal.get("evidence_refs"))),
+        "probe_candidate": bool(proposal.get("probe_candidate"))
+        or action_kind in {"resolve-challenge", "resolve-contradiction", "advance-empirical-verification", "clarify-verification-route", "open-probe"},
+        "confidence": confidence,
+        "pressure_score": pressure_score,
+        "agenda_source": "agent-proposal",
+        "decision_source": decision_source,
+        "lineage": unique_texts([proposal_id, *response_to_ids, *list_items(proposal.get("lineage"))]),
+    }
+
+
+def load_council_proposals(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    payload = query_council_objects(
+        run_dir,
+        object_kind="proposal",
+        run_id=run_id,
+        round_id=round_id,
+        limit=200,
+    )
+    proposals = payload.get("objects", []) if isinstance(payload.get("objects"), list) else []
+    return [
+        proposal
+        for proposal in proposals
+        if isinstance(proposal, dict)
+        and maybe_text(proposal.get("status")) not in {"rejected", "withdrawn", "closed"}
+    ]
+
+
+def council_proposal_actions(proposals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        action_from_council_proposal(proposal)
+        for proposal in proposals
+        if proposal_drives_phase2_action_queue(proposal)
+    ]
+
+
+def load_council_readiness_opinions(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    payload = query_council_objects(
+        run_dir,
+        object_kind="readiness-opinion",
+        run_id=run_id,
+        round_id=round_id,
+        limit=200,
+    )
+    opinions = payload.get("objects", []) if isinstance(payload.get("objects"), list) else []
+    return [
+        opinion
+        for opinion in opinions
+        if isinstance(opinion, dict)
+        and maybe_text(opinion.get("opinion_status")) not in {"withdrawn", "retracted"}
+    ]
+
+
+def readiness_bucket(opinion: dict[str, Any]) -> str:
+    readiness_value = maybe_text(opinion.get("readiness_status"))
+    if bool(opinion.get("sufficient_for_promotion")) or readiness_value in {"ready", "ready-for-promotion", "promote"}:
+        return "ready"
+    if readiness_value in {"blocked", "reject", "rejected"}:
+        return "blocked"
+    return "needs-more-data"
+
+
+def aggregate_council_readiness_opinions(opinions: list[dict[str, Any]]) -> dict[str, Any]:
+    ready_opinions = [opinion for opinion in opinions if readiness_bucket(opinion) == "ready"]
+    blocked_opinions = [opinion for opinion in opinions if readiness_bucket(opinion) == "blocked"]
+    needs_more_data_opinions = [opinion for opinion in opinions if readiness_bucket(opinion) == "needs-more-data"]
+    if ready_opinions and not blocked_opinions and not needs_more_data_opinions:
+        readiness_value = "ready"
+    elif blocked_opinions and not ready_opinions:
+        readiness_value = "blocked"
+    else:
+        readiness_value = "needs-more-data"
+    return {
+        "readiness_status": readiness_value,
+        "opinion_count": len(opinions),
+        "opinion_status_counts": {
+            "ready": len(ready_opinions),
+            "blocked": len(blocked_opinions),
+            "needs-more-data": len(needs_more_data_opinions),
+        },
+    }
 
 
 def summarize_counts(items: list[dict[str, Any]], *, field_name: str) -> dict[str, int]:
@@ -253,6 +490,8 @@ def planning_signal_counts(
     probes: dict[str, Any],
     readiness: dict[str, Any],
     shared_context: dict[str, Any],
+    proposal_actions: list[dict[str, Any]],
+    council_readiness_summary: dict[str, Any],
 ) -> dict[str, Any]:
     agenda_counts = normalized_counts(next_actions, "agenda_counts")
     if not agenda_counts:
@@ -260,10 +499,16 @@ def planning_signal_counts(
     if not agenda_counts:
         agenda_counts = normalized_counts(shared_context, "agenda_counts")
 
-    controversy_gap_counts = summarize_counts(
-        next_actions.get("ranked_actions", [])
+    action_rows = (
+        proposal_actions
+        if proposal_actions
+        else next_actions.get("ranked_actions", [])
         if isinstance(next_actions.get("ranked_actions"), list)
-        else [],
+        else []
+    )
+
+    controversy_gap_counts = summarize_counts(
+        action_rows,
         field_name="controversy_gap",
     )
     if not controversy_gap_counts:
@@ -286,14 +531,9 @@ def planning_signal_counts(
     if not probe_type_counts:
         probe_type_counts = normalized_counts(readiness, "probe_type_counts")
 
-    ranked_actions = (
-        next_actions.get("ranked_actions", [])
-        if isinstance(next_actions.get("ranked_actions"), list)
-        else []
-    )
     non_promotion_actions = [
         item
-        for item in ranked_actions
+        for item in action_rows
         if isinstance(item, dict)
         and maybe_text(item.get("action_kind")) != "prepare-promotion"
     ]
@@ -348,7 +588,10 @@ def planning_signal_counts(
             counts.get("hypotheses_low_confidence")
         ),
         "board_active_hypotheses": safe_int(counts.get("hypotheses_active")),
-        "readiness_status": maybe_text(readiness.get("readiness_status")),
+        "readiness_status": (
+            maybe_text(readiness.get("readiness_status"))
+            or maybe_text(council_readiness_summary.get("readiness_status"))
+        ),
     }
 
 
@@ -358,6 +601,8 @@ def probe_stage_decision(
     probes: dict[str, Any],
     readiness: dict[str, Any],
     shared_context: dict[str, Any],
+    proposal_actions: list[dict[str, Any]],
+    council_readiness_summary: dict[str, Any],
 ) -> tuple[bool, list[str], dict[str, Any]]:
     signal_counts = planning_signal_counts(
         snapshot,
@@ -365,6 +610,8 @@ def probe_stage_decision(
         probes,
         readiness,
         shared_context,
+        proposal_actions,
+        council_readiness_summary,
     )
     reason_codes: list[str] = []
     if signal_counts["open_probe_count"] > 0:
@@ -492,10 +739,12 @@ def stop_conditions(include_probe: bool) -> list[dict[str, str]]:
 
 def fallback_path(
     snapshot: dict[str, Any],
-    next_actions: dict[str, Any],
+    action_rows: list[dict[str, Any]],
     posture: str,
     probe_reason_codes: list[str],
     signal_counts: dict[str, Any],
+    *,
+    direct_council_queue: bool,
 ) -> list[dict[str, Any]]:
     counts = snapshot.get("counts", {}) if isinstance(snapshot.get("counts"), dict) else {}
     fallback_rows: list[dict[str, Any]] = []
@@ -504,7 +753,11 @@ def fallback_path(
             {
                 "when": "Open challenge tickets remain after controller execution.",
                 "reason": "Challenge objects still need explicit closure or a stronger board note.",
-                "suggested_next_skills": ["eco-post-board-note", "eco-close-challenge-ticket", "eco-propose-next-actions"],
+                "suggested_next_skills": (
+                    ["eco-post-board-note", "eco-close-challenge-ticket"]
+                    if direct_council_queue
+                    else ["eco-post-board-note", "eco-close-challenge-ticket", "eco-propose-next-actions"]
+                ),
             }
         )
     if probe_reason_codes:
@@ -539,12 +792,16 @@ def fallback_path(
             }
         )
     else:
-        top_rows = top_actions(next_actions)
+        top_rows = top_action_rows_from_actions(action_rows)
         fallback_rows.append(
             {
                 "when": "Gate freezes the round after readiness review.",
                 "reason": top_rows[0]["objective"] if top_rows else "The board still carries unresolved investigation work.",
-                "suggested_next_skills": ["eco-propose-next-actions", "eco-open-falsification-probe", "eco-post-board-note"],
+                "suggested_next_skills": (
+                    ["eco-open-falsification-probe", "eco-post-board-note"]
+                    if direct_council_queue
+                    else ["eco-propose-next-actions", "eco-open-falsification-probe", "eco-post-board-note"]
+                ),
             }
         )
     deduped: list[dict[str, Any]] = []
@@ -622,6 +879,22 @@ def plan_round_orchestration_skill(
         if isinstance(readiness_context.get("payload"), dict)
         else {}
     )
+    council_proposals = load_council_proposals(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    proposal_actions = council_proposal_actions(council_proposals)
+    council_readiness_opinions = load_council_readiness_opinions(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    council_readiness_summary = (
+        aggregate_council_readiness_opinions(council_readiness_opinions)
+        if council_readiness_opinions
+        else {}
+    )
     brief_text = load_text_if_exists(board_brief_file)
     probes_context = load_falsification_probe_wrapper(
         run_dir_path,
@@ -655,23 +928,41 @@ def plan_round_orchestration_skill(
         probes,
         readiness,
         shared_context,
+        proposal_actions,
+        council_readiness_summary,
     )
     posture, posture_reason_codes = downstream_posture(
         signal_counts,
         probe_reason_codes,
     )
-    top_action_rows = top_actions(next_actions)
+    effective_actions = (
+        proposal_actions
+        if proposal_actions
+        else next_actions.get("ranked_actions", [])
+        if isinstance(next_actions.get("ranked_actions"), list)
+        else []
+    )
+    top_action_rows = (
+        top_action_rows_from_actions(effective_actions)
+        if effective_actions
+        else top_actions(next_actions)
+    )
     primary_action_role = top_action_rows[0]["assigned_role"] if top_action_rows else "moderator"
+    direct_council_queue = planner_mode == "agent-advisory" and bool(
+        proposal_actions or council_readiness_opinions
+    )
 
-    execution_queue = [
-        step_entry(
-            "next-actions",
-            "eco-propose-next-actions",
-            "Re-rank investigation actions directly from shared board state and controversy agenda context.",
-            primary_action_role or "moderator",
-            next_actions_file,
-        ),
-    ]
+    execution_queue: list[dict[str, Any]] = []
+    if not direct_council_queue:
+        execution_queue.append(
+            step_entry(
+                "next-actions",
+                "eco-propose-next-actions",
+                "Re-rank investigation actions directly from shared board state and controversy agenda context.",
+                primary_action_role or "moderator",
+                next_actions_file,
+            )
+        )
     if probe_stage_included:
         execution_queue.append(
             step_entry(
@@ -686,7 +977,11 @@ def plan_round_orchestration_skill(
         step_entry(
             "round-readiness",
             "eco-summarize-round-readiness",
-            "Re-evaluate round readiness from shared board state, action, and probe artifacts.",
+            (
+                "Re-evaluate round readiness directly from council readiness opinions and governed probe state."
+                if direct_council_queue
+                else "Re-evaluate round readiness from shared board state, action, and probe artifacts."
+            ),
             "moderator",
             readiness_file,
         )
@@ -721,6 +1016,22 @@ def plan_round_orchestration_skill(
     phase_decision_basis = {
         "probe_stage_reason_codes": probe_reason_codes,
         "posture_reason_codes": posture_reason_codes,
+        "council_input_counts": {
+            "proposal_count": len(council_proposals),
+            "proposal_action_count": len(proposal_actions),
+            "readiness_opinion_count": len(council_readiness_opinions),
+            "readiness_ready_count": safe_int(council_readiness_summary.get("opinion_status_counts", {}).get("ready"))
+            if isinstance(council_readiness_summary.get("opinion_status_counts"), dict)
+            else 0,
+            "readiness_blocked_count": safe_int(council_readiness_summary.get("opinion_status_counts", {}).get("blocked"))
+            if isinstance(council_readiness_summary.get("opinion_status_counts"), dict)
+            else 0,
+            "readiness_needs_more_data_count": safe_int(
+                council_readiness_summary.get("opinion_status_counts", {}).get("needs-more-data")
+            )
+            if isinstance(council_readiness_summary.get("opinion_status_counts"), dict)
+            else 0,
+        },
         "agenda_counts": signal_counts.get("agenda_counts", {}),
         "controversy_gap_counts": signal_counts.get("controversy_gap_counts", {}),
         "probe_type_counts": signal_counts.get("probe_type_counts", {}),
@@ -741,10 +1052,11 @@ def plan_round_orchestration_skill(
     }
     fallback_rows = fallback_path(
         snapshot,
-        next_actions,
+        effective_actions,
         posture,
         probe_reason_codes,
         signal_counts,
+        direct_council_queue=direct_council_queue,
     )
     plan_id = "orchestration-plan-" + stable_hash(run_id, round_id, posture, *(step["skill_name"] for step in execution_queue))[:12]
     planning_notes = [
@@ -752,6 +1064,10 @@ def plan_round_orchestration_skill(
         "Probe materialization is decided from agenda artifacts first; direct board heuristics only remain as a compatibility fallback when those artifacts are absent.",
         "Board summary and board brief are treated as derived exports rather than controller prerequisites.",
     ]
+    if direct_council_queue:
+        planning_notes.append(
+            "Agent-advisory mode found direct council proposals or readiness opinions, so the advisory queue skips a mandatory next-actions recomputation."
+        )
     if brief_text:
         planning_notes.append(f"Board brief context: {maybe_text(brief_text)[:180]}")
     plan_payload = {
@@ -778,16 +1094,30 @@ def plan_round_orchestration_skill(
             "board_summary_present": isinstance(board_summary, dict),
             "board_brief_present": bool(brief_text),
             "board_exports_are_derived": True,
+            "direct_council_queue": direct_council_queue,
+            "next_actions_stage_skipped": direct_council_queue,
+            "council_proposal_count": len(council_proposals),
+            "council_proposal_action_count": len(proposal_actions),
+            "council_readiness_opinion_count": len(council_readiness_opinions),
+            "council_readiness_status": maybe_text(council_readiness_summary.get("readiness_status")),
             "next_actions_present": isinstance(next_actions, dict) and bool(next_actions),
             "probes_present": isinstance(probes, dict) and bool(probes),
-            "next_actions_source": maybe_text(next_actions_context.get("source")),
+            "next_actions_source": (
+                "council-proposals-direct"
+                if direct_council_queue and proposal_actions and not next_actions
+                else maybe_text(next_actions_context.get("source"))
+            ),
             "probes_source": maybe_text(probes_context.get("source")),
             "readiness_present": bool(readiness_context.get("payload_present")),
-            "readiness_source": maybe_text(readiness_context.get("source")),
+            "readiness_source": (
+                "council-readiness-opinions"
+                if council_readiness_opinions and not readiness
+                else maybe_text(readiness_context.get("source"))
+            ),
             "board_state_source": maybe_text(snapshot.get("state_source")),
             "board_state_db_path": db_path,
             "status_rollup": maybe_text(snapshot.get("status_rollup")),
-            "readiness_status": maybe_text(readiness.get("readiness_status")),
+            "readiness_status": maybe_text(readiness.get("readiness_status")) or maybe_text(council_readiness_summary.get("readiness_status")),
             "counts": counts,
             "top_actions": top_action_rows,
             "agenda_counts": phase_decision_basis["agenda_counts"],
@@ -837,6 +1167,7 @@ def plan_round_orchestration_skill(
             "planned_skill_count": len(execution_queue) + len(post_gate_steps),
             "derived_export_count": len(derived_exports),
             "planning_mode": plan_payload["planning_mode"],
+            "direct_council_queue": direct_council_queue,
             "probe_stage_included": probe_stage_included,
             "downstream_posture": posture,
             "board_state_source": maybe_text(snapshot.get("state_source")),
