@@ -57,6 +57,8 @@ class DirectCouncilAdvisoryTests(unittest.TestCase):
             self.assertEqual("direct-council-advisory", payload["skill_payload"]["plan_source"])
             self.assertEqual("direct-council-advisory", plan["plan_source"])
             self.assertEqual(["round-readiness"], [item["stage_name"] for item in plan["execution_queue"]])
+            self.assertEqual(["promotion-gate"], [item["stage_name"] for item in plan["gate_steps"]])
+            self.assertEqual(["round-readiness"], plan["gate_steps"][0]["required_previous_stages"])
             self.assertEqual("promote-candidate", plan["downstream_posture"])
             self.assertTrue(plan["observed_state"]["direct_council_queue"])
 
@@ -97,6 +99,7 @@ class DirectCouncilAdvisoryTests(unittest.TestCase):
             self.assertEqual("completed", payload["status"])
             self.assertEqual("direct-council-advisory", plan["plan_source"])
             self.assertEqual(["round-readiness"], [item["stage_name"] for item in plan["execution_queue"]])
+            self.assertEqual(["promotion-gate"], [item["stage_name"] for item in plan["gate_steps"]])
             self.assertFalse(plan["probe_stage_included"])
             self.assertEqual("hold-investigation-open", plan["downstream_posture"])
             self.assertEqual(

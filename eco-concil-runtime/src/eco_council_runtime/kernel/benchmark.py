@@ -8,7 +8,7 @@ from typing import Any
 
 from .deliberation_plane import load_phase2_control_state
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
-from .investigation_planning import (
+from .phase2_state_surfaces import (
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
 )

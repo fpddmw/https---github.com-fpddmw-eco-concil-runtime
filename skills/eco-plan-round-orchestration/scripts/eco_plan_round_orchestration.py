@@ -19,8 +19,8 @@ if str(RUNTIME_SRC) not in sys.path:
 
 from eco_council_runtime.kernel.deliberation_plane import load_round_snapshot  # noqa: E402
 from eco_council_runtime.council_objects import query_council_objects  # noqa: E402
-from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
-    load_d1_shared_context,
+from eco_council_runtime.kernel.investigation_planning import load_d1_shared_context  # noqa: E402
+from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
     load_round_readiness_wrapper,
@@ -684,22 +684,68 @@ def downstream_posture(
     return "promote-candidate", ["no-visible-blockers"]
 
 
-def step_entry(stage_name: str, skill_name: str, reason: str, assigned_role_hint: str, expected_output_path: Path) -> dict[str, Any]:
+def step_entry(
+    stage_name: str,
+    skill_name: str,
+    reason: str,
+    assigned_role_hint: str,
+    expected_output_path: Path,
+    *,
+    required_previous_stages: list[str] | None = None,
+    phase_group: str = "execution",
+    operator_summary: str = "",
+) -> dict[str, Any]:
     return {
         "stage_name": stage_name,
+        "stage_kind": "skill",
+        "phase_group": phase_group,
         "skill_name": skill_name,
+        "expected_skill_name": skill_name,
         "skill_args": [],
         "assigned_role_hint": assigned_role_hint,
+        "required_previous_stages": required_previous_stages or [],
+        "blocking": True,
+        "resume_policy": "skip-if-completed",
+        "operator_summary": operator_summary,
         "reason": reason,
         "expected_output_path": str(expected_output_path),
+    }
+
+
+def gate_step_entry(
+    reason: str,
+    expected_output_path: Path,
+    *,
+    required_previous_stages: list[str],
+    readiness_stage_name: str,
+) -> dict[str, Any]:
+    return {
+        "stage_name": "promotion-gate",
+        "stage_kind": "gate",
+        "phase_group": "gate",
+        "required_previous_stages": required_previous_stages,
+        "blocking": True,
+        "resume_policy": "skip-if-completed",
+        "operator_summary": "Evaluate whether the current round can move into promotion and reporting.",
+        "reason": reason,
+        "expected_output_path": str(expected_output_path),
+        "gate_handler": "promotion-gate",
+        "readiness_stage_name": readiness_stage_name,
     }
 
 
 def derived_export_entry(stage_name: str, skill_name: str, reason: str, expected_output_path: Path) -> dict[str, Any]:
     return {
         "stage_name": stage_name,
+        "stage_kind": "skill",
+        "phase_group": "exports",
         "skill_name": skill_name,
+        "expected_skill_name": skill_name,
         "assigned_role_hint": "moderator",
+        "required_previous_stages": ["orchestration-planner"],
+        "blocking": False,
+        "resume_policy": "skip-if-completed",
+        "operator_summary": reason,
         "reason": reason,
         "expected_output_path": str(expected_output_path),
         "required_for_controller": False,
@@ -836,6 +882,7 @@ def plan_round_orchestration_skill(
     probes_file = resolve_path(run_dir_path, probes_path, f"investigation/falsification_probes_{round_id}.json")
     readiness_file = resolve_path(run_dir_path, readiness_path, f"reporting/round_readiness_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"runtime/orchestration_plan_{round_id}.json")
+    promotion_gate_file = (run_dir_path / "runtime" / f"promotion_gate_{round_id}.json").resolve()
     promotion_basis_file = (run_dir_path / "promotion" / f"promoted_evidence_basis_{round_id}.json").resolve()
 
     warnings: list[dict[str, Any]] = []
@@ -953,6 +1000,7 @@ def plan_round_orchestration_skill(
     )
 
     execution_queue: list[dict[str, Any]] = []
+    previous_stage_names = ["orchestration-planner"]
     if not direct_council_queue:
         execution_queue.append(
             step_entry(
@@ -961,8 +1009,11 @@ def plan_round_orchestration_skill(
                 "Re-rank investigation actions directly from shared board state and controversy agenda context.",
                 primary_action_role or "moderator",
                 next_actions_file,
+                required_previous_stages=previous_stage_names,
+                operator_summary="Re-rank investigation actions directly from shared board state and evidence context.",
             )
         )
+        previous_stage_names = ["next-actions"]
     if probe_stage_included:
         execution_queue.append(
             step_entry(
@@ -971,8 +1022,11 @@ def plan_round_orchestration_skill(
                 "Open or refresh probe objects because the current round still carries unresolved agenda-level controversy pressure.",
                 "challenger",
                 probes_file,
+                required_previous_stages=previous_stage_names,
+                operator_summary="Refresh contradiction and falsification work before readiness review.",
             )
         )
+        previous_stage_names = ["falsification-probes"]
     execution_queue.append(
         step_entry(
             "round-readiness",
@@ -984,8 +1038,18 @@ def plan_round_orchestration_skill(
             ),
             "moderator",
             readiness_file,
+            required_previous_stages=previous_stage_names,
+            operator_summary="Freeze one readiness posture before gate evaluation.",
         )
     )
+    gate_steps = [
+        gate_step_entry(
+            "Evaluate whether the current round can move into promotion and reporting after readiness review.",
+            promotion_gate_file,
+            required_previous_stages=["round-readiness"],
+            readiness_stage_name="round-readiness",
+        )
+    ]
 
     derived_exports = [
         derived_export_entry(
@@ -1009,6 +1073,9 @@ def plan_round_orchestration_skill(
             "Freeze a promoted or withheld evidence basis after gate evaluation so controller output always stays auditable.",
             "moderator",
             promotion_basis_file,
+            required_previous_stages=["promotion-gate"],
+            phase_group="promotion",
+            operator_summary="Freeze the promoted or withheld evidence basis after gate evaluation.",
         )
     ]
 
@@ -1131,6 +1198,7 @@ def plan_round_orchestration_skill(
             "readiness_path": str(readiness_file),
         },
         "execution_queue": execution_queue,
+        "gate_steps": gate_steps,
         "derived_exports": derived_exports,
         "post_gate_steps": post_gate_steps,
         "stop_conditions": stop_conditions(probe_stage_included),
@@ -1165,6 +1233,8 @@ def plan_round_orchestration_skill(
             "output_path": str(output_file),
             "plan_id": plan_id,
             "planned_skill_count": len(execution_queue) + len(post_gate_steps),
+            "gate_step_count": len(gate_steps),
+            "planned_stage_count": len(execution_queue) + len(gate_steps) + len(post_gate_steps),
             "derived_export_count": len(derived_exports),
             "planning_mode": plan_payload["planning_mode"],
             "direct_council_queue": direct_council_queue,

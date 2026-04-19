@@ -200,9 +200,11 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             )
             plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
             stage_names = [item["stage_name"] for item in plan["execution_queue"]]
+            gate_stage_names = [item["stage_name"] for item in plan["gate_steps"]]
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual(["round-readiness"], stage_names)
+            self.assertEqual(["promotion-gate"], gate_stage_names)
             self.assertEqual("promote-candidate", plan["downstream_posture"])
             self.assertTrue(plan["observed_state"]["direct_council_queue"])
             self.assertTrue(plan["observed_state"]["next_actions_stage_skipped"])
@@ -262,9 +264,11 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             )
             plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
             stage_names = [item["stage_name"] for item in plan["execution_queue"]]
+            gate_stage_names = [item["stage_name"] for item in plan["gate_steps"]]
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual(["falsification-probes", "round-readiness"], stage_names)
+            self.assertEqual(["promotion-gate"], gate_stage_names)
             self.assertTrue(plan["probe_stage_included"])
             self.assertEqual("hold-investigation-open", plan["downstream_posture"])
             self.assertTrue(plan["observed_state"]["direct_council_queue"])
@@ -291,12 +295,14 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
             stage_names = [item["stage_name"] for item in plan["execution_queue"]]
             derived_export_stage_names = [item["stage_name"] for item in plan["derived_exports"]]
+            gate_stage_names = [item["stage_name"] for item in plan["gate_steps"]]
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual("planner-backed-phase2", plan["planning_mode"])
             self.assertFalse(plan["probe_stage_included"])
             self.assertEqual("promote-candidate", plan["downstream_posture"])
             self.assertEqual(["next-actions", "round-readiness"], stage_names)
+            self.assertEqual(["promotion-gate"], gate_stage_names)
             self.assertEqual(["board-summary", "board-brief"], derived_export_stage_names)
             self.assertTrue(plan["observed_state"]["board_exports_are_derived"])
             self.assertEqual(2, payload["summary"]["derived_export_count"])

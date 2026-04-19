@@ -439,7 +439,11 @@ observation matching 不再是默认主链。
 1. `controller.py` 已把 `openclaw-agent` 轮次改为 `direct-council-advisory -> agent-advisory -> runtime-planner` 的显式选择链。
 2. `agent_entry.py` 也已接入同一条 direct compiler 优先路径，agent 入口不再先调用 planner skill。
 3. phase-2 controller artifact 已暴露 `plan_source / planning_attempts / agent_advisory_plan_path`，controller 选择链不再是隐式 planner 语义。
-4. `controller.py / phase2_contract.py / investigation_planning.py` 仍明显绑定固定阶段假设，这一块仍是后续收边界的主战场。
+4. `controller.py` 已不再强制注入固定 `promotion-gate` / post-gate 阶段；plan 已能显式声明 `gate_steps / required_previous_stages / stage_kind / gate_handler`，controller 按计划执行。
+5. `phase2_contract.py` 已降级为 known-stage default metadata / compatibility fallback，显式 plan 依赖可以覆盖内置依赖。
+6. `promotion-gate` 的执行分派、readiness 依赖解析与 controller 状态更新已迁入 `kernel/gate.py`；`controller.py` 现在只消费统一 `gate_result`。
+7. `next_actions / probes / readiness` 的 DB/artifact read surface 已抽到 `kernel/phase2_state_surfaces.py`，`gate.py / supervisor.py / benchmark.py` 已不再直接依赖 `investigation_planning.py`。
+8. `controller.py / gate.py / investigation_planning.py` 仍明显绑定 readiness/promotion 语义与既有 gate handler，这一块仍是后续收边界的主战场。
 
 完成标志：
 

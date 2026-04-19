@@ -792,7 +792,7 @@ class RuntimeKernelTests(unittest.TestCase):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.kernel.controller.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[planner_result, board_summary_result, board_brief_result, next_actions_result, readiness_result, promotion_result],
@@ -821,6 +821,202 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("runtime-controller-v3", payload["controller"]["schema_version"])
             self.assertEqual("fresh-run", payload["controller"]["resume_status"])
             self.assertEqual("eco-summarize-board-state", payload["controller"]["stage_contracts"]["board-summary"]["expected_skill_name"])
+
+    def test_controller_uses_plan_declared_gate_steps_instead_of_injecting_default_gate_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+
+            planner_result = {
+                "summary": {"skill_name": "eco-plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": []},
+            }
+            readiness_result = {
+                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
+                "event": {"status": "completed"},
+                "skill_payload": {
+                    "artifact_refs": [],
+                    "canonical_ids": [],
+                    "summary": {"output_path": str(root / "custom_readiness.json"), "readiness_status": "ready"},
+                },
+            }
+            promotion_result = {
+                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "event": {"status": "completed"},
+                "skill_payload": {
+                    "artifact_refs": [],
+                    "canonical_ids": [],
+                    "summary": {"output_path": str(root / "custom_basis.json"), "promotion_status": "promoted"},
+                },
+            }
+            planning = {
+                "plan_id": "plan-custom-gate-001",
+                "plan_path": str(root / "plan.json"),
+                "planning_status": "ready-for-controller",
+                "planning_mode": "planner-backed",
+                "planner_skill_name": "eco-plan-round-orchestration",
+                "probe_stage_included": False,
+                "assigned_role_hints": [],
+                "execution_queue": [
+                    {
+                        "stage_name": "round-readiness",
+                        "stage_kind": "skill",
+                        "phase_group": "execution",
+                        "skill_name": "eco-summarize-round-readiness",
+                        "expected_skill_name": "eco-summarize-round-readiness",
+                        "skill_args": [],
+                        "assigned_role_hint": "moderator",
+                        "required_previous_stages": ["orchestration-planner"],
+                        "blocking": True,
+                        "resume_policy": "skip-if-completed",
+                        "operator_summary": "Custom readiness stage declared by plan payload.",
+                        "reason": "test",
+                        "expected_output_path": str(root / "custom_readiness.json"),
+                    }
+                ],
+                "gate_steps": [
+                    {
+                        "stage_name": "final-promotion-review",
+                        "stage_kind": "gate",
+                        "phase_group": "gate",
+                        "required_previous_stages": ["round-readiness"],
+                        "blocking": True,
+                        "resume_policy": "skip-if-completed",
+                        "operator_summary": "Custom gate step declared by plan payload.",
+                        "reason": "test",
+                        "expected_output_path": str(root / "custom_gate.json"),
+                        "gate_handler": "promotion-gate",
+                        "readiness_stage_name": "round-readiness",
+                    }
+                ],
+                "post_gate_steps": [
+                    {
+                        "stage_name": "promotion-basis",
+                        "stage_kind": "skill",
+                        "phase_group": "promotion",
+                        "skill_name": "eco-promote-evidence-basis",
+                        "expected_skill_name": "eco-promote-evidence-basis",
+                        "skill_args": [],
+                        "assigned_role_hint": "moderator",
+                        "required_previous_stages": ["final-promotion-review"],
+                        "blocking": True,
+                        "resume_policy": "skip-if-completed",
+                        "operator_summary": "Custom promotion basis stage declared by plan payload.",
+                        "reason": "test",
+                        "expected_output_path": str(root / "custom_basis.json"),
+                    }
+                ],
+                "stop_conditions": [],
+                "fallback_path": [],
+                "fallback_suggested_next_skills": [],
+            }
+            gate_payload = {
+                "generated_at_utc": "2024-01-01T00:00:00Z",
+                "gate_status": "allow-promote",
+                "readiness_status": "ready",
+                "promote_allowed": True,
+                "output_path": str(root / "custom_gate.json"),
+                "gate_reasons": [],
+                "recommended_next_skills": [],
+            }
+
+            with (
+                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
+                mock.patch(
+                    "eco_council_runtime.kernel.gate.apply_promotion_gate",
+                    return_value=gate_payload,
+                ) as gate_mock,
+                mock.patch(
+                    "eco_council_runtime.kernel.controller.run_skill",
+                    side_effect=[planner_result, readiness_result, promotion_result],
+                ),
+            ):
+                payload = run_phase2_round_with_contract_mode(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    contract_mode="strict",
+                )
+
+            self.assertEqual(
+                str(root / "custom_readiness.json"),
+                gate_mock.call_args.kwargs["readiness_path_override"],
+            )
+            self.assertEqual(
+                str(root / "custom_gate.json"),
+                gate_mock.call_args.kwargs["output_path_override"],
+            )
+            self.assertEqual(
+                ["orchestration-planner", "round-readiness", "final-promotion-review", "promotion-basis"],
+                payload["controller"]["planning"]["stage_sequence"],
+            )
+            self.assertEqual(
+                str(root / "custom_gate.json"),
+                payload["controller"]["stage_contracts"]["final-promotion-review"]["expected_output_path"],
+            )
+            self.assertEqual(
+                str(root / "custom_gate.json"),
+                payload["controller"]["steps"][2]["artifact_path"],
+            )
+            self.assertEqual(1, payload["controller"]["planning"]["gate_step_count"])
+
+    def test_gate_runtime_dispatches_custom_handler_registry(self) -> None:
+        ensure_runtime_src_on_path()
+
+        from eco_council_runtime.kernel.gate import execute_gate_step
+
+        run_dir = Path("/tmp/runtime-gate-registry")
+        handler = mock.Mock(
+            return_value={
+                "generated_at_utc": "2024-01-01T00:00:00Z",
+                "output_path": "/tmp/custom_gate.json",
+                "controller_updates": {
+                    "readiness_status": "custom-ready",
+                    "gate_status": "custom-approved",
+                    "gate_reasons": ["registry-dispatched"],
+                    "recommended_next_skills": ["eco-custom-follow-up"],
+                },
+            }
+        )
+
+        result = execute_gate_step(
+            run_dir,
+            run_id=RUN_ID,
+            round_id=ROUND_ID,
+            blueprint={
+                "stage_name": "custom-gate-review",
+                "stage_kind": "gate",
+                "gate_handler": "custom-gate",
+                "required_previous_stages": ["custom-readiness-review"],
+                "expected_output_path": "/tmp/custom_gate.json",
+            },
+            stage_contracts={
+                "custom-readiness-review": {
+                    "expected_output_path": "/tmp/custom_readiness.json"
+                }
+            },
+            gate_handlers={"custom-gate": handler},
+        )
+
+        handler.assert_called_once_with(
+            run_dir,
+            run_id=RUN_ID,
+            round_id=ROUND_ID,
+            readiness_path_override="/tmp/custom_readiness.json",
+            output_path_override="/tmp/custom_gate.json",
+        )
+        self.assertEqual("custom-gate", result["gate_handler"])
+        self.assertEqual("custom-readiness-review", result["readiness_stage_name"])
+        self.assertEqual("custom-approved", result["controller_updates"]["gate_status"])
+        self.assertEqual(
+            ["eco-custom-follow-up"],
+            result["controller_updates"]["recommended_next_skills"],
+        )
 
     def test_controller_prefers_agent_advisory_plan_over_runtime_planner(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -900,7 +1096,7 @@ class RuntimeKernelTests(unittest.TestCase):
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.controller.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[readiness_result, promotion_result],
@@ -1049,7 +1245,7 @@ class RuntimeKernelTests(unittest.TestCase):
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.controller.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=run_skill_side_effect,
@@ -1176,7 +1372,7 @@ class RuntimeKernelTests(unittest.TestCase):
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.controller.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=run_skill_side_effect,
@@ -1324,7 +1520,7 @@ class RuntimeKernelTests(unittest.TestCase):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.kernel.controller.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=run_skill_side_effect,
@@ -1448,7 +1644,7 @@ class RuntimeKernelTests(unittest.TestCase):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.kernel.controller.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[planner_result, board_summary_result, board_brief_failure],
@@ -1481,7 +1677,7 @@ class RuntimeKernelTests(unittest.TestCase):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle") as planning_bundle_mock,
-                mock.patch("eco_council_runtime.kernel.controller.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[board_brief_result, next_actions_result, readiness_result, promotion_result],

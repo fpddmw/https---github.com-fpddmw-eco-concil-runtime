@@ -9,9 +9,9 @@ from .deliberation_plane import store_promotion_freeze_record
 from .executor import SkillExecutionError
 from .controller import run_phase2_round, run_phase2_round_with_contract_mode
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
-from .investigation_planning import load_next_actions_wrapper
 from .ledger import append_ledger_event
 from .manifest import load_json_if_exists, write_json
+from .phase2_state_surfaces import load_next_actions_wrapper
 from .paths import supervisor_state_path
 from .source_queue_history import discovered_round_ids
 

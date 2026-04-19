@@ -93,12 +93,19 @@ PHASE2_STAGE_DEFINITIONS: dict[str, dict[str, Any]] = {
 }
 
 
-def stage_contract(stage_name: str) -> dict[str, Any]:
+def lookup_stage_contract(stage_name: str) -> dict[str, Any] | None:
     normalized_name = maybe_text(stage_name)
     definition = PHASE2_STAGE_DEFINITIONS.get(normalized_name)
     if definition is None:
-        raise ValueError(f"Unknown phase-2 stage: {normalized_name}")
+        return None
     return {"stage_name": normalized_name, **definition}
+
+
+def stage_contract(stage_name: str) -> dict[str, Any]:
+    definition = lookup_stage_contract(stage_name)
+    if definition is None:
+        raise ValueError(f"Unknown phase-2 stage: {maybe_text(stage_name)}")
+    return definition
 
 
 def expected_output_path(stage_name: str, artifacts: dict[str, Any], explicit_path: str = "") -> str:
@@ -123,15 +130,33 @@ def validate_skill_stage(stage_name: str, skill_name: str) -> dict[str, Any]:
     return contract
 
 
-def validate_stage_sequence(stage_names: list[str]) -> None:
+def normalized_required_previous_stages(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [maybe_text(item) for item in value if maybe_text(item)]
+
+
+def validate_stage_blueprints(stage_entries: list[dict[str, Any]]) -> None:
     seen: set[str] = set()
-    for raw_stage_name in stage_names:
-        contract = stage_contract(raw_stage_name)
-        stage_name = maybe_text(contract.get("stage_name"))
+    for entry in stage_entries:
+        if not isinstance(entry, dict):
+            continue
+        stage_name = maybe_text(entry.get("stage") or entry.get("stage_name"))
+        if not stage_name:
+            raise ValueError("Missing phase-2 stage name in planned controller sequence.")
         if stage_name in seen:
             raise ValueError(f"Duplicate phase-2 stage detected: {stage_name}")
-        for dependency in contract.get("required_previous_stages", []):
-            dependency_name = maybe_text(dependency)
+        required_previous_stages = normalized_required_previous_stages(entry.get("required_previous_stages"))
+        if not required_previous_stages:
+            contract = lookup_stage_contract(stage_name)
+            required_previous_stages = normalized_required_previous_stages(
+                contract.get("required_previous_stages") if isinstance(contract, dict) else []
+            )
+        for dependency_name in required_previous_stages:
             if dependency_name and dependency_name not in seen:
                 raise ValueError(f"Stage {stage_name} requires {dependency_name} to appear earlier in the controller sequence.")
         seen.add(stage_name)
+
+
+def validate_stage_sequence(stage_names: list[str]) -> None:
+    validate_stage_blueprints([{"stage": stage_name} for stage_name in stage_names])

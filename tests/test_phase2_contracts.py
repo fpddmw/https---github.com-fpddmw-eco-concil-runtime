@@ -9,7 +9,7 @@ RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.phase2_contract import validate_stage_sequence  # noqa: E402
+from eco_council_runtime.kernel.phase2_contract import validate_stage_blueprints, validate_stage_sequence  # noqa: E402
 
 
 class Phase2ContractTests(unittest.TestCase):
@@ -33,6 +33,25 @@ class Phase2ContractTests(unittest.TestCase):
                     "promotion-basis",
                 ]
             )
+
+    def test_explicit_stage_dependencies_can_override_known_stage_defaults(self) -> None:
+        validate_stage_blueprints(
+            [
+                {"stage": "orchestration-planner"},
+                {
+                    "stage": "custom-readiness-review",
+                    "required_previous_stages": ["orchestration-planner"],
+                },
+                {
+                    "stage": "promotion-gate",
+                    "required_previous_stages": ["custom-readiness-review"],
+                },
+                {
+                    "stage": "promotion-basis",
+                    "required_previous_stages": ["promotion-gate"],
+                },
+            ]
+        )
 
 
 if __name__ == "__main__":

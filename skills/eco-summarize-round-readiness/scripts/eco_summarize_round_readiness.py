@@ -22,14 +22,16 @@ from eco_council_runtime.council_objects import (  # noqa: E402
 )
 from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
     d1_contract_fields_from_payload,
-    load_falsification_probe_wrapper,
     load_d1_shared_context,
-    load_next_actions_wrapper,
     maybe_text,
     resolve_path,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_round_readiness_assessment,
+)
+from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
+    load_falsification_probe_wrapper,
+    load_next_actions_wrapper,
 )
 
 

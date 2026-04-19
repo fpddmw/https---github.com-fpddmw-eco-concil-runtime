@@ -6,7 +6,7 @@ from typing import Any
 from ..phase2_direct_advisory import materialize_direct_council_advisory_plan
 from .deliberation_plane import load_phase2_control_state, store_promotion_freeze_record
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill, utc_now_iso
-from .gate import apply_promotion_gate
+from .gate import execute_gate_step as execute_runtime_gate_step
 from .ledger import append_ledger_event
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists, write_json
 from .paths import (
@@ -19,7 +19,7 @@ from .paths import (
     promotion_gate_path,
 )
 from .phase2_contract import expected_output_path as resolve_expected_output_path
-from .phase2_contract import stage_contract, validate_skill_stage, validate_stage_sequence
+from .phase2_contract import lookup_stage_contract, validate_skill_stage, validate_stage_blueprints
 from .registry import write_registry
 
 PLANNER_SKILL_NAME = "eco-plan-round-orchestration"
@@ -54,38 +54,81 @@ def phase2_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
     }
 
 
+def normalized_stage_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [maybe_text(item) for item in value if maybe_text(item)]
+
+
+def default_gate_steps() -> list[dict[str, Any]]:
+    return [
+        {
+            "stage_name": "promotion-gate",
+            "stage_kind": "gate",
+            "phase_group": "gate",
+            "required_previous_stages": ["round-readiness"],
+            "blocking": True,
+            "resume_policy": "skip-if-completed",
+            "operator_summary": "Evaluate whether the current round can move into promotion and reporting.",
+            "reason": "Fallback runtime promotion gate evaluation.",
+            "gate_handler": "promotion-gate",
+            "readiness_stage_name": "round-readiness",
+        }
+    ]
+
+
 def default_post_gate_steps() -> list[dict[str, Any]]:
     return [
         {
             "stage_name": "promotion-basis",
+            "stage_kind": "skill",
+            "phase_group": "promotion",
             "skill_name": "eco-promote-evidence-basis",
+            "expected_skill_name": "eco-promote-evidence-basis",
             "skill_args": [],
             "assigned_role_hint": "moderator",
+            "required_previous_stages": ["promotion-gate"],
+            "blocking": True,
+            "resume_policy": "skip-if-completed",
+            "operator_summary": "Freeze the promoted or withheld evidence basis after gate evaluation.",
             "reason": "Fallback post-gate promotion basis write.",
         }
     ]
 
 
-def normalized_planned_steps(entries: Any) -> list[dict[str, Any]]:
+def normalized_planned_steps(entries: Any, *, default_stage_kind: str = "skill") -> list[dict[str, Any]]:
     if not isinstance(entries, list):
         return []
     results: list[dict[str, Any]] = []
     for item in entries:
         if not isinstance(item, dict):
             continue
+        stage_kind = maybe_text(item.get("stage_kind") or item.get("kind")) or default_stage_kind
         skill_name = maybe_text(item.get("skill_name"))
-        if not skill_name:
+        stage_name = maybe_text(item.get("stage_name") or item.get("stage") or skill_name or item.get("gate_handler"))
+        if not stage_name:
+            continue
+        if stage_kind == "skill" and not skill_name:
             continue
         raw_skill_args = item.get("skill_args", [])
         skill_args = [maybe_text(value) for value in raw_skill_args if maybe_text(value)] if isinstance(raw_skill_args, list) else []
         results.append(
             {
-                "stage_name": maybe_text(item.get("stage_name") or item.get("stage") or skill_name),
+                "stage_name": stage_name,
+                "stage_kind": stage_kind,
+                "phase_group": maybe_text(item.get("phase_group")),
                 "skill_name": skill_name,
+                "expected_skill_name": maybe_text(item.get("expected_skill_name")),
                 "skill_args": skill_args,
                 "assigned_role_hint": maybe_text(item.get("assigned_role_hint")),
                 "reason": maybe_text(item.get("reason")),
                 "expected_output_path": maybe_text(item.get("expected_output_path")),
+                "required_previous_stages": normalized_stage_list(item.get("required_previous_stages")),
+                "blocking": item.get("blocking") if isinstance(item.get("blocking"), bool) else None,
+                "resume_policy": maybe_text(item.get("resume_policy")),
+                "operator_summary": maybe_text(item.get("operator_summary")),
+                "gate_handler": maybe_text(item.get("gate_handler")),
+                "readiness_stage_name": maybe_text(item.get("readiness_stage_name")),
             }
         )
     return results
@@ -168,7 +211,9 @@ def append_planning_attempt(controller_payload: dict[str, Any], attempt: dict[st
 
 def planning_bundle_from_payload(run_dir: Path, round_id: str, plan_path: str, plan_payload: dict[str, Any]) -> dict[str, Any]:
     explicit_execution_queue = normalized_planned_steps(plan_payload.get("execution_queue"))
+    explicit_gate_steps = normalized_planned_steps(plan_payload.get("gate_steps"), default_stage_kind="gate")
     explicit_post_gate_steps = normalized_planned_steps(plan_payload.get("post_gate_steps"))
+    gate_steps = explicit_gate_steps or default_gate_steps()
     post_gate_steps = explicit_post_gate_steps or default_post_gate_steps()
     fallback_path = plan_payload.get("fallback_path", []) if isinstance(plan_payload.get("fallback_path"), list) else []
     return {
@@ -184,6 +229,7 @@ def planning_bundle_from_payload(run_dir: Path, round_id: str, plan_path: str, p
         "probe_stage_included": bool(plan_payload.get("probe_stage_included")),
         "assigned_role_hints": plan_payload.get("assigned_role_hints", []) if isinstance(plan_payload.get("assigned_role_hints"), list) else [],
         "execution_queue": explicit_execution_queue,
+        "gate_steps": gate_steps,
         "post_gate_steps": post_gate_steps,
         "stop_conditions": plan_payload.get("stop_conditions", []) if isinstance(plan_payload.get("stop_conditions"), list) else [],
         "fallback_path": fallback_path,
@@ -224,6 +270,7 @@ def advisory_planning_bundle(run_dir: Path, round_id: str) -> dict[str, Any]:
 def planning_from_controller(run_dir: Path, round_id: str, controller_payload: dict[str, Any]) -> dict[str, Any]:
     planning = controller_payload.get("planning", {}) if isinstance(controller_payload.get("planning"), dict) else {}
     execution_queue = normalized_planned_steps(planning.get("execution_queue"))
+    gate_steps = normalized_planned_steps(planning.get("gate_steps"), default_stage_kind="gate")
     post_gate_steps = normalized_planned_steps(planning.get("post_gate_steps"))
     if execution_queue:
         return {
@@ -240,6 +287,7 @@ def planning_from_controller(run_dir: Path, round_id: str, controller_payload: d
             "probe_stage_included": bool(planning.get("probe_stage_included")),
             "assigned_role_hints": planning.get("assigned_role_hints", []) if isinstance(planning.get("assigned_role_hints"), list) else [],
             "execution_queue": execution_queue,
+            "gate_steps": gate_steps or default_gate_steps(),
             "post_gate_steps": post_gate_steps or default_post_gate_steps(),
             "stop_conditions": planning.get("stop_conditions", []) if isinstance(planning.get("stop_conditions"), list) else [],
             "fallback_path": planning.get("fallback_path", []) if isinstance(planning.get("fallback_path"), list) else [],
@@ -274,26 +322,55 @@ def stage_blueprint(
     planner_reason: str = "",
     artifacts: dict[str, Any],
     explicit_output_path: str = "",
+    planned_stage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    contract = stage_contract(stage_name)
-    expected_skill_name = maybe_text(contract.get("expected_skill_name")) or maybe_text(skill_name)
+    planned = planned_stage if isinstance(planned_stage, dict) else {}
+    contract = lookup_stage_contract(stage_name) or {}
+    stage_kind = (
+        maybe_text(planned.get("stage_kind") or planned.get("kind"))
+        or maybe_text(contract.get("stage_kind"))
+        or ("skill" if maybe_text(skill_name) or maybe_text(planned.get("skill_name")) else "gate")
+    )
+    resolved_skill_name = maybe_text(skill_name) or maybe_text(planned.get("skill_name"))
+    expected_skill_name = (
+        maybe_text(planned.get("expected_skill_name"))
+        or maybe_text(contract.get("expected_skill_name"))
+        or resolved_skill_name
+    )
+    if stage_kind == "skill":
+        if contract:
+            validate_skill_stage(stage_name, resolved_skill_name or expected_skill_name)
+        elif expected_skill_name and resolved_skill_name and expected_skill_name != resolved_skill_name:
+            raise ValueError(
+                f"Stage {stage_name} must execute {expected_skill_name}, but planner selected {resolved_skill_name}."
+            )
+        if not (resolved_skill_name or expected_skill_name):
+            raise ValueError(f"Skill stage {stage_name} must declare a skill_name.")
+    else:
+        resolved_skill_name = ""
+        expected_skill_name = ""
     return {
         "stage": stage_name,
-        "phase_group": maybe_text(contract.get("phase_group")),
-        "stage_kind": maybe_text(contract.get("stage_kind")) or "skill",
-        "kind": maybe_text(contract.get("stage_kind")) or "skill",
-        "skill_name": maybe_text(skill_name) or expected_skill_name,
+        "phase_group": maybe_text(planned.get("phase_group")) or maybe_text(contract.get("phase_group")),
+        "stage_kind": stage_kind,
+        "kind": stage_kind,
+        "skill_name": resolved_skill_name or expected_skill_name,
         "expected_skill_name": expected_skill_name,
         "skill_args": skill_args or [],
-        "assigned_role_hint": maybe_text(assigned_role_hint),
+        "assigned_role_hint": maybe_text(assigned_role_hint) or maybe_text(planned.get("assigned_role_hint")),
         "planner_reason": maybe_text(planner_reason),
-        "required_previous_stages": [
-            maybe_text(item) for item in contract.get("required_previous_stages", []) if maybe_text(item)
-        ],
-        "blocking": bool(contract.get("blocking")),
-        "resume_policy": maybe_text(contract.get("resume_policy")) or "skip-if-completed",
-        "operator_summary": maybe_text(contract.get("operator_summary")),
-        "expected_output_path": resolve_expected_output_path(stage_name, artifacts, explicit_output_path),
+        "required_previous_stages": normalized_stage_list(planned.get("required_previous_stages"))
+        or normalized_stage_list(contract.get("required_previous_stages")),
+        "blocking": planned.get("blocking") if isinstance(planned.get("blocking"), bool) else bool(contract.get("blocking")),
+        "resume_policy": maybe_text(planned.get("resume_policy")) or maybe_text(contract.get("resume_policy")) or "skip-if-completed",
+        "operator_summary": maybe_text(planned.get("operator_summary")) or maybe_text(contract.get("operator_summary")),
+        "expected_output_path": resolve_expected_output_path(
+            stage_name,
+            artifacts,
+            maybe_text(planned.get("expected_output_path")) or explicit_output_path,
+        ),
+        "gate_handler": maybe_text(planned.get("gate_handler")) or (stage_name if stage_kind == "gate" else ""),
+        "readiness_stage_name": maybe_text(planned.get("readiness_stage_name")),
     }
 
 
@@ -309,48 +386,60 @@ def stage_blueprints(planning: dict[str, Any], artifacts: dict[str, Any]) -> lis
     ]
     for planned_step in planning.get("execution_queue", []):
         stage_name = maybe_text(planned_step.get("stage_name"))
-        skill_name = maybe_text(planned_step.get("skill_name"))
-        validate_skill_stage(stage_name, skill_name)
         blueprints.append(
             stage_blueprint(
                 stage_name,
-                skill_name=skill_name,
+                skill_name=maybe_text(planned_step.get("skill_name")),
                 skill_args=planned_step.get("skill_args", []) if isinstance(planned_step.get("skill_args"), list) else [],
                 assigned_role_hint=maybe_text(planned_step.get("assigned_role_hint")),
                 planner_reason=maybe_text(planned_step.get("reason")),
                 artifacts=artifacts,
                 explicit_output_path=maybe_text(planned_step.get("expected_output_path")),
+                planned_stage=planned_step,
             )
         )
-    blueprints.append(
-        stage_blueprint(
-            "promotion-gate",
-            artifacts=artifacts,
-            explicit_output_path=artifacts.get("promotion_gate_path", ""),
-        )
-    )
-    for planned_step in planning.get("post_gate_steps", []):
+    gate_steps = planning.get("gate_steps", []) if isinstance(planning.get("gate_steps"), list) else default_gate_steps()
+    for planned_step in gate_steps:
         stage_name = maybe_text(planned_step.get("stage_name"))
-        skill_name = maybe_text(planned_step.get("skill_name"))
-        validate_skill_stage(stage_name, skill_name)
         blueprints.append(
             stage_blueprint(
                 stage_name,
-                skill_name=skill_name,
+                skill_name=maybe_text(planned_step.get("skill_name")),
                 skill_args=planned_step.get("skill_args", []) if isinstance(planned_step.get("skill_args"), list) else [],
                 assigned_role_hint=maybe_text(planned_step.get("assigned_role_hint")),
                 planner_reason=maybe_text(planned_step.get("reason")),
                 artifacts=artifacts,
                 explicit_output_path=maybe_text(planned_step.get("expected_output_path")),
+                planned_stage=planned_step,
             )
         )
-    validate_stage_sequence([maybe_text(item.get("stage")) for item in blueprints])
+    post_gate_steps = (
+        planning.get("post_gate_steps", [])
+        if isinstance(planning.get("post_gate_steps"), list)
+        else default_post_gate_steps()
+    )
+    for planned_step in post_gate_steps:
+        stage_name = maybe_text(planned_step.get("stage_name"))
+        blueprints.append(
+            stage_blueprint(
+                stage_name,
+                skill_name=maybe_text(planned_step.get("skill_name")),
+                skill_args=planned_step.get("skill_args", []) if isinstance(planned_step.get("skill_args"), list) else [],
+                assigned_role_hint=maybe_text(planned_step.get("assigned_role_hint")),
+                planner_reason=maybe_text(planned_step.get("reason")),
+                artifacts=artifacts,
+                explicit_output_path=maybe_text(planned_step.get("expected_output_path")),
+                planned_stage=planned_step,
+            )
+        )
+    validate_stage_blueprints(blueprints)
     return blueprints
 
 
 def controller_planning_state(planning: dict[str, Any], blueprints: list[dict[str, Any]]) -> dict[str, Any]:
     execution_queue = planning.get("execution_queue", []) if isinstance(planning.get("execution_queue"), list) else []
-    post_gate_steps = planning.get("post_gate_steps", []) if isinstance(planning.get("post_gate_steps"), list) else []
+    gate_steps = planning.get("gate_steps", []) if isinstance(planning.get("gate_steps"), list) else default_gate_steps()
+    post_gate_steps = planning.get("post_gate_steps", []) if isinstance(planning.get("post_gate_steps"), list) else default_post_gate_steps()
     return {
         "plan_id": planning.get("plan_id", ""),
         "plan_path": planning.get("plan_path", ""),
@@ -362,9 +451,12 @@ def controller_planning_state(planning: dict[str, Any], blueprints: list[dict[st
         "probe_stage_included": planning.get("probe_stage_included", False),
         "assigned_role_hints": planning.get("assigned_role_hints", []),
         "planned_skill_count": len(execution_queue) + len(post_gate_steps),
+        "gate_step_count": len(gate_steps),
+        "planned_stage_count": len(execution_queue) + len(gate_steps) + len(post_gate_steps),
         "stop_conditions": planning.get("stop_conditions", []),
         "fallback_path": planning.get("fallback_path", []),
         "execution_queue": execution_queue,
+        "gate_steps": gate_steps,
         "post_gate_steps": post_gate_steps,
         "stage_sequence": [maybe_text(item.get("stage")) for item in blueprints],
     }
@@ -386,6 +478,8 @@ def stage_contracts_from_blueprints(blueprints: list[dict[str, Any]]) -> dict[st
             "resume_policy": maybe_text(blueprint.get("resume_policy")),
             "operator_summary": maybe_text(blueprint.get("operator_summary")),
             "expected_output_path": maybe_text(blueprint.get("expected_output_path")),
+            "gate_handler": maybe_text(blueprint.get("gate_handler")),
+            "readiness_stage_name": maybe_text(blueprint.get("readiness_stage_name")),
         }
     return contracts
 
@@ -578,6 +672,23 @@ def gate_stage_summary(blueprint: dict[str, Any], gate_payload: dict[str, Any], 
         "readiness_status": maybe_text(gate_payload.get("readiness_status")),
         "promote_allowed": bool(gate_payload.get("promote_allowed")),
     }
+
+
+def execute_gate_step(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    blueprint: dict[str, Any],
+    stage_contracts: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return execute_runtime_gate_step(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        blueprint=blueprint,
+        stage_contracts=stage_contracts,
+    )
 
 
 def base_controller_payload(
@@ -1175,20 +1286,24 @@ def run_phase2_round_with_contract_mode(
 
             if maybe_text(blueprint.get("stage_kind")) == "gate":
                 gate_started_at = utc_now_iso()
-                gate_payload = apply_promotion_gate(
+                gate_result = execute_gate_step(
                     run_dir,
                     run_id=run_id,
                     round_id=round_id,
-                    readiness_path_override=maybe_text(controller_payload["stage_contracts"].get("round-readiness", {}).get("expected_output_path"))
+                    blueprint=blueprint,
+                    stage_contracts=controller_payload.get("stage_contracts", {})
                     if isinstance(controller_payload.get("stage_contracts"), dict)
-                    else "",
-                    output_path_override=maybe_text(blueprint.get("expected_output_path")),
+                    else {},
                 )
+                gate_handler = maybe_text(gate_result.get("gate_handler")) or maybe_text(blueprint.get("gate_handler")) or stage_name
+                readiness_stage_name = maybe_text(gate_result.get("readiness_stage_name"))
+                gate_payload = gate_result.get("gate_payload", {}) if isinstance(gate_result.get("gate_payload"), dict) else {}
+                gate_updates = gate_result.get("controller_updates", {}) if isinstance(gate_result.get("controller_updates"), dict) else {}
                 gate_event_id = new_runtime_event_id(
                     "runtimeevt",
                     run_id,
                     round_id,
-                    "promotion-gate",
+                    gate_handler,
                     gate_started_at,
                     gate_payload.get("generated_at_utc"),
                     controller_payload.get("resume_status"),
@@ -1198,7 +1313,7 @@ def run_phase2_round_with_contract_mode(
                     {
                         "schema_version": "runtime-event-v3",
                         "event_id": gate_event_id,
-                        "event_type": "promotion-gate",
+                        "event_type": gate_handler,
                         "run_id": run_id,
                         "round_id": round_id,
                         "started_at_utc": gate_started_at,
@@ -1216,14 +1331,21 @@ def run_phase2_round_with_contract_mode(
                         "readiness_status": gate_payload.get("readiness_status"),
                         "promote_allowed": bool(gate_payload.get("promote_allowed")),
                         "gate_path": gate_payload.get("output_path"),
+                        "readiness_stage_name": readiness_stage_name,
                     },
                 )
                 controller_payload["steps"][step_pos] = gate_stage_summary(blueprint, gate_payload, gate_event_id, gate_started_at)
-                controller_payload["readiness_status"] = maybe_text(gate_payload.get("readiness_status")) or "blocked"
-                controller_payload["gate_status"] = maybe_text(gate_payload.get("gate_status")) or "freeze-withheld"
-                controller_payload["gate_reasons"] = gate_payload.get("gate_reasons", []) if isinstance(gate_payload.get("gate_reasons"), list) else []
+                controller_payload["readiness_status"] = maybe_text(gate_updates.get("readiness_status")) or "blocked"
+                controller_payload["gate_status"] = maybe_text(gate_updates.get("gate_status")) or "freeze-withheld"
+                controller_payload["gate_reasons"] = (
+                    gate_updates.get("gate_reasons", [])
+                    if isinstance(gate_updates.get("gate_reasons"), list)
+                    else []
+                )
                 controller_payload["recommended_next_skills"] = (
-                    gate_payload.get("recommended_next_skills", []) if isinstance(gate_payload.get("recommended_next_skills"), list) else []
+                    gate_updates.get("recommended_next_skills", [])
+                    if isinstance(gate_updates.get("recommended_next_skills"), list)
+                    else []
                 )
                 persist_controller_state(run_dir, round_id, controller_payload, gate_payload=gate_payload)
                 continue

@@ -23,7 +23,7 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_evidence_coverage_context,
     load_observation_scope_context,
 )
-from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_council_decision_wrapper,
     load_expert_report_wrapper,
     load_final_publication_wrapper,

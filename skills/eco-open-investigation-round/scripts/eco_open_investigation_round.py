@@ -27,9 +27,7 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_round_transition_record,
     store_round_task_snapshot,
 )
-from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
-    load_next_actions_wrapper,
-)
+from eco_council_runtime.kernel.phase2_state_surfaces import load_next_actions_wrapper  # noqa: E402
 from eco_council_runtime.kernel.source_queue_contract import source_role  # noqa: E402
 from eco_council_runtime.kernel.source_queue_history import (  # noqa: E402
     load_round_tasks_wrapper,

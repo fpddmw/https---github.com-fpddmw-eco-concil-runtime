@@ -24,7 +24,7 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_claim_scope_context,
     load_observation_scope_context,
 )
-from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
+from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
     load_promotion_basis_wrapper,

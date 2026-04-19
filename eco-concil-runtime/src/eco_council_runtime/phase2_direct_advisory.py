@@ -302,22 +302,68 @@ def aggregate_council_readiness_opinions(opinions: list[dict[str, Any]]) -> dict
     }
 
 
-def step_entry(stage_name: str, skill_name: str, reason: str, assigned_role_hint: str, expected_output_path: Path) -> dict[str, Any]:
+def step_entry(
+    stage_name: str,
+    skill_name: str,
+    reason: str,
+    assigned_role_hint: str,
+    expected_output_path: Path,
+    *,
+    required_previous_stages: list[str] | None = None,
+    phase_group: str = "execution",
+    operator_summary: str = "",
+) -> dict[str, Any]:
     return {
         "stage_name": stage_name,
+        "stage_kind": "skill",
+        "phase_group": phase_group,
         "skill_name": skill_name,
+        "expected_skill_name": skill_name,
         "skill_args": [],
         "assigned_role_hint": assigned_role_hint,
+        "required_previous_stages": required_previous_stages or [],
+        "blocking": True,
+        "resume_policy": "skip-if-completed",
+        "operator_summary": operator_summary,
         "reason": reason,
         "expected_output_path": str(expected_output_path),
+    }
+
+
+def gate_step_entry(
+    reason: str,
+    expected_output_path: Path,
+    *,
+    required_previous_stages: list[str],
+    readiness_stage_name: str,
+) -> dict[str, Any]:
+    return {
+        "stage_name": "promotion-gate",
+        "stage_kind": "gate",
+        "phase_group": "gate",
+        "required_previous_stages": required_previous_stages,
+        "blocking": True,
+        "resume_policy": "skip-if-completed",
+        "operator_summary": "Evaluate whether the current round can move into promotion and reporting.",
+        "reason": reason,
+        "expected_output_path": str(expected_output_path),
+        "gate_handler": "promotion-gate",
+        "readiness_stage_name": readiness_stage_name,
     }
 
 
 def derived_export_entry(stage_name: str, skill_name: str, reason: str, expected_output_path: Path) -> dict[str, Any]:
     return {
         "stage_name": stage_name,
+        "stage_kind": "skill",
+        "phase_group": "exports",
         "skill_name": skill_name,
+        "expected_skill_name": skill_name,
         "assigned_role_hint": "moderator",
+        "required_previous_stages": ["orchestration-planner"],
+        "blocking": False,
+        "resume_policy": "skip-if-completed",
+        "operator_summary": reason,
         "reason": reason,
         "expected_output_path": str(expected_output_path),
         "required_for_controller": False,
@@ -385,6 +431,7 @@ def direct_council_advisory_payload(
     board_brief_file = (run_dir_path / "board" / f"board_brief_{round_id}.md").resolve()
     probes_file = (run_dir_path / "investigation" / f"falsification_probes_{round_id}.json").resolve()
     readiness_file = (run_dir_path / "reporting" / f"round_readiness_{round_id}.json").resolve()
+    promotion_gate_file = (run_dir_path / "runtime" / f"promotion_gate_{round_id}.json").resolve()
     promotion_basis_file = (run_dir_path / "promotion" / f"promoted_evidence_basis_{round_id}.json").resolve()
 
     round_snapshot = load_round_snapshot(
@@ -432,6 +479,7 @@ def direct_council_advisory_payload(
             posture_reason_codes.append("direct-council-inputs-open")
 
     execution_queue: list[dict[str, Any]] = []
+    previous_stage_names = ["orchestration-planner"]
     if include_probe:
         execution_queue.append(
             step_entry(
@@ -440,8 +488,11 @@ def direct_council_advisory_payload(
                 "Open or refresh probe objects directly from council proposals or still-open DB probes.",
                 "challenger",
                 probes_file,
+                required_previous_stages=previous_stage_names,
+                operator_summary="Refresh contradiction and falsification work before readiness review.",
             )
         )
+        previous_stage_names = ["falsification-probes"]
     execution_queue.append(
         step_entry(
             "round-readiness",
@@ -449,8 +500,18 @@ def direct_council_advisory_payload(
             "Re-evaluate round readiness directly from council readiness opinions, probe state, and governed board state.",
             "moderator",
             readiness_file,
+            required_previous_stages=previous_stage_names,
+            operator_summary="Freeze one readiness posture before gate evaluation.",
         )
     )
+    gate_steps = [
+        gate_step_entry(
+            "Evaluate whether the direct-council queue leaves the round promotable or still frozen after readiness review.",
+            promotion_gate_file,
+            required_previous_stages=["round-readiness"],
+            readiness_stage_name="round-readiness",
+        )
+    ]
 
     derived_exports = [
         derived_export_entry(
@@ -473,6 +534,9 @@ def direct_council_advisory_payload(
             "Freeze a promoted or withheld evidence basis after gate evaluation so controller output always stays auditable.",
             "moderator",
             promotion_basis_file,
+            required_previous_stages=["promotion-gate"],
+            phase_group="promotion",
+            operator_summary="Freeze the promoted or withheld evidence basis after gate evaluation.",
         )
     ]
     fallback_path = (
@@ -578,6 +642,7 @@ def direct_council_advisory_payload(
             "readiness_path": str(readiness_file),
         },
         "execution_queue": execution_queue,
+        "gate_steps": gate_steps,
         "derived_exports": derived_exports,
         "post_gate_steps": post_gate_steps,
         "stop_conditions": stop_conditions(include_probe),
@@ -609,6 +674,8 @@ def direct_council_advisory_payload(
             "plan_id": plan_id,
             "plan_source": PLAN_SOURCE,
             "planned_skill_count": len(execution_queue) + len(post_gate_steps),
+            "gate_step_count": len(gate_steps),
+            "planned_stage_count": len(execution_queue) + len(gate_steps) + len(post_gate_steps),
             "derived_export_count": len(derived_exports),
             "planning_mode": "agent-advisory",
             "direct_council_queue": True,

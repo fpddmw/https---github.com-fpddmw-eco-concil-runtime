@@ -221,8 +221,14 @@
 
 - `[x]` `controller.py` 已把 `openclaw-agent` 轮次改成 `direct-council-advisory -> agent-advisory -> runtime-planner` 的三级回退链；`runtime planner` 不再是默认入口。
 - `[x]` phase-2 controller artifact 与 round-controller ledger 事件现在都会暴露 `plan_source`，controller 已能区分 `direct-council-advisory / agent-advisory / runtime-planner`。
-- `[ ]` `controller.py` 仍强依赖固定 stage contract 与固定 gate/post-gate 序列，尚未退化为真正的 generic execution queue runner。
-- `[ ]` `investigation_planning.py` 与 readiness/promotion fallback 仍保留较多 heuristic 主语义，kernel 边界尚未收干净。
+- `[x]` `controller.py` 不再强行注入固定 `promotion-gate` / post-gate 序列；plan 现在可以显式声明 `gate_steps / required_previous_stages / stage_kind / gate_handler`，controller 会按计划执行。
+- `[x]` `phase2_contract.py` 已从“controller 唯一真理表”退化成 known-stage default metadata / compatibility fallback；显式 plan 依赖可以覆盖内置依赖。
+- `[x]` `promotion-gate` 的执行分派、readiness 依赖解析与 controller 状态更新已迁入 `kernel/gate.py`；`controller.py` 现在只消费统一 `gate_result`，不再内嵌 `promotion-gate` 特判。
+- `[x]` `next_actions / probes / readiness` 的 DB/artifact read surface 已抽到 `kernel/phase2_state_surfaces.py`，`gate.py / supervisor.py / benchmark.py` 不再直接依赖 `investigation_planning.py`。
+- `[x]` `promotion_basis / reporting_handoff / council_decision / expert_report / final_publication` 的 DB/artifact read surface 也已并入 `kernel/phase2_state_surfaces.py`；reporting / publication 相关 skills 已切到新 surface，`investigation_planning.py` 只剩 compatibility re-export，不再持有这些实现。
+- `[x]` `gate.py` 已支持 handler registry / dispatch；controller 不再导入或硬编码 `promotion-gate` 实现，`promotion-gate` 也不再是唯一合法 gate handler。
+- `[ ]` runtime 仍自带 `promotion-gate` 默认 handler，而且该 handler 继续绑定 readiness/promotion 语义；下一步仍需把这块领域语义迁出 kernel，只保留通用 gate runtime。
+- `[ ]` `investigation_planning.py` 的 state-query 主职责已移出，但 readiness/promotion fallback 与 controversy scoring 等 heuristic 主语义仍然过重；kernel 边界尚未收干净。
 
 ### 9.1 必须收缩或迁出的模块
 
