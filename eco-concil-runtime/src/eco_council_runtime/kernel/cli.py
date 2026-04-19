@@ -15,6 +15,7 @@ from ..council_objects import (
     council_queryable_object_kinds,
     query_council_objects,
 )
+from ..phase2_agent_handoff import EntryChainBuilder, HardGateCommandBuilder
 from .analysis_plane import (
     analysis_kind_names,
     query_analysis_result_items,
@@ -27,11 +28,11 @@ from .benchmark import (
     materialize_scenario_fixture,
     replay_runtime_scenario,
 )
-from .controller import run_phase2_round, run_phase2_round_with_contract_mode
+from .controller import run_phase2_round_with_contract_mode
 from .deliberation_plane import load_phase2_control_state
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill
+from .gate import GateHandler
 from .governance import CONTRACT_MODES, preflight_skill_execution
-from .gate import apply_promotion_gate
 from .ledger import append_ledger_event, load_ledger_tail
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists
 from .operations import (
@@ -286,7 +287,14 @@ def operations_state(run_dir: Path, selected_round_id: str) -> dict[str, Any]:
     }
 
 
-def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, Any]:
+def show_run_state(
+    run_dir: Path,
+    tail: int,
+    round_id: str = "",
+    *,
+    agent_entry_profile: dict[str, Any] | None = None,
+    hard_gate_command_builder: HardGateCommandBuilder | None = None,
+) -> dict[str, Any]:
     manifest = load_json_if_exists(manifest_path(run_dir)) or {}
     cursor = load_json_if_exists(cursor_path(run_dir)) or {}
     registry = load_json_if_exists(registry_path(run_dir)) or {}
@@ -359,6 +367,8 @@ def show_run_state(run_dir: Path, tail: int, round_id: str = "") -> dict[str, An
             run_dir,
             run_id=maybe_text(manifest.get("run_id")) or maybe_text(cursor.get("run_id")),
             round_id=selected_round_id,
+            agent_entry_profile=agent_entry_profile,
+            hard_gate_command_builder=hard_gate_command_builder,
         ),
         "phase2": phase2_state,
         "post_round": post_round_state,
@@ -594,9 +604,40 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    default_gate_handlers: dict[str, GateHandler] | None = None,
+    default_agent_entry_profile: dict[str, Any] | None = None,
+    default_posture_profile: dict[str, Any] | None = None,
+    hard_gate_command_builder: HardGateCommandBuilder | None = None,
+    entry_chain_builder: EntryChainBuilder | None = None,
+    default_planning_sources: list[dict[str, Any]] | None = None,
+    default_stage_definitions: dict[str, dict[str, Any]] | None = None,
+) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    gate_handlers = default_gate_handlers if isinstance(default_gate_handlers, dict) else None
+    agent_entry_profile = (
+        default_agent_entry_profile
+        if isinstance(default_agent_entry_profile, dict)
+        else None
+    )
+    posture_profile = (
+        default_posture_profile
+        if isinstance(default_posture_profile, dict)
+        else None
+    )
+    planning_sources = (
+        default_planning_sources
+        if isinstance(default_planning_sources, list)
+        else None
+    )
+    stage_definitions = (
+        default_stage_definitions
+        if isinstance(default_stage_definitions, dict)
+        else None
+    )
 
     if args.command == "list-canonical-contracts":
         contracts = canonical_contracts_for_plane(plane=args.plane)
@@ -696,7 +737,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "apply-promotion-gate":
         init_run(run_dir, args.run_id)
-        payload = apply_promotion_gate(run_dir, run_id=args.run_id, round_id=args.round_id)
+        if not gate_handlers or "promotion-gate" not in gate_handlers:
+            failure = {
+                "status": "failed",
+                "summary": {"run_id": args.run_id, "round_id": args.round_id},
+                "message": "No default phase-2 gate handler registry was injected into cli.main().",
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        payload = gate_handlers["promotion-gate"](
+            run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+        )
         append_ledger_event(
             run_dir,
             {
@@ -718,12 +771,24 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "run-phase2-round":
+        if not isinstance(posture_profile, dict):
+            failure = {
+                "status": "failed",
+                "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode},
+                "message": "No phase-2 posture profile was injected into cli.main().",
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
         try:
             payload = run_phase2_round_with_contract_mode(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
                 contract_mode=args.contract_mode,
+                gate_handlers=gate_handlers,
+                posture_profile=posture_profile,
+                planning_sources=planning_sources,
+                stage_definitions=stage_definitions,
                 timeout_seconds=args.timeout_seconds,
                 retry_budget=args.retry_budget,
                 retry_backoff_ms=args.retry_backoff_ms,
@@ -737,12 +802,24 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "resume-phase2-round":
+        if not isinstance(posture_profile, dict):
+            failure = {
+                "status": "failed",
+                "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode},
+                "message": "No phase-2 posture profile was injected into cli.main().",
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
         try:
             payload = run_phase2_round_with_contract_mode(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
                 contract_mode=args.contract_mode,
+                gate_handlers=gate_handlers,
+                posture_profile=posture_profile,
+                planning_sources=planning_sources,
+                stage_definitions=stage_definitions,
                 timeout_seconds=args.timeout_seconds,
                 retry_budget=args.retry_budget,
                 retry_backoff_ms=args.retry_backoff_ms,
@@ -757,12 +834,24 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "restart-phase2-round":
+        if not isinstance(posture_profile, dict):
+            failure = {
+                "status": "failed",
+                "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode},
+                "message": "No phase-2 posture profile was injected into cli.main().",
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
         try:
             payload = run_phase2_round_with_contract_mode(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
                 contract_mode=args.contract_mode,
+                gate_handlers=gate_handlers,
+                posture_profile=posture_profile,
+                planning_sources=planning_sources,
+                stage_definitions=stage_definitions,
                 timeout_seconds=args.timeout_seconds,
                 retry_budget=args.retry_budget,
                 retry_backoff_ms=args.retry_backoff_ms,
@@ -878,12 +967,24 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "supervise-round":
+        if not isinstance(posture_profile, dict):
+            failure = {
+                "status": "failed",
+                "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode},
+                "message": "No phase-2 posture profile was injected into cli.main().",
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
         try:
             payload = supervise_round_with_contract_mode(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
                 contract_mode=args.contract_mode,
+                gate_handlers=gate_handlers,
+                posture_profile=posture_profile,
+                planning_sources=planning_sources,
+                stage_definitions=stage_definitions,
                 timeout_seconds=args.timeout_seconds,
                 retry_budget=args.retry_budget,
                 retry_backoff_ms=args.retry_backoff_ms,
@@ -933,11 +1034,30 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "materialize-agent-entry-gate":
         init_run(run_dir, args.run_id)
+        if (
+            not isinstance(agent_entry_profile, dict)
+            or not callable(hard_gate_command_builder)
+            or not callable(entry_chain_builder)
+        ):
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "contract_mode": args.contract_mode,
+                },
+                "message": "No agent entry profile or agent handoff profile was injected into cli.main().",
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
         try:
             payload = materialize_agent_entry_gate(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
+                agent_entry_profile=agent_entry_profile,
+                hard_gate_command_builder=hard_gate_command_builder,
+                entry_chain_builder=entry_chain_builder,
                 contract_mode=args.contract_mode,
                 refresh_advisory_plan=args.refresh_advisory_plan,
                 timeout_seconds=args.timeout_seconds,
@@ -1071,7 +1191,24 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "show-run-state":
-        payload = show_run_state(run_dir, args.tail, args.round_id)
+        if not isinstance(agent_entry_profile, dict):
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_dir": str(run_dir),
+                    "round_id": args.round_id,
+                },
+                "message": "No agent entry profile was injected into cli.main().",
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        payload = show_run_state(
+            run_dir,
+            args.tail,
+            args.round_id,
+            agent_entry_profile=agent_entry_profile,
+            hard_gate_command_builder=hard_gate_command_builder,
+        )
         print(pretty_json(payload, args.pretty))
         return 0
 

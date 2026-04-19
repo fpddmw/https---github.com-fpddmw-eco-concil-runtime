@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-import shlex
 from pathlib import Path
 from typing import Any
 
-from ..phase2_direct_advisory import materialize_direct_council_advisory_plan
+from ..phase2_agent_entry_profile import materialize_agent_entry_advisory_plan
+from ..phase2_agent_handoff import EntryChainBuilder, HardGateCommandBuilder
 from .analysis_plane import query_analysis_result_sets
 from .deliberation_plane import load_round_snapshot
 from .executor import (
-    SkillExecutionError,
     maybe_text,
     new_runtime_event_id,
-    run_skill,
-    skill_command_hint,
     utc_now_iso,
 )
 from .ledger import append_ledger_event
@@ -24,146 +21,6 @@ from .paths import (
     mission_scaffold_path,
     resolve_run_dir,
 )
-from .supervisor import suggest_next_round_id
-
-
-ROLE_DEFINITIONS = [
-    {
-        "role": "sociologist",
-        "focus": "public evidence query, narrative regrouping, and claim-side analysis.",
-        "read_skills": ["eco-read-board-delta", "eco-query-public-signals"],
-        "write_skills": ["eco-post-board-note", "eco-update-hypothesis-status"],
-        "analysis_kinds": ["claim-candidate", "claim-cluster", "claim-scope", "evidence-coverage"],
-    },
-    {
-        "role": "environmentalist",
-        "focus": "environment evidence query, observation analysis, and corroboration work.",
-        "read_skills": ["eco-read-board-delta", "eco-query-environment-signals"],
-        "write_skills": ["eco-post-board-note", "eco-update-hypothesis-status"],
-        "analysis_kinds": ["observation-candidate", "merged-observation", "observation-scope", "evidence-coverage"],
-    },
-    {
-        "role": "challenger",
-        "focus": "contradiction pressure, challenge tickets, and falsification probes.",
-        "read_skills": ["eco-read-board-delta", "eco-query-public-signals", "eco-query-environment-signals"],
-        "write_skills": ["eco-open-challenge-ticket", "eco-open-falsification-probe", "eco-close-challenge-ticket"],
-        "analysis_kinds": ["claim-cluster", "merged-observation", "evidence-coverage"],
-    },
-    {
-        "role": "moderator",
-        "focus": "board state progression, round transition, and return to runtime hard gates.",
-        "read_skills": ["eco-read-board-delta"],
-        "write_skills": ["eco-post-board-note", "eco-claim-board-task", "eco-open-investigation-round"],
-        "analysis_kinds": ["claim-cluster", "merged-observation", "evidence-coverage"],
-    },
-]
-
-
-def unique_texts(values: list[Any]) -> list[str]:
-    seen: set[str] = set()
-    results: list[str] = []
-    for value in values:
-        text = maybe_text(value)
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        results.append(text)
-    return results
-
-
-def kernel_command(command_name: str, *args: str) -> str:
-    return shlex.join(
-        [
-            "python3",
-            "eco-concil-runtime/scripts/eco_runtime_kernel.py",
-            command_name,
-            *args,
-        ]
-    )
-
-
-def run_skill_command(
-    *,
-    run_dir: Path,
-    run_id: str,
-    round_id: str,
-    skill_name: str,
-    contract_mode: str,
-    skill_args: list[str] | None = None,
-) -> str:
-    return (
-        "python3 eco-concil-runtime/scripts/eco_runtime_kernel.py "
-        + skill_command_hint(
-            "run-skill",
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            skill_name=skill_name,
-            contract_mode=contract_mode,
-            skill_args=skill_args or [],
-        )
-    )
-
-
-def query_result_set_command(*, run_dir: Path, run_id: str, round_id: str, analysis_kind: str) -> str:
-    return kernel_command(
-        "list-analysis-result-sets",
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
-        "--analysis-kind",
-        analysis_kind,
-        "--latest-only",
-        "--include-contract",
-        "--pretty",
-    )
-
-
-def query_result_item_template(*, run_dir: Path, run_id: str, round_id: str, analysis_kind: str) -> str:
-    return kernel_command(
-        "query-analysis-result-items",
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
-        "--analysis-kind",
-        analysis_kind,
-        "--latest-only",
-        "--subject-id",
-        f"<{analysis_kind.replace('-', '_')}_id>",
-        "--include-result-sets",
-        "--include-contract",
-        "--pretty",
-    )
-
-
-def advisory_plan_relative_path(run_dir: Path, round_id: str) -> str:
-    return str(agent_advisory_plan_path(run_dir, round_id).relative_to(run_dir))
-
-
-def advisory_plan_command(
-    *,
-    run_dir: Path,
-    run_id: str,
-    round_id: str,
-    contract_mode: str,
-) -> str:
-    return kernel_command(
-        "materialize-agent-entry-gate",
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
-        "--refresh-advisory-plan",
-        "--pretty",
-    )
 
 
 def board_counts(round_state: dict[str, Any]) -> dict[str, int]:
@@ -348,410 +205,24 @@ def advisory_plan_surface(run_dir: Path, round_id: str) -> dict[str, Any]:
     }
 
 
-def entry_status(
-    *,
-    governance: dict[str, Any],
-    mission: dict[str, Any],
-    round_surface_payload: dict[str, Any],
-    analysis: dict[str, Any],
-) -> tuple[str, list[dict[str, str]]]:
-    warnings: list[dict[str, str]] = []
-    if (
-        not mission.get("present")
-        and maybe_text(round_surface_payload.get("state_source")) == "missing-board"
-        and int(analysis.get("matching_result_set_count") or 0) == 0
-    ):
-        warnings.append(
-            {
-                "code": "missing-entry-state",
-                "message": "No mission scaffold, board state, or analysis result sets are available for the selected round.",
-            }
-        )
-        return "blocked", warnings
-    if maybe_text(governance.get("alert_status")) == "red" or int(governance.get("open_dead_letter_count") or 0) > 0:
-        warnings.append(
-            {
-                "code": "operator-review-required",
-                "message": "Runtime health is not clean; inspect dead letters and health alerts before trusting agent-side conclusions.",
-            }
-        )
-        return "needs-operator-review", warnings
-    if maybe_text(round_surface_payload.get("state_source")) == "missing-board":
-        warnings.append(
-            {
-                "code": "missing-board-snapshot",
-                "message": "Board state has not been initialized yet; the entry gate will rely on mission and analysis surfaces until board state exists.",
-            }
-        )
-    if int(analysis.get("matching_result_set_count") or 0) == 0:
-        warnings.append(
-            {
-                "code": "analysis-surface-empty",
-                "message": "No analysis-plane result sets are visible yet; direct signal-plane query skills remain the primary agent entry reads.",
-            }
-        )
-    return "ready", warnings
+def resolved_agent_entry_profile(agent_entry_profile: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(agent_entry_profile, dict):
+        raise ValueError("No agent entry profile was injected into kernel.agent_entry.")
+    return agent_entry_profile
 
 
-def role_entry_points(
-    *,
-    run_dir: Path,
-    run_id: str,
-    round_id: str,
-    contract_mode: str,
-    next_round_id: str,
-) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    for definition in ROLE_DEFINITIONS:
-        role = maybe_text(definition.get("role"))
-        role_read_commands: list[str] = []
-        for skill_name in definition.get("read_skills", []) if isinstance(definition.get("read_skills"), list) else []:
-            if skill_name == "eco-read-board-delta":
-                role_read_commands.append(
-                    run_skill_command(
-                        run_dir=run_dir,
-                        run_id=run_id,
-                        round_id=round_id,
-                        skill_name=skill_name,
-                        contract_mode=contract_mode,
-                        skill_args=["--include-closed", "--event-limit", "20"],
-                    )
-                )
-            else:
-                role_read_commands.append(
-                    run_skill_command(
-                        run_dir=run_dir,
-                        run_id=run_id,
-                        round_id=round_id,
-                        skill_name=skill_name,
-                        contract_mode=contract_mode,
-                    )
-                )
-        analysis_commands = [
-            query_result_set_command(
-                run_dir=run_dir,
-                run_id=run_id,
-                round_id=round_id,
-                analysis_kind=analysis_kind,
-            )
-            for analysis_kind in definition.get("analysis_kinds", []) if isinstance(definition.get("analysis_kinds"), list)
-        ]
-        role_write_commands: list[str] = []
-        for skill_name in definition.get("write_skills", []) if isinstance(definition.get("write_skills"), list) else []:
-            if skill_name == "eco-post-board-note":
-                role_write_commands.append(
-                    run_skill_command(
-                        run_dir=run_dir,
-                        run_id=run_id,
-                        round_id=round_id,
-                        skill_name=skill_name,
-                        contract_mode=contract_mode,
-                        skill_args=[
-                            "--author-role",
-                            role,
-                            "--category",
-                            "analysis",
-                            "--note-text",
-                            "<note_text>",
-                        ],
-                    )
-                )
-            elif skill_name == "eco-update-hypothesis-status":
-                role_write_commands.append(
-                    run_skill_command(
-                        run_dir=run_dir,
-                        run_id=run_id,
-                        round_id=round_id,
-                        skill_name=skill_name,
-                        contract_mode=contract_mode,
-                        skill_args=[
-                            "--title",
-                            "<hypothesis_title>",
-                            "--statement",
-                            "<hypothesis_statement>",
-                            "--status",
-                            "active",
-                            "--owner-role",
-                            role if role in {"sociologist", "environmentalist", "moderator"} else "moderator",
-                        ],
-                    )
-                )
-            elif skill_name == "eco-open-challenge-ticket":
-                role_write_commands.append(
-                    run_skill_command(
-                        run_dir=run_dir,
-                        run_id=run_id,
-                        round_id=round_id,
-                        skill_name=skill_name,
-                        contract_mode=contract_mode,
-                        skill_args=[
-                            "--title",
-                            "<challenge_title>",
-                            "--challenge-statement",
-                            "<challenge_statement>",
-                            "--priority",
-                            "high",
-                            "--owner-role",
-                            "challenger",
-                        ],
-                    )
-                )
-            elif skill_name == "eco-open-falsification-probe":
-                role_write_commands.append(
-                    run_skill_command(
-                        run_dir=run_dir,
-                        run_id=run_id,
-                        round_id=round_id,
-                        skill_name=skill_name,
-                        contract_mode=contract_mode,
-                        skill_args=["--max-probes", "3"],
-                    )
-                )
-            elif skill_name == "eco-close-challenge-ticket":
-                role_write_commands.append(
-                    run_skill_command(
-                        run_dir=run_dir,
-                        run_id=run_id,
-                        round_id=round_id,
-                        skill_name=skill_name,
-                        contract_mode=contract_mode,
-                        skill_args=["--ticket-id", "<ticket_id>"],
-                    )
-                )
-            elif skill_name == "eco-claim-board-task":
-                role_write_commands.append(
-                    run_skill_command(
-                        run_dir=run_dir,
-                        run_id=run_id,
-                        round_id=round_id,
-                        skill_name=skill_name,
-                        contract_mode=contract_mode,
-                        skill_args=["--task-id", "<task_id>", "--claimed-by-role", "moderator"],
-                    )
-                )
-            elif skill_name == "eco-open-investigation-round":
-                role_write_commands.append(
-                    run_skill_command(
-                        run_dir=run_dir,
-                        run_id=run_id,
-                        round_id=next_round_id,
-                        skill_name=skill_name,
-                        contract_mode=contract_mode,
-                        skill_args=["--source-round-id", round_id],
-                    )
-                )
-        results.append(
-            {
-                "role": role,
-                "focus": maybe_text(definition.get("focus")),
-                "read_commands": role_read_commands,
-                "analysis_commands": analysis_commands,
-                "write_commands": role_write_commands,
-            }
-        )
-    return results
+def profile_callable(agent_entry_profile: dict[str, Any], key: str) -> Any:
+    candidate = agent_entry_profile.get(key)
+    if not callable(candidate):
+        raise ValueError(f"Agent entry profile is missing callable: {key}")
+    return candidate
 
 
-def hard_gate_commands(
-    *,
-    run_dir: Path,
-    run_id: str,
-    round_id: str,
-    next_round_id: str,
-    contract_mode: str,
-) -> dict[str, str]:
-    return {
-        "show_run_state": kernel_command(
-            "show-run-state",
-            "--run-dir",
-            str(run_dir),
-            "--round-id",
-            round_id,
-            "--tail",
-            "20",
-            "--pretty",
-        ),
-        "supervise_round": kernel_command(
-            "supervise-round",
-            "--run-dir",
-            str(run_dir),
-            "--run-id",
-            run_id,
-            "--round-id",
-            round_id,
-            "--pretty",
-        ),
-        "apply_promotion_gate": kernel_command(
-            "apply-promotion-gate",
-            "--run-dir",
-            str(run_dir),
-            "--run-id",
-            run_id,
-            "--round-id",
-            round_id,
-            "--pretty",
-        ),
-        "close_round": kernel_command(
-            "close-round",
-            "--run-dir",
-            str(run_dir),
-            "--run-id",
-            run_id,
-            "--round-id",
-            round_id,
-            "--pretty",
-        ),
-        "open_next_round": run_skill_command(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=next_round_id,
-            skill_name="eco-open-investigation-round",
-            contract_mode=contract_mode,
-            skill_args=["--source-round-id", round_id],
-        ),
-    }
-
-
-def entry_chain(
-    *,
-    run_dir: Path,
-    run_id: str,
-    round_id: str,
-    contract_mode: str,
-    next_round_id: str,
-) -> list[dict[str, str]]:
-    return [
-        {
-            "step_id": "inspect-runtime",
-            "mode": "runtime-gate",
-            "objective": "Inspect governance, health, and current round posture before agent work begins.",
-            "command": kernel_command(
-                "show-run-state",
-                "--run-dir",
-                str(run_dir),
-                "--round-id",
-                round_id,
-                "--tail",
-                "20",
-                "--pretty",
-            ),
-        },
-        {
-            "step_id": "read-board-delta",
-            "mode": "advisory-read",
-            "objective": "Read the current round directly from deliberation-plane state instead of depending on stale summaries.",
-            "command": run_skill_command(
-                run_dir=run_dir,
-                run_id=run_id,
-                round_id=round_id,
-                skill_name="eco-read-board-delta",
-                contract_mode=contract_mode,
-                skill_args=["--include-closed", "--event-limit", "20"],
-            ),
-        },
-        {
-            "step_id": "query-shared-planes",
-            "mode": "advisory-read",
-            "objective": "Read normalized public/environment signals and current analysis result sets without leaving governed runtime surfaces.",
-            "command": run_skill_command(
-                run_dir=run_dir,
-                run_id=run_id,
-                round_id=round_id,
-                skill_name="eco-query-public-signals",
-                contract_mode=contract_mode,
-            ),
-        },
-        {
-            "step_id": "materialize-agent-advisory-plan",
-            "mode": "advisory-plan",
-            "objective": "Refresh one advisory-only orchestration plan so the agent route has an explicit but non-binding next-step hint.",
-            "command": advisory_plan_command(
-                run_dir=run_dir,
-                run_id=run_id,
-                round_id=round_id,
-                contract_mode=contract_mode,
-            ),
-        },
-        {
-            "step_id": "write-deliberation-state",
-            "mode": "governed-write",
-            "objective": "Push findings back through explicit board or challenge write skills instead of hidden in-memory agent state.",
-            "command": run_skill_command(
-                run_dir=run_dir,
-                run_id=run_id,
-                round_id=round_id,
-                skill_name="eco-post-board-note",
-                contract_mode=contract_mode,
-                skill_args=[
-                    "--author-role",
-                    "moderator",
-                    "--category",
-                    "analysis",
-                    "--note-text",
-                    "<note_text>",
-                ],
-            ),
-        },
-        {
-            "step_id": "return-to-runtime-gate",
-            "mode": "runtime-gate",
-            "objective": "Hand the updated round back to the runtime supervisor or promotion gate for a governed decision.",
-            "command": kernel_command(
-                "supervise-round",
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                run_id,
-                "--round-id",
-                round_id,
-                "--pretty",
-            ),
-        },
-        {
-            "step_id": "open-follow-up-round",
-            "mode": "governed-write",
-            "objective": "If the round remains open, advance the investigation with an explicit next-round transition rather than implicit carryover.",
-            "command": run_skill_command(
-                run_dir=run_dir,
-                run_id=run_id,
-                round_id=next_round_id,
-                skill_name="eco-open-investigation-round",
-                contract_mode=contract_mode,
-                skill_args=["--source-round-id", round_id],
-            ),
-        },
-    ]
-
-
-def operator_notes(
-    *,
-    status: str,
-    mission: dict[str, Any],
-    advisory_plan: dict[str, Any],
-    round_surface_payload: dict[str, Any],
-    analysis: dict[str, Any],
-) -> list[str]:
-    notes = [
-        "Agent entry remains advisory-first: direct reads and board writes can happen through governed skills without replacing runtime hard gates.",
-        "Promotion, archive, replay, and publication stay outside the agent inner loop and must return to runtime kernel commands.",
-    ]
-    if maybe_text(mission.get("orchestration_mode")) == "openclaw-agent":
-        notes.append("Mission scaffold already marks this round as `openclaw-agent`, so the operator-visible entry chain is explicitly enabled.")
-    if advisory_plan.get("present"):
-        notes.append(
-            f"Advisory plan posture is `{maybe_text(advisory_plan.get('downstream_posture')) or 'unspecified'}` with primary role `{maybe_text(advisory_plan.get('primary_role')) or 'moderator'}`."
-        )
-        if maybe_text(advisory_plan.get("plan_source")) == "direct-council-advisory":
-            notes.append("Current advisory queue was compiled directly from DB-backed council objects instead of a planner skill subprocess.")
-    if int(analysis.get("matching_result_set_count") or 0) > 0:
-        notes.append(
-            f"Analysis plane currently exposes {int(analysis.get('matching_result_set_count') or 0)} latest result sets for this round."
-        )
-    if maybe_text(round_surface_payload.get("state_source")) == "deliberation-plane":
-        notes.append("Board state is already readable from the deliberation plane, so agent-side context does not depend on `board_summary` or `board_brief` artifacts.")
-    if status == "needs-operator-review":
-        notes.append("Resolve runtime health alerts or dead letters before trusting agent-guided next steps.")
-    return notes[:5]
+def profile_list(agent_entry_profile: dict[str, Any], key: str) -> list[Any]:
+    candidate = agent_entry_profile.get(key)
+    if not isinstance(candidate, list):
+        raise ValueError(f"Agent entry profile is missing list: {key}")
+    return candidate
 
 
 def build_agent_entry_payload(
@@ -760,42 +231,43 @@ def build_agent_entry_payload(
     run_id: str,
     round_id: str,
     contract_mode: str,
+    agent_entry_profile: dict[str, Any],
+    hard_gate_command_builder: HardGateCommandBuilder,
+    entry_chain_builder: EntryChainBuilder,
 ) -> dict[str, Any]:
+    profile = resolved_agent_entry_profile(agent_entry_profile)
+    status_evaluator = profile_callable(profile, "status_evaluator")
+    next_round_id_builder = profile_callable(profile, "next_round_id_builder")
+    role_entry_builder = profile_callable(profile, "role_entry_builder")
+    recommended_skills_builder = profile_callable(profile, "recommended_skills_builder")
+    operator_notes_builder = profile_callable(profile, "operator_notes_builder")
+    role_definitions = profile_list(profile, "role_definitions")
     governance = governance_surface(run_dir, round_id=round_id)
     mission = mission_surface(run_dir, round_id)
     advisory_plan = advisory_plan_surface(run_dir, round_id)
     round_state = round_surface(run_dir, run_id=run_id, round_id=round_id)
     analysis = analysis_surface(run_dir, run_id=run_id, round_id=round_id)
-    next_round_id = suggest_next_round_id(run_dir, round_id)
-    status, warnings = entry_status(
+    next_round_id = maybe_text(
+        next_round_id_builder(
+            run_dir=run_dir,
+            current_round_id=round_id,
+        )
+    )
+    status, warnings = status_evaluator(
         governance=governance,
         mission=mission,
         round_surface_payload=round_state,
         analysis=analysis,
     )
-    role_entries = role_entry_points(
+    role_entries = role_entry_builder(
         run_dir=run_dir,
         run_id=run_id,
         round_id=round_id,
         contract_mode=contract_mode,
         next_round_id=next_round_id,
+        role_definitions=role_definitions,
     )
-    recommended_skills = unique_texts(
-        [
-            *(
-                advisory_plan.get("recommended_skill_sequence", [])
-                if isinstance(advisory_plan.get("recommended_skill_sequence"), list)
-                else []
-            ),
-            "eco-read-board-delta",
-            "eco-query-public-signals",
-            "eco-query-environment-signals",
-            "eco-post-board-note",
-            "eco-update-hypothesis-status",
-            "eco-open-challenge-ticket",
-            "eco-open-falsification-probe",
-        ]
-    )
+    recommended_skills = recommended_skills_builder(advisory_plan=advisory_plan)
     payload = {
         "schema_version": "runtime-agent-entry-gate-v1",
         "generated_at_utc": utc_now_iso(),
@@ -813,21 +285,21 @@ def build_agent_entry_payload(
         "advisory_plan": advisory_plan,
         "recommended_entry_skills": recommended_skills,
         "role_entry_points": role_entries,
-        "entry_chain": entry_chain(
+        "entry_chain": entry_chain_builder(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
             contract_mode=contract_mode,
             next_round_id=next_round_id,
         ),
-        "hard_gate_commands": hard_gate_commands(
+        "hard_gate_commands": hard_gate_command_builder(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
             next_round_id=next_round_id,
             contract_mode=contract_mode,
         ),
-        "operator_notes": operator_notes(
+        "operator_notes": operator_notes_builder(
             status=status,
             mission=mission,
             advisory_plan=advisory_plan,
@@ -851,9 +323,44 @@ def agent_entry_operator_view(
     round_id: str,
     gate_payload: dict[str, Any] | None,
     contract_mode: str = "warn",
+    agent_entry_profile: dict[str, Any] | None = None,
+    hard_gate_command_builder: HardGateCommandBuilder | None = None,
 ) -> dict[str, Any]:
+    profile = resolved_agent_entry_profile(agent_entry_profile)
+    operator_commands_builder = profile_callable(profile, "operator_commands_builder")
+    next_round_id_builder = profile_callable(profile, "next_round_id_builder")
     gate = gate_payload if isinstance(gate_payload, dict) else {}
-    next_round_id = suggest_next_round_id(run_dir, round_id) if round_id else ""
+    next_round_id = (
+        maybe_text(
+            next_round_id_builder(
+                run_dir=run_dir,
+                current_round_id=round_id,
+            )
+        )
+        if round_id
+        else ""
+    )
+    handoff_commands = (
+        hard_gate_command_builder(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
+            contract_mode=contract_mode,
+        )
+        if callable(hard_gate_command_builder) and run_id and round_id
+        else {}
+    )
+    entry_commands = (
+        operator_commands_builder(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            contract_mode=contract_mode,
+        )
+        if run_id and round_id
+        else {}
+    )
     return {
         "entry_gate_present": bool(gate),
         "entry_status": maybe_text(gate.get("entry_status")) or "",
@@ -862,105 +369,16 @@ def agent_entry_operator_view(
         "mission_scaffold_path": str(mission_scaffold_path(run_dir, round_id).resolve()) if round_id else "",
         "agent_advisory_plan_path": str(agent_advisory_plan_path(run_dir, round_id).resolve()) if round_id else "",
         "recommended_entry_skills": gate.get("recommended_entry_skills", []) if isinstance(gate.get("recommended_entry_skills"), list) else [],
-        "materialize_agent_entry_gate_command": kernel_command(
-            "materialize-agent-entry-gate",
-            "--run-dir",
-            str(run_dir),
-            "--run-id",
-            run_id,
-            "--round-id",
-            round_id,
-            "--pretty",
-        )
-        if run_id and round_id
-        else "",
-        "refresh_agent_entry_gate_command": kernel_command(
-            "materialize-agent-entry-gate",
-            "--run-dir",
-            str(run_dir),
-            "--run-id",
-            run_id,
-            "--round-id",
-            round_id,
-            "--refresh-advisory-plan",
-            "--pretty",
-        )
-        if run_id and round_id
-        else "",
-        "materialize_agent_advisory_plan_command": advisory_plan_command(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            contract_mode=contract_mode,
-        )
-        if run_id and round_id
-        else "",
-        "read_board_delta_command": run_skill_command(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            skill_name="eco-read-board-delta",
-            contract_mode=contract_mode,
-            skill_args=["--include-closed", "--event-limit", "20"],
-        )
-        if run_id and round_id
-        else "",
-        "query_public_signals_command": run_skill_command(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            skill_name="eco-query-public-signals",
-            contract_mode=contract_mode,
-        )
-        if run_id and round_id
-        else "",
-        "query_environment_signals_command": run_skill_command(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            skill_name="eco-query-environment-signals",
-            contract_mode=contract_mode,
-        )
-        if run_id and round_id
-        else "",
-        "list_claim_cluster_result_sets_command": query_result_set_command(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            analysis_kind="claim-cluster",
-        )
-        if run_id and round_id
-        else "",
-        "query_claim_cluster_items_command_template": query_result_item_template(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            analysis_kind="claim-cluster",
-        )
-        if run_id and round_id
-        else "",
-        "open_next_round_command_template": run_skill_command(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=next_round_id,
-            skill_name="eco-open-investigation-round",
-            contract_mode=contract_mode,
-            skill_args=["--source-round-id", round_id],
-        )
-        if run_id and round_id and next_round_id
-        else "",
-        "return_to_supervisor_command": kernel_command(
-            "supervise-round",
-            "--run-dir",
-            str(run_dir),
-            "--run-id",
-            run_id,
-            "--round-id",
-            round_id,
-            "--pretty",
-        )
-        if run_id and round_id
-        else "",
+        "materialize_agent_entry_gate_command": maybe_text(entry_commands.get("materialize_agent_entry_gate_command")),
+        "refresh_agent_entry_gate_command": maybe_text(entry_commands.get("refresh_agent_entry_gate_command")),
+        "materialize_agent_advisory_plan_command": maybe_text(entry_commands.get("materialize_agent_advisory_plan_command")),
+        "read_board_delta_command": maybe_text(entry_commands.get("read_board_delta_command")),
+        "query_public_signals_command": maybe_text(entry_commands.get("query_public_signals_command")),
+        "query_environment_signals_command": maybe_text(entry_commands.get("query_environment_signals_command")),
+        "list_claim_cluster_result_sets_command": maybe_text(entry_commands.get("list_claim_cluster_result_sets_command")),
+        "query_claim_cluster_items_command_template": maybe_text(entry_commands.get("query_claim_cluster_items_command_template")),
+        "open_next_round_command_template": maybe_text(handoff_commands.get("open_next_round")),
+        "return_to_supervisor_command": maybe_text(handoff_commands.get("supervise_round")),
     }
 
 
@@ -970,6 +388,8 @@ def agent_entry_state(
     run_id: str,
     round_id: str,
     contract_mode: str = "warn",
+    agent_entry_profile: dict[str, Any] | None = None,
+    hard_gate_command_builder: HardGateCommandBuilder | None = None,
 ) -> dict[str, Any]:
     if not round_id:
         return {}
@@ -982,6 +402,8 @@ def agent_entry_state(
             round_id=round_id,
             gate_payload=gate,
             contract_mode=contract_mode,
+            agent_entry_profile=agent_entry_profile,
+            hard_gate_command_builder=hard_gate_command_builder,
         ),
     }
 
@@ -991,6 +413,9 @@ def materialize_agent_entry_gate(
     *,
     run_id: str,
     round_id: str,
+    agent_entry_profile: dict[str, Any],
+    hard_gate_command_builder: HardGateCommandBuilder,
+    entry_chain_builder: EntryChainBuilder,
     contract_mode: str = "warn",
     refresh_advisory_plan: bool = False,
     timeout_seconds: float | None = None,
@@ -998,12 +423,16 @@ def materialize_agent_entry_gate(
     retry_backoff_ms: int | None = None,
     allow_side_effects: list[str] | None = None,
 ) -> dict[str, Any]:
+    profile = resolved_agent_entry_profile(agent_entry_profile)
     resolved_run_dir = resolve_run_dir(run_dir)
     initial_payload = build_agent_entry_payload(
         resolved_run_dir,
         run_id=run_id,
         round_id=round_id,
         contract_mode=contract_mode,
+        agent_entry_profile=profile,
+        hard_gate_command_builder=hard_gate_command_builder,
+        entry_chain_builder=entry_chain_builder,
     )
     advisory_plan_file = agent_advisory_plan_path(resolved_run_dir, round_id)
     advisory_plan_materialized = False
@@ -1011,41 +440,27 @@ def materialize_agent_entry_gate(
     if maybe_text(initial_payload.get("entry_status")) != "blocked" and (
         refresh_advisory_plan or not advisory_plan_file.exists()
     ):
-        try:
-            plan_result = materialize_direct_council_advisory_plan(
-                resolved_run_dir,
-                run_id=run_id,
-                round_id=round_id,
-                output_path=advisory_plan_relative_path(resolved_run_dir, round_id),
-                contract_mode=contract_mode,
-            )
-        except Exception:
-            plan_result = {}
-        if not plan_result:
-            plan_result = run_skill(
-                resolved_run_dir,
-                run_id=run_id,
-                round_id=round_id,
-                skill_name="eco-plan-round-orchestration",
-                skill_args=[
-                    "--planner-mode",
-                    "agent-advisory",
-                    "--output-path",
-                    advisory_plan_relative_path(resolved_run_dir, round_id),
-                ],
-                contract_mode=contract_mode,
-                timeout_seconds=timeout_seconds,
-                retry_budget=retry_budget,
-                retry_backoff_ms=retry_backoff_ms,
-                allow_side_effects=allow_side_effects,
-            )
-        advisory_plan_materialized = True
-        advisory_plan_receipt_id = maybe_text(plan_result.get("summary", {}).get("receipt_id"))
+        plan_result = materialize_agent_entry_advisory_plan(
+            resolved_run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            contract_mode=contract_mode,
+            advisory_sources=profile_list(profile, "advisory_sources"),
+            timeout_seconds=timeout_seconds,
+            retry_budget=retry_budget,
+            retry_backoff_ms=retry_backoff_ms,
+            allow_side_effects=allow_side_effects,
+        )
+        advisory_plan_materialized = bool(plan_result.get("materialized"))
+        advisory_plan_receipt_id = maybe_text(plan_result.get("receipt_id"))
     payload = build_agent_entry_payload(
         resolved_run_dir,
         run_id=run_id,
         round_id=round_id,
         contract_mode=contract_mode,
+        agent_entry_profile=profile,
+        hard_gate_command_builder=hard_gate_command_builder,
+        entry_chain_builder=entry_chain_builder,
     )
     output_file = agent_entry_gate_path(resolved_run_dir, round_id)
     write_json(output_file, payload)

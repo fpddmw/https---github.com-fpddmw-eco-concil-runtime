@@ -20,7 +20,7 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.council_objects import (  # noqa: E402
     query_council_objects,
 )
-from eco_council_runtime.kernel.investigation_planning import load_d1_shared_context  # noqa: E402
+from eco_council_runtime.phase2_fallback_context import load_d1_shared_context  # noqa: E402
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_next_actions_wrapper,
     load_round_readiness_wrapper,

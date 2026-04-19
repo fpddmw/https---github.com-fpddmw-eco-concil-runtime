@@ -20,10 +20,16 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.council_objects import (  # noqa: E402
     query_council_objects,
 )
-from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
-    d1_contract_fields_from_payload,
+from eco_council_runtime.phase2_fallback_common import maybe_text  # noqa: E402
+from eco_council_runtime.phase2_fallback_context import (  # noqa: E402
     load_ranked_actions_context,
-    maybe_text,
+)
+from eco_council_runtime.phase2_fallback_contracts import (  # noqa: E402
+    d1_contract_fields_from_payload,
+)
+from eco_council_runtime.phase2_proposal_actions import (  # noqa: E402
+    action_from_council_proposal,
+    action_signature,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_moderator_action_records,
@@ -107,152 +113,6 @@ def summarize_action_counts(
             continue
         counts[value] = counts.get(value, 0) + 1
     return counts
-
-
-def proposal_target(proposal: dict[str, Any]) -> dict[str, Any]:
-    target = proposal.get("target", {})
-    if isinstance(target, dict) and target:
-        return dict(target)
-    target_kind = maybe_text(proposal.get("target_kind"))
-    target_id = maybe_text(proposal.get("target_id"))
-    resolved: dict[str, Any] = {}
-    if target_kind:
-        resolved["object_kind"] = target_kind
-    if target_id:
-        resolved["object_id"] = target_id
-    if maybe_text(proposal.get("target_claim_id")):
-        resolved["claim_id"] = maybe_text(proposal.get("target_claim_id"))
-    if maybe_text(proposal.get("target_hypothesis_id")):
-        resolved["hypothesis_id"] = maybe_text(proposal.get("target_hypothesis_id"))
-    if maybe_text(proposal.get("target_ticket_id")):
-        resolved["ticket_id"] = maybe_text(proposal.get("target_ticket_id"))
-    if target_kind in {"claim", "claim-candidate", "claim-cluster"} and target_id:
-        resolved.setdefault("claim_id", target_id)
-    if target_kind in {"hypothesis", "hypothesis-card"} and target_id:
-        resolved.setdefault("hypothesis_id", target_id)
-    if target_kind in {"challenge-ticket", "ticket"} and target_id:
-        resolved.setdefault("ticket_id", target_id)
-    if target_kind == "issue-cluster" and target_id:
-        resolved.setdefault("map_issue_id", target_id)
-    return resolved
-
-
-def action_signature(action: dict[str, Any]) -> str:
-    target = action.get("target", {}) if isinstance(action.get("target"), dict) else {}
-    return "|".join(
-        [
-            maybe_text(action.get("action_kind")),
-            maybe_text(action.get("assigned_role")),
-            maybe_text(target.get("object_kind")),
-            maybe_text(target.get("object_id")),
-            maybe_text(target.get("claim_id")),
-            maybe_text(target.get("hypothesis_id")),
-            maybe_text(target.get("ticket_id")),
-            maybe_text(action.get("issue_label")),
-        ]
-    )
-
-
-def action_from_council_proposal(proposal: dict[str, Any]) -> dict[str, Any]:
-    proposal_id = maybe_text(proposal.get("proposal_id"))
-    target = proposal_target(proposal)
-    response_to_ids = list_items(proposal.get("response_to_ids"))
-    decision_source = maybe_text(proposal.get("decision_source")) or "agent-council"
-    action_kind = (
-        maybe_text(proposal.get("action_kind"))
-        or maybe_text(proposal.get("proposed_action_kind"))
-        or maybe_text(proposal.get("proposal_kind"))
-        or "follow-council-proposal"
-    )
-    objective = (
-        maybe_text(proposal.get("objective"))
-        or maybe_text(proposal.get("summary"))
-        or maybe_text(proposal.get("rationale"))
-        or f"Execute council proposal {proposal_id or 'for this round'}."
-    )
-    reason = (
-        maybe_text(proposal.get("rationale"))
-        or maybe_text(proposal.get("summary"))
-        or f"Council proposal {proposal_id or '<missing>'} requested this action."
-    )
-    confidence = maybe_number(proposal.get("confidence"))
-    pressure_score = (
-        0.95 if confidence is None else max(0.55, min(1.0, float(confidence)))
-    )
-    return {
-        "action_id": (
-            maybe_text(proposal.get("proposed_action_id"))
-            or maybe_text(proposal.get("action_id"))
-            or "action-"
-            + stable_hash(
-                "council-proposal-action",
-                proposal_id,
-                action_kind,
-                maybe_text(proposal.get("agent_role")),
-                maybe_text(target.get("object_id")),
-                maybe_text(target.get("claim_id")),
-                maybe_text(target.get("hypothesis_id")),
-                maybe_text(target.get("ticket_id")),
-            )[:12]
-        ),
-        "action_kind": action_kind,
-        "priority": maybe_text(proposal.get("priority")) or "high",
-        "assigned_role": (
-            maybe_text(proposal.get("assigned_role"))
-            or maybe_text(proposal.get("agent_role"))
-            or "moderator"
-        ),
-        "objective": objective,
-        "reason": reason,
-        "source_ids": unique_texts(
-            [proposal_id, maybe_text(proposal.get("target_id")), *response_to_ids]
-        ),
-        "target": target,
-        "controversy_gap": maybe_text(proposal.get("controversy_gap")),
-        "recommended_lane": maybe_text(proposal.get("recommended_lane")),
-        "expected_outcome": (
-            maybe_text(proposal.get("expected_outcome"))
-            or maybe_text(proposal.get("desired_outcome"))
-            or "Execute the council-proposed next step."
-        ),
-        "evidence_refs": unique_texts(list_items(proposal.get("evidence_refs"))),
-        "probe_candidate": bool(proposal.get("probe_candidate"))
-        or action_kind
-        in {
-            "resolve-challenge",
-            "resolve-contradiction",
-            "advance-empirical-verification",
-            "clarify-verification-route",
-            "open-probe",
-        },
-        "contradiction_link_count": int(proposal.get("contradiction_link_count") or 0),
-        "coverage_score": float(proposal.get("coverage_score") or 0.0),
-        "confidence": confidence,
-        "brief_context": reason,
-        "agenda_source": "agent-proposal",
-        "issue_label": (
-            maybe_text(proposal.get("issue_label"))
-            or maybe_text(target.get("issue_label"))
-            or maybe_text(target.get("map_issue_id"))
-        ),
-        "pressure_score": pressure_score,
-        "readiness_blocker": bool(
-            proposal.get("readiness_blocker", True)
-        ),
-        "decision_source": decision_source,
-        "lineage": unique_texts(
-            [proposal_id, *response_to_ids, *list_items(proposal.get("lineage"))]
-        ),
-        "provenance": (
-            proposal.get("provenance")
-            if isinstance(proposal.get("provenance"), dict)
-            else {
-                "source_skill": "council-proposal",
-                "proposal_id": proposal_id,
-                "decision_source": decision_source,
-            }
-        ),
-    }
 
 
 def load_council_proposal_actions(
@@ -378,6 +238,14 @@ def propose_next_actions_skill(
         "agenda_source_counts": summarize_action_counts(
             ranked_actions,
             field_name="agenda_source",
+        ),
+        "policy_source_counts": summarize_action_counts(
+            ranked_actions,
+            field_name="policy_source",
+        ),
+        "policy_profile_counts": summarize_action_counts(
+            ranked_actions,
+            field_name="policy_profile",
         ),
         "controversy_gap_counts": summarize_action_counts(
             ranked_actions,

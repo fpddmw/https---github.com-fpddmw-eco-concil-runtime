@@ -227,15 +227,29 @@
 - `[x]` `next_actions / probes / readiness` 的 DB/artifact read surface 已抽到 `kernel/phase2_state_surfaces.py`，`gate.py / supervisor.py / benchmark.py` 不再直接依赖 `investigation_planning.py`。
 - `[x]` `promotion_basis / reporting_handoff / council_decision / expert_report / final_publication` 的 DB/artifact read surface 也已并入 `kernel/phase2_state_surfaces.py`；reporting / publication 相关 skills 已切到新 surface，`investigation_planning.py` 只剩 compatibility re-export，不再持有这些实现。
 - `[x]` `gate.py` 已支持 handler registry / dispatch；controller 不再导入或硬编码 `promotion-gate` 实现，`promotion-gate` 也不再是唯一合法 gate handler。
-- `[ ]` runtime 仍自带 `promotion-gate` 默认 handler，而且该 handler 继续绑定 readiness/promotion 语义；下一步仍需把这块领域语义迁出 kernel，只保留通用 gate runtime。
-- `[ ]` `investigation_planning.py` 的 state-query 主职责已移出，但 readiness/promotion fallback 与 controversy scoring 等 heuristic 主语义仍然过重；kernel 边界尚未收干净。
+- `[x]` `promotion-gate` 默认实现已迁到 `eco_council_runtime/phase2_gate_handlers.py`；`kernel/gate.py` 现在只剩 gate dispatch/runtime，不再持有 promotion/readiness 领域逻辑。
+- `[x]` `controller.run_phase2_round_with_contract_mode(...)` 已改成显式接收 `gate_handlers`；默认 gate/profile 现在只能从组合根显式注入，controller 不再默认拥有该 profile。
+- `[x]` `phase2_fallback_planning.py` 已拆成 `phase2_fallback_common.py / phase2_fallback_contracts.py / phase2_fallback_agenda.py / phase2_fallback_context.py` 四个明确职责模块；原文件退成 compatibility facade，skills / reporting contracts / kernel compatibility layer 也开始直接依赖这些新边界。
+- `[x]` `phase2_fallback_agenda.py` 内的 score / pressure / probe / readiness-blocker 规则已继续抽成 `eco_council_runtime/phase2_fallback_policy.py`，fallback 动作现在会显式写出 `policy_profile / policy_source / policy_owner`。
+- `[x]` agent proposal 到执行 action 的投影已统一抽到 `eco_council_runtime/phase2_proposal_actions.py`；`phase2_direct_advisory.py`、`eco-propose-next-actions`、`eco-open-falsification-probe`、`eco-plan-round-orchestration` 不再各自维护一套 proposal->action 规则副本。
+- `[x]` phase-2 默认 gate profile 已从 handler 实现文件拆到 `eco_council_runtime/phase2_gate_profile.py`；`phase2_gate_handlers.py` 现在只保留 handler 实现，不再同时承担“默认 profile 注册表”。
+- `[x]` `runtime_command_hints.py / phase2_agent_handoff.py` 已把默认 runtime command hints 与 agent handoff chain 提升到 kernel 外；`kernel/agent_entry.py` 现在只消费注入的 `hard_gate_command_builder / entry_chain_builder`，不再内建默认 runtime handoff 流程。
+- `[x]` `scripts/eco_runtime_kernel.py` 现在是默认 phase-2 gate/profile 与 agent handoff profile 的组合根；`cli.py / supervisor.py / agent_entry.py` 只消费注入参数，不再私自装配默认 profile。
+- `[x]` `phase2_fallback_agenda_profile.py` 已接管 `open-challenge / task / hypothesis / issue / route / assessment / link / gap / edge / coverage -> action` 的映射与启停顺序；`phase2_fallback_agenda.py` 现在只剩通用 context 装配、去重、排序和统计。
+- `[x]` 新增 profile-overridable 回归：可注入自定义 agenda profile 覆盖默认 fallback 议会流程，可注入自定义 agent handoff profile 覆盖默认 runtime handoff 命令链。
+- `[x]` `phase2_stage_profile.py` 现在持有默认 stage definitions、gate/post-gate 默认蓝图与 stage validation；`kernel/phase2_contract.py` 已退成 compatibility facade，不再是 controller 的默认真理表。
+- `[x]` `phase2_controller_state.py` 已接管 phase-2 stage blueprint、controller planning snapshot、step merge、planner attempt summary、failure/event shape；`kernel/controller.py` 现在主要只剩 injected planning source 执行、gate dispatch、skill execution 与持久化。
+- `[x]` `phase2_agent_entry_profile.py` 已接管 agent-entry 默认 role definitions、recommended skills、operator commands/notes、next-round suggestion builder 与 advisory refresh source 顺序；`kernel/agent_entry.py / cli.py` 现在只消费 injected entry profile，不再内建默认议会入口教程或 advisory materialization 链。
+- `[x]` `phase2_posture_profile.py` 已接管 controller completion follow-up、supervisor classification / top-actions / round-transition / operator notes / failure notes；`kernel/controller.py / kernel/supervisor.py / cli.py` 现在只消费 injected posture profile。
+- `[x]` `phase2_round_profile.py` 已接管默认 `next_round_id` sequencing；`kernel/supervisor.py / kernel/agent_entry.py` 不再共享或持有内建轮次递增策略，round handoff policy 可以通过 posture / entry profile 双向覆写。
+- `[x]` 本地大回归 `95` 项通过，覆盖 phase-2 / agent-entry / council / reporting / publication 主链。
 
 ### 9.1 必须收缩或迁出的模块
 
-- `[ ]` 收缩或迁出 `eco-concil-runtime/src/eco_council_runtime/kernel/phase2_contract.py`
-- `[ ]` 收缩或迁出 `eco-concil-runtime/src/eco_council_runtime/kernel/controller.py`
-- `[ ]` 迁出 `eco-concil-runtime/src/eco_council_runtime/kernel/investigation_planning.py`
-- `[ ]` 重写 `eco-concil-runtime/src/eco_council_runtime/kernel/agent_entry.py`
+- `[x]` 收缩或迁出 `eco-concil-runtime/src/eco_council_runtime/kernel/phase2_contract.py`
+- `[x]` 收缩或迁出 `eco-concil-runtime/src/eco_council_runtime/kernel/controller.py`
+- `[x]` 迁出 `eco-concil-runtime/src/eco_council_runtime/kernel/investigation_planning.py`
+- `[x]` 重写 `eco-concil-runtime/src/eco_council_runtime/kernel/agent_entry.py`
 
 ### 9.2 必须保留在 kernel 的职责
 
@@ -291,7 +305,7 @@
 - `[x]` 新增 DB-only recovery tests
 - `[x]` 新增 agent proposal-driven round tests
 - `[x]` 新增 board canonical query-surface tests
-- `[ ]` 新增 kernel boundary tests
+- `[x]` 新增 kernel boundary tests
 - `[ ]` 新增 optional verification lane tests
 - `[ ]` 准备争议型政策 case
 - `[ ]` 准备混合型争议 case

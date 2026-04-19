@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-# Compatibility-only module. Canonical phase-2 fallback logic now lives in the
-# narrower top-level modules below so kernel no longer owns the heuristics or
-# their DB-backed context assembly surface.
-from ..phase2_fallback_agenda import (  # noqa: F401
+# Compatibility-only facade. Canonical phase-2 fallback logic now lives in the
+# narrower modules below so callers can depend on explicit policy surfaces
+# instead of one oversized planning module.
+from .phase2_fallback_agenda import (  # noqa: F401
     action_from_claim_assessment,
     action_from_coverage,
     action_from_diffusion_edge,
@@ -26,7 +26,7 @@ from ..phase2_fallback_agenda import (  # noqa: F401
     role_from_coverage,
     score_action,
 )
-from ..phase2_fallback_common import (  # noqa: F401
+from .phase2_fallback_common import (  # noqa: F401
     excerpt_text,
     grouped_by_issue_label,
     indexed_by_claim_id,
@@ -50,29 +50,19 @@ from ..phase2_fallback_common import (  # noqa: F401
     unique_texts,
     weakest_coverage_for_claim_ids,
 )
-from ..phase2_fallback_context import (  # noqa: F401
+from .phase2_fallback_context import (  # noqa: F401
     load_d1_shared_context,
     load_ranked_actions_context,
     primary_analysis_sync,
 )
-from ..phase2_fallback_contracts import (  # noqa: F401
+from .phase2_fallback_contracts import (  # noqa: F401
     d1_contract_fields,
     d1_contract_fields_from_payload,
     normalize_d1_observed_inputs,
 )
-from ..phase2_fallback_policy import (  # noqa: F401
+from .phase2_fallback_policy import (  # noqa: F401
     DEFAULT_FALLBACK_POLICY_OWNER,
     DEFAULT_FALLBACK_POLICY_PROFILE,
     DEFAULT_FALLBACK_POLICY_SOURCE,
     fallback_policy_annotation,
-)
-from .phase2_state_surfaces import (  # noqa: F401
-    load_council_decision_wrapper,
-    load_expert_report_wrapper,
-    load_falsification_probe_wrapper,
-    load_final_publication_wrapper,
-    load_next_actions_wrapper,
-    load_promotion_basis_wrapper,
-    load_reporting_handoff_wrapper,
-    load_round_readiness_wrapper,
 )

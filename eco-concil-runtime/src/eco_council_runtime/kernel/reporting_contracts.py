@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from .investigation_planning import (  # noqa: F401
+from ..phase2_fallback_common import maybe_text  # noqa: F401
+from ..phase2_fallback_contracts import (  # noqa: F401
     d1_contract_fields,
-    maybe_text,
     normalize_d1_observed_inputs,
 )
 

@@ -20,11 +20,15 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.council_objects import (  # noqa: E402
     query_council_objects,
 )
-from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
-    d1_contract_fields_from_payload,
-    load_d1_shared_context,
+from eco_council_runtime.phase2_fallback_common import (  # noqa: E402
     maybe_text,
     resolve_path,
+)
+from eco_council_runtime.phase2_fallback_context import (  # noqa: E402
+    load_d1_shared_context,
+)
+from eco_council_runtime.phase2_fallback_contracts import (  # noqa: E402
+    d1_contract_fields_from_payload,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_round_readiness_assessment,

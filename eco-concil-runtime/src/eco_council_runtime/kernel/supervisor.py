@@ -1,72 +1,21 @@
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
-import re
 from typing import Any
 
+from ..phase2_posture_profile import (
+    posture_profile_callable,
+    resolve_phase2_posture_profile,
+)
 from .deliberation_plane import store_promotion_freeze_record
 from .executor import SkillExecutionError
-from .controller import run_phase2_round, run_phase2_round_with_contract_mode
+from .controller import run_phase2_round_with_contract_mode
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
+from .gate import GateHandler
 from .ledger import append_ledger_event
 from .manifest import load_json_if_exists, write_json
 from .phase2_state_surfaces import load_next_actions_wrapper
 from .paths import supervisor_state_path
-from .source_queue_history import discovered_round_ids
-
-WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
-OPEN_ROUND_SCRIPT = WORKSPACE_ROOT / "skills" / "eco-open-investigation-round" / "scripts" / "eco_open_investigation_round.py"
-ROUND_SUFFIX_PATTERN = re.compile(r"^(?P<prefix>.*?)(?P<number>\d+)$")
-
-
-def stable_hash(*parts: Any) -> str:
-    joined = "||".join(maybe_text(part) for part in parts)
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
-
-
-def unique_texts(values: list[Any]) -> list[str]:
-    seen: set[str] = set()
-    results: list[str] = []
-    for value in values:
-        text = maybe_text(value)
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        results.append(text)
-    return results
-
-
-def top_actions(next_actions: dict[str, Any]) -> list[dict[str, str]]:
-    ranked_actions = next_actions.get("ranked_actions", []) if isinstance(next_actions.get("ranked_actions"), list) else []
-    results: list[dict[str, str]] = []
-    for action in ranked_actions[:3]:
-        if not isinstance(action, dict):
-            continue
-        results.append(
-            {
-                "action_id": maybe_text(action.get("action_id")),
-                "action_kind": maybe_text(action.get("action_kind")),
-                "assigned_role": maybe_text(action.get("assigned_role")),
-                "priority": maybe_text(action.get("priority")),
-                "objective": maybe_text(action.get("objective")),
-            }
-        )
-    return results
-
-
-def operator_notes(*, promotion_status: str, gate_status: str, gate_reasons: list[Any], top_action_rows: list[dict[str, str]]) -> list[str]:
-    if promotion_status == "promoted":
-        return [
-            "Round promotion succeeded and the evidence basis is now ready for downstream reporting.",
-            "No blocking board or probe objects remain in the current controller snapshot.",
-        ]
-    notes = [f"Promotion is withheld because gate={gate_status}."]
-    notes.extend(maybe_text(reason) for reason in gate_reasons if maybe_text(reason))
-    if top_action_rows:
-        top_action_kind = top_action_rows[0].get("action_kind") or "unspecified"
-        notes.append(f"Highest-priority follow-up remains {top_action_kind}.")
-    return notes[:4]
 
 
 def operator_commands(*, run_id: str, round_id: str, run_dir: Path) -> dict[str, str]:
@@ -78,81 +27,26 @@ def operator_commands(*, run_id: str, round_id: str, run_dir: Path) -> dict[str,
     }
 
 
-def increment_round_id(round_id: str) -> str:
-    normalized = maybe_text(round_id)
-    match = ROUND_SUFFIX_PATTERN.match(normalized)
-    if match is None:
-        return f"{normalized}-next"
-    prefix = maybe_text(match.group("prefix"))
-    number_text = maybe_text(match.group("number"))
-    return f"{prefix}{int(number_text) + 1:0{len(number_text)}d}"
-
-
-def suggest_next_round_id(run_dir: Path, current_round_id: str) -> str:
-    observed = set(discovered_round_ids(run_dir))
-    candidate = increment_round_id(current_round_id)
-    while candidate in observed:
-        candidate = increment_round_id(candidate)
-    return candidate
-
-
-def round_transition_hint(run_dir: Path, *, run_id: str, round_id: str, supervisor_status: str) -> dict[str, str]:
-    if supervisor_status != "hold-investigation-open":
-        return {}
-    suggested_round_id = suggest_next_round_id(run_dir, round_id)
-    return {
-        "skill_name": "eco-open-investigation-round",
-        "source_round_id": round_id,
-        "suggested_round_id": suggested_round_id,
-        "command": (
-            f"python3 {OPEN_ROUND_SCRIPT} --run-dir {run_dir} --run-id {run_id} "
-            f"--round-id {suggested_round_id} --source-round-id {round_id}"
-        ),
-    }
-
-
-def classify_supervisor_state(controller: dict[str, Any]) -> dict[str, str]:
-    controller_status = maybe_text(controller.get("controller_status")) or "completed"
-    readiness_status = maybe_text(controller.get("readiness_status")) or "blocked"
-    gate_status = maybe_text(controller.get("gate_status")) or "freeze-withheld"
-    promotion_status = maybe_text(controller.get("promotion_status")) or "withheld"
-    if controller_status == "failed":
-        return {
-            "supervisor_status": "controller-failed",
-            "supervisor_substatus": "phase2-recovery-required",
-            "phase2_posture": "controller-failed",
-            "terminal_state": "recovery-required",
-            "recovery_posture": "resume-controller",
-            "operator_action": "resume-phase2",
-        }
-    if promotion_status == "promoted":
-        return {
-            "supervisor_status": "ready-for-reporting",
-            "supervisor_substatus": "promotion-complete",
-            "phase2_posture": "reporting-ready",
-            "terminal_state": "reporting-ready",
-            "recovery_posture": "terminal",
-            "operator_action": "handoff-reporting",
-        }
-    substatus = "promotion-withheld"
-    if readiness_status == "blocked":
-        substatus = "blocked-before-promotion"
-    elif readiness_status == "needs-more-data":
-        substatus = "investigation-open"
-    elif gate_status == "freeze-withheld":
-        substatus = "gate-withheld"
-    return {
-        "supervisor_status": "hold-investigation-open",
-        "supervisor_substatus": substatus,
-        "phase2_posture": "investigation-hold",
-        "terminal_state": "investigation-open",
-        "recovery_posture": "continue-investigation",
-        "operator_action": "continue-investigation",
-    }
-
-
-def supervise_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any]:
-    return supervise_round_with_contract_mode(run_dir, run_id=run_id, round_id=round_id, contract_mode="warn")
+def supervise_round(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    gate_handlers: dict[str, GateHandler] | None = None,
+    posture_profile: dict[str, Any] | None = None,
+    planning_sources: list[dict[str, Any]] | None = None,
+    stage_definitions: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return supervise_round_with_contract_mode(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        contract_mode="warn",
+        gate_handlers=gate_handlers,
+        posture_profile=posture_profile,
+        planning_sources=planning_sources,
+        stage_definitions=stage_definitions,
+    )
 
 
 def supervise_round_with_contract_mode(
@@ -161,11 +55,44 @@ def supervise_round_with_contract_mode(
     run_id: str,
     round_id: str,
     contract_mode: str,
+    gate_handlers: dict[str, GateHandler] | None = None,
+    posture_profile: dict[str, Any] | None = None,
+    planning_sources: list[dict[str, Any]] | None = None,
+    stage_definitions: dict[str, dict[str, Any]] | None = None,
     timeout_seconds: float | None = None,
     retry_budget: int | None = None,
     retry_backoff_ms: int | None = None,
     allow_side_effects: list[str] | None = None,
 ) -> dict[str, Any]:
+    profile = resolve_phase2_posture_profile(posture_profile)
+    classification_builder = posture_profile_callable(
+        profile,
+        "supervisor_classification_builder",
+    )
+    next_round_id_builder = posture_profile_callable(
+        profile,
+        "supervisor_next_round_id_builder",
+    )
+    top_actions_builder = posture_profile_callable(
+        profile,
+        "supervisor_top_actions_builder",
+    )
+    round_transition_builder = posture_profile_callable(
+        profile,
+        "supervisor_round_transition_builder",
+    )
+    recommended_skills_builder = posture_profile_callable(
+        profile,
+        "supervisor_recommended_skills_builder",
+    )
+    operator_notes_builder = posture_profile_callable(
+        profile,
+        "supervisor_operator_notes_builder",
+    )
+    failure_notes_builder = posture_profile_callable(
+        profile,
+        "supervisor_failure_notes_builder",
+    )
     started_at = utc_now_iso()
     execution_policy = {
         "timeout_seconds": timeout_seconds,
@@ -175,20 +102,29 @@ def supervise_round_with_contract_mode(
     }
     command_hints = operator_commands(run_id=run_id, round_id=round_id, run_dir=run_dir)
     try:
+        controller_kwargs: dict[str, Any] = {
+            "run_id": run_id,
+            "round_id": round_id,
+            "contract_mode": contract_mode,
+            "gate_handlers": gate_handlers,
+            "posture_profile": profile,
+            "timeout_seconds": timeout_seconds,
+            "retry_budget": retry_budget,
+            "retry_backoff_ms": retry_backoff_ms,
+            "allow_side_effects": allow_side_effects,
+        }
+        if planning_sources is not None:
+            controller_kwargs["planning_sources"] = planning_sources
+        if stage_definitions is not None:
+            controller_kwargs["stage_definitions"] = stage_definitions
         controller_result = run_phase2_round_with_contract_mode(
             run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            contract_mode=contract_mode,
-            timeout_seconds=timeout_seconds,
-            retry_budget=retry_budget,
-            retry_backoff_ms=retry_backoff_ms,
-            allow_side_effects=allow_side_effects,
+            **controller_kwargs,
         )
     except SkillExecutionError as exc:
         controller = exc.payload.get("controller", {}) if isinstance(exc.payload.get("controller"), dict) else {}
         artifacts = controller.get("artifacts", {}) if isinstance(controller.get("artifacts"), dict) else {}
-        classification = classify_supervisor_state(controller or {"controller_status": "failed"})
+        classification = classification_builder(controller or {"controller_status": "failed"})
         finished_at = utc_now_iso()
         payload = {
             "schema_version": "runtime-supervisor-v3",
@@ -223,9 +159,7 @@ def supervise_round_with_contract_mode(
             "recommended_next_skills": controller.get("recommended_next_skills", []),
             "round_transition": {},
             "top_actions": [],
-            "operator_notes": [
-                f"Controller failed at stage {maybe_text(controller.get('failed_stage')) or maybe_text(controller.get('current_stage')) or 'unknown'}."
-            ],
+            "operator_notes": failure_notes_builder(controller),
             "resume_command": command_hints["resume_command"],
             "restart_command": command_hints["restart_command"],
             "inspect_command": command_hints["inspect_command"],
@@ -300,37 +234,36 @@ def supervise_round_with_contract_mode(
         else {}
     )
     next_actions = next_actions or {}
-    top_action_rows = top_actions(next_actions)
+    top_action_rows = top_actions_builder(next_actions)
     gate_reasons = controller.get("gate_reasons", []) if isinstance(controller.get("gate_reasons"), list) else []
     promotion_status = maybe_text(controller.get("promotion_status")) or "withheld"
     gate_status = maybe_text(controller.get("gate_status")) or "freeze-withheld"
-    classification = classify_supervisor_state(controller)
-    round_transition = round_transition_hint(run_dir, run_id=run_id, round_id=round_id, supervisor_status=classification["supervisor_status"])
-    recommended_next_skills = unique_texts(
-        [
-            *(
-                ["eco-open-investigation-round"]
-                if classification["supervisor_status"] == "hold-investigation-open"
-                else []
-            ),
-            *(
-                controller.get("recommended_next_skills", [])
-                if isinstance(controller.get("recommended_next_skills"), list)
-                else []
-            ),
-        ]
+    classification = classification_builder(controller)
+    round_transition = round_transition_builder(
+        run_dir=run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        next_round_id=maybe_text(
+            next_round_id_builder(
+                run_dir=run_dir,
+                current_round_id=round_id,
+            )
+        ),
+        contract_mode=contract_mode,
+        classification=classification,
     )
-    resolved_operator_notes = operator_notes(
+    recommended_next_skills = recommended_skills_builder(
+        controller=controller,
+        classification=classification,
+        round_transition=round_transition,
+    )
+    resolved_operator_notes = operator_notes_builder(
         promotion_status=promotion_status,
         gate_status=gate_status,
         gate_reasons=gate_reasons,
         top_action_rows=top_action_rows,
+        round_transition=round_transition,
     )
-    if round_transition:
-        resolved_operator_notes = [
-            *resolved_operator_notes,
-            f"Moderator may open {round_transition['suggested_round_id']} via eco-open-investigation-round to continue the case with a clean round boundary.",
-        ][:4]
     finished_at = utc_now_iso()
 
     payload = {

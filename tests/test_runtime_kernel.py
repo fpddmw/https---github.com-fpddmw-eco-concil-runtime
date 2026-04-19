@@ -22,6 +22,22 @@ def ensure_runtime_src_on_path() -> None:
         sys.path.insert(0, str(runtime_src))
 
 
+def default_phase2_gate_handlers() -> dict[str, object]:
+    ensure_runtime_src_on_path()
+
+    from eco_council_runtime.phase2_gate_profile import phase2_gate_handler_registry
+
+    return phase2_gate_handler_registry()
+
+
+def default_phase2_posture_profile_config() -> dict[str, object]:
+    ensure_runtime_src_on_path()
+
+    from eco_council_runtime.phase2_posture_profile import default_phase2_posture_profile
+
+    return default_phase2_posture_profile()
+
+
 class RuntimeKernelTests(unittest.TestCase):
     def test_kernel_tracks_manifest_cursor_and_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -646,6 +662,9 @@ class RuntimeKernelTests(unittest.TestCase):
 
             from eco_council_runtime.kernel.cli import init_run, show_run_state
             from eco_council_runtime.kernel.operations import materialize_dead_letter
+            from eco_council_runtime.phase2_agent_entry_profile import (
+                default_phase2_agent_entry_profile,
+            )
 
             init_run(run_dir, RUN_ID)
             materialize_dead_letter(
@@ -659,7 +678,12 @@ class RuntimeKernelTests(unittest.TestCase):
                 summary={"skill_name": "eco-test-skill", "run_id": RUN_ID, "round_id": ROUND_ID},
             )
 
-            payload = show_run_state(run_dir, tail=5, round_id=ROUND_ID)
+            payload = show_run_state(
+                run_dir,
+                tail=5,
+                round_id=ROUND_ID,
+                agent_entry_profile=default_phase2_agent_entry_profile(),
+            )
 
             self.assertIn("operations", payload)
             self.assertEqual("red", payload["operations"]["runtime_health"]["alert_status"])
@@ -792,7 +816,7 @@ class RuntimeKernelTests(unittest.TestCase):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[planner_result, board_summary_result, board_brief_result, next_actions_result, readiness_result, promotion_result],
@@ -803,6 +827,8 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
+                    gate_handlers=default_phase2_gate_handlers(),
+                    posture_profile=default_phase2_posture_profile_config(),
                     timeout_seconds=12.5,
                     retry_budget=2,
                     retry_backoff_ms=150,
@@ -928,7 +954,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
                 mock.patch(
-                    "eco_council_runtime.kernel.gate.apply_promotion_gate",
+                    "eco_council_runtime.phase2_gate_handlers.apply_promotion_gate",
                     return_value=gate_payload,
                 ) as gate_mock,
                 mock.patch(
@@ -941,6 +967,8 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
+                    gate_handlers=default_phase2_gate_handlers(),
+                    posture_profile=default_phase2_posture_profile_config(),
                 )
 
             self.assertEqual(
@@ -1096,7 +1124,7 @@ class RuntimeKernelTests(unittest.TestCase):
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[readiness_result, promotion_result],
@@ -1107,6 +1135,8 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
+                    gate_handlers=default_phase2_gate_handlers(),
+                    posture_profile=default_phase2_posture_profile_config(),
                 )
 
             self.assertEqual(
@@ -1245,7 +1275,7 @@ class RuntimeKernelTests(unittest.TestCase):
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=run_skill_side_effect,
@@ -1256,6 +1286,8 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
+                    gate_handlers=default_phase2_gate_handlers(),
+                    posture_profile=default_phase2_posture_profile_config(),
                 )
 
             self.assertEqual(
@@ -1372,7 +1404,7 @@ class RuntimeKernelTests(unittest.TestCase):
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=run_skill_side_effect,
@@ -1383,6 +1415,8 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
+                    gate_handlers=default_phase2_gate_handlers(),
+                    posture_profile=default_phase2_posture_profile_config(),
                 )
 
             advisory_plan = load_json(advisory_plan_path)
@@ -1520,7 +1554,7 @@ class RuntimeKernelTests(unittest.TestCase):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=run_skill_side_effect,
@@ -1531,6 +1565,8 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
+                    gate_handlers=default_phase2_gate_handlers(),
+                    posture_profile=default_phase2_posture_profile_config(),
                 )
 
             self.assertEqual(
@@ -1644,14 +1680,21 @@ class RuntimeKernelTests(unittest.TestCase):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[planner_result, board_summary_result, board_brief_failure],
                 ),
             ):
                 with self.assertRaises(SkillExecutionError):
-                    run_phase2_round_with_contract_mode(run_dir, run_id=RUN_ID, round_id=ROUND_ID, contract_mode="warn")
+                    run_phase2_round_with_contract_mode(
+                        run_dir,
+                        run_id=RUN_ID,
+                        round_id=ROUND_ID,
+                        contract_mode="warn",
+                        gate_handlers=default_phase2_gate_handlers(),
+                        posture_profile=default_phase2_posture_profile_config(),
+                    )
 
             controller_artifact = load_json(run_dir / "runtime" / f"round_controller_{ROUND_ID}.json")
             self.assertEqual("failed", controller_artifact["controller_status"])
@@ -1677,13 +1720,20 @@ class RuntimeKernelTests(unittest.TestCase):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle") as planning_bundle_mock,
-                mock.patch("eco_council_runtime.kernel.gate.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[board_brief_result, next_actions_result, readiness_result, promotion_result],
                 ) as run_skill_mock,
             ):
-                payload = run_phase2_round_with_contract_mode(run_dir, run_id=RUN_ID, round_id=ROUND_ID, contract_mode="warn")
+                payload = run_phase2_round_with_contract_mode(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    contract_mode="warn",
+                    gate_handlers=default_phase2_gate_handlers(),
+                    posture_profile=default_phase2_posture_profile_config(),
+                )
 
             planning_bundle_mock.assert_not_called()
             self.assertEqual(
@@ -1694,6 +1744,159 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("resumed", payload["controller"]["resume_status"])
             self.assertEqual("promoted", payload["controller"]["promotion_status"])
             self.assertFalse(payload["controller"]["resume_recommended"])
+
+    def test_controller_respects_injected_planning_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            runtime_dir = run_dir / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+            from eco_council_runtime.phase2_planning_profile import phase2_planning_source
+
+            advisory_plan_path = runtime_dir / f"agent_advisory_plan_{ROUND_ID}.json"
+            advisory_plan_path.write_text(
+                json.dumps(
+                    {
+                        "plan_id": "agent-plan-should-not-run",
+                        "planning_status": "advisory-plan-ready",
+                        "planning_mode": "agent-advisory",
+                        "controller_authority": "advisory-only",
+                        "execution_queue": [
+                            {
+                                "stage_name": "round-readiness",
+                                "skill_name": "eco-summarize-round-readiness",
+                                "skill_args": [],
+                                "assigned_role_hint": "moderator",
+                                "reason": "This advisory plan should be ignored by injected planning sources.",
+                                "expected_output_path": str(root / "ignored_readiness.json"),
+                            }
+                        ],
+                        "post_gate_steps": [
+                            {
+                                "stage_name": "promotion-basis",
+                                "skill_name": "eco-promote-evidence-basis",
+                                "skill_args": [],
+                                "assigned_role_hint": "moderator",
+                                "reason": "Ignore this advisory post-gate path.",
+                                "expected_output_path": str(root / "ignored_basis.json"),
+                            }
+                        ],
+                        "fallback_path": [],
+                    },
+                    ensure_ascii=True,
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            planner_result = {
+                "summary": {"skill_name": "eco-plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": []},
+            }
+            planning = {
+                "plan_id": "plan-injected-runtime-only-001",
+                "plan_path": str(root / "plan.json"),
+                "planning_status": "ready-for-controller",
+                "planning_mode": "planner-backed",
+                "planner_skill_name": "eco-plan-round-orchestration",
+                "execution_queue": [
+                    {
+                        "stage_name": "round-readiness",
+                        "skill_name": "eco-summarize-round-readiness",
+                        "skill_args": [],
+                        "assigned_role_hint": "moderator",
+                        "reason": "Injected planning sources force runtime planner.",
+                        "expected_output_path": str(root / "readiness.json"),
+                    }
+                ],
+                "post_gate_steps": [
+                    {
+                        "stage_name": "promotion-basis",
+                        "skill_name": "eco-promote-evidence-basis",
+                        "skill_args": [],
+                        "assigned_role_hint": "moderator",
+                        "reason": "Freeze the runtime-only planner result.",
+                        "expected_output_path": str(root / "basis.json"),
+                    }
+                ],
+                "fallback_path": [],
+            }
+            readiness_result = {
+                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
+                "event": {"status": "completed"},
+                "skill_payload": {
+                    "artifact_refs": [],
+                    "canonical_ids": [],
+                    "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"},
+                },
+            }
+            promotion_result = {
+                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "event": {"status": "completed"},
+                "skill_payload": {
+                    "artifact_refs": [],
+                    "canonical_ids": [],
+                    "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"},
+                },
+            }
+            gate_payload = {
+                "generated_at_utc": "2024-01-01T00:00:00Z",
+                "gate_status": "allow-promote",
+                "readiness_status": "ready",
+                "promote_allowed": True,
+                "output_path": str(root / "promotion_gate.json"),
+                "gate_reasons": [],
+                "recommended_next_skills": [],
+            }
+            runtime_only_sources = [
+                phase2_planning_source(
+                    "runtime-planner-only",
+                    source_kind="planner-skill",
+                    output_path_key="orchestration_plan_path",
+                    planner_skill_name="eco-plan-round-orchestration",
+                    materialized_message="Use only the injected runtime planner path.",
+                    failed_message="Injected runtime planner path failed.",
+                )
+            ]
+
+            with (
+                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
+                mock.patch(
+                    "eco_council_runtime.kernel.controller.run_skill",
+                    side_effect=[planner_result, readiness_result, promotion_result],
+                ) as run_skill_mock,
+            ):
+                payload = run_phase2_round_with_contract_mode(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    contract_mode="strict",
+                    gate_handlers=default_phase2_gate_handlers(),
+                    posture_profile=default_phase2_posture_profile_config(),
+                    planning_sources=runtime_only_sources,
+                )
+
+            self.assertEqual(
+                ["eco-plan-round-orchestration", "eco-summarize-round-readiness", "eco-promote-evidence-basis"],
+                [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
+            )
+            self.assertEqual([], run_skill_mock.call_args_list[0].kwargs["skill_args"])
+            self.assertEqual("runtime-planner", payload["controller"]["planning"]["plan_source"])
+            self.assertEqual(
+                [{"source": "runtime-planner-only", "status": "materialized"}],
+                [
+                    {"source": item["source"], "status": item["status"]}
+                    for item in payload["controller"]["planning_attempts"]
+                ],
+            )
 
     def test_show_run_state_uses_deliberation_control_snapshots_when_phase2_json_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1856,6 +2059,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="warn",
+                    posture_profile=default_phase2_posture_profile_config(),
                     timeout_seconds=8.0,
                     retry_budget=1,
                     retry_backoff_ms=40,
@@ -1867,6 +2071,8 @@ class RuntimeKernelTests(unittest.TestCase):
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
                 contract_mode="warn",
+                gate_handlers=mock.ANY,
+                posture_profile=mock.ANY,
                 timeout_seconds=8.0,
                 retry_budget=1,
                 retry_backoff_ms=40,
@@ -1878,6 +2084,142 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("reporting-ready", payload["supervisor"]["phase2_posture"])
             self.assertEqual("handoff-reporting", payload["supervisor"]["operator_action"])
             self.assertIn("resume-phase2-round", payload["supervisor"]["resume_command"])
+
+    def test_supervisor_respects_injected_posture_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.supervisor import supervise_round_with_contract_mode
+
+            posture_profile = default_phase2_posture_profile_config()
+            posture_profile["supervisor_classification_builder"] = (
+                lambda controller: {
+                    "supervisor_status": "custom-supervisor-status",
+                    "supervisor_substatus": "custom-substatus",
+                    "phase2_posture": "custom-posture",
+                    "terminal_state": "custom-terminal-state",
+                    "recovery_posture": "custom-recovery-posture",
+                    "operator_action": "custom-operator-action",
+                }
+            )
+            posture_profile["supervisor_next_round_id_builder"] = (
+                lambda **kwargs: f"{kwargs['current_round_id']}-custom"
+            )
+            posture_profile["supervisor_top_actions_builder"] = (
+                lambda next_actions: [
+                    {
+                        "action_id": "action-custom-001",
+                        "action_kind": "custom-action-kind",
+                        "assigned_role": "moderator",
+                        "priority": "critical",
+                        "objective": "Follow the injected posture profile.",
+                    }
+                ]
+            )
+            posture_profile["supervisor_round_transition_builder"] = (
+                lambda **kwargs: {
+                    "skill_name": "eco-custom-round-transition",
+                    "source_round_id": kwargs["round_id"],
+                    "suggested_round_id": f"{kwargs['round_id']}-custom",
+                    "command": "eco-custom-round-transition --injected",
+                }
+            )
+            posture_profile["supervisor_recommended_skills_builder"] = (
+                lambda **kwargs: [
+                    "eco-custom-round-transition",
+                    "eco-custom-follow-up",
+                ]
+            )
+            posture_profile["supervisor_operator_notes_builder"] = (
+                lambda **kwargs: [
+                    "Injected posture profile decided the next operator move.",
+                ]
+            )
+            posture_profile["supervisor_failure_notes_builder"] = (
+                lambda controller: [
+                    "Injected failure note.",
+                ]
+            )
+
+            controller_result = {
+                "controller": {
+                    "planning_mode": "planner-backed",
+                    "controller_status": "completed",
+                    "resume_status": "fresh-run",
+                    "current_stage": "",
+                    "failed_stage": "",
+                    "resume_recommended": False,
+                    "restart_recommended": False,
+                    "recovery": {"resume_from_stage": ""},
+                    "readiness_status": "blocked",
+                    "gate_status": "freeze-withheld",
+                    "promotion_status": "withheld",
+                    "recommended_next_skills": ["eco-kernel-default-follow-up"],
+                    "gate_reasons": ["This should be ignored by the injected operator notes builder."],
+                    "artifacts": {
+                        "next_actions_path": "",
+                        "orchestration_plan_path": str(root / "plan.json"),
+                        "controller_state_path": str(root / "controller.json"),
+                        "promotion_gate_path": str(root / "gate.json"),
+                        "promotion_basis_path": str(root / "basis.json"),
+                    },
+                }
+            }
+
+            with mock.patch(
+                "eco_council_runtime.kernel.supervisor.run_phase2_round_with_contract_mode",
+                return_value=controller_result,
+            ) as controller_mock:
+                payload = supervise_round_with_contract_mode(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    contract_mode="warn",
+                    posture_profile=posture_profile,
+                )
+
+            controller_mock.assert_called_once_with(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                contract_mode="warn",
+                gate_handlers=None,
+                posture_profile=posture_profile,
+                timeout_seconds=None,
+                retry_budget=None,
+                retry_backoff_ms=None,
+                allow_side_effects=None,
+            )
+            self.assertEqual(
+                "custom-supervisor-status",
+                payload["supervisor"]["supervisor_status"],
+            )
+            self.assertEqual(
+                "custom-operator-action",
+                payload["supervisor"]["operator_action"],
+            )
+            self.assertEqual(
+                ["eco-custom-round-transition", "eco-custom-follow-up"],
+                payload["supervisor"]["recommended_next_skills"],
+            )
+            self.assertEqual(
+                "eco-custom-round-transition",
+                payload["supervisor"]["round_transition"]["skill_name"],
+            )
+            self.assertEqual(
+                f"{ROUND_ID}-custom",
+                payload["supervisor"]["round_transition"]["suggested_round_id"],
+            )
+            self.assertEqual(
+                ["Injected posture profile decided the next operator move."],
+                payload["supervisor"]["operator_notes"],
+            )
+            self.assertEqual(
+                "action-custom-001",
+                payload["supervisor"]["top_actions"][0]["action_id"],
+            )
 
     def test_supervisor_materializes_failed_state_when_controller_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1920,7 +2262,13 @@ class RuntimeKernelTests(unittest.TestCase):
                 side_effect=controller_failure,
             ):
                 with self.assertRaises(SkillExecutionError) as raised:
-                    supervise_round_with_contract_mode(run_dir, run_id=RUN_ID, round_id=ROUND_ID, contract_mode="warn")
+                    supervise_round_with_contract_mode(
+                        run_dir,
+                        run_id=RUN_ID,
+                        round_id=ROUND_ID,
+                        contract_mode="warn",
+                        posture_profile=default_phase2_posture_profile_config(),
+                    )
 
             supervisor_artifact = load_json(run_dir / "runtime" / f"supervisor_state_{ROUND_ID}.json")
             self.assertEqual("controller-failed", supervisor_artifact["supervisor_status"])
@@ -2250,7 +2598,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         "7",
                         "--retry-budget",
                         "1",
-                    ]
+                    ],
+                    default_posture_profile=default_phase2_posture_profile_config(),
                 )
 
             self.assertEqual(0, exit_code)
@@ -2276,7 +2625,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         RUN_ID,
                         "--round-id",
                         ROUND_ID,
-                    ]
+                    ],
+                    default_posture_profile=default_phase2_posture_profile_config(),
                 )
 
             self.assertEqual(0, exit_code)

@@ -4,6 +4,10 @@ from pathlib import Path
 from typing import Any
 
 from .council_objects import query_council_objects
+from .phase2_proposal_actions import (
+    action_from_council_proposal as shared_action_from_council_proposal,
+    proposal_drives_phase2_action_queue as shared_proposal_drives_phase2_action_queue,
+)
 from .kernel.deliberation_plane import load_round_snapshot
 from .kernel.executor import maybe_text, new_runtime_event_id, stable_hash, utc_now_iso
 from .kernel.ledger import append_ledger_event, write_receipt
@@ -11,26 +15,6 @@ from .kernel.manifest import update_after_run, write_json
 
 PLANNER_SKILL_NAME = "eco-plan-round-orchestration"
 PLAN_SOURCE = "direct-council-advisory"
-
-NON_EXECUTION_PROPOSAL_KINDS = {
-    "claim-board-task",
-    "close-challenge",
-    "create-board-task",
-    "create-hypothesis",
-    "dismiss-challenge",
-    "open-board-task",
-    "open-challenge",
-}
-NON_EXECUTION_ACTION_KINDS = {
-    "claim-board-task",
-    "close-challenge-ticket",
-    "create-board-task",
-    "create-hypothesis",
-    "dismiss-challenge",
-    "dismiss-challenge-ticket",
-    "open-board-task",
-    "open-challenge-ticket",
-}
 
 
 def resolve_run_dir(run_dir: str | Path) -> Path:
@@ -132,95 +116,15 @@ def snapshot_board_state(round_snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def proposal_target(proposal: dict[str, Any]) -> dict[str, Any]:
-    target = proposal.get("target", {})
-    if isinstance(target, dict) and target:
-        return dict(target)
-    target_kind = maybe_text(proposal.get("target_kind"))
-    target_id = maybe_text(proposal.get("target_id"))
-    resolved: dict[str, Any] = {}
-    if target_kind:
-        resolved["object_kind"] = target_kind
-    if target_id:
-        resolved["object_id"] = target_id
-    if maybe_text(proposal.get("target_claim_id")):
-        resolved["claim_id"] = maybe_text(proposal.get("target_claim_id"))
-    if maybe_text(proposal.get("target_hypothesis_id")):
-        resolved["hypothesis_id"] = maybe_text(proposal.get("target_hypothesis_id"))
-    if maybe_text(proposal.get("target_ticket_id")):
-        resolved["ticket_id"] = maybe_text(proposal.get("target_ticket_id"))
-    if target_kind in {"claim", "claim-candidate", "claim-cluster"} and target_id:
-        resolved.setdefault("claim_id", target_id)
-    if target_kind in {"hypothesis", "hypothesis-card"} and target_id:
-        resolved.setdefault("hypothesis_id", target_id)
-    if target_kind in {"challenge-ticket", "ticket"} and target_id:
-        resolved.setdefault("ticket_id", target_id)
-    if target_kind == "issue-cluster" and target_id:
-        resolved.setdefault("map_issue_id", target_id)
-    return resolved
-
-
 def proposal_drives_phase2_action_queue(proposal: dict[str, Any]) -> bool:
-    proposal_kind = maybe_text(proposal.get("proposal_kind"))
-    action_kind = maybe_text(proposal.get("action_kind")) or maybe_text(proposal.get("proposed_action_kind")) or proposal_kind
-    if proposal_kind in NON_EXECUTION_PROPOSAL_KINDS or action_kind in NON_EXECUTION_ACTION_KINDS:
-        return False
-    target_kind = maybe_text(proposal.get("target_kind"))
-    return bool(action_kind or proposal_kind) and (
-        bool(proposal.get("probe_candidate"))
-        or bool(proposal.get("readiness_blocker"))
-        or bool(maybe_text(proposal.get("recommended_lane")))
-        or bool(maybe_text(proposal.get("controversy_gap")))
-        or target_kind in {"issue-cluster", "claim", "claim-candidate", "claim-cluster", "challenge-ticket", "ticket", "round"}
-    )
+    return shared_proposal_drives_phase2_action_queue(proposal)
 
 
 def action_from_council_proposal(proposal: dict[str, Any]) -> dict[str, Any]:
-    proposal_id = maybe_text(proposal.get("proposal_id"))
-    target = proposal_target(proposal)
-    response_to_ids = list_items(proposal.get("response_to_ids"))
-    action_kind = (
-        maybe_text(proposal.get("action_kind"))
-        or maybe_text(proposal.get("proposed_action_kind"))
-        or maybe_text(proposal.get("proposal_kind"))
-        or "follow-council-proposal"
+    return shared_action_from_council_proposal(
+        proposal,
+        action_id_namespace="direct-council-action",
     )
-    confidence = maybe_number(proposal.get("confidence"))
-    return {
-        "action_id": (
-            maybe_text(proposal.get("proposed_action_id"))
-            or maybe_text(proposal.get("action_id"))
-            or "action-"
-            + stable_hash(
-                "direct-council-action",
-                proposal_id,
-                action_kind,
-                maybe_text(target.get("object_id")),
-                maybe_text(target.get("claim_id")),
-                maybe_text(target.get("hypothesis_id")),
-                maybe_text(target.get("ticket_id")),
-            )[:12]
-        ),
-        "action_kind": action_kind,
-        "priority": maybe_text(proposal.get("priority")) or "high",
-        "assigned_role": maybe_text(proposal.get("assigned_role")) or maybe_text(proposal.get("agent_role")) or "moderator",
-        "objective": (
-            maybe_text(proposal.get("objective"))
-            or maybe_text(proposal.get("summary"))
-            or maybe_text(proposal.get("rationale"))
-            or f"Execute council proposal {proposal_id or 'for this round'}."
-        ),
-        "reason": maybe_text(proposal.get("rationale")) or maybe_text(proposal.get("summary")) or "Council proposal requested direct queue execution.",
-        "target": target,
-        "evidence_refs": unique_texts(list_items(proposal.get("evidence_refs"))),
-        "probe_candidate": bool(proposal.get("probe_candidate"))
-        or action_kind in {"resolve-challenge", "resolve-contradiction", "advance-empirical-verification", "clarify-verification-route", "open-probe"},
-        "controversy_gap": maybe_text(proposal.get("controversy_gap")),
-        "recommended_lane": maybe_text(proposal.get("recommended_lane")),
-        "confidence": confidence,
-        "decision_source": maybe_text(proposal.get("decision_source")) or "agent-council",
-        "lineage": unique_texts([proposal_id, *response_to_ids, *list_items(proposal.get("lineage"))]),
-    }
 
 
 def load_council_objects(

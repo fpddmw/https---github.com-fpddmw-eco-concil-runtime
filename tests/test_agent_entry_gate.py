@@ -252,6 +252,13 @@ class AgentEntryGateTests(unittest.TestCase):
 
             from eco_council_runtime.council_objects import store_readiness_opinion_records
             from eco_council_runtime.kernel.agent_entry import materialize_agent_entry_gate
+            from eco_council_runtime.phase2_agent_entry_profile import (
+                default_phase2_agent_entry_profile,
+            )
+            from eco_council_runtime.phase2_agent_handoff import (
+                default_phase2_entry_chain,
+                default_phase2_hard_gate_commands,
+            )
 
             store_readiness_opinion_records(
                 run_dir,
@@ -273,11 +280,14 @@ class AgentEntryGateTests(unittest.TestCase):
                 },
             )
 
-            with mock.patch("eco_council_runtime.kernel.agent_entry.run_skill") as run_skill_mock:
+            with mock.patch("eco_council_runtime.phase2_agent_entry_profile.run_skill") as run_skill_mock:
                 payload = materialize_agent_entry_gate(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
+                    agent_entry_profile=default_phase2_agent_entry_profile(),
+                    hard_gate_command_builder=default_phase2_hard_gate_commands,
+                    entry_chain_builder=default_phase2_entry_chain,
                     contract_mode="warn",
                 )
 
@@ -289,6 +299,178 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertEqual("direct-council-advisory", payload["agent_entry"]["advisory_plan"]["plan_source"])
             self.assertEqual("direct-council-advisory", advisory_plan["plan_source"])
             self.assertTrue(payload["agent_entry"]["advisory_plan"]["direct_council_queue"])
+
+    def test_materialize_agent_entry_gate_accepts_injected_handoff_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            artifacts = build_raw_artifacts(root)
+            mission_path = build_mission_file(root, artifacts)
+
+            run_script(
+                script_path("eco-scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+                "--orchestration-mode",
+                "openclaw-agent",
+            )
+            seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            from eco_council_runtime.kernel.agent_entry import materialize_agent_entry_gate
+            from eco_council_runtime.phase2_agent_entry_profile import (
+                default_phase2_agent_entry_profile,
+            )
+
+            def custom_hard_gate_commands(**_: object) -> dict[str, str]:
+                return {
+                    "show_run_state": "custom-show-state",
+                    "supervise_round": "custom-supervise-round",
+                    "apply_promotion_gate": "custom-apply-gate",
+                    "close_round": "custom-close-round",
+                    "open_next_round": "custom-open-next-round",
+                }
+
+            def custom_entry_chain(**_: object) -> list[dict[str, str]]:
+                return [
+                    {
+                        "step_id": "custom-runtime-handoff",
+                        "mode": "runtime-gate",
+                        "objective": "Use the injected handoff profile.",
+                        "command": "custom-supervise-round",
+                    }
+                ]
+
+            payload = materialize_agent_entry_gate(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                agent_entry_profile=default_phase2_agent_entry_profile(),
+                hard_gate_command_builder=custom_hard_gate_commands,
+                entry_chain_builder=custom_entry_chain,
+                contract_mode="warn",
+            )
+
+            self.assertEqual(
+                "custom-supervise-round",
+                payload["agent_entry"]["hard_gate_commands"]["supervise_round"],
+            )
+            self.assertEqual(
+                "custom-runtime-handoff",
+                payload["agent_entry"]["entry_chain"][0]["step_id"],
+            )
+
+    def test_materialize_agent_entry_gate_accepts_injected_agent_entry_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            artifacts = build_raw_artifacts(root)
+            mission_path = build_mission_file(root, artifacts)
+
+            run_script(
+                script_path("eco-scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+                "--orchestration-mode",
+                "openclaw-agent",
+            )
+            seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            from eco_council_runtime.kernel.agent_entry import (
+                agent_entry_state,
+                materialize_agent_entry_gate,
+            )
+            from eco_council_runtime.phase2_agent_entry_profile import (
+                default_phase2_agent_entry_profile,
+            )
+            from eco_council_runtime.phase2_agent_handoff import (
+                default_phase2_entry_chain,
+                default_phase2_hard_gate_commands,
+            )
+
+            custom_profile = default_phase2_agent_entry_profile()
+            custom_profile["role_definitions"] = [
+                {
+                    "role": "auditor",
+                    "focus": "Custom review lane only.",
+                    "read_skills": [],
+                    "write_skills": [],
+                    "analysis_kinds": [],
+                }
+            ]
+            custom_profile["role_entry_builder"] = lambda **_: [
+                {
+                    "role": "auditor",
+                    "focus": "Custom review lane only.",
+                    "read_commands": ["custom-read-state"],
+                    "analysis_commands": ["custom-query-analysis"],
+                    "write_commands": ["custom-write-note"],
+                }
+            ]
+            custom_profile["recommended_skills_builder"] = lambda **_: ["eco-audit-round"]
+            custom_profile["operator_notes_builder"] = lambda **_: ["Use the injected entry profile."]
+            custom_profile["next_round_id_builder"] = lambda **_: "round-agent-entry-custom-next"
+            custom_profile["operator_commands_builder"] = lambda **_: {
+                "materialize_agent_entry_gate_command": "custom-materialize-entry-gate",
+                "refresh_agent_entry_gate_command": "custom-refresh-entry-gate",
+                "materialize_agent_advisory_plan_command": "custom-refresh-advisory",
+                "read_board_delta_command": "custom-read-board",
+                "query_public_signals_command": "custom-query-public",
+                "query_environment_signals_command": "custom-query-environment",
+                "list_claim_cluster_result_sets_command": "custom-list-analysis",
+                "query_claim_cluster_items_command_template": "custom-query-analysis-items",
+            }
+
+            payload = materialize_agent_entry_gate(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                agent_entry_profile=custom_profile,
+                hard_gate_command_builder=default_phase2_hard_gate_commands,
+                entry_chain_builder=default_phase2_entry_chain,
+                contract_mode="warn",
+            )
+            state_payload = agent_entry_state(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                agent_entry_profile=custom_profile,
+                hard_gate_command_builder=default_phase2_hard_gate_commands,
+            )
+
+            self.assertEqual(["eco-audit-round"], payload["agent_entry"]["recommended_entry_skills"])
+            self.assertEqual("auditor", payload["agent_entry"]["role_entry_points"][0]["role"])
+            self.assertEqual(
+                "Use the injected entry profile.",
+                payload["agent_entry"]["operator_notes"][0],
+            )
+            self.assertEqual(
+                "custom-materialize-entry-gate",
+                state_payload["operator"]["materialize_agent_entry_gate_command"],
+            )
+            self.assertEqual(
+                "custom-query-analysis-items",
+                state_payload["operator"]["query_claim_cluster_items_command_template"],
+            )
+            self.assertIn(
+                "round-agent-entry-custom-next",
+                payload["agent_entry"]["hard_gate_commands"]["open_next_round"],
+            )
+            self.assertIn(
+                "round-agent-entry-custom-next",
+                state_payload["operator"]["open_next_round_command_template"],
+            )
 
     def test_show_run_state_surfaces_agent_entry_commands_before_gate_materialization(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -155,6 +155,13 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertTrue(any(action["action_kind"] == "resolve-challenge" for action in actions))
             self.assertTrue(any(bool(action["probe_candidate"]) for action in actions))
             self.assertTrue(any("controversy_gap" in action for action in actions))
+            self.assertTrue(
+                any(action.get("policy_source") == "runtime-fallback-policy" for action in actions)
+            )
+            self.assertEqual(
+                len(actions),
+                sum(actions_artifact["policy_source_counts"].values()),
+            )
             probes = probes_artifact["probes"]
             self.assertEqual("deliberation-plane-actions", probes_artifact["action_source"])
             self.assertTrue(probes_artifact["observed_inputs"]["next_actions_artifact_present"])
