@@ -84,6 +84,24 @@
 - `已完成` proposal-only board workflow 回归，覆盖 hypothesis update、challenge open、challenge close、board task claim，并断言 DB 列与 `raw_json` judgement metadata。
 - `已完成` 本地大回归 `75` 项通过，board proposal-first 改造未击穿 council / reporting / runtime 主链。
 
+### 2.9 Batch 5 当前状态
+
+- `已完成` 新增 `eco_council_runtime/phase2_promotion_resolution.py`，统一 promotion-stage council proposal / readiness opinion 的 resolution surface。
+- `已完成` `eco-promote-evidence-basis` 已移除 skill 内部固定 promotion support kind 白名单；现在优先消费 proposal 内显式 `promotion_disposition / promote_allowed / publication_readiness / handoff_status / moderator_status` judgement，legacy kind 仅保留为 compatibility fallback。
+- `已完成` `promotion-gate` 现在会把 `rejected_proposal_ids / supporting_proposal_ids / promotion_resolution_mode / council_input_counts` 写入 gate snapshot，议会 veto 已进入 controller 可见面。
+- `已完成` `eco-materialize-reporting-handoff / eco-draft-council-decision / eco-publish-council-decision` 已显式透传 `rejected_proposal_ids / promotion_resolution_mode / promotion_resolution_reasons / council_input_counts`。
+- `已完成` decision trace / final publication 现在可以把 veto proposal 作为 selected object 落库并对外导出，不再只能通过 readiness opinion 表达 withheld 路径。
+- `已完成` `tests/test_decision_trace_workflow.py` 已新增 explicit support proposal 与 explicit veto proposal 回归；当前相关大回归 `127` 项全部通过。
+
+### 2.10 Batch 6 当前状态
+
+- `已完成` `council_objects.py` 已新增 append/upsert proposal/readiness 原语，agent 可以逐条提交 canonical council object，而不是依赖整轮 replace bundle。
+- `已完成` 新增 `eco-submit-council-proposal / eco-submit-readiness-opinion`，默认直接写 DB canonical `proposal / readiness-opinion`，并保留 `target / evidence_refs / response_to_ids / lineage / provenance / promotion_*` judgement 字段。
+- `已完成` `canonical_contracts.py` 已收紧 `proposal / readiness-opinion` 契约，`status / opinion_status / response_to_ids / basis_object_ids` 已进入强校验面。
+- `已完成` `phase2_agent_entry_profile.py / phase2_agent_handoff.py / kernel/agent_entry.py` 已把默认 agent write path 改为 submission skills，并显式暴露 proposal/readiness 的 query/template command。
+- `已完成` `phase2_direct_advisory.py / eco-plan-round-orchestration / eco-summarize-round-readiness / eco-propose-next-actions / eco-open-falsification-probe` 的 follow-up guidance 已开始从 `eco-post-board-note` 转向结构化 submission。
+- `已完成` 新增 `tests/test_council_submission_workflow.py`，并补强 `tests/test_agent_entry_gate.py / tests/test_council_autonomy_flow.py`；当前扩展后的大回归 `130` 项全部通过。
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -203,7 +221,7 @@
 - `[x]` `openclaw-agent` 轮次进入 phase-2 时，controller 与 agent entry 现在都会先尝试 `direct-council-advisory` compiler，只有 direct council inputs 不足或 compiler 失败时才回退 `agent-advisory` planner skill。
 - `[x]` advisory plan 已存在时会直接采用；advisory 物化失败时才会回退 `planner-backed` phase-2。
 - `[x]` controller 状态现在显式记录 `plan_source / planning_attempts / agent_advisory_plan_path`，agent 路径与 fallback 路径不再混在一条隐式 planner 语义里。
-- `[x]` `eco-plan-round-orchestration` 在 `agent-advisory` 模式下，若 DB 中已存在直接 `proposal / readiness-opinion`，现在可以跳过 `next-actions` 重算，直接产出 `probe -> readiness` 或 `readiness-only` 队列。
+- `[x]` `eco-plan-round-orchestration` 在 `agent-advisory` 与 `runtime-phase2` 模式下，若 DB 中已存在直接 `proposal / readiness-opinion`，现在都可以跳过 `next-actions` 重算，直接产出 `probe -> readiness` 或 `readiness-only` 队列。
 - `[x]` advisory plan 现在会显式暴露 `direct_council_queue / next_actions_stage_skipped / council_input_counts`，能区分“由 council inputs 直接驱动的 advisory”与“仍依赖 wrapper/action snapshot 的 advisory”。
 - `[x]` `eco-concil-runtime/src/eco_council_runtime/phase2_direct_advisory.py` 已接入主链，能把 DB 中的 `proposal / readiness-opinion / probe` 直接编译为 advisory queue，并把 `plan_source = direct-council-advisory` 写入 advisory artifact、controller 状态与 planning attempts。
 
@@ -212,8 +230,8 @@
 - `[x]` 定义 `readiness opinion contract`
 - `[x]` 定义 `decision trace contract`
 - `[x]` 允许多个 agent 对同一问题提交相互冲突的 judgement
-- `[ ]` runtime 默认执行 agent proposal，而不是替 agent 先算出结论
-- `[ ]` heuristic 只在 proposal 缺失、失败或审计模式下触发
+- `[x]` runtime 默认执行 agent proposal，而不是替 agent 先算出结论
+- `[x]` heuristic 只在 proposal 缺失、失败或审计模式下触发
 
 ## 9. Work Package 6: Runtime kernel 收边界
 
@@ -237,12 +255,13 @@
 - `[x]` `scripts/eco_runtime_kernel.py` 现在是默认 phase-2 gate/profile 与 agent handoff profile 的组合根；`cli.py / supervisor.py / agent_entry.py` 只消费注入参数，不再私自装配默认 profile。
 - `[x]` `phase2_fallback_agenda_profile.py` 已接管 `open-challenge / task / hypothesis / issue / route / assessment / link / gap / edge / coverage -> action` 的映射与启停顺序；`phase2_fallback_agenda.py` 现在只剩通用 context 装配、去重、排序和统计。
 - `[x]` 新增 profile-overridable 回归：可注入自定义 agenda profile 覆盖默认 fallback 议会流程，可注入自定义 agent handoff profile 覆盖默认 runtime handoff 命令链。
+- `[x]` `phase2_council_execution.py` 已统一 `proposal-authoritative / proposal-augmented / fallback-only` 三种议会执行模式；`eco-propose-next-actions / eco-open-falsification-probe / eco-summarize-round-readiness / eco-plan-round-orchestration` 现在共享同一套 proposal-vs-heuristic 决策面，并显式写出 observed / selected / suppressed fallback counts。
 - `[x]` `phase2_stage_profile.py` 现在持有默认 stage definitions、gate/post-gate 默认蓝图与 stage validation；`kernel/phase2_contract.py` 已退成 compatibility facade，不再是 controller 的默认真理表。
 - `[x]` `phase2_controller_state.py` 已接管 phase-2 stage blueprint、controller planning snapshot、step merge、planner attempt summary、failure/event shape；`kernel/controller.py` 现在主要只剩 injected planning source 执行、gate dispatch、skill execution 与持久化。
 - `[x]` `phase2_agent_entry_profile.py` 已接管 agent-entry 默认 role definitions、recommended skills、operator commands/notes、next-round suggestion builder 与 advisory refresh source 顺序；`kernel/agent_entry.py / cli.py` 现在只消费 injected entry profile，不再内建默认议会入口教程或 advisory materialization 链。
 - `[x]` `phase2_posture_profile.py` 已接管 controller completion follow-up、supervisor classification / top-actions / round-transition / operator notes / failure notes；`kernel/controller.py / kernel/supervisor.py / cli.py` 现在只消费 injected posture profile。
 - `[x]` `phase2_round_profile.py` 已接管默认 `next_round_id` sequencing；`kernel/supervisor.py / kernel/agent_entry.py` 不再共享或持有内建轮次递增策略，round handoff policy 可以通过 posture / entry profile 双向覆写。
-- `[x]` 本地大回归 `95` 项通过，覆盖 phase-2 / agent-entry / council / reporting / publication 主链。
+- `[x]` 本地大回归 `126` 项通过，覆盖 phase-2 / agent-entry / council / board / reporting / publication 主链。
 
 ### 9.1 必须收缩或迁出的模块
 

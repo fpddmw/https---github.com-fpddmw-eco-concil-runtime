@@ -69,6 +69,34 @@
 5. board 状态更新现在把 canonical judgement metadata 同时写入表列和 `raw_json`，board JSON 只作为 DB-backed 导出视图存在。
 6. 已新增 proposal-only board workflow 回归，覆盖 hypothesis update、challenge open、challenge close、board task claim 四条路径，并显式断言 DB 列与 `raw_json` 中的 judgement metadata；当前相关核心回归共 75 项，已在本地全部通过。
 
+## 2.5 Batch 5 当前已交付
+
+第五批已把 promotion judgement 从“skill 内部硬编码 proposal kind 白名单”推进到“共享 council promotion resolution surface”，已落地以下硬改动：
+
+1. 新增 `eco_council_runtime/phase2_promotion_resolution.py`，统一承载 promotion proposal / readiness opinion 的加载、显式 disposition 解析、legacy compatibility fallback 与 council veto 规则。
+2. `eco-promote-evidence-basis` 不再依赖固定 `prepare-promotion / ready-for-reporting / publish-council-decision` kind 集合来判定 support；现在优先消费 proposal 内显式 `promotion_disposition / promote_allowed / publication_readiness / handoff_status / moderator_status` 等 structured judgement。
+3. `promotion-gate` 现在会显式读取 council proposal，并把 `rejected_proposal_ids / supporting_proposal_ids / promotion_resolution_mode / council_input_counts` 写进 gate snapshot；controller 不会再出现“gate 放行但议会 veto promotion”却无 trace 的盲区。
+4. `promotion-basis -> reporting-handoff -> council-decision -> decision-trace` 已开始显式透传 `rejected_proposal_ids / promotion_resolution_mode / promotion_resolution_reasons / council_input_counts`，publication trace 可以直接指出是哪个 veto proposal 阻断了发布。
+5. 已新增回归覆盖：
+   - 非旧白名单 proposal kind，但带显式 promotion judgement，仍可被识别为 support。
+   - ready opinions 存在时，explicit hold proposal 仍可 veto gate / promotion / publication，并在 decision trace 中以 `proposal` 作为 selected object 落库。
+6. 当前相关大回归共 `127` 项，已在本地全部通过。
+
+## 2.6 Batch 6 当前已交付
+
+第六批已把 agent-facing proposal / readiness intake 从“零散 store helper + board note 提示”推进到“默认 DB-native 结构化提交链”，已落地以下硬改动：
+
+1. `eco_council_runtime/council_objects.py` 已新增 append/upsert 原语，agent 现在可以逐条提交 `proposal / readiness-opinion`，不再只能通过整轮 replace bundle 写入。
+2. 新增 `eco-submit-council-proposal` 与 `eco-submit-readiness-opinion` 两个技能，直接写 canonical `proposal / readiness-opinion` 对象，并保留 `target / evidence_refs / response_to_ids / lineage / provenance / promotion_disposition / publication_readiness` 等结构化字段。
+3. `canonical_contracts.py` 已收紧 `proposal / readiness-opinion` 契约；`status / opinion_status / response_to_ids / basis_object_ids` 已进入硬校验面，proposal/opinion 不再只是“最小文本壳”。
+4. `phase2_agent_entry_profile.py`、`phase2_agent_handoff.py` 与 `kernel/agent_entry.py` 已把默认 agent 入口切到 submission skill：
+   - 默认 write path 优先 `eco-submit-council-proposal / eco-submit-readiness-opinion`
+   - operator view 已显式暴露 `query-council-objects` proposal/readiness 命令与 submission command template
+   - entry chain 默认要求先提交结构化 proposal / readiness judgement，再回 runtime gate
+5. `phase2_direct_advisory.py`、`eco-plan-round-orchestration`、`eco-summarize-round-readiness`、`eco-propose-next-actions`、`eco-open-falsification-probe` 的 follow-up guidance 已开始从 `eco-post-board-note` 转向 submission skills，agent 默认不再被鼓励用 freeform note 代替 council judgement。
+6. 已新增 `tests/test_council_submission_workflow.py`，覆盖 proposal/opinion append、query surface、kernel registry execution；同时补强 `test_agent_entry_gate.py` 与 `test_council_autonomy_flow.py`，锁定默认入口与 readiness follow-up 的新方向。
+7. 当前扩展后的大回归共 `130` 项，已在本地全部通过。
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足

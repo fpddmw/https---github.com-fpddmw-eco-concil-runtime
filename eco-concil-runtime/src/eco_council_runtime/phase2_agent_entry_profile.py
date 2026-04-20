@@ -24,28 +24,47 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "role": "sociologist",
         "focus": "public evidence query, narrative regrouping, and claim-side analysis.",
         "read_skills": ["eco-read-board-delta", "eco-query-public-signals"],
-        "write_skills": ["eco-post-board-note", "eco-update-hypothesis-status"],
+        "write_skills": [
+            "eco-submit-council-proposal",
+            "eco-submit-readiness-opinion",
+            "eco-update-hypothesis-status",
+        ],
         "analysis_kinds": ["claim-candidate", "claim-cluster", "claim-scope", "evidence-coverage"],
     },
     {
         "role": "environmentalist",
         "focus": "environment evidence query, observation analysis, and corroboration work.",
         "read_skills": ["eco-read-board-delta", "eco-query-environment-signals"],
-        "write_skills": ["eco-post-board-note", "eco-update-hypothesis-status"],
+        "write_skills": [
+            "eco-submit-council-proposal",
+            "eco-submit-readiness-opinion",
+            "eco-update-hypothesis-status",
+        ],
         "analysis_kinds": ["observation-candidate", "merged-observation", "observation-scope", "evidence-coverage"],
     },
     {
         "role": "challenger",
         "focus": "contradiction pressure, challenge tickets, and falsification probes.",
         "read_skills": ["eco-read-board-delta", "eco-query-public-signals", "eco-query-environment-signals"],
-        "write_skills": ["eco-open-challenge-ticket", "eco-open-falsification-probe", "eco-close-challenge-ticket"],
+        "write_skills": [
+            "eco-submit-council-proposal",
+            "eco-submit-readiness-opinion",
+            "eco-open-challenge-ticket",
+            "eco-open-falsification-probe",
+            "eco-close-challenge-ticket",
+        ],
         "analysis_kinds": ["claim-cluster", "merged-observation", "evidence-coverage"],
     },
     {
         "role": "moderator",
         "focus": "board state progression, round transition, and return to runtime hard gates.",
         "read_skills": ["eco-read-board-delta"],
-        "write_skills": ["eco-post-board-note", "eco-claim-board-task", "eco-open-investigation-round"],
+        "write_skills": [
+            "eco-submit-council-proposal",
+            "eco-submit-readiness-opinion",
+            "eco-claim-board-task",
+            "eco-open-investigation-round",
+        ],
         "analysis_kinds": ["claim-cluster", "merged-observation", "evidence-coverage"],
     },
 ]
@@ -215,7 +234,51 @@ def default_role_entry_points(
         ]
         role_write_commands: list[str] = []
         for skill_name in definition.get("write_skills", []) if isinstance(definition.get("write_skills"), list) else []:
-            if skill_name == "eco-post-board-note":
+            if skill_name == "eco-submit-council-proposal":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--agent-role",
+                            role,
+                            "--proposal-kind",
+                            "<proposal_kind>",
+                            "--rationale",
+                            "<rationale>",
+                            "--decision-source",
+                            "agent-council",
+                            "--target-kind",
+                            "<target_kind>",
+                            "--target-id",
+                            "<target_id>",
+                        ],
+                    )
+                )
+            elif skill_name == "eco-submit-readiness-opinion":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--agent-role",
+                            role,
+                            "--readiness-status",
+                            "<ready|needs-more-data|blocked>",
+                            "--rationale",
+                            "<rationale>",
+                            "--basis-object-id",
+                            "<basis_object_id>",
+                        ],
+                    )
+                )
+            elif skill_name == "eco-post-board-note":
                 role_write_commands.append(
                     run_skill_command(
                         run_dir=run_dir,
@@ -340,7 +403,8 @@ def default_agent_entry_recommended_skills(*, advisory_plan: dict[str, Any]) -> 
             "eco-read-board-delta",
             "eco-query-public-signals",
             "eco-query-environment-signals",
-            "eco-post-board-note",
+            "eco-submit-council-proposal",
+            "eco-submit-readiness-opinion",
             "eco-update-hypothesis-status",
             "eco-open-challenge-ticket",
             "eco-open-falsification-probe",
@@ -357,7 +421,7 @@ def default_agent_entry_operator_notes(
     analysis: dict[str, Any],
 ) -> list[str]:
     notes = [
-        "Agent entry remains advisory-first: direct reads and board writes can happen through governed skills without replacing runtime hard gates.",
+        "Agent entry remains advisory-first: direct reads and structured proposal/readiness writes can happen through governed skills without replacing runtime hard gates.",
         "Promotion, archive, replay, and publication stay outside the agent inner loop and must return to runtime kernel commands.",
     ]
     if maybe_text(mission.get("orchestration_mode")) == "openclaw-agent":
@@ -374,6 +438,7 @@ def default_agent_entry_operator_notes(
         )
     if maybe_text(round_surface_payload.get("state_source")) == "deliberation-plane":
         notes.append("Board state is already readable from the deliberation plane, so agent-side context does not depend on `board_summary` or `board_brief` artifacts.")
+        notes.append("Default write path should now prefer `proposal / readiness-opinion` submissions over freeform board notes whenever the agent is making a council judgement.")
     if status == "needs-operator-review":
         notes.append("Resolve runtime health alerts or dead letters before trusting agent-guided next steps.")
     return notes[:5]
@@ -430,6 +495,68 @@ def default_agent_entry_operator_commands(
             round_id=round_id,
             skill_name="eco-query-environment-signals",
             contract_mode=contract_mode,
+        ),
+        "query_council_proposals_command": kernel_command(
+            "query-council-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "proposal",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--include-contract",
+            "--pretty",
+        ),
+        "query_readiness_opinions_command": kernel_command(
+            "query-council-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "readiness-opinion",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--include-contract",
+            "--pretty",
+        ),
+        "submit_council_proposal_command_template": run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="eco-submit-council-proposal",
+            contract_mode=contract_mode,
+            skill_args=[
+                "--agent-role",
+                "<agent_role>",
+                "--proposal-kind",
+                "<proposal_kind>",
+                "--rationale",
+                "<rationale>",
+                "--target-kind",
+                "<target_kind>",
+                "--target-id",
+                "<target_id>",
+            ],
+        ),
+        "submit_readiness_opinion_command_template": run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="eco-submit-readiness-opinion",
+            contract_mode=contract_mode,
+            skill_args=[
+                "--agent-role",
+                "<agent_role>",
+                "--readiness-status",
+                "<ready|needs-more-data|blocked>",
+                "--rationale",
+                "<rationale>",
+                "--basis-object-id",
+                "<basis_object_id>",
+            ],
         ),
         "list_claim_cluster_result_sets_command": query_result_set_command(
             run_dir=run_dir,

@@ -456,7 +456,13 @@ def direct_council_advisory_payload(
             {
                 "when": "Gate freezes the round after readiness review.",
                 "reason": top_action_rows[0]["objective"] if top_action_rows else "The board still carries unresolved council-directed investigation work.",
-                "suggested_next_skills": unique_texts(["eco-open-falsification-probe", "eco-post-board-note"]),
+                "suggested_next_skills": unique_texts(
+                    [
+                        "eco-open-falsification-probe",
+                        "eco-submit-council-proposal",
+                        "eco-submit-readiness-opinion",
+                    ]
+                ),
             }
         ]
     )

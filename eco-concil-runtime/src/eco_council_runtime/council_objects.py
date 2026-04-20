@@ -642,6 +642,106 @@ def write_decision_trace_row(
     )
 
 
+def next_round_object_index(
+    connection: sqlite3.Connection,
+    *,
+    table_name: str,
+    run_id: str,
+    round_id: str,
+) -> int:
+    row = connection.execute(
+        f"SELECT COUNT(*) AS row_count FROM {table_name} WHERE run_id = ? AND round_id = ?",
+        (maybe_text(run_id), maybe_text(round_id)),
+    ).fetchone()
+    return int(row["row_count"]) if row is not None else 0
+
+
+def append_council_proposal_record(
+    run_dir: str | Path,
+    *,
+    proposal_payload: dict[str, Any],
+    artifact_path: str = "",
+    record_locator: str = "$.proposal",
+    db_path: str = "",
+) -> dict[str, Any]:
+    payload = dict(proposal_payload) if isinstance(proposal_payload, dict) else {}
+    run_id = maybe_text(payload.get("run_id"))
+    round_id = maybe_text(payload.get("round_id"))
+    connection, db_file = connect_db(run_dir, db_path)
+    try:
+        with connection:
+            proposal_index = next_round_object_index(
+                connection,
+                table_name="council_proposals",
+                run_id=run_id,
+                round_id=round_id,
+            )
+            normalized = normalized_proposal_payload(
+                payload,
+                run_id=run_id,
+                round_id=round_id,
+                proposal_index=proposal_index,
+            )
+            write_council_proposal_row(
+                connection,
+                proposal_row_from_payload(
+                    normalized,
+                    artifact_path=artifact_path,
+                    record_locator=record_locator,
+                ),
+            )
+    finally:
+        connection.close()
+    return {
+        "schema_version": "council-proposal-append-v1",
+        "db_path": str(db_file),
+        "proposal": normalized,
+    }
+
+
+def append_readiness_opinion_record(
+    run_dir: str | Path,
+    *,
+    opinion_payload: dict[str, Any],
+    artifact_path: str = "",
+    record_locator: str = "$.opinion",
+    db_path: str = "",
+) -> dict[str, Any]:
+    payload = dict(opinion_payload) if isinstance(opinion_payload, dict) else {}
+    run_id = maybe_text(payload.get("run_id"))
+    round_id = maybe_text(payload.get("round_id"))
+    connection, db_file = connect_db(run_dir, db_path)
+    try:
+        with connection:
+            opinion_index = next_round_object_index(
+                connection,
+                table_name="readiness_opinions",
+                run_id=run_id,
+                round_id=round_id,
+            )
+            normalized = normalized_readiness_opinion_payload(
+                payload,
+                run_id=run_id,
+                round_id=round_id,
+                opinion_index=opinion_index,
+            )
+            write_readiness_opinion_row(
+                connection,
+                readiness_opinion_row_from_payload(
+                    normalized,
+                    artifact_path=artifact_path,
+                    record_locator=record_locator,
+                ),
+            )
+    finally:
+        connection.close()
+    return {
+        "schema_version": "readiness-opinion-append-v1",
+        "db_path": str(db_file),
+        "opinion": normalized,
+    }
+
+
 def store_council_proposal_records(
     run_dir: str | Path,
     *,

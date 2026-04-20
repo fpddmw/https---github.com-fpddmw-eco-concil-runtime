@@ -214,6 +214,28 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertEqual("openclaw-agent", payload["agent_entry"]["orchestration_mode"])
             self.assertEqual("agent-advisory", payload["agent_entry"]["advisory_plan"]["planning_mode"])
             self.assertIn("eco-read-board-delta", payload["agent_entry"]["recommended_entry_skills"])
+            self.assertIn("eco-submit-council-proposal", payload["agent_entry"]["recommended_entry_skills"])
+            self.assertIn("eco-submit-readiness-opinion", payload["agent_entry"]["recommended_entry_skills"])
+            self.assertTrue(
+                any(
+                    "eco-submit-council-proposal" in command
+                    for entry in payload["agent_entry"]["role_entry_points"]
+                    if isinstance(entry, dict)
+                    for command in entry.get("write_commands", [])
+                    if isinstance(entry.get("write_commands"), list)
+                )
+            )
+            self.assertTrue(
+                any(
+                    "eco-submit-readiness-opinion" in command
+                    for entry in payload["agent_entry"]["role_entry_points"]
+                    if isinstance(entry, dict)
+                    for command in entry.get("write_commands", [])
+                    if isinstance(entry.get("write_commands"), list)
+                )
+            )
+            self.assertTrue(any(item["step_id"] == "submit-council-proposal" for item in payload["agent_entry"]["entry_chain"]))
+            self.assertTrue(any(item["step_id"] == "submit-readiness-opinion" for item in payload["agent_entry"]["entry_chain"]))
             self.assertTrue(any(item["step_id"] == "return-to-runtime-gate" for item in payload["agent_entry"]["entry_chain"]))
             self.assertEqual("runtime-agent-entry-gate-v1", gate_artifact["schema_version"])
             self.assertEqual("agent-advisory", advisory_plan["planning_mode"])
@@ -221,6 +243,14 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn(
                 "materialize-agent-entry-gate",
                 state_payload["agent_entry"]["operator"]["refresh_agent_entry_gate_command"],
+            )
+            self.assertIn(
+                "query-council-objects",
+                state_payload["agent_entry"]["operator"]["query_council_proposals_command"],
+            )
+            self.assertIn(
+                "eco-submit-council-proposal",
+                state_payload["agent_entry"]["operator"]["submit_council_proposal_command_template"],
             )
             self.assertIn(
                 "supervise-round",
@@ -494,6 +524,10 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("claim-cluster", operator["list_claim_cluster_result_sets_command"])
             self.assertIn("eco-read-board-delta", operator["read_board_delta_command"])
             self.assertIn("eco-query-public-signals", operator["query_public_signals_command"])
+            self.assertIn("query-council-objects", operator["query_council_proposals_command"])
+            self.assertIn("query-council-objects", operator["query_readiness_opinions_command"])
+            self.assertIn("eco-submit-council-proposal", operator["submit_council_proposal_command_template"])
+            self.assertIn("eco-submit-readiness-opinion", operator["submit_readiness_opinion_command_template"])
 
     def test_operator_runbook_includes_agent_entry_section_for_round(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -112,18 +112,27 @@ def decision_summary(
     return "Another round is required before finalization because promotion remains withheld."
 
 
-def reason_codes(handoff_status: str, promotion_status: str, open_risks: list[dict[str, Any]]) -> list[str]:
+def reason_codes(
+    handoff_status: str,
+    promotion_status: str,
+    open_risks: list[dict[str, Any]],
+    rejected_proposal_ids: list[str],
+) -> list[str]:
     codes: list[str] = []
     if handoff_status != "ready-for-reporting":
         codes.append("reporting-handoff-not-ready")
     if promotion_status != "promoted":
         codes.append("promotion-withheld")
+    if rejected_proposal_ids:
+        codes.append("council-veto")
     for item in open_risks:
         risk_type = maybe_text(item.get("risk_type"))
         if risk_type == "gate":
             codes.append("gate-blocking")
         elif risk_type == "operator-note":
             codes.append("operator-follow-up")
+        elif risk_type == "proposal-veto":
+            codes.append("council-veto")
         else:
             codes.append("investigation-open")
     return unique_texts(codes)
@@ -215,6 +224,13 @@ def draft_council_decision_skill(
     key_findings = handoff.get("key_findings", []) if isinstance(handoff.get("key_findings"), list) else []
     open_risks = handoff.get("open_risks", []) if isinstance(handoff.get("open_risks"), list) else []
     recommended_next_actions = handoff.get("recommended_next_actions", []) if isinstance(handoff.get("recommended_next_actions"), list) else []
+    rejected_proposal_ids = unique_texts(
+        handoff.get("rejected_proposal_ids", [])
+        if isinstance(handoff.get("rejected_proposal_ids"), list)
+        else promotion_basis.get("rejected_proposal_ids", [])
+        if isinstance(promotion_basis.get("rejected_proposal_ids"), list)
+        else []
+    )
     moderator_status = "finalize" if handoff_status == "ready-for-reporting" and promotion_status == "promoted" else "continue"
     publication_readiness = "ready" if moderator_status == "finalize" else "hold"
     decision_id = "council-decision-" + stable_hash(run_id, round_id, moderator_status, publication_readiness)[:12]
@@ -255,6 +271,7 @@ def draft_council_decision_skill(
             if isinstance(promotion_basis.get("supporting_proposal_ids"), list)
             else []
         ),
+        "rejected_proposal_ids": rejected_proposal_ids,
         "supporting_opinion_ids": unique_texts(
             handoff.get("supporting_opinion_ids", [])
             if isinstance(handoff.get("supporting_opinion_ids"), list)
@@ -269,8 +286,31 @@ def draft_council_decision_skill(
             if isinstance(promotion_basis.get("rejected_opinion_ids"), list)
             else []
         ),
+        "promotion_resolution_mode": maybe_text(
+            handoff.get("promotion_resolution_mode")
+        )
+        or maybe_text(promotion_basis.get("promotion_resolution_mode")),
+        "promotion_resolution_reasons": (
+            handoff.get("promotion_resolution_reasons", [])
+            if isinstance(handoff.get("promotion_resolution_reasons"), list)
+            else promotion_basis.get("promotion_resolution_reasons", [])
+            if isinstance(promotion_basis.get("promotion_resolution_reasons"), list)
+            else []
+        ),
+        "council_input_counts": (
+            handoff.get("council_input_counts", {})
+            if isinstance(handoff.get("council_input_counts"), dict)
+            else promotion_basis.get("council_input_counts", {})
+            if isinstance(promotion_basis.get("council_input_counts"), dict)
+            else {}
+        ),
         "decision_gating": {
-            "reason_codes": reason_codes(handoff_status, promotion_status, open_risks),
+            "reason_codes": reason_codes(
+                handoff_status,
+                promotion_status,
+                open_risks,
+                rejected_proposal_ids,
+            ),
             "reasons": [maybe_text(item.get("summary")) for item in open_risks[:4] if maybe_text(item.get("summary"))],
             "open_risk_count": len(open_risks),
         },

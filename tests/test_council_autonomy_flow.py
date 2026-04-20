@@ -12,6 +12,7 @@ from _workflow_support import (
     run_kernel,
     run_script,
     runtime_src_path,
+    seed_analysis_chain,
     script_path,
 )
 
@@ -103,6 +104,111 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 query_payload["objects"][0]["decision_source"],
             )
 
+    def test_next_actions_default_to_proposal_authority_when_heuristic_queue_exists(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+            coverage_payload = run_script(
+                script_path("eco-score-evidence-coverage"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            run_script(
+                script_path("eco-post-board-note"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--author-role",
+                "moderator",
+                "--category",
+                "analysis",
+                "--note-text",
+                "Heuristic next-action pressure is present, but proposal authority should still win.",
+                "--linked-artifact-ref",
+                coverage_ref,
+            )
+            run_script(
+                script_path("eco-update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Smoke over NYC needs one more route review",
+                "--statement",
+                "The round still exposes routing pressure that would normally produce heuristic next actions.",
+                "--status",
+                "active",
+                "--owner-role",
+                "moderator",
+                "--linked-claim-id",
+                outputs["cluster_claims"]["canonical_ids"][0],
+                "--confidence",
+                "0.58",
+            )
+            proposal_bundle = store_council_proposal_records(
+                run_dir,
+                proposal_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "proposals": [
+                        {
+                            "proposal_kind": "clarify-verification-route",
+                            "action_kind": "clarify-verification-route",
+                            "agent_role": "moderator",
+                            "assigned_role": "moderator",
+                            "objective": "Freeze a single investigation lane for issue-proposal.",
+                            "rationale": "Council wants routing resolved from the proposal queue instead of recomputing fallback actions.",
+                            "target_kind": "issue-cluster",
+                            "target_id": "issue-proposal",
+                            "recommended_lane": "mixed-review",
+                            "controversy_gap": "verification-routing-gap",
+                            "decision_source": "agent-council",
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://proposal-route"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+            proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
+
+            payload = run_script(
+                script_path("eco-propose-next-actions"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            artifact = load_json(
+                investigation_path(run_dir, f"next_actions_{ROUND_ID}.json")
+            )
+            first_action = artifact["ranked_actions"][0]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("agent-proposal-execution", artifact["agenda_source"])
+            self.assertEqual(1, artifact["proposal_action_count"])
+            self.assertEqual(0, artifact["heuristic_action_count"])
+            self.assertGreaterEqual(artifact["observed_heuristic_action_count"], 1)
+            self.assertGreaterEqual(artifact["suppressed_heuristic_action_count"], 1)
+            self.assertEqual("issue-proposal", first_action["target"]["object_id"])
+            self.assertIn(proposal_id, first_action["lineage"])
+
     def test_readiness_assessment_prefers_council_opinions_over_policy_formula(
         self,
     ) -> None:
@@ -183,6 +289,62 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 "agent-council",
                 query_payload["objects"][0]["decision_source"],
             )
+
+    def test_readiness_with_council_opinions_stops_recommending_next_actions_recompute(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "blocked",
+                            "sufficient_for_promotion": False,
+                            "rationale": "The current contradiction still needs a targeted challenge pass.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["issue-002"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://issue-002"],
+                            "lineage": [],
+                        },
+                        {
+                            "agent_role": "challenger",
+                            "readiness_status": "needs-more-data",
+                            "sufficient_for_promotion": False,
+                            "rationale": "The board should stay open, but the next step is challenge work rather than recomputing the fallback action agenda.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["issue-002"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://issue-002"],
+                            "lineage": [],
+                        },
+                    ],
+                },
+            )
+
+            payload = run_script(
+                script_path("eco-summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("agent-council", artifact["decision_source"])
+            self.assertNotIn("eco-propose-next-actions", artifact["recommended_next_skills"])
+            self.assertIn("eco-submit-council-proposal", artifact["recommended_next_skills"])
+            self.assertIn("eco-submit-readiness-opinion", artifact["recommended_next_skills"])
 
     def test_probe_opening_can_execute_directly_from_council_proposal(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -268,7 +430,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 query_payload["objects"][0]["decision_source"],
             )
 
-    def test_probe_opening_prefers_council_proposal_over_db_backed_heuristic_action(
+    def test_probe_opening_defaults_to_proposal_authority_over_db_backed_heuristic_action(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -350,10 +512,13 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual(
-                "agent-proposal-augmented",
+                "agent-proposal-execution",
                 payload["summary"]["action_source"],
             )
             self.assertEqual(1, artifact["proposal_probe_candidate_count"])
+            self.assertEqual(0, artifact["fallback_probe_candidate_count"])
+            self.assertEqual(1, artifact["observed_fallback_probe_candidate_count"])
+            self.assertEqual(1, artifact["suppressed_fallback_probe_candidate_count"])
             self.assertEqual("ticket-proposal", probe["target_ticket_id"])
             self.assertEqual("hypothesis-proposal", probe["target_hypothesis_id"])
             self.assertNotEqual("ticket-heuristic", probe["target_ticket_id"])

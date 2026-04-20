@@ -30,6 +30,12 @@ from eco_council_runtime.phase2_fallback_context import (  # noqa: E402
 from eco_council_runtime.phase2_fallback_contracts import (  # noqa: E402
     d1_contract_fields_from_payload,
 )
+from eco_council_runtime.phase2_council_execution import (  # noqa: E402
+    COUNCIL_EXECUTION_MODE_FALLBACK_ONLY,
+    COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
+    VALID_COUNCIL_EXECUTION_MODES,
+    normalize_council_execution_mode,
+)
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_round_readiness_assessment,
 )
@@ -269,6 +275,7 @@ def summarize_round_readiness_skill(
     probes_path: str,
     coverage_path: str,
     output_path: str,
+    council_execution_mode: str,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_summary_file = resolve_path(run_dir_path, board_summary_path, f"board/board_state_summary_{round_id}.json")
@@ -323,6 +330,9 @@ def summarize_round_readiness_skill(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
+    )
+    normalized_council_execution_mode = normalize_council_execution_mode(
+        council_execution_mode
     )
     contract_fields = d1_contract_fields_from_payload(
         shared_context,
@@ -453,7 +463,11 @@ def summarize_round_readiness_skill(
     selected_basis_object_ids: list[str] = []
     opinion_ids: list[str] = []
     opinion_status_counts: dict[str, int] = {}
-    if council_opinions:
+    if (
+        council_opinions
+        and normalized_council_execution_mode
+        != COUNCIL_EXECUTION_MODE_FALLBACK_ONLY
+    ):
         council_summary = aggregate_council_readiness_opinions(council_opinions)
         status_value = maybe_text(council_summary.get("readiness_status")) or status_value
         reasons = (
@@ -476,6 +490,13 @@ def summarize_round_readiness_skill(
             + readiness_evidence_refs
         )
         readiness_lineage = unique_texts(opinion_ids + selected_basis_object_ids)
+    elif council_opinions:
+        warnings.append(
+            {
+                "code": "council-opinions-ignored",
+                "message": "Council readiness opinions were present but ignored because council_execution_mode=fallback-only.",
+            }
+        )
     findings = [
         {"finding_id": "readiness-coverage", "title": "Coverage posture", "summary": f"strong={strong_coverages}, moderate={moderate_coverages}, weak={weak_coverages}", "confidence": "medium"},
         {"finding_id": "readiness-board", "title": "Board posture", "summary": f"active_hypotheses={active_hypotheses}, open_challenges={open_challenges}, open_tasks={open_tasks}", "confidence": "medium"},
@@ -497,8 +518,42 @@ def summarize_round_readiness_skill(
 
     if status_value == "ready":
         recommended_next_skills = ["eco-promote-evidence-basis"]
+    elif (
+        council_opinions
+        and normalized_council_execution_mode
+        != COUNCIL_EXECUTION_MODE_FALLBACK_ONLY
+    ):
+        recommended_next_skills = [
+            "eco-submit-council-proposal",
+            "eco-submit-readiness-opinion",
+        ]
+        if (
+            open_probes > 0
+            or routing_actions > 0
+            or empirical_gap_actions > 0
+            or representation_gap_actions > 0
+            or formal_linkage_actions > 0
+            or issue_gap_actions > 0
+        ):
+            recommended_next_skills.append("eco-open-falsification-probe")
+        if representation_gap_actions > 0 or formal_linkage_actions > 0:
+            recommended_next_skills.append(
+                "eco-link-formal-comments-to-public-discourse"
+            )
+            recommended_next_skills.append("eco-identify-representation-gaps")
+        if diffusion_focus_count > 0:
+            recommended_next_skills.append("eco-detect-cross-platform-diffusion")
+        deduped: list[str] = []
+        for skill_name in recommended_next_skills:
+            if skill_name not in deduped:
+                deduped.append(skill_name)
+        recommended_next_skills = deduped
     else:
-        recommended_next_skills = ["eco-propose-next-actions", "eco-post-board-note"]
+        recommended_next_skills = [
+            "eco-propose-next-actions",
+            "eco-submit-council-proposal",
+            "eco-submit-readiness-opinion",
+        ]
         if open_probes > 0 or routing_actions > 0 or empirical_gap_actions > 0:
             recommended_next_skills.append("eco-open-falsification-probe")
         if representation_gap_actions > 0 or formal_linkage_actions > 0:
@@ -517,6 +572,7 @@ def summarize_round_readiness_skill(
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
+        "council_execution_mode": normalized_council_execution_mode,
         "board_summary_path": str(board_summary_file),
         "board_brief_path": str(board_brief_file),
         "next_actions_path": str(next_actions_file),
@@ -626,6 +682,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--probes-path", default="")
     parser.add_argument("--coverage-path", default="")
     parser.add_argument("--output-path", default="")
+    parser.add_argument(
+        "--council-execution-mode",
+        choices=sorted(VALID_COUNCIL_EXECUTION_MODES),
+        default=COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
+    )
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
@@ -642,6 +703,7 @@ def main() -> int:
         probes_path=args.probes_path,
         coverage_path=args.coverage_path,
         output_path=args.output_path,
+        council_execution_mode=args.council_execution_mode,
     )
     print(pretty_json(payload, args.pretty))
     return 0

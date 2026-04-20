@@ -19,6 +19,14 @@ if str(RUNTIME_SRC) not in sys.path:
 
 from eco_council_runtime.kernel.deliberation_plane import load_round_snapshot  # noqa: E402
 from eco_council_runtime.council_objects import query_council_objects  # noqa: E402
+from eco_council_runtime.phase2_council_execution import (  # noqa: E402
+    COUNCIL_EXECUTION_MODE_FALLBACK_ONLY,
+    COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
+    VALID_COUNCIL_EXECUTION_MODES,
+    council_execution_uses_direct_queue,
+    normalize_council_execution_mode,
+    resolve_council_action_queue,
+)
 from eco_council_runtime.phase2_fallback_context import load_d1_shared_context  # noqa: E402
 from eco_council_runtime.phase2_proposal_actions import (  # noqa: E402
     action_from_council_proposal,
@@ -361,7 +369,7 @@ def planning_signal_counts(
     probes: dict[str, Any],
     readiness: dict[str, Any],
     shared_context: dict[str, Any],
-    proposal_actions: list[dict[str, Any]],
+    effective_actions: list[dict[str, Any]],
     council_readiness_summary: dict[str, Any],
 ) -> dict[str, Any]:
     agenda_counts = normalized_counts(next_actions, "agenda_counts")
@@ -370,13 +378,7 @@ def planning_signal_counts(
     if not agenda_counts:
         agenda_counts = normalized_counts(shared_context, "agenda_counts")
 
-    action_rows = (
-        proposal_actions
-        if proposal_actions
-        else next_actions.get("ranked_actions", [])
-        if isinstance(next_actions.get("ranked_actions"), list)
-        else []
-    )
+    action_rows = effective_actions
 
     controversy_gap_counts = summarize_counts(
         action_rows,
@@ -472,7 +474,7 @@ def probe_stage_decision(
     probes: dict[str, Any],
     readiness: dict[str, Any],
     shared_context: dict[str, Any],
-    proposal_actions: list[dict[str, Any]],
+    effective_actions: list[dict[str, Any]],
     council_readiness_summary: dict[str, Any],
 ) -> tuple[bool, list[str], dict[str, Any]]:
     signal_counts = planning_signal_counts(
@@ -481,7 +483,7 @@ def probe_stage_decision(
         probes,
         readiness,
         shared_context,
-        proposal_actions,
+        effective_actions,
         council_readiness_summary,
     )
     reason_codes: list[str] = []
@@ -669,16 +671,29 @@ def fallback_path(
         fallback_rows.append(
             {
                 "when": "Open challenge tickets remain after controller execution.",
-                "reason": "Challenge objects still need explicit closure or a stronger board note.",
+                "reason": "Challenge objects still need explicit closure or a structured follow-up proposal.",
                 "suggested_next_skills": (
-                    ["eco-post-board-note", "eco-close-challenge-ticket"]
+                    [
+                        "eco-submit-council-proposal",
+                        "eco-submit-readiness-opinion",
+                        "eco-close-challenge-ticket",
+                    ]
                     if direct_council_queue
-                    else ["eco-post-board-note", "eco-close-challenge-ticket", "eco-propose-next-actions"]
+                    else [
+                        "eco-submit-council-proposal",
+                        "eco-submit-readiness-opinion",
+                        "eco-close-challenge-ticket",
+                        "eco-propose-next-actions",
+                    ]
                 ),
             }
         )
     if probe_reason_codes:
-        suggested_next_skills = ["eco-open-falsification-probe", "eco-post-board-note"]
+        suggested_next_skills = [
+            "eco-open-falsification-probe",
+            "eco-submit-council-proposal",
+            "eco-submit-readiness-opinion",
+        ]
         if signal_counts.get("routing_actions", 0) > 0:
             suggested_next_skills.insert(0, "eco-route-verification-lane")
         if signal_counts.get("representation_gap_actions", 0) > 0 or signal_counts.get(
@@ -715,9 +730,18 @@ def fallback_path(
                 "when": "Gate freezes the round after readiness review.",
                 "reason": top_rows[0]["objective"] if top_rows else "The board still carries unresolved investigation work.",
                 "suggested_next_skills": (
-                    ["eco-open-falsification-probe", "eco-post-board-note"]
+                    [
+                        "eco-open-falsification-probe",
+                        "eco-submit-council-proposal",
+                        "eco-submit-readiness-opinion",
+                    ]
                     if direct_council_queue
-                    else ["eco-propose-next-actions", "eco-open-falsification-probe", "eco-post-board-note"]
+                    else [
+                        "eco-propose-next-actions",
+                        "eco-open-falsification-probe",
+                        "eco-submit-council-proposal",
+                        "eco-submit-readiness-opinion",
+                    ]
                 ),
             }
         )
@@ -744,6 +768,7 @@ def plan_round_orchestration_skill(
     readiness_path: str,
     output_path: str,
     planner_mode: str,
+    council_execution_mode: str,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_path(run_dir_path, board_path, "board/investigation_board.json")
@@ -786,6 +811,11 @@ def plan_round_orchestration_skill(
         if isinstance(next_actions_context.get("payload"), dict)
         else {}
     )
+    next_action_rows = (
+        next_actions.get("ranked_actions", [])
+        if isinstance(next_actions.get("ranked_actions"), list)
+        else []
+    )
     readiness_context = load_round_readiness_wrapper(
         run_dir_path,
         run_id=run_id,
@@ -813,6 +843,19 @@ def plan_round_orchestration_skill(
         if council_readiness_opinions
         else {}
     )
+    normalized_council_execution_mode = normalize_council_execution_mode(
+        council_execution_mode
+    )
+    if (
+        normalized_council_execution_mode == COUNCIL_EXECUTION_MODE_FALLBACK_ONLY
+        and (council_proposals or council_readiness_opinions)
+    ):
+        warnings.append(
+            {
+                "code": "council-inputs-ignored",
+                "message": "Council proposals or readiness opinions were present but ignored because council_execution_mode=fallback-only.",
+            }
+        )
     brief_text = load_text_if_exists(board_brief_file)
     probes_context = load_falsification_probe_wrapper(
         run_dir_path,
@@ -840,25 +883,24 @@ def plan_round_orchestration_skill(
 
     snapshot = board_snapshot(round_state, board_summary if isinstance(board_summary, dict) else None)
     counts = snapshot.get("counts", {}) if isinstance(snapshot.get("counts"), dict) else {}
+    resolved_action_queue = resolve_council_action_queue(
+        proposal_actions,
+        next_action_rows,
+        council_execution_mode=normalized_council_execution_mode,
+    )
+    effective_actions = resolved_action_queue["selected_actions"]
     probe_stage_included, probe_reason_codes, signal_counts = probe_stage_decision(
         snapshot,
         next_actions,
         probes,
         readiness,
         shared_context,
-        proposal_actions,
+        effective_actions,
         council_readiness_summary,
     )
     posture, posture_reason_codes = downstream_posture(
         signal_counts,
         probe_reason_codes,
-    )
-    effective_actions = (
-        proposal_actions
-        if proposal_actions
-        else next_actions.get("ranked_actions", [])
-        if isinstance(next_actions.get("ranked_actions"), list)
-        else []
     )
     top_action_rows = (
         top_action_rows_from_actions(effective_actions)
@@ -866,8 +908,10 @@ def plan_round_orchestration_skill(
         else top_actions(next_actions)
     )
     primary_action_role = top_action_rows[0]["assigned_role"] if top_action_rows else "moderator"
-    direct_council_queue = planner_mode == "agent-advisory" and bool(
-        proposal_actions or council_readiness_opinions
+    direct_council_queue = council_execution_uses_direct_queue(
+        normalized_council_execution_mode,
+        proposal_actions=proposal_actions,
+        readiness_opinions=council_readiness_opinions,
     )
 
     execution_queue: list[dict[str, Any]] = []
@@ -957,6 +1001,18 @@ def plan_round_orchestration_skill(
         "council_input_counts": {
             "proposal_count": len(council_proposals),
             "proposal_action_count": len(proposal_actions),
+            "observed_fallback_action_count": int(
+                resolved_action_queue["observed_fallback_action_count"]
+            ),
+            "selected_proposal_action_count": int(
+                resolved_action_queue["included_proposal_action_count"]
+            ),
+            "selected_fallback_action_count": int(
+                resolved_action_queue["included_fallback_action_count"]
+            ),
+            "suppressed_fallback_action_count": int(
+                resolved_action_queue["suppressed_fallback_action_count"]
+            ),
             "readiness_opinion_count": len(council_readiness_opinions),
             "readiness_ready_count": safe_int(council_readiness_summary.get("opinion_status_counts", {}).get("ready"))
             if isinstance(council_readiness_summary.get("opinion_status_counts"), dict)
@@ -1004,7 +1060,7 @@ def plan_round_orchestration_skill(
     ]
     if direct_council_queue:
         planning_notes.append(
-            "Agent-advisory mode found direct council proposals or readiness opinions, so the advisory queue skips a mandatory next-actions recomputation."
+            "Direct council proposals or readiness opinions are authoritative in the default execution mode, so the controller queue skips a mandatory next-actions recomputation."
         )
     if brief_text:
         planning_notes.append(f"Board brief context: {maybe_text(brief_text)[:180]}")
@@ -1015,6 +1071,7 @@ def plan_round_orchestration_skill(
         "run_id": run_id,
         "round_id": round_id,
         "plan_id": plan_id,
+        "council_execution_mode": normalized_council_execution_mode,
         "planning_status": "advisory-plan-ready" if planner_mode == "agent-advisory" else "ready-for-controller",
         "planning_mode": "agent-advisory" if planner_mode == "agent-advisory" else "planner-backed-phase2",
         "controller_authority": "advisory-only" if planner_mode == "agent-advisory" else "queue-owner",
@@ -1034,8 +1091,18 @@ def plan_round_orchestration_skill(
             "board_exports_are_derived": True,
             "direct_council_queue": direct_council_queue,
             "next_actions_stage_skipped": direct_council_queue,
+            "council_execution_resolution": resolved_action_queue["resolution"],
             "council_proposal_count": len(council_proposals),
             "council_proposal_action_count": len(proposal_actions),
+            "selected_proposal_action_count": int(
+                resolved_action_queue["included_proposal_action_count"]
+            ),
+            "selected_fallback_action_count": int(
+                resolved_action_queue["included_fallback_action_count"]
+            ),
+            "suppressed_fallback_action_count": int(
+                resolved_action_queue["suppressed_fallback_action_count"]
+            ),
             "council_readiness_opinion_count": len(council_readiness_opinions),
             "council_readiness_status": maybe_text(council_readiness_summary.get("readiness_status")),
             "next_actions_present": isinstance(next_actions, dict) and bool(next_actions),
@@ -1143,6 +1210,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--readiness-path", default="")
     parser.add_argument("--output-path", default="")
     parser.add_argument("--planner-mode", choices=["runtime-phase2", "agent-advisory"], default="runtime-phase2")
+    parser.add_argument(
+        "--council-execution-mode",
+        choices=sorted(VALID_COUNCIL_EXECUTION_MODES),
+        default=COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
+    )
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
@@ -1161,6 +1233,7 @@ def main() -> int:
         readiness_path=args.readiness_path,
         output_path=args.output_path,
         planner_mode=args.planner_mode,
+        council_execution_mode=args.council_execution_mode,
     )
     print(pretty_json(payload, args.pretty))
     return 0

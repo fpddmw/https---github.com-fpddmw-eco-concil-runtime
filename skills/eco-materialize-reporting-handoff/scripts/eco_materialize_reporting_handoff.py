@@ -360,6 +360,11 @@ def materialize_reporting_handoff_skill(
             if isinstance(promotion_basis.get("supporting_proposal_ids"), list)
             else []
         ),
+        "rejected_proposal_ids": unique_texts(
+            promotion_basis.get("rejected_proposal_ids", [])
+            if isinstance(promotion_basis.get("rejected_proposal_ids"), list)
+            else []
+        ),
         "supporting_opinion_ids": unique_texts(
             promotion_basis.get("supporting_opinion_ids", [])
             if isinstance(promotion_basis.get("supporting_opinion_ids"), list)
@@ -369,6 +374,19 @@ def materialize_reporting_handoff_skill(
             promotion_basis.get("rejected_opinion_ids", [])
             if isinstance(promotion_basis.get("rejected_opinion_ids"), list)
             else []
+        ),
+        "promotion_resolution_mode": maybe_text(
+            promotion_basis.get("promotion_resolution_mode")
+        ),
+        "promotion_resolution_reasons": (
+            promotion_basis.get("promotion_resolution_reasons", [])
+            if isinstance(promotion_basis.get("promotion_resolution_reasons"), list)
+            else []
+        ),
+        "council_input_counts": (
+            promotion_basis.get("council_input_counts", {})
+            if isinstance(promotion_basis.get("council_input_counts"), dict)
+            else {}
         ),
         "selected_evidence_refs": unique_texts(promotion_basis.get("selected_evidence_refs", []) if isinstance(promotion_basis.get("selected_evidence_refs"), list) else []),
         "board_brief_excerpt": board_excerpt,

@@ -27,9 +27,17 @@ from eco_council_runtime.phase2_fallback_context import (  # noqa: E402
 from eco_council_runtime.phase2_fallback_contracts import (  # noqa: E402
     d1_contract_fields_from_payload,
 )
+from eco_council_runtime.phase2_council_execution import (  # noqa: E402
+    COUNCIL_EXECUTION_MODE_FALLBACK_ONLY,
+    COUNCIL_EXECUTION_MODE_PROPOSAL_AUGMENTED,
+    COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
+    VALID_COUNCIL_EXECUTION_MODES,
+    normalize_council_execution_mode,
+    resolve_council_action_queue,
+)
 from eco_council_runtime.phase2_proposal_actions import (  # noqa: E402
     action_from_council_proposal,
-    action_signature,
+    proposal_drives_phase2_action_queue,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_moderator_action_records,
@@ -140,29 +148,10 @@ def load_council_proposal_actions(
         status = maybe_text(proposal.get("status"))
         if status in {"rejected", "withdrawn", "closed"}:
             continue
+        if not proposal_drives_phase2_action_queue(proposal):
+            continue
         results.append(action_from_council_proposal(proposal))
     return results
-
-
-def merged_ranked_actions(
-    proposal_actions: list[dict[str, Any]],
-    heuristic_actions: list[dict[str, Any]],
-    *,
-    max_actions: int,
-) -> list[dict[str, Any]]:
-    merged: list[dict[str, Any]] = []
-    seen_signatures: set[str] = set()
-    for action in [*proposal_actions, *heuristic_actions]:
-        if not isinstance(action, dict):
-            continue
-        signature = action_signature(action)
-        if signature in seen_signatures:
-            continue
-        seen_signatures.add(signature)
-        merged.append(dict(action))
-        if len(merged) >= max(1, max_actions):
-            break
-    return merged
 
 
 def propose_next_actions_skill(
@@ -174,6 +163,7 @@ def propose_next_actions_skill(
     coverage_path: str,
     output_path: str,
     max_actions: int,
+    council_execution_mode: str,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     output_file = resolve_path(
@@ -201,21 +191,34 @@ def propose_next_actions_skill(
         run_id=run_id,
         round_id=round_id,
     )
-    ranked_actions = merged_ranked_actions(
+    normalized_mode = normalize_council_execution_mode(council_execution_mode)
+    resolved_action_queue = resolve_council_action_queue(
         proposal_actions,
         heuristic_actions,
+        council_execution_mode=normalized_mode,
         max_actions=max_actions,
     )
+    ranked_actions = resolved_action_queue["selected_actions"]
     action_source = maybe_text(action_context.get("action_source"))
-    if proposal_actions and heuristic_actions:
+    if resolved_action_queue["resolution"] == COUNCIL_EXECUTION_MODE_PROPOSAL_AUGMENTED:
         action_source = "agent-proposal-augmented"
-    elif proposal_actions:
+    elif resolved_action_queue["resolution"] == COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE:
         action_source = "agent-proposal-execution"
     warnings = (
         action_context.get("warnings", [])
         if isinstance(action_context.get("warnings"), list)
         else []
     )
+    if (
+        normalized_mode == COUNCIL_EXECUTION_MODE_FALLBACK_ONLY
+        and proposal_actions
+    ):
+        warnings.append(
+            {
+                "code": "council-proposals-ignored",
+                "message": "Council proposals were present but ignored because council_execution_mode=fallback-only.",
+            }
+        )
     contract_fields = d1_contract_fields_from_payload(action_context)
 
     wrapper = {
@@ -225,13 +228,27 @@ def propose_next_actions_skill(
         "run_id": run_id,
         "round_id": round_id,
         "agenda_source": action_source or "controversy-agenda-materialization",
+        "council_execution_mode": normalized_mode,
         "board_summary_path": maybe_text(action_context.get("board_summary_file")),
         "board_brief_path": maybe_text(action_context.get("board_brief_file")),
         "coverage_path": maybe_text(action_context.get("coverage_file")),
         **contract_fields,
         "action_count": len(ranked_actions),
-        "proposal_action_count": len(proposal_actions),
-        "heuristic_action_count": len(heuristic_actions),
+        "proposal_action_count": int(
+            resolved_action_queue["included_proposal_action_count"]
+        ),
+        "heuristic_action_count": int(
+            resolved_action_queue["included_fallback_action_count"]
+        ),
+        "observed_proposal_action_count": int(
+            resolved_action_queue["observed_proposal_action_count"]
+        ),
+        "observed_heuristic_action_count": int(
+            resolved_action_queue["observed_fallback_action_count"]
+        ),
+        "suppressed_heuristic_action_count": int(
+            resolved_action_queue["suppressed_fallback_action_count"]
+        ),
         "agenda_counts": action_context.get("agenda_counts", {})
         if isinstance(action_context.get("agenda_counts"), dict)
         else {},
@@ -327,7 +344,7 @@ def propose_next_actions_skill(
             "suggested_next_skills": [
                 "eco-open-falsification-probe",
                 "eco-summarize-round-readiness",
-                "eco-post-board-note",
+                "eco-submit-council-proposal",
             ],
         },
     }
@@ -345,6 +362,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--coverage-path", default="")
     parser.add_argument("--output-path", default="")
     parser.add_argument("--max-actions", type=int, default=6)
+    parser.add_argument(
+        "--council-execution-mode",
+        choices=sorted(VALID_COUNCIL_EXECUTION_MODES),
+        default=COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
+    )
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
@@ -360,6 +382,7 @@ def main() -> int:
         coverage_path=args.coverage_path,
         output_path=args.output_path,
         max_actions=args.max_actions,
+        council_execution_mode=args.council_execution_mode,
     )
     print(pretty_json(payload, args.pretty))
     return 0

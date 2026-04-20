@@ -11,6 +11,7 @@ from _workflow_support import (
     reporting_path,
     run_kernel,
     run_script,
+    runtime_path,
     runtime_src_path,
     script_path,
     seed_analysis_chain,
@@ -150,10 +151,11 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                     "round_id": ROUND_ID,
                     "proposals": [
                         {
-                            "proposal_kind": "ready-for-reporting",
+                            "proposal_kind": "freeze-current-basis",
                             "agent_role": "moderator",
                             "target_kind": "round",
                             "target_id": ROUND_ID,
+                            "publication_readiness": "ready",
                             "rationale": "Council wants the current evidence basis frozen and sent into reporting.",
                             "decision_source": "agent-council",
                             "provenance": {"source": "unit-test"},
@@ -209,10 +211,19 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "council-judgement-freeze-v1",
                 promotion["basis_selection_mode"],
             )
+            self.assertEqual(
+                "gate-passed-with-council-support",
+                promotion["promotion_resolution_mode"],
+            )
             self.assertEqual([proposal_id], promotion["supporting_proposal_ids"])
+            self.assertEqual([], promotion["rejected_proposal_ids"])
             self.assertEqual(ready_opinion_ids, set(promotion["supporting_opinion_ids"]))
             self.assertEqual([], promotion["rejected_opinion_ids"])
             self.assertEqual(1, promotion["council_input_counts"]["proposal_count"])
+            self.assertEqual(
+                "explicit:publication_readiness",
+                promotion["proposal_resolution_records"][0]["resolution_mode"],
+            )
             self.assertEqual(
                 1,
                 promotion["council_input_counts"]["supporting_proposal_count"],
@@ -282,6 +293,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
 
             self.assertEqual("ready", decision["publication_readiness"])
             self.assertEqual([proposal_id], decision["supporting_proposal_ids"])
+            self.assertEqual([], decision["rejected_proposal_ids"])
             self.assertEqual(ready_opinion_ids, set(decision["supporting_opinion_ids"]))
             self.assertEqual([], decision["rejected_opinion_ids"])
             self.assertEqual(1, len(decision["decision_trace_ids"]))
@@ -348,6 +360,161 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 publication["decision_traces"][0]["selected_object_id"],
                 ready_opinion_ids,
             )
+
+    def test_hold_round_persists_rejected_proposal_veto_into_gate_trace_and_publication(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seeded = prepare_round_base(run_dir, root)
+
+            proposal_bundle = store_council_proposal_records(
+                run_dir,
+                proposal_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "proposals": [
+                        {
+                            "proposal_kind": "hold-current-round",
+                            "agent_role": "challenger",
+                            "target_kind": "round",
+                            "target_id": ROUND_ID,
+                            "promotion_disposition": "hold",
+                            "rationale": "A contradiction still needs explicit council review before publication can proceed.",
+                            "decision_source": "agent-council",
+                            "confidence": 0.88,
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": [seeded["coverage_ref"]],
+                            "lineage": [seeded["claim_id"]],
+                        }
+                    ],
+                },
+            )
+            proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
+            opinion_bundle = store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_promotion": True,
+                            "rationale": "The evidence basis would otherwise be ready for reporting.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": [seeded["claim_id"]],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": [seeded["coverage_ref"]],
+                            "lineage": [seeded["claim_id"]],
+                        },
+                        {
+                            "agent_role": "environmentalist",
+                            "readiness_status": "ready",
+                            "sufficient_for_promotion": True,
+                            "rationale": "No empirical blocker remains at the evidence layer.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": [seeded["claim_id"]],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": [seeded["coverage_ref"]],
+                            "lineage": [seeded["claim_id"]],
+                        },
+                    ],
+                },
+            )
+            ready_opinion_ids = {
+                opinion["opinion_id"] for opinion in opinion_bundle["opinions"]
+            }
+
+            prepare_reporting_chain(run_dir)
+            gate = load_json(runtime_path(run_dir, f"promotion_gate_{ROUND_ID}.json"))
+            promotion = load_json(
+                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("freeze-withheld", gate["gate_status"])
+            self.assertEqual("council-veto", gate["promotion_resolution_mode"])
+            self.assertEqual([proposal_id], gate["rejected_proposal_ids"])
+            self.assertEqual("agent-council", gate["decision_source"])
+            self.assertEqual("withheld", promotion["promotion_status"])
+            self.assertEqual("agent-council", promotion["decision_source"])
+            self.assertEqual([], promotion["supporting_proposal_ids"])
+            self.assertEqual([proposal_id], promotion["rejected_proposal_ids"])
+            self.assertEqual([], promotion["supporting_opinion_ids"])
+            self.assertEqual(ready_opinion_ids, set(promotion["rejected_opinion_ids"]))
+            self.assertEqual(
+                1,
+                promotion["council_input_counts"]["rejected_proposal_count"],
+            )
+
+            decision_publish = run_script(
+                script_path("eco-publish-council-decision"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            decision = load_json(
+                reporting_path(run_dir, f"council_decision_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("hold", decision["publication_readiness"])
+            self.assertEqual([], decision["supporting_proposal_ids"])
+            self.assertEqual([proposal_id], decision["rejected_proposal_ids"])
+            self.assertEqual([], decision["supporting_opinion_ids"])
+            self.assertEqual(ready_opinion_ids, set(decision["rejected_opinion_ids"]))
+            self.assertIn(proposal_id, decision["rejected_object_ids"])
+            self.assertEqual(
+                decision["decision_trace_ids"][0],
+                decision_publish["summary"]["decision_trace_id"],
+            )
+
+            trace_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "decision-trace",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--decision-id",
+                decision["decision_id"],
+            )
+            self.assertEqual(1, trace_query["summary"]["returned_object_count"])
+            trace = trace_query["objects"][0]
+            self.assertEqual("withheld", trace["status"])
+            self.assertEqual("proposal", trace["selected_object_kind"])
+            self.assertEqual(proposal_id, trace["selected_object_id"])
+            self.assertIn(proposal_id, trace["rejected_object_ids"])
+            self.assertTrue(ready_opinion_ids.issubset(trace["rejected_object_ids"]))
+
+            publication_payload = run_script(
+                script_path("eco-materialize-final-publication"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            publication = load_json(
+                reporting_path(run_dir, f"final_publication_{ROUND_ID}.json")
+            )
+
+            self.assertFalse(
+                any(
+                    warning["code"] == "missing-decision-trace"
+                    for warning in publication_payload["warnings"]
+                )
+            )
+            self.assertEqual("withhold", publication["publication_posture"])
+            self.assertEqual("proposal", publication["decision_traces"][0]["selected_object_kind"])
+            self.assertEqual(proposal_id, publication["decision_traces"][0]["selected_object_id"])
 
     def test_hold_round_persists_rejected_ready_opinion_into_trace_and_publication(
         self,

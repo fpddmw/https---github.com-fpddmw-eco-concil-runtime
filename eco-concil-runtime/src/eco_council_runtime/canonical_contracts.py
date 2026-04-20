@@ -157,7 +157,14 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
         plane=PLANE_DELIBERATION,
         schema_version="council-proposal-v1",
         id_field="proposal_id",
-        required_text_fields=("decision_source", "proposal_kind", "agent_role", "rationale"),
+        required_text_fields=(
+            "decision_source",
+            "proposal_kind",
+            "agent_role",
+            "status",
+            "rationale",
+        ),
+        required_list_fields=("evidence_refs", "lineage", "response_to_ids"),
     ),
     "hypothesis": _contract(
         "hypothesis",
@@ -225,7 +232,14 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
         plane=PLANE_DELIBERATION,
         schema_version="readiness-opinion-v1",
         id_field="opinion_id",
-        required_text_fields=("decision_source", "agent_role", "readiness_status", "rationale"),
+        required_text_fields=(
+            "decision_source",
+            "agent_role",
+            "opinion_status",
+            "readiness_status",
+            "rationale",
+        ),
+        required_list_fields=("evidence_refs", "lineage", "basis_object_ids"),
     ),
     "readiness-assessment": _contract(
         "readiness-assessment",

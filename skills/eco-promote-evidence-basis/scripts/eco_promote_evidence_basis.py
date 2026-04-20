@@ -17,10 +17,12 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.council_objects import (  # noqa: E402
-    query_council_objects,
-)
 from eco_council_runtime.phase2_fallback_context import load_d1_shared_context  # noqa: E402
+from eco_council_runtime.phase2_promotion_resolution import (  # noqa: E402
+    load_council_proposals,
+    load_council_readiness_opinions,
+    resolve_promotion_council_inputs,
+)
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_next_actions_wrapper,
     load_round_readiness_wrapper,
@@ -147,92 +149,6 @@ def unique_artifact_ref_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
-
-
-def load_council_proposals(
-    run_dir: Path,
-    *,
-    run_id: str,
-    round_id: str,
-) -> list[dict[str, Any]]:
-    payload = query_council_objects(
-        run_dir,
-        object_kind="proposal",
-        run_id=run_id,
-        round_id=round_id,
-        limit=200,
-    )
-    proposals = (
-        payload.get("objects", [])
-        if isinstance(payload.get("objects"), list)
-        else []
-    )
-    return [
-        proposal
-        for proposal in proposals
-        if isinstance(proposal, dict)
-        and maybe_text(proposal.get("status")) not in {"rejected", "withdrawn", "closed"}
-    ]
-
-
-def load_council_readiness_opinions(
-    run_dir: Path,
-    *,
-    run_id: str,
-    round_id: str,
-) -> list[dict[str, Any]]:
-    payload = query_council_objects(
-        run_dir,
-        object_kind="readiness-opinion",
-        run_id=run_id,
-        round_id=round_id,
-        limit=200,
-    )
-    opinions = (
-        payload.get("objects", [])
-        if isinstance(payload.get("objects"), list)
-        else []
-    )
-    return [
-        opinion
-        for opinion in opinions
-        if isinstance(opinion, dict)
-        and maybe_text(opinion.get("opinion_status")) not in {"withdrawn", "retracted"}
-    ]
-
-
-def readiness_bucket(opinion: dict[str, Any]) -> str:
-    readiness_value = maybe_text(opinion.get("readiness_status"))
-    if bool(opinion.get("sufficient_for_promotion")) or readiness_value in {
-        "ready",
-        "ready-for-promotion",
-        "promote",
-    }:
-        return "ready"
-    if readiness_value in {"blocked", "reject", "rejected"}:
-        return "blocked"
-    return "needs-more-data"
-
-
-def proposal_supports_basis(
-    proposal: dict[str, Any],
-    *,
-    readiness_status: str,
-    selected_basis_object_ids: list[str],
-) -> bool:
-    target_id = maybe_text(proposal.get("target_id"))
-    proposal_kind = maybe_text(proposal.get("proposal_kind"))
-    if target_id and target_id in selected_basis_object_ids:
-        return True
-    if readiness_status == "ready" and proposal_kind in {
-        "prepare-promotion",
-        "promote-evidence-basis",
-        "finalize-round",
-        "ready-for-reporting",
-        "publish-council-decision",
-    }:
-        return True
-    return False
 
 
 def normalize_issue_cluster(item: dict[str, Any]) -> dict[str, Any]:
@@ -607,9 +523,6 @@ def promote_evidence_basis_skill(
     )
 
     readiness_status = maybe_text(readiness.get("readiness_status")) or "blocked"
-    promotion_status = "promoted" if readiness_status == "ready" or allow_non_ready else "withheld"
-    if promotion_status == "withheld":
-        warnings.append({"code": "promotion-withheld", "message": "Promotion was withheld because the round-readiness gate is not ready."})
 
     ranked_coverages = sorted(coverages, key=lambda item: (-float(item.get("coverage_score") or 0.0), maybe_text(item.get("coverage_id"))))[: max(1, max_coverages)]
     selected_coverages = [
@@ -658,38 +571,60 @@ def promote_evidence_basis_skill(
         run_id=run_id,
         round_id=round_id,
     )
-    supporting_proposal_ids = unique_texts(
-        [
-            proposal.get("proposal_id")
-            for proposal in council_proposals
-            if proposal_supports_basis(
-                proposal,
-                readiness_status=readiness_status,
-                selected_basis_object_ids=selected_basis_object_ids,
-            )
-        ]
+    promotion_resolution = resolve_promotion_council_inputs(
+        council_proposals,
+        council_opinions,
+        readiness_status=readiness_status,
+        allow_non_ready=allow_non_ready,
+        round_id=round_id,
+        selected_basis_object_ids=selected_basis_object_ids,
     )
-    accepted_opinions = [
-        opinion
-        for opinion in council_opinions
-        if (
-            readiness_status == "ready" and readiness_bucket(opinion) == "ready"
+    promotion_status = (
+        maybe_text(promotion_resolution.get("promotion_status")) or "withheld"
+    )
+    promotion_resolution_reasons = (
+        promotion_resolution.get("promotion_resolution_reasons", [])
+        if isinstance(promotion_resolution.get("promotion_resolution_reasons"), list)
+        else []
+    )
+    if promotion_status == "withheld":
+        warnings.append(
+            {
+                "code": "promotion-withheld",
+                "message": maybe_text(promotion_resolution_reasons[0])
+                or "Promotion was withheld because the round-readiness gate is not ready.",
+            }
         )
-        or (
-            readiness_status != "ready" and readiness_bucket(opinion) != "ready"
-        )
+    supporting_proposal_ids = unique_texts(
+        promotion_resolution.get("supporting_proposal_ids", [])
+        if isinstance(promotion_resolution.get("supporting_proposal_ids"), list)
+        else []
+    )
+    rejected_proposal_ids = unique_texts(
+        promotion_resolution.get("rejected_proposal_ids", [])
+        if isinstance(promotion_resolution.get("rejected_proposal_ids"), list)
+        else []
+    )
+    supporting_opinion_ids = unique_texts(
+        promotion_resolution.get("supporting_opinion_ids", [])
+        if isinstance(promotion_resolution.get("supporting_opinion_ids"), list)
+        else []
+    )
+    rejected_opinion_ids = unique_texts(
+        promotion_resolution.get("rejected_opinion_ids", [])
+        if isinstance(promotion_resolution.get("rejected_opinion_ids"), list)
+        else []
+    )
+    rejected_proposals = [
+        proposal
+        for proposal in council_proposals
+        if maybe_text(proposal.get("proposal_id")) in rejected_proposal_ids
     ]
     rejected_opinions = [
         opinion
         for opinion in council_opinions
-        if opinion not in accepted_opinions
+        if maybe_text(opinion.get("opinion_id")) in rejected_opinion_ids
     ]
-    supporting_opinion_ids = unique_texts(
-        [opinion.get("opinion_id") for opinion in accepted_opinions]
-    )
-    rejected_opinion_ids = unique_texts(
-        [opinion.get("opinion_id") for opinion in rejected_opinions]
-    )
     selected_evidence_refs = unique_artifact_ref_texts(
         [
             ref
@@ -723,7 +658,7 @@ def promote_evidence_basis_skill(
             for ref in list_items(proposal.get("evidence_refs"))
         ]
     )
-    remaining_risks = [
+    fallback_remaining_risks = [
         {
             "action_id": maybe_text(item.get("action_id")),
             "action_kind": maybe_text(item.get("action_kind")),
@@ -735,8 +670,20 @@ def promote_evidence_basis_skill(
         for item in next_actions.get("ranked_actions", [])
         if isinstance(item, dict) and maybe_text(item.get("action_kind")) != "prepare-promotion"
     ][:4] if isinstance(next_actions.get("ranked_actions"), list) else []
-    remaining_risks.extend(
+    remaining_risks = (
         [
+            {
+                "action_id": maybe_text(proposal.get("proposal_id")),
+                "action_kind": "proposal-veto",
+                "priority": "high",
+                "reason": maybe_text(proposal.get("rationale"))
+                or "An open council proposal explicitly withholds promotion.",
+                "controversy_gap": "council-promotion-veto",
+                "recommended_lane": "council-deliberation",
+            }
+            for proposal in rejected_proposals[:3]
+        ]
+        + [
             {
                 "action_id": maybe_text(opinion.get("opinion_id")),
                 "action_kind": "readiness-opinion",
@@ -748,13 +695,21 @@ def promote_evidence_basis_skill(
             }
             for opinion in rejected_opinions[:3]
         ]
-    )
-    remaining_risks = remaining_risks[:4]
+        + fallback_remaining_risks
+    )[:4]
 
     basis_id = "evidence-basis-" + stable_hash(run_id, round_id, promotion_status)[:12]
     decision_source = maybe_text(readiness.get("decision_source")) or "policy-fallback"
-    if council_opinions or supporting_proposal_ids:
-        decision_source = "agent-council"
+    if maybe_text(promotion_resolution.get("decision_source")):
+        decision_source = maybe_text(promotion_resolution.get("decision_source"))
+    merged_gate_reasons = unique_texts(
+        promotion_resolution_reasons
+        + (
+            readiness.get("gate_reasons", [])
+            if isinstance(readiness.get("gate_reasons"), list)
+            else []
+        )
+    )
     lineage = unique_texts(
         selected_basis_object_ids
         + [
@@ -763,6 +718,7 @@ def promote_evidence_basis_skill(
             if isinstance(coverage, dict)
         ]
         + supporting_proposal_ids
+        + rejected_proposal_ids
         + supporting_opinion_ids
         + rejected_opinion_ids
     )
@@ -786,18 +742,31 @@ def promote_evidence_basis_skill(
             if decision_source == "agent-council"
             else "freeze-controversy-basis-v1"
         ),
+        "promotion_resolution_mode": maybe_text(
+            promotion_resolution.get("promotion_resolution_mode")
+        ),
+        "promotion_resolution_reasons": promotion_resolution_reasons,
         "basis_counts": basis_counts,
         "selected_basis_object_ids": selected_basis_object_ids,
         "supporting_proposal_ids": supporting_proposal_ids,
+        "rejected_proposal_ids": rejected_proposal_ids,
         "supporting_opinion_ids": supporting_opinion_ids,
         "rejected_opinion_ids": rejected_opinion_ids,
-        "council_input_counts": {
-            "proposal_count": len(council_proposals),
-            "supporting_proposal_count": len(supporting_proposal_ids),
-            "opinion_count": len(council_opinions),
-            "supporting_opinion_count": len(supporting_opinion_ids),
-            "rejected_opinion_count": len(rejected_opinion_ids),
-        },
+        "proposal_resolution_records": (
+            promotion_resolution.get("proposal_resolution_records", [])
+            if isinstance(promotion_resolution.get("proposal_resolution_records"), list)
+            else []
+        ),
+        "proposal_resolution_mode_counts": (
+            promotion_resolution.get("proposal_resolution_mode_counts", {})
+            if isinstance(promotion_resolution.get("proposal_resolution_mode_counts"), dict)
+            else {}
+        ),
+        "council_input_counts": (
+            promotion_resolution.get("council_input_counts", {})
+            if isinstance(promotion_resolution.get("council_input_counts"), dict)
+            else {}
+        ),
         "frozen_basis": frozen_basis,
         "selected_coverages": selected_coverages,
         "selected_evidence_refs": selected_evidence_refs,
@@ -811,18 +780,25 @@ def promote_evidence_basis_skill(
             "next_actions_source": maybe_text(
                 contract_fields.get("next_actions_source")
             ),
-            "council_input_counts": {
-                "proposal_count": len(council_proposals),
-                "opinion_count": len(council_opinions),
-            },
+            "promotion_resolution_mode": maybe_text(
+                promotion_resolution.get("promotion_resolution_mode")
+            ),
+            "council_input_counts": (
+                promotion_resolution.get("council_input_counts", {})
+                if isinstance(promotion_resolution.get("council_input_counts"), dict)
+                else {}
+            ),
         },
         "board_brief_excerpt": brief_text[:300],
-        "gate_reasons": readiness.get("gate_reasons", []) if isinstance(readiness.get("gate_reasons"), list) else [],
+        "gate_reasons": merged_gate_reasons,
         "remaining_risks": remaining_risks,
         "promotion_notes": (
             "Round is ready and a compact controversy basis has been frozen for downstream reporting."
             if promotion_status == "promoted"
-            else "Round is not yet ready; the basis artifact freezes the current controversy basis and strongest available evidence while promotion remains withheld."
+            else (
+                maybe_text(promotion_resolution_reasons[0])
+                or "Round is not yet ready; the basis artifact freezes the current controversy basis and strongest available evidence while promotion remains withheld."
+            )
         ),
     }
     wrapper = store_promotion_basis_record(
@@ -859,7 +835,12 @@ def promote_evidence_basis_skill(
         "board_handoff": {
             "candidate_ids": unique_texts([basis_id] + selected_basis_object_ids),
             "evidence_refs": artifact_refs,
-            "gap_hints": [] if promotion_status == "promoted" else [maybe_text(reason) for reason in readiness.get("gate_reasons", [])[:3]] if isinstance(readiness.get("gate_reasons"), list) else ["Round readiness is not yet sufficient for promotion."],
+            "gap_hints": (
+                []
+                if promotion_status == "promoted"
+                else merged_gate_reasons[:3]
+                or ["Round readiness is not yet sufficient for promotion."]
+            ),
             "challenge_hints": [],
             "suggested_next_skills": ["eco-post-board-note"] if promotion_status == "promoted" else ["eco-summarize-round-readiness", "eco-open-falsification-probe"],
         },

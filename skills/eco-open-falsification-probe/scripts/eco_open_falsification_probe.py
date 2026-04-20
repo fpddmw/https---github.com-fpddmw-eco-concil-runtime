@@ -31,9 +31,16 @@ from eco_council_runtime.phase2_fallback_context import (  # noqa: E402
 from eco_council_runtime.phase2_fallback_contracts import (  # noqa: E402
     d1_contract_fields_from_payload,
 )
+from eco_council_runtime.phase2_council_execution import (  # noqa: E402
+    COUNCIL_EXECUTION_MODE_FALLBACK_ONLY,
+    COUNCIL_EXECUTION_MODE_PROPOSAL_AUGMENTED,
+    COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
+    VALID_COUNCIL_EXECUTION_MODES,
+    normalize_council_execution_mode,
+    resolve_council_action_queue,
+)
 from eco_council_runtime.phase2_proposal_actions import (  # noqa: E402
     action_from_council_proposal,
-    action_signature,
 )
 from eco_council_runtime.kernel.phase2_state_surfaces import load_next_actions_wrapper  # noqa: E402
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
@@ -95,22 +102,33 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
     assigned_role = maybe_text(action.get("assigned_role"))
     suggestions: list[str] = []
     if action_kind in {"resolve-challenge", "resolve-contradiction"}:
-        suggestions.extend(["eco-post-board-note", "eco-close-challenge-ticket"])
+        suggestions.extend(
+            [
+                "eco-submit-council-proposal",
+                "eco-submit-readiness-opinion",
+                "eco-close-challenge-ticket",
+            ]
+        )
     if action_kind == "clarify-verification-route":
-        suggestions.extend(["eco-route-verification-lane", "eco-post-board-note"])
+        suggestions.extend(
+            [
+                "eco-route-verification-lane",
+                "eco-submit-council-proposal",
+            ]
+        )
     if action_kind == "advance-empirical-verification":
         suggestions.extend(
             [
                 "eco-link-claims-to-observations",
                 "eco-score-evidence-coverage",
-                "eco-post-board-note",
+                "eco-submit-council-proposal",
             ]
         )
     if action_kind == "review-formal-record":
         suggestions.extend(
             [
                 "eco-link-formal-comments-to-public-discourse",
-                "eco-post-board-note",
+                "eco-submit-council-proposal",
             ]
         )
     if action_kind in {
@@ -122,7 +140,7 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
             [
                 "eco-link-formal-comments-to-public-discourse",
                 "eco-identify-representation-gaps",
-                "eco-post-board-note",
+                "eco-submit-council-proposal",
             ]
         )
     if action_kind == "address-representation-gap":
@@ -130,17 +148,33 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
             [
                 "eco-identify-representation-gaps",
                 "eco-link-formal-comments-to-public-discourse",
-                "eco-post-board-note",
+                "eco-submit-council-proposal",
             ]
         )
     if action_kind == "trace-cross-platform-diffusion":
-        suggestions.extend(["eco-detect-cross-platform-diffusion", "eco-post-board-note"])
+        suggestions.extend(
+            [
+                "eco-detect-cross-platform-diffusion",
+                "eco-submit-council-proposal",
+            ]
+        )
     if action_kind in {"resolve-contradiction", "expand-coverage"}:
         suggestions.extend(["eco-query-environment-signals", "eco-query-public-signals"])
     if action_kind == "classify-verifiability":
-        suggestions.extend(["eco-post-board-note", "eco-query-public-signals"])
+        suggestions.extend(
+            [
+                "eco-submit-council-proposal",
+                "eco-query-public-signals",
+            ]
+        )
     if action_kind == "stabilize-hypothesis":
-        suggestions.extend(["eco-update-hypothesis-status", "eco-post-board-note"])
+        suggestions.extend(
+            [
+                "eco-update-hypothesis-status",
+                "eco-submit-council-proposal",
+                "eco-submit-readiness-opinion",
+            ]
+        )
     if assigned_role == "environmentalist":
         suggestions.append("eco-query-environment-signals")
     if assigned_role == "sociologist":
@@ -180,23 +214,6 @@ def load_council_probe_actions(
         if bool(action.get("probe_candidate")):
             results.append(action)
     return results
-
-
-def merged_probe_actions(
-    proposal_actions: list[dict[str, Any]],
-    fallback_actions: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    merged: list[dict[str, Any]] = []
-    seen_signatures: set[str] = set()
-    for action in [*proposal_actions, *fallback_actions]:
-        if not isinstance(action, dict):
-            continue
-        signature = action_signature(action)
-        if signature in seen_signatures:
-            continue
-        seen_signatures.add(signature)
-        merged.append(dict(action))
-    return merged
 
 
 def probe_type_for_action(action: dict[str, Any]) -> str:
@@ -437,6 +454,7 @@ def open_falsification_probe_skill(
     action_id: str,
     max_probes: int,
     max_actions: int,
+    council_execution_mode: str,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     next_actions_file = resolve_path(
@@ -538,15 +556,30 @@ def open_falsification_probe_skill(
             )
             action_source = "derived-from-deliberation"
 
-    if proposal_actions and fallback_actions:
-        if not action_source.startswith("agent-proposal"):
-            action_source = "agent-proposal-augmented"
-    elif proposal_actions:
+    normalized_mode = normalize_council_execution_mode(council_execution_mode)
+    resolved_action_queue = resolve_council_action_queue(
+        proposal_actions,
+        fallback_actions,
+        council_execution_mode=normalized_mode,
+    )
+    if resolved_action_queue["resolution"] == COUNCIL_EXECUTION_MODE_PROPOSAL_AUGMENTED:
+        action_source = "agent-proposal-augmented"
+    elif resolved_action_queue["resolution"] == COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE:
         action_source = "agent-proposal-execution"
+    elif (
+        normalized_mode == COUNCIL_EXECUTION_MODE_FALLBACK_ONLY
+        and proposal_actions
+    ):
+        warnings.append(
+            {
+                "code": "council-proposals-ignored",
+                "message": "Council proposals were present but ignored because council_execution_mode=fallback-only.",
+            }
+        )
     elif not action_source:
         action_source = "next-actions-artifact"
 
-    probe_input_actions = merged_probe_actions(proposal_actions, fallback_actions)
+    probe_input_actions = resolved_action_queue["selected_actions"]
     candidates = probe_candidates(probe_input_actions, action_id)[: max(1, max_probes)]
     probes = [
         build_probe(
@@ -565,9 +598,23 @@ def open_falsification_probe_skill(
         "round_id": round_id,
         "next_actions_path": str(next_actions_file),
         "action_source": action_source,
+        "council_execution_mode": normalized_mode,
         **contract_fields,
-        "proposal_probe_candidate_count": len(proposal_actions),
-        "fallback_probe_candidate_count": len(probe_candidates(fallback_actions, "")),
+        "proposal_probe_candidate_count": int(
+            resolved_action_queue["included_proposal_action_count"]
+        ),
+        "fallback_probe_candidate_count": int(
+            resolved_action_queue["included_fallback_action_count"]
+        ),
+        "observed_proposal_probe_candidate_count": int(
+            resolved_action_queue["observed_proposal_action_count"]
+        ),
+        "observed_fallback_probe_candidate_count": int(
+            resolved_action_queue["observed_fallback_action_count"]
+        ),
+        "suppressed_fallback_probe_candidate_count": int(
+            resolved_action_queue["suppressed_fallback_action_count"]
+        ),
         "probe_count": len(probes),
         "probes": probes,
     }
@@ -633,8 +680,8 @@ def open_falsification_probe_skill(
             else [],
             "suggested_next_skills": [
                 "eco-summarize-round-readiness",
-                "eco-post-board-note",
-                "eco-update-hypothesis-status",
+                "eco-submit-council-proposal",
+                "eco-submit-readiness-opinion",
             ],
         },
     }
@@ -655,6 +702,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--action-id", default="")
     parser.add_argument("--max-probes", type=int, default=3)
     parser.add_argument("--max-actions", type=int, default=6)
+    parser.add_argument(
+        "--council-execution-mode",
+        choices=sorted(VALID_COUNCIL_EXECUTION_MODES),
+        default=COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
+    )
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
@@ -673,6 +725,7 @@ def main() -> int:
         action_id=args.action_id,
         max_probes=args.max_probes,
         max_actions=args.max_actions,
+        council_execution_mode=args.council_execution_mode,
     )
     print(pretty_json(payload, args.pretty))
     return 0

@@ -16,12 +16,14 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.council_objects import (  # noqa: E402
-    query_council_objects,
-    store_decision_trace_records,
-)
+from eco_council_runtime.council_objects import store_decision_trace_records  # noqa: E402
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
+)
+from eco_council_runtime.phase2_promotion_resolution import (  # noqa: E402
+    load_council_proposals,
+    load_council_readiness_opinions,
+    resolve_promotion_council_inputs,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_council_decision_record,
@@ -107,24 +109,6 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def load_round_council_objects(
-    run_dir: Path,
-    *,
-    object_kind: str,
-    run_id: str,
-    round_id: str,
-) -> list[dict[str, Any]]:
-    payload = query_council_objects(
-        run_dir,
-        object_kind=object_kind,
-        run_id=run_id,
-        round_id=round_id,
-        limit=200,
-    )
-    rows = payload.get("objects", []) if isinstance(payload.get("objects"), list) else []
-    return [row for row in rows if isinstance(row, dict)]
-
-
 def deterministic_trace_id(
     run_id: str,
     round_id: str,
@@ -140,27 +124,17 @@ def deterministic_trace_id(
     )[:12]
 
 
-def readiness_bucket(opinion: dict[str, Any]) -> str:
-    readiness_value = maybe_text(opinion.get("readiness_status"))
-    if bool(opinion.get("sufficient_for_promotion")) or readiness_value in {
-        "ready",
-        "ready-for-promotion",
-        "promote",
-    }:
-        return "ready"
-    if readiness_value in {"blocked", "reject", "rejected"}:
-        return "blocked"
-    return "needs-more-data"
-
-
 def selected_trace_object(
     *,
     publication_readiness: str,
     promoted_basis_id: str,
     supporting_proposal_ids: list[str],
+    rejected_proposal_ids: list[str],
     supporting_opinion_ids: list[str],
     rejected_opinion_ids: list[str],
 ) -> tuple[str, str]:
+    if publication_readiness != "ready" and rejected_proposal_ids:
+        return "proposal", rejected_proposal_ids[0]
     if publication_readiness != "ready" and rejected_opinion_ids:
         return "readiness-opinion", rejected_opinion_ids[0]
     if supporting_opinion_ids:
@@ -338,6 +312,9 @@ def publish_council_decision_skill(
     draft_supporting_proposal_ids = unique_texts(
         list_items(draft_payload.get("supporting_proposal_ids"))
     )
+    draft_rejected_proposal_ids = unique_texts(
+        list_items(draft_payload.get("rejected_proposal_ids"))
+    )
     draft_supporting_opinion_ids = unique_texts(
         list_items(draft_payload.get("supporting_opinion_ids"))
     )
@@ -357,65 +334,102 @@ def publish_council_decision_skill(
             else []
         )
     )
-    all_proposals = load_round_council_objects(
+    all_proposals = load_council_proposals(
         run_dir_path,
-        object_kind="proposal",
         run_id=run_id,
         round_id=round_id,
     )
-    all_opinions = load_round_council_objects(
+    all_opinions = load_council_readiness_opinions(
         run_dir_path,
-        object_kind="readiness-opinion",
         run_id=run_id,
         round_id=round_id,
     )
-    if publication_readiness == "ready":
-        fallback_supporting_opinion_ids = unique_texts(
-            [
-                opinion.get("opinion_id")
-                for opinion in all_opinions
-                if readiness_bucket(opinion) == "ready"
-            ]
+    fallback_promotion_resolution = resolve_promotion_council_inputs(
+        all_proposals,
+        all_opinions,
+        readiness_status=(
+            maybe_text(draft_payload.get("readiness_status"))
+            or maybe_text(promotion_payload.get("readiness_status"))
+            or ("ready" if publication_readiness == "ready" else "needs-more-data")
+        ),
+        allow_non_ready=bool(
+            isinstance(promotion_payload, dict)
+            and maybe_text(promotion_payload.get("promotion_status")) == "promoted"
+            and maybe_text(promotion_payload.get("readiness_status")) != "ready"
+        ),
+        round_id=round_id,
+        basis_id=promoted_basis_id,
+        selected_basis_object_ids=selected_basis_object_ids,
+    )
+    supporting_proposal_ids = (
+        draft_supporting_proposal_ids
+        or unique_texts(
+            promotion_payload.get("supporting_proposal_ids", [])
+            if isinstance(promotion_payload, dict)
+            and isinstance(promotion_payload.get("supporting_proposal_ids"), list)
+            else []
         )
-        fallback_rejected_opinion_ids = unique_texts(
-            [
-                opinion.get("opinion_id")
-                for opinion in all_opinions
-                if readiness_bucket(opinion) != "ready"
-            ]
+        or unique_texts(
+            fallback_promotion_resolution.get("supporting_proposal_ids", [])
+            if isinstance(
+                fallback_promotion_resolution.get("supporting_proposal_ids"), list
+            )
+            else []
         )
-    else:
-        fallback_supporting_opinion_ids = unique_texts(
-            [
-                opinion.get("opinion_id")
-                for opinion in all_opinions
-                if readiness_bucket(opinion) != "ready"
-            ]
+    )
+    rejected_proposal_ids = (
+        draft_rejected_proposal_ids
+        or unique_texts(
+            promotion_payload.get("rejected_proposal_ids", [])
+            if isinstance(promotion_payload, dict)
+            and isinstance(promotion_payload.get("rejected_proposal_ids"), list)
+            else []
         )
-        fallback_rejected_opinion_ids = unique_texts(
-            [
-                opinion.get("opinion_id")
-                for opinion in all_opinions
-                if readiness_bucket(opinion) == "ready"
-            ]
+        or unique_texts(
+            fallback_promotion_resolution.get("rejected_proposal_ids", [])
+            if isinstance(
+                fallback_promotion_resolution.get("rejected_proposal_ids"), list
+            )
+            else []
         )
-    supporting_proposal_ids = draft_supporting_proposal_ids or unique_texts(
-        [
-            proposal.get("proposal_id")
-            for proposal in all_proposals
-            if maybe_text(proposal.get("target_id")) in selected_basis_object_ids
-        ]
     )
     supporting_opinion_ids = (
-        draft_supporting_opinion_ids or fallback_supporting_opinion_ids
+        draft_supporting_opinion_ids
+        or unique_texts(
+            promotion_payload.get("supporting_opinion_ids", [])
+            if isinstance(promotion_payload, dict)
+            and isinstance(promotion_payload.get("supporting_opinion_ids"), list)
+            else []
+        )
+        or unique_texts(
+            fallback_promotion_resolution.get("supporting_opinion_ids", [])
+            if isinstance(
+                fallback_promotion_resolution.get("supporting_opinion_ids"), list
+            )
+            else []
+        )
     )
     rejected_opinion_ids = (
-        draft_rejected_opinion_ids or fallback_rejected_opinion_ids
+        draft_rejected_opinion_ids
+        or unique_texts(
+            promotion_payload.get("rejected_opinion_ids", [])
+            if isinstance(promotion_payload, dict)
+            and isinstance(promotion_payload.get("rejected_opinion_ids"), list)
+            else []
+        )
+        or unique_texts(
+            fallback_promotion_resolution.get("rejected_opinion_ids", [])
+            if isinstance(
+                fallback_promotion_resolution.get("rejected_opinion_ids"), list
+            )
+            else []
+        )
     )
     selected_object_kind, selected_object_id = selected_trace_object(
         publication_readiness=publication_readiness,
         promoted_basis_id=promoted_basis_id,
         supporting_proposal_ids=supporting_proposal_ids,
+        rejected_proposal_ids=rejected_proposal_ids,
         supporting_opinion_ids=supporting_opinion_ids,
         rejected_opinion_ids=rejected_opinion_ids,
     )
@@ -424,11 +438,18 @@ def publish_council_decision_skill(
         + supporting_proposal_ids
         + supporting_opinion_ids
     )
-    rejected_object_ids = unique_texts(rejected_opinion_ids)
+    rejected_object_ids = unique_texts(
+        rejected_proposal_ids + rejected_opinion_ids
+    )
     accepted_proposals = [
         proposal
         for proposal in all_proposals
         if maybe_text(proposal.get("proposal_id")) in supporting_proposal_ids
+    ]
+    rejected_proposals = [
+        proposal
+        for proposal in all_proposals
+        if maybe_text(proposal.get("proposal_id")) in rejected_proposal_ids
     ]
     accepted_opinions = [
         opinion
@@ -441,7 +462,7 @@ def publish_council_decision_skill(
         if maybe_text(opinion.get("opinion_id")) in rejected_opinion_ids
     ]
     trace_confidence = None
-    for row in [*accepted_opinions, *accepted_proposals, *rejected_opinions]:
+    for row in [*rejected_proposals, *accepted_opinions, *accepted_proposals, *rejected_opinions]:
         candidate = maybe_number(row.get("confidence"))
         if candidate is not None:
             trace_confidence = candidate
@@ -456,8 +477,42 @@ def publish_council_decision_skill(
         "promoted_basis_id": promoted_basis_id,
         "selected_basis_object_ids": selected_basis_object_ids,
         "supporting_proposal_ids": supporting_proposal_ids,
+        "rejected_proposal_ids": rejected_proposal_ids,
         "supporting_opinion_ids": supporting_opinion_ids,
         "rejected_opinion_ids": rejected_opinion_ids,
+        "promotion_resolution_mode": maybe_text(
+            draft_payload.get("promotion_resolution_mode")
+        )
+        or maybe_text(
+            promotion_payload.get("promotion_resolution_mode")
+            if isinstance(promotion_payload, dict)
+            else ""
+        )
+        or maybe_text(fallback_promotion_resolution.get("promotion_resolution_mode")),
+        "promotion_resolution_reasons": (
+            draft_payload.get("promotion_resolution_reasons", [])
+            if isinstance(draft_payload.get("promotion_resolution_reasons"), list)
+            else promotion_payload.get("promotion_resolution_reasons", [])
+            if isinstance(promotion_payload, dict)
+            and isinstance(promotion_payload.get("promotion_resolution_reasons"), list)
+            else fallback_promotion_resolution.get("promotion_resolution_reasons", [])
+            if isinstance(
+                fallback_promotion_resolution.get("promotion_resolution_reasons"), list
+            )
+            else []
+        ),
+        "council_input_counts": (
+            draft_payload.get("council_input_counts", {})
+            if isinstance(draft_payload.get("council_input_counts"), dict)
+            else promotion_payload.get("council_input_counts", {})
+            if isinstance(promotion_payload, dict)
+            and isinstance(promotion_payload.get("council_input_counts"), dict)
+            else fallback_promotion_resolution.get("council_input_counts", {})
+            if isinstance(
+                fallback_promotion_resolution.get("council_input_counts"), dict
+            )
+            else {}
+        ),
         "accepted_object_ids": accepted_object_ids,
         "rejected_object_ids": rejected_object_ids,
         "decision_trace_ids": [trace_id] if decision_id else [],
@@ -504,7 +559,12 @@ def publish_council_decision_skill(
                     list_items(canonical_payload.get("selected_evidence_refs"))
                     + [
                         ref
-                        for row in [*accepted_proposals, *accepted_opinions, *rejected_opinions]
+                        for row in [
+                            *accepted_proposals,
+                            *rejected_proposals,
+                            *accepted_opinions,
+                            *rejected_opinions,
+                        ]
                         for ref in list_items(row.get("evidence_refs"))
                     ]
                 ),
@@ -523,6 +583,7 @@ def publish_council_decision_skill(
                     "promoted_basis_id": promoted_basis_id,
                     "promotion_basis_path": str(promotion_file),
                     "supporting_proposal_count": len(supporting_proposal_ids),
+                    "rejected_proposal_count": len(rejected_proposal_ids),
                     "supporting_opinion_count": len(supporting_opinion_ids),
                     "rejected_opinion_count": len(rejected_opinion_ids),
                 },

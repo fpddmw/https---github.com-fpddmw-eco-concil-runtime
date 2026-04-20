@@ -285,6 +285,78 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                 plan["phase_decision_basis"]["probe_stage_reason_codes"],
             )
 
+    def test_runtime_phase2_plan_defaults_to_direct_council_queue_when_proposals_exist(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            store_council_proposal_records(
+                run_dir,
+                proposal_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "proposals": [
+                        {
+                            "proposal_kind": "open-probe",
+                            "action_kind": "resolve-challenge",
+                            "agent_role": "challenger",
+                            "assigned_role": "challenger",
+                            "objective": "Stress-test the contradiction around ticket-runtime-001 before any promotion move.",
+                            "rationale": "Runtime planner should execute this proposal directly instead of recomputing fallback next actions.",
+                            "target_kind": "challenge-ticket",
+                            "target_id": "ticket-runtime-001",
+                            "target_hypothesis_id": "hypothesis-runtime-001",
+                            "target_claim_id": "claim-runtime-001",
+                            "probe_candidate": True,
+                            "controversy_gap": "unresolved-contestation",
+                            "recommended_lane": "mixed-review",
+                            "decision_source": "agent-council",
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://ticket-runtime-001"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+
+            payload = run_script(
+                script_path("eco-plan-round-orchestration"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
+            stage_names = [item["stage_name"] for item in plan["execution_queue"]]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("planner-backed-phase2", plan["planning_mode"])
+            self.assertTrue(plan["observed_state"]["direct_council_queue"])
+            self.assertTrue(plan["observed_state"]["next_actions_stage_skipped"])
+            self.assertEqual(
+                "proposal-authoritative",
+                plan["council_execution_mode"],
+            )
+            self.assertEqual(
+                "proposal-authoritative",
+                plan["observed_state"]["council_execution_resolution"],
+            )
+            self.assertNotIn("next-actions", stage_names)
+            self.assertEqual(
+                ["falsification-probes", "round-readiness"],
+                stage_names,
+            )
+            self.assertEqual(
+                1,
+                plan["phase_decision_basis"]["council_input_counts"]["selected_proposal_action_count"],
+            )
+            self.assertEqual(
+                0,
+                plan["phase_decision_basis"]["council_input_counts"]["selected_fallback_action_count"],
+            )
+
     def test_ready_round_planner_skips_probe_stage(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
