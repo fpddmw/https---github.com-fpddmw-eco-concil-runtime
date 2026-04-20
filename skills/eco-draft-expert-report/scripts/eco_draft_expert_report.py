@@ -28,6 +28,9 @@ from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_council_decision_wrapper,
     load_reporting_handoff_wrapper,
 )
+from eco_council_runtime.reporting_status import (  # noqa: E402
+    reporting_gate_state,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -223,7 +226,15 @@ def draft_expert_report_skill(
                 ),
             }
         )
-        handoff = {"handoff_status": "pending-more-investigation", "promotion_status": "withheld", "key_findings": [], "open_risks": [], "recommended_next_actions": []}
+        handoff = {
+            "handoff_status": "investigation-open",
+            "reporting_ready": False,
+            "reporting_blockers": ["reporting-handoff-missing"],
+            "promotion_status": "withheld",
+            "key_findings": [],
+            "open_risks": [],
+            "recommended_next_actions": [],
+        }
     else:
         handoff = handoff_payload
     decision_context = load_council_decision_wrapper(
@@ -268,9 +279,30 @@ def draft_expert_report_skill(
         },
     )
 
-    handoff_status = maybe_text(handoff.get("handoff_status")) or "pending-more-investigation"
-    publication_readiness = maybe_text(decision.get("publication_readiness")) or ("ready" if handoff_status == "ready-for-reporting" else "hold")
-    report_status = "ready-to-publish" if handoff_status == "ready-for-reporting" and publication_readiness == "ready" else "needs-more-evidence"
+    gate_state = reporting_gate_state(
+        promotion_status=maybe_text(handoff.get("promotion_status"))
+        or maybe_text(decision.get("promotion_status"))
+        or "withheld",
+        readiness_status=maybe_text(handoff.get("readiness_status")) or "blocked",
+        supervisor_status=maybe_text(handoff.get("supervisor_status")) or "unavailable",
+        require_supervisor=True,
+        reporting_ready=decision.get("reporting_ready")
+        if "reporting_ready" in decision
+        else handoff.get("reporting_ready"),
+        reporting_blockers_value=decision.get("reporting_blockers")
+        if isinstance(decision.get("reporting_blockers"), list)
+        else handoff.get("reporting_blockers"),
+        handoff_status=maybe_text(handoff.get("handoff_status")),
+    )
+    handoff_status = maybe_text(gate_state.get("handoff_status")) or "investigation-open"
+    reporting_ready = bool(gate_state.get("reporting_ready"))
+    reporting_blockers = unique_texts(
+        gate_state.get("reporting_blockers", [])
+        if isinstance(gate_state.get("reporting_blockers"), list)
+        else []
+    )
+    publication_readiness = maybe_text(decision.get("publication_readiness")) or ("ready" if reporting_ready else "hold")
+    report_status = "ready-to-publish" if reporting_ready and publication_readiness == "ready" else "needs-more-evidence"
     key_findings = handoff.get("key_findings", []) if isinstance(handoff.get("key_findings"), list) else []
     open_risks = handoff.get("open_risks", []) if isinstance(handoff.get("open_risks"), list) else []
     recommendations = handoff.get("recommended_next_actions", []) if isinstance(handoff.get("recommended_next_actions"), list) else []
@@ -288,6 +320,8 @@ def draft_expert_report_skill(
         "agent_role": role,
         "status": report_status,
         "handoff_status": handoff_status,
+        "reporting_ready": reporting_ready,
+        "reporting_blockers": reporting_blockers,
         "publication_readiness": publication_readiness,
         **contract_fields,
         "summary": (
@@ -343,7 +377,7 @@ def draft_expert_report_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [maybe_text(item.get("summary")) for item in open_risks[:3] if maybe_text(item.get("summary"))] if report_status != "ready-to-publish" else [],
             "challenge_hints": [maybe_text(item) for item in payload["open_questions"] if maybe_text(item)],
-            "suggested_next_skills": ["eco-publish-expert-report", "eco-publish-council-decision"] if report_status == "ready-to-publish" else ["eco-post-board-note", "eco-propose-next-actions", "eco-open-falsification-probe"],
+            "suggested_next_skills": ["eco-publish-expert-report", "eco-publish-council-decision"] if report_status == "ready-to-publish" else ["eco-submit-council-proposal", "eco-submit-readiness-opinion", "eco-propose-next-actions", "eco-open-falsification-probe"],
         },
     }
 

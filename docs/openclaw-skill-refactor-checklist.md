@@ -102,6 +102,33 @@
 - `已完成` `phase2_direct_advisory.py / eco-plan-round-orchestration / eco-summarize-round-readiness / eco-propose-next-actions / eco-open-falsification-probe` 的 follow-up guidance 已开始从 `eco-post-board-note` 转向结构化 submission。
 - `已完成` 新增 `tests/test_council_submission_workflow.py`，并补强 `tests/test_agent_entry_gate.py / tests/test_council_autonomy_flow.py`；当前扩展后的大回归 `130` 项全部通过。
 
+### 2.11 Batch 7 当前状态
+
+- `已完成` `phase2_promotion_resolution.py` 已移除 legacy promotion support compatibility；旧 `proposal_kind / action_kind` 名称本身不再授予 promotion support 语义。
+- `已完成` legacy 输入现在会被显式标记为 `ignored-implicit-promotion-kind`，并写进 `proposal_resolution_records / proposal_resolution_mode_counts`，而不是静默兼容。
+- `已完成` `eco-promote-evidence-basis` 会对这类旧输入发出 `ignored-implicit-promotion-kind` warning，promotion artifact 已能审计残留旧写法。
+- `已完成` `eco-materialize-reporting-handoff / eco-draft-council-decision / eco-draft-expert-report / eco-publish-expert-report / eco-publish-council-decision` 的 hold-path `suggested_next_skills` 已从 `eco-post-board-note` 转向 `eco-submit-council-proposal / eco-submit-readiness-opinion`。
+- `已完成` `eco-promote-evidence-basis / eco-summarize-round-readiness` 的 skill docs 与 agent prompts 已改写为“explicit DB judgement first”。
+- `已完成` 已新增 “legacy named promotion proposal is ignored” 与 reporting/publication hold-path guidance 回归；当前扩展后的大回归 `131` 项全部通过。
+
+### 2.12 Batch 8 当前状态
+
+- `已完成` 新增 `phase2_action_semantics.py`，`readiness_blocker` 已成为 planner / readiness / promotion 共享语义，不再依赖 `prepare-promotion` 旧 action kind 特判。
+- `已完成` `phase2_fallback_policy.py` 的默认空 agenda cue 已改为 `open-council-readiness-review`，语义从“隐式 promotion cue”切成“显式 council readiness review cue”。
+- `已完成` 新增 `reporting_status.py`，`eco-materialize-reporting-handoff / eco-draft-council-decision / eco-draft-expert-report / phase2_posture_profile` 现在共享 `reporting_ready / reporting_blockers / handoff_status` 判定层。
+- `已完成` promoted supervisor status 已统一到 `reporting-ready`，handoff hold 状态已统一到 `investigation-open`。
+- `已完成` `phase2_state_surfaces.py` 已新增 `load_supervisor_state_wrapper`；删掉 `runtime/supervisor_state_*.json` 后，reporting handoff 仍可从 deliberation DB 恢复 supervisor state。
+- `已完成` `deliberation_plane.py` 已把 `readiness_blocker / reporting_ready / reporting_blockers / decision_gating` 提升成表列并补迁移，不再只藏在 `raw_json`。
+
+### 2.13 Batch 9 当前状态
+
+- `已完成` `phase2_state_surfaces.py` 已新增 `build_reporting_surface(...)`，supervisor / handoff / decision / report wrapper 现在共享同一套显式 reporting gate surface。
+- `已完成` `kernel/supervisor.py` 现在会把 `reporting_ready / reporting_blockers / reporting_handoff_status` 直接写入 supervisor snapshot / promotion freeze，不再只能靠后续 handoff 反推。
+- `已完成` `kernel/cli.py` 现已新增 `show-reporting-state`，`show-run-state` 也新增 top-level `reporting` section；operator 可直接查看 DB-first reporting surface。
+- `已完成` `query-council-objects` 已支持 `--readiness-blocker-only`；`moderator_actions.readiness_blocker` 现在可直接通过 query surface 过滤。
+- `已完成` `phase2 operator / post-round operator / benchmark operator` 现已显式暴露 `reporting_ready / reporting_blockers / reporting_handoff_status`，不再只透出 `promotion_status`。
+- `已完成` `post_round.py / benchmark.py` 已切到 shared reporting surface；`round_close / benchmark_manifest` 已显式写出 reporting gate 字段与 `reporting_surface_source`。
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -261,7 +288,8 @@
 - `[x]` `phase2_agent_entry_profile.py` 已接管 agent-entry 默认 role definitions、recommended skills、operator commands/notes、next-round suggestion builder 与 advisory refresh source 顺序；`kernel/agent_entry.py / cli.py` 现在只消费 injected entry profile，不再内建默认议会入口教程或 advisory materialization 链。
 - `[x]` `phase2_posture_profile.py` 已接管 controller completion follow-up、supervisor classification / top-actions / round-transition / operator notes / failure notes；`kernel/controller.py / kernel/supervisor.py / cli.py` 现在只消费 injected posture profile。
 - `[x]` `phase2_round_profile.py` 已接管默认 `next_round_id` sequencing；`kernel/supervisor.py / kernel/agent_entry.py` 不再共享或持有内建轮次递增策略，round handoff policy 可以通过 posture / entry profile 双向覆写。
-- `[x]` 本地大回归 `126` 项通过，覆盖 phase-2 / agent-entry / council / board / reporting / publication 主链。
+- `[x]` `kernel/cli.py / post_round.py / benchmark.py` 已把 reporting/publication operator surface 从 `promotion_status` 主导切到 shared reporting surface；operator/query 现在可直接读取 `reporting_ready / blockers / readiness_blocker`。
+- `[x]` 本地扩展大回归 `139` 项通过，覆盖 phase-2 / agent-entry / council / board / reporting / publication / post-round / benchmark 主链。
 
 ### 9.1 必须收缩或迁出的模块
 

@@ -361,6 +361,112 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 ready_opinion_ids,
             )
 
+    def test_legacy_named_promotion_proposal_is_ignored_without_explicit_judgement(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seeded = prepare_round_base(run_dir, root)
+
+            store_council_proposal_records(
+                run_dir,
+                proposal_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "proposals": [
+                        {
+                            "proposal_kind": "ready-for-reporting",
+                            "action_kind": "prepare-promotion",
+                            "agent_role": "moderator",
+                            "target_kind": "round",
+                            "target_id": ROUND_ID,
+                            "rationale": "Legacy proposal naming should no longer imply promotion support by itself.",
+                            "decision_source": "agent-council",
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": [seeded["coverage_ref"]],
+                            "lineage": [seeded["claim_id"]],
+                        }
+                    ],
+                },
+            )
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_promotion": True,
+                            "rationale": "The round is ready, but promotion support should come from explicit judgement fields.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": [seeded["claim_id"]],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": [seeded["coverage_ref"]],
+                            "lineage": [seeded["claim_id"]],
+                        }
+                    ],
+                },
+            )
+
+            run_kernel(
+                "supervise-round",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            promotion_payload = run_script(
+                script_path("eco-promote-evidence-basis"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            promotion = load_json(
+                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", promotion_payload["status"])
+            self.assertEqual("promoted", promotion["promotion_status"])
+            self.assertEqual("readiness-opinion-gate", promotion["promotion_resolution_mode"])
+            self.assertEqual([], promotion["supporting_proposal_ids"])
+            self.assertEqual([], promotion["rejected_proposal_ids"])
+            self.assertEqual(
+                "ignored-implicit-promotion-kind",
+                promotion["proposal_resolution_records"][0]["resolution_mode"],
+            )
+            self.assertEqual(
+                "neutral",
+                promotion["proposal_resolution_records"][0]["disposition"],
+            )
+            self.assertIn(
+                "implicit-promotion-kind-without-explicit-signal",
+                promotion["proposal_resolution_records"][0]["relevance_reasons"],
+            )
+            self.assertEqual(
+                1,
+                promotion["proposal_resolution_mode_counts"][
+                    "ignored-implicit-promotion-kind"
+                ],
+            )
+            self.assertEqual(
+                1,
+                promotion["council_input_counts"]["neutral_proposal_count"],
+            )
+            self.assertTrue(
+                any(
+                    warning["code"] == "ignored-implicit-promotion-kind"
+                    for warning in promotion_payload["warnings"]
+                )
+            )
+
     def test_hold_round_persists_rejected_proposal_veto_into_gate_trace_and_publication(
         self,
     ) -> None:

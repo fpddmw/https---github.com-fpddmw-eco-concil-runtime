@@ -1,6 +1,6 @@
 ---
 name: eco-promote-evidence-basis
-description: Promote the current round into a compact controversy-basis artifact by combining round readiness, board brief, controversy agenda objects, and strongest coverage objects.
+description: Promote the current round into a compact controversy-basis artifact by combining explicit council promotion judgements, readiness state, controversy agenda objects, and strongest coverage objects.
 ---
 
 # Eco Promote Evidence Basis
@@ -8,16 +8,19 @@ description: Promote the current round into a compact controversy-basis artifact
 ## Core Goal
 - Freeze the strongest round evidence and controversy objects into a promotion-ready basis artifact.
 - Respect round-readiness gate results while still producing an auditable promotion decision.
+- Consume explicit `proposal / readiness-opinion` judgements from the deliberation DB rather than inferring promotion support from legacy proposal names.
 - Emit a compact artifact that later reporting and decision layers can consume.
 
 ## Triggering Conditions
 - A round-readiness artifact exists and needs to be turned into a promotion decision.
+- Council proposals or readiness opinions already express promotion posture and need to be resolved explicitly.
 - Need to freeze strongest coverage refs together with issue clusters, routing posture, formal/public linkage, representation gaps, and diffusion edges when available.
 - Need a durable basis artifact for the eventual canonical reporting layer.
 
 ## Read/Write Contract
 - Reads `run_dir/reporting/round_readiness_<round_id>.json` by default.
 - Reads `run_dir/board/board_brief_<round_id>.md` by default.
+- Reads canonical `proposal` and `readiness-opinion` objects from the shared deliberation plane.
 - Reads evidence coverage from the run-local analysis plane first.
 - Falls back to `run_dir/analytics/evidence_coverage_<round_id>.json` when the synced result set is unavailable.
 - Reads `run_dir/investigation/next_actions_<round_id>.json` by default when present.

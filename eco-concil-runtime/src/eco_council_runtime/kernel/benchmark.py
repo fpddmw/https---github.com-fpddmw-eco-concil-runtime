@@ -9,8 +9,13 @@ from typing import Any
 from .deliberation_plane import load_phase2_control_state
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
 from .phase2_state_surfaces import (
+    build_reporting_surface,
+    load_council_decision_wrapper,
     load_falsification_probe_wrapper,
+    load_final_publication_wrapper,
     load_next_actions_wrapper,
+    load_reporting_handoff_wrapper,
+    load_supervisor_state_wrapper,
 )
 from .ledger import append_ledger_event, load_ledger_tail
 from .manifest import load_json_if_exists, write_json
@@ -509,23 +514,71 @@ def comparison_step_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return comparison_rows
 
 
-def phase2_state_snapshot(run_dir: Path, round_id: str, artifact_hashes: dict[str, str]) -> dict[str, Any]:
-    control_state = load_phase2_control_state(run_dir, round_id=round_id)
+def phase2_state_snapshot(
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    artifact_hashes: dict[str, str],
+) -> dict[str, Any]:
+    control_state = load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id)
     plan = load_json_if_exists(orchestration_plan_path(run_dir, round_id)) or {}
-    gate = load_json_if_exists(promotion_gate_path(run_dir, round_id)) or (
+    gate = (
         control_state.get("promotion_gate", {})
         if isinstance(control_state.get("promotion_gate"), dict)
         else {}
-    )
-    controller = load_json_if_exists(controller_state_path(run_dir, round_id)) or (
+    ) or load_json_if_exists(promotion_gate_path(run_dir, round_id)) or {}
+    controller = (
         control_state.get("controller", {})
         if isinstance(control_state.get("controller"), dict)
         else {}
+    ) or load_json_if_exists(controller_state_path(run_dir, round_id)) or {}
+    supervisor_context = load_supervisor_state_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        supervisor_state_path=str(supervisor_state_path(run_dir, round_id).resolve()),
     )
-    supervisor = load_json_if_exists(supervisor_state_path(run_dir, round_id)) or (
-        control_state.get("supervisor", {})
-        if isinstance(control_state.get("supervisor"), dict)
+    supervisor = (
+        supervisor_context.get("payload")
+        if isinstance(supervisor_context.get("payload"), dict)
         else {}
+    )
+    handoff_context = load_reporting_handoff_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    decision_draft_context = load_council_decision_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="draft",
+    )
+    decision_context = load_council_decision_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="canonical",
+    )
+    final_publication_context = load_final_publication_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    reporting_surface = build_reporting_surface(
+        supervisor_payload=supervisor,
+        handoff_payload=handoff_context.get("payload")
+        if isinstance(handoff_context.get("payload"), dict)
+        else {},
+        decision_draft_payload=decision_draft_context.get("payload")
+        if isinstance(decision_draft_context.get("payload"), dict)
+        else {},
+        decision_payload=decision_context.get("payload")
+        if isinstance(decision_context.get("payload"), dict)
+        else {},
+        final_publication_payload=final_publication_context.get("payload")
+        if isinstance(final_publication_context.get("payload"), dict)
+        else {},
     )
     steps = summarized_step_rows(run_dir, round_id, controller.get("steps"), artifact_hashes=artifact_hashes)
     summary = {
@@ -538,6 +591,16 @@ def phase2_state_snapshot(run_dir: Path, round_id: str, artifact_hashes: dict[st
         "readiness_status": maybe_text(supervisor.get("readiness_status")) or maybe_text(controller.get("readiness_status")) or maybe_text(gate.get("readiness_status")) or "unknown",
         "gate_status": maybe_text(supervisor.get("gate_status")) or maybe_text(controller.get("gate_status")) or maybe_text(gate.get("gate_status")) or "unknown",
         "promotion_status": maybe_text(supervisor.get("promotion_status")) or maybe_text(controller.get("promotion_status")) or "unknown",
+        "reporting_ready": bool(reporting_surface.get("reporting_ready")),
+        "reporting_blockers": (
+            reporting_surface.get("reporting_blockers", [])
+            if isinstance(reporting_surface.get("reporting_blockers"), list)
+            else []
+        ),
+        "reporting_handoff_status": maybe_text(reporting_surface.get("handoff_status")),
+        "reporting_surface_source": maybe_text(reporting_surface.get("surface_source")),
+        "publication_status": maybe_text(reporting_surface.get("publication_status")),
+        "publication_posture": maybe_text(reporting_surface.get("publication_posture")),
         "resume_status": maybe_text(controller.get("resume_status")),
         "failed_stage": maybe_text(controller.get("failed_stage")),
         "completed_stage_names": [maybe_text(item) for item in controller.get("completed_stage_names", []) if maybe_text(item)]
@@ -568,6 +631,12 @@ def phase2_state_snapshot(run_dir: Path, round_id: str, artifact_hashes: dict[st
         "readiness_status": summary["readiness_status"],
         "gate_status": summary["gate_status"],
         "promotion_status": summary["promotion_status"],
+        "reporting_ready": summary["reporting_ready"],
+        "reporting_blockers": summary["reporting_blockers"],
+        "reporting_handoff_status": summary["reporting_handoff_status"],
+        "reporting_surface_source": summary["reporting_surface_source"],
+        "publication_status": summary["publication_status"],
+        "publication_posture": summary["publication_posture"],
         "failed_stage": summary["failed_stage"],
         "completed_stage_names": summary["completed_stage_names"],
         "pending_stage_names": summary["pending_stage_names"],
@@ -815,7 +884,7 @@ def benchmark_manifest_payload(run_dir: Path, run_id: str, round_id: str) -> dic
         category="output",
     )
     output_hashes = artifact_hash_lookup(output_artifacts)
-    phase2 = phase2_state_snapshot(run_dir, round_id, output_hashes)
+    phase2 = phase2_state_snapshot(run_dir, run_id, round_id, output_hashes)
     post_round = post_round_state_snapshot(run_dir, round_id, output_hashes)
     events = core_ledger_events(run_dir, round_id)
     failure = failure_summary(events, phase2=phase2, post_round=post_round)
@@ -837,6 +906,7 @@ def benchmark_manifest_payload(run_dir: Path, run_id: str, round_id: str) -> dic
         "blocked_event_count": failure["blocked_event_count"],
         "controller_status": phase2["summary"]["controller_status"],
         "supervisor_status": phase2["summary"]["supervisor_status"],
+        "reporting_ready": phase2["summary"]["reporting_ready"],
         "close_status": post_round["summary"]["close_status"],
         "bootstrap_status": post_round["summary"]["bootstrap_status"],
     }

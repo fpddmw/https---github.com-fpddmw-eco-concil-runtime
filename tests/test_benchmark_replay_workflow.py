@@ -284,6 +284,10 @@ class BenchmarkReplayWorkflowTests(unittest.TestCase):
             self.assertEqual("match", compare_artifact["verdict"])
             self.assertEqual("matched", replay_report["replay_verdict"])
             self.assertEqual(0, candidate_manifest["summary"]["failed_event_count"])
+            self.assertEqual(
+                candidate_manifest["phase2_summary"]["reporting_ready"],
+                state_payload["benchmark"]["operator"]["reporting_ready"],
+            )
             self.assertTrue(any(item["skill_name"] == "eco-archive-case-library" for item in candidate_manifest["skill_timing_summary"]))
             self.assertTrue(any(item["event_type"] == "round-close" for item in candidate_manifest["round_event_summary"]))
 

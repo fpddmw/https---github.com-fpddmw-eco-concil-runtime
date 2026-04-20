@@ -6,6 +6,7 @@ from typing import Any, Callable
 from .kernel.executor import maybe_text
 from .runtime_command_hints import run_skill_command
 from .phase2_round_profile import default_next_round_id_builder
+from .reporting_status import SUPERVISOR_REPORTING_READY_STATUS
 
 PostureProfileCallable = Callable[..., Any]
 
@@ -86,7 +87,7 @@ def default_supervisor_classification(controller: dict[str, Any]) -> dict[str, s
         }
     if promotion_status == "promoted":
         return {
-            "supervisor_status": "ready-for-reporting",
+            "supervisor_status": SUPERVISOR_REPORTING_READY_STATUS,
             "supervisor_substatus": "promotion-complete",
             "phase2_posture": "reporting-ready",
             "terminal_state": "reporting-ready",
@@ -184,15 +185,27 @@ def default_supervisor_operator_notes(
     gate_reasons: list[Any],
     top_action_rows: list[dict[str, str]],
     round_transition: dict[str, Any],
+    reporting_ready: bool = False,
+    reporting_blockers: list[Any] | None = None,
+    reporting_handoff_status: str = "",
 ) -> list[str]:
-    if promotion_status == "promoted":
+    blockers = [
+        maybe_text(item)
+        for item in (reporting_blockers or [])
+        if maybe_text(item)
+    ]
+    if reporting_ready:
         notes = [
-            "Round promotion succeeded and the evidence basis is now ready for downstream reporting.",
+            "The round is now explicitly ready for downstream reporting handoff.",
             "No blocking board or probe objects remain in the current controller snapshot.",
         ]
     else:
-        notes = [f"Promotion is withheld because gate={gate_status}."]
+        hold_anchor = maybe_text(reporting_handoff_status) or gate_status or "investigation-open"
+        notes = [f"Reporting remains held at {hold_anchor}."]
+        notes.extend(blockers)
         notes.extend(maybe_text(reason) for reason in gate_reasons if maybe_text(reason))
+        if promotion_status == "withheld" and "promotion-withheld" not in blockers:
+            notes.append("Promotion is still withheld in the current controller snapshot.")
         if top_action_rows:
             top_action_kind = top_action_rows[0].get("action_kind") or "unspecified"
             notes.append(f"Highest-priority follow-up remains {top_action_kind}.")

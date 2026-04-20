@@ -67,6 +67,40 @@ def prepare_hold_round(run_dir: Path, root: Path) -> None:
 
 
 class ReportingPublishWorkflowTests(unittest.TestCase):
+    def test_show_reporting_state_recovers_db_first_reporting_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_round(run_dir, root)
+
+            reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json").unlink()
+            reporting_path(run_dir, f"council_decision_draft_{ROUND_ID}.json").unlink()
+
+            payload = run_kernel(
+                "show-reporting-state",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            self.assertEqual("completed", payload["status"])
+            self.assertTrue(payload["summary"]["reporting_ready"])
+            self.assertEqual(
+                "council-decision-draft",
+                payload["summary"]["surface_source"],
+            )
+            self.assertTrue(payload["surface"]["handoff_present"])
+            self.assertTrue(payload["surface"]["decision_draft_present"])
+            self.assertEqual([], payload["surface"]["reporting_blockers"])
+            self.assertTrue(payload["operator"]["reporting_ready"])
+            self.assertIn(
+                "eco-materialize-reporting-handoff",
+                payload["operator"]["materialize_reporting_handoff_command"],
+            )
+
     def test_role_reports_and_decision_publish_ready_round(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -288,6 +322,30 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("published", first_publish["summary"]["operation"])
             self.assertEqual("completed", decision_publish["status"])
             self.assertEqual("hold", decision_publish["summary"]["publication_readiness"])
+            self.assertIn(
+                "eco-submit-council-proposal",
+                draft_payload["board_handoff"]["suggested_next_skills"],
+            )
+            self.assertIn(
+                "eco-submit-readiness-opinion",
+                draft_payload["board_handoff"]["suggested_next_skills"],
+            )
+            self.assertNotIn(
+                "eco-post-board-note",
+                draft_payload["board_handoff"]["suggested_next_skills"],
+            )
+            self.assertIn(
+                "eco-submit-council-proposal",
+                decision_publish["board_handoff"]["suggested_next_skills"],
+            )
+            self.assertIn(
+                "eco-submit-readiness-opinion",
+                decision_publish["board_handoff"]["suggested_next_skills"],
+            )
+            self.assertNotIn(
+                "eco-post-board-note",
+                decision_publish["board_handoff"]["suggested_next_skills"],
+            )
             self.assertEqual(
                 "deliberation-plane-expert-report",
                 decision["sociologist_report_source"],

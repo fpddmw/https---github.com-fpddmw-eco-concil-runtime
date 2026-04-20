@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from ..canonical_contracts import validate_canonical_payload
+from ..phase2_action_semantics import action_is_readiness_blocker, maybe_bool
+from ..reporting_status import (
+    normalize_reporting_handoff_status,
+    reporting_gate_state,
+)
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS board_runs (
@@ -206,6 +211,7 @@ CREATE TABLE IF NOT EXISTS moderator_actions (
     controversy_gap TEXT NOT NULL DEFAULT '',
     recommended_lane TEXT NOT NULL DEFAULT '',
     probe_candidate INTEGER NOT NULL DEFAULT 0,
+    readiness_blocker INTEGER NOT NULL DEFAULT 1,
     objective TEXT NOT NULL DEFAULT '',
     reason TEXT NOT NULL DEFAULT '',
     evidence_refs_json TEXT NOT NULL DEFAULT '[]',
@@ -354,6 +360,8 @@ CREATE TABLE IF NOT EXISTS reporting_handoffs (
     round_id TEXT NOT NULL,
     generated_at_utc TEXT NOT NULL DEFAULT '',
     handoff_status TEXT NOT NULL DEFAULT '',
+    reporting_ready INTEGER NOT NULL DEFAULT 0,
+    reporting_blockers_json TEXT NOT NULL DEFAULT '[]',
     promotion_status TEXT NOT NULL DEFAULT '',
     readiness_status TEXT NOT NULL DEFAULT '',
     supervisor_status TEXT NOT NULL DEFAULT '',
@@ -379,7 +387,9 @@ CREATE TABLE IF NOT EXISTS council_decision_records (
     generated_at_utc TEXT NOT NULL DEFAULT '',
     decision_stage TEXT NOT NULL DEFAULT '',
     moderator_status TEXT NOT NULL DEFAULT '',
+    reporting_ready INTEGER NOT NULL DEFAULT 0,
     publication_readiness TEXT NOT NULL DEFAULT '',
+    decision_gating_json TEXT NOT NULL DEFAULT '{}',
     next_round_required INTEGER NOT NULL DEFAULT 0,
     canonical_artifact TEXT NOT NULL DEFAULT '',
     board_state_source TEXT NOT NULL DEFAULT '',
@@ -408,6 +418,7 @@ CREATE TABLE IF NOT EXISTS expert_report_records (
     agent_role TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT '',
     handoff_status TEXT NOT NULL DEFAULT '',
+    reporting_ready INTEGER NOT NULL DEFAULT 0,
     publication_readiness TEXT NOT NULL DEFAULT '',
     canonical_artifact TEXT NOT NULL DEFAULT '',
     board_state_source TEXT NOT NULL DEFAULT '',
@@ -628,6 +639,42 @@ def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
             "lineage_json",
             "TEXT NOT NULL DEFAULT '[]'",
         )
+    ensure_column(
+        connection,
+        "moderator_actions",
+        "readiness_blocker",
+        "INTEGER NOT NULL DEFAULT 1",
+    )
+    ensure_column(
+        connection,
+        "reporting_handoffs",
+        "reporting_ready",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        connection,
+        "reporting_handoffs",
+        "reporting_blockers_json",
+        "TEXT NOT NULL DEFAULT '[]'",
+    )
+    ensure_column(
+        connection,
+        "council_decision_records",
+        "reporting_ready",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        connection,
+        "council_decision_records",
+        "decision_gating_json",
+        "TEXT NOT NULL DEFAULT '{}'",
+    )
+    ensure_column(
+        connection,
+        "expert_report_records",
+        "reporting_ready",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
     connection.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_board_events_round_sequence
@@ -986,12 +1033,14 @@ def write_moderator_action_row(connection: sqlite3.Connection, row: dict[str, An
             action_id, run_id, round_id, generated_at_utc, action_rank, action_kind,
             priority, assigned_role, target_hypothesis_id, target_claim_id,
             target_ticket_id, controversy_gap, recommended_lane, probe_candidate,
+            readiness_blocker,
             objective, reason, evidence_refs_json, source_ids_json, artifact_path,
             record_locator, raw_json
         ) VALUES (
             :action_id, :run_id, :round_id, :generated_at_utc, :action_rank, :action_kind,
             :priority, :assigned_role, :target_hypothesis_id, :target_claim_id,
             :target_ticket_id, :controversy_gap, :recommended_lane, :probe_candidate,
+            :readiness_blocker,
             :objective, :reason, :evidence_refs_json, :source_ids_json, :artifact_path,
             :record_locator, :raw_json
         )
@@ -1137,12 +1186,14 @@ def write_reporting_handoff_row(
         """
         INSERT OR REPLACE INTO reporting_handoffs (
             handoff_id, run_id, round_id, generated_at_utc, handoff_status,
+            reporting_ready, reporting_blockers_json,
             promotion_status, readiness_status, supervisor_status,
             board_state_source, coverage_source, promotion_source,
             readiness_source, board_brief_source, supervisor_state_source,
             selected_evidence_refs_json, artifact_path, record_locator, raw_json
         ) VALUES (
             :handoff_id, :run_id, :round_id, :generated_at_utc, :handoff_status,
+            :reporting_ready, :reporting_blockers_json,
             :promotion_status, :readiness_status, :supervisor_status,
             :board_state_source, :coverage_source, :promotion_source,
             :readiness_source, :board_brief_source, :supervisor_state_source,
@@ -1161,7 +1212,8 @@ def write_council_decision_record_row(
         """
         INSERT OR REPLACE INTO council_decision_records (
             record_id, decision_id, run_id, round_id, generated_at_utc,
-            decision_stage, moderator_status, publication_readiness,
+            decision_stage, moderator_status, reporting_ready,
+            publication_readiness, decision_gating_json,
             next_round_required, canonical_artifact, board_state_source,
             coverage_source, reporting_handoff_source, promotion_source,
             decision_source, sociologist_report_source,
@@ -1169,7 +1221,8 @@ def write_council_decision_record_row(
             published_report_refs_json, artifact_path, record_locator, raw_json
         ) VALUES (
             :record_id, :decision_id, :run_id, :round_id, :generated_at_utc,
-            :decision_stage, :moderator_status, :publication_readiness,
+            :decision_stage, :moderator_status, :reporting_ready,
+            :publication_readiness, :decision_gating_json,
             :next_round_required, :canonical_artifact, :board_state_source,
             :coverage_source, :reporting_handoff_source, :promotion_source,
             :decision_source, :sociologist_report_source,
@@ -1190,6 +1243,7 @@ def write_expert_report_record_row(
         INSERT OR REPLACE INTO expert_report_records (
             record_id, report_id, run_id, round_id, generated_at_utc,
             report_stage, agent_role, status, handoff_status,
+            reporting_ready,
             publication_readiness, canonical_artifact, board_state_source,
             coverage_source, reporting_handoff_source, decision_source,
             expert_report_draft_source, board_brief_source,
@@ -1197,6 +1251,7 @@ def write_expert_report_record_row(
         ) VALUES (
             :record_id, :report_id, :run_id, :round_id, :generated_at_utc,
             :report_stage, :agent_role, :status, :handoff_status,
+            :reporting_ready,
             :publication_readiness, :canonical_artifact, :board_state_source,
             :coverage_source, :reporting_handoff_source, :decision_source,
             :expert_report_draft_source, :board_brief_source,
@@ -1821,12 +1876,24 @@ def normalized_reporting_handoff_payload(
     normalized["generated_at_utc"] = (
         maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
     )
-    normalized["handoff_status"] = (
-        maybe_text(normalized.get("handoff_status"))
-        or "pending-more-investigation"
+    gate_state = reporting_gate_state(
+        promotion_status=maybe_text(normalized.get("promotion_status")) or "withheld",
+        readiness_status=maybe_text(normalized.get("readiness_status")) or "blocked",
+        supervisor_status=maybe_text(normalized.get("supervisor_status")),
+        require_supervisor=True,
+        reporting_ready=normalized.get("reporting_ready"),
+        reporting_blockers_value=normalized.get("reporting_blockers"),
+        handoff_status=maybe_text(normalized.get("handoff_status")),
     )
-    normalized["promotion_status"] = (
-        maybe_text(normalized.get("promotion_status")) or "withheld"
+    normalized["handoff_status"] = (
+        maybe_text(gate_state.get("handoff_status")) or "investigation-open"
+    )
+    normalized["promotion_status"] = maybe_text(gate_state.get("promotion_status")) or "withheld"
+    normalized["readiness_status"] = maybe_text(gate_state.get("readiness_status")) or "blocked"
+    normalized["supervisor_status"] = maybe_text(gate_state.get("supervisor_status"))
+    normalized["reporting_ready"] = bool(gate_state.get("reporting_ready"))
+    normalized["reporting_blockers"] = list_items(
+        gate_state.get("reporting_blockers")
     )
     normalized["handoff_id"] = (
         maybe_text(normalized.get("handoff_id"))
@@ -1874,6 +1941,13 @@ def normalized_council_decision_payload(
             normalized["decision_id"],
         )
     )
+    normalized["handoff_status"] = normalize_reporting_handoff_status(
+        normalized.get("handoff_status")
+    )
+    normalized["reporting_ready"] = bool(maybe_bool(normalized.get("reporting_ready")))
+    normalized["reporting_blockers"] = list_items(
+        normalized.get("reporting_blockers")
+    )
     return normalized
 
 
@@ -1917,6 +1991,13 @@ def normalized_expert_report_payload(
             normalized["agent_role"],
             normalized["report_id"],
         )
+    )
+    normalized["handoff_status"] = normalize_reporting_handoff_status(
+        normalized.get("handoff_status")
+    )
+    normalized["reporting_ready"] = bool(maybe_bool(normalized.get("reporting_ready")))
+    normalized["reporting_blockers"] = list_items(
+        normalized.get("reporting_blockers")
     )
     return normalized
 
@@ -2060,6 +2141,7 @@ def moderator_action_row_from_payload(
         "controversy_gap": maybe_text(action.get("controversy_gap")),
         "recommended_lane": maybe_text(action.get("recommended_lane")),
         "probe_candidate": 1 if bool(action.get("probe_candidate")) else 0,
+        "readiness_blocker": 1 if action_is_readiness_blocker(action) else 0,
         "objective": maybe_text(action.get("objective")),
         "reason": maybe_text(action.get("reason")),
         "evidence_refs_json": json_text(
@@ -2256,6 +2338,10 @@ def reporting_handoff_row_from_payload(
         "round_id": maybe_text(handoff_payload.get("round_id")),
         "generated_at_utc": maybe_text(handoff_payload.get("generated_at_utc")),
         "handoff_status": maybe_text(handoff_payload.get("handoff_status")),
+        "reporting_ready": 1 if bool(handoff_payload.get("reporting_ready")) else 0,
+        "reporting_blockers_json": json_text(
+            handoff_payload.get("reporting_blockers", [])
+        ),
         "promotion_status": maybe_text(handoff_payload.get("promotion_status")),
         "readiness_status": maybe_text(handoff_payload.get("readiness_status")),
         "supervisor_status": maybe_text(handoff_payload.get("supervisor_status")),
@@ -2290,8 +2376,12 @@ def council_decision_record_row_from_payload(
         "generated_at_utc": maybe_text(decision_payload.get("generated_at_utc")),
         "decision_stage": maybe_text(decision_payload.get("decision_stage")),
         "moderator_status": maybe_text(decision_payload.get("moderator_status")),
+        "reporting_ready": 1 if bool(decision_payload.get("reporting_ready")) else 0,
         "publication_readiness": maybe_text(
             decision_payload.get("publication_readiness")
+        ),
+        "decision_gating_json": json_text(
+            decision_payload.get("decision_gating", {})
         ),
         "next_round_required": 1
         if bool(decision_payload.get("next_round_required"))
@@ -2338,6 +2428,7 @@ def expert_report_record_row_from_payload(
         "agent_role": maybe_text(report_payload.get("agent_role")),
         "status": maybe_text(report_payload.get("status")),
         "handoff_status": maybe_text(report_payload.get("handoff_status")),
+        "reporting_ready": 1 if bool(report_payload.get("reporting_ready")) else 0,
         "publication_readiness": maybe_text(
             report_payload.get("publication_readiness")
         ),

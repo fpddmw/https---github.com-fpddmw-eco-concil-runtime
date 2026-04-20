@@ -156,6 +156,7 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
         "agent_role_column": "assigned_role",
         "status_column": "",
         "decision_id_column": "",
+        "readiness_blocker_column": "readiness_blocker",
     },
     OBJECT_KIND_PROBE: {
         "table_name": "falsification_probes",
@@ -966,6 +967,7 @@ def query_council_objects(
     agent_role: str = "",
     status: str = "",
     decision_id: str = "",
+    readiness_blocker_only: bool = False,
     include_contract: bool = False,
     include_items: bool = False,
     limit: int = 20,
@@ -1000,6 +1002,13 @@ def query_council_objects(
     if decision_id_column and maybe_text(decision_id):
         where_clauses.append(f"{decision_id_column} = ?")
         params.append(maybe_text(decision_id))
+    if readiness_blocker_only:
+        blocker_column = maybe_text(config.get("readiness_blocker_column"))
+        if not blocker_column:
+            raise ValueError(
+                f"Unsupported readiness_blocker filter for object kind: {normalized_kind}."
+            )
+        where_clauses.append(f"{blocker_column} = 1")
 
     connection, db_file = connect_db(run_dir)
     try:
@@ -1038,6 +1047,7 @@ def query_council_objects(
             "agent_role": maybe_text(agent_role),
             "status": maybe_text(status),
             "decision_id": maybe_text(decision_id),
+            "readiness_blocker_only": bool(readiness_blocker_only),
         },
         "paging": {
             "limit": safe_limit,

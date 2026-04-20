@@ -23,6 +23,9 @@ from eco_council_runtime.phase2_promotion_resolution import (  # noqa: E402
     load_council_readiness_opinions,
     resolve_promotion_council_inputs,
 )
+from eco_council_runtime.phase2_action_semantics import (  # noqa: E402
+    action_is_readiness_blocker,
+)
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_next_actions_wrapper,
     load_round_readiness_wrapper,
@@ -615,6 +618,29 @@ def promote_evidence_basis_skill(
         if isinstance(promotion_resolution.get("rejected_opinion_ids"), list)
         else []
     )
+    proposal_resolution_records = (
+        promotion_resolution.get("proposal_resolution_records", [])
+        if isinstance(promotion_resolution.get("proposal_resolution_records"), list)
+        else []
+    )
+    ignored_implicit_promotion_proposals = [
+        record
+        for record in proposal_resolution_records
+        if isinstance(record, dict)
+        and maybe_text(record.get("resolution_mode"))
+        == "ignored-implicit-promotion-kind"
+    ]
+    if ignored_implicit_promotion_proposals:
+        warnings.append(
+            {
+                "code": "ignored-implicit-promotion-kind",
+                "message": (
+                    f"{len(ignored_implicit_promotion_proposals)} council proposals "
+                    "used legacy promotion naming without explicit structured "
+                    "judgement fields and were ignored for promotion support."
+                ),
+            }
+        )
     rejected_proposals = [
         proposal
         for proposal in council_proposals
@@ -668,7 +694,7 @@ def promote_evidence_basis_skill(
             "recommended_lane": maybe_text(item.get("recommended_lane")),
         }
         for item in next_actions.get("ranked_actions", [])
-        if isinstance(item, dict) and maybe_text(item.get("action_kind")) != "prepare-promotion"
+        if isinstance(item, dict) and action_is_readiness_blocker(item)
     ][:4] if isinstance(next_actions.get("ranked_actions"), list) else []
     remaining_risks = (
         [
@@ -752,11 +778,7 @@ def promote_evidence_basis_skill(
         "rejected_proposal_ids": rejected_proposal_ids,
         "supporting_opinion_ids": supporting_opinion_ids,
         "rejected_opinion_ids": rejected_opinion_ids,
-        "proposal_resolution_records": (
-            promotion_resolution.get("proposal_resolution_records", [])
-            if isinstance(promotion_resolution.get("proposal_resolution_records"), list)
-            else []
-        ),
+        "proposal_resolution_records": proposal_resolution_records,
         "proposal_resolution_mode_counts": (
             promotion_resolution.get("proposal_resolution_mode_counts", {})
             if isinstance(promotion_resolution.get("proposal_resolution_mode_counts"), dict)
@@ -842,7 +864,7 @@ def promote_evidence_basis_skill(
                 or ["Round readiness is not yet sufficient for promotion."]
             ),
             "challenge_hints": [],
-            "suggested_next_skills": ["eco-post-board-note"] if promotion_status == "promoted" else ["eco-summarize-round-readiness", "eco-open-falsification-probe"],
+            "suggested_next_skills": ["eco-materialize-reporting-handoff", "eco-draft-council-decision", "eco-draft-expert-report"] if promotion_status == "promoted" else ["eco-summarize-round-readiness", "eco-open-falsification-probe"],
         },
     }
 

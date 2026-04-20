@@ -75,4 +75,5 @@ from .phase2_state_surfaces import (  # noqa: F401
     load_promotion_basis_wrapper,
     load_reporting_handoff_wrapper,
     load_round_readiness_wrapper,
+    load_supervisor_state_wrapper,
 )

@@ -40,6 +40,21 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
                     "assigned_role": "environmentalist",
                     "objective": "Advance smoke verification.",
                     "reason": "Coverage is still incomplete.",
+                    "readiness_blocker": True,
+                    "decision_source": "heuristic-fallback",
+                    "provenance": {"source": "unit-test"},
+                    "evidence_refs": [],
+                    "lineage": [],
+                    "source_ids": ["issue-001"],
+                    "target": {"claim_id": "claim-001"},
+                },
+                {
+                    "action_kind": "open-council-readiness-review",
+                    "priority": "medium",
+                    "assigned_role": "moderator",
+                    "objective": "Prepare the next council review once blockers are cleared.",
+                    "reason": "A structured review step should remain visible after the blocking action.",
+                    "readiness_blocker": False,
                     "decision_source": "heuristic-fallback",
                     "provenance": {"source": "unit-test"},
                     "evidence_refs": [],
@@ -294,11 +309,32 @@ class CouncilQuerySurfaceTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            self.assertEqual(1, action_payload["summary"]["returned_object_count"])
+            self.assertEqual(2, action_payload["summary"]["returned_object_count"])
             self.assertEqual(
                 "advance-empirical-verification",
                 action_payload["objects"][0]["action_kind"],
             )
+            self.assertTrue(action_payload["objects"][0]["readiness_blocker"])
+
+            blocker_actions = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "next-action",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--readiness-blocker-only",
+            )
+            self.assertEqual(1, blocker_actions["summary"]["returned_object_count"])
+            self.assertTrue(blocker_actions["filters"]["readiness_blocker_only"])
+            self.assertEqual(
+                "advance-empirical-verification",
+                blocker_actions["objects"][0]["action_kind"],
+            )
+            self.assertTrue(blocker_actions["objects"][0]["readiness_blocker"])
 
             hypothesis_payload = run_kernel(
                 "query-council-objects",

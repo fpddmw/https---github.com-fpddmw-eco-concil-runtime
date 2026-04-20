@@ -36,6 +36,9 @@ from eco_council_runtime.phase2_council_execution import (  # noqa: E402
     VALID_COUNCIL_EXECUTION_MODES,
     normalize_council_execution_mode,
 )
+from eco_council_runtime.phase2_action_semantics import (  # noqa: E402
+    action_is_readiness_blocker,
+)
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_round_readiness_assessment,
 )
@@ -374,19 +377,20 @@ def summarize_round_readiness_skill(
     non_empirical_issue_count = int(agenda_counts.get("non_empirical_issue_count") or 0)
     mixed_issue_count = int(agenda_counts.get("mixed_issue_count") or 0)
     open_probes = len([item for item in probes.get("probes", []) if isinstance(item, dict) and maybe_text(item.get("probe_status")) not in {"closed", "cancelled"}]) if isinstance(probes.get("probes"), list) else 0
+    blocking_actions = [
+        item
+        for item in next_actions.get("ranked_actions", [])
+        if isinstance(item, dict) and action_is_readiness_blocker(item)
+    ] if isinstance(next_actions.get("ranked_actions"), list) else []
     high_priority_actions = len(
         [
             item
-            for item in next_actions.get("ranked_actions", [])
-            if isinstance(item, dict)
-            and maybe_text(item.get("priority")) in {"high", "critical"}
-            and maybe_text(item.get("action_kind")) != "prepare-promotion"
+            for item in blocking_actions
+            if maybe_text(item.get("priority")) in {"high", "critical"}
         ]
-    ) if isinstance(next_actions.get("ranked_actions"), list) else 0
+    )
     action_gap_counts = summarize_counts(
-        next_actions.get("ranked_actions", [])
-        if isinstance(next_actions.get("ranked_actions"), list)
-        else [],
+        blocking_actions,
         field_name="controversy_gap",
     )
     probe_type_counts = summarize_counts(

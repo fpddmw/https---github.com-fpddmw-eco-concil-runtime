@@ -7,6 +7,14 @@ from .deliberation_plane import load_phase2_control_state
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill, utc_now_iso
 from .ledger import append_ledger_event
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists, write_json
+from .phase2_state_surfaces import (
+    build_reporting_surface,
+    load_council_decision_wrapper,
+    load_final_publication_wrapper,
+    load_promotion_basis_wrapper,
+    load_reporting_handoff_wrapper,
+    load_supervisor_state_wrapper,
+)
 from .paths import (
     controller_state_path,
     ensure_runtime_dirs,
@@ -98,50 +106,131 @@ def infer_publication_status(final_publication: dict[str, Any], decision: dict[s
     return "", ""
 
 
-def infer_close_posture(*, promotion_status: str, publication_posture: str, publication_materialized: bool, supervisor_status: str) -> str:
+def infer_close_posture(
+    *,
+    reporting_ready: bool,
+    publication_posture: str,
+    publication_materialized: bool,
+    supervisor_status: str,
+    reporting_handoff_status: str,
+) -> str:
     if publication_materialized and publication_posture == "release":
         return "published-release"
     if publication_materialized and publication_posture == "withhold":
         return "published-withhold"
-    if promotion_status == "promoted":
-        return "promoted-unpublished"
-    if supervisor_status == "hold-investigation-open":
+    if reporting_ready:
+        return "reporting-ready-unpublished"
+    if (
+        supervisor_status == "hold-investigation-open"
+        or reporting_handoff_status == "investigation-open"
+    ):
         return "investigation-hold"
     return "post-round-pending"
 
 
-def round_terminal_state(run_dir: Path, round_id: str, artifacts: dict[str, str]) -> dict[str, Any]:
-    control_state = load_phase2_control_state(run_dir, round_id=round_id)
+def round_terminal_state(
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    artifacts: dict[str, str],
+) -> dict[str, Any]:
+    control_state = load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id)
     controller = (
         control_state.get("controller", {})
         if isinstance(control_state.get("controller"), dict)
         else {}
     ) or load_json_if_exists(Path(artifacts["controller_state_path"])) or {}
+    supervisor_context = load_supervisor_state_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        supervisor_state_path=artifacts["supervisor_state_path"],
+    )
     supervisor = (
-        control_state.get("supervisor", {})
-        if isinstance(control_state.get("supervisor"), dict)
+        supervisor_context.get("payload")
+        if isinstance(supervisor_context.get("payload"), dict)
         else {}
-    ) or load_json_if_exists(Path(artifacts["supervisor_state_path"])) or {}
+    )
+    promotion_context = load_promotion_basis_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        promotion_path=artifacts["promotion_basis_path"],
+    )
     promotion = (
-        control_state.get("promotion_basis", {})
-        if isinstance(control_state.get("promotion_basis"), dict)
+        promotion_context.get("payload")
+        if isinstance(promotion_context.get("payload"), dict)
         else {}
-    ) or load_json_if_exists(Path(artifacts["promotion_basis_path"])) or {}
+    )
+    handoff_context = load_reporting_handoff_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        reporting_handoff_path=artifacts["reporting_handoff_path"],
+    )
     handoff = (
-        control_state.get("reporting_handoff", {})
-        if isinstance(control_state.get("reporting_handoff"), dict)
+        handoff_context.get("payload")
+        if isinstance(handoff_context.get("payload"), dict)
         else {}
-    ) or load_json_if_exists(Path(artifacts["reporting_handoff_path"])) or {}
-    decision = selected_decision_artifact(run_dir, round_id, control_state)
+    )
+    decision_context = load_council_decision_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="canonical",
+        decision_path=artifacts["council_decision_path"],
+    )
+    decision_draft_context = load_council_decision_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="draft",
+        decision_path=artifacts["council_decision_draft_path"],
+    )
+    decision = (
+        decision_context.get("payload")
+        if isinstance(decision_context.get("payload"), dict)
+        else {}
+    ) or (
+        decision_draft_context.get("payload")
+        if isinstance(decision_draft_context.get("payload"), dict)
+        else {}
+    )
+    final_publication_context = load_final_publication_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        output_path=artifacts["final_publication_path"],
+    )
     final_publication = (
-        control_state.get("final_publication", {})
-        if isinstance(control_state.get("final_publication"), dict)
+        final_publication_context.get("payload")
+        if isinstance(final_publication_context.get("payload"), dict)
         else {}
-    ) or load_json_if_exists(Path(artifacts["final_publication_path"])) or {}
+    )
     controller_status = maybe_text(controller.get("controller_status"))
     supervisor_status = maybe_text(supervisor.get("supervisor_status"))
-    promotion_status = maybe_text(final_publication.get("promotion_status")) or maybe_text(promotion.get("promotion_status")) or maybe_text(supervisor.get("promotion_status"))
-    readiness_status = maybe_text(supervisor.get("readiness_status")) or maybe_text(controller.get("readiness_status"))
+    reporting_surface = build_reporting_surface(
+        supervisor_payload=supervisor,
+        handoff_payload=handoff,
+        decision_draft_payload=decision_draft_context.get("payload")
+        if isinstance(decision_draft_context.get("payload"), dict)
+        else {},
+        decision_payload=decision_context.get("payload")
+        if isinstance(decision_context.get("payload"), dict)
+        else {},
+        final_publication_payload=final_publication,
+    )
+    promotion_status = (
+        maybe_text(final_publication.get("promotion_status"))
+        or maybe_text(reporting_surface.get("promotion_status"))
+        or maybe_text(promotion.get("promotion_status"))
+        or maybe_text(supervisor.get("promotion_status"))
+    )
+    readiness_status = (
+        maybe_text(reporting_surface.get("readiness_status"))
+        or maybe_text(supervisor.get("readiness_status"))
+        or maybe_text(controller.get("readiness_status"))
+    )
     publication_status, publication_posture = infer_publication_status(final_publication, decision)
     block_close = False
     block_reason = ""
@@ -155,10 +244,11 @@ def round_terminal_state(run_dir: Path, round_id: str, artifacts: dict[str, str]
         block_reason = "controller-failed"
         block_message = "Round close is blocked because the phase-2 controller did not finish successfully."
     close_posture = infer_close_posture(
-        promotion_status=promotion_status,
+        reporting_ready=bool(reporting_surface.get("reporting_ready")),
         publication_posture=publication_posture,
         publication_materialized=bool(final_publication),
         supervisor_status=supervisor_status,
+        reporting_handoff_status=maybe_text(reporting_surface.get("handoff_status")),
     )
     return {
         "controller": controller,
@@ -171,6 +261,18 @@ def round_terminal_state(run_dir: Path, round_id: str, artifacts: dict[str, str]
         "supervisor_status": supervisor_status or "missing",
         "readiness_status": readiness_status or "unknown",
         "promotion_status": promotion_status or "unknown",
+        "reporting_ready": bool(reporting_surface.get("reporting_ready")),
+        "reporting_blockers": (
+            reporting_surface.get("reporting_blockers", [])
+            if isinstance(reporting_surface.get("reporting_blockers"), list)
+            else []
+        ),
+        "reporting_handoff_status": maybe_text(
+            reporting_surface.get("handoff_status")
+        ),
+        "reporting_surface_source": maybe_text(
+            reporting_surface.get("surface_source")
+        ),
         "publication_status": publication_status or "unpublished",
         "publication_posture": publication_posture or "unpublished",
         "close_posture": close_posture,
@@ -332,6 +434,9 @@ def round_close_event(
         "close_posture": payload.get("close_posture"),
         "publication_status": payload.get("publication_status"),
         "promotion_status": payload.get("promotion_status"),
+        "reporting_ready": payload.get("reporting_ready"),
+        "reporting_handoff_status": payload.get("reporting_handoff_status"),
+        "reporting_blockers": payload.get("reporting_blockers", []),
         "failed_stage": payload.get("failed_stage"),
         "round_close_path": payload.get("artifacts", {}).get("round_close_state_path", "")
         if isinstance(payload.get("artifacts"), dict)
@@ -417,7 +522,7 @@ def close_round_with_contract_mode(
         "allow_side_effects": allow_side_effects,
     }
     started_at = utc_now_iso()
-    terminal_state = round_terminal_state(run_dir, round_id, artifacts)
+    terminal_state = round_terminal_state(run_dir, run_id, round_id, artifacts)
     payload = {
         "schema_version": "runtime-round-close-v1",
         "generated_at_utc": started_at,
@@ -435,6 +540,10 @@ def close_round_with_contract_mode(
         "supervisor_status": terminal_state["supervisor_status"],
         "readiness_status": terminal_state["readiness_status"],
         "promotion_status": terminal_state["promotion_status"],
+        "reporting_ready": terminal_state["reporting_ready"],
+        "reporting_blockers": terminal_state["reporting_blockers"],
+        "reporting_handoff_status": terminal_state["reporting_handoff_status"],
+        "reporting_surface_source": terminal_state["reporting_surface_source"],
         "publication_status": terminal_state["publication_status"],
         "publication_posture": terminal_state["publication_posture"],
         "recommended_next_skills": [],

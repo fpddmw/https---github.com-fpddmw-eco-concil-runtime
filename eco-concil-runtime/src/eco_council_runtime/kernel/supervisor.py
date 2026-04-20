@@ -7,6 +7,7 @@ from ..phase2_posture_profile import (
     posture_profile_callable,
     resolve_phase2_posture_profile,
 )
+from ..reporting_status import reporting_gate_state
 from .deliberation_plane import store_promotion_freeze_record
 from .executor import SkillExecutionError
 from .controller import run_phase2_round_with_contract_mode
@@ -125,6 +126,14 @@ def supervise_round_with_contract_mode(
         controller = exc.payload.get("controller", {}) if isinstance(exc.payload.get("controller"), dict) else {}
         artifacts = controller.get("artifacts", {}) if isinstance(controller.get("artifacts"), dict) else {}
         classification = classification_builder(controller or {"controller_status": "failed"})
+        reporting_state = reporting_gate_state(
+            promotion_status=maybe_text(controller.get("promotion_status"))
+            or "not-evaluated",
+            readiness_status=maybe_text(controller.get("readiness_status"))
+            or "pending",
+            supervisor_status=classification["supervisor_status"],
+            require_supervisor=True,
+        )
         finished_at = utc_now_iso()
         payload = {
             "schema_version": "runtime-supervisor-v3",
@@ -150,6 +159,15 @@ def supervise_round_with_contract_mode(
             "readiness_status": maybe_text(controller.get("readiness_status")) or "pending",
             "gate_status": maybe_text(controller.get("gate_status")) or "not-evaluated",
             "promotion_status": maybe_text(controller.get("promotion_status")) or "not-evaluated",
+            "reporting_ready": bool(reporting_state.get("reporting_ready")),
+            "reporting_blockers": (
+                reporting_state.get("reporting_blockers", [])
+                if isinstance(reporting_state.get("reporting_blockers"), list)
+                else []
+            ),
+            "reporting_handoff_status": maybe_text(
+                reporting_state.get("handoff_status")
+            ),
             "execution_policy": execution_policy,
             "planning_mode": maybe_text(controller.get("planning_mode")) or "planner-backed",
             "orchestration_plan_path": artifacts.get("orchestration_plan_path", ""),
@@ -201,6 +219,8 @@ def supervise_round_with_contract_mode(
                 "readiness_status": payload["readiness_status"],
                 "gate_status": payload["gate_status"],
                 "promotion_status": payload["promotion_status"],
+                "reporting_ready": payload["reporting_ready"],
+                "reporting_blockers": payload["reporting_blockers"],
                 "supervisor_path": str(output_file),
             },
         )
@@ -213,6 +233,7 @@ def supervise_round_with_contract_mode(
             "planning_mode": payload["planning_mode"],
             "supervisor_path": str(output_file),
             "promotion_status": payload["promotion_status"],
+            "reporting_ready": payload["reporting_ready"],
         }
         raise SkillExecutionError(failure_payload.get("message", str(exc)), failure_payload)
     controller = controller_result.get("controller", {}) if isinstance(controller_result.get("controller"), dict) else {}
@@ -239,6 +260,12 @@ def supervise_round_with_contract_mode(
     promotion_status = maybe_text(controller.get("promotion_status")) or "withheld"
     gate_status = maybe_text(controller.get("gate_status")) or "freeze-withheld"
     classification = classification_builder(controller)
+    reporting_state = reporting_gate_state(
+        promotion_status=promotion_status,
+        readiness_status=maybe_text(controller.get("readiness_status")) or "blocked",
+        supervisor_status=classification["supervisor_status"],
+        require_supervisor=True,
+    )
     round_transition = round_transition_builder(
         run_dir=run_dir,
         run_id=run_id,
@@ -263,6 +290,13 @@ def supervise_round_with_contract_mode(
         gate_reasons=gate_reasons,
         top_action_rows=top_action_rows,
         round_transition=round_transition,
+        reporting_ready=bool(reporting_state.get("reporting_ready")),
+        reporting_blockers=(
+            reporting_state.get("reporting_blockers", [])
+            if isinstance(reporting_state.get("reporting_blockers"), list)
+            else []
+        ),
+        reporting_handoff_status=maybe_text(reporting_state.get("handoff_status")),
     )
     finished_at = utc_now_iso()
 
@@ -290,6 +324,13 @@ def supervise_round_with_contract_mode(
         "readiness_status": maybe_text(controller.get("readiness_status")) or "blocked",
         "gate_status": gate_status,
         "promotion_status": promotion_status,
+        "reporting_ready": bool(reporting_state.get("reporting_ready")),
+        "reporting_blockers": (
+            reporting_state.get("reporting_blockers", [])
+            if isinstance(reporting_state.get("reporting_blockers"), list)
+            else []
+        ),
+        "reporting_handoff_status": maybe_text(reporting_state.get("handoff_status")),
         "execution_policy": execution_policy,
         "planning_mode": maybe_text(controller.get("planning_mode")) or maybe_text(controller.get("planning", {}).get("planning_mode") if isinstance(controller.get("planning"), dict) else "") or "planner-backed",
         "orchestration_plan_path": artifacts.get("orchestration_plan_path", ""),
@@ -344,6 +385,8 @@ def supervise_round_with_contract_mode(
             "readiness_status": payload["readiness_status"],
             "gate_status": gate_status,
             "promotion_status": promotion_status,
+            "reporting_ready": payload["reporting_ready"],
+            "reporting_blockers": payload["reporting_blockers"],
             "supervisor_path": str(output_file),
         },
     )
@@ -356,6 +399,7 @@ def supervise_round_with_contract_mode(
             "planning_mode": payload["planning_mode"],
             "supervisor_path": str(output_file),
             "promotion_status": promotion_status,
+            "reporting_ready": payload["reporting_ready"],
         },
         "supervisor": payload,
         "controller": controller,

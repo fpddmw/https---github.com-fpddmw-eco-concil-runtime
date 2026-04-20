@@ -171,6 +171,25 @@ class Phase2FallbackPlanningTests(unittest.TestCase):
         self.assertEqual("custom-route-review", actions[0]["action_kind"])
         self.assertEqual("custom-profile", actions[0]["agenda_source"])
 
+    def test_default_empty_agenda_action_is_non_blocking_readiness_review(self) -> None:
+        actions = phase2_fallback_agenda_profile.default_empty_agenda_actions(
+            {
+                "coverages": [
+                    {
+                        "coverage_id": "coverage-001",
+                        "claim_id": "claim-001",
+                        "readiness": "strong",
+                        "coverage_score": 0.91,
+                        "evidence_refs": ["artifact:coverage-001"],
+                    }
+                ]
+            }
+        )
+
+        self.assertEqual(1, len(actions))
+        self.assertEqual("open-council-readiness-review", actions[0]["action_kind"])
+        self.assertFalse(actions[0]["readiness_blocker"])
+
 
 if __name__ == "__main__":
     unittest.main()

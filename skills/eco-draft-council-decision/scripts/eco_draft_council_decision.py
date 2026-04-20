@@ -27,6 +27,10 @@ from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_promotion_basis_wrapper,
     load_reporting_handoff_wrapper,
 )
+from eco_council_runtime.reporting_status import (  # noqa: E402
+    reporting_blocker_summaries,
+    reporting_gate_state,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -96,12 +100,12 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
 
 def decision_summary(
     *,
-    handoff_status: str,
-    promotion_status: str,
+    reporting_ready: bool,
+    reporting_blockers: list[str],
     key_findings: list[dict[str, Any]],
     open_risks: list[dict[str, Any]],
 ) -> str:
-    if handoff_status == "ready-for-reporting" and promotion_status == "promoted":
+    if reporting_ready:
         if key_findings:
             lead = maybe_text(key_findings[0].get("summary"))
             return f"Round is ready for formal reporting and decision finalization. Lead basis: {lead}"
@@ -109,20 +113,22 @@ def decision_summary(
     if open_risks:
         reasons = "; ".join(maybe_text(item.get("summary")) for item in open_risks[:3] if maybe_text(item.get("summary")))
         return f"Another round is required before finalization because {reasons}."
-    return "Another round is required before finalization because promotion remains withheld."
+    blocker_summaries = reporting_blocker_summaries(reporting_blockers)
+    if blocker_summaries:
+        return f"Another round is required before finalization because {'; '.join(blocker_summaries[:3])}."
+    return "Another round is required before finalization because reporting readiness is still unresolved."
 
 
 def reason_codes(
-    handoff_status: str,
-    promotion_status: str,
+    reporting_ready: bool,
+    reporting_blockers: list[str],
     open_risks: list[dict[str, Any]],
     rejected_proposal_ids: list[str],
 ) -> list[str]:
     codes: list[str] = []
-    if handoff_status != "ready-for-reporting":
+    if not reporting_ready:
         codes.append("reporting-handoff-not-ready")
-    if promotion_status != "promoted":
-        codes.append("promotion-withheld")
+    codes.extend(reporting_blockers)
     if rejected_proposal_ids:
         codes.append("council-veto")
     for item in open_risks:
@@ -175,7 +181,9 @@ def draft_council_decision_skill(
             }
         )
         handoff = {
-            "handoff_status": "pending-more-investigation",
+            "handoff_status": "investigation-open",
+            "reporting_ready": False,
+            "reporting_blockers": ["reporting-handoff-missing"],
             "promotion_status": "withheld",
             "key_findings": [],
             "open_risks": [],
@@ -219,8 +227,27 @@ def draft_council_decision_skill(
         },
     )
 
-    handoff_status = maybe_text(handoff.get("handoff_status")) or "pending-more-investigation"
-    promotion_status = maybe_text(handoff.get("promotion_status")) or maybe_text(promotion_basis.get("promotion_status")) or "withheld"
+    gate_state = reporting_gate_state(
+        promotion_status=maybe_text(handoff.get("promotion_status"))
+        or maybe_text(promotion_basis.get("promotion_status"))
+        or "withheld",
+        readiness_status=maybe_text(handoff.get("readiness_status"))
+        or maybe_text(promotion_basis.get("readiness_status"))
+        or "blocked",
+        supervisor_status=maybe_text(handoff.get("supervisor_status")) or "unavailable",
+        require_supervisor=True,
+        reporting_ready=handoff.get("reporting_ready"),
+        reporting_blockers_value=handoff.get("reporting_blockers"),
+        handoff_status=handoff.get("handoff_status"),
+    )
+    handoff_status = maybe_text(gate_state.get("handoff_status")) or "investigation-open"
+    promotion_status = maybe_text(gate_state.get("promotion_status")) or "withheld"
+    reporting_ready = bool(gate_state.get("reporting_ready"))
+    reporting_blockers = unique_texts(
+        gate_state.get("reporting_blockers", [])
+        if isinstance(gate_state.get("reporting_blockers"), list)
+        else []
+    )
     key_findings = handoff.get("key_findings", []) if isinstance(handoff.get("key_findings"), list) else []
     open_risks = handoff.get("open_risks", []) if isinstance(handoff.get("open_risks"), list) else []
     recommended_next_actions = handoff.get("recommended_next_actions", []) if isinstance(handoff.get("recommended_next_actions"), list) else []
@@ -231,12 +258,12 @@ def draft_council_decision_skill(
         if isinstance(promotion_basis.get("rejected_proposal_ids"), list)
         else []
     )
-    moderator_status = "finalize" if handoff_status == "ready-for-reporting" and promotion_status == "promoted" else "continue"
-    publication_readiness = "ready" if moderator_status == "finalize" else "hold"
+    moderator_status = "finalize" if reporting_ready else "continue"
+    publication_readiness = "ready" if reporting_ready else "hold"
     decision_id = "council-decision-" + stable_hash(run_id, round_id, moderator_status, publication_readiness)[:12]
     summary_text = decision_summary(
-        handoff_status=handoff_status,
-        promotion_status=promotion_status,
+        reporting_ready=reporting_ready,
+        reporting_blockers=reporting_blockers,
         key_findings=key_findings,
         open_risks=open_risks,
     )
@@ -248,6 +275,9 @@ def draft_council_decision_skill(
         "run_id": run_id,
         "round_id": round_id,
         "decision_id": decision_id,
+        "handoff_status": handoff_status,
+        "reporting_ready": reporting_ready,
+        "reporting_blockers": reporting_blockers,
         "moderator_status": moderator_status,
         "publication_readiness": publication_readiness,
         "next_round_required": moderator_status != "finalize",
@@ -306,12 +336,15 @@ def draft_council_decision_skill(
         ),
         "decision_gating": {
             "reason_codes": reason_codes(
-                handoff_status,
-                promotion_status,
+                reporting_ready,
+                reporting_blockers,
                 open_risks,
                 rejected_proposal_ids,
             ),
-            "reasons": [maybe_text(item.get("summary")) for item in open_risks[:4] if maybe_text(item.get("summary"))],
+            "reasons": unique_texts(
+                [maybe_text(item.get("summary")) for item in open_risks[:4] if maybe_text(item.get("summary"))]
+                + reporting_blocker_summaries(reporting_blockers)
+            )[:4],
             "open_risk_count": len(open_risks),
         },
         "key_findings": key_findings[:3],
@@ -344,6 +377,7 @@ def draft_council_decision_skill(
             "decision_id": decision_id,
             "moderator_status": moderator_status,
             "publication_readiness": publication_readiness,
+            "reporting_ready": reporting_ready,
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
             "reporting_handoff_source": maybe_text(contract_fields.get("reporting_handoff_source")),
@@ -362,7 +396,7 @@ def draft_council_decision_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [maybe_text(item.get("summary")) for item in open_risks[:3] if maybe_text(item.get("summary"))] if moderator_status != "finalize" else [],
             "challenge_hints": [summary_text] if moderator_status != "finalize" else [],
-            "suggested_next_skills": ["eco-draft-expert-report", "eco-publish-expert-report", "eco-publish-council-decision"] if moderator_status == "finalize" else ["eco-draft-expert-report", "eco-post-board-note", "eco-propose-next-actions", "eco-open-falsification-probe"],
+            "suggested_next_skills": ["eco-draft-expert-report", "eco-publish-expert-report", "eco-publish-council-decision"] if moderator_status == "finalize" else ["eco-draft-expert-report", "eco-submit-council-proposal", "eco-submit-readiness-opinion", "eco-propose-next-actions", "eco-open-falsification-probe"],
         },
     }
 

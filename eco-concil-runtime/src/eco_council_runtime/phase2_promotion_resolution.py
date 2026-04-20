@@ -18,7 +18,7 @@ PROMOTION_TARGET_KINDS = {
     "reporting-handoff",
     "council-decision",
 }
-LEGACY_PROMOTION_SUPPORT_OPERATION_KINDS = {
+IGNORED_IMPLICIT_PROMOTION_OPERATION_KINDS = {
     "prepare-promotion",
     "promote-evidence-basis",
     "finalize-round",
@@ -34,6 +34,7 @@ SUPPORT_PROMOTION_DISPOSITION_VALUES = {
     "promoted",
     "publish",
     "ready",
+    "reporting-ready",
     "ready-for-reporting",
     "support",
 }
@@ -44,6 +45,7 @@ REJECT_PROMOTION_DISPOSITION_VALUES = {
     "continue-investigation",
     "freeze-withheld",
     "hold",
+    "investigation-open",
     "oppose",
     "pending-more-investigation",
     "reject",
@@ -248,6 +250,7 @@ def resolve_promotion_proposal(
         proposal.get("target_id")
     )
     action_kinds = sorted(proposal_operation_kinds(proposal))
+    action_kind_set = set(action_kinds)
     relevance_reasons = proposal_relevance_reasons(
         proposal,
         round_id=round_id,
@@ -276,11 +279,11 @@ def resolve_promotion_proposal(
     elif reject_signals:
         disposition = PROMOTION_PROPOSAL_DISPOSITION_REJECT
         resolution_mode = f"explicit:{maybe_text(reject_signals[0].get('field'))}"
-    elif action_kinds.intersection(LEGACY_PROMOTION_SUPPORT_OPERATION_KINDS):
-        disposition = PROMOTION_PROPOSAL_DISPOSITION_SUPPORT
-        resolution_mode = "legacy-operation-compatibility"
-        if not relevance_reasons:
-            relevance_reasons = ["legacy-support-without-target"]
+    elif action_kind_set.intersection(IGNORED_IMPLICIT_PROMOTION_OPERATION_KINDS):
+        resolution_mode = "ignored-implicit-promotion-kind"
+        relevance_reasons = unique_texts(
+            [*relevance_reasons, "implicit-promotion-kind-without-explicit-signal"]
+        )
     elif relevance_reasons:
         resolution_mode = "promotion-neutral"
 

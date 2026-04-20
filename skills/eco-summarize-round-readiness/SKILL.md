@@ -1,22 +1,24 @@
 ---
 name: eco-summarize-round-readiness
-description: Summarize round-level readiness from board, next-action, probe, and evidence-coverage artifacts so the council can decide whether the round is blocked, needs more data, or is ready for promotion.
+description: Summarize round-level readiness from deliberation-plane state, council readiness opinions, next actions, probes, and evidence coverage so the council can decide whether the round is blocked, needs more data, or is ready for promotion.
 ---
 
 # Eco Summarize Round Readiness
 
 ## Core Goal
-- Turn D1 and board artifacts into a compact round-readiness gate.
+- Turn deliberation-plane state plus council readiness opinions into a compact round-readiness gate.
 - Explain whether the round is blocked, needs more data, or is ready.
 - Emit a durable reporting artifact for promotion and runtime gate logic.
 
 ## Triggering Conditions
 - Need a round-level gate after board organization and D1 planning.
+- Need to aggregate or override heuristic readiness with explicit readiness opinions already written by the council.
 - Need to know whether open tasks or probes still block promotion.
 - Need a compact readiness artifact before freezing evidence basis.
 
 ## Read/Write Contract
 - Syncs the round into the run-local deliberation plane and prefers that state for readiness evaluation.
+- Reads canonical `readiness-opinion` objects from the shared deliberation plane when present.
 - Reads `run_dir/board/board_state_summary_<round_id>.json` by default as a compatible advisory fallback.
 - Reads `run_dir/board/board_brief_<round_id>.md` by default when present as a compatible advisory fallback.
 - Reads `run_dir/investigation/next_actions_<round_id>.json` by default when present.

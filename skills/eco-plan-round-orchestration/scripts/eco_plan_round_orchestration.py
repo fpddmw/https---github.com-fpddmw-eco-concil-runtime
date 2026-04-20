@@ -27,6 +27,9 @@ from eco_council_runtime.phase2_council_execution import (  # noqa: E402
     normalize_council_execution_mode,
     resolve_council_action_queue,
 )
+from eco_council_runtime.phase2_action_semantics import (  # noqa: E402
+    action_is_readiness_blocker,
+)
 from eco_council_runtime.phase2_fallback_context import load_d1_shared_context  # noqa: E402
 from eco_council_runtime.phase2_proposal_actions import (  # noqa: E402
     action_from_council_proposal,
@@ -404,16 +407,16 @@ def planning_signal_counts(
     if not probe_type_counts:
         probe_type_counts = normalized_counts(readiness, "probe_type_counts")
 
-    non_promotion_actions = [
+    blocking_actions = [
         item
         for item in action_rows
         if isinstance(item, dict)
-        and maybe_text(item.get("action_kind")) != "prepare-promotion"
+        and action_is_readiness_blocker(item)
     ]
     probe_candidate_actions = len(
         [
             item
-            for item in non_promotion_actions
+            for item in blocking_actions
             if bool(item.get("probe_candidate"))
         ]
     )
@@ -448,7 +451,8 @@ def planning_signal_counts(
         "probe_type_counts": probe_type_counts,
         "open_probe_count": count_open_probes(probes),
         "probe_candidate_actions": probe_candidate_actions,
-        "pending_non_promotion_actions": len(non_promotion_actions),
+        "pending_blocking_actions": len(blocking_actions),
+        "pending_non_promotion_actions": len(blocking_actions),
         "issue_cluster_count": safe_int(agenda_counts.get("issue_cluster_count")),
         "routing_actions": routing_actions,
         "empirical_gap_actions": empirical_gap_actions,
@@ -507,7 +511,7 @@ def probe_stage_decision(
             safe_int(value) > 0
             for value in signal_counts["agenda_counts"].values()
         )
-        or signal_counts["pending_non_promotion_actions"] > 0
+        or signal_counts["pending_blocking_actions"] > 0
         or signal_counts["open_probe_count"] > 0
         or bool(signal_counts["readiness_status"])
     )
@@ -538,7 +542,7 @@ def downstream_posture(
     reason_codes: list[str] = []
     if signal_counts.get("open_probe_count", 0) > 0:
         reason_codes.append("open-probes")
-    if signal_counts.get("pending_non_promotion_actions", 0) > 0:
+    if signal_counts.get("pending_blocking_actions", 0) > 0:
         reason_codes.append("pending-investigation-actions")
     if probe_reason_codes:
         reason_codes.append("probe-stage-retained")

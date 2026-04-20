@@ -224,7 +224,7 @@ def publish_expert_report_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [],
             "challenge_hints": [],
-            "suggested_next_skills": ["eco-publish-council-decision"] if maybe_text(draft_payload.get("status")) == "ready-to-publish" else ["eco-post-board-note", "eco-propose-next-actions"],
+            "suggested_next_skills": ["eco-publish-council-decision"] if maybe_text(draft_payload.get("status")) == "ready-to-publish" else ["eco-submit-council-proposal", "eco-submit-readiness-opinion", "eco-propose-next-actions"],
         },
     }
 

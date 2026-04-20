@@ -255,14 +255,14 @@ def coverage_policy(coverage: dict[str, Any]) -> dict[str, Any] | None:
 def promotion_action_policy(coverage: dict[str, Any]) -> dict[str, Any]:
     claim_id = maybe_text(coverage.get("claim_id"))
     return {
-        "action_kind": "prepare-promotion",
+        "action_kind": "open-council-readiness-review",
         "priority": "medium",
         "assigned_role": "moderator",
-        "objective": "Prepare the round for readiness review once the controversy map is stable.",
-        "reason": f"Claim {claim_id} already has strong evidence coverage and can move toward readiness gating.",
-        "controversy_gap": "promotion-readiness",
-        "recommended_lane": "promotion-review",
-        "expected_outcome": "Freeze the strongest support path for board and reporting review.",
+        "objective": "Open explicit council readiness review once the controversy map is stable.",
+        "reason": f"Claim {claim_id} already has strong evidence coverage and can move into explicit council readiness review.",
+        "controversy_gap": "council-readiness-review",
+        "recommended_lane": "council-deliberation",
+        "expected_outcome": "Solicit explicit readiness and publication judgement before downstream reporting proceeds.",
         "probe_candidate": False,
         "contradiction_link_count": 0,
         "coverage_score": float(coverage.get("coverage_score") or 0.0),

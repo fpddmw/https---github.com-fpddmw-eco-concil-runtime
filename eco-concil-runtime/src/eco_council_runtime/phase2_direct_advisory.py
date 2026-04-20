@@ -8,6 +8,7 @@ from .phase2_proposal_actions import (
     action_from_council_proposal as shared_action_from_council_proposal,
     proposal_drives_phase2_action_queue as shared_proposal_drives_phase2_action_queue,
 )
+from .phase2_action_semantics import action_is_readiness_blocker
 from .kernel.deliberation_plane import load_round_snapshot
 from .kernel.executor import maybe_text, new_runtime_event_id, stable_hash, utc_now_iso
 from .kernel.ledger import append_ledger_event, write_receipt
@@ -350,6 +351,11 @@ def direct_council_advisory_payload(
 
     proposals = load_council_proposals(run_dir_path, run_id=run_id, round_id=round_id)
     proposal_actions = [action_from_council_proposal(proposal) for proposal in proposals if proposal_drives_phase2_action_queue(proposal)]
+    blocking_proposal_actions = [
+        action
+        for action in proposal_actions
+        if action_is_readiness_blocker(action)
+    ]
     readiness_opinions = load_council_readiness_opinions(run_dir_path, run_id=run_id, round_id=round_id)
     readiness_summary = aggregate_council_readiness_opinions(readiness_opinions) if readiness_opinions else {}
     open_probes = load_open_probes(run_dir_path, run_id=run_id, round_id=round_id)
@@ -358,10 +364,12 @@ def direct_council_advisory_payload(
         return {}
 
     readiness_status = maybe_text(readiness_summary.get("readiness_status"))
-    probe_candidate_actions = [action for action in proposal_actions if bool(action.get("probe_candidate"))]
+    probe_candidate_actions = [action for action in blocking_proposal_actions if bool(action.get("probe_candidate"))]
     include_probe = readiness_status != "ready" and bool(probe_candidate_actions or open_probes)
 
-    top_action_rows = top_action_rows_from_actions(proposal_actions)
+    top_action_rows = top_action_rows_from_actions(
+        blocking_proposal_actions or proposal_actions
+    )
     primary_action_role = top_action_rows[0]["assigned_role"] if top_action_rows else "moderator"
     probe_reason_codes = []
     if open_probes:
@@ -375,7 +383,7 @@ def direct_council_advisory_payload(
         posture_reason_codes = []
         if open_probes:
             posture_reason_codes.append("open-probes")
-        if proposal_actions:
+        if blocking_proposal_actions:
             posture_reason_codes.append("pending-investigation-actions")
         if include_probe:
             posture_reason_codes.append("probe-stage-retained")
@@ -486,6 +494,7 @@ def direct_council_advisory_payload(
             "council_input_counts": {
                 "proposal_count": len(proposals),
                 "proposal_action_count": len(proposal_actions),
+                "blocking_proposal_action_count": len(blocking_proposal_actions),
                 "probe_candidate_action_count": len(probe_candidate_actions),
                 "readiness_opinion_count": len(readiness_opinions),
                 "readiness_ready_count": int(readiness_summary.get("opinion_status_counts", {}).get("ready") or 0)
@@ -501,7 +510,8 @@ def direct_council_advisory_payload(
             "signal_counts": {
                 "open_probe_count": len(open_probes),
                 "probe_candidate_actions": len(probe_candidate_actions),
-                "pending_non_promotion_actions": len(proposal_actions),
+                "pending_blocking_actions": len(blocking_proposal_actions),
+                "pending_non_promotion_actions": len(blocking_proposal_actions),
                 "board_open_challenges": int(snapshot.get("counts", {}).get("challenge_open") or 0)
                 if isinstance(snapshot.get("counts"), dict)
                 else 0,
@@ -528,6 +538,7 @@ def direct_council_advisory_payload(
             "next_actions_stage_skipped": True,
             "council_proposal_count": len(proposals),
             "council_proposal_action_count": len(proposal_actions),
+            "council_proposal_blocking_action_count": len(blocking_proposal_actions),
             "council_readiness_opinion_count": len(readiness_opinions),
             "council_readiness_status": readiness_status,
             "next_actions_present": False,

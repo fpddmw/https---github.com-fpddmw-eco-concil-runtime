@@ -1,4 +1,4 @@
 interface:
   display_name: "Eco Summarize Round Readiness"
   short_description: "Summarize round-level readiness from board, D1, and evidence artifacts"
-  default_prompt: "Use $eco-summarize-round-readiness to summarize whether the current round is blocked, needs more data, or is ready for promotion by combining board, next-action, probe, and evidence-coverage artifacts."
+  default_prompt: "Use $eco-summarize-round-readiness to summarize whether the current round is blocked, needs more data, or is ready for promotion by combining deliberation-plane state, council readiness opinions, next actions, probes, and evidence coverage. Prefer explicit readiness judgements already written into the DB."

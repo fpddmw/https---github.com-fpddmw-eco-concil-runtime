@@ -70,6 +70,14 @@ from .paths import (
     scenario_fixture_path,
     supervisor_state_path,
 )
+from .phase2_state_surfaces import (
+    build_reporting_surface,
+    load_council_decision_wrapper,
+    load_expert_report_wrapper,
+    load_final_publication_wrapper,
+    load_reporting_handoff_wrapper,
+    load_supervisor_state_wrapper,
+)
 from .registry import write_registry
 from .supervisor import supervise_round, supervise_round_with_contract_mode
 
@@ -129,11 +137,17 @@ def init_run(run_dir: Path, run_id: str) -> dict[str, Any]:
     }
 
 
-def phase2_operator_view(run_dir: Path, round_id: str, phase2_state: dict[str, Any]) -> dict[str, Any]:
+def phase2_operator_view(
+    run_dir: Path,
+    round_id: str,
+    phase2_state: dict[str, Any],
+    reporting_surface: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     plan = phase2_state.get("plan", {}) if isinstance(phase2_state.get("plan"), dict) else {}
     gate = phase2_state.get("promotion_gate", {}) if isinstance(phase2_state.get("promotion_gate"), dict) else {}
     controller = phase2_state.get("controller", {}) if isinstance(phase2_state.get("controller"), dict) else {}
     supervisor = phase2_state.get("supervisor", {}) if isinstance(phase2_state.get("supervisor"), dict) else {}
+    reporting = reporting_surface if isinstance(reporting_surface, dict) else {}
     run_id = (
         maybe_text(supervisor.get("run_id"))
         or maybe_text(controller.get("run_id"))
@@ -160,6 +174,12 @@ def phase2_operator_view(run_dir: Path, round_id: str, phase2_state: dict[str, A
         "readiness_status": maybe_text(controller.get("readiness_status")) or maybe_text(supervisor.get("readiness_status")),
         "gate_status": maybe_text(controller.get("gate_status")) or maybe_text(gate.get("gate_status")),
         "promotion_status": maybe_text(controller.get("promotion_status")) or maybe_text(supervisor.get("promotion_status")),
+        "reporting_ready": bool(reporting.get("reporting_ready")),
+        "reporting_blockers": reporting.get("reporting_blockers", [])
+        if isinstance(reporting.get("reporting_blockers"), list)
+        else [],
+        "reporting_handoff_status": maybe_text(reporting.get("handoff_status")),
+        "reporting_surface_source": maybe_text(reporting.get("surface_source")),
         "current_stage": maybe_text(controller.get("current_stage")),
         "failed_stage": maybe_text(controller.get("failed_stage")),
         "completed_stage_names": controller.get("completed_stage_names", []) if isinstance(controller.get("completed_stage_names"), list) else [],
@@ -172,6 +192,21 @@ def phase2_operator_view(run_dir: Path, round_id: str, phase2_state: dict[str, A
         "resume_command": resume_command,
         "restart_command": restart_command,
         "inspect_command": inspect_command,
+        "show_reporting_state_command": (
+            f"show-reporting-state --run-dir {run_dir} --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "query_next_actions_command": (
+            f"query-council-objects --run-dir {run_dir} --object-kind next-action --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "query_readiness_blockers_command": (
+            f"query-council-objects --run-dir {run_dir} --object-kind next-action --run-id {run_id} --round-id {round_id} --readiness-blocker-only"
+            if round_id and run_id
+            else ""
+        ),
         "inspection_paths": {
             "plan_path": maybe_text(controller.get("artifacts", {}).get("orchestration_plan_path"))
             if isinstance(controller.get("artifacts"), dict)
@@ -195,6 +230,204 @@ def phase2_operator_view(run_dir: Path, round_id: str, phase2_state: dict[str, A
     }
 
 
+def reporting_operator_view(
+    run_dir: Path,
+    round_id: str,
+    run_id: str,
+    reporting_state: dict[str, Any],
+) -> dict[str, Any]:
+    surface = (
+        reporting_state.get("surface", {})
+        if isinstance(reporting_state.get("surface"), dict)
+        else {}
+    )
+    handoff = (
+        reporting_state.get("handoff", {})
+        if isinstance(reporting_state.get("handoff"), dict)
+        else {}
+    )
+    decision_draft = (
+        reporting_state.get("decision_draft", {})
+        if isinstance(reporting_state.get("decision_draft"), dict)
+        else {}
+    )
+    decision = (
+        reporting_state.get("decision", {})
+        if isinstance(reporting_state.get("decision"), dict)
+        else {}
+    )
+    final_publication = (
+        reporting_state.get("final_publication", {})
+        if isinstance(reporting_state.get("final_publication"), dict)
+        else {}
+    )
+    return {
+        "round_id": round_id,
+        "reporting_ready": bool(surface.get("reporting_ready")),
+        "reporting_blockers": surface.get("reporting_blockers", [])
+        if isinstance(surface.get("reporting_blockers"), list)
+        else [],
+        "handoff_status": maybe_text(surface.get("handoff_status")),
+        "surface_source": maybe_text(surface.get("surface_source")),
+        "publication_status": maybe_text(surface.get("publication_status")),
+        "publication_posture": maybe_text(surface.get("publication_posture")),
+        "handoff_present": bool(handoff),
+        "decision_draft_present": bool(decision_draft),
+        "decision_present": bool(decision),
+        "final_publication_present": bool(final_publication),
+        "materialize_reporting_handoff_command": (
+            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-materialize-reporting-handoff"
+            if round_id and run_id
+            else ""
+        ),
+        "draft_council_decision_command": (
+            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-draft-council-decision"
+            if round_id and run_id
+            else ""
+        ),
+        "draft_sociologist_report_command": (
+            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-draft-expert-report -- --role sociologist"
+            if round_id and run_id
+            else ""
+        ),
+        "draft_environmentalist_report_command": (
+            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-draft-expert-report -- --role environmentalist"
+            if round_id and run_id
+            else ""
+        ),
+        "publish_council_decision_command": (
+            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-publish-council-decision"
+            if round_id and run_id
+            else ""
+        ),
+        "publish_sociologist_report_command": (
+            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-publish-expert-report -- --role sociologist"
+            if round_id and run_id
+            else ""
+        ),
+        "publish_environmentalist_report_command": (
+            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-publish-expert-report -- --role environmentalist"
+            if round_id and run_id
+            else ""
+        ),
+        "show_run_state_command": (
+            f"show-run-state --run-dir {run_dir} --round-id {round_id} --tail 20"
+            if round_id
+            else ""
+        ),
+        "inspection_paths": {
+            "handoff_path": maybe_text(handoff.get("output_path")),
+            "decision_draft_path": maybe_text(decision_draft.get("output_path")),
+            "decision_path": maybe_text(decision.get("output_path")),
+            "final_publication_path": maybe_text(final_publication.get("output_path")),
+        },
+    }
+
+
+def reporting_state_for_round(run_dir: Path, run_id: str, round_id: str) -> dict[str, Any]:
+    supervisor_context = load_supervisor_state_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    supervisor = (
+        supervisor_context.get("payload")
+        if isinstance(supervisor_context.get("payload"), dict)
+        else {}
+    )
+    handoff_context = load_reporting_handoff_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    decision_draft_context = load_council_decision_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="draft",
+    )
+    decision_context = load_council_decision_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        decision_stage="canonical",
+    )
+    expert_report_drafts = {
+        role: (
+            load_expert_report_wrapper(
+                run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                agent_role=role,
+                report_stage="draft",
+            ).get("payload", {})
+        )
+        for role in ("sociologist", "environmentalist")
+    }
+    expert_reports = {
+        role: (
+            load_expert_report_wrapper(
+                run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                agent_role=role,
+                report_stage="canonical",
+            ).get("payload", {})
+        )
+        for role in ("sociologist", "environmentalist")
+    }
+    final_publication_context = load_final_publication_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    surface = build_reporting_surface(
+        supervisor_payload=supervisor,
+        handoff_payload=handoff_context.get("payload")
+        if isinstance(handoff_context.get("payload"), dict)
+        else {},
+        decision_draft_payload=decision_draft_context.get("payload")
+        if isinstance(decision_draft_context.get("payload"), dict)
+        else {},
+        decision_payload=decision_context.get("payload")
+        if isinstance(decision_context.get("payload"), dict)
+        else {},
+        expert_report_payloads={
+            role: payload
+            for role, payload in expert_reports.items()
+            if isinstance(payload, dict)
+        },
+        final_publication_payload=final_publication_context.get("payload")
+        if isinstance(final_publication_context.get("payload"), dict)
+        else {},
+    )
+    reporting_state = {
+        "supervisor": supervisor,
+        "handoff": handoff_context.get("payload")
+        if isinstance(handoff_context.get("payload"), dict)
+        else {},
+        "decision_draft": decision_draft_context.get("payload")
+        if isinstance(decision_draft_context.get("payload"), dict)
+        else {},
+        "decision": decision_context.get("payload")
+        if isinstance(decision_context.get("payload"), dict)
+        else {},
+        "expert_report_drafts": expert_report_drafts,
+        "expert_reports": expert_reports,
+        "final_publication": final_publication_context.get("payload")
+        if isinstance(final_publication_context.get("payload"), dict)
+        else {},
+        "surface": surface,
+    }
+    reporting_state["operator"] = reporting_operator_view(
+        run_dir,
+        round_id,
+        run_id,
+        reporting_state,
+    )
+    return reporting_state
+
+
 def post_round_operator_view(run_dir: Path, round_id: str, post_round_state: dict[str, Any]) -> dict[str, Any]:
     round_close = post_round_state.get("round_close", {}) if isinstance(post_round_state.get("round_close"), dict) else {}
     history_bootstrap = post_round_state.get("history_bootstrap", {}) if isinstance(post_round_state.get("history_bootstrap"), dict) else {}
@@ -203,6 +436,13 @@ def post_round_operator_view(run_dir: Path, round_id: str, post_round_state: dic
         "round_close_status": maybe_text(round_close.get("close_status")),
         "archive_status": maybe_text(round_close.get("archive_status")),
         "close_posture": maybe_text(round_close.get("close_posture")),
+        "reporting_ready": bool(round_close.get("reporting_ready")),
+        "reporting_blockers": round_close.get("reporting_blockers", [])
+        if isinstance(round_close.get("reporting_blockers"), list)
+        else [],
+        "reporting_handoff_status": maybe_text(
+            round_close.get("reporting_handoff_status")
+        ),
         "history_bootstrap_status": maybe_text(history_bootstrap.get("bootstrap_status")),
         "selected_case_count": int(history_bootstrap.get("selected_case_count") or 0),
         "selected_signal_count": int(history_bootstrap.get("selected_signal_count") or 0),
@@ -244,6 +484,9 @@ def benchmark_operator_view(run_dir: Path, round_id: str, benchmark_state: dict[
         "scenario_fingerprint": maybe_text(manifest.get("scenario_fingerprint")) or maybe_text(fixture.get("scenario_fingerprint")),
         "fixture_materialized": bool(fixture),
         "benchmark_materialized": bool(manifest),
+        "reporting_ready": bool(manifest.get("phase2_summary", {}).get("reporting_ready"))
+        if isinstance(manifest.get("phase2_summary"), dict)
+        else False,
         "compare_verdict": maybe_text(compare.get("verdict")),
         "replay_verdict": maybe_text(replay.get("replay_verdict")),
         "fixture_command": f"materialize-scenario-fixture --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if run_id and round_id else "",
@@ -300,40 +543,54 @@ def show_run_state(
     registry = load_json_if_exists(registry_path(run_dir)) or {}
     current_round_id = str(cursor.get("current_round_id") or "")
     selected_round_id = maybe_text(round_id) or current_round_id
+    resolved_run_id = maybe_text(manifest.get("run_id")) or maybe_text(cursor.get("run_id"))
     phase2_state: dict[str, Any] = {}
+    reporting_state: dict[str, Any] = {}
     post_round_state: dict[str, Any] = {}
     benchmark_state: dict[str, Any] = {}
     if selected_round_id:
         control_state = load_phase2_control_state(
             run_dir,
-            run_id=maybe_text(manifest.get("run_id")) or maybe_text(cursor.get("run_id")),
+            run_id=resolved_run_id,
             round_id=selected_round_id,
         )
         phase2_state = {
             "plan": load_json_if_exists(orchestration_plan_path(run_dir, selected_round_id)) or {},
-            "promotion_gate": load_json_if_exists(promotion_gate_path(run_dir, selected_round_id))
-            or (
+            "promotion_gate": (
                 control_state.get("promotion_gate", {})
                 if isinstance(control_state.get("promotion_gate"), dict)
                 else {}
-            ),
-            "controller": load_json_if_exists(controller_state_path(run_dir, selected_round_id))
-            or (
+            ) or load_json_if_exists(promotion_gate_path(run_dir, selected_round_id)) or {},
+            "controller": (
                 control_state.get("controller", {})
                 if isinstance(control_state.get("controller"), dict)
                 else {}
-            ),
-            "supervisor": load_json_if_exists(supervisor_state_path(run_dir, selected_round_id))
-            or (
-                control_state.get("supervisor", {})
-                if isinstance(control_state.get("supervisor"), dict)
-                else {}
-            ),
+            ) or load_json_if_exists(controller_state_path(run_dir, selected_round_id)) or {},
+            "supervisor": load_supervisor_state_wrapper(
+                run_dir,
+                run_id=resolved_run_id,
+                round_id=selected_round_id,
+                supervisor_state_path=str(
+                    supervisor_state_path(run_dir, selected_round_id).resolve()
+                ),
+            ).get("payload", {}),
             "promotion_freeze": control_state.get("promotion_freeze", {})
             if isinstance(control_state.get("promotion_freeze"), dict)
             else {},
         }
-        phase2_state["operator"] = phase2_operator_view(run_dir, selected_round_id, phase2_state)
+        reporting_state = reporting_state_for_round(
+            run_dir,
+            resolved_run_id,
+            selected_round_id,
+        )
+        phase2_state["operator"] = phase2_operator_view(
+            run_dir,
+            selected_round_id,
+            phase2_state,
+            reporting_state.get("surface", {})
+            if isinstance(reporting_state.get("surface"), dict)
+            else {},
+        )
         post_round_state = {
             "round_close": load_json_if_exists(round_close_state_path(run_dir, selected_round_id)) or {},
             "history_bootstrap": load_json_if_exists(history_bootstrap_state_path(run_dir, selected_round_id)) or {},
@@ -365,12 +622,13 @@ def show_run_state(
         "operations": operations,
         "agent_entry": agent_entry_state(
             run_dir,
-            run_id=maybe_text(manifest.get("run_id")) or maybe_text(cursor.get("run_id")),
+            run_id=resolved_run_id,
             round_id=selected_round_id,
             agent_entry_profile=agent_entry_profile,
             hard_gate_command_builder=hard_gate_command_builder,
         ),
         "phase2": phase2_state,
+        "reporting": reporting_state,
         "post_round": post_round_state,
         "benchmark": benchmark_state,
         "ledger_tail": load_ledger_tail(run_dir, tail),
@@ -409,6 +667,7 @@ def add_council_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--agent-role", default="")
     command.add_argument("--status", default="")
     command.add_argument("--decision-id", default="")
+    command.add_argument("--readiness-blocker-only", action="store_true")
     command.add_argument("--include-contract", action="store_true")
     command.add_argument("--include-items", action="store_true")
     command.add_argument("--limit", type=int, default=20)
@@ -601,6 +860,15 @@ def build_parser() -> argparse.ArgumentParser:
     show_cmd.add_argument("--round-id", default="")
     show_cmd.add_argument("--tail", type=int, default=10)
     show_cmd.add_argument("--pretty", action="store_true")
+
+    reporting_cmd = sub.add_parser(
+        "show-reporting-state",
+        help="Show the DB-first reporting surface for one round, including handoff, decision, and publication gate state.",
+    )
+    reporting_cmd.add_argument("--run-dir", required=True)
+    reporting_cmd.add_argument("--run-id", default="")
+    reporting_cmd.add_argument("--round-id", required=True)
+    reporting_cmd.add_argument("--pretty", action="store_true")
     return parser
 
 
@@ -1169,6 +1437,7 @@ def main(
                 agent_role=args.agent_role,
                 status=args.status,
                 decision_id=args.decision_id,
+                readiness_blocker_only=args.readiness_blocker_only,
                 include_contract=args.include_contract,
                 include_items=args.include_items,
                 limit=args.limit,
@@ -1188,6 +1457,37 @@ def main(
             print(pretty_json(failure, args.pretty))
             return 1
         print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "show-reporting-state":
+        resolved_run_id = maybe_text(args.run_id)
+        if not resolved_run_id:
+            manifest = load_json_if_exists(manifest_path(run_dir)) or {}
+            cursor = load_json_if_exists(cursor_path(run_dir)) or {}
+            resolved_run_id = maybe_text(manifest.get("run_id")) or maybe_text(cursor.get("run_id"))
+        payload = reporting_state_for_round(run_dir, resolved_run_id, args.round_id)
+        output = {
+            "status": "completed",
+            "summary": {
+                "run_dir": str(run_dir),
+                "run_id": resolved_run_id,
+                "round_id": args.round_id,
+                "reporting_ready": bool(payload.get("surface", {}).get("reporting_ready"))
+                if isinstance(payload.get("surface"), dict)
+                else False,
+                "reporting_blocker_count": len(payload.get("surface", {}).get("reporting_blockers", []))
+                if isinstance(payload.get("surface", {}).get("reporting_blockers"), list)
+                else 0,
+                "surface_source": maybe_text(payload.get("surface", {}).get("surface_source"))
+                if isinstance(payload.get("surface"), dict)
+                else "",
+                "publication_status": maybe_text(payload.get("surface", {}).get("publication_status"))
+                if isinstance(payload.get("surface"), dict)
+                else "",
+            },
+            **payload,
+        }
+        print(pretty_json(output, args.pretty))
         return 0
 
     if args.command == "show-run-state":

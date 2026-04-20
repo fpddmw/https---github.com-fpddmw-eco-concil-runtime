@@ -329,6 +329,9 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", close_payload["round_close"]["close_status"])
             self.assertEqual("completed", close_artifact["archive_status"])
             self.assertEqual(expected_close_posture, close_artifact["close_posture"])
+            self.assertIn("reporting_ready", close_artifact)
+            self.assertIn("reporting_blockers", close_artifact)
+            self.assertIn("reporting_handoff_status", close_artifact)
             self.assertIn("eco-materialize-history-context", close_artifact["recommended_next_skills"])
             self.assertEqual(
                 ["archive-signal-corpus", "archive-case-library"],
@@ -336,6 +339,14 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             )
             self.assertEqual("completed", state_payload["post_round"]["round_close"]["close_status"])
             self.assertEqual("completed", state_payload["post_round"]["operator"]["round_close_status"])
+            self.assertEqual(
+                close_artifact["reporting_ready"],
+                state_payload["post_round"]["operator"]["reporting_ready"],
+            )
+            self.assertEqual(
+                close_artifact["reporting_handoff_status"],
+                state_payload["post_round"]["operator"]["reporting_handoff_status"],
+            )
             self.assertTrue(Path(close_artifact["artifacts"]["signal_archive_db_path"]).exists())
             self.assertTrue(Path(close_artifact["artifacts"]["case_archive_db_path"]).exists())
 

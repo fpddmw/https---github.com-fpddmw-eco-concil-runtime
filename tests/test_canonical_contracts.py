@@ -87,10 +87,12 @@ class CanonicalContractTests(unittest.TestCase):
                 "proposal_id": "proposal-001",
                 "proposal_kind": "open-investigation",
                 "agent_role": "moderator",
+                "status": "open",
                 "rationale": "Need more analysis.",
                 "decision_source": "agent-council",
                 "evidence_refs": [],
                 "lineage": [],
+                "response_to_ids": [],
                 "provenance": {"source": "unit-test"},
             },
         )

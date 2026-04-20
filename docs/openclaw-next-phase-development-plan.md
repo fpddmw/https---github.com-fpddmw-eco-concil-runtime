@@ -97,6 +97,55 @@
 6. 已新增 `tests/test_council_submission_workflow.py`，覆盖 proposal/opinion append、query surface、kernel registry execution；同时补强 `test_agent_entry_gate.py` 与 `test_council_autonomy_flow.py`，锁定默认入口与 readiness follow-up 的新方向。
 7. 当前扩展后的大回归共 `130` 项，已在本地全部通过。
 
+## 2.7 Batch 7 当前已交付
+
+第七批已把 promotion compatibility 从“保留旧 implicit kind 的迁移窗”推进到“默认明确忽略旧 kind，只有显式 structured judgement 才有 promotion 解释权”，已落地以下硬改动：
+
+1. `eco_council_runtime/phase2_promotion_resolution.py` 已删除旧 `prepare-promotion / ready-for-reporting / publish-council-decision` proposal kind 的 support 语义；proposal 若没有显式 `promotion_disposition / promote_allowed / publication_readiness / handoff_status / moderator_status`，将不再被解释为 promotion support。
+2. promotion resolution 现在会把这类残留输入显式标成 `ignored-implicit-promotion-kind`，并写入 `proposal_resolution_records / proposal_resolution_mode_counts`，不再静默兼容。
+3. `eco-promote-evidence-basis` 现在会对这类旧输入发出 `ignored-implicit-promotion-kind` warning，使迁移残留在 promotion artifact 中可见。
+4. `eco-materialize-reporting-handoff / eco-draft-council-decision / eco-draft-expert-report / eco-publish-expert-report / eco-publish-council-decision` 的 withheld guidance 已从 `eco-post-board-note` 改为 `eco-submit-council-proposal / eco-submit-readiness-opinion`，reporting/publication hold-path 不再把 agent 引回弱结构写入。
+5. `eco-promote-evidence-basis` 与 `eco-summarize-round-readiness` 的 skill docs / agent prompts 已更新，明确要求依赖 deliberation DB 中的显式 proposal/readiness judgement，而不是 proposal 名称暗示。
+6. 已新增回归：
+   - legacy-named promotion proposal 在没有显式 judgement 字段时会被忽略而不是被当作 support。
+   - reporting / publication hold-path 的 `suggested_next_skills` 不再包含 `eco-post-board-note`，而是转向 submission skills。
+7. 当前扩展后的大回归共 `131` 项，已在本地全部通过。
+
+## 2.8 Batch 8 当前已交付
+
+第八批已把 reporting / fallback 的剩余旧中间态从“字符串特殊处理 + artifact 依赖”推进到“显式 blocker / DB-first supervisor / shared reporting gate”，已落地以下硬改动：
+
+1. 新增 `phase2_action_semantics.py`，`readiness_blocker` 现在成为 fallback / planner / readiness / promotion 共享的一等语义；planner 不再靠 `action_kind == prepare-promotion` 这种旧名字判断是否忽略一个 action。
+2. `phase2_fallback_policy.py` 的默认空 agenda cue 已从 `prepare-promotion` 改成 `open-council-readiness-review`，语义从“隐式推动 promotion”改成“显式打开 council readiness review”，并明确 `readiness_blocker = false`。
+3. 新增 `reporting_status.py`，`eco-materialize-reporting-handoff / eco-draft-council-decision / eco-draft-expert-report / phase2_posture_profile` 现在共享 `reporting_ready / reporting_blockers / handoff_status` 判定层；`ready-for-reporting / pending-more-investigation` 不再是主判定锚点。
+4. `phase2_posture_profile.py` 的 promoted supervisor status 已统一到 `reporting-ready`；reporting handoff 的非 ready 状态统一为 `investigation-open`。
+5. `phase2_state_surfaces.py` 已新增 `load_supervisor_state_wrapper`，reporting handoff 现在可以在缺失 `runtime/supervisor_state_*.json` 时，直接从 deliberation DB 的 `promotion_freeze -> supervisor_snapshot` 恢复 supervisor state。
+6. `deliberation_plane.py` 已新增迁移列：
+   - `moderator_actions.readiness_blocker`
+   - `reporting_handoffs.reporting_ready / reporting_blockers_json`
+   - `council_decision_records.reporting_ready / decision_gating_json`
+   - `expert_report_records.reporting_ready`
+   关键 reporting gate 字段不再只存在于 `raw_json`。
+7. `eco-promote-evidence-basis` 的 promoted follow-up 已从 `eco-post-board-note` 改为 `eco-materialize-reporting-handoff / eco-draft-council-decision / eco-draft-expert-report`；promoted path 不再把 agent 引回弱结构 note。
+
+## 2.9 Batch 9 当前已交付
+
+第九批已把 runtime/operator/query surface 对 reporting 与 readiness blocker 的可见面，从“内部字段存在但外部仍靠 promotion/status 推断”推进到“显式 DB-native surface + operator/query direct access”，已落地以下硬改动：
+
+1. `kernel/phase2_state_surfaces.py` 已新增 `build_reporting_surface(...)`，并把 `supervisor / reporting-handoff / council-decision / expert-report` wrapper 统一接到 shared reporting surface；runtime 不再让这些入口各自重新推断 `reporting_ready / reporting_blockers / handoff_status`。
+2. `kernel/supervisor.py` 现在会把 `reporting_ready / reporting_blockers / reporting_handoff_status` 直接写入 supervisor snapshot 与 promotion freeze；reporting gate 不再只能从后续 handoff artifact 反推。
+3. `kernel/cli.py` 现在新增 `show-reporting-state` 命令，`show-run-state` 也新增 top-level `reporting` section；operator 可直接查看 DB-first handoff / decision / publication surface，而不是只看 phase-2 promotion summary。
+4. `phase2 operator` view 现在显式暴露：
+   - `reporting_ready / reporting_blockers / reporting_handoff_status`
+   - `show_reporting_state_command`
+   - `query_next_actions_command`
+   - `query_readiness_blockers_command`
+   操作员不再需要手工翻 raw JSON 才知道是哪个 next-action 在阻塞 readiness。
+5. `query-council-objects` 已支持 `--readiness-blocker-only`；`moderator_actions.readiness_blocker` 终于成为真正可查询的 DB filter，而不只是 `raw_json` 内部字段。
+6. `kernel/post_round.py` 与 `kernel/benchmark.py` 已改为消费 shared reporting surface；round close / benchmark manifest 现在都会显式携带 `reporting_ready / reporting_blockers / reporting_handoff_status / reporting_surface_source`，不再只透出 `promotion_status`。
+7. `post_round` 的未发布 ready posture 已从 `promoted-unpublished` 改成 `reporting-ready-unpublished`，终态语义不再把 reporting readiness 锚死在旧 promotion gate 名词上。
+8. 本地扩展回归已更新到 `139` 项，并在当前版本全部通过。
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足

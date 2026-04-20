@@ -1956,7 +1956,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "run_id": RUN_ID,
                 "round_id": ROUND_ID,
                 "supervisor_path": str(supervisor_path.resolve()),
-                "supervisor_status": "ready-for-reporting",
+                "supervisor_status": "reporting-ready",
                 "supervisor_substatus": "promotion-complete",
                 "phase2_posture": "reporting-ready",
                 "terminal_state": "reporting-ready",
@@ -2011,9 +2011,27 @@ class RuntimeKernelTests(unittest.TestCase):
             )
 
             self.assertEqual("completed", state_payload["phase2"]["operator"]["controller_status"])
-            self.assertEqual("ready-for-reporting", state_payload["phase2"]["operator"]["supervisor_status"])
+            self.assertEqual("reporting-ready", state_payload["phase2"]["operator"]["supervisor_status"])
             self.assertEqual("allow-promote", state_payload["phase2"]["operator"]["gate_status"])
             self.assertEqual("promoted", state_payload["phase2"]["operator"]["promotion_status"])
+            self.assertTrue(state_payload["phase2"]["operator"]["reporting_ready"])
+            self.assertEqual(
+                "reporting-ready",
+                state_payload["phase2"]["operator"]["reporting_handoff_status"],
+            )
+            self.assertIn(
+                "show-reporting-state",
+                state_payload["phase2"]["operator"]["show_reporting_state_command"],
+            )
+            self.assertIn(
+                "--readiness-blocker-only",
+                state_payload["phase2"]["operator"]["query_readiness_blockers_command"],
+            )
+            self.assertTrue(state_payload["reporting"]["surface"]["reporting_ready"])
+            self.assertEqual(
+                "supervisor",
+                state_payload["reporting"]["surface"]["surface_source"],
+            )
             self.assertEqual(str(controller_path.resolve()), state_payload["phase2"]["operator"]["inspection_paths"]["controller_path"])
             self.assertEqual(str(supervisor_path.resolve()), state_payload["phase2"]["operator"]["inspection_paths"]["supervisor_path"])
 
@@ -2293,7 +2311,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     {
                         "run_id": RUN_ID,
                         "round_id": ROUND_ID,
-                        "supervisor_status": "ready-for-reporting",
+                        "supervisor_status": "reporting-ready",
                         "readiness_status": "ready",
                         "promotion_status": "promoted",
                     },

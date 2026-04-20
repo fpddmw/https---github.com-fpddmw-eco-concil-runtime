@@ -26,6 +26,11 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_promotion_basis_wrapper,
     load_round_readiness_wrapper,
+    load_supervisor_state_wrapper,
+)
+from eco_council_runtime.reporting_status import (  # noqa: E402
+    reporting_blocker_summaries,
+    reporting_gate_state,
 )
 
 
@@ -87,15 +92,6 @@ def resolve_path(run_dir: Path, override: str, default_relative: str) -> Path:
     if not candidate.is_absolute():
         candidate = run_dir / candidate
     return candidate.resolve()
-
-
-def load_json_if_exists(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(payload, dict):
-        return payload
-    return None
 
 
 def load_text_if_exists(path: Path) -> str:
@@ -220,8 +216,8 @@ def build_recommended_next_actions(supervisor_state: dict[str, Any]) -> list[dic
     return recommendations
 
 
-def recommended_sections(handoff_status: str) -> list[str]:
-    if handoff_status == "ready-for-reporting":
+def recommended_sections(reporting_ready: bool) -> list[str]:
+    if reporting_ready:
         return ["executive-summary", "role-reports", "evidence-basis", "residual-risks", "audit-trace"]
     return ["gating-status", "open-risks", "next-round-plan", "audit-trace"]
 
@@ -277,8 +273,19 @@ def materialize_reporting_handoff_skill(
         readiness = {"readiness_status": "blocked", "gate_reasons": []}
     else:
         readiness = readiness_payload
-    supervisor_state_payload = load_json_if_exists(supervisor_file)
+    supervisor_context = load_supervisor_state_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        supervisor_state_path=supervisor_state_path,
+    )
+    supervisor_state_payload = (
+        supervisor_context.get("payload")
+        if isinstance(supervisor_context.get("payload"), dict)
+        else None
+    )
     if not isinstance(supervisor_state_payload, dict):
+        warnings.append({"code": "missing-supervisor-state", "message": f"No supervisor snapshot artifact or DB record was found at {supervisor_file}."})
         supervisor_state = {"supervisor_status": "unavailable", "top_actions": [], "operator_notes": []}
     else:
         supervisor_state = supervisor_state_payload
@@ -298,7 +305,7 @@ def materialize_reporting_handoff_skill(
             "board_brief_artifact_present": board_brief_file.exists(),
             "board_brief_present": bool(maybe_text(board_brief_text)),
             "supervisor_state_artifact_present": supervisor_file.exists(),
-            "supervisor_state_present": isinstance(supervisor_state_payload, dict),
+            "supervisor_state_present": bool(supervisor_context.get("payload_present")),
         },
         field_overrides={
             "promotion_source": maybe_text(promotion_context.get("source"))
@@ -313,17 +320,29 @@ def materialize_reporting_handoff_skill(
                 else "missing-board-brief"
             ),
             "supervisor_state_source": (
-                "supervisor-state-artifact"
-                if supervisor_file.exists()
-                else "missing-supervisor-state"
+                maybe_text(supervisor_context.get("source"))
+                or "missing-supervisor-state"
             ),
         },
     )
 
-    promotion_status = maybe_text(promotion_basis.get("promotion_status")) or "withheld"
-    readiness_status = maybe_text(readiness.get("readiness_status")) or "blocked"
-    supervisor_status = maybe_text(supervisor_state.get("supervisor_status")) or "unavailable"
-    handoff_status = "ready-for-reporting" if promotion_status == "promoted" else "pending-more-investigation"
+    gate_state = reporting_gate_state(
+        promotion_status=maybe_text(promotion_basis.get("promotion_status")) or "withheld",
+        readiness_status=maybe_text(readiness.get("readiness_status")) or "blocked",
+        supervisor_status=maybe_text(supervisor_state.get("supervisor_status")) or "unavailable",
+        require_supervisor=True,
+    )
+    promotion_status = maybe_text(gate_state.get("promotion_status")) or "withheld"
+    readiness_status = maybe_text(gate_state.get("readiness_status")) or "blocked"
+    supervisor_status = maybe_text(gate_state.get("supervisor_status")) or "unavailable"
+    handoff_status = maybe_text(gate_state.get("handoff_status")) or "investigation-open"
+    reporting_ready = bool(gate_state.get("reporting_ready"))
+    reporting_blockers = unique_texts(
+        gate_state.get("reporting_blockers", [])
+        if isinstance(gate_state.get("reporting_blockers"), list)
+        else []
+    )
+    reporting_blocker_hints = reporting_blocker_summaries(reporting_blockers)
 
     selected_coverages = promotion_basis.get("selected_coverages", []) if isinstance(promotion_basis.get("selected_coverages"), list) else []
     key_findings = build_key_findings(selected_coverages, max_findings)
@@ -340,6 +359,8 @@ def materialize_reporting_handoff_skill(
         "round_id": round_id,
         "handoff_id": handoff_id,
         "handoff_status": handoff_status,
+        "reporting_ready": reporting_ready,
+        "reporting_blockers": reporting_blockers,
         "promotion_status": promotion_status,
         "readiness_status": readiness_status,
         "supervisor_status": supervisor_status,
@@ -393,8 +414,8 @@ def materialize_reporting_handoff_skill(
         "key_findings": key_findings,
         "open_risks": open_risks,
         "recommended_next_actions": next_actions,
-        "recommended_sections": recommended_sections(handoff_status),
-        "report_targets": ["expert-report-draft", "council-decision-draft"] if handoff_status == "ready-for-reporting" else ["expert-report-draft", "another-round-decision"],
+        "recommended_sections": recommended_sections(reporting_ready),
+        "report_targets": ["expert-report-draft", "council-decision-draft"] if reporting_ready else ["expert-report-draft", "another-round-decision"],
     }
     store_reporting_handoff_record(
         run_dir_path,
@@ -413,6 +434,7 @@ def materialize_reporting_handoff_skill(
             "output_path": str(output_file),
             "handoff_id": handoff_id,
             "handoff_status": handoff_status,
+            "reporting_ready": reporting_ready,
             "finding_count": len(key_findings),
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
@@ -431,9 +453,12 @@ def materialize_reporting_handoff_skill(
         "board_handoff": {
             "candidate_ids": [handoff_id],
             "evidence_refs": artifact_refs,
-            "gap_hints": [item.get("summary", "") for item in open_risks[:3] if maybe_text(item.get("summary"))] if handoff_status != "ready-for-reporting" else [],
+            "gap_hints": unique_texts(
+                [item.get("summary", "") for item in open_risks[:3] if maybe_text(item.get("summary"))]
+                + (reporting_blocker_hints if not reporting_ready else [])
+            )[:3] if not reporting_ready else [],
             "challenge_hints": [item.get("summary", "") for item in open_risks[:2] if maybe_text(item.get("summary"))],
-            "suggested_next_skills": ["eco-draft-expert-report", "eco-draft-council-decision"] if handoff_status == "ready-for-reporting" else ["eco-draft-expert-report", "eco-draft-council-decision", "eco-propose-next-actions", "eco-open-falsification-probe"],
+            "suggested_next_skills": ["eco-draft-expert-report", "eco-draft-council-decision"] if reporting_ready else ["eco-draft-expert-report", "eco-draft-council-decision", "eco-submit-council-proposal", "eco-submit-readiness-opinion", "eco-propose-next-actions", "eco-open-falsification-probe"],
         },
     }
 
