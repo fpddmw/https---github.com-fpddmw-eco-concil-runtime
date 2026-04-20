@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ..canonical_contracts import validate_canonical_payload
+from ..canonical_contracts import canonical_contract, validate_canonical_payload
 from ..phase2_action_semantics import action_is_readiness_blocker, maybe_bool
 from ..reporting_status import (
     normalize_reporting_handoff_status,
@@ -1864,6 +1864,65 @@ def normalized_promotion_basis_payload(
 REPORT_AGENT_ROLES = ("sociologist", "environmentalist")
 
 
+def nested_evidence_refs(items: Any) -> list[str]:
+    values: list[Any] = []
+    for item in list_items(items):
+        if isinstance(item, dict):
+            values.extend(list_items(item.get("evidence_refs")))
+    return unique_texts(values)
+
+
+def nested_text_ids(items: Any, *field_names: str) -> list[str]:
+    values: list[str] = []
+    for item in list_items(items):
+        if not isinstance(item, dict):
+            continue
+        for field_name in field_names:
+            text = maybe_text(item.get(field_name))
+            if text:
+                values.append(text)
+    return unique_texts(values)
+
+
+def ensure_list_fields(normalized: dict[str, Any], *field_names: str) -> None:
+    for field_name in field_names:
+        normalized[field_name] = list_items(normalized.get(field_name))
+
+
+def ensure_dict_fields(normalized: dict[str, Any], *field_names: str) -> None:
+    for field_name in field_names:
+        normalized[field_name] = dict_items(normalized.get(field_name))
+
+
+def apply_reporting_contract_defaults(
+    normalized: dict[str, Any],
+    *,
+    object_kind: str,
+    decision_source: str,
+    lineage_sources: tuple[Any, ...] = (),
+    nested_evidence_sources: tuple[Any, ...] = (),
+    provenance_extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized["schema_version"] = canonical_contract(object_kind).schema_version
+    normalized["decision_source"] = decision_source
+    evidence_refs = list_items(normalized.get("evidence_refs"))
+    evidence_refs.extend(list_items(normalized.get("selected_evidence_refs")))
+    for source in nested_evidence_sources:
+        evidence_refs.extend(nested_evidence_refs(source))
+    normalized["evidence_refs"] = unique_texts(evidence_refs)
+    normalized["lineage"] = merged_lineage(
+        normalized.get("lineage"),
+        *lineage_sources,
+    )
+    normalized["provenance"] = normalized_provenance(
+        normalized.get("provenance"),
+        source_skill=maybe_text(normalized.get("skill")),
+        decision_source=decision_source,
+        extra=provenance_extra,
+    )
+    return normalized
+
+
 def normalized_reporting_handoff_payload(
     handoff_payload: dict[str, Any],
     *,
@@ -1904,7 +1963,63 @@ def normalized_reporting_handoff_payload(
             normalized["promotion_status"],
         )
     )
-    return normalized
+    ensure_list_fields(
+        normalized,
+        "reporting_blockers",
+        "selected_basis_object_ids",
+        "selected_evidence_refs",
+        "supporting_proposal_ids",
+        "rejected_proposal_ids",
+        "supporting_opinion_ids",
+        "rejected_opinion_ids",
+        "recommended_next_actions",
+        "key_findings",
+        "open_risks",
+    )
+    ensure_dict_fields(
+        normalized,
+        "observed_inputs",
+        "analysis_sync",
+        "deliberation_sync",
+        "council_input_counts",
+    )
+    decision_source = (
+        maybe_text(normalized.get("decision_source"))
+        or maybe_text(normalized.get("promotion_source"))
+        or maybe_text(normalized.get("readiness_source"))
+        or maybe_text(normalized.get("supervisor_state_source"))
+        or maybe_text(normalized.get("skill"))
+        or "reporting-handoff-generator"
+    )
+    normalized = apply_reporting_contract_defaults(
+        normalized,
+        object_kind="reporting-handoff",
+        decision_source=decision_source,
+        lineage_sources=(
+            maybe_text(normalized.get("promoted_basis_id")),
+            normalized.get("selected_basis_object_ids"),
+            normalized.get("supporting_proposal_ids"),
+            normalized.get("rejected_proposal_ids"),
+            normalized.get("supporting_opinion_ids"),
+            normalized.get("rejected_opinion_ids"),
+            nested_text_ids(normalized.get("key_findings"), "claim_id", "coverage_id"),
+        ),
+        nested_evidence_sources=(normalized.get("key_findings"),),
+        provenance_extra={
+            "handoff_status": normalized["handoff_status"],
+            "promotion_status": normalized["promotion_status"],
+            "readiness_status": normalized["readiness_status"],
+            "supervisor_status": normalized["supervisor_status"],
+            "board_state_source": maybe_text(normalized.get("board_state_source")),
+            "coverage_source": maybe_text(normalized.get("coverage_source")),
+            "promotion_source": maybe_text(normalized.get("promotion_source")),
+            "readiness_source": maybe_text(normalized.get("readiness_source")),
+            "supervisor_state_source": maybe_text(
+                normalized.get("supervisor_state_source")
+            ),
+        },
+    )
+    return validate_canonical_payload("reporting-handoff", normalized)
 
 
 def normalized_council_decision_payload(
@@ -1945,10 +2060,88 @@ def normalized_council_decision_payload(
         normalized.get("handoff_status")
     )
     normalized["reporting_ready"] = bool(maybe_bool(normalized.get("reporting_ready")))
-    normalized["reporting_blockers"] = list_items(
-        normalized.get("reporting_blockers")
+    normalized["reporting_blockers"] = list_items(normalized.get("reporting_blockers"))
+    normalized["publication_readiness"] = (
+        maybe_text(normalized.get("publication_readiness"))
+        or ("ready" if normalized["reporting_ready"] else "hold")
     )
-    return normalized
+    normalized["moderator_status"] = (
+        maybe_text(normalized.get("moderator_status"))
+        or (
+            "finalize"
+            if normalized["publication_readiness"] == "ready"
+            else "continue"
+        )
+    )
+    normalized["decision_summary"] = (
+        maybe_text(normalized.get("decision_summary"))
+        or (
+            "Round is ready for final reporting."
+            if normalized["publication_readiness"] == "ready"
+            else "Another round is required before final reporting."
+        )
+    )
+    ensure_list_fields(
+        normalized,
+        "reporting_blockers",
+        "selected_basis_object_ids",
+        "selected_evidence_refs",
+        "supporting_proposal_ids",
+        "rejected_proposal_ids",
+        "supporting_opinion_ids",
+        "rejected_opinion_ids",
+        "decision_trace_ids",
+        "published_report_refs",
+        "recommended_next_actions",
+        "key_findings",
+        "open_risks",
+        "accepted_object_ids",
+        "rejected_object_ids",
+        "promotion_resolution_reasons",
+    )
+    ensure_dict_fields(
+        normalized,
+        "observed_inputs",
+        "analysis_sync",
+        "deliberation_sync",
+        "decision_gating",
+        "council_input_counts",
+        "audit_refs",
+    )
+    decision_source = (
+        maybe_text(normalized.get("decision_source"))
+        or maybe_text(normalized.get("reporting_handoff_source"))
+        or maybe_text(normalized.get("promotion_source"))
+        or maybe_text(normalized.get("skill"))
+        or "council-decision-generator"
+    )
+    normalized = apply_reporting_contract_defaults(
+        normalized,
+        object_kind="council-decision",
+        decision_source=decision_source,
+        lineage_sources=(
+            maybe_text(normalized.get("promoted_basis_id")),
+            normalized.get("selected_basis_object_ids"),
+            normalized.get("supporting_proposal_ids"),
+            normalized.get("rejected_proposal_ids"),
+            normalized.get("supporting_opinion_ids"),
+            normalized.get("rejected_opinion_ids"),
+            normalized.get("decision_trace_ids"),
+            nested_text_ids(normalized.get("key_findings"), "claim_id", "coverage_id"),
+        ),
+        nested_evidence_sources=(normalized.get("key_findings"),),
+        provenance_extra={
+            "decision_stage": normalized["decision_stage"],
+            "moderator_status": normalized["moderator_status"],
+            "publication_readiness": normalized["publication_readiness"],
+            "canonical_artifact": maybe_text(normalized.get("canonical_artifact")),
+            "reporting_handoff_source": maybe_text(
+                normalized.get("reporting_handoff_source")
+            ),
+            "promotion_source": maybe_text(normalized.get("promotion_source")),
+        },
+    )
+    return validate_canonical_payload("council-decision", normalized)
 
 
 def normalized_expert_report_payload(
@@ -1996,10 +2189,74 @@ def normalized_expert_report_payload(
         normalized.get("handoff_status")
     )
     normalized["reporting_ready"] = bool(maybe_bool(normalized.get("reporting_ready")))
-    normalized["reporting_blockers"] = list_items(
-        normalized.get("reporting_blockers")
+    normalized["reporting_blockers"] = list_items(normalized.get("reporting_blockers"))
+    normalized["publication_readiness"] = (
+        maybe_text(normalized.get("publication_readiness"))
+        or ("ready" if normalized["reporting_ready"] else "hold")
     )
-    return normalized
+    normalized["status"] = (
+        maybe_text(normalized.get("status"))
+        or (
+            "ready-to-publish"
+            if normalized["publication_readiness"] == "ready"
+            else "needs-more-evidence"
+        )
+    )
+    normalized["summary"] = (
+        maybe_text(normalized.get("summary"))
+        or f"Expert report for {normalized['agent_role'] or 'unspecified-role'}."
+    )
+    if normalized["report_stage"] == "canonical" and not maybe_text(
+        normalized.get("canonical_artifact")
+    ):
+        normalized["canonical_artifact"] = "expert-report"
+    ensure_list_fields(
+        normalized,
+        "reporting_blockers",
+        "selected_evidence_refs",
+        "findings",
+        "open_questions",
+        "recommended_next_actions",
+        "report_sections",
+    )
+    ensure_dict_fields(
+        normalized,
+        "observed_inputs",
+        "analysis_sync",
+        "deliberation_sync",
+        "audit_refs",
+    )
+    decision_source = (
+        maybe_text(normalized.get("decision_source"))
+        or maybe_text(normalized.get("reporting_handoff_source"))
+        or maybe_text(normalized.get("expert_report_draft_source"))
+        or maybe_text(normalized.get("skill"))
+        or "expert-report-generator"
+    )
+    normalized = apply_reporting_contract_defaults(
+        normalized,
+        object_kind="expert-report",
+        decision_source=decision_source,
+        lineage_sources=(
+            maybe_text(normalized.get("decision_id")),
+            nested_text_ids(normalized.get("findings"), "claim_id", "coverage_id"),
+        ),
+        nested_evidence_sources=(normalized.get("findings"),),
+        provenance_extra={
+            "report_stage": normalized["report_stage"],
+            "agent_role": normalized["agent_role"],
+            "status": normalized["status"],
+            "publication_readiness": normalized["publication_readiness"],
+            "canonical_artifact": maybe_text(normalized.get("canonical_artifact")),
+            "reporting_handoff_source": maybe_text(
+                normalized.get("reporting_handoff_source")
+            ),
+            "expert_report_draft_source": maybe_text(
+                normalized.get("expert_report_draft_source")
+            ),
+        },
+    )
+    return validate_canonical_payload("expert-report", normalized)
 
 
 def normalized_final_publication_payload(
@@ -2036,7 +2293,70 @@ def normalized_final_publication_payload(
             maybe_text(normalized.get("decision_id")),
         )[:12]
     )
-    return normalized
+    normalized["publication_summary"] = (
+        maybe_text(normalized.get("publication_summary"))
+        or (
+            "Round is ready for final publication."
+            if normalized["publication_posture"] == "release"
+            else "Final publication is currently withheld."
+        )
+    )
+    ensure_list_fields(
+        normalized,
+        "published_sections",
+        "decision_trace_ids",
+        "decision_traces",
+        "role_reports",
+        "published_report_refs",
+        "key_findings",
+        "open_risks",
+        "recommended_next_actions",
+        "selected_evidence_refs",
+        "operator_review_hints",
+    )
+    ensure_dict_fields(
+        normalized,
+        "observed_inputs",
+        "analysis_sync",
+        "deliberation_sync",
+        "decision",
+        "audit_refs",
+    )
+    decision_payload = dict_items(normalized.get("decision"))
+    decision_source = (
+        maybe_text(normalized.get("decision_source"))
+        or maybe_text(normalized.get("reporting_handoff_source"))
+        or maybe_text(normalized.get("promotion_source"))
+        or maybe_text(normalized.get("skill"))
+        or "final-publication-generator"
+    )
+    normalized = apply_reporting_contract_defaults(
+        normalized,
+        object_kind="final-publication",
+        decision_source=decision_source,
+        lineage_sources=(
+            maybe_text(decision_payload.get("decision_id")),
+            normalized.get("decision_trace_ids"),
+            nested_text_ids(normalized.get("role_reports"), "report_id"),
+            nested_text_ids(normalized.get("key_findings"), "claim_id", "coverage_id"),
+        ),
+        nested_evidence_sources=(
+            normalized.get("key_findings"),
+            normalized.get("decision_traces"),
+        ),
+        provenance_extra={
+            "publication_status": normalized["publication_status"],
+            "publication_posture": normalized["publication_posture"],
+            "reporting_handoff_source": maybe_text(
+                normalized.get("reporting_handoff_source")
+            ),
+            "promotion_source": maybe_text(normalized.get("promotion_source")),
+            "supervisor_state_source": maybe_text(
+                normalized.get("supervisor_state_source")
+            ),
+        },
+    )
+    return validate_canonical_payload("final-publication", normalized)
 
 
 def promotion_basis_item_object_type(item_group: str, item: dict[str, Any]) -> str:

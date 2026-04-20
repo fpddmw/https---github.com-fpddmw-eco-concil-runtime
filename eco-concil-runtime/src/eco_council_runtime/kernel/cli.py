@@ -8,12 +8,17 @@ from typing import Any
 from ..canonical_contracts import (
     PLANE_ANALYSIS,
     PLANE_DELIBERATION,
+    PLANE_REPORTING,
     PLANE_SIGNAL,
     canonical_contracts_for_plane,
 )
 from ..council_objects import (
     council_queryable_object_kinds,
     query_council_objects,
+)
+from ..reporting_objects import (
+    query_reporting_objects,
+    reporting_queryable_object_kinds,
 )
 from ..phase2_agent_handoff import EntryChainBuilder, HardGateCommandBuilder
 from .analysis_plane import (
@@ -275,6 +280,36 @@ def reporting_operator_view(
         "decision_draft_present": bool(decision_draft),
         "decision_present": bool(decision),
         "final_publication_present": bool(final_publication),
+        "query_reporting_handoff_command": (
+            f"query-reporting-objects --run-dir {run_dir} --object-kind reporting-handoff --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "query_council_decision_drafts_command": (
+            f"query-reporting-objects --run-dir {run_dir} --object-kind council-decision --run-id {run_id} --round-id {round_id} --stage draft"
+            if round_id and run_id
+            else ""
+        ),
+        "query_council_decisions_command": (
+            f"query-reporting-objects --run-dir {run_dir} --object-kind council-decision --run-id {run_id} --round-id {round_id} --stage canonical"
+            if round_id and run_id
+            else ""
+        ),
+        "query_expert_report_drafts_command": (
+            f"query-reporting-objects --run-dir {run_dir} --object-kind expert-report --run-id {run_id} --round-id {round_id} --stage draft"
+            if round_id and run_id
+            else ""
+        ),
+        "query_expert_reports_command": (
+            f"query-reporting-objects --run-dir {run_dir} --object-kind expert-report --run-id {run_id} --round-id {round_id} --stage canonical"
+            if round_id and run_id
+            else ""
+        ),
+        "query_final_publications_command": (
+            f"query-reporting-objects --run-dir {run_dir} --object-kind final-publication --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
         "materialize_reporting_handoff_command": (
             f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-materialize-reporting-handoff"
             if round_id and run_id
@@ -675,6 +710,26 @@ def add_council_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--pretty", action="store_true")
 
 
+def add_reporting_query_args(command: argparse.ArgumentParser) -> None:
+    supported_kinds = ", ".join(reporting_queryable_object_kinds())
+    command.add_argument("--run-dir", required=True)
+    command.add_argument(
+        "--object-kind",
+        required=True,
+        help=f"Canonical reporting object kind. Supported kinds: {supported_kinds}.",
+    )
+    command.add_argument("--run-id", default="")
+    command.add_argument("--round-id", default="")
+    command.add_argument("--agent-role", default="")
+    command.add_argument("--status", default="")
+    command.add_argument("--decision-id", default="")
+    command.add_argument("--stage", default="")
+    command.add_argument("--include-contract", action="store_true")
+    command.add_argument("--limit", type=int, default=20)
+    command.add_argument("--offset", type=int, default=0)
+    command.add_argument("--pretty", action="store_true")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Minimal runtime kernel for skill-first investigation runs.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -844,6 +899,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_council_query_args(council_query_cmd)
 
+    reporting_query_cmd = sub.add_parser(
+        "query-reporting-objects",
+        help="Query canonical reporting-plane objects from the shared SQLite query surface.",
+    )
+    add_reporting_query_args(reporting_query_cmd)
+
     contract_list_cmd = sub.add_parser(
         "list-canonical-contracts",
         help="List target canonical contracts for the selected plane or all planes.",
@@ -851,7 +912,7 @@ def build_parser() -> argparse.ArgumentParser:
     contract_list_cmd.add_argument(
         "--plane",
         default="",
-        choices=["", PLANE_SIGNAL, PLANE_ANALYSIS, PLANE_DELIBERATION],
+        choices=["", PLANE_SIGNAL, PLANE_ANALYSIS, PLANE_DELIBERATION, PLANE_REPORTING],
     )
     contract_list_cmd.add_argument("--pretty", action="store_true")
 
@@ -1440,6 +1501,37 @@ def main(
                 readiness_blocker_only=args.readiness_blocker_only,
                 include_contract=args.include_contract,
                 include_items=args.include_items,
+                limit=args.limit,
+                offset=args.offset,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_dir": str(run_dir),
+                    "object_kind": args.object_kind,
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "query-reporting-objects":
+        try:
+            payload = query_reporting_objects(
+                run_dir,
+                object_kind=args.object_kind,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                agent_role=args.agent_role,
+                status=args.status,
+                decision_id=args.decision_id,
+                stage=args.stage,
+                include_contract=args.include_contract,
                 limit=args.limit,
                 offset=args.offset,
             )

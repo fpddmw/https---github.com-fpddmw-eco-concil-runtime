@@ -129,6 +129,14 @@
 - `已完成` `phase2 operator / post-round operator / benchmark operator` 现已显式暴露 `reporting_ready / reporting_blockers / reporting_handoff_status`，不再只透出 `promotion_status`。
 - `已完成` `post_round.py / benchmark.py` 已切到 shared reporting surface；`round_close / benchmark_manifest` 已显式写出 reporting gate 字段与 `reporting_surface_source`。
 
+### 2.14 Batch 10 当前状态
+
+- `已完成` 新增 `eco_council_runtime/reporting_objects.py`，reporting plane 现在拥有独立 `query-reporting-objects` query surface，不再继续复用 deliberation query namespace。
+- `已完成` `kernel/cli.py` 已新增 `query-reporting-objects` 与 `list-canonical-contracts --plane reporting`；`show-reporting-state` operator 也已补上 reporting query command templates。
+- `已完成` `store_reporting_handoff_record / store_council_decision_record / store_expert_report_record / store_final_publication_record` 现已统一执行 canonical normalization + `validate_canonical_payload(...)`；DB `raw_json` 已从 skill `e1.x` envelope 切到 reporting canonical schema。
+- `已完成` `canonical_contracts.py` 已收紧 reporting plane 契约，`evidence_refs / lineage / provenance` 已进入 reporting objects 的硬校验面，decision 还显式要求 `decision_trace_ids / published_report_refs` 等结构字段。
+- `已完成` 新增 `tests/test_reporting_query_surface.py`，覆盖 reporting query surface、operator query commands 与 DB canonical raw_json；当前扩展后的大回归 `141` 项全部通过。
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -326,6 +334,7 @@
 - `[x]` `[重写]` `eco-materialize-final-publication`
 - `[x]` board summary / brief 只作为 DB 导出物存在
 - `[x]` reporting / publication 默认从 canonical DB 对象物化
+- `[x]` reporting / publication canonical objects 已支持 item-level query
 
 ## 11. Work Package 8: Verification lane 降级为 optional lane
 
@@ -352,6 +361,7 @@
 - `[x]` 新增 DB-only recovery tests
 - `[x]` 新增 agent proposal-driven round tests
 - `[x]` 新增 board canonical query-surface tests
+- `[x]` 新增 reporting canonical query-surface tests
 - `[x]` 新增 kernel boundary tests
 - `[ ]` 新增 optional verification lane tests
 - `[ ]` 准备争议型政策 case
@@ -363,6 +373,7 @@
 - `[ ]` canonical signal / analysis / deliberation 对象已经定义并落库
 - `[ ]` formal comments 已成为一等结构化输入
 - `[x]` `hypothesis / challenge / board-task / proposal / next-action / probe / readiness-opinion / readiness-assessment / promotion-basis / decision-trace` 已可 item-level 查询
+- `[x]` `reporting-handoff / council-decision / expert-report / final-publication` 已可 item-level 查询
 - `[ ]` 删除 `board_summary / board_brief / next_actions / probes / readiness` artifact 后，round 仍可继续
 - `[ ]` 主链默认输出已不再是 `claim-observation-link-coverage`
 - `[ ]` observation matching 只在明确可核实时触发

@@ -11,6 +11,7 @@ if str(RUNTIME_SRC) not in sys.path:
 
 from eco_council_runtime.canonical_contracts import (  # noqa: E402
     PLANE_DELIBERATION,
+    PLANE_REPORTING,
     canonical_contract,
     canonical_contract_kinds,
     validate_canonical_payload,
@@ -44,6 +45,10 @@ class CanonicalContractTests(unittest.TestCase):
             "readiness-assessment",
             "promotion-basis",
             "decision-trace",
+            "reporting-handoff",
+            "council-decision",
+            "expert-report",
+            "final-publication",
         }
         self.assertSetEqual(expected_kinds, set(canonical_contract_kinds()))
         self.assertSetEqual(
@@ -60,6 +65,15 @@ class CanonicalContractTests(unittest.TestCase):
                 "decision-trace",
             },
             set(canonical_contract_kinds(plane=PLANE_DELIBERATION)),
+        )
+        self.assertSetEqual(
+            {
+                "reporting-handoff",
+                "council-decision",
+                "expert-report",
+                "final-publication",
+            },
+            set(canonical_contract_kinds(plane=PLANE_REPORTING)),
         )
 
     def test_validate_canonical_payload_rejects_missing_structural_fields(self) -> None:

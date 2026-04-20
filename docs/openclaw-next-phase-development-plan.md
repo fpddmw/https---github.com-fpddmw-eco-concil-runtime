@@ -146,6 +146,17 @@
 7. `post_round` 的未发布 ready posture 已从 `promoted-unpublished` 改成 `reporting-ready-unpublished`，终态语义不再把 reporting readiness 锚死在旧 promotion gate 名词上。
 8. 本地扩展回归已更新到 `139` 项，并在当前版本全部通过。
 
+## 2.10 Batch 10 当前已交付
+
+第十批已把 reporting/publication 从“deliberation DB 里有几张记录表”推进到“正式 reporting canonical plane + 独立 query surface + 强校验写库”，已落地以下硬改动：
+
+1. 新增 `eco_council_runtime/reporting_objects.py`，`reporting-handoff / council-decision / expert-report / final-publication` 现在拥有独立 reporting query surface，不再继续混挂在 `query-council-objects` 下。
+2. `kernel/cli.py` 现在新增 `query-reporting-objects` 命令；支持 `run_id / round_id / status / stage / agent_role / decision_id` 过滤，同时 `list-canonical-contracts --plane reporting` 已正式开放。
+3. `show-reporting-state` 的 operator view 已新增 reporting query command templates；操作员现在不仅能看 handoff/decision/publication surface，还能直接按 stage/role 查询 DB canonical objects。
+4. `deliberation_plane.py` 的 `store_reporting_handoff_record / store_council_decision_record / store_expert_report_record / store_final_publication_record` 现在会先 canonicalize 再校验；DB `raw_json` 已统一切到 `reporting-handoff-v1 / council-decision-v1 / expert-report-v1 / final-publication-v1`，不再保留 skill 自己的 `e1.x` envelope 作为真实存储形态。
+5. `canonical_contracts.py` 已收紧 reporting plane 契约：`evidence_refs / lineage / provenance` 已进入 reporting objects 的硬校验面；decision 还额外强制 `decision_trace_ids / published_report_refs` 等关键字段具备显式结构。
+6. 已新增 `tests/test_reporting_query_surface.py`，覆盖 reporting contract list、独立 query surface、operator query command 以及 DB `raw_json` canonicalization；当前扩展后的大回归已更新到 `141` 项，并在本地全部通过。
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足
