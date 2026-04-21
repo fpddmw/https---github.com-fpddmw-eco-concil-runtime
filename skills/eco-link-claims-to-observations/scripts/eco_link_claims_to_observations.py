@@ -141,7 +141,15 @@ def normalize_claim_items(payload: Any) -> list[dict[str, Any]]:
                     "text": maybe_text(item.get("representative_statement") or item.get("cluster_label")),
                     "time_window": item.get("time_window") if isinstance(item.get("time_window"), dict) else {},
                     "member_count": item.get("member_count"),
-                    "evidence_refs": item.get("public_refs") if isinstance(item.get("public_refs"), list) else [],
+                    "evidence_refs": (
+                        item.get("evidence_refs")
+                        if isinstance(item.get("evidence_refs"), list)
+                        else (
+                            item.get("public_refs")
+                            if isinstance(item.get("public_refs"), list)
+                            else []
+                        )
+                    ),
                 }
             )
         return normalized
@@ -157,7 +165,15 @@ def normalize_claim_items(payload: Any) -> list[dict[str, Any]]:
                 "text": maybe_text(item.get("statement") or item.get("summary")),
                 "time_window": item.get("time_window") if isinstance(item.get("time_window"), dict) else {},
                 "member_count": item.get("source_signal_count"),
-                "evidence_refs": item.get("public_refs") if isinstance(item.get("public_refs"), list) else [],
+                "evidence_refs": (
+                    item.get("evidence_refs")
+                    if isinstance(item.get("evidence_refs"), list)
+                    else (
+                        item.get("public_refs")
+                        if isinstance(item.get("public_refs"), list)
+                        else []
+                    )
+                ),
             }
         )
     return normalized

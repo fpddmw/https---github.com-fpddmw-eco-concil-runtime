@@ -257,6 +257,31 @@
    - `tests/test_runtime_kernel.py`
    - `tests/test_analysis_workflow.py`
 
+## 2.15 Batch 15 当前已交付
+
+第十五批把 public-side 旧 analysis 主链从“弱 envelope + heuristic 半成品”推进到“canonical object + DB-strong sync”，已落地以下硬改动：
+
+1. `canonical_contracts.py` 已新增 `claim-candidate / claim-cluster / claim-scope`，并支持 `required_number_fields`；claim-side analysis object 现在可以对 `confidence` 这类关键数值字段做硬校验。
+2. 新增 `eco_council_runtime/analysis_objects.py`，统一承载 `claim-candidate / claim-cluster / claim-scope / verifiability-assessment / verification-route` 的 normalization：
+   - `decision_source / confidence / rationale / evidence_refs / lineage / provenance` 已有唯一 canonical 归一化入口。
+   - heuristic 输出会显式固定为 `decision_source = heuristic-fallback`，而不是下游默猜。
+3. `kernel/analysis_plane.py` 现在会在 sync 时强校验上述 analysis object，并把 `decision_source / lineage_json / provenance_json` 落到 `analysis_result_items`；analysis DB 丢失 artifact 后仍能恢复完整 claim-side canonical row，而不只是弱 `item_json`。
+4. `eco-extract-claim-candidates / eco-cluster-claim-candidates / eco-derive-claim-scope` 已彻底改写：
+   - `claim-candidate` 直接产出 canonical `evidence_refs / lineage / rationale / provenance / confidence`。
+   - `claim-cluster` 补齐 `source_signal_ids`，并把 DB lineage relation 从 `public_refs` 切到 canonical `evidence_refs`。
+   - `claim-scope` 现在显式暴露 `claim_input_kind / claim_object_id / basis_claim_ids / source_signal_ids`，上游对象语义不再继续被一个模糊 `claim_id` 吞掉。
+5. `eco-classify-claim-verifiability / eco-route-verification-lane` 已修复 artifact-ref 证据串化错误：
+   - `claim_scope.evidence_refs` 不再被 `unique_texts()` 转成伪字符串。
+   - `verifiability / route / controversy-map` 现在能继续消费 artifact-ref dict evidence chain。
+6. `eco-link-claims-to-observations / eco-link-formal-comments-to-public-discourse / eco-materialize-controversy-map` 已切到 `evidence_refs-first` 消费，`public_refs` 降级为兼容 alias。
+7. 本轮本地验证通过：
+   - `tests/test_canonical_contracts.py`
+   - `tests/test_analysis_workflow.py`
+   - `tests/test_controversy_workflow.py`
+   - `tests/test_runtime_kernel.py`
+   - `tests/test_investigation_workflow.py`
+   - `tests/test_formal_public_workflow.py`
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足

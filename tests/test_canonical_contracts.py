@@ -10,6 +10,7 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.canonical_contracts import (  # noqa: E402
+    PLANE_ANALYSIS,
     PLANE_DELIBERATION,
     PLANE_REPORTING,
     canonical_contract,
@@ -29,6 +30,9 @@ class CanonicalContractTests(unittest.TestCase):
             "concern-facet",
             "actor-profile",
             "evidence-citation-type",
+            "claim-candidate",
+            "claim-cluster",
+            "claim-scope",
             "verifiability-assessment",
             "verification-route",
             "formal-public-link",
@@ -51,6 +55,25 @@ class CanonicalContractTests(unittest.TestCase):
             "final-publication",
         }
         self.assertSetEqual(expected_kinds, set(canonical_contract_kinds()))
+        self.assertSetEqual(
+            {
+                "actor-profile",
+                "claim-candidate",
+                "claim-cluster",
+                "claim-scope",
+                "concern-facet",
+                "controversy-map",
+                "diffusion-edge",
+                "evidence-citation-type",
+                "formal-public-link",
+                "issue-cluster",
+                "representation-gap",
+                "stance-group",
+                "verifiability-assessment",
+                "verification-route",
+            },
+            set(canonical_contract_kinds(plane=PLANE_ANALYSIS)),
+        )
         self.assertSetEqual(
             {
                 "proposal",
@@ -113,6 +136,45 @@ class CanonicalContractTests(unittest.TestCase):
         contract = canonical_contract("proposal")
         self.assertEqual(contract.schema_version, payload["schema_version"])
         self.assertEqual("proposal-001", payload["proposal_id"])
+
+    def test_validate_canonical_payload_accepts_well_formed_claim_candidate(self) -> None:
+        payload = validate_canonical_payload(
+            "claim-candidate",
+            {
+                "run_id": "run-001",
+                "round_id": "round-001",
+                "claim_id": "claim-001",
+                "agent_role": "sociologist",
+                "claim_type": "hazard-impact",
+                "status": "candidate",
+                "summary": "Smoke is worsening.",
+                "statement": "Residents reported worsening smoke conditions across the city.",
+                "issue_hint": "air-quality-smoke",
+                "issue_terms": ["smoke", "air", "quality"],
+                "stance_hint": "report-impact",
+                "concern_facets": ["health-safety"],
+                "actor_hints": ["resident"],
+                "evidence_citation_types": ["news-report"],
+                "verifiability_hint": "empirical-observable",
+                "dispute_type": "impact-severity",
+                "decision_source": "heuristic-fallback",
+                "confidence": 0.72,
+                "rationale": "Grouped repeated smoke-impact reports into one candidate.",
+                "source_signal_count": 2,
+                "source_signal_ids": ["signal-001", "signal-002"],
+                "evidence_refs": [],
+                "public_refs": [],
+                "lineage": ["signal-001", "signal-002"],
+                "provenance": {"source": "unit-test"},
+                "controversy_seed": {"issue_hint": "air-quality-smoke"},
+                "time_window": {"start_utc": "", "end_utc": ""},
+                "place_scope": {"label": "Public evidence footprint", "geometry": {}},
+                "claim_scope": {"label": "Public evidence footprint", "geometry": {}, "usable_for_matching": False},
+                "compact_audit": {"representative": False},
+            },
+        )
+        self.assertEqual("claim-candidate-v1", payload["schema_version"])
+        self.assertEqual("claim-001", payload["claim_id"])
 
 
 if __name__ == "__main__":

@@ -21,6 +21,10 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     sync_claim_cluster_result_set,
 )
+from eco_council_runtime.analysis_objects import (  # noqa: E402
+    normalize_claim_cluster_payload,
+    unique_texts as canonical_unique_texts,
+)
 
 STOPWORDS = {
     "a",
@@ -305,6 +309,7 @@ def cluster_claim_candidates_skill(
         refs: list[dict[str, Any]] = []
         unique_signal_ids: set[str] = set()
         claim_ids: list[str] = []
+        lineage_values: list[str] = []
         total_source_signal_count = 0
         for item in group:
             claim_ids.append(maybe_text(item.get("claim_id")))
@@ -312,9 +317,16 @@ def cluster_claim_candidates_skill(
             source_ids = item.get("source_signal_ids")
             if isinstance(source_ids, list):
                 unique_signal_ids.update(maybe_text(source_id) for source_id in source_ids if maybe_text(source_id))
-            public_refs = item.get("public_refs")
-            if isinstance(public_refs, list):
-                refs.extend(public_refs)
+            evidence_refs = item.get("evidence_refs")
+            if isinstance(evidence_refs, list):
+                refs.extend(evidence_refs)
+            elif isinstance(item.get("public_refs"), list):
+                refs.extend(item.get("public_refs", []))
+            lineage_values.extend(
+                canonical_unique_texts(
+                    item.get("lineage", []) if isinstance(item.get("lineage"), list) else []
+                )
+            )
             concern_values.extend(list_field(item, "concern_facets"))
             actor_values.extend(list_field(item, "actor_hints"))
             citation_values.extend(list_field(item, "evidence_citation_types"))
@@ -350,54 +362,83 @@ def cluster_claim_candidates_skill(
             cluster_title = f"{cluster_title} [{humanize_label(dominant_stance)}]"
         fingerprint = semantic_fingerprint(label_source)
         cluster_id = "claimcluster-" + stable_hash(run_id, round_id, lead.get("claim_type"), fingerprint)[:12]
+        evidence_refs = unique_refs(refs, 12)
+        source_signal_ids = sorted(unique_signal_ids)
         clusters.append(
-            {
-                "schema_version": "n2.1",
-                "cluster_id": cluster_id,
-                "run_id": run_id,
-                "round_id": round_id,
-                "claim_type": maybe_text(lead.get("claim_type")),
-                "status": "cluster-candidate",
-                "cluster_label": truncate_text(cluster_title, 160),
-                "representative_statement": truncate_text(label_source, 320),
-                "semantic_fingerprint": fingerprint,
-                "issue_label": dominant_issue,
-                "issue_terms": issue_terms,
-                "dominant_stance": dominant_stance,
-                "stance_distribution": stance_distribution(stance_values),
-                "concern_facets": concern_facets,
-                "actor_hints": actor_hints,
-                "evidence_citation_types": evidence_citation_types,
-                "verifiability_posture": dominant_verification,
-                "dispute_type": dominant_dispute,
-                "controversy_summary": (
-                    f"Cluster centers on {humanize_label(dominant_issue) or 'a public controversy'} "
-                    f"with a dominant {humanize_label(dominant_stance) or 'unclear'} posture."
-                ),
-                "member_claim_ids": claim_ids,
-                "member_count": len(group),
-                "aggregate_source_signal_count": total_source_signal_count,
-                "unique_source_signal_count": len(unique_signal_ids),
-                "time_window": {
-                    "start_utc": start_times[0] if start_times else "",
-                    "end_utc": end_times[-1] if end_times else "",
-                },
-                "member_summaries": [truncate_text(item.get("summary") or item.get("statement"), 160) for item in group[:8]],
-                "public_refs": unique_refs(refs, 12),
-                "compact_audit": {
-                    "representative": len(group) > 1,
-                    "retained_count": min(len(group), 8),
-                    "total_candidate_count": len(group),
-                    "coverage_summary": (
-                        f"Grouped {len(group)} claim candidates into one issue cluster "
-                        f"centered on {humanize_label(dominant_issue) or 'a public controversy'}."
+            normalize_claim_cluster_payload(
+                {
+                    "cluster_id": cluster_id,
+                    "run_id": run_id,
+                    "round_id": round_id,
+                    "claim_type": maybe_text(lead.get("claim_type")),
+                    "status": "cluster-candidate",
+                    "cluster_label": truncate_text(cluster_title, 160),
+                    "representative_statement": truncate_text(label_source, 320),
+                    "semantic_fingerprint": fingerprint,
+                    "issue_label": dominant_issue,
+                    "issue_terms": issue_terms,
+                    "dominant_stance": dominant_stance,
+                    "stance_distribution": stance_distribution(stance_values),
+                    "concern_facets": concern_facets,
+                    "actor_hints": actor_hints,
+                    "evidence_citation_types": evidence_citation_types,
+                    "verifiability_posture": dominant_verification,
+                    "dispute_type": dominant_dispute,
+                    "controversy_summary": (
+                        f"Cluster centers on {humanize_label(dominant_issue) or 'a public controversy'} "
+                        f"with a dominant {humanize_label(dominant_stance) or 'unclear'} posture."
                     ),
-                    "concentration_flags": ["singleton-cluster"] if len(group) == 1 else [],
-                    "coverage_dimensions": ["issue-hint", "stance-hint", "concern-facets", "publication-time"],
-                    "missing_dimensions": ["verification-route"] if dominant_verification != "empirical-observable" else [],
-                    "sampling_notes": [],
+                    "member_claim_ids": claim_ids,
+                    "member_count": len(group),
+                    "aggregate_source_signal_count": total_source_signal_count,
+                    "unique_source_signal_count": len(unique_signal_ids),
+                    "source_signal_ids": source_signal_ids,
+                    "evidence_refs": evidence_refs,
+                    "public_refs": evidence_refs,
+                    "lineage": canonical_unique_texts(lineage_values + claim_ids + source_signal_ids),
+                    "rationale": (
+                        "Grouped claim candidates with aligned issue, stance, and "
+                        f"concern facets into a single cluster for {dominant_issue}."
+                    ),
+                    "provenance": {
+                        "method": "controversy-issue-cluster-v2",
+                        "input_kind": "claim-candidate",
+                        "selection_mode": "group-claim-candidates-by-issue-stance-concern",
+                    },
+                    "time_window": {
+                        "start_utc": start_times[0] if start_times else "",
+                        "end_utc": end_times[-1] if end_times else "",
+                    },
+                    "member_summaries": [
+                        truncate_text(item.get("summary") or item.get("statement"), 160)
+                        for item in group[:8]
+                    ],
+                    "compact_audit": {
+                        "representative": len(group) > 1,
+                        "retained_count": min(len(group), 8),
+                        "total_candidate_count": len(group),
+                        "coverage_summary": (
+                            f"Grouped {len(group)} claim candidates into one issue cluster "
+                            f"centered on {humanize_label(dominant_issue) or 'a public controversy'}."
+                        ),
+                        "concentration_flags": ["singleton-cluster"] if len(group) == 1 else [],
+                        "coverage_dimensions": [
+                            "issue-hint",
+                            "stance-hint",
+                            "concern-facets",
+                            "publication-time",
+                        ],
+                        "missing_dimensions": (
+                            ["verification-route"]
+                            if dominant_verification != "empirical-observable"
+                            else []
+                        ),
+                        "sampling_notes": [],
+                    },
                 },
-            }
+                source_skill=SKILL_NAME,
+                artifact_path=str(output_file),
+            )
         )
         if len(clusters) >= max(1, max_clusters):
             break
@@ -414,7 +455,7 @@ def cluster_claim_candidates_skill(
             "min_member_count": max(1, min_member_count),
             "max_clusters": max(1, max_clusters),
             "selection_mode": "group-claim-candidates-by-issue-stance-concern",
-            "method": "controversy-issue-cluster-v1",
+            "method": "controversy-issue-cluster-v2",
         },
         "input_path": str(input_file),
         "cluster_count": len(clusters),
@@ -439,7 +480,7 @@ def cluster_claim_candidates_skill(
         }
     ]
     for cluster in clusters:
-        artifact_refs.extend(cluster["public_refs"])
+        artifact_refs.extend(cluster["evidence_refs"])
     if not clusters:
         warnings.append({"code": "no-clusters", "message": "No claim clusters were produced from the available claim candidates."})
     gap_hints: list[str] = []

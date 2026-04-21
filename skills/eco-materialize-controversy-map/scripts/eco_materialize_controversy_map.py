@@ -180,6 +180,9 @@ def fallback_clusters_from_scopes(scopes: list[dict[str, Any]]) -> list[dict[str
                 "member_claim_ids": [claim_id] if claim_id else [],
                 "member_count": 1,
                 "aggregate_source_signal_count": 0,
+                "evidence_refs": scope.get("evidence_refs", [])
+                if isinstance(scope.get("evidence_refs"), list)
+                else [],
                 "public_refs": scope.get("evidence_refs", [])
                 if isinstance(scope.get("evidence_refs"), list)
                 else [],
@@ -349,7 +352,15 @@ def materialize_controversy_map_skill(
         route_status = maybe_text(route.get("route_status")) or fallback_status
         should_query_environment = bool(route.get("should_query_environment")) if maybe_text(route.get("route_status")) else fallback_env
         evidence_refs = unique_refs(
-            list(cluster.get("public_refs", []) if isinstance(cluster.get("public_refs"), list) else [])
+            list(
+                cluster.get("evidence_refs", [])
+                if isinstance(cluster.get("evidence_refs"), list)
+                else (
+                    cluster.get("public_refs", [])
+                    if isinstance(cluster.get("public_refs"), list)
+                    else []
+                )
+            )
             + list(scope.get("evidence_refs", []) if isinstance(scope.get("evidence_refs"), list) else [])
             + list(assessment.get("evidence_refs", []) if isinstance(assessment.get("evidence_refs"), list) else [])
             + list(route.get("evidence_refs", []) if isinstance(route.get("evidence_refs"), list) else [])

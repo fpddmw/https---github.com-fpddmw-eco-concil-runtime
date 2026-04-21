@@ -36,7 +36,7 @@ OpenClaw 当前更准确的定位是：
 2. `signal plane`
    - 已能把 public 与 environment 两类异构输入写入统一的 `normalized_signals` 工作面。
 3. `analysis plane`
-   - 已能把 candidate、cluster、scope、link、coverage 等对象写入统一 result-set / lineage 结构。
+   - 已能把 candidate、cluster、scope、link、coverage 等对象写入统一 result-set / lineage 结构；其中 `claim-candidate / claim-cluster / claim-scope / verifiability / route` 这条主链已开始具备 canonical contract、item-level query 与 DB-native evidence/lineage 持久化。
 4. `deliberation plane`
    - 已能把 hypothesis、challenge、board-task、proposal、next-action、probe、readiness、decision trace、round transition 等议会状态写入 DB-first 状态面。
 5. `reporting plane`
@@ -129,8 +129,8 @@ OpenClaw 当前更准确的定位是：
 
 主要缺口：
 
-1. formal comment 没有成为一等 schema。
-2. analysis plane 的 controversy objects 仍未建成；虽然 `hypothesis / challenge / board-task / proposal / next-action / probe / readiness / promotion-basis / decision-trace` 已可查询，但信号与分析层契约仍不够硬。
+1. `formal-comment-signal` 已成为一等 schema，但 formal-side 的 `stance / concern / citation / route` typed analysis 仍未补齐。
+2. analysis plane 的 controversy objects 仍未完全建成；虽然 `claim-candidate / claim-cluster / claim-scope / verifiability / route` 已开始 canonical 化，`hypothesis / challenge / board-task / proposal / next-action / probe / readiness / promotion-basis / decision-trace` 也已可查询，但 `issue / stance / concern / actor / citation / controversy-map` 这一层仍未全部成为强契约对象。
 3. 很多 skill 仍依赖 envelope 兼容字段和松散 dict 约定。
 4. board / reporting 还未完全以新 controversy 对象为中心运作。
 

@@ -22,6 +22,10 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_claim_verifiability_context,
     sync_verification_route_result_set,
 )
+from eco_council_runtime.analysis_objects import (  # noqa: E402
+    normalize_verification_route_payload,
+    unique_artifact_refs,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -133,11 +137,21 @@ def fallback_assessment_from_scope(scope: dict[str, Any]) -> dict[str, Any]:
         )
         and lane == "environmental-observation",
         "confidence": float(scope.get("confidence") or 0.6),
-        "evidence_refs": unique_texts(
+        "evidence_refs": unique_artifact_refs(
             scope.get("evidence_refs", [])
             if isinstance(scope.get("evidence_refs"), list)
-            else []
+            else [],
+            limit=16,
         ),
+        "lineage": scope.get("lineage", [])
+        if isinstance(scope.get("lineage"), list)
+        else [],
+        "provenance": {
+            "input_kind": maybe_text(scope.get("claim_input_kind")),
+            "input_claim_object_id": maybe_text(
+                scope.get("claim_object_id") or scope.get("claim_id")
+            ),
+        },
     }
 
 
@@ -264,32 +278,43 @@ def route_verification_lane_skill(
         route_id = "route-" + stable_hash(run_id, round_id, claim_id, lane)[:12]
         should_query_environment = lane == "environmental-observation"
         routes.append(
-            {
-                "schema_version": "n3.0",
-                "route_id": route_id,
-                "run_id": run_id,
-                "round_id": round_id,
-                "claim_id": claim_id,
-                "assessment_id": assessment_id,
-                "claim_scope_id": maybe_text(assessment.get("claim_scope_id")),
-                "issue_hint": maybe_text(assessment.get("issue_hint")),
-                "verifiability_kind": maybe_text(assessment.get("verifiability_kind"))
-                or "mixed-public-claim",
-                "dispute_type": maybe_text(assessment.get("dispute_type"))
-                or "mixed-controversy",
-                "recommended_lane": lane,
-                "route_status": route_status,
-                "should_query_environment": should_query_environment,
-                "should_link_observations": should_query_environment,
-                "route_reason": route_reason(assessment, lane),
-                "suggested_next_skills": suggested_skills_for_lane(lane),
-                "confidence": float(assessment.get("confidence") or 0.6),
-                "evidence_refs": unique_texts(
-                    assessment.get("evidence_refs", [])
-                    if isinstance(assessment.get("evidence_refs"), list)
-                    else []
-                ),
-            }
+            normalize_verification_route_payload(
+                {
+                    "route_id": route_id,
+                    "run_id": run_id,
+                    "round_id": round_id,
+                    "claim_id": claim_id,
+                    "assessment_id": assessment_id,
+                    "claim_scope_id": maybe_text(assessment.get("claim_scope_id")),
+                    "issue_hint": maybe_text(assessment.get("issue_hint")),
+                    "verifiability_kind": maybe_text(assessment.get("verifiability_kind"))
+                    or "mixed-public-claim",
+                    "dispute_type": maybe_text(assessment.get("dispute_type"))
+                    or "mixed-controversy",
+                    "recommended_lane": lane,
+                    "route_status": route_status,
+                    "should_query_environment": should_query_environment,
+                    "should_link_observations": should_query_environment,
+                    "route_reason": route_reason(assessment, lane),
+                    "suggested_next_skills": suggested_skills_for_lane(lane),
+                    "method": "controversy-verification-router-v2",
+                    "confidence": float(assessment.get("confidence") or 0.6),
+                    "evidence_refs": unique_artifact_refs(
+                        assessment.get("evidence_refs", [])
+                        if isinstance(assessment.get("evidence_refs"), list)
+                        else [],
+                        limit=16,
+                    ),
+                    "lineage": assessment.get("lineage", [])
+                    if isinstance(assessment.get("lineage"), list)
+                    else [],
+                    "provenance": assessment.get("provenance", {})
+                    if isinstance(assessment.get("provenance"), dict)
+                    else {},
+                },
+                source_skill=SKILL_NAME,
+                artifact_path=str(output_file),
+            )
         )
 
     lane_counts: dict[str, int] = {}
@@ -330,7 +355,7 @@ def route_verification_lane_skill(
             "input_path": str(input_path),
             "input_source": input_source,
             "selection_mode": "route-each-verifiability-assessment",
-            "method": "controversy-verification-router-v1",
+            "method": "controversy-verification-router-v2",
         },
         "input_path": str(input_path),
         "input_source": input_source,

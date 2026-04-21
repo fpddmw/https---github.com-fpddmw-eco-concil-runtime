@@ -498,9 +498,13 @@ def build_issue_profiles(
         profile["concern_facets"].extend(list_field(cluster, "concern_facets"))
         profile["actor_hints"].extend(list_field(cluster, "actor_hints"))
         profile["evidence_refs"].extend(
-            cluster.get("public_refs", [])
-            if isinstance(cluster.get("public_refs"), list)
-            else []
+            cluster.get("evidence_refs", [])
+            if isinstance(cluster.get("evidence_refs"), list)
+            else (
+                cluster.get("public_refs", [])
+                if isinstance(cluster.get("public_refs"), list)
+                else []
+            )
         )
         for claim_id in list_field(cluster, "member_claim_ids"):
             attached_claim_ids.add(claim_id)
@@ -512,9 +516,13 @@ def build_issue_profiles(
                 profile["concern_facets"].extend(list_field(candidate, "concern_facets"))
                 profile["actor_hints"].extend(list_field(candidate, "actor_hints"))
                 profile["evidence_refs"].extend(
-                    candidate.get("public_refs", [])
-                    if isinstance(candidate.get("public_refs"), list)
-                    else []
+                    candidate.get("evidence_refs", [])
+                    if isinstance(candidate.get("evidence_refs"), list)
+                    else (
+                        candidate.get("public_refs", [])
+                        if isinstance(candidate.get("public_refs"), list)
+                        else []
+                    )
                 )
             for route in route_index.get(claim_id, []):
                 profile["recommended_lane_votes"].append(
@@ -546,9 +554,13 @@ def build_issue_profiles(
         profile["concern_facets"].extend(list_field(candidate, "concern_facets"))
         profile["actor_hints"].extend(list_field(candidate, "actor_hints"))
         profile["evidence_refs"].extend(
-            candidate.get("public_refs", [])
-            if isinstance(candidate.get("public_refs"), list)
-            else []
+            candidate.get("evidence_refs", [])
+            if isinstance(candidate.get("evidence_refs"), list)
+            else (
+                candidate.get("public_refs", [])
+                if isinstance(candidate.get("public_refs"), list)
+                else []
+            )
         )
         for route in route_index.get(claim_id, []):
             profile["recommended_lane_votes"].append(

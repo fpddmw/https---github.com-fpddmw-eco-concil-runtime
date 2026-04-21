@@ -21,6 +21,10 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_claim_scope_context,
     sync_claim_verifiability_result_set,
 )
+from eco_council_runtime.analysis_objects import (  # noqa: E402
+    normalize_verifiability_assessment_payload,
+    unique_artifact_refs,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -175,33 +179,47 @@ def classify_claim_verifiability_skill(
         )
         assessment_id = "verif-" + stable_hash(run_id, round_id, claim_scope_id, lane)[:12]
         assessments.append(
-            {
-                "schema_version": "n3.0",
-                "assessment_id": assessment_id,
-                "run_id": run_id,
-                "round_id": round_id,
-                "claim_id": claim_id,
-                "claim_scope_id": claim_scope_id,
-                "claim_type": maybe_text(scope.get("claim_type")),
-                "issue_hint": maybe_text(scope.get("issue_hint")),
-                "issue_terms": list_field(scope, "issue_terms"),
-                "concern_facets": list_field(scope, "concern_facets"),
-                "actor_hints": list_field(scope, "actor_hints"),
-                "evidence_citation_types": list_field(scope, "evidence_citation_types"),
-                "verifiability_kind": verifiability_kind,
-                "dispute_type": maybe_text(scope.get("dispute_type")) or "mixed-controversy",
-                "recommended_lane": lane,
-                "route_to_observation_matching": route_to_matching,
-                "route_blocked": not route_to_matching,
-                "risk_flags": risk_flags_for_scope(scope, lane),
-                "assessment_summary": assessment_summary(scope, lane),
-                "confidence": float(scope.get("confidence") or 0.6),
-                "evidence_refs": unique_texts(
-                    scope.get("evidence_refs", [])
-                    if isinstance(scope.get("evidence_refs"), list)
-                    else []
-                ),
-            }
+            normalize_verifiability_assessment_payload(
+                {
+                    "assessment_id": assessment_id,
+                    "run_id": run_id,
+                    "round_id": round_id,
+                    "claim_id": claim_id,
+                    "claim_scope_id": claim_scope_id,
+                    "claim_type": maybe_text(scope.get("claim_type")),
+                    "issue_hint": maybe_text(scope.get("issue_hint")),
+                    "issue_terms": list_field(scope, "issue_terms"),
+                    "concern_facets": list_field(scope, "concern_facets"),
+                    "actor_hints": list_field(scope, "actor_hints"),
+                    "evidence_citation_types": list_field(scope, "evidence_citation_types"),
+                    "verifiability_kind": verifiability_kind,
+                    "dispute_type": maybe_text(scope.get("dispute_type")) or "mixed-controversy",
+                    "recommended_lane": lane,
+                    "route_to_observation_matching": route_to_matching,
+                    "route_blocked": not route_to_matching,
+                    "risk_flags": risk_flags_for_scope(scope, lane),
+                    "assessment_summary": assessment_summary(scope, lane),
+                    "method": "controversy-verifiability-routing-v2",
+                    "confidence": float(scope.get("confidence") or 0.6),
+                    "evidence_refs": unique_artifact_refs(
+                        scope.get("evidence_refs", [])
+                        if isinstance(scope.get("evidence_refs"), list)
+                        else [],
+                        limit=16,
+                    ),
+                    "lineage": scope.get("lineage", [])
+                    if isinstance(scope.get("lineage"), list)
+                    else [],
+                    "provenance": {
+                        "input_kind": maybe_text(scope.get("claim_input_kind")),
+                        "input_claim_object_id": maybe_text(
+                            scope.get("claim_object_id") or scope.get("claim_id")
+                        ),
+                    },
+                },
+                source_skill=SKILL_NAME,
+                artifact_path=str(output_file),
+            )
         )
 
     lane_counts: dict[str, int] = {}
@@ -221,7 +239,7 @@ def classify_claim_verifiability_skill(
             "input_path": str(input_file),
             "input_source": input_source,
             "selection_mode": "classify-each-claim-scope",
-            "method": "controversy-verifiability-routing-v1",
+            "method": "controversy-verifiability-routing-v2",
         },
         "input_path": str(input_file),
         "input_source": input_source,

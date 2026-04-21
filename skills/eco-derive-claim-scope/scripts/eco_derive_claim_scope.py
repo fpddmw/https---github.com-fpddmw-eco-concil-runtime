@@ -23,6 +23,10 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_claim_cluster_context,
     sync_claim_scope_result_set,
 )
+from eco_council_runtime.analysis_objects import (  # noqa: E402
+    merged_lineage,
+    normalize_claim_scope_payload,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -333,37 +337,76 @@ def derive_claim_scope_skill(
         actor_hints = list_field(item, "actor_hints")
         issue_hint = maybe_text(item.get("issue_hint") or item.get("issue_label"))
         issue_terms = list_field(item, "issue_terms")
+        evidence_refs = unique_refs(
+            item.get("evidence_refs", [])
+            if isinstance(item.get("evidence_refs"), list)
+            else (
+                item.get("public_refs", [])
+                if isinstance(item.get("public_refs"), list)
+                else []
+            ),
+            10,
+        )
+        basis_claim_ids = list_field(item, "member_claim_ids") or ([claim_id] if claim_id else [])
+        source_signal_ids = list_field(item, "source_signal_ids")
         scopes.append(
-            {
-                "schema_version": "n2.2",
-                "claim_scope_id": "claimscope-" + stable_hash(run_id, round_id, claim_id, location_label, ",".join(tags))[:12],
-                "run_id": run_id,
-                "round_id": round_id,
-                "claim_id": claim_id,
-                "claim_type": claim_type,
-                "scope_label": location_label,
-                "scope_kind": scope_kind,
-                "matching_tags": tags,
-                "issue_hint": issue_hint,
-                "issue_terms": issue_terms,
-                "concern_facets": concern_facets,
-                "actor_hints": actor_hints,
-                "evidence_citation_types": evidence_citation_types,
-                "verifiability_kind": verifiability_kind,
-                "dispute_type": dispute_kind,
-                "verification_route_recommended": route_recommended,
-                "required_evidence_lane": lane,
-                "matching_eligibility_reason": (
-                    "Empirical, place-sensitive issue suitable for optional observation matching."
-                    if route_recommended
-                    else "Route through controversy analysis or formal records before any observation matching."
-                ),
-                "claim_scope": {"label": location_label, "geometry": {}, "usable_for_matching": route_recommended},
-                "place_scope": {"label": location_label, "geometry": {}},
-                "method": "controversy-routing-scope-v1",
-                "confidence": 0.82 if route_recommended else 0.58,
-                "evidence_refs": unique_refs(item.get("public_refs", []) if isinstance(item.get("public_refs"), list) else [], 10),
-            }
+            normalize_claim_scope_payload(
+                {
+                    "claim_scope_id": "claimscope-" + stable_hash(run_id, round_id, claim_id, location_label, ",".join(tags))[:12],
+                    "run_id": run_id,
+                    "round_id": round_id,
+                    "claim_id": claim_id,
+                    "claim_object_id": claim_id,
+                    "claim_input_kind": claim_input_kind,
+                    "basis_claim_ids": basis_claim_ids,
+                    "source_signal_ids": source_signal_ids,
+                    "claim_type": claim_type,
+                    "scope_label": location_label,
+                    "scope_kind": scope_kind,
+                    "matching_tags": tags,
+                    "issue_hint": issue_hint,
+                    "issue_terms": issue_terms,
+                    "concern_facets": concern_facets,
+                    "actor_hints": actor_hints,
+                    "evidence_citation_types": evidence_citation_types,
+                    "verifiability_kind": verifiability_kind,
+                    "dispute_type": dispute_kind,
+                    "verification_route_recommended": route_recommended,
+                    "required_evidence_lane": lane,
+                    "matching_eligibility_reason": (
+                        "Empirical, place-sensitive issue suitable for optional observation matching."
+                        if route_recommended
+                        else "Route through controversy analysis or formal records before any observation matching."
+                    ),
+                    "claim_scope": {
+                        "label": location_label,
+                        "geometry": {},
+                        "usable_for_matching": route_recommended,
+                    },
+                    "place_scope": {"label": location_label, "geometry": {}},
+                    "method": "controversy-routing-scope-v2",
+                    "confidence": 0.82 if route_recommended else 0.58,
+                    "evidence_refs": evidence_refs,
+                    "lineage": merged_lineage(
+                        item.get("lineage"),
+                        claim_id,
+                        basis_claim_ids,
+                        source_signal_ids,
+                    ),
+                    "rationale": (
+                        f"Derived a {scope_kind or 'public'} scope for "
+                        f"{issue_hint or claim_type or 'the claim object'} and routed it "
+                        f"toward {lane}."
+                    ),
+                    "provenance": {
+                        "method": "controversy-routing-scope-v2",
+                        "input_kind": claim_input_kind,
+                        "input_source": claim_input_source,
+                    },
+                },
+                source_skill=SKILL_NAME,
+                artifact_path=str(output_file),
+            )
         )
     wrapper = {
         "schema_version": "n2.2",
@@ -376,7 +419,7 @@ def derive_claim_scope_skill(
             "input_source": claim_input_source or "missing-claim-input",
             "input_kind": claim_input_kind or "missing-claim-input",
             "selection_mode": "prefer-clusters-then-candidates",
-            "method": "controversy-routing-scope-v1",
+            "method": "controversy-routing-scope-v2",
         },
         "input_path": str(input_file),
         "claim_input_source": claim_input_source or "missing-claim-input",

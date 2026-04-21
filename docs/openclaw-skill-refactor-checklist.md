@@ -185,6 +185,25 @@
   - `tests/test_runtime_kernel.py`
   - `tests/test_analysis_workflow.py`
 
+### 2.19 Batch 15 当前状态
+
+- `已完成` `canonical_contracts.py` 已新增 `claim-candidate / claim-cluster / claim-scope` 强契约，并把 `required_number_fields` 提升成一等校验面；claim-side analysis object 不再只有“有几个字符串字段就算过关”。
+- `已完成` 新增 `eco_council_runtime/analysis_objects.py`，把 `claim-candidate / claim-cluster / claim-scope / verifiability-assessment / verification-route` 的 canonical normalization 收口到统一入口；`decision_source / confidence / rationale / provenance / evidence_refs / lineage` 现在不再分散在多个 skill 里各自拼接。
+- `已完成` `kernel/analysis_plane.py` 现在会在 sync 阶段对上述 analysis object 做强校验，并把 `decision_source / lineage_json / provenance_json` 落到 `analysis_result_items`；DB 丢失 artifact 后保留的已不再只是弱 `item_json`。
+- `已完成` `eco-extract-claim-candidates / eco-cluster-claim-candidates / eco-derive-claim-scope` 已重写为 canonical claim-side object 输出：
+  - `claim-candidate` 现在直接写出 `evidence_refs / lineage / rationale / provenance / confidence`。
+  - `claim-cluster` 现在显式持久化 `source_signal_ids`，并把 canonical `evidence_refs` 取代旧 `public_refs-only` DB lineage。
+  - `claim-scope` 现在显式标注 `claim_input_kind / claim_object_id / basis_claim_ids / source_signal_ids`，不再把上游对象语义全部挤进一个模糊 `claim_id`。
+- `已完成` `eco-classify-claim-verifiability / eco-route-verification-lane` 已修正 artifact-ref 证据链错误：`evidence_refs` 不再被 `unique_texts()` 串化成伪字符串，而是继续作为 artifact-ref dict 在 `verifiability / route / controversy-map` 主链中流转。
+- `已完成` `eco-link-claims-to-observations / eco-link-formal-comments-to-public-discourse / eco-materialize-controversy-map` 已改成 `evidence_refs-first` 读取；`public_refs` 降级为兼容 alias，而不是 canonical evidence 面。
+- `已完成` 本轮本地验证通过：
+  - `tests/test_canonical_contracts.py`
+  - `tests/test_analysis_workflow.py`
+  - `tests/test_controversy_workflow.py`
+  - `tests/test_runtime_kernel.py`
+  - `tests/test_investigation_workflow.py`
+  - `tests/test_formal_public_workflow.py`
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -208,12 +227,15 @@
 - `[ ]` 建立 `concern-facet`
 - `[ ]` 建立 `actor-profile`
 - `[ ]` 建立 `evidence-citation-type`
-- `[ ]` 建立 `verifiability-assessment`
-- `[ ]` 建立 `verification-route`
+- `[x]` 建立 `verifiability-assessment`
+- `[x]` 建立 `verification-route`
 - `[ ]` 建立 `formal-public-link`
 - `[ ]` 建立 `representation-gap`
 - `[ ]` 建立 `diffusion-edge`
 - `[ ]` 建立 `controversy-map`
+- `[x]` 建立 `claim-candidate`
+- `[x]` 建立 `claim-cluster`
+- `[x]` 建立 `claim-scope`
 
 ### 4.3 Deliberation plane
 
@@ -230,8 +252,8 @@
 
 ### 4.4 通用要求
 
-- `[ ]` 每个关键对象支持 item-level query
-- `[ ]` 每个关键对象有 ID、provenance、evidence refs、lineage、decision source
+- `[x]` `claim-candidate / claim-cluster / claim-scope / verifiability-assessment / verification-route` 支持 item-level query
+- `[x]` 上述 claim-side analysis object 已具备 ID、provenance、evidence refs、lineage、decision source
 - `[ ]` phase-2 对象不再只作为整包 snapshot 存在
 
 ## 5. Work Package 2: Signal plane 重构
@@ -245,9 +267,9 @@
 
 ### 6.1 重写旧主链 skills
 
-- `[ ]` `[重写]` `eco-extract-claim-candidates`
-- `[ ]` `[重写]` `eco-cluster-claim-candidates`
-- `[ ]` `[重写]` `eco-derive-claim-scope`
+- `[x]` `[重写]` `eco-extract-claim-candidates`
+- `[x]` `[重写]` `eco-cluster-claim-candidates`
+- `[x]` `[重写]` `eco-derive-claim-scope`
 
 ### 6.2 新增 controversy 主链 skills
 
@@ -266,8 +288,8 @@
 
 ### 6.3 强约束
 
-- `[ ]` 每个 extractor 输出 `confidence`
-- `[ ]` 每个 extractor 输出 `rationale`
+- `[x]` `claim-candidate / claim-cluster / claim-scope` 输出 `confidence`
+- `[x]` `claim-candidate / claim-cluster / claim-scope` 输出 `rationale`
 - `[ ]` 每个 extractor 输出 `provenance`
 - `[ ]` heuristic 输出显式标记 `decision_source = heuristic-fallback`
 - `[ ]` 旧 claim 输出只保留为兼容视图或 fallback，不再是 canonical 主轴

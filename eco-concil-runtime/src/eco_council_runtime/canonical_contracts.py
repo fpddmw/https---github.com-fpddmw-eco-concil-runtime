@@ -19,6 +19,7 @@ class CanonicalContract:
     required_text_fields: tuple[str, ...]
     required_list_fields: tuple[str, ...]
     required_dict_fields: tuple[str, ...]
+    required_number_fields: tuple[str, ...]
     item_level_query: bool = True
 
     def as_dict(self) -> dict[str, Any]:
@@ -40,6 +41,7 @@ def _contract(
     required_text_fields: tuple[str, ...],
     required_list_fields: tuple[str, ...] = ("evidence_refs", "lineage"),
     required_dict_fields: tuple[str, ...] = ("provenance",),
+    required_number_fields: tuple[str, ...] = (),
     item_level_query: bool = True,
 ) -> CanonicalContract:
     return CanonicalContract(
@@ -50,6 +52,7 @@ def _contract(
         required_text_fields=("run_id", "round_id", id_field, *required_text_fields),
         required_list_fields=required_list_fields,
         required_dict_fields=required_dict_fields,
+        required_number_fields=required_number_fields,
         item_level_query=item_level_query,
     )
 
@@ -110,6 +113,115 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
         schema_version="evidence-citation-type-v1",
         id_field="citation_type_id",
         required_text_fields=("decision_source", "citation_type"),
+    ),
+    "claim-candidate": _contract(
+        "claim-candidate",
+        plane=PLANE_ANALYSIS,
+        schema_version="claim-candidate-v1",
+        id_field="claim_id",
+        required_text_fields=(
+            "decision_source",
+            "agent_role",
+            "claim_type",
+            "status",
+            "summary",
+            "statement",
+            "issue_hint",
+            "stance_hint",
+            "verifiability_hint",
+            "dispute_type",
+            "rationale",
+        ),
+        required_list_fields=(
+            "evidence_refs",
+            "lineage",
+            "issue_terms",
+            "concern_facets",
+            "actor_hints",
+            "evidence_citation_types",
+            "source_signal_ids",
+            "public_refs",
+        ),
+        required_dict_fields=(
+            "provenance",
+            "controversy_seed",
+            "time_window",
+            "place_scope",
+            "claim_scope",
+            "compact_audit",
+        ),
+        required_number_fields=("confidence", "source_signal_count"),
+    ),
+    "claim-cluster": _contract(
+        "claim-cluster",
+        plane=PLANE_ANALYSIS,
+        schema_version="claim-cluster-v1",
+        id_field="cluster_id",
+        required_text_fields=(
+            "decision_source",
+            "claim_type",
+            "status",
+            "cluster_label",
+            "representative_statement",
+            "semantic_fingerprint",
+            "issue_label",
+            "dominant_stance",
+            "verifiability_posture",
+            "dispute_type",
+            "controversy_summary",
+            "rationale",
+        ),
+        required_list_fields=(
+            "evidence_refs",
+            "lineage",
+            "issue_terms",
+            "concern_facets",
+            "actor_hints",
+            "evidence_citation_types",
+            "member_claim_ids",
+            "source_signal_ids",
+            "stance_distribution",
+            "member_summaries",
+            "public_refs",
+        ),
+        required_dict_fields=("provenance", "time_window", "compact_audit"),
+        required_number_fields=(
+            "confidence",
+            "member_count",
+            "aggregate_source_signal_count",
+            "unique_source_signal_count",
+        ),
+    ),
+    "claim-scope": _contract(
+        "claim-scope",
+        plane=PLANE_ANALYSIS,
+        schema_version="claim-scope-v1",
+        id_field="claim_scope_id",
+        required_text_fields=(
+            "decision_source",
+            "claim_id",
+            "claim_type",
+            "issue_hint",
+            "scope_label",
+            "scope_kind",
+            "verifiability_kind",
+            "dispute_type",
+            "required_evidence_lane",
+            "matching_eligibility_reason",
+            "method",
+            "rationale",
+        ),
+        required_list_fields=(
+            "evidence_refs",
+            "lineage",
+            "matching_tags",
+            "issue_terms",
+            "concern_facets",
+            "actor_hints",
+            "evidence_citation_types",
+        ),
+        required_dict_fields=("provenance", "claim_scope", "place_scope"),
+        required_number_fields=("confidence",),
     ),
     "verifiability-assessment": _contract(
         "verifiability-assessment",
@@ -458,10 +570,17 @@ def validate_canonical_payload(
         for field_name in contract.required_dict_fields
         if not isinstance(normalized.get(field_name), dict)
     ]
+    invalid_number_fields = [
+        field_name
+        for field_name in contract.required_number_fields
+        if not isinstance(normalized.get(field_name), (int, float))
+        or isinstance(normalized.get(field_name), bool)
+    ]
     if (
         missing_text_fields
         or invalid_list_fields
         or invalid_dict_fields
+        or invalid_number_fields
     ):
         problems: list[str] = []
         if missing_text_fields:
@@ -475,6 +594,10 @@ def validate_canonical_payload(
         if invalid_dict_fields:
             problems.append(
                 "dict fields required: " + ", ".join(sorted(invalid_dict_fields))
+            )
+        if invalid_number_fields:
+            problems.append(
+                "number fields required: " + ", ".join(sorted(invalid_number_fields))
             )
         raise ValueError(
             f"Invalid canonical payload for {object_kind}: " + "; ".join(problems)

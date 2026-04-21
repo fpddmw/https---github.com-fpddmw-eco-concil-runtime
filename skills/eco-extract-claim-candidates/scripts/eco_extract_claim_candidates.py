@@ -26,6 +26,9 @@ from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     ensure_signal_plane_schema,
     resolved_canonical_object_kind,
 )
+from eco_council_runtime.analysis_objects import (  # noqa: E402
+    normalize_claim_candidate_payload,
+)
 
 STOPWORDS = {
     "a",
@@ -628,54 +631,82 @@ def extract_claim_candidates_skill(
             if isinstance(profile.get("issue_terms"), list)
             else []
         )
+        evidence_refs = [signal_ref(row) for row in group[:8]]
+        source_signal_ids = [row["signal_id"] for row in group]
         candidates.append(
-            {
-                "schema_version": "n2",
-                "claim_id": candidate_id,
-                "run_id": run_id,
-                "round_id": round_id,
-                "agent_role": "sociologist",
-                "claim_type": derived_claim_type,
-                "status": "candidate",
-                "summary": truncate_text(lead["title"] or lead["body_text"], 180),
-                "statement": truncate_text(source_text, 320),
-                "issue_hint": maybe_text(profile.get("issue_hint")),
-                "issue_terms": issue_terms_value,
-                "stance_hint": maybe_text(profile.get("stance_hint")),
-                "concern_facets": concern_values,
-                "actor_hints": actor_values,
-                "evidence_citation_types": citation_values,
-                "verifiability_hint": maybe_text(profile.get("verifiability_hint")),
-                "dispute_type": maybe_text(profile.get("dispute_type")),
-                "controversy_seed": {
+            normalize_claim_candidate_payload(
+                {
+                    "claim_id": candidate_id,
+                    "run_id": run_id,
+                    "round_id": round_id,
+                    "agent_role": "sociologist",
+                    "claim_type": derived_claim_type,
+                    "status": "candidate",
+                    "summary": truncate_text(lead["title"] or lead["body_text"], 180),
+                    "statement": truncate_text(source_text, 320),
                     "issue_hint": maybe_text(profile.get("issue_hint")),
+                    "issue_terms": issue_terms_value,
                     "stance_hint": maybe_text(profile.get("stance_hint")),
                     "concern_facets": concern_values,
                     "actor_hints": actor_values,
                     "evidence_citation_types": citation_values,
                     "verifiability_hint": maybe_text(profile.get("verifiability_hint")),
                     "dispute_type": maybe_text(profile.get("dispute_type")),
+                    "evidence_refs": evidence_refs,
+                    "public_refs": evidence_refs,
+                    "lineage": source_signal_ids,
+                    "rationale": (
+                        "Collapsed repeated public-discourse signals into a single "
+                        f"{derived_claim_type} candidate anchored on "
+                        f"{maybe_text(profile.get('issue_hint')) or 'a public controversy'}."
+                    ),
+                    "provenance": {
+                        "method": "controversy-seed-extraction-v2",
+                        "group_signature": maybe_text(profile.get("group_signature")),
+                        "source_plane": "public",
+                    },
+                    "controversy_seed": {
+                        "issue_hint": maybe_text(profile.get("issue_hint")),
+                        "stance_hint": maybe_text(profile.get("stance_hint")),
+                        "concern_facets": concern_values,
+                        "actor_hints": actor_values,
+                        "evidence_citation_types": citation_values,
+                        "verifiability_hint": maybe_text(profile.get("verifiability_hint")),
+                        "dispute_type": maybe_text(profile.get("dispute_type")),
+                        "group_signature": maybe_text(profile.get("group_signature")),
+                    },
+                    "time_window": {
+                        "start_utc": time_values[0] if time_values else "",
+                        "end_utc": time_values[-1] if time_values else "",
+                    },
+                    "place_scope": {"label": "Public evidence footprint", "geometry": {}},
+                    "claim_scope": {
+                        "label": "Public evidence footprint",
+                        "geometry": {},
+                        "usable_for_matching": False,
+                    },
+                    "source_signal_count": len(group),
+                    "source_signal_ids": source_signal_ids,
+                    "compact_audit": {
+                        "representative": len(group) > 1,
+                        "retained_count": min(len(group), 8),
+                        "total_candidate_count": len(group),
+                        "coverage_summary": controversy_summary(profile, signal_count=len(group)),
+                        "concentration_flags": [],
+                        "coverage_dimensions": [
+                            "issue-hint",
+                            "stance-hint",
+                            "concern-facets",
+                            "publication-time",
+                        ],
+                        "missing_dimensions": ["verification-route", "place-scope"],
+                        "sampling_notes": [],
+                        "selection_mode": "group-by-issue-stance-concern-seed",
+                    },
                 },
-                "time_window": {
-                    "start_utc": time_values[0] if time_values else "",
-                    "end_utc": time_values[-1] if time_values else "",
-                },
-                "place_scope": {"label": "Public evidence footprint", "geometry": {}},
-                "claim_scope": {"label": "Public evidence footprint", "geometry": {}, "usable_for_matching": False},
-                "source_signal_count": len(group),
-                "source_signal_ids": [row["signal_id"] for row in group],
-                "public_refs": [signal_ref(row) for row in group[:8]],
-                "compact_audit": {
-                    "representative": len(group) > 1,
-                    "retained_count": min(len(group), 8),
-                    "total_candidate_count": len(group),
-                    "coverage_summary": controversy_summary(profile, signal_count=len(group)),
-                    "concentration_flags": [],
-                    "coverage_dimensions": ["issue-hint", "stance-hint", "concern-facets", "publication-time"],
-                    "missing_dimensions": ["verification-route", "place-scope"],
-                    "sampling_notes": [],
-                },
-            }
+                source_skill=SKILL_NAME,
+                artifact_path=str(candidate_path),
+            )
         )
     wrapper = {
         "schema_version": "n2",
@@ -694,7 +725,7 @@ def extract_claim_candidates_skill(
             "max_candidates": max(1, int(max_candidates)),
             "selection_mode": "group-by-issue-stance-concern-seed",
             "order_by": "COALESCE(published_at_utc, captured_at_utc) DESC, signal_id",
-            "method": "controversy-seed-extraction-v1",
+            "method": "controversy-seed-extraction-v2",
         },
         "candidate_count": len(candidates),
         "candidates": candidates,
@@ -712,7 +743,7 @@ def extract_claim_candidates_skill(
     write_json(candidate_path, wrapper)
     artifact_refs = [{"signal_id": "", "artifact_path": str(candidate_path), "record_locator": "$.candidates", "artifact_ref": f"{candidate_path}:$.candidates"}]
     for candidate in candidates:
-        artifact_refs.extend(candidate["public_refs"])
+        artifact_refs.extend(candidate["evidence_refs"])
     batch_id = "candbatch-" + stable_hash(SKILL_NAME, run_id, round_id, str(candidate_path))[:16]
     warnings = [] if candidates else [{"code": "no-candidates", "message": "No claim candidates were extracted from the current public signal plane."}]
     return {

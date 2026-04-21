@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 import tempfile
@@ -106,13 +107,34 @@ class AnalysisWorkflowTests(unittest.TestCase):
             self.assertIn("stance_hint", first_candidate)
             self.assertIn("concern_facets", first_candidate)
             self.assertIn("verifiability_hint", first_candidate)
+            self.assertEqual("heuristic-fallback", first_candidate["decision_source"])
+            self.assertGreater(float(first_candidate["confidence"]), 0.0)
+            self.assertTrue(first_candidate["rationale"])
+            self.assertIsInstance(first_candidate["provenance"], dict)
+            self.assertIsInstance(first_candidate["evidence_refs"], list)
+            self.assertIsInstance(first_candidate["lineage"], list)
+            self.assertGreaterEqual(len(first_candidate["evidence_refs"]), 1)
+            self.assertGreaterEqual(len(first_candidate["lineage"]), 1)
             self.assertIn("issue_label", first_cluster)
             self.assertIn("dominant_stance", first_cluster)
             self.assertIn("concern_facets", first_cluster)
             self.assertIn("verifiability_posture", first_cluster)
+            self.assertEqual("heuristic-fallback", first_cluster["decision_source"])
+            self.assertGreater(float(first_cluster["confidence"]), 0.0)
+            self.assertTrue(first_cluster["rationale"])
+            self.assertIsInstance(first_cluster["provenance"], dict)
+            self.assertIsInstance(first_cluster["evidence_refs"], list)
+            self.assertIsInstance(first_cluster["lineage"], list)
+            self.assertGreaterEqual(len(first_cluster["source_signal_ids"]), 1)
             self.assertIn("verifiability_kind", first_scope)
             self.assertIn("required_evidence_lane", first_scope)
             self.assertIn("verification_route_recommended", first_scope)
+            self.assertEqual("heuristic-fallback", first_scope["decision_source"])
+            self.assertTrue(first_scope["rationale"])
+            self.assertIsInstance(first_scope["provenance"], dict)
+            self.assertIsInstance(first_scope["evidence_refs"], list)
+            self.assertIsInstance(first_scope["lineage"], list)
+            self.assertIn("claim_input_kind", first_scope["provenance"])
             self.assertGreaterEqual(claim_scope_artifact["scope_count"], 1)
             self.assertEqual(1, observation_scope_artifact["scope_count"])
             self.assertGreaterEqual(coverage_artifact["coverage_count"], 1)
@@ -163,6 +185,31 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 self.assertIsNotNone(item_count)
                 assert item_count is not None
                 self.assertGreaterEqual(int(item_count[0]), 1)
+                claim_candidate_row = connection.execute(
+                    """
+                    SELECT decision_source, evidence_refs_json, lineage_json, provenance_json
+                    FROM analysis_result_items
+                    WHERE run_id = ? AND round_id = ? AND analysis_kind = ?
+                    ORDER BY item_index
+                    LIMIT 1
+                    """,
+                    (RUN_ID, ROUND_ID, "claim-candidate"),
+                ).fetchone()
+                self.assertIsNotNone(claim_candidate_row)
+                assert claim_candidate_row is not None
+                self.assertEqual("heuristic-fallback", claim_candidate_row[0])
+                self.assertGreaterEqual(
+                    len(json.loads(claim_candidate_row[1])),
+                    1,
+                )
+                self.assertGreaterEqual(
+                    len(json.loads(claim_candidate_row[2])),
+                    1,
+                )
+                self.assertIn(
+                    "source_skill",
+                    json.loads(claim_candidate_row[3]),
+                )
 
     def test_scope_and_link_can_read_cluster_and_merge_from_analysis_plane_without_artifacts(
         self,
@@ -568,13 +615,27 @@ class AnalysisWorkflowTests(unittest.TestCase):
                     WHERE result_set_id = ?
                       AND lineage_scope = 'item'
                       AND lineage_type = 'artifact-ref'
-                      AND relation = 'public_refs'
+                      AND relation = 'evidence_refs'
                     """,
                     (result_set_ids["claim-candidate"],),
                 ).fetchone()
                 self.assertIsNotNone(claim_candidate_artifact_ref_count)
                 assert claim_candidate_artifact_ref_count is not None
                 self.assertGreaterEqual(int(claim_candidate_artifact_ref_count[0]), 1)
+                claim_scope_lineage_count = connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM analysis_result_lineage
+                    WHERE result_set_id = ?
+                      AND lineage_scope = 'item'
+                      AND lineage_type = 'parent-id'
+                      AND relation = 'lineage'
+                    """,
+                    (result_set_ids["claim-scope"],),
+                ).fetchone()
+                self.assertIsNotNone(claim_scope_lineage_count)
+                assert claim_scope_lineage_count is not None
+                self.assertGreaterEqual(int(claim_scope_lineage_count[0]), 1)
                 claim_cluster_parent_kinds = {
                     row["source_analysis_kind"]
                     for row in connection.execute(

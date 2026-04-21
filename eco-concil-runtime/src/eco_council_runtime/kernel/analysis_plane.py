@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ..canonical_contracts import validate_canonical_payload
+
 ANALYSIS_KIND_EVIDENCE_COVERAGE = "evidence-coverage"
 ANALYSIS_KIND_CONTROVERSY_MAP = "controversy-map"
 ANALYSIS_KIND_VERIFICATION_ROUTE = "verification-route"
@@ -173,6 +175,7 @@ ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
         "count_key": "route_count",
         "id_field": "route_id",
         "subject_field": "claim_id",
+        "score_field": "confidence",
         "state_field": "route_status",
         "related_id_fields": [
             "route_id",
@@ -181,11 +184,13 @@ ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
             "recommended_lane",
             "route_status",
         ],
+        "canonical_object_kind": "verification-route",
         "default_source_skill": "eco-route-verification-lane",
         "summary_fields": ["input_path"],
         "query_basis_fields": ["input_path", "input_source"],
         "parent_artifact_fields": ["input_path"],
         "item_parent_id_fields": ["claim_id", "assessment_id", "claim_scope_id"],
+        "item_parent_id_list_fields": ["lineage"],
         "item_artifact_ref_fields": ["evidence_refs"],
     },
     ANALYSIS_KIND_CLAIM_VERIFIABILITY: {
@@ -204,11 +209,13 @@ ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
             "verifiability_kind",
             "recommended_lane",
         ],
+        "canonical_object_kind": "verifiability-assessment",
         "default_source_skill": "eco-classify-claim-verifiability",
         "summary_fields": ["input_path"],
         "query_basis_fields": ["input_path", "input_source"],
         "parent_artifact_fields": ["input_path"],
         "item_parent_id_fields": ["claim_id", "claim_scope_id"],
+        "item_parent_id_list_fields": ["lineage"],
         "item_artifact_ref_fields": ["evidence_refs"],
     },
     ANALYSIS_KIND_EVIDENCE_COVERAGE: {
@@ -254,11 +261,13 @@ ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
         "score_field": "confidence",
         "state_field": "scope_kind",
         "related_id_fields": ["claim_scope_id", "claim_id", "claim_type"],
+        "canonical_object_kind": "claim-scope",
         "default_source_skill": "eco-derive-claim-scope",
         "summary_fields": ["input_path"],
         "query_basis_fields": ["input_path"],
         "parent_artifact_fields": ["input_path"],
         "item_parent_id_fields": ["claim_id"],
+        "item_parent_id_list_fields": ["lineage"],
         "item_artifact_ref_fields": ["evidence_refs"],
     },
     ANALYSIS_KIND_OBSERVATION_SCOPE: {
@@ -308,14 +317,16 @@ ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
         "count_key": "cluster_count",
         "id_field": "cluster_id",
         "subject_field": "cluster_id",
+        "score_field": "confidence",
         "state_field": "status",
         "related_id_fields": ["cluster_id", "claim_type", "semantic_fingerprint"],
+        "canonical_object_kind": "claim-cluster",
         "default_source_skill": "eco-cluster-claim-candidates",
         "summary_fields": ["input_path"],
         "query_basis_fields": ["input_path"],
         "parent_artifact_fields": ["input_path"],
-        "item_parent_id_list_fields": ["member_claim_ids", "source_signal_ids"],
-        "item_artifact_ref_fields": ["public_refs"],
+        "item_parent_id_list_fields": ["member_claim_ids", "source_signal_ids", "lineage"],
+        "item_artifact_ref_fields": ["evidence_refs"],
     },
     ANALYSIS_KIND_MERGED_OBSERVATION: {
         "artifact_label": "merged-observation",
@@ -340,12 +351,14 @@ ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
         "count_key": "candidate_count",
         "id_field": "claim_id",
         "subject_field": "claim_id",
+        "score_field": "confidence",
         "state_field": "status",
         "related_id_fields": ["claim_id", "claim_type"],
+        "canonical_object_kind": "claim-candidate",
         "default_source_skill": "eco-extract-claim-candidates",
         "summary_fields": [],
-        "item_parent_id_list_fields": ["source_signal_ids"],
-        "item_artifact_ref_fields": ["public_refs"],
+        "item_parent_id_list_fields": ["source_signal_ids", "lineage"],
+        "item_artifact_ref_fields": ["evidence_refs"],
     },
     ANALYSIS_KIND_OBSERVATION_CANDIDATE: {
         "artifact_label": "observation-candidate",
@@ -392,9 +405,12 @@ CREATE TABLE IF NOT EXISTS analysis_result_items (
     item_index INTEGER NOT NULL DEFAULT 0,
     subject_id TEXT NOT NULL DEFAULT '',
     readiness TEXT NOT NULL DEFAULT '',
+    decision_source TEXT NOT NULL DEFAULT '',
     score REAL,
     related_ids_json TEXT NOT NULL DEFAULT '[]',
     evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
     item_json TEXT NOT NULL DEFAULT '{}',
     artifact_path TEXT NOT NULL DEFAULT '',
     record_locator TEXT NOT NULL DEFAULT '',
@@ -507,7 +523,27 @@ def connect_db(run_dir: Path, db_path: str = "") -> tuple[sqlite3.Connection, Pa
     connection = sqlite3.connect(file_path)
     connection.row_factory = sqlite3.Row
     connection.executescript(SCHEMA_SQL)
+    ensure_analysis_plane_schema(connection)
     return connection, file_path
+
+
+def ensure_analysis_plane_schema(connection: sqlite3.Connection) -> None:
+    item_columns = {
+        str(row["name"])
+        for row in connection.execute("PRAGMA table_info(analysis_result_items)")
+    }
+    if "decision_source" not in item_columns:
+        connection.execute(
+            "ALTER TABLE analysis_result_items ADD COLUMN decision_source TEXT NOT NULL DEFAULT ''"
+        )
+    if "lineage_json" not in item_columns:
+        connection.execute(
+            "ALTER TABLE analysis_result_items ADD COLUMN lineage_json TEXT NOT NULL DEFAULT '[]'"
+        )
+    if "provenance_json" not in item_columns:
+        connection.execute(
+            "ALTER TABLE analysis_result_items ADD COLUMN provenance_json TEXT NOT NULL DEFAULT '{}'"
+        )
 
 
 def resolve_artifact_path(
@@ -1355,6 +1391,12 @@ def _serialize_result_item_row(row: sqlite3.Row) -> dict[str, Any]:
     evidence_refs = decode_json(maybe_text(row["evidence_refs_json"]), [])
     if not isinstance(evidence_refs, list):
         evidence_refs = []
+    lineage = decode_json(maybe_text(row["lineage_json"]), [])
+    if not isinstance(lineage, list):
+        lineage = []
+    provenance = decode_json(maybe_text(row["provenance_json"]), {})
+    if not isinstance(provenance, dict):
+        provenance = {}
     item_payload = decode_json(maybe_text(row["item_json"]), {})
     if not isinstance(item_payload, dict):
         item_payload = {}
@@ -1369,9 +1411,12 @@ def _serialize_result_item_row(row: sqlite3.Row) -> dict[str, Any]:
         "item_index": int(row["item_index"] or 0),
         "subject_id": maybe_text(row["subject_id"]),
         "readiness": maybe_text(row["readiness"]),
+        "decision_source": maybe_text(row["decision_source"]),
         "score": maybe_number(row["score"]),
         "related_ids": related_ids,
         "evidence_refs": evidence_refs,
+        "lineage": lineage,
+        "provenance": provenance,
         "artifact_path": artifact_path,
         "artifact_present": _artifact_present(artifact_path),
         "record_locator": maybe_text(row["record_locator"]),
@@ -1647,6 +1692,17 @@ def sync_analysis_result_set(
     source_skill = maybe_text(payload.get("skill")) or default_source_skill
     generated_at_utc = maybe_text(payload.get("generated_at_utc")) or utc_now_iso()
     items = _extract_items_from_payload(payload, items_key=items_key)
+    canonical_object_kind = maybe_text(config.get("canonical_object_kind"))
+    if canonical_object_kind:
+        normalized_items: list[dict[str, Any]] = []
+        for item in items:
+            normalized_items.append(
+                validate_canonical_payload(canonical_object_kind, item)
+            )
+        items = normalized_items
+        payload = dict(payload)
+        payload[items_key] = items
+        payload[count_key] = len(items)
     result_set_id = "analysis-set-" + stable_hash(
         analysis_kind,
         payload_run_id,
@@ -1748,14 +1804,17 @@ def sync_analysis_result_set(
                         item_index,
                         subject_id,
                         readiness,
+                        decision_source,
                         score,
                         related_ids_json,
                         evidence_refs_json,
+                        lineage_json,
+                        provenance_json,
                         item_json,
                         artifact_path,
                         record_locator,
                         generated_at_utc
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         item_id,
@@ -1767,6 +1826,7 @@ def sync_analysis_result_set(
                         index,
                         maybe_text(item.get(subject_field)) or item_id_value,
                         maybe_text(item.get(state_field)),
+                        maybe_text(item.get("decision_source")),
                         maybe_number(item.get(score_field)) if score_field else None,
                         json_text(
                             unique_texts(
@@ -1777,6 +1837,16 @@ def sync_analysis_result_set(
                             item.get("evidence_refs", [])
                             if isinstance(item.get("evidence_refs"), list)
                             else []
+                        ),
+                        json_text(
+                            item.get("lineage", [])
+                            if isinstance(item.get("lineage"), list)
+                            else []
+                        ),
+                        json_text(
+                            item.get("provenance", {})
+                            if isinstance(item.get("provenance"), dict)
+                            else {}
                         ),
                         json_text(item),
                         str(analysis_file),
