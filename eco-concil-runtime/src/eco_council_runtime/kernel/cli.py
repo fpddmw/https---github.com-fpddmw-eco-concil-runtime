@@ -23,6 +23,7 @@ from ..reporting_objects import (
 )
 from ..reporting_exports import materialize_reporting_exports
 from ..phase2_agent_handoff import EntryChainBuilder, HardGateCommandBuilder
+from ..runtime_command_hints import run_skill_command
 from .analysis_plane import (
     analysis_kind_names,
     query_analysis_result_items,
@@ -170,6 +171,39 @@ def phase2_operator_view(
     inspect_command = maybe_text(supervisor.get("inspect_command")) or (
         f"show-run-state --run-dir {run_dir} --round-id {round_id} --tail 20" if round_id else ""
     )
+    query_public_signals_command = (
+        run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="eco-query-public-signals",
+            contract_mode="warn",
+        )
+        if round_id and run_id
+        else ""
+    )
+    query_formal_signals_command = (
+        run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="eco-query-formal-signals",
+            contract_mode="warn",
+        )
+        if round_id and run_id
+        else ""
+    )
+    query_environment_signals_command = (
+        run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="eco-query-environment-signals",
+            contract_mode="warn",
+        )
+        if round_id and run_id
+        else ""
+    )
     return {
         "round_id": round_id,
         "planning_mode": maybe_text(controller.get("planning_mode")) or maybe_text(supervisor.get("planning_mode")),
@@ -209,6 +243,9 @@ def phase2_operator_view(
             if round_id and run_id
             else ""
         ),
+        "query_public_signals_command": query_public_signals_command,
+        "query_formal_signals_command": query_formal_signals_command,
+        "query_environment_signals_command": query_environment_signals_command,
         "query_next_actions_command": (
             f"query-council-objects --run-dir {run_dir} --object-kind next-action --run-id {run_id} --round-id {round_id}"
             if round_id and run_id

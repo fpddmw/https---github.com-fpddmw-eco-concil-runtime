@@ -275,10 +275,6 @@ def selected_verification_routes(routes: list[dict[str, Any]]) -> list[dict[str,
     for item in routes:
         if not isinstance(item, dict):
             continue
-        lane = maybe_text(item.get("recommended_lane"))
-        route_status = maybe_text(item.get("route_status"))
-        if route_status != "mixed-routing-review" and lane == "environmental-observation":
-            continue
         normalized = normalize_verification_route(item)
         if maybe_text(normalized.get("object_id")):
             rows.append(normalized)
@@ -343,6 +339,84 @@ def selected_diffusion_edges(edges: list[dict[str, Any]]) -> list[dict[str, Any]
             maybe_text(row.get("object_id")),
         ),
     )
+
+
+def route_is_explicit_empirical(item: dict[str, Any]) -> bool:
+    lane = maybe_text(item.get("recommended_lane"))
+    route_status = maybe_text(item.get("route_status")) or "mixed-routing-review"
+    return (
+        lane == "environmental-observation"
+        and route_status != "mixed-routing-review"
+    )
+
+
+def empirical_lane_claim_ids(
+    issue_clusters: list[dict[str, Any]],
+    routes: list[dict[str, Any]],
+) -> list[str]:
+    claim_ids: list[str] = []
+    for issue in issue_clusters:
+        if not isinstance(issue, dict) or not route_is_explicit_empirical(issue):
+            continue
+        claim_ids.extend(list_field(issue, "claim_ids"))
+    for route in routes:
+        if not isinstance(route, dict) or not route_is_explicit_empirical(route):
+            continue
+        claim_id = maybe_text(route.get("claim_id"))
+        if claim_id:
+            claim_ids.append(claim_id)
+    return unique_texts(claim_ids)
+
+
+def selected_empirical_support_coverages(
+    coverages: list[dict[str, Any]],
+    *,
+    empirical_claim_ids: list[str],
+    max_coverages: int,
+) -> list[dict[str, Any]]:
+    if not empirical_claim_ids:
+        return []
+    allowed_claim_ids = set(empirical_claim_ids)
+    ranked_coverages = [
+        item
+        for item in coverages
+        if isinstance(item, dict)
+        and maybe_text(item.get("claim_id")) in allowed_claim_ids
+    ]
+    return selected_support_coverages(
+        ranked_coverages,
+        max_coverages=max_coverages,
+    )
+
+
+def selected_support_coverages(
+    coverages: list[dict[str, Any]],
+    *,
+    max_coverages: int,
+) -> list[dict[str, Any]]:
+    ranked_coverages = sorted(
+        [item for item in coverages if isinstance(item, dict)],
+        key=lambda item: (
+            -float(item.get("coverage_score") or 0.0),
+            maybe_text(item.get("coverage_id")),
+        ),
+    )[: max(1, max_coverages)]
+    return [
+        {
+            "coverage_id": maybe_text(item.get("coverage_id")),
+            "claim_id": maybe_text(item.get("claim_id")),
+            "coverage_score": float(item.get("coverage_score") or 0.0),
+            "readiness": maybe_text(item.get("readiness")),
+            "support_link_count": int(item.get("support_link_count") or 0),
+            "contradiction_link_count": int(item.get("contradiction_link_count") or 0),
+            "evidence_refs": unique_artifact_ref_texts(
+                item.get("evidence_refs", [])
+                if isinstance(item.get("evidence_refs"), list)
+                else []
+            ),
+        }
+        for item in ranked_coverages
+    ]
 
 
 def basis_object_ids(
@@ -535,29 +609,31 @@ def promote_evidence_basis_skill(
 
     readiness_status = maybe_text(readiness.get("readiness_status")) or "blocked"
 
-    ranked_coverages = sorted(coverages, key=lambda item: (-float(item.get("coverage_score") or 0.0), maybe_text(item.get("coverage_id"))))[: max(1, max_coverages)]
-    selected_coverages = [
-        {
-            "coverage_id": maybe_text(item.get("coverage_id")),
-            "claim_id": maybe_text(item.get("claim_id")),
-            "coverage_score": float(item.get("coverage_score") or 0.0),
-            "readiness": maybe_text(item.get("readiness")),
-            "support_link_count": int(item.get("support_link_count") or 0),
-            "contradiction_link_count": int(item.get("contradiction_link_count") or 0),
-            "evidence_refs": unique_artifact_ref_texts(
-                item.get("evidence_refs", [])
-                if isinstance(item.get("evidence_refs"), list)
-                else []
-            ),
-        }
-        for item in ranked_coverages
-    ]
+    empirical_claim_ids = empirical_lane_claim_ids(issue_clusters, routes)
+    selected_coverages = selected_empirical_support_coverages(
+        coverages,
+        empirical_claim_ids=empirical_claim_ids,
+        max_coverages=max_coverages,
+    )
+    structural_basis_present = bool(
+        issue_clusters
+        or routes
+        or links
+        or gaps
+        or edges
+    )
+    if not selected_coverages and not structural_basis_present:
+        selected_coverages = selected_support_coverages(
+            coverages,
+            max_coverages=max_coverages,
+        )
     frozen_basis = {
         "issue_clusters": selected_issue_clusters(issue_clusters),
         "verification_routes": selected_verification_routes(routes),
         "formal_public_links": selected_formal_public_links(links),
         "representation_gaps": selected_representation_gaps(gaps),
         "diffusion_edges": selected_diffusion_edges(edges),
+        "empirical_support_coverages": selected_coverages,
         "coverages": selected_coverages,
     }
     basis_counts = {
@@ -566,6 +642,7 @@ def promote_evidence_basis_skill(
         "formal_public_link_count": len(frozen_basis["formal_public_links"]),
         "representation_gap_count": len(frozen_basis["representation_gaps"]),
         "diffusion_edge_count": len(frozen_basis["diffusion_edges"]),
+        "empirical_support_coverage_count": len(selected_coverages),
         "coverage_count": len(selected_coverages),
     }
     selected_basis_object_ids = basis_object_ids(
@@ -756,6 +833,22 @@ def promote_evidence_basis_skill(
         + supporting_opinion_ids
         + rejected_opinion_ids
     )
+    withheld_next_skills = [
+        "eco-summarize-round-readiness",
+        "eco-propose-next-actions",
+    ]
+    if empirical_claim_ids or selected_coverages:
+        withheld_next_skills.append("eco-open-falsification-probe")
+    if basis_counts["formal_public_link_count"] > 0:
+        withheld_next_skills.append("eco-link-formal-comments-to-public-discourse")
+    if basis_counts["representation_gap_count"] > 0:
+        withheld_next_skills.append("eco-identify-representation-gaps")
+    if basis_counts["diffusion_edge_count"] > 0:
+        withheld_next_skills.append("eco-detect-cross-platform-diffusion")
+    deduped_withheld_next_skills: list[str] = []
+    for skill_name in withheld_next_skills:
+        if skill_name not in deduped_withheld_next_skills:
+            deduped_withheld_next_skills.append(skill_name)
     wrapper = {
         "schema_version": "d2.1",
         "skill": SKILL_NAME,
@@ -824,10 +917,14 @@ def promote_evidence_basis_skill(
         "remaining_risks": remaining_risks,
         "promotion_notes": (
             "Round is ready and a compact controversy basis has been frozen for downstream reporting."
-            if promotion_status == "promoted"
+            if promotion_status == "promoted" and not selected_coverages
             else (
-                maybe_text(promotion_resolution_reasons[0])
-                or "Round is not yet ready; the basis artifact freezes the current controversy basis and strongest available evidence while promotion remains withheld."
+                "Round is ready and a compact controversy basis plus route-gated empirical support has been frozen for downstream reporting."
+                if promotion_status == "promoted"
+                else (
+                    maybe_text(promotion_resolution_reasons[0])
+                    or "Round is not yet ready; the basis artifact freezes the current controversy basis and route-gated empirical support posture while promotion remains withheld."
+                )
             )
         ),
     }
@@ -872,7 +969,15 @@ def promote_evidence_basis_skill(
                 or ["Round readiness is not yet sufficient for promotion."]
             ),
             "challenge_hints": [],
-            "suggested_next_skills": ["eco-materialize-reporting-handoff", "eco-draft-council-decision", "eco-draft-expert-report"] if promotion_status == "promoted" else ["eco-summarize-round-readiness", "eco-open-falsification-probe"],
+            "suggested_next_skills": (
+                [
+                    "eco-materialize-reporting-handoff",
+                    "eco-draft-council-decision",
+                    "eco-draft-expert-report",
+                ]
+                if promotion_status == "promoted"
+                else deduped_withheld_next_skills
+            ),
         },
     }
 

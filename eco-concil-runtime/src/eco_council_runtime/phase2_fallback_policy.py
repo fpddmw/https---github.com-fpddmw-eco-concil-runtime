@@ -348,41 +348,41 @@ def issue_cluster_policy(
         return None
     if has_representation_gap:
         return None
-    if lane == "formal-comment-and-policy-record" and link_status in {"unlinked", "public-only"}:
+    if lane == "formal-comment-and-policy-record" and link_status == "public-only":
         return {
             "action_kind": "review-formal-record",
-            "priority": "high" if link_status == "public-only" else "medium",
+            "priority": "high",
             "assigned_role": "moderator",
             "objective": f"Check whether the formal record sufficiently represents {issue_label}.",
             "reason": f"Issue {issue_label} is routed into formal record review but the current linkage posture is {link_status}.",
             "controversy_gap": "formal-record-gap",
             "recommended_lane": lane,
             "expected_outcome": "Establish whether the formal policy record captures the issue strongly enough to close the round.",
-            "probe_candidate": link_status == "public-only",
+            "probe_candidate": True,
             "contradiction_link_count": 0,
             "coverage_score": 1.0,
             "confidence": None,
-            "pressure_score": 0.78 if link_status == "public-only" else 0.6,
+            "pressure_score": 0.78,
             "readiness_blocker": True,
         }
-    if lane == "public-discourse-analysis" and link_status in {"unlinked", "formal-only"}:
+    if lane == "public-discourse-analysis" and link_status == "formal-only":
         return {
             "action_kind": "analyze-public-discourse",
-            "priority": "high" if link_status == "formal-only" else "medium",
+            "priority": "high",
             "assigned_role": "sociologist",
             "objective": f"Check whether public discourse around {issue_label} is adequately represented and interpretable.",
             "reason": f"Issue {issue_label} stays in discourse analysis but the current linkage posture is {link_status}.",
             "controversy_gap": "public-discourse-gap",
             "recommended_lane": lane,
             "expected_outcome": "Decide whether discourse-side evidence is representative enough to stabilize the issue.",
-            "probe_candidate": link_status == "formal-only",
+            "probe_candidate": True,
             "contradiction_link_count": 0,
             "coverage_score": 1.0,
             "confidence": None,
-            "pressure_score": 0.76 if link_status == "formal-only" else 0.58,
+            "pressure_score": 0.76,
             "readiness_blocker": True,
         }
-    if lane == "stakeholder-deliberation-analysis" and link_status in {"unlinked", "formal-only"}:
+    if lane == "stakeholder-deliberation-analysis" and link_status == "formal-only":
         return {
             "action_kind": "analyze-stakeholder-deliberation",
             "priority": "medium",
@@ -392,11 +392,11 @@ def issue_cluster_policy(
             "controversy_gap": "stakeholder-deliberation-gap",
             "recommended_lane": lane,
             "expected_outcome": "Clarify whether stakeholder positions need more explicit representation before the round can close.",
-            "probe_candidate": False,
+            "probe_candidate": True,
             "contradiction_link_count": 0,
             "coverage_score": 1.0,
             "confidence": None,
-            "pressure_score": 0.58,
+            "pressure_score": 0.64,
             "readiness_blocker": True,
         }
     return None
@@ -462,10 +462,10 @@ def verification_route_policy(
                 "readiness_blocker": True,
             }
         return None
-    if lane == "formal-comment-and-policy-record" and link_status in {"unlinked", "public-only"}:
+    if lane == "formal-comment-and-policy-record" and link_status == "public-only":
         return {
             "action_kind": "review-formal-record",
-            "priority": "high" if link_status == "public-only" else "medium",
+            "priority": "high",
             "assigned_role": "moderator",
             "objective": f"Review the formal record posture for {issue_label}.",
             "reason": maybe_text(route.get("route_reason"))
@@ -473,14 +473,14 @@ def verification_route_policy(
             "controversy_gap": "formal-record-gap",
             "recommended_lane": lane,
             "expected_outcome": "Decide whether formal record material is enough to represent the issue cleanly.",
-            "probe_candidate": link_status == "public-only",
+            "probe_candidate": True,
             "contradiction_link_count": 0,
             "coverage_score": 1.0,
             "confidence": maybe_number(route.get("confidence")),
-            "pressure_score": 0.74 if link_status == "public-only" else 0.56,
+            "pressure_score": 0.74,
             "readiness_blocker": True,
         }
-    if lane in {"public-discourse-analysis", "stakeholder-deliberation-analysis"} and link_status in {"unlinked", "formal-only"}:
+    if lane in {"public-discourse-analysis", "stakeholder-deliberation-analysis"} and link_status == "formal-only":
         action_kind = (
             "analyze-public-discourse"
             if lane == "public-discourse-analysis"
@@ -493,7 +493,7 @@ def verification_route_policy(
         )
         return {
             "action_kind": action_kind,
-            "priority": "high" if link_status == "formal-only" else "medium",
+            "priority": "high",
             "assigned_role": "sociologist",
             "objective": f"Review the discourse-side representation posture for {issue_label}.",
             "reason": maybe_text(route.get("route_reason"))
@@ -501,11 +501,11 @@ def verification_route_policy(
             "controversy_gap": controversy_gap,
             "recommended_lane": lane,
             "expected_outcome": "Decide whether discourse or stakeholder representation is sufficient to stabilize the issue.",
-            "probe_candidate": link_status == "formal-only",
+            "probe_candidate": True,
             "contradiction_link_count": 0,
             "coverage_score": 1.0,
             "confidence": maybe_number(route.get("confidence")),
-            "pressure_score": 0.72 if link_status == "formal-only" else 0.55,
+            "pressure_score": 0.72,
             "readiness_blocker": True,
         }
     return None

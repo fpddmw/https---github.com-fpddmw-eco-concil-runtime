@@ -112,7 +112,7 @@ def excerpt_text(text: str, limit: int = 280) -> str:
     return normalized[: limit - 3].rstrip() + "..."
 
 
-def build_key_findings(selected_coverages: list[dict[str, Any]], max_findings: int) -> list[dict[str, Any]]:
+def build_coverage_key_findings(selected_coverages: list[dict[str, Any]], max_findings: int) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     for index, coverage in enumerate(selected_coverages[: max(1, max_findings)], start=1):
         if not isinstance(coverage, dict):
@@ -140,6 +140,81 @@ def build_key_findings(selected_coverages: list[dict[str, Any]], max_findings: i
             }
         )
     return findings
+
+
+def build_structural_basis_findings(
+    promotion_basis: dict[str, Any],
+    max_findings: int,
+) -> list[dict[str, Any]]:
+    frozen_basis = (
+        promotion_basis.get("frozen_basis", {})
+        if isinstance(promotion_basis.get("frozen_basis"), dict)
+        else {}
+    )
+    results: list[dict[str, Any]] = []
+    for key in (
+        "issue_clusters",
+        "verification_routes",
+        "formal_public_links",
+        "representation_gaps",
+        "diffusion_edges",
+    ):
+        rows = frozen_basis.get(key, [])
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            object_type = maybe_text(row.get("object_type")) or key.rstrip("s")
+            object_id = maybe_text(row.get("object_id"))
+            issue_label = maybe_text(row.get("issue_label")) or object_id or "round target"
+            summary = maybe_text(row.get("summary"))
+            recommended_lane = maybe_text(row.get("recommended_lane"))
+            status_hint = (
+                maybe_text(row.get("route_status"))
+                or maybe_text(row.get("link_status"))
+                or maybe_text(row.get("gap_type"))
+                or maybe_text(row.get("edge_type"))
+            )
+            if not summary:
+                summary = (
+                    f"{object_type} {object_id or issue_label} remains part of the frozen controversy basis."
+                )
+            if recommended_lane:
+                summary = f"{summary} lane={recommended_lane}."
+            if status_hint:
+                summary = f"{summary} status={status_hint}."
+            results.append(
+                {
+                    "finding_id": f"reporting-finding-{len(results) + 1:03d}",
+                    "title": f"{object_type} for {issue_label}",
+                    "summary": summary,
+                    "object_type": object_type,
+                    "object_id": object_id,
+                    "issue_label": issue_label,
+                    "recommended_lane": recommended_lane,
+                    "evidence_refs": unique_texts(
+                        row.get("evidence_refs", [])
+                        if isinstance(row.get("evidence_refs"), list)
+                        else []
+                    ),
+                }
+            )
+            if len(results) >= max(1, max_findings):
+                return results
+    return results
+
+
+def build_key_findings(promotion_basis: dict[str, Any], max_findings: int) -> list[dict[str, Any]]:
+    selected_coverages = (
+        promotion_basis.get("selected_coverages", [])
+        if isinstance(promotion_basis.get("selected_coverages"), list)
+        else []
+    )
+    coverage_findings = build_coverage_key_findings(selected_coverages, max_findings)
+    if coverage_findings:
+        return coverage_findings
+    return build_structural_basis_findings(promotion_basis, max_findings)
 
 
 def build_open_risks(
@@ -383,8 +458,7 @@ def materialize_reporting_handoff_skill(
     )
     reporting_blocker_hints = reporting_blocker_summaries(reporting_blockers)
 
-    selected_coverages = promotion_basis.get("selected_coverages", []) if isinstance(promotion_basis.get("selected_coverages"), list) else []
-    key_findings = build_key_findings(selected_coverages, max_findings)
+    key_findings = build_key_findings(promotion_basis, max_findings)
     open_risks = build_open_risks(promotion_basis=promotion_basis, supervisor_state=supervisor_state, readiness=readiness)
     next_actions = build_recommended_next_actions(supervisor_state)
     board_excerpt = excerpt_text(board_brief_text)

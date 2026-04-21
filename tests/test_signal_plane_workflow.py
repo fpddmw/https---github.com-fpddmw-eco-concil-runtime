@@ -12,6 +12,86 @@ ROUND2_ID = "round-signal-002"
 
 
 class SignalPlaneWorkflowTests(unittest.TestCase):
+    def test_formal_signal_roundtrip_and_filters(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            regulations_path = root / "regulationsgov_comments.json"
+            write_json(
+                regulations_path,
+                {
+                    "records": [
+                        {
+                            "id": "rg-smoke-001",
+                            "attributes": {
+                                "title": "Wildfire smoke and air quality impacts",
+                                "comment": "Wildfire smoke is reducing air quality and visibility across the city.",
+                                "postedDate": "2023-06-08T12:00:00Z",
+                                "agencyId": "EPA",
+                                "docketId": "EPA-2023-001",
+                            },
+                        },
+                        {
+                            "id": "rg-water-001",
+                            "attributes": {
+                                "title": "Water permit hearing request",
+                                "comment": "The agency should extend the hearing timeline for this water permit docket.",
+                                "postedDate": "2023-06-08T13:00:00Z",
+                                "agencyId": "EPA",
+                                "docketId": "EPA-2023-002",
+                            },
+                        },
+                    ]
+                },
+            )
+            normalize_payload = run_script(
+                script_path("eco-normalize-regulationsgov-comments-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(regulations_path),
+            )
+            self.assertEqual("completed", normalize_payload["status"])
+            self.assertEqual(2, len(normalize_payload["canonical_ids"]))
+
+            query_payload = run_script(
+                script_path("eco-query-formal-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--agency-id",
+                "EPA",
+                "--docket-id",
+                "EPA-2023-001",
+                "--keyword",
+                "wildfire",
+            )
+            self.assertEqual(1, query_payload["result_count"])
+            result = query_payload["results"][0]
+            self.assertEqual("formal-comment-signal", result["canonical_object_kind"])
+            self.assertEqual("EPA-2023-001", result["docket_id"])
+            self.assertEqual("EPA", result["agency_id"])
+
+            lookup_payload = run_script(
+                script_path("eco-lookup-normalized-signal"),
+                "--run-dir",
+                str(run_dir),
+                "--signal-id",
+                result["signal_id"],
+            )
+            self.assertEqual(1, lookup_payload["result_count"])
+            self.assertEqual(
+                "Wildfire smoke and air quality impacts",
+                lookup_payload["results"][0]["title"],
+            )
+
     def test_public_signal_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

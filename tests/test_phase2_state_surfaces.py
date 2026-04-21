@@ -481,6 +481,18 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 operator["materialize_phase2_exports_command"],
             )
             self.assertIn(
+                "eco-query-public-signals",
+                operator["query_public_signals_command"],
+            )
+            self.assertIn(
+                "eco-query-formal-signals",
+                operator["query_formal_signals_command"],
+            )
+            self.assertIn(
+                "eco-query-environment-signals",
+                operator["query_environment_signals_command"],
+            )
+            self.assertIn(
                 "--object-kind probe",
                 operator["query_probes_command"],
             )

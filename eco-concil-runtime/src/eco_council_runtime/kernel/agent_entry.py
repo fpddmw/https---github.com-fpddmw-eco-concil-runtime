@@ -374,6 +374,7 @@ def agent_entry_operator_view(
         "materialize_agent_advisory_plan_command": maybe_text(entry_commands.get("materialize_agent_advisory_plan_command")),
         "read_board_delta_command": maybe_text(entry_commands.get("read_board_delta_command")),
         "query_public_signals_command": maybe_text(entry_commands.get("query_public_signals_command")),
+        "query_formal_signals_command": maybe_text(entry_commands.get("query_formal_signals_command")),
         "query_environment_signals_command": maybe_text(entry_commands.get("query_environment_signals_command")),
         "query_council_proposals_command": maybe_text(entry_commands.get("query_council_proposals_command")),
         "query_readiness_opinions_command": maybe_text(entry_commands.get("query_readiness_opinions_command")),

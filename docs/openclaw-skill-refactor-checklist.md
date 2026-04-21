@@ -163,6 +163,28 @@
 - `已完成` `source_queue_profile` 已把默认主链改成 `claim-scope -> verifiability -> route -> controversy-map`，并把 observation extract/merge/link/scope/coverage 降级为 `route-gated optional lane`。
 - `已完成` `tests/test_formal_public_workflow.py / tests/test_migrated_source_runtime_integration.py / tests/test_runtime_source_queue_profiles.py` 已补上 formal-plane、typed signal、optional verification 的结构性回归；本轮 targeted `17` 项与扩展 workflow `87` 项均已本地通过。
 
+### 2.18 Batch 14 当前状态
+
+- `已完成` 新增 `eco-query-formal-signals`，`formal` plane 现在拥有与 `public / environment` 对称的独立 query surface；可直接按 `source_skill / signal_kind / published window / docket_id / agency_id / keyword` 查询。
+- `已完成` `phase2 operator / agent entry operator / 默认 role read path` 已全部接入 `query_formal_signals_command`；formal signal 不再只能靠底层表或历史 source whitelist 间接访问。
+- `已完成` `phase2_fallback_agenda.py / phase2_fallback_policy.py / phase2_fallback_context.py` 已把 empirical blocker 进一步改成 `route-gated`：只有显式 routed 到 `environmental-observation` 的问题才会被 coverage/support 继续卡住；纯 `formal / discourse / stakeholder` round 不再因为缺少另一侧 material 或 coverage 被硬阻塞。
+- `已完成` `eco-summarize-round-readiness` 已切成 `lane-aware readiness`：主判断面现在是 `issue / route / linkage / representation / diffusion / council opinions`，coverage 退为 observation lane supporting posture。
+- `已完成` `eco-promote-evidence-basis` 已切成 `lane-aware promotion freeze`：`verification_routes` 现在会冻结 empirical routes，自身成为 basis object；coverage 只在 `route-gated empirical lane` 或 `legacy no-structure fallback` 时进入 `selected_coverages`。
+- `已完成` `eco-materialize-reporting-handoff` 已补上 structural-basis key findings fallback；纯 formal/public/discourse promoted round 即使没有 selected coverages，也能从 `issue_clusters / routes / links / gaps / edges` 生成 reporting handoff findings。
+- `已完成` 本轮新增/更新回归已覆盖 `formal signal query surface`、`agent entry/operator commands`、`phase2 operator surface`、`non-empirical ready+promote+reporting handoff`、`investigation/reporting/runtime kernel` 主链；本地验证通过：
+  - `tests/test_signal_plane_workflow.py`
+  - `tests/test_agent_entry_gate.py`
+  - `tests/test_phase2_state_surfaces.py`
+  - `tests/test_deliberation_agenda_workflow.py`
+  - `tests/test_formal_public_workflow.py`
+  - `tests/test_diffusion_workflow.py`
+  - `tests/test_council_autonomy_flow.py`
+  - `tests/test_investigation_workflow.py`
+  - `tests/test_reporting_workflow.py`
+  - `tests/test_reporting_publish_workflow.py`
+  - `tests/test_runtime_kernel.py`
+  - `tests/test_analysis_workflow.py`
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -217,7 +239,7 @@
 - `[x]` 停止把 formal comments 仅作为 generic public signal 写入系统
 - `[ ]` 为 formal comments 增加 docket / agency / submitter / stance / concern / citation / route 维度
 - `[x]` 保留 formal/public/environment 三类输入的 source-specific provenance
-- `[ ]` 为 typed signals 提供统一 query surface
+- `[x]` 为 typed signals 提供统一 query surface
 
 ## 6. Work Package 3: Analysis plane 改写为 controversy chain
 
@@ -370,7 +392,7 @@
 - `[x]` `[降级为 optional lane]` `eco-link-claims-to-observations`
 - `[x]` `[降级为 optional lane]` `eco-score-evidence-coverage`
 - `[x]` observation chain 只在 verifiability + route 明确允许时触发
-- `[ ]` readiness 默认不再围绕 coverage 公式展开
+- `[x]` readiness 默认不再围绕 coverage 公式展开
 
 ## 12. Work Package 9: 删除兼容债
 

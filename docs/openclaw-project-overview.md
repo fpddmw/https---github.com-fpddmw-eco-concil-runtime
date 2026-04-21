@@ -73,7 +73,7 @@ OpenClaw 当前更准确的定位是：
 
 1. `openclaw-agent` 的 advisory 主路径已基本 DB-native，但 controller/operator 仍默认暴露一批 summary / planner export。
 2. 某些 runtime/post-round/benchmark 控制链路仍保留历史导出物约定。
-3. formal comments 虽已切成 `formal-comment-signal` 并独立落在 `formal` plane，但 operator-friendly formal query surface 与少数旧 empirical hint 仍有残余待清理。
+3. `formal-comment-signal` 已拥有独立 `formal` plane 与 operator-friendly query surface；当前残余问题已主要收缩到少数 runtime export 约定与旧 fallback heuristic。
 
 因此，当前最准确的判断不是“议会已经完全基于数据库运作”，而是：
 

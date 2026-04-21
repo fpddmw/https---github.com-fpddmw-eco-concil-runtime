@@ -285,6 +285,11 @@ def controversy_context_counts(
     non_empirical_issue_count = 0
     mixed_issue_count = 0
     routing_issue_count = 0
+    observation_lane_issue_count = 0
+    observation_lane_gap_count = 0
+    formal_record_issue_count = 0
+    public_discourse_issue_count = 0
+    stakeholder_deliberation_issue_count = 0
     empirical_issue_gap_count = 0
     formal_public_linkage_gap_count = 0
     for issue in issue_clusters:
@@ -295,14 +300,40 @@ def controversy_context_counts(
         route_status = maybe_text(issue.get("route_status")) or "mixed-routing-review"
         claim_ids = list_field(issue, "claim_ids")
         weakest_coverage = weakest_coverage_for_claim_ids(claim_ids, coverages_by_claim_id)
+        explicit_observation_lane = (
+            route_status != "mixed-routing-review"
+            and lane == "environmental-observation"
+        )
+        explicit_formal_record_lane = (
+            route_status != "mixed-routing-review"
+            and lane == "formal-comment-and-policy-record"
+        )
+        explicit_public_discourse_lane = (
+            route_status != "mixed-routing-review"
+            and lane == "public-discourse-analysis"
+        )
+        explicit_stakeholder_deliberation_lane = (
+            route_status != "mixed-routing-review"
+            and lane == "stakeholder-deliberation-analysis"
+        )
         if posture == "empirical-issue" or lane == "environmental-observation":
             empirical_issue_count += 1
-            if empirical_issue_requires_followup(weakest_coverage):
+            if explicit_observation_lane and empirical_issue_requires_followup(weakest_coverage):
                 empirical_issue_gap_count += 1
         elif posture == "non-empirical-issue":
             non_empirical_issue_count += 1
         elif posture:
             mixed_issue_count += 1
+        if explicit_observation_lane:
+            observation_lane_issue_count += 1
+            if empirical_issue_requires_followup(weakest_coverage):
+                observation_lane_gap_count += 1
+        elif explicit_formal_record_lane:
+            formal_record_issue_count += 1
+        elif explicit_public_discourse_lane:
+            public_discourse_issue_count += 1
+        elif explicit_stakeholder_deliberation_lane:
+            stakeholder_deliberation_issue_count += 1
         if route_status == "mixed-routing-review" or lane in {"mixed-review", "route-before-matching"}:
             routing_issue_count += 1
     if not issue_clusters:
@@ -313,10 +344,36 @@ def controversy_context_counts(
             route_status = maybe_text(route.get("route_status")) or "mixed-routing-review"
             claim_id = maybe_text(route.get("claim_id"))
             weakest_coverage = weakest_coverage_for_claim_ids([claim_id], coverages_by_claim_id)
+            explicit_observation_lane = (
+                route_status != "mixed-routing-review"
+                and lane == "environmental-observation"
+            )
+            explicit_formal_record_lane = (
+                route_status != "mixed-routing-review"
+                and lane == "formal-comment-and-policy-record"
+            )
+            explicit_public_discourse_lane = (
+                route_status != "mixed-routing-review"
+                and lane == "public-discourse-analysis"
+            )
+            explicit_stakeholder_deliberation_lane = (
+                route_status != "mixed-routing-review"
+                and lane == "stakeholder-deliberation-analysis"
+            )
             if lane == "environmental-observation":
                 empirical_issue_count += 1
-                if empirical_issue_requires_followup(weakest_coverage):
+                if explicit_observation_lane and empirical_issue_requires_followup(weakest_coverage):
                     empirical_issue_gap_count += 1
+            if explicit_observation_lane:
+                observation_lane_issue_count += 1
+                if empirical_issue_requires_followup(weakest_coverage):
+                    observation_lane_gap_count += 1
+            elif explicit_formal_record_lane:
+                formal_record_issue_count += 1
+            elif explicit_public_discourse_lane:
+                public_discourse_issue_count += 1
+            elif explicit_stakeholder_deliberation_lane:
+                stakeholder_deliberation_issue_count += 1
             elif lane in {
                 "formal-comment-and-policy-record",
                 "public-discourse-analysis",
@@ -344,6 +401,11 @@ def controversy_context_counts(
         "non_empirical_issue_count": non_empirical_issue_count,
         "mixed_issue_count": mixed_issue_count,
         "routing_issue_count": routing_issue_count,
+        "observation_lane_issue_count": observation_lane_issue_count,
+        "observation_lane_gap_count": observation_lane_gap_count,
+        "formal_record_issue_count": formal_record_issue_count,
+        "public_discourse_issue_count": public_discourse_issue_count,
+        "stakeholder_deliberation_issue_count": stakeholder_deliberation_issue_count,
         "empirical_issue_gap_count": empirical_issue_gap_count,
         "representation_gap_count": len([item for item in gaps if isinstance(item, dict)]),
         "formal_public_linkage_gap_count": formal_public_linkage_gap_count,

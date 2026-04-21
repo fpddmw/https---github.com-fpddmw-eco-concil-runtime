@@ -373,6 +373,12 @@ def load_ranked_actions_context(
     for action in ranked_actions:
         action.setdefault("run_id", run_id)
         action.setdefault("round_id", round_id)
+    board_counts = (
+        shared_context.get("board_state", {}).get("counts", {})
+        if isinstance(shared_context.get("board_state"), dict)
+        and isinstance(shared_context.get("board_state", {}).get("counts"), dict)
+        else {}
+    )
     return {
         **shared_context,
         "action_source": (
@@ -380,13 +386,27 @@ def load_ranked_actions_context(
             if any(
                 int(shared_context.get("agenda_counts", {}).get(key) or 0) > 0
                 for key in (
+                    "routing_issue_count",
                     "issue_cluster_count",
+                    "observation_lane_issue_count",
+                    "formal_record_issue_count",
+                    "public_discourse_issue_count",
+                    "stakeholder_deliberation_issue_count",
                     "representation_gap_count",
                     "formal_public_linkage_gap_count",
                     "diffusion_focus_count",
                 )
             )
-            else "coverage-ranking-fallback"
+            or any(
+                int(board_counts.get(key) or 0) > 0
+                for key in ("hypotheses_active", "challenge_open", "tasks_open")
+            )
+            or bool(
+                shared_context.get("assessments", [])
+                if isinstance(shared_context.get("assessments"), list)
+                else []
+            )
+            else "empirical-support-fallback"
         ),
         "ranked_actions": ranked_actions,
     }

@@ -218,6 +218,11 @@ def readiness_status(
     active_hypotheses: int,
     issue_cluster_count: int,
     empirical_issue_count: int,
+    observation_lane_issue_count: int,
+    observation_lane_gap_count: int,
+    formal_record_issue_count: int,
+    public_discourse_issue_count: int,
+    stakeholder_deliberation_issue_count: int,
     strong_coverages: int,
     moderate_coverages: int,
     open_challenges: int,
@@ -234,9 +239,6 @@ def readiness_status(
     if active_hypotheses == 0 and issue_cluster_count == 0:
         reasons.append("No active board hypotheses or controversy-map issues are available for round-level review.")
         return "blocked", reasons
-    if empirical_issue_count > 0 and strong_coverages + moderate_coverages == 0:
-        reasons.append("Empirical controversy issues are present but no moderate-or-strong evidence coverage objects are available.")
-        return "blocked", reasons
     if open_challenges > 0:
         reasons.append(f"{open_challenges} contested points remain open.")
     if open_tasks > 0:
@@ -245,8 +247,10 @@ def readiness_status(
         reasons.append(f"{open_probes} controversy probes remain open.")
     if routing_actions > 0:
         reasons.append(f"{routing_actions} verification-routing actions remain unresolved.")
-    if empirical_gap_actions > 0:
-        reasons.append(f"{empirical_gap_actions} empirical verification or contradiction-resolution actions remain unresolved.")
+    if observation_lane_issue_count > 0 and max(empirical_gap_actions, observation_lane_gap_count) > 0:
+        reasons.append(
+            f"{max(empirical_gap_actions, observation_lane_gap_count)} route-gated empirical verification or contradiction-resolution actions remain unresolved."
+        )
     if representation_gap_actions > 0:
         reasons.append(f"{representation_gap_actions} representation-gap actions remain unresolved.")
     if formal_linkage_actions > 0 and representation_gap_actions == 0:
@@ -257,14 +261,20 @@ def readiness_status(
         reasons.append(f"{high_priority_actions} high-priority investigation actions remain unresolved.")
     if reasons:
         return "needs-more-data", reasons
-    if strong_coverages > 0:
-        reasons.append("At least one strong evidence coverage object is available and no controversy-routing blockers remain.")
-    elif moderate_coverages > 0 and empirical_issue_count == 0:
-        reasons.append("No empirical blockers remain and the current non-empirical issue set is coherent enough for promotion review.")
-    elif moderate_coverages > 0:
-        reasons.append("Empirical issues are covered at least moderately and no remaining blockers are visible.")
+    if observation_lane_issue_count > 0 and strong_coverages > 0:
+        reasons.append("Explicit observation-lane issues are backed by at least one strong empirical support object and no structural blockers remain.")
+    elif observation_lane_issue_count > 0 and moderate_coverages > 0:
+        reasons.append("Explicit observation-lane issues are covered at least moderately and no remaining structural blockers are visible.")
+    elif observation_lane_issue_count > 0:
+        reasons.append("Explicit observation-lane issues no longer carry unresolved verification blockers and the current controversy basis is coherent enough for promotion review.")
+    elif empirical_issue_count == 0 and (
+        formal_record_issue_count > 0
+        or public_discourse_issue_count > 0
+        or stakeholder_deliberation_issue_count > 0
+    ):
+        reasons.append("No route-gated empirical blockers remain and the current formal/public/discourse issue structure is coherent enough for promotion review.")
     else:
-        reasons.append("No empirical blockers remain and the current issue map is coherent enough for promotion review.")
+        reasons.append("No route-gated empirical blockers remain and the current issue / route / linkage structure is coherent enough for promotion review.")
     return "ready", reasons
 
 
@@ -376,6 +386,21 @@ def summarize_round_readiness_skill(
     empirical_issue_count = int(agenda_counts.get("empirical_issue_count") or 0)
     non_empirical_issue_count = int(agenda_counts.get("non_empirical_issue_count") or 0)
     mixed_issue_count = int(agenda_counts.get("mixed_issue_count") or 0)
+    observation_lane_issue_count = int(
+        agenda_counts.get("observation_lane_issue_count") or 0
+    )
+    observation_lane_gap_count = int(
+        agenda_counts.get("observation_lane_gap_count") or 0
+    )
+    formal_record_issue_count = int(
+        agenda_counts.get("formal_record_issue_count") or 0
+    )
+    public_discourse_issue_count = int(
+        agenda_counts.get("public_discourse_issue_count") or 0
+    )
+    stakeholder_deliberation_issue_count = int(
+        agenda_counts.get("stakeholder_deliberation_issue_count") or 0
+    )
     open_probes = len([item for item in probes.get("probes", []) if isinstance(item, dict) and maybe_text(item.get("probe_status")) not in {"closed", "cancelled"}]) if isinstance(probes.get("probes"), list) else 0
     blocking_actions = [
         item
@@ -426,6 +451,11 @@ def summarize_round_readiness_skill(
         active_hypotheses=active_hypotheses,
         issue_cluster_count=issue_cluster_count,
         empirical_issue_count=empirical_issue_count,
+        observation_lane_issue_count=observation_lane_issue_count,
+        observation_lane_gap_count=observation_lane_gap_count,
+        formal_record_issue_count=formal_record_issue_count,
+        public_discourse_issue_count=public_discourse_issue_count,
+        stakeholder_deliberation_issue_count=stakeholder_deliberation_issue_count,
         strong_coverages=strong_coverages,
         moderate_coverages=moderate_coverages,
         open_challenges=open_challenges,
@@ -502,12 +532,39 @@ def summarize_round_readiness_skill(
             }
         )
     findings = [
-        {"finding_id": "readiness-coverage", "title": "Coverage posture", "summary": f"strong={strong_coverages}, moderate={moderate_coverages}, weak={weak_coverages}", "confidence": "medium"},
-        {"finding_id": "readiness-board", "title": "Board posture", "summary": f"active_hypotheses={active_hypotheses}, open_challenges={open_challenges}, open_tasks={open_tasks}", "confidence": "medium"},
+        {
+            "finding_id": "readiness-route-gating",
+            "title": "Route gating posture",
+            "summary": (
+                f"routing_actions={routing_actions}, observation_lane_issues={observation_lane_issue_count}, "
+                f"observation_lane_gap_actions={max(empirical_gap_actions, observation_lane_gap_count)}, "
+                f"open_probes={open_probes}, high_priority_actions={high_priority_actions}"
+            ),
+            "confidence": "medium",
+        },
+        {
+            "finding_id": "readiness-empirical-support",
+            "title": "Empirical support posture",
+            "summary": f"strong={strong_coverages}, moderate={moderate_coverages}, weak={weak_coverages}",
+            "confidence": "medium",
+        },
+        {
+            "finding_id": "readiness-board",
+            "title": "Board posture",
+            "summary": f"active_hypotheses={active_hypotheses}, open_challenges={open_challenges}, open_tasks={open_tasks}",
+            "confidence": "medium",
+        },
         {
             "finding_id": "readiness-investigation",
             "title": "Investigation posture",
-            "summary": f"open_probes={open_probes}, high_priority_actions={high_priority_actions}, routing_actions={routing_actions}, empirical_gap_actions={empirical_gap_actions}, representation_gap_actions={representation_gap_actions}",
+            "summary": (
+                f"formal_record_issues={formal_record_issue_count}, "
+                f"public_discourse_issues={public_discourse_issue_count}, "
+                f"stakeholder_deliberation_issues={stakeholder_deliberation_issue_count}, "
+                f"representation_gap_actions={representation_gap_actions}, "
+                f"formal_linkage_actions={formal_linkage_actions}, "
+                f"issue_gap_actions={issue_gap_actions}"
+            ),
             "confidence": "medium",
         },
         {
@@ -614,6 +671,14 @@ def summarize_round_readiness_skill(
             "empirical_issues": empirical_issue_count,
             "non_empirical_issues": non_empirical_issue_count,
             "mixed_issues": mixed_issue_count,
+            "observation_lane_issues": observation_lane_issue_count,
+            "observation_lane_gap_actions": max(
+                empirical_gap_actions,
+                observation_lane_gap_count,
+            ),
+            "formal_record_issues": formal_record_issue_count,
+            "public_discourse_issues": public_discourse_issue_count,
+            "stakeholder_deliberation_issues": stakeholder_deliberation_issue_count,
             "open_challenges": open_challenges,
             "open_tasks": open_tasks,
             "open_probes": open_probes,
@@ -632,7 +697,7 @@ def summarize_round_readiness_skill(
         "controversy_gap_counts": action_gap_counts,
         "probe_type_counts": probe_type_counts,
         "gate_reasons": reasons,
-        "findings": findings[:4],
+        "findings": findings[:5],
         "recommended_next_skills": recommended_next_skills,
     }
     wrapper = store_round_readiness_assessment(

@@ -22,8 +22,12 @@ OperatorCommandsBuilder = Callable[..., dict[str, str]]
 DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     {
         "role": "sociologist",
-        "focus": "public evidence query, narrative regrouping, and claim-side analysis.",
-        "read_skills": ["eco-read-board-delta", "eco-query-public-signals"],
+        "focus": "public/formal evidence query, narrative regrouping, and claim-side analysis.",
+        "read_skills": [
+            "eco-read-board-delta",
+            "eco-query-public-signals",
+            "eco-query-formal-signals",
+        ],
         "write_skills": [
             "eco-submit-council-proposal",
             "eco-submit-readiness-opinion",
@@ -45,7 +49,12 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     {
         "role": "challenger",
         "focus": "contradiction pressure, challenge tickets, and falsification probes.",
-        "read_skills": ["eco-read-board-delta", "eco-query-public-signals", "eco-query-environment-signals"],
+        "read_skills": [
+            "eco-read-board-delta",
+            "eco-query-public-signals",
+            "eco-query-formal-signals",
+            "eco-query-environment-signals",
+        ],
         "write_skills": [
             "eco-submit-council-proposal",
             "eco-submit-readiness-opinion",
@@ -57,8 +66,12 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     },
     {
         "role": "moderator",
-        "focus": "board state progression, round transition, and return to runtime hard gates.",
-        "read_skills": ["eco-read-board-delta"],
+        "focus": "board state progression, formal/public route review, and return to runtime hard gates.",
+        "read_skills": [
+            "eco-read-board-delta",
+            "eco-query-formal-signals",
+            "eco-query-public-signals",
+        ],
         "write_skills": [
             "eco-submit-council-proposal",
             "eco-submit-readiness-opinion",
@@ -487,6 +500,13 @@ def default_agent_entry_operator_commands(
             run_id=run_id,
             round_id=round_id,
             skill_name="eco-query-public-signals",
+            contract_mode=contract_mode,
+        ),
+        "query_formal_signals_command": run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="eco-query-formal-signals",
             contract_mode=contract_mode,
         ),
         "query_environment_signals_command": run_skill_command(

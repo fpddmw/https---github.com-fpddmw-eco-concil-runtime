@@ -184,6 +184,64 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
     )
 
 
+def seed_non_empirical_route_inputs(run_dir: Path, root: Path) -> None:
+    seed_public_only_trust_signal(run_dir, root)
+    run_script(
+        script_path("eco-extract-claim-candidates"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+    )
+    run_script(
+        script_path("eco-cluster-claim-candidates"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+    )
+    run_script(
+        script_path("eco-derive-claim-scope"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+    )
+    run_script(
+        script_path("eco-classify-claim-verifiability"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+    )
+    run_script(
+        script_path("eco-route-verification-lane"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+    )
+    run_script(
+        script_path("eco-materialize-controversy-map"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+    )
+
+
 class DeliberationAgendaWorkflowTests(unittest.TestCase):
     def test_next_actions_materializes_representation_and_diffusion_agenda(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -353,6 +411,106 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 )
             )
             self.assertGreaterEqual(len(artifact["selected_basis_object_ids"]), 1)
+
+    def test_non_empirical_round_can_promote_without_coverage_and_reporting_falls_back_to_structural_basis(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seed_non_empirical_route_inputs(run_dir, root)
+
+            run_script(
+                script_path("eco-propose-next-actions"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--max-actions",
+                "10",
+            )
+            readiness_payload = run_script(
+                script_path("eco-summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            readiness_artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+            promotion_payload = run_script(
+                script_path("eco-promote-evidence-basis"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            promotion_artifact = load_json(
+                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
+            )
+            run_script(
+                script_path("eco-materialize-reporting-handoff"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            handoff_artifact = load_json(
+                reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", readiness_payload["status"])
+            self.assertEqual("ready", readiness_payload["summary"]["readiness_status"])
+            self.assertEqual(0, readiness_artifact["counts"]["strong_coverages"])
+            self.assertEqual(0, readiness_artifact["counts"]["moderate_coverages"])
+            self.assertEqual(0, readiness_artifact["agenda_counts"]["observation_lane_issue_count"])
+            self.assertGreaterEqual(
+                readiness_artifact["counts"]["public_discourse_issues"]
+                + readiness_artifact["counts"]["stakeholder_deliberation_issues"]
+                + readiness_artifact["counts"]["formal_record_issues"],
+                1,
+            )
+
+            self.assertEqual("completed", promotion_payload["status"])
+            self.assertEqual("promoted", promotion_artifact["promotion_status"])
+            self.assertEqual(0, promotion_artifact["basis_counts"]["coverage_count"])
+            self.assertEqual(0, len(promotion_artifact["selected_coverages"]))
+            self.assertGreaterEqual(
+                promotion_artifact["basis_counts"]["verification_route_count"],
+                1,
+            )
+            self.assertTrue(
+                any(
+                    row.get("recommended_lane")
+                    in {
+                        "formal-comment-and-policy-record",
+                        "public-discourse-analysis",
+                        "stakeholder-deliberation-analysis",
+                    }
+                    for row in promotion_artifact["frozen_basis"]["verification_routes"]
+                )
+            )
+
+            self.assertGreaterEqual(len(handoff_artifact["key_findings"]), 1)
+            self.assertIn(
+                handoff_artifact["key_findings"][0].get("object_type"),
+                {
+                    "issue-cluster",
+                    "verification-route",
+                    "formal-public-link",
+                    "representation-gap",
+                    "diffusion-edge",
+                },
+            )
 
 
 if __name__ == "__main__":

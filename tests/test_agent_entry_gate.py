@@ -457,6 +457,7 @@ class AgentEntryGateTests(unittest.TestCase):
                 "materialize_agent_advisory_plan_command": "custom-refresh-advisory",
                 "read_board_delta_command": "custom-read-board",
                 "query_public_signals_command": "custom-query-public",
+                "query_formal_signals_command": "custom-query-formal",
                 "query_environment_signals_command": "custom-query-environment",
                 "list_claim_cluster_result_sets_command": "custom-list-analysis",
                 "query_claim_cluster_items_command_template": "custom-query-analysis-items",
@@ -488,6 +489,10 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertEqual(
                 "custom-materialize-entry-gate",
                 state_payload["operator"]["materialize_agent_entry_gate_command"],
+            )
+            self.assertEqual(
+                "custom-query-formal",
+                state_payload["operator"]["query_formal_signals_command"],
             )
             self.assertEqual(
                 "custom-query-analysis-items",
@@ -524,6 +529,7 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("claim-cluster", operator["list_claim_cluster_result_sets_command"])
             self.assertIn("eco-read-board-delta", operator["read_board_delta_command"])
             self.assertIn("eco-query-public-signals", operator["query_public_signals_command"])
+            self.assertIn("eco-query-formal-signals", operator["query_formal_signals_command"])
             self.assertIn("query-council-objects", operator["query_council_proposals_command"])
             self.assertIn("query-council-objects", operator["query_readiness_opinions_command"])
             self.assertIn("eco-submit-council-proposal", operator["submit_council_proposal_command_template"])

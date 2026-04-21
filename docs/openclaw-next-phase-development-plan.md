@@ -219,6 +219,44 @@
    - targeted `17` 项通过。
    - 扩展 workflow `87` 项通过。
 
+## 2.14 Batch 14 当前已交付
+
+第十四批把 `formal signal` 的 operator/query 可见面与 `readiness / promotion / reporting handoff` 的 coverage-first 尾巴一起收口，已落地以下硬改动：
+
+1. 新增 `eco-query-formal-signals`：
+   - `formal` plane 现在拥有与 `public / environment` 对称的一等 query surface。
+   - 支持 `source_skill / signal_kind / published_after_utc / published_before_utc / docket_id / agency_id / keyword` 过滤。
+   - 输出会直接暴露 `canonical_object_kind / docket_id / agency_id / artifact_ref`。
+2. `phase2 operator`、`agent entry operator` 与默认 role read path 现已全部接入 `query_formal_signals_command`：
+   - `show-run-state` 不再只给 operator 暴露 deliberation/reporting summary。
+   - sociologist / challenger / moderator 默认 read chain 现在都能直接读取 formal record signals。
+3. `phase2_fallback_agenda.py / phase2_fallback_policy.py / phase2_fallback_context.py` 已进一步改成 `lane-aware`：
+   - `public-discourse-analysis / stakeholder-deliberation-analysis / formal-comment-and-policy-record` 不再因为“另一侧为空”就被一律判成 blocker。
+   - empirical gap 只在 route 已明确落到 `environmental-observation` 时才继续作为 readiness/promotion blocker。
+   - 旧 `coverage-ranking-fallback` 语义被收窄成 `empirical-support-fallback`，只有在完全缺少结构 basis 时才允许 coverage 继续兜底。
+4. `eco-summarize-round-readiness` 现在以 `issue / route / linkage / representation / diffusion / council opinions` 为主判断面：
+   - `observation_lane_issue_count / observation_lane_gap_count / formal_record_issue_count / public_discourse_issue_count / stakeholder_deliberation_issue_count` 已进入 readiness counts。
+   - non-empirical round 即使没有 coverage，只要结构稳定也可以 `ready`。
+5. `eco-promote-evidence-basis` 现在会冻结 empirical `verification_routes` 本身，而不是只冻结 coverage：
+   - `selected_coverages` 只保留给 `route-gated empirical lane` 或 “没有任何结构 basis 的 legacy fallback round”。
+   - `frozen_basis` 现在显式包含 `empirical_support_coverages`，coverage 退为 supporting object，不再默认是主 basis。
+6. `eco-materialize-reporting-handoff` 已新增 structural-basis key findings fallback：
+   - 当 `selected_coverages` 为空时，会从 `issue_clusters / verification_routes / formal_public_links / representation_gaps / diffusion_edges` 生成 reporting findings。
+   - 纯 formal/public/discourse promoted round 不再因为“没有 coverage”而生成空 handoff。
+7. 本轮本地验证通过：
+   - `tests/test_signal_plane_workflow.py`
+   - `tests/test_agent_entry_gate.py`
+   - `tests/test_phase2_state_surfaces.py`
+   - `tests/test_deliberation_agenda_workflow.py`
+   - `tests/test_formal_public_workflow.py`
+   - `tests/test_diffusion_workflow.py`
+   - `tests/test_council_autonomy_flow.py`
+   - `tests/test_investigation_workflow.py`
+   - `tests/test_reporting_workflow.py`
+   - `tests/test_reporting_publish_workflow.py`
+   - `tests/test_runtime_kernel.py`
+   - `tests/test_analysis_workflow.py`
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足
