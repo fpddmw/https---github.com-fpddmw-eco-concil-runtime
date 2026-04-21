@@ -23,6 +23,9 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_formal_public_link_context,
     sync_diffusion_edge_result_set,
 )
+from eco_council_runtime.analysis_objects import (  # noqa: E402
+    normalize_diffusion_edge_payload,
+)
 from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     ensure_signal_plane_schema,
     resolved_canonical_object_kind,
@@ -393,8 +396,12 @@ def issue_profiles_from_links(
                 list_field(link, "issue_terms")
                 + semantic_tokens(issue_label.replace("-", " "))
             )[:16],
+            "linkage_ids": unique_texts([maybe_text(link.get("linkage_id"))]),
             "cluster_ids": unique_texts(list_field(link, "cluster_ids")),
             "claim_ids": unique_texts(list_field(link, "claim_ids")),
+            "claim_scope_ids": unique_texts(list_field(link, "claim_scope_ids")),
+            "assessment_ids": unique_texts(list_field(link, "assessment_ids")),
+            "route_ids": unique_texts(list_field(link, "route_ids")),
             "recommended_lane": maybe_text(link.get("recommended_lane"))
             or "mixed-review",
             "route_status": maybe_text(link.get("route_status"))
@@ -404,6 +411,9 @@ def issue_profiles_from_links(
                 if isinstance(link.get("evidence_refs"), list)
                 else [],
                 limit=16,
+            ),
+            "lineage": unique_texts(
+                link.get("lineage", []) if isinstance(link.get("lineage"), list) else []
             ),
         }
         profiles[issue_label] = profile
@@ -645,63 +655,95 @@ def detect_cross_platform_diffusion_skill(
                     edge_type,
                 )[:12]
                 edges.append(
-                    {
-                        "schema_version": "n3.0",
-                        "edge_id": edge_id,
-                        "run_id": run_id,
-                        "round_id": round_id,
-                        "issue_label": issue_label,
-                        "source_platform": maybe_text(ordered_source.get("platform")),
-                        "target_platform": maybe_text(ordered_target.get("platform")),
-                        "source_plane": maybe_text(ordered_source.get("plane_label")),
-                        "target_plane": maybe_text(ordered_target.get("plane_label")),
-                        "source_signal_ids": source_signal_ids,
-                        "target_signal_ids": target_signal_ids,
-                        "source_signal_count": len(source_signal_ids),
-                        "target_signal_count": len(target_signal_ids),
-                        "source_source_skills": unique_texts(
-                            ordered_source.get("source_skills", [])
-                        ),
-                        "target_source_skills": unique_texts(
-                            ordered_target.get("source_skills", [])
-                        ),
-                        "source_examples": unique_texts(
-                            ordered_source.get("examples", [])
-                        )[:3],
-                        "target_examples": unique_texts(
-                            ordered_target.get("examples", [])
-                        )[:3],
-                        "edge_type": edge_type,
-                        "temporal_relation": relation,
-                        "time_delta_hours": delta_hours,
-                        "source_first_seen_utc": maybe_text(
-                            ordered_source.get("first_seen_utc")
-                        ),
-                        "target_first_seen_utc": maybe_text(
-                            ordered_target.get("first_seen_utc")
-                        ),
-                        "recommended_lane": maybe_text(profile.get("recommended_lane"))
-                        or "mixed-review",
-                        "route_status": maybe_text(profile.get("route_status"))
-                        or "mixed-routing-review",
-                        "cluster_ids": unique_texts(profile.get("cluster_ids", [])),
-                        "claim_ids": unique_texts(profile.get("claim_ids", [])),
-                        "confidence": edge_confidence(
-                            source_count=len(source_signal_ids),
-                            target_count=len(target_signal_ids),
-                            delta_hours=delta_hours,
-                            claim_count=len(profile.get("claim_ids", [])),
-                            cluster_count=len(profile.get("cluster_ids", [])),
-                        ),
-                        "edge_summary": edge_summary(
-                            issue_label,
-                            edge_type,
-                            maybe_text(ordered_source.get("platform")),
-                            maybe_text(ordered_target.get("platform")),
-                            relation,
-                        ),
-                        "evidence_refs": evidence_refs,
-                    }
+                    normalize_diffusion_edge_payload(
+                        {
+                            "edge_id": edge_id,
+                            "run_id": run_id,
+                            "round_id": round_id,
+                            "issue_label": issue_label,
+                            "linkage_ids": unique_texts(profile.get("linkage_ids", [])),
+                            "cluster_ids": unique_texts(profile.get("cluster_ids", [])),
+                            "claim_ids": unique_texts(profile.get("claim_ids", [])),
+                            "claim_scope_ids": unique_texts(
+                                profile.get("claim_scope_ids", [])
+                            ),
+                            "assessment_ids": unique_texts(
+                                profile.get("assessment_ids", [])
+                            ),
+                            "route_ids": unique_texts(profile.get("route_ids", [])),
+                            "source_platform": maybe_text(ordered_source.get("platform")),
+                            "target_platform": maybe_text(ordered_target.get("platform")),
+                            "source_plane": maybe_text(ordered_source.get("plane_label")),
+                            "target_plane": maybe_text(ordered_target.get("plane_label")),
+                            "source_signal_ids": source_signal_ids,
+                            "target_signal_ids": target_signal_ids,
+                            "source_signal_count": len(source_signal_ids),
+                            "target_signal_count": len(target_signal_ids),
+                            "source_source_skills": unique_texts(
+                                ordered_source.get("source_skills", [])
+                            ),
+                            "target_source_skills": unique_texts(
+                                ordered_target.get("source_skills", [])
+                            ),
+                            "source_examples": unique_texts(
+                                ordered_source.get("examples", [])
+                            )[:3],
+                            "target_examples": unique_texts(
+                                ordered_target.get("examples", [])
+                            )[:3],
+                            "edge_type": edge_type,
+                            "temporal_relation": relation,
+                            "time_delta_hours": delta_hours,
+                            "source_first_seen_utc": maybe_text(
+                                ordered_source.get("first_seen_utc")
+                            ),
+                            "target_first_seen_utc": maybe_text(
+                                ordered_target.get("first_seen_utc")
+                            ),
+                            "recommended_lane": maybe_text(profile.get("recommended_lane"))
+                            or "mixed-review",
+                            "route_status": maybe_text(profile.get("route_status"))
+                            or "mixed-routing-review",
+                            "confidence": edge_confidence(
+                                source_count=len(source_signal_ids),
+                                target_count=len(target_signal_ids),
+                                delta_hours=delta_hours,
+                                claim_count=len(profile.get("claim_ids", [])),
+                                cluster_count=len(profile.get("cluster_ids", [])),
+                            ),
+                            "edge_summary": edge_summary(
+                                issue_label,
+                                edge_type,
+                                maybe_text(ordered_source.get("platform")),
+                                maybe_text(ordered_target.get("platform")),
+                                relation,
+                            ),
+                            "evidence_refs": evidence_refs,
+                            "lineage": unique_texts(
+                                list(profile.get("lineage", []))
+                                + list(profile.get("linkage_ids", []))
+                                + list(profile.get("cluster_ids", []))
+                                + list(profile.get("claim_ids", []))
+                                + list(profile.get("claim_scope_ids", []))
+                                + list(profile.get("assessment_ids", []))
+                                + list(profile.get("route_ids", []))
+                                + source_signal_ids
+                                + target_signal_ids
+                            ),
+                            "rationale": (
+                                "Collapsed ordered cross-platform signal movement into one "
+                                f"diffusion edge for {issue_label}."
+                            ),
+                            "method": "cross-platform-diffusion-v2",
+                            "selection_mode": "infer-cross-platform-issue-diffusion",
+                            "provenance": {
+                                "source_signal_bucket_size": len(source_signal_ids),
+                                "target_signal_bucket_size": len(target_signal_ids),
+                            },
+                        },
+                        source_skill=SKILL_NAME,
+                        artifact_path=str(output_file),
+                    )
                 )
 
     edge_type_counts: dict[str, int] = {}
@@ -728,7 +770,7 @@ def detect_cross_platform_diffusion_skill(
                 link_context.get("formal_public_link_source")
             ),
             "selection_mode": "infer-cross-platform-issue-diffusion",
-            "method": "cross-platform-diffusion-v1",
+            "method": "cross-platform-diffusion-v2",
         },
         "formal_public_links_path": maybe_text(
             link_context.get("formal_public_links_file")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,10 +10,17 @@ from _workflow_support import (
     investigation_path,
     load_json,
     run_script,
+    runtime_src_path,
     script_path,
     seed_analysis_chain,
     write_json,
 )
+
+RUNTIME_SRC = runtime_src_path()
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import query_analysis_result_items
 
 RUN_ID = "run-controversy-001"
 ROUND_ID = "round-controversy-001"
@@ -100,6 +108,52 @@ class ControversyWorkflowTests(unittest.TestCase):
                     and issue["recommended_lane"] == "environmental-observation"
                     for issue in map_artifact["issue_clusters"]
                 )
+            )
+            smoke_issue = next(
+                issue
+                for issue in map_artifact["issue_clusters"]
+                if issue["issue_label"] == "air-quality-smoke"
+            )
+            self.assertEqual("heuristic-fallback", smoke_issue["decision_source"])
+            self.assertTrue(smoke_issue["rationale"])
+            self.assertTrue(smoke_issue["claim_scope_id"])
+            self.assertTrue(smoke_issue["assessment_id"])
+            self.assertTrue(smoke_issue["route_id"])
+            self.assertGreaterEqual(len(smoke_issue["source_signal_ids"]), 1)
+            self.assertGreaterEqual(len(smoke_issue["lineage"]), 1)
+            self.assertIn("source_skill", smoke_issue["provenance"])
+
+            analytics_path(run_dir, f"controversy_map_{ROUND_ID}.json").unlink()
+            query_payload = query_analysis_result_items(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                analysis_kind="controversy-map",
+                subject_id="air-quality-smoke",
+                latest_only=True,
+                include_result_sets=True,
+                include_contract=True,
+            )
+            self.assertGreaterEqual(query_payload["summary"]["returned_item_count"], 1)
+            self.assertTrue(
+                all(not item["artifact_present"] for item in query_payload["items"])
+            )
+            self.assertTrue(
+                any(
+                    item["decision_source"] == "heuristic-fallback"
+                    and bool(item["item"]["route_id"])
+                    for item in query_payload["items"]
+                )
+            )
+            parent_kinds = {
+                parent["analysis_kind"]
+                for parent in query_payload["result_sets"][0]["result_contract"][
+                    "parent_result_sets"
+                ]
+            }
+            self.assertSetEqual(
+                {"claim-cluster", "claim-scope", "claim-verifiability", "verification-route"},
+                parent_kinds,
             )
 
     def test_procedural_scope_routes_away_from_environment_and_still_materializes_map(
@@ -217,6 +271,9 @@ class ControversyWorkflowTests(unittest.TestCase):
                 "non-empirical-issue",
                 map_artifact["issue_clusters"][0]["controversy_posture"],
             )
+            self.assertTrue(map_artifact["issue_clusters"][0]["claim_scope_id"])
+            self.assertTrue(map_artifact["issue_clusters"][0]["assessment_id"])
+            self.assertTrue(map_artifact["issue_clusters"][0]["route_id"])
 
 
 if __name__ == "__main__":

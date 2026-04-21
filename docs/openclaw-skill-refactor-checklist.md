@@ -204,6 +204,28 @@
   - `tests/test_investigation_workflow.py`
   - `tests/test_formal_public_workflow.py`
 
+### 2.20 Batch 16 当前状态
+
+- `已完成` `canonical_contracts.py` 已把 `formal-public-link / representation-gap / diffusion-edge / controversy-map` 升级为强契约对象：
+  - 现在会硬校验 `rationale / provenance / evidence_refs / lineage`。
+  - `alignment_score / severity_score / confidence / member_count` 等关键数值字段已进入 `required_number_fields`。
+- `已完成` `eco_council_runtime/analysis_objects.py` 已新增四类 canonical normalization helper，并统一 controversy 主链的 `decision_source / rationale / provenance / evidence_refs / lineage / score` 归一化。
+- `已完成` `kernel/analysis_plane.py` 已把上述四类结果集接入 `canonical_object_kind` 强校验与更完整的 parent lineage：
+  - `formal-public-link` 现在会显式保留 `claim_scope_ids / assessment_ids / route_ids`。
+  - `diffusion-edge` 现在会显式保留 `linkage_ids / claim_scope_ids / assessment_ids / route_ids`。
+  - `controversy-map` 现在会把 `claim_scope_id / assessment_id / route_id / source_signal_ids` 写入 item row 与 query surface。
+- `已完成` `eco-link-formal-comments-to-public-discourse / eco-identify-representation-gaps / eco-detect-cross-platform-diffusion / eco-materialize-controversy-map` 已改成 canonical object 输出；controversy 链不再把弱 wrapper dict 直接 sync 进 DB。
+- `已完成` controversy 主链的 DB-native 恢复验证已补齐：
+  - 删掉 `formal_public_links / representation_gaps / diffusion_edges / controversy_map` artifact 后，`query_analysis_result_items(...)` 与 runtime kernel query surface 仍能从 `analysis_result_items` 恢复完整对象。
+  - `eco-link-formal-comments-to-public-discourse` 已修正 `route.claim_id = cluster_id` 时 route 元数据丢失的问题；formal/public linkage 不再漏掉 `route_ids / assessment_ids / claim_scope_ids` 父链。
+- `已完成` 本轮本地验证通过：
+  - `tests/test_canonical_contracts.py`
+  - `tests/test_analysis_workflow.py`
+  - `tests/test_formal_public_workflow.py`
+  - `tests/test_diffusion_workflow.py`
+  - `tests/test_controversy_workflow.py`
+  - `tests/test_runtime_kernel.py`
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -229,10 +251,10 @@
 - `[ ]` 建立 `evidence-citation-type`
 - `[x]` 建立 `verifiability-assessment`
 - `[x]` 建立 `verification-route`
-- `[ ]` 建立 `formal-public-link`
-- `[ ]` 建立 `representation-gap`
-- `[ ]` 建立 `diffusion-edge`
-- `[ ]` 建立 `controversy-map`
+- `[x]` 建立 `formal-public-link`
+- `[x]` 建立 `representation-gap`
+- `[x]` 建立 `diffusion-edge`
+- `[x]` 建立 `controversy-map`
 - `[x]` 建立 `claim-candidate`
 - `[x]` 建立 `claim-cluster`
 - `[x]` 建立 `claim-scope`
@@ -252,8 +274,8 @@
 
 ### 4.4 通用要求
 
-- `[x]` `claim-candidate / claim-cluster / claim-scope / verifiability-assessment / verification-route` 支持 item-level query
-- `[x]` 上述 claim-side analysis object 已具备 ID、provenance、evidence refs、lineage、decision source
+- `[x]` `claim-candidate / claim-cluster / claim-scope / verifiability-assessment / verification-route / formal-public-link / representation-gap / diffusion-edge / controversy-map` 支持 item-level query
+- `[x]` 上述 claim-side + controversy-chain analysis object 已具备 ID、provenance、evidence refs、lineage、decision source
 - `[ ]` phase-2 对象不再只作为整包 snapshot 存在
 
 ## 5. Work Package 2: Signal plane 重构

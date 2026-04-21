@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import sqlite3
 import tempfile
 import unittest
@@ -9,10 +10,17 @@ from _workflow_support import (
     analytics_path,
     load_json,
     run_script,
+    runtime_src_path,
     script_path,
     seed_analysis_chain,
     write_json,
 )
+
+RUNTIME_SRC = runtime_src_path()
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import query_analysis_result_items
 
 RUN_ID = "run-formal-public-001"
 ROUND_ID = "round-formal-public-001"
@@ -211,6 +219,11 @@ class FormalPublicWorkflowTests(unittest.TestCase):
             self.assertEqual("aligned", smoke_link["link_status"])
             self.assertGreaterEqual(smoke_link["formal_signal_count"], 1)
             self.assertGreaterEqual(smoke_link["public_signal_count"], 1)
+            self.assertEqual("heuristic-fallback", smoke_link["decision_source"])
+            self.assertTrue(smoke_link["rationale"])
+            self.assertGreaterEqual(len(smoke_link["route_ids"]), 1)
+            self.assertGreaterEqual(len(smoke_link["lineage"]), 1)
+            self.assertIn("source_skill", smoke_link["provenance"])
             self.assertEqual("formal-only", permit_link["link_status"])
             self.assertGreaterEqual(permit_link["formal_signal_count"], 1)
             self.assertEqual(0, permit_link["public_signal_count"])
@@ -228,6 +241,53 @@ class FormalPublicWorkflowTests(unittest.TestCase):
             self.assertIn(
                 ("representation-trust", "formal-underrepresentation"),
                 gap_pairs,
+            )
+            permit_gap = next(
+                gap
+                for gap in gap_artifact["gaps"]
+                if gap["issue_label"] == "permit-process"
+                and gap["gap_type"] == "public-underrepresentation"
+            )
+            self.assertEqual("heuristic-fallback", permit_gap["decision_source"])
+            self.assertTrue(permit_gap["rationale"])
+            self.assertIsInstance(permit_gap["route_ids"], list)
+            self.assertGreaterEqual(len(permit_gap["lineage"]), 1)
+            self.assertIn("source_skill", permit_gap["provenance"])
+
+            analytics_path(run_dir, f"formal_public_links_{ROUND_ID}.json").unlink()
+            analytics_path(run_dir, f"representation_gaps_{ROUND_ID}.json").unlink()
+
+            link_query = query_analysis_result_items(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                analysis_kind="formal-public-link",
+                subject_id="air-quality-smoke",
+                latest_only=True,
+                include_result_sets=True,
+                include_contract=True,
+            )
+            self.assertEqual(1, link_query["summary"]["returned_item_count"])
+            self.assertFalse(link_query["items"][0]["artifact_present"])
+            self.assertEqual("heuristic-fallback", link_query["items"][0]["decision_source"])
+            self.assertGreaterEqual(len(link_query["items"][0]["item"]["route_ids"]), 1)
+            self.assertIn("source_skill", link_query["items"][0]["provenance"])
+
+            gap_query = query_analysis_result_items(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                analysis_kind="representation-gap",
+                subject_id="permit-process",
+                latest_only=True,
+            )
+            self.assertGreaterEqual(gap_query["summary"]["returned_item_count"], 1)
+            self.assertTrue(
+                any(
+                    item["item"]["gap_type"] == "public-underrepresentation"
+                    and not item["artifact_present"]
+                    for item in gap_query["items"]
+                )
             )
 
     def test_claim_extractor_ignores_formal_signal_rows_after_formal_plane_split(

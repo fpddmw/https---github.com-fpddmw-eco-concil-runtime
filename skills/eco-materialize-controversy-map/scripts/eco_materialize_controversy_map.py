@@ -24,6 +24,9 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_verification_route_context,
     sync_controversy_map_result_set,
 )
+from eco_council_runtime.analysis_objects import (  # noqa: E402
+    normalize_controversy_map_payload,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -180,6 +183,7 @@ def fallback_clusters_from_scopes(scopes: list[dict[str, Any]]) -> list[dict[str
                 "member_claim_ids": [claim_id] if claim_id else [],
                 "member_count": 1,
                 "aggregate_source_signal_count": 0,
+                "source_signal_ids": list_field(scope, "source_signal_ids"),
                 "evidence_refs": scope.get("evidence_refs", [])
                 if isinstance(scope.get("evidence_refs"), list)
                 else [],
@@ -187,6 +191,9 @@ def fallback_clusters_from_scopes(scopes: list[dict[str, Any]]) -> list[dict[str
                 if isinstance(scope.get("evidence_refs"), list)
                 else [],
                 "controversy_summary": maybe_text(scope.get("matching_eligibility_reason")),
+                "lineage": scope.get("lineage", [])
+                if isinstance(scope.get("lineage"), list)
+                else [],
             }
         )
     return clusters
@@ -367,59 +374,103 @@ def materialize_controversy_map_skill(
         )
         map_issue_id = "issuemap-" + stable_hash(run_id, round_id, claim_key, lane)[:12]
         claim_ids = list_field(cluster, "member_claim_ids") or ([claim_key] if claim_key else [])
+        source_signal_ids = list_field(cluster, "source_signal_ids")
         issue_label = maybe_text(cluster.get("issue_label")) or maybe_text(cluster.get("cluster_label")) or maybe_text(scope.get("issue_hint")) or "general-public-controversy"
         issue_clusters.append(
-            {
-                "schema_version": "n3.0",
-                "map_issue_id": map_issue_id,
-                "run_id": run_id,
-                "round_id": round_id,
-                "cluster_id": maybe_text(cluster.get("cluster_id")) or claim_key,
-                "claim_ids": claim_ids,
-                "issue_label": issue_label,
-                "claim_type": maybe_text(cluster.get("claim_type")) or maybe_text(scope.get("claim_type")),
-                "dominant_stance": maybe_text(cluster.get("dominant_stance")) or "unclear",
-                "stance_distribution": (
-                    cluster.get("stance_distribution")
-                    if isinstance(cluster.get("stance_distribution"), list)
-                    else []
-                ),
-                "concern_facets": unique_texts(
-                    list_field(cluster, "concern_facets")
-                    + list_field(scope, "concern_facets")
-                    + list_field(assessment, "concern_facets")
-                )[:5],
-                "actor_hints": unique_texts(
-                    list_field(cluster, "actor_hints")
-                    + list_field(scope, "actor_hints")
-                    + list_field(assessment, "actor_hints")
-                )[:5],
-                "evidence_citation_types": unique_texts(
-                    list_field(cluster, "evidence_citation_types")
-                    + list_field(scope, "evidence_citation_types")
-                    + list_field(assessment, "evidence_citation_types")
-                )[:5],
-                "verifiability_kind": maybe_text(assessment.get("verifiability_kind"))
-                or maybe_text(cluster.get("verifiability_posture"))
-                or maybe_text(scope.get("verifiability_kind"))
-                or "mixed-public-claim",
-                "dispute_type": maybe_text(route.get("dispute_type"))
-                or maybe_text(assessment.get("dispute_type"))
-                or maybe_text(cluster.get("dispute_type"))
-                or maybe_text(scope.get("dispute_type"))
-                or "mixed-controversy",
-                "recommended_lane": lane,
-                "route_status": route_status,
-                "should_query_environment": should_query_environment,
-                "member_count": int(cluster.get("member_count") or 1),
-                "aggregate_source_signal_count": int(
-                    cluster.get("aggregate_source_signal_count") or 0
-                ),
-                "controversy_posture": controversy_posture(route_status, lane),
-                "controversy_summary": maybe_text(cluster.get("controversy_summary"))
-                or issue_summary(cluster, lane, route_status),
-                "evidence_refs": evidence_refs,
-            }
+            normalize_controversy_map_payload(
+                {
+                    "map_issue_id": map_issue_id,
+                    "run_id": run_id,
+                    "round_id": round_id,
+                    "cluster_id": maybe_text(cluster.get("cluster_id")) or claim_key,
+                    "claim_scope_id": maybe_text(scope.get("claim_scope_id")),
+                    "assessment_id": maybe_text(assessment.get("assessment_id")),
+                    "route_id": maybe_text(route.get("route_id")),
+                    "claim_ids": claim_ids,
+                    "source_signal_ids": source_signal_ids,
+                    "issue_label": issue_label,
+                    "claim_type": maybe_text(cluster.get("claim_type"))
+                    or maybe_text(scope.get("claim_type")),
+                    "dominant_stance": maybe_text(cluster.get("dominant_stance"))
+                    or "unclear",
+                    "stance_distribution": (
+                        cluster.get("stance_distribution")
+                        if isinstance(cluster.get("stance_distribution"), list)
+                        else []
+                    ),
+                    "concern_facets": unique_texts(
+                        list_field(cluster, "concern_facets")
+                        + list_field(scope, "concern_facets")
+                        + list_field(assessment, "concern_facets")
+                    )[:5],
+                    "actor_hints": unique_texts(
+                        list_field(cluster, "actor_hints")
+                        + list_field(scope, "actor_hints")
+                        + list_field(assessment, "actor_hints")
+                    )[:5],
+                    "evidence_citation_types": unique_texts(
+                        list_field(cluster, "evidence_citation_types")
+                        + list_field(scope, "evidence_citation_types")
+                        + list_field(assessment, "evidence_citation_types")
+                    )[:5],
+                    "verifiability_kind": maybe_text(assessment.get("verifiability_kind"))
+                    or maybe_text(cluster.get("verifiability_posture"))
+                    or maybe_text(scope.get("verifiability_kind"))
+                    or "mixed-public-claim",
+                    "dispute_type": maybe_text(route.get("dispute_type"))
+                    or maybe_text(assessment.get("dispute_type"))
+                    or maybe_text(cluster.get("dispute_type"))
+                    or maybe_text(scope.get("dispute_type"))
+                    or "mixed-controversy",
+                    "recommended_lane": lane,
+                    "route_status": route_status,
+                    "should_query_environment": should_query_environment,
+                    "member_count": int(cluster.get("member_count") or 1),
+                    "aggregate_source_signal_count": int(
+                        cluster.get("aggregate_source_signal_count") or 0
+                    ),
+                    "controversy_posture": controversy_posture(route_status, lane),
+                    "controversy_summary": maybe_text(cluster.get("controversy_summary"))
+                    or issue_summary(cluster, lane, route_status),
+                    "evidence_refs": evidence_refs,
+                    "lineage": unique_texts(
+                        list(
+                            cluster.get("lineage", [])
+                            if isinstance(cluster.get("lineage"), list)
+                            else []
+                        )
+                        + list(
+                            scope.get("lineage", [])
+                            if isinstance(scope.get("lineage"), list)
+                            else []
+                        )
+                        + list(
+                            assessment.get("lineage", [])
+                            if isinstance(assessment.get("lineage"), list)
+                            else []
+                        )
+                        + list(
+                            route.get("lineage", [])
+                            if isinstance(route.get("lineage"), list)
+                            else []
+                        )
+                        + claim_ids
+                        + source_signal_ids
+                    ),
+                    "rationale": (
+                        "Merged cluster, scope, verifiability, and route state into "
+                        f"one controversy-map issue object for {issue_label}."
+                    ),
+                    "method": "controversy-map-materialization-v2",
+                    "selection_mode": "cluster-first-with-routing-merge",
+                    "provenance": {
+                        "fallback_route_used": not bool(maybe_text(route.get("route_id"))),
+                        "fallback_scope_used": not bool(maybe_text(scope.get("claim_scope_id"))),
+                    },
+                },
+                source_skill=SKILL_NAME,
+                artifact_path=str(output_file),
+            )
         )
 
     lane_counts = count_labels(
@@ -483,7 +534,7 @@ def materialize_controversy_map_skill(
             "route_source": maybe_text(route_context.get("verification_route_source"))
             or "missing-verification-route",
             "selection_mode": "cluster-first-with-routing-merge",
-            "method": "controversy-map-materialization-v1",
+            "method": "controversy-map-materialization-v2",
         },
         "cluster_input_path": str(cluster_input_file),
         "claim_scope_path": maybe_text(scope_context.get("claim_scope_file")),

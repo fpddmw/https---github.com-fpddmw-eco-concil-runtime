@@ -282,6 +282,34 @@
    - `tests/test_investigation_workflow.py`
    - `tests/test_formal_public_workflow.py`
 
+## 2.16 Batch 16 当前已交付
+
+第十六批把 controversy 主结构链从“claim-side 已 canonical、controversy-side 仍是弱 wrapper”推进到“formal/public link -> gap/edge -> controversy-map 全链 strong-contract + DB-native”，已落地以下硬改动：
+
+1. `canonical_contracts.py` 已收紧 `formal-public-link / representation-gap / diffusion-edge / controversy-map`：
+   - `rationale / provenance / evidence_refs / lineage` 已进入硬校验面。
+   - `alignment_score / severity_score / confidence / member_count / aggregate_source_signal_count` 等结构化数值字段已进入 `required_number_fields`。
+2. `eco_council_runtime/analysis_objects.py` 已新增四类 controversy normalization helper：
+   - controversy 主链也有了与 claim-side 对称的 canonical normalize 入口。
+   - heuristic 输出会统一显式标成 `decision_source = heuristic-fallback`。
+3. `kernel/analysis_plane.py` 已把四类 controversy result set 接到 `canonical_object_kind` 强校验，并补齐更完整的 parent lineage：
+   - `formal-public-link` 会保留 `claim_scope_ids / assessment_ids / route_ids`。
+   - `representation-gap` 会保留 `linkage_id` 到 claim-side route lineage 的完整父链。
+   - `diffusion-edge` 会保留 `linkage_ids / claim_scope_ids / assessment_ids / route_ids`。
+   - `controversy-map` 会把 `claim_scope_id / assessment_id / route_id / source_signal_ids / confidence` 写进 DB item row。
+4. `eco-link-formal-comments-to-public-discourse / eco-identify-representation-gaps / eco-detect-cross-platform-diffusion / eco-materialize-controversy-map` 已改成 canonical object 输出，不再把弱 wrapper dict 直接 sync 到 analysis DB。
+5. `eco-link-formal-comments-to-public-discourse` 已修正 cluster-first controversy 链中的 route 关联错误：
+   - 当 `verification-route.claim_id = cluster_id` 时，linkage 不再漏掉 `route_ids / assessment_ids / claim_scope_ids`。
+6. 已补强 workflow/runtime 验证，确认 controversy 主链确实由数据库而不是 artifact wrapper 驱动：
+   - 删掉 `formal_public_links / representation_gaps / diffusion_edges / controversy_map` artifact 后，`query_analysis_result_items(...)` 与 kernel query surface 仍能恢复完整对象。
+7. 本轮本地验证通过：
+   - `tests/test_canonical_contracts.py`
+   - `tests/test_analysis_workflow.py`
+   - `tests/test_formal_public_workflow.py`
+   - `tests/test_diffusion_workflow.py`
+   - `tests/test_controversy_workflow.py`
+   - `tests/test_runtime_kernel.py`
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足

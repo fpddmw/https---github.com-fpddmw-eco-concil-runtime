@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,10 +9,17 @@ from _workflow_support import (
     analytics_path,
     load_json,
     run_script,
+    runtime_src_path,
     script_path,
     seed_analysis_chain,
     write_json,
 )
+
+RUNTIME_SRC = runtime_src_path()
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.analysis_plane import query_analysis_result_items
 
 RUN_ID = "run-diffusion-001"
 ROUND_ID = "round-diffusion-001"
@@ -135,6 +143,36 @@ class DiffusionWorkflowTests(unittest.TestCase):
                     edge["target_platform"] == "regulationsgov"
                     and edge["edge_type"] == "public-to-formal-spillover"
                     for edge in smoke_edges
+                )
+            )
+            spillover_edge = next(
+                edge
+                for edge in smoke_edges
+                if edge["target_platform"] == "regulationsgov"
+                and edge["edge_type"] == "public-to-formal-spillover"
+            )
+            self.assertEqual("heuristic-fallback", spillover_edge["decision_source"])
+            self.assertTrue(spillover_edge["rationale"])
+            self.assertGreaterEqual(len(spillover_edge["linkage_ids"]), 1)
+            self.assertGreaterEqual(len(spillover_edge["route_ids"]), 1)
+            self.assertGreaterEqual(len(spillover_edge["lineage"]), 1)
+            self.assertIn("source_skill", spillover_edge["provenance"])
+
+            analytics_path(run_dir, f"diffusion_edges_{ROUND_ID}.json").unlink()
+            query_payload = query_analysis_result_items(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                analysis_kind="diffusion-edge",
+                subject_id="air-quality-smoke",
+                latest_only=True,
+            )
+            self.assertGreaterEqual(query_payload["summary"]["returned_item_count"], 2)
+            self.assertTrue(
+                any(
+                    item["item"]["edge_type"] == "public-to-formal-spillover"
+                    and not item["artifact_present"]
+                    for item in query_payload["items"]
                 )
             )
 

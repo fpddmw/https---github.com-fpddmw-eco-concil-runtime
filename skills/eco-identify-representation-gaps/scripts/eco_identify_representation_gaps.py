@@ -21,6 +21,9 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_formal_public_link_context,
     sync_representation_gap_result_set,
 )
+from eco_council_runtime.analysis_objects import (  # noqa: E402
+    normalize_representation_gap_payload,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -314,47 +317,91 @@ def identify_representation_gaps_skill(
             else [],
             limit=16,
         )
+        cluster_ids = unique_texts(
+            link.get("cluster_ids", [])
+            if isinstance(link.get("cluster_ids"), list)
+            else []
+        )
+        claim_ids = unique_texts(
+            link.get("claim_ids", [])
+            if isinstance(link.get("claim_ids"), list)
+            else []
+        )
+        claim_scope_ids = unique_texts(
+            link.get("claim_scope_ids", [])
+            if isinstance(link.get("claim_scope_ids"), list)
+            else []
+        )
+        assessment_ids = unique_texts(
+            link.get("assessment_ids", [])
+            if isinstance(link.get("assessment_ids"), list)
+            else []
+        )
+        route_ids = unique_texts(
+            link.get("route_ids", [])
+            if isinstance(link.get("route_ids"), list)
+            else []
+        )
+        link_lineage = (
+            link.get("lineage", []) if isinstance(link.get("lineage"), list) else []
+        )
         for spec in representation_gap_specs(link):
             gap_type = maybe_text(spec.get("gap_type"))
             if not gap_type:
                 continue
             gap_id = "gap-" + stable_hash(run_id, round_id, linkage_id, gap_type)[:12]
             gaps.append(
-                {
-                    "schema_version": "n3.0",
-                    "gap_id": gap_id,
-                    "run_id": run_id,
-                    "round_id": round_id,
-                    "linkage_id": linkage_id,
-                    "issue_label": issue_label,
-                    "gap_type": gap_type,
-                    "severity": maybe_text(spec.get("severity")),
-                    "severity_score": float(spec.get("severity_score") or 0.0),
-                    "link_status": maybe_text(link.get("link_status")),
-                    "recommended_lane": recommended_lane,
-                    "route_status": route_status,
-                    "formal_signal_count": formal_count,
-                    "public_signal_count": public_count,
-                    "cluster_ids": unique_texts(
-                        link.get("cluster_ids", [])
-                        if isinstance(link.get("cluster_ids"), list)
-                        else []
-                    ),
-                    "claim_ids": unique_texts(
-                        link.get("claim_ids", [])
-                        if isinstance(link.get("claim_ids"), list)
-                        else []
-                    ),
-                    "recommended_action": maybe_text(spec.get("recommended_action")),
-                    "gap_summary": gap_summary(
-                        gap_type,
-                        issue_label,
-                        formal_count,
-                        public_count,
-                        recommended_lane,
-                    ),
-                    "evidence_refs": evidence_refs,
-                }
+                normalize_representation_gap_payload(
+                    {
+                        "gap_id": gap_id,
+                        "run_id": run_id,
+                        "round_id": round_id,
+                        "linkage_id": linkage_id,
+                        "issue_label": issue_label,
+                        "gap_type": gap_type,
+                        "severity": maybe_text(spec.get("severity")),
+                        "severity_score": float(spec.get("severity_score") or 0.0),
+                        "link_status": maybe_text(link.get("link_status")),
+                        "recommended_lane": recommended_lane,
+                        "route_status": route_status,
+                        "formal_signal_count": formal_count,
+                        "public_signal_count": public_count,
+                        "cluster_ids": cluster_ids,
+                        "claim_ids": claim_ids,
+                        "claim_scope_ids": claim_scope_ids,
+                        "assessment_ids": assessment_ids,
+                        "route_ids": route_ids,
+                        "recommended_action": maybe_text(spec.get("recommended_action")),
+                        "gap_summary": gap_summary(
+                            gap_type,
+                            issue_label,
+                            formal_count,
+                            public_count,
+                            recommended_lane,
+                        ),
+                        "evidence_refs": evidence_refs,
+                        "lineage": unique_texts(
+                            list(link_lineage)
+                            + [linkage_id]
+                            + cluster_ids
+                            + claim_ids
+                            + claim_scope_ids
+                            + assessment_ids
+                            + route_ids
+                        ),
+                        "rationale": (
+                            "Classified an issue-level representation gap from the "
+                            f"formal/public linkage object for {issue_label}."
+                        ),
+                        "method": "representation-gap-classifier-v2",
+                        "selection_mode": "identify-representation-gaps-from-linkages",
+                        "provenance": {
+                            "source_link_status": maybe_text(link.get("link_status")),
+                        },
+                    },
+                    source_skill=SKILL_NAME,
+                    artifact_path=str(output_file),
+                )
             )
 
     gap_type_counts: dict[str, int] = {}
@@ -381,7 +428,7 @@ def identify_representation_gaps_skill(
                 link_context.get("formal_public_link_source")
             ),
             "selection_mode": "identify-representation-gaps-from-linkages",
-            "method": "representation-gap-classifier-v1",
+            "method": "representation-gap-classifier-v2",
         },
         "formal_public_links_path": maybe_text(
             link_context.get("formal_public_links_file")

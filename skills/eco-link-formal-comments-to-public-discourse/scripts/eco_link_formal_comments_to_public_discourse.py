@@ -25,6 +25,9 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_verification_route_context,
     sync_formal_public_link_result_set,
 )
+from eco_council_runtime.analysis_objects import (  # noqa: E402
+    normalize_formal_public_link_payload,
+)
 from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     ensure_signal_plane_schema,
     resolved_canonical_object_kind,
@@ -445,12 +448,16 @@ def ensure_issue_profile(
             "issue_label": label,
             "cluster_ids": [],
             "claim_ids": [],
+            "claim_scope_ids": [],
+            "assessment_ids": [],
+            "route_ids": [],
             "terms": issue_terms_for_label(label),
             "concern_facets": [],
             "actor_hints": [],
             "recommended_lane_votes": [lane],
             "route_status_votes": [route_status_for_lane(lane)],
             "evidence_refs": [],
+            "lineage": [],
         }
     return profiles[label]
 
@@ -497,6 +504,9 @@ def build_issue_profiles(
         )
         profile["concern_facets"].extend(list_field(cluster, "concern_facets"))
         profile["actor_hints"].extend(list_field(cluster, "actor_hints"))
+        profile["lineage"].extend(
+            cluster.get("lineage", []) if isinstance(cluster.get("lineage"), list) else []
+        )
         profile["evidence_refs"].extend(
             cluster.get("evidence_refs", [])
             if isinstance(cluster.get("evidence_refs"), list)
@@ -506,6 +516,32 @@ def build_issue_profiles(
                 else []
             )
         )
+        for route in route_index.get(cluster_id, []) if cluster_id else []:
+            route_id = maybe_text(route.get("route_id"))
+            if route_id:
+                profile["route_ids"].append(route_id)
+            claim_scope_id = maybe_text(route.get("claim_scope_id"))
+            if claim_scope_id:
+                profile["claim_scope_ids"].append(claim_scope_id)
+            assessment_id = maybe_text(route.get("assessment_id"))
+            if assessment_id:
+                profile["assessment_ids"].append(assessment_id)
+            profile["recommended_lane_votes"].append(
+                maybe_text(route.get("recommended_lane"))
+            )
+            profile["route_status_votes"].append(
+                maybe_text(route.get("route_status"))
+            )
+            profile["lineage"].extend(
+                route.get("lineage", [])
+                if isinstance(route.get("lineage"), list)
+                else []
+            )
+            profile["evidence_refs"].extend(
+                route.get("evidence_refs", [])
+                if isinstance(route.get("evidence_refs"), list)
+                else []
+            )
         for claim_id in list_field(cluster, "member_claim_ids"):
             attached_claim_ids.add(claim_id)
             profile["claim_ids"].append(claim_id)
@@ -515,6 +551,11 @@ def build_issue_profiles(
                 profile["terms"].extend(semantic_tokens(maybe_text(candidate.get("summary"))))
                 profile["concern_facets"].extend(list_field(candidate, "concern_facets"))
                 profile["actor_hints"].extend(list_field(candidate, "actor_hints"))
+                profile["lineage"].extend(
+                    candidate.get("lineage", [])
+                    if isinstance(candidate.get("lineage"), list)
+                    else []
+                )
                 profile["evidence_refs"].extend(
                     candidate.get("evidence_refs", [])
                     if isinstance(candidate.get("evidence_refs"), list)
@@ -525,11 +566,25 @@ def build_issue_profiles(
                     )
                 )
             for route in route_index.get(claim_id, []):
+                route_id = maybe_text(route.get("route_id"))
+                if route_id:
+                    profile["route_ids"].append(route_id)
+                claim_scope_id = maybe_text(route.get("claim_scope_id"))
+                if claim_scope_id:
+                    profile["claim_scope_ids"].append(claim_scope_id)
+                assessment_id = maybe_text(route.get("assessment_id"))
+                if assessment_id:
+                    profile["assessment_ids"].append(assessment_id)
                 profile["recommended_lane_votes"].append(
                     maybe_text(route.get("recommended_lane"))
                 )
                 profile["route_status_votes"].append(
                     maybe_text(route.get("route_status"))
+                )
+                profile["lineage"].extend(
+                    route.get("lineage", [])
+                    if isinstance(route.get("lineage"), list)
+                    else []
                 )
                 profile["evidence_refs"].extend(
                     route.get("evidence_refs", [])
@@ -553,6 +608,11 @@ def build_issue_profiles(
         profile["terms"].extend(semantic_tokens(maybe_text(candidate.get("summary"))))
         profile["concern_facets"].extend(list_field(candidate, "concern_facets"))
         profile["actor_hints"].extend(list_field(candidate, "actor_hints"))
+        profile["lineage"].extend(
+            candidate.get("lineage", [])
+            if isinstance(candidate.get("lineage"), list)
+            else []
+        )
         profile["evidence_refs"].extend(
             candidate.get("evidence_refs", [])
             if isinstance(candidate.get("evidence_refs"), list)
@@ -563,11 +623,25 @@ def build_issue_profiles(
             )
         )
         for route in route_index.get(claim_id, []):
+            route_id = maybe_text(route.get("route_id"))
+            if route_id:
+                profile["route_ids"].append(route_id)
+            claim_scope_id = maybe_text(route.get("claim_scope_id"))
+            if claim_scope_id:
+                profile["claim_scope_ids"].append(claim_scope_id)
+            assessment_id = maybe_text(route.get("assessment_id"))
+            if assessment_id:
+                profile["assessment_ids"].append(assessment_id)
             profile["recommended_lane_votes"].append(
                 maybe_text(route.get("recommended_lane"))
             )
             profile["route_status_votes"].append(
                 maybe_text(route.get("route_status"))
+            )
+            profile["lineage"].extend(
+                route.get("lineage", [])
+                if isinstance(route.get("lineage"), list)
+                else []
             )
             profile["evidence_refs"].extend(
                 route.get("evidence_refs", [])
@@ -587,9 +661,13 @@ def build_issue_profiles(
         )
         profile["cluster_ids"] = unique_texts(profile.get("cluster_ids", []))
         profile["claim_ids"] = unique_texts(profile.get("claim_ids", []))
+        profile["claim_scope_ids"] = unique_texts(profile.get("claim_scope_ids", []))
+        profile["assessment_ids"] = unique_texts(profile.get("assessment_ids", []))
+        profile["route_ids"] = unique_texts(profile.get("route_ids", []))
         profile["terms"] = unique_texts(profile.get("terms", []))[:12]
         profile["concern_facets"] = unique_texts(profile.get("concern_facets", []))[:6]
         profile["actor_hints"] = unique_texts(profile.get("actor_hints", []))[:6]
+        profile["lineage"] = unique_texts(profile.get("lineage", []))
         profile["evidence_refs"] = unique_artifact_refs(
             profile.get("evidence_refs", []),
             limit=16,
@@ -838,51 +916,80 @@ def link_formal_comments_to_public_discourse_skill(
             limit=20,
         )
         linkage_id = "fplink-" + stable_hash(run_id, round_id, issue_label, link_status)[:12]
+        claim_scope_ids = unique_texts(profile.get("claim_scope_ids", []))
+        assessment_ids = unique_texts(profile.get("assessment_ids", []))
+        route_ids = unique_texts(profile.get("route_ids", []))
         links.append(
-            {
-                "schema_version": "n3.0",
-                "linkage_id": linkage_id,
-                "run_id": run_id,
-                "round_id": round_id,
-                "issue_label": issue_label,
-                "issue_terms": unique_texts(profile.get("terms", []))[:12],
-                "concern_facets": unique_texts(profile.get("concern_facets", []))[:6],
-                "actor_hints": unique_texts(profile.get("actor_hints", []))[:6],
-                "cluster_ids": cluster_ids,
-                "claim_ids": claim_ids,
-                "formal_signal_ids": formal_ids,
-                "public_signal_ids": public_ids,
-                "formal_signal_count": len(formal_ids),
-                "public_signal_count": len(public_ids),
-                "formal_source_skills": unique_texts(
-                    [signal.get("source_skill") for signal in formal_signals]
-                ),
-                "public_source_skills": unique_texts(
-                    [signal.get("source_skill") for signal in public_signals]
-                ),
-                "formal_examples": unique_texts(
-                    [signal.get("title") for signal in formal_signals]
-                )[:3],
-                "public_examples": unique_texts(
-                    [signal.get("title") for signal in public_signals]
-                )[:3],
-                "alignment_score": alignment_score(
-                    len(formal_ids),
-                    len(public_ids),
-                    has_claim_support=bool(claim_ids),
-                ),
-                "link_status": link_status,
-                "recommended_lane": recommended_lane,
-                "route_status": route_status,
-                "linkage_summary": linkage_summary(
-                    issue_label,
-                    link_status,
-                    len(formal_ids),
-                    len(public_ids),
-                    recommended_lane,
-                ),
-                "evidence_refs": evidence_refs,
-            }
+            normalize_formal_public_link_payload(
+                {
+                    "linkage_id": linkage_id,
+                    "run_id": run_id,
+                    "round_id": round_id,
+                    "issue_label": issue_label,
+                    "issue_terms": unique_texts(profile.get("terms", []))[:12],
+                    "concern_facets": unique_texts(profile.get("concern_facets", []))[:6],
+                    "actor_hints": unique_texts(profile.get("actor_hints", []))[:6],
+                    "cluster_ids": cluster_ids,
+                    "claim_ids": claim_ids,
+                    "claim_scope_ids": claim_scope_ids,
+                    "assessment_ids": assessment_ids,
+                    "route_ids": route_ids,
+                    "formal_signal_ids": formal_ids,
+                    "public_signal_ids": public_ids,
+                    "formal_signal_count": len(formal_ids),
+                    "public_signal_count": len(public_ids),
+                    "formal_source_skills": unique_texts(
+                        [signal.get("source_skill") for signal in formal_signals]
+                    ),
+                    "public_source_skills": unique_texts(
+                        [signal.get("source_skill") for signal in public_signals]
+                    ),
+                    "formal_examples": unique_texts(
+                        [signal.get("title") for signal in formal_signals]
+                    )[:3],
+                    "public_examples": unique_texts(
+                        [signal.get("title") for signal in public_signals]
+                    )[:3],
+                    "alignment_score": alignment_score(
+                        len(formal_ids),
+                        len(public_ids),
+                        has_claim_support=bool(claim_ids),
+                    ),
+                    "link_status": link_status,
+                    "recommended_lane": recommended_lane,
+                    "route_status": route_status,
+                    "linkage_summary": linkage_summary(
+                        issue_label,
+                        link_status,
+                        len(formal_ids),
+                        len(public_ids),
+                        recommended_lane,
+                    ),
+                    "evidence_refs": evidence_refs,
+                    "lineage": unique_texts(
+                        list(profile.get("lineage", []))
+                        + cluster_ids
+                        + claim_ids
+                        + claim_scope_ids
+                        + assessment_ids
+                        + route_ids
+                        + formal_ids
+                        + public_ids
+                    ),
+                    "rationale": (
+                        "Collapsed claim-side routing, formal comments, and "
+                        f"public-discourse signals into one linkage object for {issue_label}."
+                    ),
+                    "method": "formal-public-issue-linkage-v2",
+                    "selection_mode": "link-issue-level-formal-and-public-footprints",
+                    "provenance": {
+                        "input_cluster_count": len(cluster_ids),
+                        "input_claim_count": len(claim_ids),
+                    },
+                },
+                source_skill=SKILL_NAME,
+                artifact_path=str(output_file),
+            )
         )
 
     link_status_counts: dict[str, int] = {}
@@ -923,7 +1030,7 @@ def link_formal_comments_to_public_discourse_skill(
                 route_context.get("verification_route_source")
             ),
             "selection_mode": "link-issue-level-formal-and-public-footprints",
-            "method": "formal-public-issue-linkage-v1",
+            "method": "formal-public-issue-linkage-v2",
         },
         "claim_cluster_path": maybe_text(cluster_context.get("claim_cluster_file")),
         "claim_candidates_path": maybe_text(

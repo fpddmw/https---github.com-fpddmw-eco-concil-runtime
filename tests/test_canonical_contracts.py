@@ -176,6 +176,45 @@ class CanonicalContractTests(unittest.TestCase):
         self.assertEqual("claim-candidate-v1", payload["schema_version"])
         self.assertEqual("claim-001", payload["claim_id"])
 
+    def test_validate_canonical_payload_accepts_well_formed_formal_public_link(self) -> None:
+        payload = validate_canonical_payload(
+            "formal-public-link",
+            {
+                "run_id": "run-001",
+                "round_id": "round-001",
+                "linkage_id": "fplink-001",
+                "issue_label": "air-quality-smoke",
+                "issue_terms": ["smoke", "air quality"],
+                "concern_facets": ["health-safety"],
+                "actor_hints": ["resident"],
+                "cluster_ids": ["claimcluster-001"],
+                "claim_ids": ["claim-001"],
+                "claim_scope_ids": ["scope-001"],
+                "assessment_ids": ["assessment-001"],
+                "route_ids": ["route-001"],
+                "formal_signal_ids": ["signal-formal-001"],
+                "public_signal_ids": ["signal-public-001"],
+                "formal_signal_count": 1,
+                "public_signal_count": 1,
+                "formal_source_skills": ["regulationsgov-comments-fetch"],
+                "public_source_skills": ["youtube-video-search"],
+                "formal_examples": ["Formal smoke comment"],
+                "public_examples": ["Public smoke video"],
+                "alignment_score": 0.86,
+                "link_status": "aligned",
+                "recommended_lane": "environmental-observation",
+                "route_status": "route-to-verification-lane",
+                "linkage_summary": "Linked formal comments and public discourse for smoke.",
+                "decision_source": "heuristic-fallback",
+                "evidence_refs": [],
+                "lineage": ["claimcluster-001", "claim-001", "route-001"],
+                "rationale": "Unified formal and public footprints for one issue.",
+                "provenance": {"source": "unit-test"},
+            },
+        )
+        self.assertEqual("formal-public-link-v1", payload["schema_version"])
+        self.assertEqual("fplink-001", payload["linkage_id"])
+
 
 if __name__ == "__main__":
     unittest.main()
