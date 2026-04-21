@@ -21,6 +21,7 @@ from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    normalized_expert_report_payload,
     store_expert_report_record,
 )
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
@@ -105,13 +106,19 @@ def publish_expert_report_skill(
         else None
     )
     if not isinstance(draft_payload, dict):
+        missing_message = (
+            "No expert report draft DB record was found for "
+            f"{draft_file}; artifact exists but is orphaned from the reporting plane."
+            if bool(draft_context.get("artifact_present"))
+            else (
+                "No expert report draft artifact or DB record was found "
+                f"at {draft_file}."
+            )
+        )
         warnings.append(
             {
                 "code": "missing-report-draft",
-                "message": (
-                    "No expert report draft artifact or DB record was found "
-                    f"at {draft_file}."
-                ),
+                "message": missing_message,
             }
         )
         return {
@@ -154,12 +161,19 @@ def publish_expert_report_skill(
             or "missing-expert-report-draft",
         },
     )
-    canonical_payload = {
-        **draft_payload,
-        **contract_fields,
-        "canonical_artifact": "expert-report",
-        "canonical_role": role,
-    }
+    canonical_payload = normalized_expert_report_payload(
+        {
+            **draft_payload,
+            **contract_fields,
+            "record_id": "",
+            "provenance": {},
+            "report_stage": "canonical",
+            "canonical_artifact": "expert-report",
+            "canonical_role": role,
+        },
+        run_id=run_id,
+        round_id=round_id,
+    )
     existing = load_json_if_exists(output_file)
     operation = "published"
     overwrote_existing = False
@@ -180,16 +194,18 @@ def publish_expert_report_skill(
                 "warnings": warnings,
                 "board_handoff": {"candidate_ids": [maybe_text(draft_payload.get("report_id"))] if maybe_text(draft_payload.get("report_id")) else [], "evidence_refs": [], "gap_hints": [warnings[0]["message"]], "challenge_hints": [], "suggested_next_skills": ["eco-publish-expert-report"]},
             }
-    store_expert_report_record(
+    stored_payload = store_expert_report_record(
         run_dir_path,
         report_payload=canonical_payload,
         artifact_path=str(output_file),
     )
     if operation != "noop":
-        write_json_file(output_file, canonical_payload)
+        write_json_file(output_file, stored_payload)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
-    report_id = maybe_text(draft_payload.get("report_id"))
+    report_id = maybe_text(stored_payload.get("report_id")) or maybe_text(
+        draft_payload.get("report_id")
+    )
     return {
         "status": "completed",
         "summary": {

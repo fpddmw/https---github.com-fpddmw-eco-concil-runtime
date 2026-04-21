@@ -25,6 +25,7 @@ from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    normalized_final_publication_payload,
     store_final_publication_record,
 )
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
@@ -32,6 +33,7 @@ from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_expert_report_wrapper,
     load_promotion_basis_wrapper,
     load_reporting_handoff_wrapper,
+    load_supervisor_state_wrapper,
 )
 
 
@@ -224,13 +226,19 @@ def materialize_final_publication_skill(
         else None
     )
     if not isinstance(handoff_payload, dict):
+        missing_message = (
+            "No reporting handoff DB record was found for "
+            f"{handoff_file}; artifact exists but is orphaned from the reporting plane."
+            if bool(handoff_context.get("artifact_present"))
+            else (
+                "No reporting handoff artifact or DB record was found "
+                f"at {handoff_file}."
+            )
+        )
         warnings.append(
             {
                 "code": "missing-reporting-handoff",
-                "message": (
-                    "No reporting handoff artifact or DB record was found "
-                    f"at {handoff_file}."
-                ),
+                "message": missing_message,
             }
         )
         return {
@@ -258,13 +266,19 @@ def materialize_final_publication_skill(
         else None
     )
     if not isinstance(decision_payload, dict):
+        missing_message = (
+            "No canonical council decision DB record was found for "
+            f"{decision_file}; artifact exists but is orphaned from the reporting plane."
+            if bool(decision_context.get("artifact_present"))
+            else (
+                "No canonical council decision artifact or DB record was "
+                f"found at {decision_file}."
+            )
+        )
         warnings.append(
             {
                 "code": "missing-canonical-decision",
-                "message": (
-                    "No canonical council decision artifact or DB record was "
-                    f"found at {decision_file}."
-                ),
+                "message": missing_message,
             }
         )
         return {
@@ -291,7 +305,21 @@ def materialize_final_publication_skill(
         else None
     )
     if not isinstance(promotion_payload, dict):
-        warnings.append({"code": "missing-promotion-basis", "message": f"No promotion basis artifact or DB record was found at {promotion_file}."})
+        missing_message = (
+            "No promotion basis DB record was found for "
+            f"{promotion_file}; artifact exists but is orphaned from the deliberation plane."
+            if bool(promotion_context.get("artifact_present"))
+            else (
+                "No promotion basis artifact or DB record was found at "
+                f"{promotion_file}."
+            )
+        )
+        warnings.append(
+            {
+                "code": "missing-promotion-basis",
+                "message": missing_message,
+            }
+        )
         return {
             "status": "blocked",
             "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "operation": "blocked", "output_path": str(output_file)},
@@ -304,16 +332,44 @@ def materialize_final_publication_skill(
         }
     promotion_basis = promotion_payload
 
-    supervisor_state_payload = load_json_if_exists(supervisor_file)
-    supervisor_state = supervisor_state_payload or {}
-    if not supervisor_state_payload:
-        warnings.append({"code": "missing-supervisor-state", "message": f"No supervisor state artifact was found at {supervisor_file}."})
+    supervisor_context = load_supervisor_state_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        supervisor_state_path=supervisor_state_path,
+    )
+    supervisor_state_payload = (
+        supervisor_context.get("payload")
+        if isinstance(supervisor_context.get("payload"), dict)
+        else None
+    )
+    supervisor_state = (
+        supervisor_state_payload
+        if isinstance(supervisor_state_payload, dict)
+        else {}
+    )
+    if not isinstance(supervisor_state_payload, dict):
+        missing_message = (
+            "No supervisor DB snapshot was found for "
+            f"{supervisor_file}; artifact exists but is orphaned from the phase-2 control plane."
+            if bool(supervisor_context.get("artifact_present"))
+            else (
+                "No supervisor snapshot artifact or DB record was found at "
+                f"{supervisor_file}."
+            )
+        )
+        warnings.append(
+            {
+                "code": "missing-supervisor-state",
+                "message": missing_message,
+            }
+        )
 
     publication_readiness = maybe_text(decision.get("publication_readiness")) or "hold"
     publication_posture = "release" if publication_readiness == "ready" else "withhold"
     report_rows: list[dict[str, Any]] = []
     report_contexts: dict[str, dict[str, Any]] = {}
-    missing_ready_reports: list[str] = []
+    missing_ready_reports: list[tuple[str, bool]] = []
     report_payloads: dict[str, dict[str, Any]] = {}
     published_report_refs = decision.get("published_report_refs", []) if isinstance(decision.get("published_report_refs"), list) else []
     for role in ROLE_VALUES:
@@ -345,11 +401,39 @@ def materialize_final_publication_skill(
                 )
             )
         elif publication_posture == "release":
-            missing_ready_reports.append(str(report_context.get("artifact_path", report_files[role])))
+            missing_ready_reports.append(
+                (
+                    str(report_context.get("artifact_path", report_files[role])),
+                    bool(report_context.get("artifact_present")),
+                )
+            )
         else:
-            warnings.append({"code": "missing-canonical-report", "message": f"Canonical expert report is missing at {report_context.get('artifact_path', report_files[role])} but release posture is still withheld."})
+            artifact_path = str(report_context.get("artifact_path", report_files[role]))
+            if bool(report_context.get("artifact_present")):
+                message = (
+                    "Canonical expert report has no DB record at "
+                    f"{artifact_path}; the artifact is orphaned from the reporting plane, but release posture is still withheld."
+                )
+            else:
+                message = (
+                    f"Canonical expert report is missing at {artifact_path} but release posture is still withheld."
+                )
+            warnings.append(
+                {"code": "missing-canonical-report", "message": message}
+            )
     if missing_ready_reports:
-        warnings.extend({"code": "missing-canonical-report", "message": f"Required canonical expert report is missing at {path}."} for path in missing_ready_reports)
+        warnings.extend(
+            {
+                "code": "missing-canonical-report",
+                "message": (
+                    "Required canonical expert report has no DB record at "
+                    f"{path}; the artifact is orphaned from the reporting plane."
+                    if artifact_present
+                    else f"Required canonical expert report is missing at {path}."
+                ),
+            }
+            for path, artifact_present in missing_ready_reports
+        )
         return {
             "status": "blocked",
             "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "operation": "blocked", "output_path": str(output_file)},
@@ -388,8 +472,12 @@ def materialize_final_publication_skill(
                 promotion_context.get("artifact_present")
             ),
             "promotion_present": bool(promotion_context.get("payload_present")),
-            "supervisor_state_artifact_present": supervisor_file.exists(),
-            "supervisor_state_present": isinstance(supervisor_state_payload, dict),
+            "supervisor_state_artifact_present": bool(
+                supervisor_context.get("artifact_present")
+            ),
+            "supervisor_state_present": bool(
+                supervisor_context.get("payload_present")
+            ),
             "sociologist_report_artifact_present": bool(
                 report_contexts.get("sociologist", {}).get("artifact_present")
             ),
@@ -410,11 +498,8 @@ def materialize_final_publication_skill(
             or "missing-canonical-decision",
             "promotion_source": maybe_text(promotion_context.get("source"))
             or "missing-promotion",
-            "supervisor_state_source": (
-                "supervisor-state-artifact"
-                if supervisor_file.exists()
-                else "missing-supervisor-state"
-            ),
+            "supervisor_state_source": maybe_text(supervisor_context.get("source"))
+            or "missing-supervisor-state",
             "sociologist_report_source": maybe_text(
                 report_contexts.get("sociologist", {}).get("source")
             )
@@ -442,56 +527,76 @@ def materialize_final_publication_skill(
         ]
     )
 
-    publication_payload = {
-        "schema_version": "e1.2",
-        "skill": SKILL_NAME,
-        "generated_at_utc": utc_now_iso(),
-        "run_id": run_id,
-        "round_id": round_id,
-        "publication_id": publication_id,
-        "publication_status": "ready-for-release" if publication_posture == "release" else "hold-release",
-        "publication_posture": publication_posture,
-        **contract_fields,
-        "publication_summary": release_summary(
-            decision=decision,
-            handoff=handoff,
-            publication_posture=publication_posture,
-            report_rows=report_rows,
-        ),
-        "published_sections": published_sections(publication_posture, report_rows),
-        "decision": {
-            "decision_id": maybe_text(decision.get("decision_id")),
-            "moderator_status": maybe_text(decision.get("moderator_status")),
-            "publication_readiness": publication_readiness,
-            "decision_summary": maybe_text(decision.get("decision_summary")),
-        },
-        "decision_trace_ids": unique_texts(
-            [trace.get("trace_id") for trace in decision_traces]
-        ),
-        "decision_trace_count": len(decision_traces),
-        "decision_traces": summarized_decision_traces(decision_traces),
-        "role_reports": report_rows,
-        "published_report_refs": unique_texts(published_report_refs or [row["report_path"] for row in report_rows]),
-        "key_findings": handoff.get("key_findings", []) if isinstance(handoff.get("key_findings"), list) else [],
-        "open_risks": handoff.get("open_risks", []) if isinstance(handoff.get("open_risks"), list) else [],
-        "recommended_next_actions": handoff.get("recommended_next_actions", []) if isinstance(handoff.get("recommended_next_actions"), list) else [],
-        "selected_evidence_refs": selected_evidence_refs,
-        "operator_review_hints": operator_review_hints(supervisor_state, handoff, publication_posture),
-        "audit_refs": {
-            "reporting_handoff_path": str(handoff_file),
-            "decision_path": str(decision_file),
-            "promotion_path": str(promotion_file),
-            "supervisor_state_path": str(supervisor_file),
+    publication_payload = normalized_final_publication_payload(
+        {
+            "schema_version": "e1.2",
+            "skill": SKILL_NAME,
+            "generated_at_utc": utc_now_iso(),
+            "run_id": run_id,
+            "round_id": round_id,
+            "publication_id": publication_id,
+            "publication_status": "ready-for-release"
+            if publication_posture == "release"
+            else "hold-release",
+            "publication_posture": publication_posture,
+            **contract_fields,
+            "publication_summary": release_summary(
+                decision=decision,
+                handoff=handoff,
+                publication_posture=publication_posture,
+                report_rows=report_rows,
+            ),
+            "published_sections": published_sections(
+                publication_posture, report_rows
+            ),
+            "decision": {
+                "decision_id": maybe_text(decision.get("decision_id")),
+                "moderator_status": maybe_text(decision.get("moderator_status")),
+                "publication_readiness": publication_readiness,
+                "decision_summary": maybe_text(decision.get("decision_summary")),
+            },
             "decision_trace_ids": unique_texts(
                 [trace.get("trace_id") for trace in decision_traces]
             ),
-            "role_report_paths": {
-                role: str(path)
-                for role, path in report_files.items()
-                if isinstance(report_payloads.get(role), dict)
+            "decision_trace_count": len(decision_traces),
+            "decision_traces": summarized_decision_traces(decision_traces),
+            "role_reports": report_rows,
+            "published_report_refs": unique_texts(
+                published_report_refs or [row["report_path"] for row in report_rows]
+            ),
+            "key_findings": handoff.get("key_findings", [])
+            if isinstance(handoff.get("key_findings"), list)
+            else [],
+            "open_risks": handoff.get("open_risks", [])
+            if isinstance(handoff.get("open_risks"), list)
+            else [],
+            "recommended_next_actions": handoff.get(
+                "recommended_next_actions", []
+            )
+            if isinstance(handoff.get("recommended_next_actions"), list)
+            else [],
+            "selected_evidence_refs": selected_evidence_refs,
+            "operator_review_hints": operator_review_hints(
+                supervisor_state, handoff, publication_posture
+            ),
+            "audit_refs": {
+                "reporting_handoff_path": str(handoff_file),
+                "decision_path": str(decision_file),
+                "promotion_path": str(promotion_file),
+                "supervisor_state_path": str(supervisor_file),
+                "decision_trace_ids": unique_texts(
+                    [trace.get("trace_id") for trace in decision_traces]
+                ),
+                "role_report_paths": {
+                    role: str(path)
+                    for role, path in report_files.items()
+                    if isinstance(report_payloads.get(role), dict)
+                },
             },
         },
-    }
+        run_id=run_id,
+        round_id=round_id,
+    )
 
     existing = load_json_if_exists(output_file)
     operation = "published"
@@ -515,16 +620,17 @@ def materialize_final_publication_skill(
                 "board_handoff": {"candidate_ids": [publication_id], "evidence_refs": [], "gap_hints": [warnings[-1]["message"]], "challenge_hints": [], "suggested_next_skills": ["eco-materialize-final-publication"]},
             }
 
-    store_final_publication_record(
+    stored_payload = store_final_publication_record(
         run_dir_path,
         publication_payload=publication_payload,
         artifact_path=str(output_file),
     )
     if operation != "noop":
-        write_json_file(output_file, publication_payload)
+        write_json_file(output_file, stored_payload)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
     suggested_next_skills = ["eco-post-board-note"] if publication_posture == "release" else ["eco-post-board-note", "eco-propose-next-actions", "eco-open-falsification-probe"]
+    publication_id = maybe_text(stored_payload.get("publication_id")) or publication_id
     return {
         "status": "completed",
         "summary": {

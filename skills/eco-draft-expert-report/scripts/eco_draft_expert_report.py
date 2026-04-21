@@ -217,13 +217,19 @@ def draft_expert_report_skill(
         else None
     )
     if not isinstance(handoff_payload, dict):
+        missing_message = (
+            "No reporting handoff DB record was found for "
+            f"{handoff_file}; artifact exists but is orphaned from the reporting plane."
+            if bool(handoff_context.get("artifact_present"))
+            else (
+                "No reporting handoff artifact or DB record was found "
+                f"at {handoff_file}."
+            )
+        )
         warnings.append(
             {
                 "code": "missing-reporting-handoff",
-                "message": (
-                    "No reporting handoff artifact or DB record was found "
-                    f"at {handoff_file}."
-                ),
+                "message": missing_message,
             }
         )
         handoff = {
@@ -340,12 +346,13 @@ def draft_expert_report_skill(
         },
         "selected_evidence_refs": unique_texts(handoff.get("selected_evidence_refs", []) if isinstance(handoff.get("selected_evidence_refs"), list) else []),
     }
-    store_expert_report_record(
+    stored_payload = store_expert_report_record(
         run_dir_path,
         report_payload=payload,
         artifact_path=str(output_file),
     )
-    write_json_file(output_file, payload)
+    report_id = maybe_text(stored_payload.get("report_id")) or report_id
+    write_json_file(output_file, stored_payload)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
     return {

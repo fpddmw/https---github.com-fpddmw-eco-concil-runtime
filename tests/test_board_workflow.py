@@ -27,6 +27,10 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.council_objects import (  # noqa: E402
     store_council_proposal_records,
 )
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_moderator_action_records,
+    store_moderator_action_snapshot,
+)
 
 RUN_ID = "run-board-001"
 ROUND_ID = "round-board-001"
@@ -1078,9 +1082,11 @@ class BoardWorkflowTests(unittest.TestCase):
                 outputs["cluster_claims"]["canonical_ids"][0],
             )
 
-            write_json(
-                investigation_path(run_dir, f"next_actions_{ROUND_ID}.json"),
-                {
+            next_actions = store_moderator_action_records(
+                run_dir,
+                action_snapshot={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
                     "ranked_actions": [
                         {
                             "action_id": "action-followup-public-001",
@@ -1098,6 +1104,7 @@ class BoardWorkflowTests(unittest.TestCase):
                     "action_count": 1,
                 },
             )
+            store_moderator_action_snapshot(run_dir, action_snapshot=next_actions)
 
             board_path(run_dir).unlink()
 

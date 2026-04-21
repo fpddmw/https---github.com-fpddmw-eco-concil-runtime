@@ -157,6 +157,45 @@
 5. `canonical_contracts.py` 已收紧 reporting plane 契约：`evidence_refs / lineage / provenance` 已进入 reporting objects 的硬校验面；decision 还额外强制 `decision_trace_ids / published_report_refs` 等关键字段具备显式结构。
 6. 已新增 `tests/test_reporting_query_surface.py`，覆盖 reporting contract list、独立 query surface、operator query command 以及 DB `raw_json` canonicalization；当前扩展后的大回归已更新到 `141` 项，并在本地全部通过。
 
+## 2.11 Batch 11 当前已交付
+
+第十一批已把 reporting 从“DB-first 但 artifact 仍可暗中回流成状态源”推进到“DB-native only + export-only artifact + 可重建导出面”，已落地以下硬改动：
+
+1. `kernel/phase2_state_surfaces.py` 的 `reporting-handoff / council-decision / expert-report / final-publication` wrapper 已改成 `DB-only`：
+   - 只要 DB 中存在 canonical row，就直接返回 DB payload。
+   - DB 缺失但 export 文件仍在时，不再把 artifact 当 payload 恢复，而是显式返回 `orphaned-...-artifact` source、`payload_present = false`、`artifact_present = true`。
+   - decision / expert-report wrapper 不再偷偷丢掉 `record_id / decision_stage / report_stage`，operator 与上层 skill 可以看到完整 canonical row 字段。
+2. `eco-materialize-reporting-handoff / eco-draft-council-decision / eco-draft-expert-report / eco-publish-expert-report / eco-publish-council-decision / eco-materialize-final-publication` 现已统一按 `store_*_record(...)` 返回的 canonical payload 落盘，artifact 与 DB `raw_json` 不再分叉。
+3. `eco-publish-expert-report` 与 `eco-publish-council-decision` 已显式钉死 `canonical` stage，并在 publish 时清空 draft 继承来的 `record_id / provenance`；canonical publish 不会再错误复用 draft 主键，导致 draft row 被 `INSERT OR REPLACE` 顶掉。
+4. 新增 `eco_council_runtime/reporting_exports.py` 与 CLI `materialize-reporting-exports`：
+   - 可从 reporting plane DB 一次性重建 `reporting_handoff / council_decision_draft / council_decision / expert_report_draft_* / expert_report_* / final_publication` 八个导出物。
+   - `show-reporting-state` operator view 已新增 `materialize_reporting_exports_command`，operator 可显式把 artifact 重建动作当成导出流程，而不是恢复逻辑。
+5. 已补强回归：
+   - `tests/test_reporting_query_surface.py` 现在显式断言 reporting artifact 与 DB `raw_json` 全同构。
+   - wrapper 会保留 stage/record fields，并把 artifact-only 状态标成 orphaned。
+   - `materialize-reporting-exports` 可从 DB 重建全部 reporting 导出物。
+   - `tests/test_reporting_publish_workflow.py` 已新增 orphaned draft artifact 阻断 publish 的整合回归。
+6. 当前扩展后的主链大回归已更新到 `144` 项，并在本地全部通过。
+
+## 2.12 Batch 12 当前已交付
+
+第十二批已把 phase-2 / investigation 中间态从“DB-first，但 artifact 仍可偷偷回流成状态源”推进到“DB-native only + export-only artifact + phase-2 export rebuild”，已落地以下硬改动：
+
+1. `kernel/phase2_state_surfaces.py` 的 `next-actions / falsification-probes / round-readiness / promotion-basis / supervisor-state` wrapper 已改成 `DB-only`：
+   - 只要 DB 中存在 canonical row / snapshot，就直接返回 DB payload。
+   - DB 缺失但 export 文件仍在时，不再把 artifact 当 payload 恢复，而是显式返回 `orphaned-...-artifact` source、`payload_present = false`、`artifact_present = true`。
+   - `runtime/supervisor_state_*.json` 现在也不再是 phase-2 控制面的恢复源；真正状态来自 `promotion_freezes.supervisor_snapshot`。
+2. 新增 `eco_council_runtime/phase2_exports.py` 与 CLI `materialize-phase2-exports`：
+   - 可从 deliberation / phase-2 DB 一次性重建 `next_actions / falsification_probes / round_readiness / promoted_evidence_basis / supervisor_state` 五个导出物。
+   - `show-run-state` 的 phase-2 operator view 已新增 `materialize_phase2_exports_command`，并补上 `probe / readiness-assessment / promotion-basis` 的 query command template。
+3. `eco-materialize-final-publication` 已切到 `load_supervisor_state_wrapper(...)`，publication 不再旁路直读 `supervisor_state` artifact；即使文件缺失，也会优先从 `promotion_freeze -> supervisor_snapshot` 恢复。
+4. `kernel/controller.py` 已删除一个残留的 `promotion_basis` artifact fallback；controller completion 现在只信 DB control state，不再用 `promotion/promoted_evidence_basis_*.json` 回填 `promotion_status`。
+5. 已补强回归：
+   - `tests/test_phase2_state_surfaces.py` 现在显式断言 phase-2 wrapper 的 orphaned-artifact 语义，以及 `materialize-phase2-exports` 的 DB rebuild。
+   - `tests/test_reporting_publish_workflow.py` 已新增 final publication 在 supervisor artifact 缺失时的 DB recovery 回归。
+   - `tests/test_orchestration_planner_workflow.py / tests/test_board_workflow.py / tests/test_runtime_kernel.py` 已把旧的 artifact-only test seed 收口为 DB canonical seed，防止测试继续帮旧旁路续命。
+6. 当前扩展后的主链大回归已更新到 `148` 项，并在本地全部通过。
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足

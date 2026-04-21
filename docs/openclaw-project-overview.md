@@ -39,7 +39,9 @@ OpenClaw 当前更准确的定位是：
    - 已能把 candidate、cluster、scope、link、coverage 等对象写入统一 result-set / lineage 结构。
 4. `deliberation plane`
    - 已能把 hypothesis、challenge、board-task、proposal、next-action、probe、readiness、decision trace、round transition 等议会状态写入 DB-first 状态面。
-5. `agent entry / phase-2 orchestration`
+5. `reporting plane`
+   - 已建立独立 reporting canonical plane、独立 query surface，并把 reporting artifact 降级为 DB-backed export；`materialize-reporting-exports` 已可从 SQLite 重建 handoff / decision / expert report / final publication 全套导出物。
+6. `agent entry / phase-2 orchestration`
    - `openclaw-agent` 轮次进入 phase-2 时，controller 与 agent entry 已能优先采用 `direct-council-advisory` plan，并把 `plan_source / planning_attempts` 写入 controller 状态；当 DB 中已有直接 `proposal / readiness-opinion / probe` 时，advisory queue 已能直接由这些对象编译，不再强制重跑 planner skill。与此同时，`next_actions / probes / readiness` 的 DB/artifact read surface 已从 `investigation_planning.py` 抽到独立模块，phase-2 主链对启发式规划模块的直连已经开始断开。
 
 这说明系统已经脱离“抓数据 + 生成文档”的脚本集合，具备了共享状态、受治理执行和跨轮次恢复的骨架。
@@ -58,23 +60,24 @@ OpenClaw 当前更准确的定位是：
 
 ### 4.2 当前状态源的真实情况
 
-当前系统已经明显转向 DB-first，但还不能说完全 DB-native。
+当前系统已经明显转向 DB-first；reporting/publication 已基本切到 DB-native，而 phase-2 / investigation 的关键中间态也已经收口到 DB-native only + export rebuild。但整轮议会流程还没有彻底摆脱 controller/operator summary export 与旧主链假设。
 
 已经成立的部分：
 
 1. SQLite 已经是 signal、analysis、board 状态查询与恢复的主工作面。
 2. result-set / lineage 与 deliberation state 已经形成稳定的 DB 写入面。
-3. 部分导出物已经可以在 artifact 缺失时从 DB 恢复。
+3. reporting / publication 现在已经可以从 DB canonical objects 重新物化；artifact-only 文件也会被显式视为 orphaned export，而不是隐式恢复源。
+4. `next_actions / probes / readiness / promotion_basis / supervisor_state` 现在也都能从 DB canonical rows/snapshots 重建；phase-2 artifact 已降级为 export-only。
 
 尚未完全成立的部分：
 
-1. `openclaw-agent` 的 advisory 主路径已基本 DB-native，但 planner-backed phase-2 与部分 investigation / reporting 链仍带有明显的 artifact wrapper 习惯。
-2. 某些控制与报告链路仍默认存在 summary / handoff / export 文件。
+1. `openclaw-agent` 的 advisory 主路径已基本 DB-native，但 controller/operator 仍默认暴露一批 summary / planner export。
+2. 某些 runtime/post-round/benchmark 控制链路仍保留历史导出物约定。
 3. formal comments 进入系统后，底层仍更像“generic public signal”，而不是一等 formal-comment 契约对象。
 
 因此，当前最准确的判断不是“议会已经完全基于数据库运作”，而是：
 
-`议会状态大体已 DB-first，议会流程还没有完全 DB-native。`
+`议会关键状态与 phase-2 / reporting 中间态已大体 DB-native，但整轮议会流程还没有完全摆脱 runtime 控制导出物与旧主链假设。`
 
 ## 5. 当前系统的关键问题
 
@@ -137,9 +140,9 @@ OpenClaw 当前更准确的定位是：
 
 1. 没有中间 artifact 时，round 仍能继续推进。
 2. 关键 phase-2 对象可以 item-level 查询，而不是只存整包 snapshot。
-3. reporting 与 publication 可以从 DB 重新物化，而不是依赖历史 handoff 文件。
+3. reporting 与 publication 应默认从 DB 重新物化，而不是依赖历史 handoff 文件。
 
-这一标准目前还没有完全达到。
+这一标准现在已经在 reporting/publication 与 phase-2 investigation 中间态上基本达到；剩余缺口主要转移到 controller/operator 导出物、formal comments 契约和旧 analysis 主链方向上。
 
 ## 6. 下一阶段的目标架构
 

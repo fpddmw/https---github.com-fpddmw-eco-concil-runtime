@@ -896,7 +896,7 @@ def run_phase2_round_with_contract_mode(
             phase2_control_state.get("promotion_basis", {})
             if isinstance(phase2_control_state.get("promotion_basis"), dict)
             else {}
-        ) or load_json_if_exists(Path(artifacts["promotion_basis_path"])) or {}
+        )
         controller_payload["promotion_status"] = maybe_text(promotion_basis_payload.get("promotion_status")) or "withheld"
     completion_updates = controller_completion_builder(
         controller_payload=controller_payload,

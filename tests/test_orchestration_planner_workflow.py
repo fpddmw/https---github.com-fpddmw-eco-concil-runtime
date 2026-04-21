@@ -24,6 +24,10 @@ from eco_council_runtime.council_objects import (  # noqa: E402
     store_council_proposal_records,
     store_readiness_opinion_records,
 )
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    store_moderator_action_records,
+    store_moderator_action_snapshot,
+)
 
 RUN_ID = "run-planner-001"
 ROUND_ID = "round-planner-001"
@@ -386,9 +390,9 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_board_state(run_dir, root)
 
-            write_json(
-                investigation_path(run_dir, f"next_actions_{ROUND_ID}.json"),
-                {
+            next_actions = store_moderator_action_records(
+                run_dir,
+                action_snapshot={
                     "schema_version": "d1.1",
                     "skill": "eco-propose-next-actions",
                     "run_id": RUN_ID,
@@ -416,6 +420,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                     ],
                 },
             )
+            store_moderator_action_snapshot(run_dir, action_snapshot=next_actions)
 
             payload = run_script(
                 script_path("eco-plan-round-orchestration"),

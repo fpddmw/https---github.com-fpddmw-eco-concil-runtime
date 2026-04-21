@@ -137,6 +137,23 @@
 - `已完成` `canonical_contracts.py` 已收紧 reporting plane 契约，`evidence_refs / lineage / provenance` 已进入 reporting objects 的硬校验面，decision 还显式要求 `decision_trace_ids / published_report_refs` 等结构字段。
 - `已完成` 新增 `tests/test_reporting_query_surface.py`，覆盖 reporting query surface、operator query commands 与 DB canonical raw_json；当前扩展后的大回归 `141` 项全部通过。
 
+### 2.15 Batch 11 当前状态
+
+- `已完成` `kernel/phase2_state_surfaces.py` 的 reporting wrappers 已改成 `DB-only`；artifact-only 文件不再被当成状态源，而是显式标记为 `orphaned-...-artifact`。
+- `已完成` decision / expert-report wrapper 不再丢弃 `record_id / decision_stage / report_stage`；wrapper 现在暴露完整 reporting canonical row。
+- `已完成` 六个 reporting skill 已统一按 `store_*_record(...)` 返回的 canonical payload 落盘；artifact 与 DB `raw_json` 已不再分叉。
+- `已完成` `eco-publish-expert-report / eco-publish-council-decision` 已显式固定 canonical stage，并在 publish 时清空 draft 继承的 `record_id / provenance`，修正 draft row 被 canonical publish 顶掉的问题。
+- `已完成` 新增 `eco_council_runtime/reporting_exports.py` 与 CLI `materialize-reporting-exports`，可从 DB 重建全部八个 reporting 导出物；`show-reporting-state` operator 已补上对应 command template。
+- `已完成` `tests/test_reporting_query_surface.py / tests/test_reporting_publish_workflow.py` 已补强 artifact=DB 同构、orphaned artifact、export rebuild、publish block on orphaned draft 等回归；当前扩展后的大回归 `144` 项全部通过。
+
+### 2.16 Batch 12 当前状态
+
+- `已完成` `kernel/phase2_state_surfaces.py` 的 `next-actions / falsification-probes / round-readiness / promotion-basis / supervisor-state` wrapper 已全部改成 `DB-only`；artifact-only 文件会被显式标记为 `orphaned-...-artifact`，不再回流成 phase-2 payload。
+- `已完成` 新增 `eco_council_runtime/phase2_exports.py` 与 CLI `materialize-phase2-exports`，可从 DB 重建 `next_actions / falsification_probes / round_readiness / promoted_evidence_basis / supervisor_state` 五个 phase-2 导出物；`show-run-state` phase-2 operator 已补上对应 command template 与 query commands。
+- `已完成` `eco-materialize-final-publication` 已切到 `load_supervisor_state_wrapper(...)`；publication 不再旁路直读 supervisor artifact，而是优先走 `promotion_freeze -> supervisor_snapshot`。
+- `已完成` `kernel/controller.py` 已删除一个残留的 `promotion_basis` artifact fallback；controller completion 现在不会再用旧 export 回填 `promotion_status`。
+- `已完成` `tests/test_phase2_state_surfaces.py / tests/test_runtime_kernel.py / tests/test_orchestration_planner_workflow.py / tests/test_board_workflow.py / tests/test_reporting_publish_workflow.py` 已补强 phase-2 orphaned-artifact、export rebuild、publication supervisor DB recovery 与 DB-canonical test seed；当前扩展后的大回归 `148` 项全部通过。
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -349,7 +366,7 @@
 ## 12. Work Package 9: 删除兼容债
 
 - `[ ]` 删除“formal comments 只是 generic public signal”的长期假设
-- `[ ]` 删除“next_actions / probes / readiness 只以 artifact wrapper 存在”的长期假设
+- `[x]` 删除“next_actions / probes / readiness 只以 artifact wrapper 存在”的长期假设
 - `[ ]` 删除“coverage 是默认主链”的长期假设
 - `[ ]` 删除“board / reporting 依赖 summary artifact 才能推进”的长期假设
 - `[ ]` 删除“kernel 默认承载新增 domain policy”的长期假设
@@ -374,7 +391,7 @@
 - `[ ]` formal comments 已成为一等结构化输入
 - `[x]` `hypothesis / challenge / board-task / proposal / next-action / probe / readiness-opinion / readiness-assessment / promotion-basis / decision-trace` 已可 item-level 查询
 - `[x]` `reporting-handoff / council-decision / expert-report / final-publication` 已可 item-level 查询
-- `[ ]` 删除 `board_summary / board_brief / next_actions / probes / readiness` artifact 后，round 仍可继续
+- `[x]` 删除 `board_summary / board_brief / next_actions / probes / readiness` artifact 后，round 仍可继续
 - `[ ]` 主链默认输出已不再是 `claim-observation-link-coverage`
 - `[ ]` observation matching 只在明确可核实时触发
 - `[ ]` agent proposal 已带 `rationale / confidence / evidence refs / provenance`

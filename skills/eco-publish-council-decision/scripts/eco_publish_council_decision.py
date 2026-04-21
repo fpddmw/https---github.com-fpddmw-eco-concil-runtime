@@ -26,6 +26,7 @@ from eco_council_runtime.phase2_promotion_resolution import (  # noqa: E402
     resolve_promotion_council_inputs,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    normalized_council_decision_payload,
     store_council_decision_record,
 )
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
@@ -182,13 +183,19 @@ def publish_council_decision_skill(
         else None
     )
     if not isinstance(draft_payload, dict):
+        missing_message = (
+            "No council decision draft DB record was found for "
+            f"{draft_file}; artifact exists but is orphaned from the reporting plane."
+            if bool(draft_context.get("artifact_present"))
+            else (
+                "No council decision draft artifact or DB record was found "
+                f"at {draft_file}."
+            )
+        )
         warnings.append(
             {
                 "code": "missing-decision-draft",
-                "message": (
-                    "No council decision draft artifact or DB record was found "
-                    f"at {draft_file}."
-                ),
+                "message": missing_message,
             }
         )
         return {
@@ -265,7 +272,19 @@ def publish_council_decision_skill(
             (environmentalist_context, environmentalist_payload),
         ):
             if not isinstance(payload, dict):
-                warnings.append({"code": "missing-canonical-report", "message": f"Required canonical expert report is missing at {context.get('artifact_path', '')}."})
+                artifact_path = str(context.get("artifact_path", ""))
+                if bool(context.get("artifact_present")):
+                    message = (
+                        "Required canonical expert report has no DB record at "
+                        f"{artifact_path}; the artifact is orphaned from the reporting plane."
+                    )
+                else:
+                    message = (
+                        f"Required canonical expert report is missing at {artifact_path}."
+                    )
+                warnings.append(
+                    {"code": "missing-canonical-report", "message": message}
+                )
             else:
                 report_refs.append(str(context.get("artifact_path", "")))
         if warnings:
@@ -469,54 +488,70 @@ def publish_council_decision_skill(
             break
     decision_id = maybe_text(draft_payload.get("decision_id"))
     trace_id = deterministic_trace_id(run_id, round_id, decision_id, 0)
-    canonical_payload = {
-        **draft_payload,
-        **contract_fields,
-        "canonical_artifact": "council-decision",
-        "published_report_refs": unique_texts(report_refs),
-        "promoted_basis_id": promoted_basis_id,
-        "selected_basis_object_ids": selected_basis_object_ids,
-        "supporting_proposal_ids": supporting_proposal_ids,
-        "rejected_proposal_ids": rejected_proposal_ids,
-        "supporting_opinion_ids": supporting_opinion_ids,
-        "rejected_opinion_ids": rejected_opinion_ids,
-        "promotion_resolution_mode": maybe_text(
-            draft_payload.get("promotion_resolution_mode")
-        )
-        or maybe_text(
-            promotion_payload.get("promotion_resolution_mode")
-            if isinstance(promotion_payload, dict)
-            else ""
-        )
-        or maybe_text(fallback_promotion_resolution.get("promotion_resolution_mode")),
-        "promotion_resolution_reasons": (
-            draft_payload.get("promotion_resolution_reasons", [])
-            if isinstance(draft_payload.get("promotion_resolution_reasons"), list)
-            else promotion_payload.get("promotion_resolution_reasons", [])
-            if isinstance(promotion_payload, dict)
-            and isinstance(promotion_payload.get("promotion_resolution_reasons"), list)
-            else fallback_promotion_resolution.get("promotion_resolution_reasons", [])
-            if isinstance(
-                fallback_promotion_resolution.get("promotion_resolution_reasons"), list
+    canonical_payload = normalized_council_decision_payload(
+        {
+            **draft_payload,
+            **contract_fields,
+            "record_id": "",
+            "provenance": {},
+            "decision_stage": "canonical",
+            "canonical_artifact": "council-decision",
+            "published_report_refs": unique_texts(report_refs),
+            "promoted_basis_id": promoted_basis_id,
+            "selected_basis_object_ids": selected_basis_object_ids,
+            "supporting_proposal_ids": supporting_proposal_ids,
+            "rejected_proposal_ids": rejected_proposal_ids,
+            "supporting_opinion_ids": supporting_opinion_ids,
+            "rejected_opinion_ids": rejected_opinion_ids,
+            "promotion_resolution_mode": maybe_text(
+                draft_payload.get("promotion_resolution_mode")
             )
-            else []
-        ),
-        "council_input_counts": (
-            draft_payload.get("council_input_counts", {})
-            if isinstance(draft_payload.get("council_input_counts"), dict)
-            else promotion_payload.get("council_input_counts", {})
-            if isinstance(promotion_payload, dict)
-            and isinstance(promotion_payload.get("council_input_counts"), dict)
-            else fallback_promotion_resolution.get("council_input_counts", {})
-            if isinstance(
-                fallback_promotion_resolution.get("council_input_counts"), dict
+            or maybe_text(
+                promotion_payload.get("promotion_resolution_mode")
+                if isinstance(promotion_payload, dict)
+                else ""
             )
-            else {}
-        ),
-        "accepted_object_ids": accepted_object_ids,
-        "rejected_object_ids": rejected_object_ids,
-        "decision_trace_ids": [trace_id] if decision_id else [],
-    }
+            or maybe_text(
+                fallback_promotion_resolution.get("promotion_resolution_mode")
+            ),
+            "promotion_resolution_reasons": (
+                draft_payload.get("promotion_resolution_reasons", [])
+                if isinstance(draft_payload.get("promotion_resolution_reasons"), list)
+                else promotion_payload.get("promotion_resolution_reasons", [])
+                if isinstance(promotion_payload, dict)
+                and isinstance(
+                    promotion_payload.get("promotion_resolution_reasons"), list
+                )
+                else fallback_promotion_resolution.get(
+                    "promotion_resolution_reasons", []
+                )
+                if isinstance(
+                    fallback_promotion_resolution.get(
+                        "promotion_resolution_reasons"
+                    ),
+                    list,
+                )
+                else []
+            ),
+            "council_input_counts": (
+                draft_payload.get("council_input_counts", {})
+                if isinstance(draft_payload.get("council_input_counts"), dict)
+                else promotion_payload.get("council_input_counts", {})
+                if isinstance(promotion_payload, dict)
+                and isinstance(promotion_payload.get("council_input_counts"), dict)
+                else fallback_promotion_resolution.get("council_input_counts", {})
+                if isinstance(
+                    fallback_promotion_resolution.get("council_input_counts"), dict
+                )
+                else {}
+            ),
+            "accepted_object_ids": accepted_object_ids,
+            "rejected_object_ids": rejected_object_ids,
+            "decision_trace_ids": [trace_id] if decision_id else [],
+        },
+        run_id=run_id,
+        round_id=round_id,
+    )
     existing = load_json_if_exists(output_file)
     operation = "published"
     overwrote_existing = False
@@ -590,7 +625,7 @@ def publish_council_decision_skill(
             }
         ],
     }
-    store_council_decision_record(
+    stored_payload = store_council_decision_record(
         run_dir_path,
         decision_payload=canonical_payload,
         artifact_path=str(output_file),
@@ -601,9 +636,10 @@ def publish_council_decision_skill(
         artifact_path=str(output_file),
     )
     if operation != "noop":
-        write_json_file(output_file, canonical_payload)
+        write_json_file(output_file, stored_payload)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
+    decision_id = maybe_text(stored_payload.get("decision_id")) or decision_id
     return {
         "status": "completed",
         "summary": {

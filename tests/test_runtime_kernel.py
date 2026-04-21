@@ -2302,22 +2302,37 @@ class RuntimeKernelTests(unittest.TestCase):
             ensure_runtime_src_on_path()
 
             from eco_council_runtime.kernel.executor import SkillExecutionError
+            from eco_council_runtime.kernel.deliberation_plane import (
+                store_promotion_freeze_record,
+            )
             from eco_council_runtime.kernel.post_round import close_round_with_contract_mode
 
             runtime_dir = run_dir / "runtime"
             runtime_dir.mkdir(parents=True, exist_ok=True)
-            (runtime_dir / f"supervisor_state_{ROUND_ID}.json").write_text(
-                json.dumps(
-                    {
-                        "run_id": RUN_ID,
-                        "round_id": ROUND_ID,
-                        "supervisor_status": "reporting-ready",
-                        "readiness_status": "ready",
-                        "promotion_status": "promoted",
-                    },
-                    ensure_ascii=True,
-                ),
+            supervisor_path = runtime_dir / f"supervisor_state_{ROUND_ID}.json"
+            supervisor_snapshot = {
+                "run_id": RUN_ID,
+                "round_id": ROUND_ID,
+                "supervisor_status": "reporting-ready",
+                "readiness_status": "ready",
+                "promotion_status": "promoted",
+                "reporting_ready": True,
+                "reporting_blockers": [],
+                "reporting_handoff_status": "reporting-ready",
+                "supervisor_path": str(supervisor_path.resolve()),
+            }
+            supervisor_path.write_text(
+                json.dumps(supervisor_snapshot, ensure_ascii=True),
                 encoding="utf-8",
+            )
+            store_promotion_freeze_record(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                supervisor_snapshot=supervisor_snapshot,
+                artifact_paths={
+                    "supervisor_state_path": str(supervisor_path.resolve()),
+                },
             )
 
             signal_archive_result = {

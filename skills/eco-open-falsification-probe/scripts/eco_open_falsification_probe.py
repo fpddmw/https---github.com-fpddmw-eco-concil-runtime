@@ -542,9 +542,16 @@ def open_falsification_probe_skill(
                 {
                     "code": "missing-next-actions",
                     "message": (
-                        f"No next-actions artifact or DB snapshot was found for "
-                        f"{next_actions_file}. Rebuilding action context from "
-                        "deliberation state."
+                        "No next-actions DB snapshot was found for "
+                        f"{next_actions_file}; the artifact is orphaned from "
+                        "the deliberation plane. Rebuilding action context "
+                        "from deliberation state."
+                        if next_actions_artifact_present
+                        else (
+                            f"No next-actions artifact or DB snapshot was found for "
+                            f"{next_actions_file}. Rebuilding action context from "
+                            "deliberation state."
+                        )
                     ),
                 }
             )

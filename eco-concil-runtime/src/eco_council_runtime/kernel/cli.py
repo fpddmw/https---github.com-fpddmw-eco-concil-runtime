@@ -16,10 +16,12 @@ from ..council_objects import (
     council_queryable_object_kinds,
     query_council_objects,
 )
+from ..phase2_exports import materialize_phase2_exports
 from ..reporting_objects import (
     query_reporting_objects,
     reporting_queryable_object_kinds,
 )
+from ..reporting_exports import materialize_reporting_exports
 from ..phase2_agent_handoff import EntryChainBuilder, HardGateCommandBuilder
 from .analysis_plane import (
     analysis_kind_names,
@@ -202,8 +204,28 @@ def phase2_operator_view(
             if round_id and run_id
             else ""
         ),
+        "materialize_phase2_exports_command": (
+            f"materialize-phase2-exports --run-dir {run_dir} --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
         "query_next_actions_command": (
             f"query-council-objects --run-dir {run_dir} --object-kind next-action --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "query_probes_command": (
+            f"query-council-objects --run-dir {run_dir} --object-kind probe --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "query_readiness_assessments_command": (
+            f"query-council-objects --run-dir {run_dir} --object-kind readiness-assessment --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "query_promotion_basis_command": (
+            f"query-council-objects --run-dir {run_dir} --object-kind promotion-basis --run-id {run_id} --round-id {round_id}"
             if round_id and run_id
             else ""
         ),
@@ -307,6 +329,11 @@ def reporting_operator_view(
         ),
         "query_final_publications_command": (
             f"query-reporting-objects --run-dir {run_dir} --object-kind final-publication --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "materialize_reporting_exports_command": (
+            f"materialize-reporting-exports --run-dir {run_dir} --run-id {run_id} --round-id {round_id}"
             if round_id and run_id
             else ""
         ),
@@ -904,6 +931,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Query canonical reporting-plane objects from the shared SQLite query surface.",
     )
     add_reporting_query_args(reporting_query_cmd)
+
+    phase2_export_cmd = sub.add_parser(
+        "materialize-phase2-exports",
+        help="Rebuild phase-2 investigation/promotion/runtime exports from canonical DB state.",
+    )
+    phase2_export_cmd.add_argument("--run-dir", required=True)
+    phase2_export_cmd.add_argument("--run-id", required=True)
+    phase2_export_cmd.add_argument("--round-id", required=True)
+    phase2_export_cmd.add_argument("--pretty", action="store_true")
+
+    reporting_export_cmd = sub.add_parser(
+        "materialize-reporting-exports",
+        help="Rebuild reporting/*.json exports from canonical reporting-plane DB records.",
+    )
+    reporting_export_cmd.add_argument("--run-dir", required=True)
+    reporting_export_cmd.add_argument("--run-id", required=True)
+    reporting_export_cmd.add_argument("--round-id", required=True)
+    reporting_export_cmd.add_argument("--pretty", action="store_true")
 
     contract_list_cmd = sub.add_parser(
         "list-canonical-contracts",
@@ -1548,6 +1593,24 @@ def main(
             }
             print(pretty_json(failure, args.pretty))
             return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "materialize-phase2-exports":
+        payload = materialize_phase2_exports(
+            run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+        )
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "materialize-reporting-exports":
+        payload = materialize_reporting_exports(
+            run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+        )
         print(pretty_json(payload, args.pretty))
         return 0
 

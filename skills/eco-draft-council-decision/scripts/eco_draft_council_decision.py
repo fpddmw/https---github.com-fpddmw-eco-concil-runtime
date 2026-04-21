@@ -171,13 +171,19 @@ def draft_council_decision_skill(
         else None
     )
     if not isinstance(handoff_payload, dict):
+        missing_message = (
+            "No reporting handoff DB record was found for "
+            f"{handoff_file}; artifact exists but is orphaned from the reporting plane."
+            if bool(handoff_context.get("artifact_present"))
+            else (
+                "No reporting handoff artifact or DB record was found "
+                f"at {handoff_file}."
+            )
+        )
         warnings.append(
             {
                 "code": "missing-reporting-handoff",
-                "message": (
-                    "No reporting handoff artifact or DB record was found "
-                    f"at {handoff_file}."
-                ),
+                "message": missing_message,
             }
         )
         handoff = {
@@ -359,12 +365,13 @@ def draft_council_decision_skill(
             "supervisor_state_path": maybe_text(handoff.get("supervisor_state_path")),
         },
     }
-    store_council_decision_record(
+    stored_payload = store_council_decision_record(
         run_dir_path,
         decision_payload=wrapper,
         artifact_path=str(output_file),
     )
-    write_json_file(output_file, wrapper)
+    decision_id = maybe_text(stored_payload.get("decision_id")) or decision_id
+    write_json_file(output_file, stored_payload)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
     return {

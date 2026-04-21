@@ -253,7 +253,20 @@ def materialize_reporting_handoff_skill(
         else None
     )
     if not isinstance(promotion_payload, dict):
-        warnings.append({"code": "missing-promotion-basis", "message": f"No promotion basis artifact or DB record was found at {promotion_file}."})
+        warnings.append(
+            {
+                "code": "missing-promotion-basis",
+                "message": (
+                    "No promotion basis DB record was found for "
+                    f"{promotion_file}; artifact exists but is orphaned from the deliberation plane."
+                    if bool(promotion_context.get("artifact_present"))
+                    else (
+                        "No promotion basis artifact or DB record was found "
+                        f"at {promotion_file}."
+                    )
+                ),
+            }
+        )
         promotion_basis = {"promotion_status": "withheld", "selected_coverages": [], "selected_evidence_refs": [], "remaining_risks": []}
     else:
         promotion_basis = promotion_payload
@@ -269,7 +282,20 @@ def materialize_reporting_handoff_skill(
         else None
     )
     if not isinstance(readiness_payload, dict):
-        warnings.append({"code": "missing-readiness", "message": f"No round readiness artifact or DB assessment was found at {readiness_file}."})
+        warnings.append(
+            {
+                "code": "missing-readiness",
+                "message": (
+                    "No round readiness DB assessment was found for "
+                    f"{readiness_file}; artifact exists but is orphaned from the deliberation plane."
+                    if bool(readiness_context.get("artifact_present"))
+                    else (
+                        "No round readiness artifact or DB assessment was found "
+                        f"at {readiness_file}."
+                    )
+                ),
+            }
+        )
         readiness = {"readiness_status": "blocked", "gate_reasons": []}
     else:
         readiness = readiness_payload
@@ -285,7 +311,20 @@ def materialize_reporting_handoff_skill(
         else None
     )
     if not isinstance(supervisor_state_payload, dict):
-        warnings.append({"code": "missing-supervisor-state", "message": f"No supervisor snapshot artifact or DB record was found at {supervisor_file}."})
+        warnings.append(
+            {
+                "code": "missing-supervisor-state",
+                "message": (
+                    "No supervisor DB snapshot was found for "
+                    f"{supervisor_file}; artifact exists but is orphaned from the phase-2 control plane."
+                    if bool(supervisor_context.get("artifact_present"))
+                    else (
+                        "No supervisor snapshot artifact or DB record was found "
+                        f"at {supervisor_file}."
+                    )
+                ),
+            }
+        )
         supervisor_state = {"supervisor_status": "unavailable", "top_actions": [], "operator_notes": []}
     else:
         supervisor_state = supervisor_state_payload
@@ -417,12 +456,13 @@ def materialize_reporting_handoff_skill(
         "recommended_sections": recommended_sections(reporting_ready),
         "report_targets": ["expert-report-draft", "council-decision-draft"] if reporting_ready else ["expert-report-draft", "another-round-decision"],
     }
-    store_reporting_handoff_record(
+    stored_payload = store_reporting_handoff_record(
         run_dir_path,
         handoff_payload=wrapper,
         artifact_path=str(output_file),
     )
-    write_json_file(output_file, wrapper)
+    handoff_id = maybe_text(stored_payload.get("handoff_id")) or handoff_id
+    write_json_file(output_file, stored_payload)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
     return {

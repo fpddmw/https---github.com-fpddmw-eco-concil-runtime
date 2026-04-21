@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -40,15 +39,6 @@ def resolve_path(run_dir: Path, override: str, default_relative: str) -> Path:
     if not candidate.is_absolute():
         candidate = run_dir / candidate
     return candidate.resolve()
-
-
-def load_json_if_exists(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(payload, dict):
-        return payload
-    return None
 
 
 def list_items(value: Any) -> list[Any]:
@@ -265,16 +255,11 @@ def load_next_actions_wrapper(
             "artifact_present": next_actions_file.exists(),
             "payload_present": True,
         }
-    artifact_payload = load_json_if_exists(next_actions_file)
-    if isinstance(artifact_payload, dict):
-        return {
-            "payload": artifact_payload,
-            "source": maybe_text(artifact_payload.get("action_source"))
-            or "next-actions-artifact",
-            "artifact_path": str(next_actions_file),
-            "artifact_present": True,
-            "payload_present": True,
-        }
+    if next_actions_file.exists():
+        return orphaned_artifact_wrapper(
+            next_actions_file,
+            source="orphaned-next-actions-artifact",
+        )
     return {
         "payload": None,
         "source": "missing-next-actions",
@@ -325,16 +310,11 @@ def load_falsification_probe_wrapper(
             "artifact_present": probes_file.exists(),
             "payload_present": True,
         }
-    artifact_payload = load_json_if_exists(probes_file)
-    if isinstance(artifact_payload, dict):
-        return {
-            "payload": artifact_payload,
-            "source": maybe_text(artifact_payload.get("action_source"))
-            or "falsification-probes-artifact",
-            "artifact_path": str(probes_file),
-            "artifact_present": True,
-            "payload_present": True,
-        }
+    if probes_file.exists():
+        return orphaned_artifact_wrapper(
+            probes_file,
+            source="orphaned-falsification-probes-artifact",
+        )
     return {
         "payload": None,
         "source": "missing-probes",
@@ -375,16 +355,11 @@ def load_round_readiness_wrapper(
             "artifact_present": readiness_file.exists(),
             "payload_present": True,
         }
-    artifact_payload = load_json_if_exists(readiness_file)
-    if isinstance(artifact_payload, dict):
-        return {
-            "payload": artifact_payload,
-            "source": maybe_text(artifact_payload.get("readiness_source"))
-            or "round-readiness-artifact",
-            "artifact_path": str(readiness_file),
-            "artifact_present": True,
-            "payload_present": True,
-        }
+    if readiness_file.exists():
+        return orphaned_artifact_wrapper(
+            readiness_file,
+            source="orphaned-round-readiness-artifact",
+        )
     return {
         "payload": None,
         "source": "missing-readiness",
@@ -425,16 +400,11 @@ def load_promotion_basis_wrapper(
             "artifact_present": promotion_file.exists(),
             "payload_present": True,
         }
-    artifact_payload = load_json_if_exists(promotion_file)
-    if isinstance(artifact_payload, dict):
-        return {
-            "payload": artifact_payload,
-            "source": maybe_text(artifact_payload.get("promotion_source"))
-            or "promotion-artifact",
-            "artifact_path": str(promotion_file),
-            "artifact_present": True,
-            "payload_present": True,
-        }
+    if promotion_file.exists():
+        return orphaned_artifact_wrapper(
+            promotion_file,
+            source="orphaned-promotion-basis-artifact",
+        )
     return {
         "payload": None,
         "source": "missing-promotion",
@@ -516,21 +486,26 @@ def load_supervisor_state_wrapper(
                 "artifact_present": supervisor_file.exists(),
                 "payload_present": True,
             }
-    artifact_payload = load_json_if_exists(supervisor_file)
-    if isinstance(artifact_payload, dict):
-        payload = enrich_supervisor_reporting_payload(artifact_payload)
-        return {
-            "payload": payload,
-            "source": "supervisor-state-artifact",
-            "artifact_path": str(supervisor_file),
-            "artifact_present": True,
-            "payload_present": True,
-        }
+    if supervisor_file.exists():
+        return orphaned_artifact_wrapper(
+            supervisor_file,
+            source="orphaned-supervisor-state-artifact",
+        )
     return {
         "payload": None,
         "source": "missing-supervisor-state",
         "artifact_path": str(supervisor_file),
         "artifact_present": False,
+        "payload_present": False,
+    }
+
+
+def orphaned_artifact_wrapper(path: Path, *, source: str) -> dict[str, Any]:
+    return {
+        "payload": None,
+        "source": source,
+        "artifact_path": str(path),
+        "artifact_present": True,
         "payload_present": False,
     }
 
@@ -562,16 +537,11 @@ def load_reporting_handoff_wrapper(
             "artifact_present": handoff_file.exists(),
             "payload_present": True,
         }
-    artifact_payload = load_json_if_exists(handoff_file)
-    if isinstance(artifact_payload, dict):
-        payload = enrich_reporting_record_payload(artifact_payload)
-        return {
-            "payload": payload,
-            "source": "reporting-handoff-artifact",
-            "artifact_path": str(handoff_file),
-            "artifact_present": True,
-            "payload_present": True,
-        }
+    if handoff_file.exists():
+        return orphaned_artifact_wrapper(
+            handoff_file,
+            source="orphaned-reporting-handoff-artifact",
+        )
     return {
         "payload": None,
         "source": "missing-reporting-handoff",
@@ -611,8 +581,6 @@ def load_council_decision_wrapper(
     )
     if isinstance(record_payload, dict):
         payload = enrich_reporting_record_payload(record_payload)
-        payload.pop("record_id", None)
-        payload.pop("decision_stage", None)
         return {
             "payload": payload,
             "source": (
@@ -624,20 +592,15 @@ def load_council_decision_wrapper(
             "artifact_present": decision_file.exists(),
             "payload_present": True,
         }
-    artifact_payload = load_json_if_exists(decision_file)
-    if isinstance(artifact_payload, dict):
-        payload = enrich_reporting_record_payload(artifact_payload)
-        return {
-            "payload": payload,
-            "source": (
-                "council-decision-draft-artifact"
+    if decision_file.exists():
+        return orphaned_artifact_wrapper(
+            decision_file,
+            source=(
+                "orphaned-council-decision-draft-artifact"
                 if normalized_stage == "draft"
-                else "council-decision-artifact"
+                else "orphaned-council-decision-artifact"
             ),
-            "artifact_path": str(decision_file),
-            "artifact_present": True,
-            "payload_present": True,
-        }
+        )
     return {
         "payload": None,
         "source": (
@@ -682,8 +645,6 @@ def load_expert_report_wrapper(
     )
     if isinstance(record_payload, dict):
         payload = enrich_reporting_record_payload(record_payload)
-        payload.pop("record_id", None)
-        payload.pop("report_stage", None)
         return {
             "payload": payload,
             "source": (
@@ -695,20 +656,15 @@ def load_expert_report_wrapper(
             "artifact_present": report_file.exists(),
             "payload_present": True,
         }
-    artifact_payload = load_json_if_exists(report_file)
-    if isinstance(artifact_payload, dict):
-        payload = enrich_reporting_record_payload(artifact_payload)
-        return {
-            "payload": payload,
-            "source": (
-                "expert-report-draft-artifact"
+    if report_file.exists():
+        return orphaned_artifact_wrapper(
+            report_file,
+            source=(
+                "orphaned-expert-report-draft-artifact"
                 if normalized_stage == "draft"
-                else "expert-report-artifact"
+                else "orphaned-expert-report-artifact"
             ),
-            "artifact_path": str(report_file),
-            "artifact_present": True,
-            "payload_present": True,
-        }
+        )
     return {
         "payload": None,
         "source": (
@@ -748,15 +704,11 @@ def load_final_publication_wrapper(
             "artifact_present": publication_file.exists(),
             "payload_present": True,
         }
-    artifact_payload = load_json_if_exists(publication_file)
-    if isinstance(artifact_payload, dict):
-        return {
-            "payload": artifact_payload,
-            "source": "final-publication-artifact",
-            "artifact_path": str(publication_file),
-            "artifact_present": True,
-            "payload_present": True,
-        }
+    if publication_file.exists():
+        return orphaned_artifact_wrapper(
+            publication_file,
+            source="orphaned-final-publication-artifact",
+        )
     return {
         "payload": None,
         "source": "missing-final-publication",

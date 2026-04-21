@@ -407,7 +407,15 @@ def promote_evidence_basis_skill(
         warnings.append(
             {
                 "code": "missing-readiness",
-                "message": f"No round readiness artifact or DB assessment was found at {readiness_file}.",
+                "message": (
+                    "No round readiness DB assessment was found for "
+                    f"{readiness_file}; artifact exists but is orphaned from the deliberation plane."
+                    if bool(readiness_context.get("artifact_present"))
+                    else (
+                        "No round readiness artifact or DB assessment was found "
+                        f"at {readiness_file}."
+                    )
+                ),
             }
         )
         readiness = {

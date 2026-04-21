@@ -1,13 +1,27 @@
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import load_json, promotion_path, reporting_path, run_kernel, run_script, script_path, seed_analysis_chain, write_json
+from _workflow_support import analytics_path, load_json, promotion_path, reporting_path, run_kernel, run_script, script_path, seed_analysis_chain, write_json
 
 RUN_ID = "run-reporting-publish-001"
 ROUND_ID = "round-reporting-publish-001"
+
+
+def execute_db(
+    db_path: Path,
+    query: str,
+    params: tuple[str, ...],
+) -> None:
+    connection = sqlite3.connect(db_path)
+    try:
+        with connection:
+            connection.execute(query, params)
+    finally:
+        connection.close()
 
 
 def prepare_ready_round(run_dir: Path, root: Path) -> None:
@@ -301,6 +315,54 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 report_artifact["observed_inputs"]["expert_report_draft_present"]
             )
 
+    def test_publish_expert_report_blocks_on_orphaned_draft_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_round(run_dir, root)
+            db_path = analytics_path(run_dir, "signal_plane.sqlite")
+
+            run_script(
+                script_path("eco-draft-expert-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--role",
+                "sociologist",
+            )
+            execute_db(
+                db_path,
+                """
+                DELETE FROM expert_report_records
+                WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
+                """,
+                (RUN_ID, ROUND_ID, "draft", "sociologist"),
+            )
+
+            publish_payload = run_script(
+                script_path("eco-publish-expert-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--role",
+                "sociologist",
+            )
+
+            self.assertEqual("blocked", publish_payload["status"])
+            self.assertEqual("blocked", publish_payload["summary"]["operation"])
+            self.assertTrue(
+                any(item["code"] == "missing-report-draft" for item in publish_payload["warnings"])
+            )
+            self.assertTrue(
+                any("orphaned from the reporting plane" in item["message"] for item in publish_payload["warnings"])
+            )
+
     def test_hold_decision_can_publish_without_reports_and_draft_artifact_drift_is_ignored(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -403,7 +465,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 publication["promotion_source"],
             )
             self.assertEqual(
-                "supervisor-state-artifact",
+                "deliberation-plane-supervisor",
                 publication["supervisor_state_source"],
             )
             self.assertEqual(
@@ -463,6 +525,40 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 publication["observed_inputs"]["promotion_artifact_present"]
             )
             self.assertTrue(publication["observed_inputs"]["promotion_present"])
+
+    def test_final_publication_recovers_supervisor_state_from_db_when_artifact_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_round(run_dir, root)
+
+            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            (run_dir / "runtime" / f"supervisor_state_{ROUND_ID}.json").unlink()
+
+            publication_payload = run_script(
+                script_path("eco-materialize-final-publication"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            publication = load_json(reporting_path(run_dir, f"final_publication_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", publication_payload["status"])
+            self.assertEqual(
+                "deliberation-plane-supervisor",
+                publication["supervisor_state_source"],
+            )
+            self.assertFalse(
+                publication["observed_inputs"]["supervisor_state_artifact_present"]
+            )
+            self.assertTrue(publication["observed_inputs"]["supervisor_state_present"])
 
     def test_final_publication_recovers_from_db_when_reporting_artifacts_are_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

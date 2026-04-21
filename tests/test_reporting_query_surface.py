@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,12 +13,24 @@ from _workflow_support import (
     reporting_path,
     run_kernel,
     run_script,
+    runtime_src_path,
     script_path,
     seed_analysis_chain,
 )
 
 RUN_ID = "run-reporting-query-001"
 ROUND_ID = "round-reporting-query-001"
+
+RUNTIME_SRC = runtime_src_path()
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
+    load_council_decision_wrapper,
+    load_expert_report_wrapper,
+    load_final_publication_wrapper,
+    load_reporting_handoff_wrapper,
+)
 
 
 def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
@@ -209,6 +222,19 @@ def fetch_raw_json(
     return payload
 
 
+def execute_db(
+    db_path: Path,
+    query: str,
+    params: tuple[str, ...],
+) -> None:
+    connection = sqlite3.connect(db_path)
+    try:
+        with connection:
+            connection.execute(query, params)
+    finally:
+        connection.close()
+
+
 class ReportingQuerySurfaceTests(unittest.TestCase):
     def test_kernel_lists_and_queries_reporting_plane_objects(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -249,6 +275,10 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
             self.assertIn(
                 "--stage canonical",
                 reporting_state["operator"]["query_expert_reports_command"],
+            )
+            self.assertIn(
+                "materialize-reporting-exports",
+                reporting_state["operator"]["materialize_reporting_exports_command"],
             )
 
             handoff_payload = run_kernel(
@@ -374,6 +404,24 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 """,
                 (RUN_ID, ROUND_ID, "draft"),
             )
+            decision_payload = fetch_raw_json(
+                db_path,
+                """
+                SELECT raw_json
+                FROM council_decision_records
+                WHERE run_id = ? AND round_id = ? AND decision_stage = ?
+                """,
+                (RUN_ID, ROUND_ID, "canonical"),
+            )
+            expert_draft_payload = fetch_raw_json(
+                db_path,
+                """
+                SELECT raw_json
+                FROM expert_report_records
+                WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
+                """,
+                (RUN_ID, ROUND_ID, "draft", "sociologist"),
+            )
             expert_payload = fetch_raw_json(
                 db_path,
                 """
@@ -399,7 +447,17 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
             self.assertIsInstance(decision_draft_payload["decision_trace_ids"], list)
             self.assertIsInstance(decision_draft_payload["published_report_refs"], list)
             self.assertIsInstance(decision_draft_payload["provenance"], dict)
+            self.assertEqual("council-decision-v1", decision_payload["schema_version"])
+            self.assertEqual("canonical", decision_payload["decision_stage"])
+            self.assertIsInstance(decision_payload["published_report_refs"], list)
+            self.assertIsInstance(decision_payload["provenance"], dict)
 
+            self.assertEqual("expert-report-v1", expert_draft_payload["schema_version"])
+            self.assertEqual("draft", expert_draft_payload["report_stage"])
+            self.assertEqual("sociologist", expert_draft_payload["agent_role"])
+            self.assertIsInstance(expert_draft_payload["evidence_refs"], list)
+            self.assertIsInstance(expert_draft_payload["lineage"], list)
+            self.assertIsInstance(expert_draft_payload["provenance"], dict)
             self.assertEqual("expert-report-v1", expert_payload["schema_version"])
             self.assertEqual("canonical", expert_payload["report_stage"])
             self.assertEqual("sociologist", expert_payload["agent_role"])
@@ -412,6 +470,287 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
             self.assertIsInstance(publication_payload["evidence_refs"], list)
             self.assertIsInstance(publication_payload["lineage"], list)
             self.assertIsInstance(publication_payload["provenance"], dict)
+
+            self.assertDictEqual(
+                handoff_payload,
+                load_json(reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json")),
+            )
+            self.assertDictEqual(
+                decision_draft_payload,
+                load_json(
+                    reporting_path(run_dir, f"council_decision_draft_{ROUND_ID}.json")
+                ),
+            )
+            self.assertDictEqual(
+                decision_payload,
+                load_json(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json")),
+            )
+            self.assertDictEqual(
+                expert_draft_payload,
+                load_json(
+                    reporting_path(
+                        run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json"
+                    )
+                ),
+            )
+            self.assertDictEqual(
+                expert_payload,
+                load_json(
+                    reporting_path(run_dir, f"expert_report_sociologist_{ROUND_ID}.json")
+                ),
+            )
+            self.assertDictEqual(
+                publication_payload,
+                load_json(reporting_path(run_dir, f"final_publication_{ROUND_ID}.json")),
+            )
+
+    def test_reporting_wrappers_keep_db_fields_and_flag_orphaned_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_reporting_plane(run_dir, root)
+            db_path = analytics_path(run_dir, "signal_plane.sqlite")
+
+            decision_context = load_council_decision_wrapper(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                decision_stage="draft",
+            )
+            expert_context = load_expert_report_wrapper(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                agent_role="sociologist",
+                report_stage="canonical",
+            )
+            self.assertIn("record_id", decision_context["payload"])
+            self.assertEqual("draft", decision_context["payload"]["decision_stage"])
+            self.assertIn("record_id", expert_context["payload"])
+            self.assertEqual("canonical", expert_context["payload"]["report_stage"])
+
+            execute_db(
+                db_path,
+                "DELETE FROM reporting_handoffs WHERE run_id = ? AND round_id = ?",
+                (RUN_ID, ROUND_ID),
+            )
+            execute_db(
+                db_path,
+                """
+                DELETE FROM council_decision_records
+                WHERE run_id = ? AND round_id = ? AND decision_stage = ?
+                """,
+                (RUN_ID, ROUND_ID, "draft"),
+            )
+            execute_db(
+                db_path,
+                """
+                DELETE FROM expert_report_records
+                WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
+                """,
+                (RUN_ID, ROUND_ID, "canonical", "sociologist"),
+            )
+            execute_db(
+                db_path,
+                "DELETE FROM final_publications WHERE run_id = ? AND round_id = ?",
+                (RUN_ID, ROUND_ID),
+            )
+
+            handoff_context = load_reporting_handoff_wrapper(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+            )
+            decision_context = load_council_decision_wrapper(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                decision_stage="draft",
+            )
+            expert_context = load_expert_report_wrapper(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                agent_role="sociologist",
+                report_stage="canonical",
+            )
+            publication_context = load_final_publication_wrapper(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+            )
+
+            self.assertIsNone(handoff_context["payload"])
+            self.assertTrue(handoff_context["artifact_present"])
+            self.assertFalse(handoff_context["payload_present"])
+            self.assertEqual(
+                "orphaned-reporting-handoff-artifact",
+                handoff_context["source"],
+            )
+
+            self.assertIsNone(decision_context["payload"])
+            self.assertTrue(decision_context["artifact_present"])
+            self.assertFalse(decision_context["payload_present"])
+            self.assertEqual(
+                "orphaned-council-decision-draft-artifact",
+                decision_context["source"],
+            )
+
+            self.assertIsNone(expert_context["payload"])
+            self.assertTrue(expert_context["artifact_present"])
+            self.assertFalse(expert_context["payload_present"])
+            self.assertEqual(
+                "orphaned-expert-report-artifact",
+                expert_context["source"],
+            )
+
+            self.assertIsNone(publication_context["payload"])
+            self.assertTrue(publication_context["artifact_present"])
+            self.assertFalse(publication_context["payload_present"])
+            self.assertEqual(
+                "orphaned-final-publication-artifact",
+                publication_context["source"],
+            )
+
+    def test_materialize_reporting_exports_rebuilds_reporting_files_from_db(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_ready_reporting_plane(run_dir, root)
+            db_path = analytics_path(run_dir, "signal_plane.sqlite")
+
+            for name in (
+                f"reporting_handoff_{ROUND_ID}.json",
+                f"council_decision_draft_{ROUND_ID}.json",
+                f"council_decision_{ROUND_ID}.json",
+                f"expert_report_draft_sociologist_{ROUND_ID}.json",
+                f"expert_report_draft_environmentalist_{ROUND_ID}.json",
+                f"expert_report_sociologist_{ROUND_ID}.json",
+                f"expert_report_environmentalist_{ROUND_ID}.json",
+                f"final_publication_{ROUND_ID}.json",
+            ):
+                reporting_path(run_dir, name).unlink()
+
+            payload = run_kernel(
+                "materialize-reporting-exports",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            self.assertEqual("reporting-export-materialization-v1", payload["schema_version"])
+            self.assertEqual(8, payload["summary"]["materialized_export_count"])
+            self.assertEqual(0, payload["summary"]["missing_db_object_count"])
+            self.assertEqual(0, payload["summary"]["orphaned_artifact_count"])
+
+            self.assertDictEqual(
+                fetch_raw_json(
+                    db_path,
+                    "SELECT raw_json FROM reporting_handoffs WHERE run_id = ? AND round_id = ?",
+                    (RUN_ID, ROUND_ID),
+                ),
+                load_json(reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json")),
+            )
+            self.assertDictEqual(
+                fetch_raw_json(
+                    db_path,
+                    """
+                    SELECT raw_json
+                    FROM council_decision_records
+                    WHERE run_id = ? AND round_id = ? AND decision_stage = ?
+                    """,
+                    (RUN_ID, ROUND_ID, "draft"),
+                ),
+                load_json(
+                    reporting_path(run_dir, f"council_decision_draft_{ROUND_ID}.json")
+                ),
+            )
+            self.assertDictEqual(
+                fetch_raw_json(
+                    db_path,
+                    """
+                    SELECT raw_json
+                    FROM council_decision_records
+                    WHERE run_id = ? AND round_id = ? AND decision_stage = ?
+                    """,
+                    (RUN_ID, ROUND_ID, "canonical"),
+                ),
+                load_json(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json")),
+            )
+            self.assertDictEqual(
+                fetch_raw_json(
+                    db_path,
+                    """
+                    SELECT raw_json
+                    FROM expert_report_records
+                    WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
+                    """,
+                    (RUN_ID, ROUND_ID, "draft", "sociologist"),
+                ),
+                load_json(
+                    reporting_path(
+                        run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json"
+                    )
+                ),
+            )
+            self.assertDictEqual(
+                fetch_raw_json(
+                    db_path,
+                    """
+                    SELECT raw_json
+                    FROM expert_report_records
+                    WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
+                    """,
+                    (RUN_ID, ROUND_ID, "draft", "environmentalist"),
+                ),
+                load_json(
+                    reporting_path(
+                        run_dir,
+                        f"expert_report_draft_environmentalist_{ROUND_ID}.json",
+                    )
+                ),
+            )
+            self.assertDictEqual(
+                fetch_raw_json(
+                    db_path,
+                    """
+                    SELECT raw_json
+                    FROM expert_report_records
+                    WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
+                    """,
+                    (RUN_ID, ROUND_ID, "canonical", "sociologist"),
+                ),
+                load_json(
+                    reporting_path(run_dir, f"expert_report_sociologist_{ROUND_ID}.json")
+                ),
+            )
+            self.assertDictEqual(
+                fetch_raw_json(
+                    db_path,
+                    """
+                    SELECT raw_json
+                    FROM expert_report_records
+                    WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
+                    """,
+                    (RUN_ID, ROUND_ID, "canonical", "environmentalist"),
+                ),
+                load_json(
+                    reporting_path(
+                        run_dir, f"expert_report_environmentalist_{ROUND_ID}.json"
+                    )
+                ),
+            )
+            self.assertDictEqual(
+                fetch_raw_json(
+                    db_path,
+                    "SELECT raw_json FROM final_publications WHERE run_id = ? AND round_id = ?",
+                    (RUN_ID, ROUND_ID),
+                ),
+                load_json(reporting_path(run_dir, f"final_publication_{ROUND_ID}.json")),
+            )
 
 
 if __name__ == "__main__":
