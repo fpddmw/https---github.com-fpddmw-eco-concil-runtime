@@ -226,6 +226,39 @@
   - `tests/test_controversy_workflow.py`
   - `tests/test_runtime_kernel.py`
 
+### 2.21 Batch 17 当前状态
+
+- `已完成` controversy typed decomposition 已真正落到 analysis plane：
+  - `issue-cluster`
+  - `stance-group`
+  - `concern-facet`
+  - `actor-profile`
+  - `evidence-citation-type`
+- `已完成` `canonical_contracts.py` 已把上述五类对象从“只有标签字段的弱对象”升级为强契约：
+  - `rationale / provenance / evidence_refs / lineage` 进入硬校验面。
+  - `member_count / share_ratio / affected_claim_count / claim_count / source_signal_count / confidence` 等关键数值字段进入 `required_number_fields`。
+- `已完成` `eco_council_runtime/analysis_objects.py` 已新增五类 canonical normalization helper，并统一 controversy typed issue layer 的默认值、lineage、decision source 与 score 计算。
+- `已完成` `kernel/analysis_plane.py` 已新增五类 result-set config、sync helper、load context：
+  - 新对象支持 item-level query。
+  - 新对象支持 parent result-set / parent artifact / parent id lineage。
+  - 删掉 typed artifact 后，kernel query surface 仍能从 DB 恢复对象。
+- `已完成` `eco-materialize-controversy-map` 不再只产出一个 `controversy_map` wrapper：
+  - 现在会同时派生并同步 `issue_clusters / stance_groups / concern_facets / actor_profiles / evidence_citation_types` 五组 typed artifact。
+  - `controversy-map` 保留为 routing / readiness-facing 高层对象；议会 issue layer 改由 `issue-cluster` 充当 canonical DB surface。
+- `已完成` `load_d1_shared_context` 已切到 `issue-cluster-first`：
+  - board / agenda / promotion / reporting 共享上下文优先读取 `issue-cluster` DB row，而不是直接把 `controversy-map` wrapper 当作议会 issue object。
+  - `stance_groups / concern_facets / actor_profiles / evidence_citation_types` 也已进入 shared context 暴露面。
+- `已完成` 修复 analysis plane 一处结构性 lineage bug：
+  - `analysis_result_lineage.lineage_id` 之前未把 `result_set_id` 纳入签名，不同 analysis kind 的 query-basis / parent-artifact row 会互相覆盖。
+  - 现已改为 result-set scoped lineage id，typed controversy result-set 的 parent result-set contract 不再丢失。
+- `已完成` 本轮本地验证通过：
+  - `tests/test_canonical_contracts.py`
+  - `tests/test_controversy_workflow.py`
+  - `tests/test_runtime_kernel.py`
+  - `tests/test_deliberation_agenda_workflow.py`
+  - `tests/test_reporting_workflow.py`
+  - `tests/test_phase2_state_surfaces.py`
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -244,11 +277,11 @@
 
 ### 4.2 Analysis plane
 
-- `[ ]` 建立 `issue-cluster`
-- `[ ]` 建立 `stance-group`
-- `[ ]` 建立 `concern-facet`
-- `[ ]` 建立 `actor-profile`
-- `[ ]` 建立 `evidence-citation-type`
+- `[x]` 建立 `issue-cluster`
+- `[x]` 建立 `stance-group`
+- `[x]` 建立 `concern-facet`
+- `[x]` 建立 `actor-profile`
+- `[x]` 建立 `evidence-citation-type`
 - `[x]` 建立 `verifiability-assessment`
 - `[x]` 建立 `verification-route`
 - `[x]` 建立 `formal-public-link`
@@ -274,8 +307,8 @@
 
 ### 4.4 通用要求
 
-- `[x]` `claim-candidate / claim-cluster / claim-scope / verifiability-assessment / verification-route / formal-public-link / representation-gap / diffusion-edge / controversy-map` 支持 item-level query
-- `[x]` 上述 claim-side + controversy-chain analysis object 已具备 ID、provenance、evidence refs、lineage、decision source
+- `[x]` `issue-cluster / stance-group / concern-facet / actor-profile / evidence-citation-type / claim-candidate / claim-cluster / claim-scope / verifiability-assessment / verification-route / formal-public-link / representation-gap / diffusion-edge / controversy-map` 支持 item-level query
+- `[x]` 上述 claim-side + typed controversy-chain analysis object 已具备 ID、provenance、evidence refs、lineage、decision source
 - `[ ]` phase-2 对象不再只作为整包 snapshot 存在
 
 ## 5. Work Package 2: Signal plane 重构

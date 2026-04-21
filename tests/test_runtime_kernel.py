@@ -320,6 +320,91 @@ class RuntimeKernelTests(unittest.TestCase):
                 parent_kinds,
             )
 
+    def test_kernel_queries_issue_cluster_items_when_artifact_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            run_script(
+                script_path("eco-derive-claim-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-classify-claim-verifiability"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-route-verification-lane"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-materialize-controversy-map"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            analytics_path(run_dir, f"issue_clusters_{ROUND_ID}.json").unlink()
+            analytics_path(run_dir, f"controversy_map_{ROUND_ID}.json").unlink()
+
+            payload = run_kernel(
+                "query-analysis-result-items",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--analysis-kind",
+                "issue-cluster",
+                "--latest-only",
+                "--subject-id",
+                "air-quality-smoke",
+                "--include-result-sets",
+                "--include-contract",
+            )
+
+            self.assertEqual("analysis-plane-item-query-v1", payload["schema_version"])
+            self.assertEqual(1, payload["summary"]["matching_result_set_count"])
+            self.assertGreaterEqual(payload["summary"]["returned_item_count"], 1)
+            self.assertTrue(
+                all(item["item"]["schema_version"] == "issue-cluster-v1" for item in payload["items"])
+            )
+            self.assertTrue(
+                all(not item["artifact_present"] for item in payload["items"])
+            )
+            self.assertTrue(
+                any(
+                    item["item"]["cluster_id"] == item["item"]["map_issue_id"]
+                    for item in payload["items"]
+                )
+            )
+            parent_kinds = {
+                parent["analysis_kind"]
+                for parent in payload["result_sets"][0]["result_contract"][
+                    "parent_result_sets"
+                ]
+            }
+            self.assertSetEqual({"controversy-map"}, parent_kinds)
+
     def test_kernel_analysis_query_reports_invalid_analysis_kind(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

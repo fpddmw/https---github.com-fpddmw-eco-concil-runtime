@@ -21,6 +21,7 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.analysis_plane import query_analysis_result_items
+from eco_council_runtime.phase2_fallback_context import load_d1_shared_context
 
 RUN_ID = "run-controversy-001"
 ROUND_ID = "round-controversy-001"
@@ -154,6 +155,212 @@ class ControversyWorkflowTests(unittest.TestCase):
             self.assertSetEqual(
                 {"claim-cluster", "claim-scope", "claim-verifiability", "verification-route"},
                 parent_kinds,
+            )
+
+    def test_typed_issue_surfaces_sync_to_db_and_recover_without_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            run_script(
+                script_path("eco-derive-claim-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-classify-claim-verifiability"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-route-verification-lane"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            payload = run_script(
+                script_path("eco-materialize-controversy-map"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            issue_cluster_artifact = load_json(
+                analytics_path(run_dir, f"issue_clusters_{ROUND_ID}.json")
+            )
+            stance_group_artifact = load_json(
+                analytics_path(run_dir, f"stance_groups_{ROUND_ID}.json")
+            )
+            concern_facet_artifact = load_json(
+                analytics_path(run_dir, f"concern_facets_{ROUND_ID}.json")
+            )
+            actor_profile_artifact = load_json(
+                analytics_path(run_dir, f"actor_profiles_{ROUND_ID}.json")
+            )
+            citation_type_artifact = load_json(
+                analytics_path(run_dir, f"evidence_citation_types_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", payload["typed_analysis_sync"]["issue-cluster"]["status"])
+            self.assertGreaterEqual(issue_cluster_artifact["issue_cluster_count"], 1)
+            self.assertGreaterEqual(stance_group_artifact["stance_group_count"], 1)
+            self.assertGreaterEqual(concern_facet_artifact["concern_facet_count"], 1)
+            self.assertGreaterEqual(actor_profile_artifact["actor_profile_count"], 1)
+            self.assertGreaterEqual(citation_type_artifact["citation_type_count"], 1)
+            first_issue_cluster = issue_cluster_artifact["issue_clusters"][0]
+            self.assertEqual("issue-cluster-v1", first_issue_cluster["schema_version"])
+            self.assertEqual(
+                first_issue_cluster["cluster_id"],
+                first_issue_cluster["map_issue_id"],
+            )
+            self.assertTrue(first_issue_cluster["claim_cluster_id"])
+            self.assertGreaterEqual(len(first_issue_cluster["stance_group_ids"]), 1)
+            self.assertGreaterEqual(len(first_issue_cluster["concern_ids"]), 1)
+            self.assertGreaterEqual(len(first_issue_cluster["actor_ids"]), 1)
+            self.assertGreaterEqual(len(first_issue_cluster["citation_type_ids"]), 1)
+
+            for artifact_name in (
+                f"issue_clusters_{ROUND_ID}.json",
+                f"stance_groups_{ROUND_ID}.json",
+                f"concern_facets_{ROUND_ID}.json",
+                f"actor_profiles_{ROUND_ID}.json",
+                f"evidence_citation_types_{ROUND_ID}.json",
+            ):
+                analytics_path(run_dir, artifact_name).unlink()
+
+            query_expectations = {
+                "issue-cluster": {"schema": "issue-cluster-v1", "parent_kind": "controversy-map"},
+                "stance-group": {"schema": "stance-group-v1", "parent_kind": "issue-cluster"},
+                "concern-facet": {"schema": "concern-facet-v1", "parent_kind": "issue-cluster"},
+                "actor-profile": {"schema": "actor-profile-v1", "parent_kind": "issue-cluster"},
+                "evidence-citation-type": {
+                    "schema": "evidence-citation-type-v1",
+                    "parent_kind": "issue-cluster",
+                },
+            }
+            for analysis_kind, expectation in query_expectations.items():
+                query_payload = query_analysis_result_items(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    analysis_kind=analysis_kind,
+                    subject_id="air-quality-smoke",
+                    latest_only=True,
+                    include_result_sets=True,
+                    include_contract=True,
+                )
+                self.assertGreaterEqual(
+                    query_payload["summary"]["returned_item_count"],
+                    1,
+                    analysis_kind,
+                )
+                self.assertTrue(
+                    all(not item["artifact_present"] for item in query_payload["items"]),
+                    analysis_kind,
+                )
+                self.assertTrue(
+                    all(
+                        item["item"]["schema_version"] == expectation["schema"]
+                        for item in query_payload["items"]
+                    ),
+                    analysis_kind,
+                )
+                parent_kinds = {
+                    parent["analysis_kind"]
+                    for parent in query_payload["result_sets"][0]["result_contract"][
+                        "parent_result_sets"
+                    ]
+                }
+                self.assertIn(expectation["parent_kind"], parent_kinds)
+
+    def test_shared_context_prefers_issue_cluster_db_surface_when_artifacts_are_missing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+
+            run_script(
+                script_path("eco-derive-claim-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-classify-claim-verifiability"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-route-verification-lane"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-materialize-controversy-map"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            analytics_path(run_dir, f"issue_clusters_{ROUND_ID}.json").unlink()
+            analytics_path(run_dir, f"controversy_map_{ROUND_ID}.json").unlink()
+
+            shared_context = load_d1_shared_context(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+            )
+
+            self.assertEqual(
+                "issue-cluster",
+                shared_context["analysis_sync"]["selected_analysis_kind"],
+            )
+            self.assertGreaterEqual(
+                shared_context["agenda_counts"]["issue_cluster_count"],
+                1,
+            )
+            self.assertTrue(
+                any(
+                    item["schema_version"] == "issue-cluster-v1"
+                    for item in shared_context["issue_clusters"]
+                )
+            )
+            self.assertFalse(
+                shared_context["observed_inputs"]["issue_clusters_artifact_present"]
+            )
+            self.assertFalse(
+                shared_context["observed_inputs"]["controversy_map_artifact_present"]
             )
 
     def test_procedural_scope_routes_away_from_environment_and_still_materializes_map(

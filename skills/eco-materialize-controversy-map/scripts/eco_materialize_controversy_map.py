@@ -22,10 +22,20 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_claim_scope_context,
     load_claim_verifiability_context,
     load_verification_route_context,
+    sync_actor_profile_result_set,
+    sync_concern_facet_result_set,
     sync_controversy_map_result_set,
+    sync_evidence_citation_type_result_set,
+    sync_issue_cluster_result_set,
+    sync_stance_group_result_set,
 )
 from eco_council_runtime.analysis_objects import (  # noqa: E402
+    normalize_actor_profile_payload,
+    normalize_concern_facet_payload,
     normalize_controversy_map_payload,
+    normalize_evidence_citation_type_payload,
+    normalize_issue_cluster_payload,
+    normalize_stance_group_payload,
 )
 
 
@@ -153,6 +163,384 @@ def count_labels(values: list[str]) -> dict[str, int]:
             continue
         counts[text] = counts.get(text, 0) + 1
     return counts
+
+
+def artifact_ref_for_path(path: Path, record_locator: str) -> dict[str, str]:
+    locator = maybe_text(record_locator) or "$"
+    return {
+        "signal_id": "",
+        "artifact_path": str(path),
+        "record_locator": locator,
+        "artifact_ref": f"{path}:{locator}",
+    }
+
+
+def sync_result_wrapper(
+    run_dir_path: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    output_file: Path,
+    wrapper: dict[str, Any],
+    db_path: str,
+    sync_callable: Any,
+    path_kwarg: str,
+) -> dict[str, Any]:
+    write_json(output_file, wrapper)
+    analysis_sync = sync_callable(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+        **{path_kwarg: output_file},
+    )
+    wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
+    wrapper["analysis_sync"] = analysis_sync
+    write_json(output_file, wrapper)
+    return analysis_sync
+
+
+def build_typed_issue_surfaces(
+    issue_clusters: list[dict[str, Any]],
+    *,
+    run_id: str,
+    round_id: str,
+    issue_clusters_file: Path,
+    stance_groups_file: Path,
+    concern_facets_file: Path,
+    actor_profiles_file: Path,
+    evidence_citation_types_file: Path,
+) -> dict[str, list[dict[str, Any]]]:
+    typed_issue_clusters: list[dict[str, Any]] = []
+    stance_groups: list[dict[str, Any]] = []
+    concern_facets: list[dict[str, Any]] = []
+    actor_profiles: list[dict[str, Any]] = []
+    citation_types: list[dict[str, Any]] = []
+    for issue in issue_clusters:
+        if not isinstance(issue, dict):
+            continue
+        issue_id = maybe_text(issue.get("map_issue_id")) or maybe_text(
+            issue.get("cluster_id")
+        )
+        if not issue_id:
+            continue
+        claim_cluster_id = maybe_text(issue.get("cluster_id")) or issue_id
+        claim_ids = unique_texts(list_field(issue, "claim_ids"))
+        source_signal_ids = unique_texts(list_field(issue, "source_signal_ids"))
+        concern_labels = unique_texts(list_field(issue, "concern_facets"))
+        actor_labels = unique_texts(list_field(issue, "actor_hints"))
+        citation_labels = unique_texts(list_field(issue, "evidence_citation_types"))
+        evidence_refs = (
+            issue.get("evidence_refs", [])
+            if isinstance(issue.get("evidence_refs"), list)
+            else []
+        )
+        lineage = issue.get("lineage", []) if isinstance(issue.get("lineage"), list) else []
+        issue_label = maybe_text(issue.get("issue_label")) or "general-public-controversy"
+        claim_type = maybe_text(issue.get("claim_type")) or "public-claim"
+        dominant_stance = maybe_text(issue.get("dominant_stance")) or "unclear"
+        recommended_lane = maybe_text(issue.get("recommended_lane")) or "mixed-review"
+        route_status = maybe_text(issue.get("route_status")) or "mixed-routing-review"
+        controversy_posture = maybe_text(issue.get("controversy_posture")) or "mixed-issue"
+        member_count = int(issue.get("member_count") or len(claim_ids) or 1)
+        aggregate_source_signal_count = int(
+            issue.get("aggregate_source_signal_count") or len(source_signal_ids)
+        )
+        claim_scope_id = maybe_text(issue.get("claim_scope_id"))
+        assessment_id = maybe_text(issue.get("assessment_id"))
+        route_id = maybe_text(issue.get("route_id"))
+        issue_provenance = (
+            issue.get("provenance", {})
+            if isinstance(issue.get("provenance"), dict)
+            else {}
+        )
+        raw_stance_distribution = (
+            issue.get("stance_distribution", [])
+            if isinstance(issue.get("stance_distribution"), list)
+            else []
+        )
+        normalized_stance_distribution: list[dict[str, Any]] = []
+        for entry in raw_stance_distribution:
+            if isinstance(entry, dict):
+                stance_label = maybe_text(entry.get("stance")) or maybe_text(
+                    entry.get("label")
+                )
+                stance_count = int(entry.get("count") or 0)
+            else:
+                stance_label = maybe_text(entry)
+                stance_count = 0
+            if not stance_label:
+                continue
+            if stance_count <= 0:
+                stance_count = member_count if stance_label == dominant_stance else 1
+            normalized_stance_distribution.append(
+                {"stance": stance_label, "count": stance_count}
+            )
+        if not normalized_stance_distribution and dominant_stance:
+            normalized_stance_distribution.append(
+                {"stance": dominant_stance, "count": member_count}
+            )
+
+        stance_group_ids: list[str] = []
+        for entry in normalized_stance_distribution:
+            stance_label = maybe_text(entry.get("stance"))
+            if not stance_label:
+                continue
+            stance_group_id = "stancegroup-" + stable_hash(
+                run_id,
+                round_id,
+                issue_id,
+                stance_label,
+            )[:12]
+            stance_group_ids.append(stance_group_id)
+            stance_groups.append(
+                normalize_stance_group_payload(
+                    {
+                        "stance_group_id": stance_group_id,
+                        "run_id": run_id,
+                        "round_id": round_id,
+                        "cluster_id": issue_id,
+                        "map_issue_id": issue_id,
+                        "claim_cluster_id": claim_cluster_id,
+                        "claim_scope_id": claim_scope_id,
+                        "assessment_id": assessment_id,
+                        "route_id": route_id,
+                        "issue_label": issue_label,
+                        "claim_type": claim_type,
+                        "stance_label": stance_label,
+                        "recommended_lane": recommended_lane,
+                        "route_status": route_status,
+                        "controversy_posture": controversy_posture,
+                        "claim_ids": claim_ids,
+                        "source_signal_ids": source_signal_ids,
+                        "concern_facets": concern_labels,
+                        "actor_hints": actor_labels,
+                        "evidence_citation_types": citation_labels,
+                        "member_count": int(entry.get("count") or 0),
+                        "total_member_count": member_count,
+                        "decision_source": maybe_text(issue.get("decision_source")),
+                        "evidence_refs": evidence_refs,
+                        "lineage": lineage,
+                        "rationale": (
+                            "Decomposed one controversy issue into a typed stance-group "
+                            f"object for {issue_label}."
+                        ),
+                        "method": "controversy-typed-decomposition-v1",
+                        "selection_mode": "derive-stance-groups-from-controversy-map",
+                        "provenance": issue_provenance,
+                    },
+                    source_skill=SKILL_NAME,
+                    artifact_path=str(stance_groups_file),
+                )
+            )
+
+        concern_ids: list[str] = []
+        for index, concern_label in enumerate(concern_labels):
+            concern_id = "concern-" + stable_hash(
+                run_id,
+                round_id,
+                issue_id,
+                concern_label,
+            )[:12]
+            concern_ids.append(concern_id)
+            concern_facets.append(
+                normalize_concern_facet_payload(
+                    {
+                        "concern_id": concern_id,
+                        "run_id": run_id,
+                        "round_id": round_id,
+                        "cluster_id": issue_id,
+                        "map_issue_id": issue_id,
+                        "claim_cluster_id": claim_cluster_id,
+                        "claim_scope_id": claim_scope_id,
+                        "assessment_id": assessment_id,
+                        "route_id": route_id,
+                        "issue_label": issue_label,
+                        "claim_type": claim_type,
+                        "concern_label": concern_label,
+                        "priority": "primary" if index == 0 else "supporting",
+                        "recommended_lane": recommended_lane,
+                        "route_status": route_status,
+                        "claim_ids": claim_ids,
+                        "source_signal_ids": source_signal_ids,
+                        "actor_hints": actor_labels,
+                        "evidence_citation_types": citation_labels,
+                        "affected_claim_count": member_count,
+                        "source_signal_count": aggregate_source_signal_count,
+                        "decision_source": maybe_text(issue.get("decision_source")),
+                        "evidence_refs": evidence_refs,
+                        "lineage": lineage,
+                        "rationale": (
+                            "Decomposed one controversy issue into a typed concern-facet "
+                            f"object for {issue_label}."
+                        ),
+                        "method": "controversy-typed-decomposition-v1",
+                        "selection_mode": "derive-concern-facets-from-controversy-map",
+                        "provenance": issue_provenance,
+                    },
+                    source_skill=SKILL_NAME,
+                    artifact_path=str(concern_facets_file),
+                )
+            )
+
+        actor_ids: list[str] = []
+        for actor_label in actor_labels:
+            actor_id = "actor-" + stable_hash(
+                run_id,
+                round_id,
+                issue_id,
+                actor_label,
+            )[:12]
+            actor_ids.append(actor_id)
+            actor_profiles.append(
+                normalize_actor_profile_payload(
+                    {
+                        "actor_id": actor_id,
+                        "run_id": run_id,
+                        "round_id": round_id,
+                        "cluster_id": issue_id,
+                        "map_issue_id": issue_id,
+                        "claim_cluster_id": claim_cluster_id,
+                        "claim_scope_id": claim_scope_id,
+                        "assessment_id": assessment_id,
+                        "route_id": route_id,
+                        "issue_label": issue_label,
+                        "claim_type": claim_type,
+                        "display_name": actor_label,
+                        "actor_label": actor_label,
+                        "dominant_stance": dominant_stance,
+                        "recommended_lane": recommended_lane,
+                        "route_status": route_status,
+                        "claim_ids": claim_ids,
+                        "source_signal_ids": source_signal_ids,
+                        "concern_facets": concern_labels,
+                        "evidence_citation_types": citation_labels,
+                        "claim_count": member_count,
+                        "source_signal_count": aggregate_source_signal_count,
+                        "decision_source": maybe_text(issue.get("decision_source")),
+                        "evidence_refs": evidence_refs,
+                        "lineage": lineage,
+                        "rationale": (
+                            "Decomposed one controversy issue into a typed actor-profile "
+                            f"object for {issue_label}."
+                        ),
+                        "method": "controversy-typed-decomposition-v1",
+                        "selection_mode": "derive-actor-profiles-from-controversy-map",
+                        "provenance": issue_provenance,
+                    },
+                    source_skill=SKILL_NAME,
+                    artifact_path=str(actor_profiles_file),
+                )
+            )
+
+        citation_type_ids: list[str] = []
+        for citation_type in citation_labels:
+            citation_type_id = "citationtype-" + stable_hash(
+                run_id,
+                round_id,
+                issue_id,
+                citation_type,
+            )[:12]
+            citation_type_ids.append(citation_type_id)
+            citation_types.append(
+                normalize_evidence_citation_type_payload(
+                    {
+                        "citation_type_id": citation_type_id,
+                        "run_id": run_id,
+                        "round_id": round_id,
+                        "cluster_id": issue_id,
+                        "map_issue_id": issue_id,
+                        "claim_cluster_id": claim_cluster_id,
+                        "claim_scope_id": claim_scope_id,
+                        "assessment_id": assessment_id,
+                        "route_id": route_id,
+                        "issue_label": issue_label,
+                        "claim_type": claim_type,
+                        "citation_type": citation_type,
+                        "dominant_stance": dominant_stance,
+                        "recommended_lane": recommended_lane,
+                        "route_status": route_status,
+                        "claim_ids": claim_ids,
+                        "source_signal_ids": source_signal_ids,
+                        "concern_facets": concern_labels,
+                        "actor_hints": actor_labels,
+                        "claim_count": member_count,
+                        "source_signal_count": aggregate_source_signal_count,
+                        "decision_source": maybe_text(issue.get("decision_source")),
+                        "evidence_refs": evidence_refs,
+                        "lineage": lineage,
+                        "rationale": (
+                            "Decomposed one controversy issue into a typed evidence-citation-type "
+                            f"object for {issue_label}."
+                        ),
+                        "method": "controversy-typed-decomposition-v1",
+                        "selection_mode": "derive-citation-types-from-controversy-map",
+                        "provenance": issue_provenance,
+                    },
+                    source_skill=SKILL_NAME,
+                    artifact_path=str(evidence_citation_types_file),
+                )
+            )
+
+        typed_issue_clusters.append(
+            normalize_issue_cluster_payload(
+                {
+                    "cluster_id": issue_id,
+                    "map_issue_id": issue_id,
+                    "run_id": run_id,
+                    "round_id": round_id,
+                    "claim_cluster_id": claim_cluster_id,
+                    "claim_scope_id": claim_scope_id,
+                    "assessment_id": assessment_id,
+                    "route_id": route_id,
+                    "claim_ids": claim_ids,
+                    "source_signal_ids": source_signal_ids,
+                    "issue_label": issue_label,
+                    "claim_type": claim_type,
+                    "dominant_stance": dominant_stance,
+                    "stance_distribution": normalized_stance_distribution,
+                    "stance_group_ids": stance_group_ids,
+                    "concern_ids": concern_ids,
+                    "actor_ids": actor_ids,
+                    "citation_type_ids": citation_type_ids,
+                    "concern_facets": concern_labels,
+                    "actor_hints": actor_labels,
+                    "evidence_citation_types": citation_labels,
+                    "verifiability_kind": maybe_text(issue.get("verifiability_kind")),
+                    "dispute_type": maybe_text(issue.get("dispute_type")),
+                    "recommended_lane": recommended_lane,
+                    "route_status": route_status,
+                    "controversy_posture": controversy_posture,
+                    "member_count": member_count,
+                    "aggregate_source_signal_count": aggregate_source_signal_count,
+                    "confidence": issue.get("confidence"),
+                    "issue_summary": maybe_text(issue.get("controversy_summary")),
+                    "controversy_summary": maybe_text(issue.get("controversy_summary")),
+                    "should_query_environment": bool(
+                        issue.get("should_query_environment")
+                    ),
+                    "decision_source": maybe_text(issue.get("decision_source")),
+                    "evidence_refs": evidence_refs,
+                    "lineage": lineage,
+                    "rationale": (
+                        "Projected one controversy-map issue into a canonical issue-cluster "
+                        f"object for {issue_label}."
+                    ),
+                    "method": "controversy-typed-decomposition-v1",
+                    "selection_mode": "derive-issue-cluster-from-controversy-map",
+                    "provenance": issue_provenance,
+                },
+                source_skill=SKILL_NAME,
+                artifact_path=str(issue_clusters_file),
+            )
+        )
+    return {
+        "issue_clusters": typed_issue_clusters,
+        "stance_groups": stance_groups,
+        "concern_facets": concern_facets,
+        "actor_profiles": actor_profiles,
+        "citation_types": citation_types,
+    }
 
 
 def source_available(value: Any) -> bool:
@@ -510,10 +898,54 @@ def materialize_controversy_map_skill(
         )
 
     cluster_input_file = Path(maybe_text(cluster_context.get("claim_cluster_file")))
+    generated_at_utc = utc_now_iso()
+    issue_clusters_file = (run_dir_path / f"analytics/issue_clusters_{round_id}.json").resolve()
+    stance_groups_file = (run_dir_path / f"analytics/stance_groups_{round_id}.json").resolve()
+    concern_facets_file = (
+        run_dir_path / f"analytics/concern_facets_{round_id}.json"
+    ).resolve()
+    actor_profiles_file = (run_dir_path / f"analytics/actor_profiles_{round_id}.json").resolve()
+    evidence_citation_types_file = (
+        run_dir_path / f"analytics/evidence_citation_types_{round_id}.json"
+    ).resolve()
+    typed_surfaces = build_typed_issue_surfaces(
+        issue_clusters,
+        run_id=run_id,
+        round_id=round_id,
+        issue_clusters_file=issue_clusters_file,
+        stance_groups_file=stance_groups_file,
+        concern_facets_file=concern_facets_file,
+        actor_profiles_file=actor_profiles_file,
+        evidence_citation_types_file=evidence_citation_types_file,
+    )
+    typed_issue_clusters = typed_surfaces["issue_clusters"]
+    stance_groups = typed_surfaces["stance_groups"]
+    concern_facets = typed_surfaces["concern_facets"]
+    actor_profiles = typed_surfaces["actor_profiles"]
+    citation_types = typed_surfaces["citation_types"]
+    issue_label_counts = count_labels(
+        [maybe_text(item.get("issue_label")) for item in typed_issue_clusters]
+    )
+    stance_label_counts = count_labels(
+        [maybe_text(item.get("stance_label")) for item in stance_groups]
+    )
+    concern_label_counts = count_labels(
+        [maybe_text(item.get("concern_label")) for item in concern_facets]
+    )
+    actor_label_counts = count_labels(
+        [
+            maybe_text(item.get("actor_label")) or maybe_text(item.get("display_name"))
+            for item in actor_profiles
+        ]
+    )
+    citation_type_counts = count_labels(
+        [maybe_text(item.get("citation_type")) for item in citation_types]
+    )
+
     wrapper = {
         "schema_version": "n3.0",
         "skill": SKILL_NAME,
-        "generated_at_utc": utc_now_iso(),
+        "generated_at_utc": generated_at_utc,
         "run_id": run_id,
         "round_id": round_id,
         "query_basis": {
@@ -594,31 +1026,302 @@ def materialize_controversy_map_skill(
         "concern_counts": concern_counts,
         "actor_counts": actor_counts,
         "actionable_gaps": actionable_gaps,
+        "typed_output_paths": {
+            "issue_clusters_path": str(issue_clusters_file),
+            "stance_groups_path": str(stance_groups_file),
+            "concern_facets_path": str(concern_facets_file),
+            "actor_profiles_path": str(actor_profiles_file),
+            "evidence_citation_types_path": str(evidence_citation_types_file),
+        },
+        "typed_counts": {
+            "issue_cluster_object_count": len(typed_issue_clusters),
+            "stance_group_count": len(stance_groups),
+            "concern_facet_count": len(concern_facets),
+            "actor_profile_count": len(actor_profiles),
+            "citation_type_count": len(citation_types),
+        },
         "issue_clusters": issue_clusters,
     }
-    write_json(output_file, wrapper)
-    analysis_sync = sync_controversy_map_result_set(
+    analysis_db_path = (
+        maybe_text(route_context.get("db_path"))
+        or maybe_text(verifiability_context.get("db_path"))
+        or maybe_text(scope_context.get("db_path"))
+        or maybe_text(cluster_context.get("db_path"))
+    )
+    analysis_sync = sync_result_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        output_file=output_file,
+        wrapper=wrapper,
+        db_path=analysis_db_path,
+        sync_callable=sync_controversy_map_result_set,
+        path_kwarg="controversy_map_path",
+    )
+    analysis_db_path = maybe_text(analysis_sync.get("db_path")) or analysis_db_path
+
+    issue_cluster_wrapper = {
+        "schema_version": "n3.0",
+        "skill": SKILL_NAME,
+        "generated_at_utc": generated_at_utc,
+        "run_id": run_id,
+        "round_id": round_id,
+        "query_basis": {
+            "controversy_map_path": str(output_file),
+            "controversy_map_source": SKILL_NAME,
+            "selection_mode": "derive-issue-cluster-from-controversy-map",
+            "method": "controversy-typed-decomposition-v1",
+        },
+        "controversy_map_path": str(output_file),
+        "controversy_map_source": SKILL_NAME,
+        "issue_label_counts": issue_label_counts,
+        "issue_cluster_count": len(typed_issue_clusters),
+        "issue_clusters": typed_issue_clusters,
+    }
+    issue_cluster_analysis_sync = sync_result_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        output_file=issue_clusters_file,
+        wrapper=issue_cluster_wrapper,
+        db_path=analysis_db_path,
+        sync_callable=sync_issue_cluster_result_set,
+        path_kwarg="issue_clusters_path",
+    )
+    analysis_db_path = (
+        maybe_text(issue_cluster_analysis_sync.get("db_path")) or analysis_db_path
+    )
+
+    stance_group_wrapper = {
+        "schema_version": "n3.0",
+        "skill": SKILL_NAME,
+        "generated_at_utc": generated_at_utc,
+        "run_id": run_id,
+        "round_id": round_id,
+        "query_basis": {
+            "controversy_map_path": str(output_file),
+            "issue_clusters_path": str(issue_clusters_file),
+            "controversy_map_source": SKILL_NAME,
+            "issue_clusters_source": SKILL_NAME,
+            "selection_mode": "derive-stance-groups-from-controversy-map",
+            "method": "controversy-typed-decomposition-v1",
+        },
+        "controversy_map_path": str(output_file),
+        "issue_clusters_path": str(issue_clusters_file),
+        "controversy_map_source": SKILL_NAME,
+        "issue_clusters_source": SKILL_NAME,
+        "stance_label_counts": stance_label_counts,
+        "stance_group_count": len(stance_groups),
+        "stance_groups": stance_groups,
+    }
+    stance_group_analysis_sync = sync_result_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        output_file=stance_groups_file,
+        wrapper=stance_group_wrapper,
+        db_path=analysis_db_path,
+        sync_callable=sync_stance_group_result_set,
+        path_kwarg="stance_groups_path",
+    )
+    analysis_db_path = (
+        maybe_text(stance_group_analysis_sync.get("db_path")) or analysis_db_path
+    )
+
+    concern_facet_wrapper = {
+        "schema_version": "n3.0",
+        "skill": SKILL_NAME,
+        "generated_at_utc": generated_at_utc,
+        "run_id": run_id,
+        "round_id": round_id,
+        "query_basis": {
+            "controversy_map_path": str(output_file),
+            "issue_clusters_path": str(issue_clusters_file),
+            "controversy_map_source": SKILL_NAME,
+            "issue_clusters_source": SKILL_NAME,
+            "selection_mode": "derive-concern-facets-from-controversy-map",
+            "method": "controversy-typed-decomposition-v1",
+        },
+        "controversy_map_path": str(output_file),
+        "issue_clusters_path": str(issue_clusters_file),
+        "controversy_map_source": SKILL_NAME,
+        "issue_clusters_source": SKILL_NAME,
+        "concern_label_counts": concern_label_counts,
+        "concern_facet_count": len(concern_facets),
+        "concern_facets": concern_facets,
+    }
+    concern_facet_analysis_sync = sync_result_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        output_file=concern_facets_file,
+        wrapper=concern_facet_wrapper,
+        db_path=analysis_db_path,
+        sync_callable=sync_concern_facet_result_set,
+        path_kwarg="concern_facets_path",
+    )
+    analysis_db_path = (
+        maybe_text(concern_facet_analysis_sync.get("db_path")) or analysis_db_path
+    )
+
+    actor_profile_wrapper = {
+        "schema_version": "n3.0",
+        "skill": SKILL_NAME,
+        "generated_at_utc": generated_at_utc,
+        "run_id": run_id,
+        "round_id": round_id,
+        "query_basis": {
+            "controversy_map_path": str(output_file),
+            "issue_clusters_path": str(issue_clusters_file),
+            "controversy_map_source": SKILL_NAME,
+            "issue_clusters_source": SKILL_NAME,
+            "selection_mode": "derive-actor-profiles-from-controversy-map",
+            "method": "controversy-typed-decomposition-v1",
+        },
+        "controversy_map_path": str(output_file),
+        "issue_clusters_path": str(issue_clusters_file),
+        "controversy_map_source": SKILL_NAME,
+        "issue_clusters_source": SKILL_NAME,
+        "actor_label_counts": actor_label_counts,
+        "actor_profile_count": len(actor_profiles),
+        "actor_profiles": actor_profiles,
+    }
+    actor_profile_analysis_sync = sync_result_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        output_file=actor_profiles_file,
+        wrapper=actor_profile_wrapper,
+        db_path=analysis_db_path,
+        sync_callable=sync_actor_profile_result_set,
+        path_kwarg="actor_profiles_path",
+    )
+    analysis_db_path = (
+        maybe_text(actor_profile_analysis_sync.get("db_path")) or analysis_db_path
+    )
+
+    evidence_citation_type_wrapper = {
+        "schema_version": "n3.0",
+        "skill": SKILL_NAME,
+        "generated_at_utc": generated_at_utc,
+        "run_id": run_id,
+        "round_id": round_id,
+        "query_basis": {
+            "controversy_map_path": str(output_file),
+            "issue_clusters_path": str(issue_clusters_file),
+            "controversy_map_source": SKILL_NAME,
+            "issue_clusters_source": SKILL_NAME,
+            "selection_mode": "derive-citation-types-from-controversy-map",
+            "method": "controversy-typed-decomposition-v1",
+        },
+        "controversy_map_path": str(output_file),
+        "issue_clusters_path": str(issue_clusters_file),
+        "controversy_map_source": SKILL_NAME,
+        "issue_clusters_source": SKILL_NAME,
+        "citation_type_counts": citation_type_counts,
+        "citation_type_count": len(citation_types),
+        "citation_types": citation_types,
+    }
+    evidence_citation_type_analysis_sync = sync_result_wrapper(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        output_file=evidence_citation_types_file,
+        wrapper=evidence_citation_type_wrapper,
+        db_path=analysis_db_path,
+        sync_callable=sync_evidence_citation_type_result_set,
+        path_kwarg="evidence_citation_types_path",
+    )
+    analysis_db_path = (
+        maybe_text(evidence_citation_type_analysis_sync.get("db_path"))
+        or analysis_db_path
+    )
+
+    issue_cluster_analysis_sync = sync_issue_cluster_result_set(
         run_dir_path,
         expected_run_id=run_id,
         round_id=round_id,
-        controversy_map_path=output_file,
-        db_path=maybe_text(route_context.get("db_path"))
-        or maybe_text(verifiability_context.get("db_path"))
-        or maybe_text(scope_context.get("db_path"))
-        or maybe_text(cluster_context.get("db_path")),
+        issue_clusters_path=issue_clusters_file,
+        db_path=analysis_db_path,
     )
-    wrapper["db_path"] = maybe_text(analysis_sync.get("db_path"))
-    wrapper["analysis_sync"] = analysis_sync
+    issue_cluster_wrapper["db_path"] = maybe_text(issue_cluster_analysis_sync.get("db_path"))
+    issue_cluster_wrapper["analysis_sync"] = issue_cluster_analysis_sync
+    write_json(issue_clusters_file, issue_cluster_wrapper)
+    stance_group_analysis_sync = sync_stance_group_result_set(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        stance_groups_path=stance_groups_file,
+        db_path=analysis_db_path,
+    )
+    stance_group_wrapper["db_path"] = maybe_text(stance_group_analysis_sync.get("db_path"))
+    stance_group_wrapper["analysis_sync"] = stance_group_analysis_sync
+    write_json(stance_groups_file, stance_group_wrapper)
+    concern_facet_analysis_sync = sync_concern_facet_result_set(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        concern_facets_path=concern_facets_file,
+        db_path=analysis_db_path,
+    )
+    concern_facet_wrapper["db_path"] = maybe_text(concern_facet_analysis_sync.get("db_path"))
+    concern_facet_wrapper["analysis_sync"] = concern_facet_analysis_sync
+    write_json(concern_facets_file, concern_facet_wrapper)
+    actor_profile_analysis_sync = sync_actor_profile_result_set(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        actor_profiles_path=actor_profiles_file,
+        db_path=analysis_db_path,
+    )
+    actor_profile_wrapper["db_path"] = maybe_text(actor_profile_analysis_sync.get("db_path"))
+    actor_profile_wrapper["analysis_sync"] = actor_profile_analysis_sync
+    write_json(actor_profiles_file, actor_profile_wrapper)
+    evidence_citation_type_analysis_sync = sync_evidence_citation_type_result_set(
+        run_dir_path,
+        expected_run_id=run_id,
+        round_id=round_id,
+        evidence_citation_types_path=evidence_citation_types_file,
+        db_path=analysis_db_path,
+    )
+    evidence_citation_type_wrapper["db_path"] = maybe_text(
+        evidence_citation_type_analysis_sync.get("db_path")
+    )
+    evidence_citation_type_wrapper["analysis_sync"] = (
+        evidence_citation_type_analysis_sync
+    )
+    write_json(evidence_citation_types_file, evidence_citation_type_wrapper)
+
+    typed_analysis_sync = {
+        "issue-cluster": issue_cluster_analysis_sync,
+        "stance-group": stance_group_analysis_sync,
+        "concern-facet": concern_facet_analysis_sync,
+        "actor-profile": actor_profile_analysis_sync,
+        "evidence-citation-type": evidence_citation_type_analysis_sync,
+    }
+    wrapper["db_path"] = analysis_db_path
+    wrapper["typed_analysis_sync"] = typed_analysis_sync
     write_json(output_file, wrapper)
 
     artifact_refs = [
-        {
-            "signal_id": "",
-            "artifact_path": str(output_file),
-            "record_locator": "$.issue_clusters",
-            "artifact_ref": f"{output_file}:$.issue_clusters",
-        }
+        artifact_ref_for_path(output_file, "$.issue_clusters"),
+        artifact_ref_for_path(issue_clusters_file, "$.issue_clusters"),
+        artifact_ref_for_path(stance_groups_file, "$.stance_groups"),
+        artifact_ref_for_path(concern_facets_file, "$.concern_facets"),
+        artifact_ref_for_path(actor_profiles_file, "$.actor_profiles"),
+        artifact_ref_for_path(evidence_citation_types_file, "$.citation_types"),
     ]
+    canonical_ids = [
+        maybe_text(item.get("cluster_id"))
+        for item in typed_issue_clusters
+        if maybe_text(item.get("cluster_id"))
+    ]
+    if not canonical_ids:
+        canonical_ids = [
+            maybe_text(item.get("map_issue_id"))
+            for item in issue_clusters
+            if maybe_text(item.get("map_issue_id"))
+        ]
     if not issue_clusters:
         warnings.append(
             {
@@ -634,30 +1337,28 @@ def materialize_controversy_map_skill(
             "round_id": round_id,
             "output_path": str(output_file),
             "issue_cluster_count": len(issue_clusters),
+            "typed_issue_cluster_count": len(typed_issue_clusters),
+            "stance_group_count": len(stance_groups),
+            "concern_facet_count": len(concern_facets),
+            "actor_profile_count": len(actor_profiles),
+            "citation_type_count": len(citation_types),
             "cluster_source": wrapper["cluster_source"],
             "route_source": wrapper["route_source"],
-            "db_path": maybe_text(analysis_sync.get("db_path")),
+            "db_path": analysis_db_path,
         },
         "receipt_id": "controversy-map-receipt-"
         + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
         "batch_id": "controversymapbatch-"
         + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
-        "canonical_ids": [
-            maybe_text(item.get("map_issue_id"))
-            for item in issue_clusters
-            if maybe_text(item.get("map_issue_id"))
-        ],
+        "canonical_ids": canonical_ids,
         "warnings": warnings,
         "analysis_sync": analysis_sync,
+        "typed_analysis_sync": typed_analysis_sync,
         "input_analysis_sync": wrapper.get("input_analysis_sync", {}),
         "board_handoff": {
-            "candidate_ids": [
-                maybe_text(item.get("map_issue_id"))
-                for item in issue_clusters
-                if maybe_text(item.get("map_issue_id"))
-            ],
-            "evidence_refs": artifact_refs,
+            "candidate_ids": canonical_ids,
+            "evidence_refs": artifact_refs[:2],
             "gap_hints": actionable_gaps[:3],
             "challenge_hints": (
                 ["Review whether any issue still routed to observation matching is actually a procedural controversy."]

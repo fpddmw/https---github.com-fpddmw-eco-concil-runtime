@@ -36,7 +36,7 @@ OpenClaw 当前更准确的定位是：
 2. `signal plane`
    - 已能把 public 与 environment 两类异构输入写入统一的 `normalized_signals` 工作面。
 3. `analysis plane`
-   - 已能把 candidate、cluster、scope、link、coverage、controversy-map 等对象写入统一 result-set / lineage 结构；其中 `claim-candidate / claim-cluster / claim-scope / verifiability / route / formal-public-link / representation-gap / diffusion-edge / controversy-map` 已具备 canonical contract、item-level query 与 DB-native evidence/lineage 持久化。
+   - 已能把 candidate、cluster、scope、link、coverage、controversy-map 与 typed issue decomposition 等对象写入统一 result-set / lineage 结构；其中 `issue-cluster / stance-group / concern-facet / actor-profile / evidence-citation-type / claim-candidate / claim-cluster / claim-scope / verifiability / route / formal-public-link / representation-gap / diffusion-edge / controversy-map` 已具备 canonical contract、item-level query 与 DB-native evidence/lineage 持久化。
 4. `deliberation plane`
    - 已能把 hypothesis、challenge、board-task、proposal、next-action、probe、readiness、decision trace、round transition 等议会状态写入 DB-first 状态面。
 5. `reporting plane`
@@ -130,9 +130,9 @@ OpenClaw 当前更准确的定位是：
 主要缺口：
 
 1. `formal-comment-signal` 已成为一等 schema，但 formal-side 的 `stance / concern / citation / route` typed analysis 仍未补齐。
-2. analysis plane 的 controversy 主结构对象已建成；`formal-public-link / representation-gap / diffusion-edge / controversy-map` 已完成强契约、canonical normalization 与 DB item-level query，但 `issue / stance / concern / actor / citation` 这一层 typed object 仍未补齐。
+2. analysis plane 的 typed controversy issue layer 已建成；`issue-cluster / stance-group / concern-facet / actor-profile / evidence-citation-type / formal-public-link / representation-gap / diffusion-edge / controversy-map` 均已完成强契约、canonical normalization 与 DB item-level query，但 formal-side 的 typed stance/concern/citation 仍未补齐。
 3. 少数 skill 仍依赖 envelope 兼容字段和松散 dict 约定，尚未全部收口到唯一 object shape。
-4. board / reporting 还未完全以新 controversy 对象为中心运作。
+4. board / reporting 的 shared context 已切到 `issue-cluster-first`，但 `stance / concern / actor / citation` 这层对象还没有被更多下游 judgement 直接消费。
 
 ### 5.5 议会尚未真正以数据库为唯一工作面
 
@@ -142,7 +142,7 @@ OpenClaw 当前更准确的定位是：
 2. 关键 phase-2 对象可以 item-level 查询，而不是只存整包 snapshot。
 3. reporting 与 publication 应默认从 DB 重新物化，而不是依赖历史 handoff 文件。
 
-这一标准现在已经在 reporting/publication、phase-2 investigation 中间态、formal/public/environment signal plane typed 化，以及 controversy 主结构链上基本达到；剩余缺口主要转移到 controller/operator 导出物、issue-level typed decomposition 与少数旧 empirical 主链默认方向上。
+这一标准现在已经在 reporting/publication、phase-2 investigation 中间态、formal/public/environment signal plane typed 化，以及 controversy 主结构链和 issue typed layer 上基本达到；剩余缺口主要转移到 controller/operator 导出物、formal-side typed analysis 与少数旧 empirical 主链默认方向上。
 
 ## 6. 下一阶段的目标架构
 

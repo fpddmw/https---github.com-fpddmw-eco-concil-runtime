@@ -236,21 +236,29 @@ def action_from_issue_cluster(
         list(issue.get("evidence_refs", []) if isinstance(issue.get("evidence_refs"), list) else [])
         + list(weakest_coverage.get("evidence_refs", []) if isinstance(weakest_coverage.get("evidence_refs"), list) else [])
     )
+    claim_cluster_id = maybe_text(issue.get("claim_cluster_id"))
+    issue_cluster_id = maybe_text(issue.get("cluster_id"))
+    map_issue_id = maybe_text(issue.get("map_issue_id")) or issue_cluster_id
     source_ids = unique_texts(
-        [issue.get("map_issue_id"), issue.get("cluster_id"), coverage_id, *claim_ids]
+        [map_issue_id, issue_cluster_id, claim_cluster_id, coverage_id, *claim_ids]
     )
     return agenda_action(
-        action_id="action-" + stable_hash("d1-agenda", issue.get("map_issue_id"), policy["action_kind"])[:12],
+        action_id="action-" + stable_hash("d1-agenda", map_issue_id, policy["action_kind"])[:12],
         source_ids=source_ids,
         target={
-            "map_issue_id": maybe_text(issue.get("map_issue_id")),
-            "cluster_id": maybe_text(issue.get("cluster_id")),
+            "map_issue_id": map_issue_id,
+            "cluster_id": issue_cluster_id,
+            "claim_cluster_id": claim_cluster_id,
             "claim_id": claim_ids[0] if claim_ids else "",
             "coverage_id": coverage_id,
         },
         evidence_refs=evidence_refs,
         brief_context=brief_context,
-        agenda_source="controversy-map",
+        agenda_source=(
+            "issue-cluster"
+            if maybe_text(issue.get("schema_version")).startswith("issue-cluster-")
+            else "controversy-map"
+        ),
         issue_label=issue_label,
         **policy,
     )

@@ -11,6 +11,11 @@ from ..canonical_contracts import validate_canonical_payload
 
 ANALYSIS_KIND_EVIDENCE_COVERAGE = "evidence-coverage"
 ANALYSIS_KIND_CONTROVERSY_MAP = "controversy-map"
+ANALYSIS_KIND_ISSUE_CLUSTER = "issue-cluster"
+ANALYSIS_KIND_STANCE_GROUP = "stance-group"
+ANALYSIS_KIND_CONCERN_FACET = "concern-facet"
+ANALYSIS_KIND_ACTOR_PROFILE = "actor-profile"
+ANALYSIS_KIND_EVIDENCE_CITATION_TYPE = "evidence-citation-type"
 ANALYSIS_KIND_VERIFICATION_ROUTE = "verification-route"
 ANALYSIS_KIND_CLAIM_VERIFIABILITY = "claim-verifiability"
 ANALYSIS_KIND_FORMAL_PUBLIC_LINK = "formal-public-link"
@@ -25,6 +30,191 @@ ANALYSIS_KIND_CLAIM_CANDIDATE = "claim-candidate"
 ANALYSIS_KIND_OBSERVATION_CANDIDATE = "observation-candidate"
 
 ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
+    ANALYSIS_KIND_ISSUE_CLUSTER: {
+        "artifact_label": "issue-cluster",
+        "default_relative": "analytics/issue_clusters_{round_id}.json",
+        "items_key": "issue_clusters",
+        "count_key": "issue_cluster_count",
+        "id_field": "cluster_id",
+        "subject_field": "issue_label",
+        "score_field": "confidence",
+        "state_field": "route_status",
+        "related_id_fields": [
+            "cluster_id",
+            "map_issue_id",
+            "claim_cluster_id",
+            "issue_label",
+            "recommended_lane",
+            "route_status",
+        ],
+        "canonical_object_kind": "issue-cluster",
+        "default_source_skill": "eco-materialize-controversy-map",
+        "summary_fields": ["controversy_map_path"],
+        "query_basis_fields": [
+            "controversy_map_path",
+            "controversy_map_source",
+        ],
+        "parent_artifact_fields": ["controversy_map_path"],
+        "item_parent_id_fields": [
+            "map_issue_id",
+            "claim_cluster_id",
+            "claim_scope_id",
+            "assessment_id",
+            "route_id",
+        ],
+        "item_parent_id_list_fields": ["claim_ids", "source_signal_ids", "lineage"],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_STANCE_GROUP: {
+        "artifact_label": "stance-group",
+        "default_relative": "analytics/stance_groups_{round_id}.json",
+        "items_key": "stance_groups",
+        "count_key": "stance_group_count",
+        "id_field": "stance_group_id",
+        "subject_field": "issue_label",
+        "score_field": "confidence",
+        "state_field": "stance_label",
+        "related_id_fields": [
+            "stance_group_id",
+            "cluster_id",
+            "map_issue_id",
+            "issue_label",
+            "stance_label",
+        ],
+        "canonical_object_kind": "stance-group",
+        "default_source_skill": "eco-materialize-controversy-map",
+        "summary_fields": ["controversy_map_path", "issue_clusters_path"],
+        "query_basis_fields": [
+            "controversy_map_path",
+            "issue_clusters_path",
+            "controversy_map_source",
+            "issue_clusters_source",
+        ],
+        "parent_artifact_fields": ["issue_clusters_path", "controversy_map_path"],
+        "item_parent_id_fields": [
+            "cluster_id",
+            "map_issue_id",
+            "claim_cluster_id",
+            "claim_scope_id",
+            "assessment_id",
+            "route_id",
+        ],
+        "item_parent_id_list_fields": ["claim_ids", "source_signal_ids", "lineage"],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_CONCERN_FACET: {
+        "artifact_label": "concern-facet",
+        "default_relative": "analytics/concern_facets_{round_id}.json",
+        "items_key": "concern_facets",
+        "count_key": "concern_facet_count",
+        "id_field": "concern_id",
+        "subject_field": "issue_label",
+        "score_field": "confidence",
+        "state_field": "priority",
+        "related_id_fields": [
+            "concern_id",
+            "cluster_id",
+            "map_issue_id",
+            "issue_label",
+            "concern_label",
+            "priority",
+        ],
+        "canonical_object_kind": "concern-facet",
+        "default_source_skill": "eco-materialize-controversy-map",
+        "summary_fields": ["controversy_map_path", "issue_clusters_path"],
+        "query_basis_fields": [
+            "controversy_map_path",
+            "issue_clusters_path",
+            "controversy_map_source",
+            "issue_clusters_source",
+        ],
+        "parent_artifact_fields": ["issue_clusters_path", "controversy_map_path"],
+        "item_parent_id_fields": [
+            "cluster_id",
+            "map_issue_id",
+            "claim_cluster_id",
+            "claim_scope_id",
+            "assessment_id",
+            "route_id",
+        ],
+        "item_parent_id_list_fields": ["claim_ids", "source_signal_ids", "lineage"],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_ACTOR_PROFILE: {
+        "artifact_label": "actor-profile",
+        "default_relative": "analytics/actor_profiles_{round_id}.json",
+        "items_key": "actor_profiles",
+        "count_key": "actor_profile_count",
+        "id_field": "actor_id",
+        "subject_field": "issue_label",
+        "score_field": "confidence",
+        "state_field": "dominant_stance",
+        "related_id_fields": [
+            "actor_id",
+            "cluster_id",
+            "map_issue_id",
+            "issue_label",
+            "display_name",
+            "actor_label",
+        ],
+        "canonical_object_kind": "actor-profile",
+        "default_source_skill": "eco-materialize-controversy-map",
+        "summary_fields": ["controversy_map_path", "issue_clusters_path"],
+        "query_basis_fields": [
+            "controversy_map_path",
+            "issue_clusters_path",
+            "controversy_map_source",
+            "issue_clusters_source",
+        ],
+        "parent_artifact_fields": ["issue_clusters_path", "controversy_map_path"],
+        "item_parent_id_fields": [
+            "cluster_id",
+            "map_issue_id",
+            "claim_cluster_id",
+            "claim_scope_id",
+            "assessment_id",
+            "route_id",
+        ],
+        "item_parent_id_list_fields": ["claim_ids", "source_signal_ids", "lineage"],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_EVIDENCE_CITATION_TYPE: {
+        "artifact_label": "evidence-citation-type",
+        "default_relative": "analytics/evidence_citation_types_{round_id}.json",
+        "items_key": "citation_types",
+        "count_key": "citation_type_count",
+        "id_field": "citation_type_id",
+        "subject_field": "issue_label",
+        "score_field": "confidence",
+        "state_field": "citation_type",
+        "related_id_fields": [
+            "citation_type_id",
+            "cluster_id",
+            "map_issue_id",
+            "issue_label",
+            "citation_type",
+        ],
+        "canonical_object_kind": "evidence-citation-type",
+        "default_source_skill": "eco-materialize-controversy-map",
+        "summary_fields": ["controversy_map_path", "issue_clusters_path"],
+        "query_basis_fields": [
+            "controversy_map_path",
+            "issue_clusters_path",
+            "controversy_map_source",
+            "issue_clusters_source",
+        ],
+        "parent_artifact_fields": ["issue_clusters_path", "controversy_map_path"],
+        "item_parent_id_fields": [
+            "cluster_id",
+            "map_issue_id",
+            "claim_cluster_id",
+            "claim_scope_id",
+            "assessment_id",
+            "route_id",
+        ],
+        "item_parent_id_list_fields": ["claim_ids", "source_signal_ids", "lineage"],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
     ANALYSIS_KIND_DIFFUSION_EDGE: {
         "artifact_label": "diffusion-edge",
         "default_relative": "analytics/diffusion_edges_{round_id}.json",
@@ -876,7 +1066,11 @@ def resolve_parent_result_sets(
     return results
 
 
-def deduped_lineage_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def deduped_lineage_entries(
+    entries: list[dict[str, Any]],
+    *,
+    result_set_id: str = "",
+) -> list[dict[str, Any]]:
     seen: set[tuple[str, ...]] = set()
     results: list[dict[str, Any]] = []
     for entry in entries:
@@ -887,6 +1081,7 @@ def deduped_lineage_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any
         )
         metadata_text = json_text(metadata)
         signature = (
+            maybe_text(result_set_id),
             maybe_text(entry.get("item_id")),
             maybe_text(entry.get("lineage_scope")),
             maybe_text(entry.get("lineage_type")),
@@ -1045,7 +1240,10 @@ def build_result_contract(
             "artifact_ref_count": artifact_ref_count,
         },
     }
-    return contract, deduped_lineage_entries(lineage_entries)
+    return contract, deduped_lineage_entries(
+        lineage_entries,
+        result_set_id=result_set_id,
+    )
 
 
 def load_result_contract(
@@ -2397,6 +2595,268 @@ def load_controversy_map_context(
         "analysis_sync": context.get("analysis_sync", {}),
         "result_contract": context.get("result_contract", empty_result_contract()),
         "controversy_map_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_issue_cluster_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    issue_clusters_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_ISSUE_CLUSTER,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=issue_clusters_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "issue_clusters_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_issue_cluster_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    issue_clusters_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_ISSUE_CLUSTER,
+        artifact_path=issue_clusters_path,
+        db_path=db_path,
+    )
+    return {
+        "issue_clusters_wrapper": context.get("payload_wrapper", {}),
+        "issue_clusters": context.get("items", []),
+        "issue_cluster_count": int(context.get("item_count") or 0),
+        "issue_cluster_source": maybe_text(context.get("source")),
+        "issue_clusters_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "issue_clusters_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_stance_group_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    stance_groups_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_STANCE_GROUP,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=stance_groups_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "stance_groups_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_stance_group_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    stance_groups_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_STANCE_GROUP,
+        artifact_path=stance_groups_path,
+        db_path=db_path,
+    )
+    return {
+        "stance_groups_wrapper": context.get("payload_wrapper", {}),
+        "stance_groups": context.get("items", []),
+        "stance_group_count": int(context.get("item_count") or 0),
+        "stance_group_source": maybe_text(context.get("source")),
+        "stance_groups_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "stance_groups_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_concern_facet_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    concern_facets_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_CONCERN_FACET,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=concern_facets_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "concern_facets_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_concern_facet_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    concern_facets_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_CONCERN_FACET,
+        artifact_path=concern_facets_path,
+        db_path=db_path,
+    )
+    return {
+        "concern_facets_wrapper": context.get("payload_wrapper", {}),
+        "concern_facets": context.get("items", []),
+        "concern_facet_count": int(context.get("item_count") or 0),
+        "concern_facet_source": maybe_text(context.get("source")),
+        "concern_facets_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "concern_facets_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_actor_profile_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    actor_profiles_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_ACTOR_PROFILE,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=actor_profiles_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "actor_profiles_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_actor_profile_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    actor_profiles_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_ACTOR_PROFILE,
+        artifact_path=actor_profiles_path,
+        db_path=db_path,
+    )
+    return {
+        "actor_profiles_wrapper": context.get("payload_wrapper", {}),
+        "actor_profiles": context.get("items", []),
+        "actor_profile_count": int(context.get("item_count") or 0),
+        "actor_profile_source": maybe_text(context.get("source")),
+        "actor_profiles_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "actor_profiles_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_evidence_citation_type_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    evidence_citation_types_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_EVIDENCE_CITATION_TYPE,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=evidence_citation_types_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "evidence_citation_types_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_evidence_citation_type_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    evidence_citation_types_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_EVIDENCE_CITATION_TYPE,
+        artifact_path=evidence_citation_types_path,
+        db_path=db_path,
+    )
+    return {
+        "evidence_citation_types_wrapper": context.get("payload_wrapper", {}),
+        "citation_types": context.get("items", []),
+        "citation_type_count": int(context.get("item_count") or 0),
+        "evidence_citation_type_source": maybe_text(context.get("source")),
+        "evidence_citation_types_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "evidence_citation_types_artifact_present": bool(
+            context.get("artifact_present")
+        ),
         "warnings": context.get("warnings", []),
     }
 

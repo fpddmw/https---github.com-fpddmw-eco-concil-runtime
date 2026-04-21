@@ -4,12 +4,17 @@ from pathlib import Path
 from typing import Any
 
 from .kernel.analysis_plane import (
+    load_actor_profile_context,
     load_claim_verifiability_context,
+    load_concern_facet_context,
     load_controversy_map_context,
     load_diffusion_edge_context,
+    load_evidence_citation_type_context,
     load_evidence_coverage_context,
     load_formal_public_link_context,
+    load_issue_cluster_context,
     load_representation_gap_context,
+    load_stance_group_context,
     load_verification_route_context,
 )
 from .kernel.deliberation_plane import load_round_snapshot
@@ -128,6 +133,14 @@ def load_d1_shared_context(
     coverage_source = maybe_text(coverage_context.get("coverage_source"))
     if not db_path:
         db_path = maybe_text(coverage_context.get("db_path"))
+    issue_cluster_context = load_issue_cluster_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    )
+    if not db_path:
+        db_path = maybe_text(issue_cluster_context.get("db_path"))
     controversy_map_context = load_controversy_map_context(
         run_dir_path,
         run_id=run_id,
@@ -166,20 +179,57 @@ def load_d1_shared_context(
         round_id=round_id,
         db_path=db_path,
     )
+    stance_group_context = load_stance_group_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    )
+    concern_facet_context = load_concern_facet_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    )
+    actor_profile_context = load_actor_profile_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    )
+    evidence_citation_type_context = load_evidence_citation_type_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    )
+    warnings.extend(optional_context_warnings(issue_cluster_context))
     warnings.extend(optional_context_warnings(controversy_map_context))
     warnings.extend(optional_context_warnings(verification_route_context))
     warnings.extend(optional_context_warnings(claim_verifiability_context))
     warnings.extend(optional_context_warnings(formal_public_link_context))
     warnings.extend(optional_context_warnings(representation_gap_context))
     warnings.extend(optional_context_warnings(diffusion_edge_context))
+    warnings.extend(optional_context_warnings(stance_group_context))
+    warnings.extend(optional_context_warnings(concern_facet_context))
+    warnings.extend(optional_context_warnings(actor_profile_context))
+    warnings.extend(optional_context_warnings(evidence_citation_type_context))
     analysis_sync = primary_analysis_sync(
         {
+            "issue-cluster": (issue_cluster_context, "issue_cluster_count"),
             "controversy-map": (controversy_map_context, "issue_cluster_count"),
             "verification-route": (verification_route_context, "route_count"),
             "claim-verifiability": (claim_verifiability_context, "assessment_count"),
             "formal-public-link": (formal_public_link_context, "link_count"),
             "representation-gap": (representation_gap_context, "gap_count"),
             "diffusion-edge": (diffusion_edge_context, "edge_count"),
+            "stance-group": (stance_group_context, "stance_group_count"),
+            "concern-facet": (concern_facet_context, "concern_facet_count"),
+            "actor-profile": (actor_profile_context, "actor_profile_count"),
+            "evidence-citation-type": (
+                evidence_citation_type_context,
+                "citation_type_count",
+            ),
             "evidence-coverage": (coverage_context, "coverage_count"),
         },
         fallback=coverage_context.get("analysis_sync") if isinstance(coverage_context.get("analysis_sync"), dict) else {},
@@ -191,9 +241,14 @@ def load_d1_shared_context(
         include_notes=include_board_notes,
     )
     issue_clusters = (
-        controversy_map_context.get("issue_clusters", [])
-        if isinstance(controversy_map_context.get("issue_clusters"), list)
-        else []
+        issue_cluster_context.get("issue_clusters", [])
+        if optional_context_present(issue_cluster_context, "issue_cluster_count")
+        and isinstance(issue_cluster_context.get("issue_clusters"), list)
+        else (
+            controversy_map_context.get("issue_clusters", [])
+            if isinstance(controversy_map_context.get("issue_clusters"), list)
+            else []
+        )
     )
     routes = (
         verification_route_context.get("routes", [])
@@ -220,6 +275,26 @@ def load_d1_shared_context(
         if isinstance(diffusion_edge_context.get("edges"), list)
         else []
     )
+    stance_groups = (
+        stance_group_context.get("stance_groups", [])
+        if isinstance(stance_group_context.get("stance_groups"), list)
+        else []
+    )
+    concern_facets = (
+        concern_facet_context.get("concern_facets", [])
+        if isinstance(concern_facet_context.get("concern_facets"), list)
+        else []
+    )
+    actor_profiles = (
+        actor_profile_context.get("actor_profiles", [])
+        if isinstance(actor_profile_context.get("actor_profiles"), list)
+        else []
+    )
+    evidence_citation_types = (
+        evidence_citation_type_context.get("citation_types", [])
+        if isinstance(evidence_citation_type_context.get("citation_types"), list)
+        else []
+    )
     agenda_counts = controversy_context_counts(
         issue_clusters=issue_clusters,
         routes=routes,
@@ -243,6 +318,13 @@ def load_d1_shared_context(
             "coverage_present": bool(coverages),
             "coverage_artifact_present": bool(
                 coverage_context.get("coverage_artifact_present")
+            ),
+            "issue_clusters_present": optional_context_present(
+                issue_cluster_context,
+                "issue_cluster_count",
+            ),
+            "issue_clusters_artifact_present": bool(
+                issue_cluster_context.get("issue_clusters_artifact_present")
             ),
             "controversy_map_present": optional_context_present(
                 controversy_map_context,
@@ -286,6 +368,36 @@ def load_d1_shared_context(
             "diffusion_edges_artifact_present": bool(
                 diffusion_edge_context.get("diffusion_edges_artifact_present")
             ),
+            "stance_groups_present": optional_context_present(
+                stance_group_context,
+                "stance_group_count",
+            ),
+            "stance_groups_artifact_present": bool(
+                stance_group_context.get("stance_groups_artifact_present")
+            ),
+            "concern_facets_present": optional_context_present(
+                concern_facet_context,
+                "concern_facet_count",
+            ),
+            "concern_facets_artifact_present": bool(
+                concern_facet_context.get("concern_facets_artifact_present")
+            ),
+            "actor_profiles_present": optional_context_present(
+                actor_profile_context,
+                "actor_profile_count",
+            ),
+            "actor_profiles_artifact_present": bool(
+                actor_profile_context.get("actor_profiles_artifact_present")
+            ),
+            "evidence_citation_types_present": optional_context_present(
+                evidence_citation_type_context,
+                "citation_type_count",
+            ),
+            "evidence_citation_types_artifact_present": bool(
+                evidence_citation_type_context.get(
+                    "evidence_citation_types_artifact_present"
+                )
+            ),
         },
     )
     return {
@@ -293,6 +405,10 @@ def load_d1_shared_context(
         "board_state": current_board_state,
         "coverages": coverages,
         "issue_clusters": issue_clusters,
+        "stance_groups": stance_groups,
+        "concern_facets": concern_facets,
+        "actor_profiles": actor_profiles,
+        "evidence_citation_types": evidence_citation_types,
         "routes": routes,
         "assessments": assessments,
         "formal_public_links": links,
@@ -303,6 +419,14 @@ def load_d1_shared_context(
         "board_summary_file": str(board_summary_file),
         "board_brief_file": str(board_brief_file),
         "coverage_file": str(coverage_file),
+        "issue_clusters_file": maybe_text(issue_cluster_context.get("issue_clusters_file"))
+        or maybe_text(controversy_map_context.get("controversy_map_file")),
+        "stance_groups_file": maybe_text(stance_group_context.get("stance_groups_file")),
+        "concern_facets_file": maybe_text(concern_facet_context.get("concern_facets_file")),
+        "actor_profiles_file": maybe_text(actor_profile_context.get("actor_profiles_file")),
+        "evidence_citation_types_file": maybe_text(
+            evidence_citation_type_context.get("evidence_citation_types_file")
+        ),
         "controversy_map_file": maybe_text(controversy_map_context.get("controversy_map_file")),
         "verification_route_file": maybe_text(verification_route_context.get("verification_route_file")),
         "claim_verifiability_file": maybe_text(claim_verifiability_context.get("claim_verifiability_file")),

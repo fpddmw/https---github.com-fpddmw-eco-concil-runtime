@@ -155,11 +155,23 @@ def unique_artifact_ref_texts(values: list[Any]) -> list[str]:
 
 
 def normalize_issue_cluster(item: dict[str, Any]) -> dict[str, Any]:
+    schema_version = maybe_text(item.get("schema_version"))
+    prefers_issue_cluster_id = schema_version.startswith("issue-cluster-")
+    object_id = (
+        maybe_text(item.get("cluster_id"))
+        if prefers_issue_cluster_id
+        else (
+            maybe_text(item.get("map_issue_id"))
+            or maybe_text(item.get("cluster_id"))
+        )
+    )
     return {
         "object_type": "issue-cluster",
-        "object_id": maybe_text(item.get("map_issue_id")) or maybe_text(item.get("cluster_id")),
+        "object_id": object_id,
         "issue_label": maybe_text(item.get("issue_label")),
         "cluster_id": maybe_text(item.get("cluster_id")),
+        "map_issue_id": maybe_text(item.get("map_issue_id")) or object_id,
+        "claim_cluster_id": maybe_text(item.get("claim_cluster_id")),
         "claim_ids": list_field(item, "claim_ids"),
         "dominant_stance": maybe_text(item.get("dominant_stance")),
         "controversy_posture": maybe_text(item.get("controversy_posture")),
@@ -167,7 +179,12 @@ def normalize_issue_cluster(item: dict[str, Any]) -> dict[str, Any]:
         "route_status": maybe_text(item.get("route_status")),
         "concern_facets": list_field(item, "concern_facets"),
         "actor_hints": list_field(item, "actor_hints"),
-        "summary": maybe_text(item.get("controversy_summary")),
+        "stance_group_ids": list_field(item, "stance_group_ids"),
+        "concern_ids": list_field(item, "concern_ids"),
+        "actor_ids": list_field(item, "actor_ids"),
+        "citation_type_ids": list_field(item, "citation_type_ids"),
+        "summary": maybe_text(item.get("issue_summary"))
+        or maybe_text(item.get("controversy_summary")),
         "evidence_refs": unique_artifact_ref_texts(
             item.get("evidence_refs", [])
             if isinstance(item.get("evidence_refs"), list)

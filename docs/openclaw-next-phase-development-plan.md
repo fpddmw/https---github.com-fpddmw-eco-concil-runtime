@@ -310,6 +310,40 @@
    - `tests/test_controversy_workflow.py`
    - `tests/test_runtime_kernel.py`
 
+## 2.17 Batch 17 当前已交付
+
+第十七批把 controversy issue typed layer 从“contract registry 里有名字，但系统里没有真实对象”推进到“typed decomposition 已是 DB-native analysis surface”，已落地以下硬改动：
+
+1. `canonical_contracts.py` 已收紧 `issue-cluster / stance-group / concern-facet / actor-profile / evidence-citation-type`：
+   - 现在会硬校验 `rationale / provenance / evidence_refs / lineage`。
+   - `member_count / share_ratio / affected_claim_count / claim_count / source_signal_count / confidence` 等关键数值字段已进入 `required_number_fields`。
+2. `eco_council_runtime/analysis_objects.py` 已新增五类 typed controversy normalization helper：
+   - `normalize_issue_cluster_payload`
+   - `normalize_stance_group_payload`
+   - `normalize_concern_facet_payload`
+   - `normalize_actor_profile_payload`
+   - `normalize_evidence_citation_type_payload`
+3. `kernel/analysis_plane.py` 已新增五类 result-set config、sync helper 与 load context：
+   - 新对象支持 item-level query。
+   - 新对象支持 parent result-set / parent artifact / parent id lineage。
+   - 删掉 typed artifact 后，kernel query surface 仍可从 DB 恢复对象。
+4. `eco-materialize-controversy-map` 已改成“high-level controversy-map + typed issue decomposition”双输出：
+   - 继续产出 `controversy_map_<round_id>.json` 作为 routing / readiness-facing object。
+   - 同时派生 `issue_clusters / stance_groups / concern_facets / actor_profiles / evidence_citation_types` 五组 typed artifact，并全部同步进 analysis DB。
+5. `load_d1_shared_context` 已切到 `issue-cluster-first`：
+   - board / agenda / promotion / reporting 的共享上下文优先读取 `issue-cluster` DB row，而不再把 `controversy-map` wrapper 直接当成议会 issue object。
+   - `stance_groups / concern_facets / actor_profiles / evidence_citation_types` 已进入 shared context 暴露面。
+6. 同批修复了一处 analysis plane 的真实结构 bug：
+   - `analysis_result_lineage.lineage_id` 之前未把 `result_set_id` 纳入签名，不同 analysis kind 的 query-basis / parent-artifact row 会互相覆盖。
+   - 现已改成 result-set scoped lineage id，typed controversy result-set 的 parent result-set contract 不再丢失。
+7. 本轮本地验证通过：
+   - `tests/test_canonical_contracts.py`
+   - `tests/test_controversy_workflow.py`
+   - `tests/test_runtime_kernel.py`
+   - `tests/test_deliberation_agenda_workflow.py`
+   - `tests/test_reporting_workflow.py`
+   - `tests/test_phase2_state_surfaces.py`
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足

@@ -176,6 +176,82 @@ class CanonicalContractTests(unittest.TestCase):
         self.assertEqual("claim-candidate-v1", payload["schema_version"])
         self.assertEqual("claim-001", payload["claim_id"])
 
+    def test_validate_canonical_payload_accepts_well_formed_issue_cluster(self) -> None:
+        payload = validate_canonical_payload(
+            "issue-cluster",
+            {
+                "run_id": "run-001",
+                "round_id": "round-001",
+                "cluster_id": "issuemap-001",
+                "map_issue_id": "issuemap-001",
+                "claim_cluster_id": "claimcluster-001",
+                "issue_label": "air-quality-smoke",
+                "claim_type": "hazard-impact",
+                "dominant_stance": "report-impact",
+                "verifiability_kind": "empirical-observable",
+                "dispute_type": "impact-severity",
+                "recommended_lane": "environmental-observation",
+                "route_status": "route-to-verification-lane",
+                "controversy_posture": "empirical-issue",
+                "issue_summary": "Smoke issue is routed for empirical verification.",
+                "decision_source": "heuristic-fallback",
+                "member_count": 2,
+                "aggregate_source_signal_count": 3,
+                "confidence": 0.81,
+                "claim_ids": ["claim-001", "claim-002"],
+                "source_signal_ids": ["signal-001", "signal-002"],
+                "stance_distribution": [{"stance": "report-impact", "count": 2}],
+                "stance_group_ids": ["stancegroup-001"],
+                "concern_ids": ["concern-001"],
+                "actor_ids": ["actor-001"],
+                "citation_type_ids": ["citationtype-001"],
+                "concern_facets": ["health-safety"],
+                "actor_hints": ["resident"],
+                "evidence_citation_types": ["news-report"],
+                "evidence_refs": [],
+                "lineage": ["issuemap-001", "claimcluster-001", "signal-001"],
+                "rationale": "Projected the controversy map issue into a typed issue cluster.",
+                "provenance": {"source": "unit-test"},
+            },
+        )
+        self.assertEqual("issue-cluster-v1", payload["schema_version"])
+        self.assertEqual("issuemap-001", payload["cluster_id"])
+
+    def test_validate_canonical_payload_accepts_well_formed_actor_profile(self) -> None:
+        payload = validate_canonical_payload(
+            "actor-profile",
+            {
+                "run_id": "run-001",
+                "round_id": "round-001",
+                "actor_id": "actor-001",
+                "cluster_id": "issuemap-001",
+                "map_issue_id": "issuemap-001",
+                "claim_cluster_id": "claimcluster-001",
+                "issue_label": "air-quality-smoke",
+                "claim_type": "hazard-impact",
+                "display_name": "resident",
+                "actor_label": "resident",
+                "dominant_stance": "report-impact",
+                "recommended_lane": "environmental-observation",
+                "route_status": "route-to-verification-lane",
+                "profile_summary": "Residents dominate the smoke issue cluster.",
+                "decision_source": "heuristic-fallback",
+                "claim_count": 2,
+                "source_signal_count": 3,
+                "confidence": 0.74,
+                "claim_ids": ["claim-001", "claim-002"],
+                "source_signal_ids": ["signal-001", "signal-002"],
+                "concern_facets": ["health-safety"],
+                "evidence_citation_types": ["news-report"],
+                "evidence_refs": [],
+                "lineage": ["issuemap-001", "claimcluster-001", "signal-001"],
+                "rationale": "Projected actor hints into a typed actor profile.",
+                "provenance": {"source": "unit-test"},
+            },
+        )
+        self.assertEqual("actor-profile-v1", payload["schema_version"])
+        self.assertEqual("actor-001", payload["actor_id"])
+
     def test_validate_canonical_payload_accepts_well_formed_formal_public_link(self) -> None:
         payload = validate_canonical_payload(
             "formal-public-link",
