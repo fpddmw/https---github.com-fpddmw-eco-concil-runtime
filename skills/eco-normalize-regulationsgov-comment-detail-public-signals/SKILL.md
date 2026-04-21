@@ -8,6 +8,7 @@ description: Normalize regulationsgov-comment-detail-fetch results into unified 
 ## Core Goal
 - Read one `regulationsgov-comment-detail-fetch` raw artifact.
 - Convert enriched comment-detail records into canonical formal-comment signals.
+- Derive structured `submitter / issue / stance / concern / citation / route` metadata for each formal signal.
 - Write normalized rows into the unified signal plane.
 - Return compact receipts, artifact refs, signal ids, and board-ready hints.
 
@@ -19,6 +20,7 @@ description: Normalize regulationsgov-comment-detail-fetch results into unified 
 ## Read/Write Contract
 - Reads one raw artifact from disk.
 - Writes normalized rows into `normalized_signals` in `runs/<run_id>/analytics/signal_plane.sqlite` with `plane = formal` and `canonical_object_kind = formal-comment-signal`.
+- Also writes typed formal metadata and DB index rows for `docket / agency / submitter / issue / stance / concern / citation / route`.
 - Does not generate claim candidates directly.
 
 ## Required Input

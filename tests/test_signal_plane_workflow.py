@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,11 +25,15 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                         {
                             "id": "rg-smoke-001",
                             "attributes": {
-                                "title": "Wildfire smoke and air quality impacts",
-                                "comment": "Wildfire smoke is reducing air quality and visibility across the city.",
+                                "title": "Oppose the rule because wildfire smoke harms children",
+                                "comment": (
+                                    "Coalition members oppose this rule because wildfire smoke worsens "
+                                    "asthma and the EPA monitoring study already shows dangerous air quality."
+                                ),
                                 "postedDate": "2023-06-08T12:00:00Z",
                                 "agencyId": "EPA",
                                 "docketId": "EPA-2023-001",
+                                "submitterName": "Coalition of River Residents",
                             },
                         },
                         {
@@ -39,6 +44,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                                 "postedDate": "2023-06-08T13:00:00Z",
                                 "agencyId": "EPA",
                                 "docketId": "EPA-2023-002",
+                                "submitterName": "Concerned Citizen",
                             },
                         },
                     ]
@@ -66,18 +72,49 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
-                "--agency-id",
-                "EPA",
-                "--docket-id",
-                "EPA-2023-001",
-                "--keyword",
-                "wildfire",
+                "--submitter-type",
+                "community-group",
+                "--issue-label",
+                "air-quality-smoke",
+                "--citation-type",
+                "scientific-study",
+                "--stance-hint",
+                "oppose",
             )
             self.assertEqual(1, query_payload["result_count"])
             result = query_payload["results"][0]
             self.assertEqual("formal-comment-signal", result["canonical_object_kind"])
             self.assertEqual("EPA-2023-001", result["docket_id"])
             self.assertEqual("EPA", result["agency_id"])
+            self.assertEqual("community-group", result["submitter_type"])
+            self.assertEqual("oppose", result["stance_hint"])
+            self.assertEqual("environmental-observation", result["route_hint"])
+            self.assertIn("air-quality-smoke", result["issue_labels"])
+            self.assertIn("health-safety", result["concern_facets"])
+            self.assertIn("scientific-study", result["evidence_citation_types"])
+
+            permit_query_payload = run_script(
+                script_path("eco-query-formal-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--issue-label",
+                "permit-process",
+                "--concern-facet",
+                "procedure-governance",
+                "--route-hint",
+                "formal-comment-and-policy-record",
+                "--stance-hint",
+                "request-review",
+            )
+            self.assertEqual(1, permit_query_payload["result_count"])
+            self.assertEqual(
+                "EPA-2023-002",
+                permit_query_payload["results"][0]["docket_id"],
+            )
 
             lookup_payload = run_script(
                 script_path("eco-lookup-normalized-signal"),
@@ -88,9 +125,120 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(1, lookup_payload["result_count"])
             self.assertEqual(
-                "Wildfire smoke and air quality impacts",
+                "Oppose the rule because wildfire smoke harms children",
                 lookup_payload["results"][0]["title"],
             )
+
+            with sqlite3.connect(run_dir / "analytics" / "signal_plane.sqlite") as connection:
+                connection.row_factory = sqlite3.Row
+                index_rows = connection.execute(
+                    """
+                    SELECT field_name, field_value
+                    FROM normalized_signal_index
+                    WHERE signal_id = ?
+                    ORDER BY field_name, field_value
+                    """,
+                    (result["signal_id"],),
+                ).fetchall()
+            indexed_pairs = {
+                (str(row["field_name"]), str(row["field_value"])) for row in index_rows
+            }
+            self.assertIn(("issue_labels", "air-quality-smoke"), indexed_pairs)
+            self.assertIn(("route_hint", "environmental-observation"), indexed_pairs)
+            self.assertIn(("concern_facets", "health-safety"), indexed_pairs)
+            self.assertIn(("evidence_citation_types", "scientific-study"), indexed_pairs)
+
+    def test_formal_comment_detail_signal_enrichment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            detail_path = root / "regulationsgov_comment_detail.json"
+            write_json(
+                detail_path,
+                {
+                    "records": [
+                        {
+                            "comment_id": "rg-detail-001",
+                            "response_url": "https://www.regulations.gov/comment/rg-detail-001",
+                            "detail": {
+                                "attributes": {
+                                    "title": "Reopen the refinery permit hearing",
+                                    "comment": (
+                                        "Clean Air Alliance asks the agency to reopen the hearing "
+                                        "and review the monitoring data for this permit."
+                                    ),
+                                    "postedDate": "2023-06-08T14:00:00Z",
+                                    "modifyDate": "2023-06-08T15:00:00Z",
+                                    "receiveDate": "2023-06-08T14:30:00Z",
+                                    "agencyId": "EPA",
+                                    "docketId": "EPA-2023-009",
+                                    "submitterName": "Clean Air Alliance",
+                                    "organizationName": "Clean Air Alliance",
+                                }
+                            },
+                        }
+                    ]
+                },
+            )
+            normalize_payload = run_script(
+                script_path("eco-normalize-regulationsgov-comment-detail-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(detail_path),
+            )
+            self.assertEqual("completed", normalize_payload["status"])
+            self.assertEqual(1, len(normalize_payload["canonical_ids"]))
+
+            query_payload = run_script(
+                script_path("eco-query-formal-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--source-skill",
+                "regulationsgov-comment-detail-fetch",
+                "--submitter-type",
+                "ngo",
+                "--issue-label",
+                "permit-process",
+                "--citation-type",
+                "scientific-study",
+                "--route-hint",
+                "formal-comment-and-policy-record",
+                "--stance-hint",
+                "request-review",
+            )
+            self.assertEqual(1, query_payload["result_count"])
+            result = query_payload["results"][0]
+            self.assertEqual("EPA-2023-009", result["docket_id"])
+            self.assertEqual("ngo", result["submitter_type"])
+            self.assertIn("procedure-governance", result["concern_facets"])
+            self.assertIn("scientific-study", result["evidence_citation_types"])
+
+            with sqlite3.connect(run_dir / "analytics" / "signal_plane.sqlite") as connection:
+                connection.row_factory = sqlite3.Row
+                index_rows = connection.execute(
+                    """
+                    SELECT field_name, field_value
+                    FROM normalized_signal_index
+                    WHERE signal_id = ?
+                    ORDER BY field_name, field_value
+                    """,
+                    (result["signal_id"],),
+                ).fetchall()
+            indexed_pairs = {
+                (str(row["field_name"]), str(row["field_value"])) for row in index_rows
+            }
+            self.assertIn(("submitter_type", "ngo"), indexed_pairs)
+            self.assertIn(("issue_labels", "permit-process"), indexed_pairs)
+            self.assertIn(("route_hint", "formal-comment-and-policy-record"), indexed_pairs)
 
     def test_public_signal_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

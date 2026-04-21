@@ -148,19 +148,39 @@ def query_round_ids(
     return scope, ordered[: ordered.index(current) + 1]
 
 
-def fetch_rows(connection: sqlite3.Connection, *, run_id: str, plane: str, round_ids: list[str]) -> list[sqlite3.Row]:
+def fetch_rows(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str,
+    plane: str,
+    round_ids: list[str],
+    signal_ids: set[str] | None = None,
+) -> list[sqlite3.Row]:
     selected_round_ids = [round_id for round_id in round_ids if maybe_text(round_id)]
     if not selected_round_ids:
         return []
-    placeholders = ",".join("?" for _ in selected_round_ids)
+    clauses = ["plane = ?", "run_id = ?"]
+    params: list[Any] = [plane, run_id]
+    round_placeholders = ",".join("?" for _ in selected_round_ids)
+    clauses.append(f"round_id IN ({round_placeholders})")
+    params.extend(selected_round_ids)
+    if signal_ids is not None:
+        selected_signal_ids = sorted(
+            signal_id for signal_id in signal_ids if maybe_text(signal_id)
+        )
+        if not selected_signal_ids:
+            return []
+        signal_placeholders = ",".join("?" for _ in selected_signal_ids)
+        clauses.append(f"signal_id IN ({signal_placeholders})")
+        params.extend(selected_signal_ids)
     return connection.execute(
         f"""
         SELECT *
         FROM normalized_signals
-        WHERE plane = ? AND run_id = ? AND round_id IN ({placeholders})
+        WHERE {" AND ".join(clauses)}
         ORDER BY COALESCE(published_at_utc, captured_at_utc) DESC, signal_id
         """,
-        (plane, run_id, *selected_round_ids),
+        params,
     ).fetchall()
 
 
@@ -176,9 +196,101 @@ def metadata_field(row: sqlite3.Row, key: str) -> str:
     return maybe_text(metadata_dict(row).get(key))
 
 
+def metadata_list_field(row: sqlite3.Row, key: str) -> list[str]:
+    values = metadata_dict(row).get(key)
+    if not isinstance(values, list):
+        return []
+    return unique_texts(values)
+
+
+def indexed_field_filters(
+    *,
+    docket_id: str,
+    agency_id: str,
+    submitter_type: str,
+    issue_labels: list[str],
+    concern_facets: list[str],
+    citation_types: list[str],
+    stance_hint: str,
+    route_hint: str,
+) -> dict[str, list[str]]:
+    filters: dict[str, list[str]] = {}
+    if maybe_text(docket_id):
+        filters["docket_id"] = [maybe_text(docket_id)]
+    if maybe_text(agency_id):
+        filters["agency_id"] = [maybe_text(agency_id)]
+    if maybe_text(submitter_type):
+        filters["submitter_type"] = [maybe_text(submitter_type)]
+    if issue_labels:
+        filters["issue_labels"] = unique_texts(issue_labels)
+    if concern_facets:
+        filters["concern_facets"] = unique_texts(concern_facets)
+    if citation_types:
+        filters["evidence_citation_types"] = unique_texts(citation_types)
+    if maybe_text(stance_hint):
+        filters["stance_hint"] = [maybe_text(stance_hint)]
+    if maybe_text(route_hint):
+        filters["route_hint"] = [maybe_text(route_hint)]
+    return filters
+
+
+def query_signal_ids_from_index(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str,
+    plane: str,
+    round_ids: list[str],
+    field_filters: dict[str, list[str]],
+) -> set[str] | None:
+    selected_round_ids = [round_id for round_id in round_ids if maybe_text(round_id)]
+    if not selected_round_ids or not field_filters:
+        return None
+
+    round_placeholders = ",".join("?" for _ in selected_round_ids)
+    matched_signal_ids: set[str] | None = None
+    for field_name, values in sorted(field_filters.items()):
+        selected_values = unique_texts(values)
+        if not selected_values:
+            continue
+        value_placeholders = ",".join("?" for _ in selected_values)
+        rows = connection.execute(
+            f"""
+            SELECT DISTINCT signal_id
+            FROM normalized_signal_index
+            WHERE run_id = ?
+              AND plane = ?
+              AND round_id IN ({round_placeholders})
+              AND field_name = ?
+              AND field_value IN ({value_placeholders})
+            """,
+            (run_id, plane, *selected_round_ids, field_name, *selected_values),
+        ).fetchall()
+        signal_ids = {
+            maybe_text(row["signal_id"])
+            for row in rows
+            if maybe_text(row["signal_id"])
+        }
+        matched_signal_ids = (
+            signal_ids
+            if matched_signal_ids is None
+            else matched_signal_ids & signal_ids
+        )
+        if not matched_signal_ids:
+            return set()
+    return matched_signal_ids
+
+
+def metadata_contains_any(row: sqlite3.Row, key: str, values: list[str]) -> bool:
+    expected = {maybe_text(value) for value in values if maybe_text(value)}
+    if not expected:
+        return True
+    return bool(expected & set(metadata_list_field(row, key)))
+
+
 def keyword_match(row: sqlite3.Row, keywords: list[str]) -> bool:
     if not keywords:
         return True
+    metadata = metadata_dict(row)
     haystack = " ".join(
         part
         for part in (
@@ -187,8 +299,24 @@ def keyword_match(row: sqlite3.Row, keywords: list[str]) -> bool:
             maybe_text(row["url"]),
             maybe_text(row["author_name"]),
             maybe_text(row["channel_name"]),
-            metadata_field(row, "docket_id"),
-            metadata_field(row, "agency_id"),
+            maybe_text(metadata.get("docket_id")),
+            maybe_text(metadata.get("agency_id")),
+            maybe_text(metadata.get("submitter_name")),
+            maybe_text(metadata.get("submitter_type")),
+            maybe_text(metadata.get("stance_hint")),
+            maybe_text(metadata.get("route_hint")),
+            " ".join(unique_texts(metadata.get("issue_labels", [])))
+            if isinstance(metadata.get("issue_labels"), list)
+            else "",
+            " ".join(unique_texts(metadata.get("issue_terms", [])))
+            if isinstance(metadata.get("issue_terms"), list)
+            else "",
+            " ".join(unique_texts(metadata.get("concern_facets", [])))
+            if isinstance(metadata.get("concern_facets"), list)
+            else "",
+            " ".join(unique_texts(metadata.get("evidence_citation_types", [])))
+            if isinstance(metadata.get("evidence_citation_types"), list)
+            else "",
         )
         if part
     ).casefold()
@@ -197,6 +325,7 @@ def keyword_match(row: sqlite3.Row, keywords: list[str]) -> bool:
 
 def compact_result(row: sqlite3.Row) -> dict[str, Any]:
     artifact_ref = f"{row['artifact_path']}:{row['record_locator']}"
+    metadata = metadata_dict(row)
     return {
         "signal_id": row["signal_id"],
         "round_id": maybe_text(row["round_id"]),
@@ -211,8 +340,30 @@ def compact_result(row: sqlite3.Row) -> dict[str, Any]:
         "title": maybe_text(row["title"]),
         "snippet": truncate_text(row["body_text"], 240),
         "author_name": maybe_text(row["author_name"]),
-        "agency_id": metadata_field(row, "agency_id"),
-        "docket_id": metadata_field(row, "docket_id"),
+        "submitter_name": maybe_text(metadata.get("submitter_name"))
+        or maybe_text(row["author_name"]),
+        "submitter_type": maybe_text(metadata.get("submitter_type")),
+        "agency_id": maybe_text(metadata.get("agency_id")),
+        "docket_id": maybe_text(metadata.get("docket_id")),
+        "issue_labels": unique_texts(metadata.get("issue_labels", []))
+        if isinstance(metadata.get("issue_labels"), list)
+        else [],
+        "issue_terms": unique_texts(metadata.get("issue_terms", []))
+        if isinstance(metadata.get("issue_terms"), list)
+        else [],
+        "stance_hint": maybe_text(metadata.get("stance_hint")),
+        "concern_facets": unique_texts(metadata.get("concern_facets", []))
+        if isinstance(metadata.get("concern_facets"), list)
+        else [],
+        "evidence_citation_types": unique_texts(
+            metadata.get("evidence_citation_types", [])
+        )
+        if isinstance(metadata.get("evidence_citation_types"), list)
+        else [],
+        "route_hint": maybe_text(metadata.get("route_hint")),
+        "route_status_hint": maybe_text(metadata.get("route_status_hint")),
+        "decision_source": maybe_text(metadata.get("decision_source")),
+        "typing_method": maybe_text(metadata.get("typing_method")),
         "published_at_utc": maybe_text(row["published_at_utc"]),
         "artifact_ref": artifact_ref,
     }
@@ -240,6 +391,12 @@ def query_formal_signals_skill(
     published_before_utc: str,
     docket_id: str,
     agency_id: str,
+    submitter_type: str,
+    issue_labels: list[str],
+    concern_facets: list[str],
+    citation_types: list[str],
+    stance_hint: str,
+    route_hint: str,
     keyword_any: list[str],
     limit: int,
 ) -> dict[str, Any]:
@@ -254,7 +411,30 @@ def query_formal_signals_skill(
             current_round_id=round_id,
             round_scope=round_scope,
         )
-        rows = fetch_rows(connection, run_id=run_id, plane="formal", round_ids=selected_round_ids)
+        field_filters = indexed_field_filters(
+            docket_id=docket_id,
+            agency_id=agency_id,
+            submitter_type=submitter_type,
+            issue_labels=issue_labels,
+            concern_facets=concern_facets,
+            citation_types=citation_types,
+            stance_hint=stance_hint,
+            route_hint=route_hint,
+        )
+        matched_signal_ids = query_signal_ids_from_index(
+            connection,
+            run_id=run_id,
+            plane="formal",
+            round_ids=selected_round_ids,
+            field_filters=field_filters,
+        )
+        rows = fetch_rows(
+            connection,
+            run_id=run_id,
+            plane="formal",
+            round_ids=selected_round_ids,
+            signal_ids=matched_signal_ids,
+        )
     finally:
         connection.close()
     filtered: list[sqlite3.Row] = []
@@ -272,6 +452,18 @@ def query_formal_signals_skill(
             continue
         if maybe_text(agency_id) and metadata_field(row, "agency_id") != maybe_text(agency_id):
             continue
+        if maybe_text(submitter_type) and metadata_field(row, "submitter_type") != maybe_text(submitter_type):
+            continue
+        if issue_labels and not metadata_contains_any(row, "issue_labels", issue_labels):
+            continue
+        if concern_facets and not metadata_contains_any(row, "concern_facets", concern_facets):
+            continue
+        if citation_types and not metadata_contains_any(row, "evidence_citation_types", citation_types):
+            continue
+        if maybe_text(stance_hint) and metadata_field(row, "stance_hint") != maybe_text(stance_hint):
+            continue
+        if maybe_text(route_hint) and metadata_field(row, "route_hint") != maybe_text(route_hint):
+            continue
         if not keyword_match(row, keyword_any):
             continue
         filtered.append(row)
@@ -288,6 +480,7 @@ def query_formal_signals_skill(
             "queried_round_ids": selected_round_ids,
             "matched_round_ids": matched_round_ids,
             "result_count": len(limited),
+            "indexed_filter_fields": sorted(field_filters.keys()),
             "db_path": str(db_file),
         },
         "result_count": len(limited),
@@ -321,6 +514,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--published-before-utc", default="")
     parser.add_argument("--docket-id", default="")
     parser.add_argument("--agency-id", default="")
+    parser.add_argument("--submitter-type", default="")
+    parser.add_argument("--issue-label", action="append", default=[])
+    parser.add_argument("--concern-facet", action="append", default=[])
+    parser.add_argument("--citation-type", action="append", default=[])
+    parser.add_argument("--stance-hint", default="")
+    parser.add_argument("--route-hint", default="")
     parser.add_argument("--keyword", action="append", default=[])
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--pretty", action="store_true")
@@ -341,6 +540,12 @@ def main() -> int:
         published_before_utc=args.published_before_utc,
         docket_id=args.docket_id,
         agency_id=args.agency_id,
+        submitter_type=args.submitter_type,
+        issue_labels=args.issue_label,
+        concern_facets=args.concern_facet,
+        citation_types=args.citation_type,
+        stance_hint=args.stance_hint,
+        route_hint=args.route_hint,
         keyword_any=args.keyword,
         limit=args.limit,
     )

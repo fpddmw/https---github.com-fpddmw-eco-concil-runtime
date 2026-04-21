@@ -23,6 +23,9 @@ from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     stable_hash,
     utc_now_iso,
 )
+from eco_council_runtime.formal_signal_semantics import (  # noqa: E402
+    build_formal_signal_semantics,
+)
 
 SKILL_NAME = "eco-normalize-regulationsgov-comment-detail-public-signals"
 SOURCE_SKILL = "regulationsgov-comment-detail-fetch"
@@ -60,7 +63,22 @@ def build_signals(payload: Any, run_id: str, round_id: str, artifact_file: Path,
             or maybe_text(attributes.get("organization"))
             or maybe_text(attributes.get("organizationName"))
         )
+        semantics = build_formal_signal_semantics(
+            title=title,
+            body_text=body_text,
+            author_name=author_name,
+            attributes=attributes,
+        )
+        author_name = maybe_text(semantics.get("submitter_name")) or author_name
         signal_id = "sig-" + stable_hash(run_id, round_id, SOURCE_SKILL, artifact_sha256, comment_id)[:16]
+        metadata = {
+            "docket_id": maybe_text(attributes.get("docketId")),
+            "comment_on_id": maybe_text(attributes.get("commentOnId")),
+            "modify_date": maybe_text(attributes.get("modifyDate")),
+            "receive_date": maybe_text(attributes.get("receiveDate")),
+            "validation": record.get("validation") if isinstance(record.get("validation"), dict) else {},
+        }
+        metadata.update(semantics)
         signals.append(
             base_signal(
                 signal_id=signal_id,
@@ -91,13 +109,7 @@ def build_signals(payload: Any, run_id: str, round_id: str, artifact_file: Path,
                 longitude=None,
                 quality_flags=[],
                 engagement={},
-                metadata={
-                    "docket_id": maybe_text(attributes.get("docketId")),
-                    "comment_on_id": maybe_text(attributes.get("commentOnId")),
-                    "modify_date": maybe_text(attributes.get("modifyDate")),
-                    "receive_date": maybe_text(attributes.get("receiveDate")),
-                    "validation": record.get("validation") if isinstance(record.get("validation"), dict) else {},
-                },
+                metadata=metadata,
                 raw_record=record,
                 artifact_path=artifact_file,
                 record_locator=f"$.records[{index}]",

@@ -116,6 +116,62 @@ CREATE TABLE IF NOT EXISTS normalized_signals (
 )
 """
 
+INDEX_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS normalized_signal_index (
+    signal_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    plane TEXT NOT NULL,
+    source_skill TEXT NOT NULL,
+    canonical_object_kind TEXT NOT NULL DEFAULT '',
+    field_name TEXT NOT NULL,
+    field_value TEXT NOT NULL,
+    PRIMARY KEY (signal_id, field_name, field_value)
+)
+"""
+
+INDEX_INSERT_SQL = """
+INSERT OR REPLACE INTO normalized_signal_index (
+    signal_id,
+    run_id,
+    round_id,
+    plane,
+    source_skill,
+    canonical_object_kind,
+    field_name,
+    field_value
+) VALUES (
+    :signal_id,
+    :run_id,
+    :round_id,
+    :plane,
+    :source_skill,
+    :canonical_object_kind,
+    :field_name,
+    :field_value
+)
+"""
+
+INDEXED_METADATA_TEXT_FIELDS = (
+    "agency_id",
+    "comment_on_id",
+    "decision_source",
+    "docket_id",
+    "route_hint",
+    "route_status_hint",
+    "stance_hint",
+    "submitter_name",
+    "submitter_type",
+    "typing_method",
+)
+
+INDEXED_METADATA_LIST_FIELDS = (
+    "concern_facets",
+    "evidence_citation_types",
+    "issue_labels",
+    "issue_terms",
+)
+
 
 def normalize_space(value: Any) -> str:
     return " ".join(str(value).split())
@@ -218,6 +274,7 @@ def resolved_canonical_object_kind(
 
 def ensure_signal_plane_schema(connection: sqlite3.Connection) -> None:
     connection.execute(TABLE_SQL)
+    connection.execute(INDEX_TABLE_SQL)
     columns = table_columns(connection, "normalized_signals")
     if "canonical_object_kind" not in columns:
         connection.execute(
@@ -232,6 +289,12 @@ def ensure_signal_plane_schema(connection: sqlite3.Connection) -> None:
     connection.execute(
         "CREATE INDEX IF NOT EXISTS idx_normalized_signals_artifact ON normalized_signals(artifact_path, record_locator)"
     )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_normalized_signal_index_scope ON normalized_signal_index(run_id, round_id, plane, field_name, field_value)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_normalized_signal_index_signal ON normalized_signal_index(signal_id)"
+    )
 
 
 def connect_db(run_dir: Path, db_path: str) -> tuple[sqlite3.Connection, Path]:
@@ -244,6 +307,17 @@ def connect_db(run_dir: Path, db_path: str) -> tuple[sqlite3.Connection, Path]:
 
 
 def delete_existing_rows(connection: sqlite3.Connection, run_id: str, round_id: str, source_skill: str, artifact_path: str) -> None:
+    connection.execute(
+        """
+        DELETE FROM normalized_signal_index
+        WHERE signal_id IN (
+            SELECT signal_id
+            FROM normalized_signals
+            WHERE run_id = ? AND round_id = ? AND source_skill = ? AND artifact_path = ?
+        )
+        """,
+        (run_id, round_id, source_skill, artifact_path),
+    )
     connection.execute(
         "DELETE FROM normalized_signals WHERE run_id = ? AND round_id = ? AND source_skill = ? AND artifact_path = ?",
         (run_id, round_id, source_skill, artifact_path),
@@ -264,6 +338,71 @@ def delete_existing_rows_for_artifacts(
 def insert_signals(connection: sqlite3.Connection, signals: list[dict[str, Any]]) -> None:
     for signal in signals:
         connection.execute(INSERT_SQL, signal)
+        replace_signal_index_rows(connection, signal)
+
+
+def metadata_payload(signal: dict[str, Any]) -> dict[str, Any]:
+    raw_payload = signal.get("metadata_json")
+    if isinstance(raw_payload, str):
+        metadata_json = raw_payload
+    else:
+        metadata_json = "{}" if raw_payload in (None, "") else str(raw_payload)
+    try:
+        payload = json.loads(metadata_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def indexed_signal_rows(signal: dict[str, Any]) -> list[dict[str, str]]:
+    metadata = metadata_payload(signal)
+    signal_id = maybe_text(signal.get("signal_id"))
+    if not signal_id or not metadata:
+        return []
+
+    rows: list[dict[str, str]] = []
+
+    def append_row(field_name: str, value: Any) -> None:
+        field_value = maybe_text(value)
+        if not field_value:
+            return
+        rows.append(
+            {
+                "signal_id": signal_id,
+                "run_id": maybe_text(signal.get("run_id")),
+                "round_id": maybe_text(signal.get("round_id")),
+                "plane": maybe_text(signal.get("plane")),
+                "source_skill": maybe_text(signal.get("source_skill")),
+                "canonical_object_kind": maybe_text(signal.get("canonical_object_kind")),
+                "field_name": field_name,
+                "field_value": field_value,
+            }
+        )
+
+    for field_name in INDEXED_METADATA_TEXT_FIELDS:
+        append_row(field_name, metadata.get(field_name))
+    for field_name in INDEXED_METADATA_LIST_FIELDS:
+        values = metadata.get(field_name)
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            append_row(field_name, value)
+    return rows
+
+
+def replace_signal_index_rows(
+    connection: sqlite3.Connection,
+    signal: dict[str, Any],
+) -> None:
+    signal_id = maybe_text(signal.get("signal_id"))
+    if not signal_id:
+        return
+    connection.execute(
+        "DELETE FROM normalized_signal_index WHERE signal_id = ?",
+        (signal_id,),
+    )
+    for row in indexed_signal_rows(signal):
+        connection.execute(INDEX_INSERT_SQL, row)
 
 
 def json_text(value: Any) -> str:

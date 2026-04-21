@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,75 +31,13 @@ from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     ensure_signal_plane_schema,
     resolved_canonical_object_kind,
 )
-
-STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "be",
-    "by",
-    "for",
-    "from",
-    "in",
-    "is",
-    "it",
-    "of",
-    "on",
-    "or",
-    "that",
-    "the",
-    "this",
-    "to",
-    "was",
-    "with",
-}
-
-ISSUE_RULES: dict[str, tuple[str, ...]] = {
-    "air-quality-smoke": (
-        "smoke",
-        "wildfire",
-        "haze",
-        "air quality",
-        "pm25",
-        "pm2.5",
-        "pm 2.5",
-        "respiratory",
-    ),
-    "heat-risk": ("heat", "temperature", "hot", "heatwave"),
-    "flood-water": ("flood", "stormwater", "overflow", "rainfall", "precipitation"),
-    "water-contamination": (
-        "contamination",
-        "water quality",
-        "drinking water",
-        "chemical",
-        "spill",
-        "toxic",
-    ),
-    "permit-process": (
-        "permit",
-        "hearing",
-        "comment period",
-        "rulemaking",
-        "agency",
-        "review process",
-        "public comment",
-        "docket",
-    ),
-    "representation-trust": (
-        "community voice",
-        "ignored",
-        "trust",
-        "representation",
-        "not heard",
-        "misleading",
-        "voice",
-        "voices",
-        "residents say they were ignored",
-    ),
-}
+from eco_council_runtime.formal_signal_semantics import (  # noqa: E402
+    default_lane_for_issue,
+    issue_labels_from_text,
+    issue_terms_for_labels,
+    route_status_for_lane,
+    semantic_tokens,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -196,11 +133,6 @@ def decode_json_text(text: str, default: Any) -> Any:
         return default
 
 
-def semantic_tokens(text: str) -> list[str]:
-    tokens = re.findall(r"[a-z0-9]+", maybe_text(text).casefold())
-    return [token for token in tokens if token not in STOPWORDS]
-
-
 def normalized_ref(value: Any) -> dict[str, str]:
     if isinstance(value, dict):
         artifact_path = maybe_text(value.get("artifact_path"))
@@ -257,50 +189,8 @@ def unique_artifact_refs(values: list[Any], limit: int = 20) -> list[dict[str, s
     return results
 
 
-def issue_labels_from_text(text: str) -> list[str]:
-    folded = maybe_text(text).casefold()
-    ranked: list[tuple[int, str]] = []
-    for label, terms in ISSUE_RULES.items():
-        score = sum(1 for term in terms if term in folded)
-        if score > 0:
-            ranked.append((score, label))
-    ranked.sort(key=lambda item: (-item[0], item[1]))
-    return [label for _, label in ranked[:3]]
-
-
 def issue_terms_for_label(issue_label: str) -> list[str]:
-    values = [token for token in semantic_tokens(issue_label.replace("-", " "))]
-    for term in ISSUE_RULES.get(maybe_text(issue_label), ()):
-        values.extend(semantic_tokens(term))
-    return unique_texts(values)
-
-
-def default_lane_for_issue(issue_label: str) -> str:
-    label = maybe_text(issue_label)
-    if label in {
-        "air-quality-smoke",
-        "heat-risk",
-        "flood-water",
-        "water-contamination",
-    }:
-        return "environmental-observation"
-    if label == "permit-process":
-        return "formal-comment-and-policy-record"
-    if label == "representation-trust":
-        return "public-discourse-analysis"
-    return "mixed-review"
-
-
-def route_status_for_lane(lane: str) -> str:
-    if lane == "environmental-observation":
-        return "route-to-verification-lane"
-    if lane == "formal-comment-and-policy-record":
-        return "route-to-formal-record-review"
-    if lane == "public-discourse-analysis":
-        return "keep-in-public-discourse-analysis"
-    if lane == "stakeholder-deliberation-analysis":
-        return "keep-in-stakeholder-deliberation"
-    return "mixed-routing-review"
+    return issue_terms_for_labels([maybe_text(issue_label)])
 
 
 def dominant_value(values: list[str], default: str) -> str:
@@ -316,12 +206,34 @@ def dominant_value(values: list[str], default: str) -> str:
     return ranked[0][0]
 
 
+def metadata_list(metadata: dict[str, Any], key: str) -> list[str]:
+    values = metadata.get(key)
+    if not isinstance(values, list):
+        return []
+    return unique_texts(values)
+
+
 def signal_text(row: sqlite3.Row) -> str:
-    metadata = decode_json_text(maybe_text(row["metadata_json"]), {})
+    metadata = decode_json_text(str(row["metadata_json"] or ""), {})
     metadata_parts: list[str] = []
     if isinstance(metadata, dict):
-        for key in ("docket_id", "agency_id", "query_text", "comment_on_id"):
+        for key in (
+            "docket_id",
+            "agency_id",
+            "query_text",
+            "comment_on_id",
+            "submitter_name",
+            "submitter_type",
+            "stance_hint",
+            "route_hint",
+        ):
             metadata_parts.append(maybe_text(metadata.get(key)))
+        metadata_parts.append(" ".join(metadata_list(metadata, "issue_labels")))
+        metadata_parts.append(" ".join(metadata_list(metadata, "issue_terms")))
+        metadata_parts.append(" ".join(metadata_list(metadata, "concern_facets")))
+        metadata_parts.append(
+            " ".join(metadata_list(metadata, "evidence_citation_types"))
+        )
     parts = [
         maybe_text(row["title"]),
         maybe_text(row["body_text"]),
@@ -401,12 +313,15 @@ def load_normalized_public_signals(
     results: list[dict[str, Any]] = []
     for row in rows:
         text = signal_text(row)
+        metadata = decode_json_text(str(row["metadata_json"] or ""), {})
+        metadata = metadata if isinstance(metadata, dict) else {}
         canonical_object_kind = resolved_canonical_object_kind(
             plane=maybe_text(row["plane"]),
             source_skill=maybe_text(row["source_skill"]),
             signal_kind=maybe_text(row["signal_kind"]),
             canonical_object_kind=maybe_text(row["canonical_object_kind"]),
         )
+        issue_labels = metadata_list(metadata, "issue_labels") or issue_labels_from_text(text)
         results.append(
             {
                 "signal_id": maybe_text(row["signal_id"]),
@@ -423,7 +338,17 @@ def load_normalized_public_signals(
                 "is_formal": canonical_object_kind == "formal-comment-signal",
                 "text": text,
                 "tokens": semantic_tokens(text),
-                "issue_labels": issue_labels_from_text(text),
+                "issue_labels": issue_labels,
+                "issue_terms": metadata_list(metadata, "issue_terms"),
+                "concern_facets": metadata_list(metadata, "concern_facets"),
+                "evidence_citation_types": metadata_list(
+                    metadata,
+                    "evidence_citation_types",
+                ),
+                "stance_hint": maybe_text(metadata.get("stance_hint")),
+                "route_hint": maybe_text(metadata.get("route_hint")),
+                "route_status_hint": maybe_text(metadata.get("route_status_hint")),
+                "submitter_type": maybe_text(metadata.get("submitter_type")),
             }
         )
 
@@ -688,6 +613,11 @@ def score_signal_for_issue(signal: dict[str, Any], profile: dict[str, Any]) -> f
         for token in signal.get("tokens", [])
         if maybe_text(token)
     }
+    token_set.update(
+        maybe_text(token)
+        for token in signal.get("issue_terms", [])
+        if maybe_text(token)
+    )
     for term in unique_texts(
         profile.get("terms", []) if isinstance(profile.get("terms"), list) else []
     ):
@@ -882,6 +812,25 @@ def link_formal_comments_to_public_discourse_skill(
             if isinstance(signal.get("tokens"), list)
             else []
         )
+        profile["terms"].extend(
+            signal.get("issue_terms", [])
+            if isinstance(signal.get("issue_terms"), list)
+            else []
+        )
+        profile["concern_facets"].extend(
+            signal.get("concern_facets", [])
+            if isinstance(signal.get("concern_facets"), list)
+            else []
+        )
+        submitter_type = maybe_text(signal.get("submitter_type"))
+        if submitter_type:
+            profile["actor_hints"].append(submitter_type)
+        route_hint = maybe_text(signal.get("route_hint"))
+        if route_hint:
+            profile["recommended_lane_votes"].append(route_hint)
+        route_status_hint = maybe_text(signal.get("route_status_hint"))
+        if route_status_hint:
+            profile["route_status_votes"].append(route_status_hint)
 
     links: list[dict[str, Any]] = []
     for issue_label in sorted(issue_profiles.keys()):

@@ -344,6 +344,40 @@
    - `tests/test_reporting_workflow.py`
    - `tests/test_phase2_state_surfaces.py`
 
+## 2.18 Batch 18 当前已交付
+
+第十八批把 formal-side 最后一块“只有 `docket / agency`，没有可直接消费的 typed surface”的缺口收口，已落地以下硬改动：
+
+1. 新增 `eco_council_runtime/formal_signal_semantics.py`：
+   - `submitter / issue / stance / concern / citation / route` 的 formal typing 规则已统一收口。
+   - `regulationsgov-comments` 与 `regulationsgov-comment-detail` 不再各自维护一套漂移中的规则副本。
+2. `eco-normalize-regulationsgov-comments-public-signals / eco-normalize-regulationsgov-comment-detail-public-signals` 现在会把以下 typed 字段直接写入 `formal-comment-signal`：
+   - `submitter_name / submitter_type`
+   - `issue_labels / issue_terms`
+   - `stance_hint`
+   - `concern_facets`
+   - `evidence_citation_types`
+   - `route_hint / route_status_hint`
+   - `decision_source = heuristic-fallback / typing_method`
+3. `kernel/signal_plane_normalizer.py` 已新增 `normalized_signal_index`：
+   - formal typed 维度不再只藏在 `metadata_json` blob 里。
+   - `docket / agency / submitter / issue / concern / citation / stance / route` 现在拥有 DB-native index surface。
+4. `eco-query-formal-signals` 已扩成真正的 typed formal query surface：
+   - 新增 `submitter_type / issue_label / concern_facet / citation_type / stance_hint / route_hint` 过滤。
+   - 结果会直接返回 structured formal dimensions，而不再只有 `agency / docket / snippet`。
+5. `eco-link-formal-comments-to-public-discourse` 已改成优先消费 DB 中的 formal typed metadata：
+   - formal signal 的 `issue_labels / issue_terms` 会直接进入 issue assignment。
+   - `route_hint / route_status_hint / concern_facets / submitter_type` 会进入 issue profile votes。
+   - formal/public linkage 不再只是再次从正文局部重猜 formal record posture。
+6. 本轮本地验证通过：
+   - `tests/test_signal_plane_workflow.py`
+   - `tests/test_formal_public_workflow.py`
+   - `tests/test_migrated_source_runtime_integration.py`
+   - `tests/test_runtime_kernel.py`
+   - `tests/test_phase2_state_surfaces.py`
+   - `tests/test_deliberation_agenda_workflow.py`
+   - `tests/test_diffusion_workflow.py`
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足

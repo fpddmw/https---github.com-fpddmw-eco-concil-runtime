@@ -259,6 +259,35 @@
   - `tests/test_reporting_workflow.py`
   - `tests/test_phase2_state_surfaces.py`
 
+### 2.22 Batch 18 当前状态
+
+- `已完成` 新增 `eco_council_runtime/formal_signal_semantics.py`，formal comment 的 `submitter / issue / stance / concern / citation / route` typed 语义已收口到统一 extractor；列表页与详情页 normalizer 不再各写一套互相漂移的规则。
+- `已完成` `eco-normalize-regulationsgov-comments-public-signals / eco-normalize-regulationsgov-comment-detail-public-signals` 现在都会把以下 typed 字段直接写入 `formal-comment-signal` metadata：
+  - `submitter_name / submitter_type`
+  - `issue_labels / issue_terms`
+  - `stance_hint`
+  - `concern_facets`
+  - `evidence_citation_types`
+  - `route_hint / route_status_hint`
+  - `decision_source = heuristic-fallback / typing_method`
+- `已完成` `kernel/signal_plane_normalizer.py` 已新增 `normalized_signal_index`：
+  - formal typed 维度不再只躺在 `metadata_json` blob 里。
+  - `docket / agency / submitter / issue / concern / citation / stance / route` 已有可查询的 DB index surface。
+- `已完成` `eco-query-formal-signals` 已升级为 typed formal query surface：
+  - 新增 `submitter_type / issue_label / concern_facet / citation_type / stance_hint / route_hint` 过滤。
+  - 返回结果会直接暴露上述 structured fields，而不是只给 `docket / agency`。
+- `已完成` `eco-link-formal-comments-to-public-discourse` 已改成优先消费 DB 中的 formal typed metadata：
+  - issue assignment 优先读取 signal 自带 `issue_labels / issue_terms`。
+  - profile lane/concern/actor votes 会吸收 `route_hint / concern_facets / submitter_type`，不再只靠正文临时猜。
+- `已完成` 本轮本地验证通过：
+  - `tests/test_signal_plane_workflow.py`
+  - `tests/test_formal_public_workflow.py`
+  - `tests/test_migrated_source_runtime_integration.py`
+  - `tests/test_runtime_kernel.py`
+  - `tests/test_phase2_state_surfaces.py`
+  - `tests/test_deliberation_agenda_workflow.py`
+  - `tests/test_diffusion_workflow.py`
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -314,7 +343,7 @@
 ## 5. Work Package 2: Signal plane 重构
 
 - `[x]` 停止把 formal comments 仅作为 generic public signal 写入系统
-- `[ ]` 为 formal comments 增加 docket / agency / submitter / stance / concern / citation / route 维度
+- `[x]` 为 formal comments 增加 docket / agency / submitter / stance / concern / citation / route 维度
 - `[x]` 保留 formal/public/environment 三类输入的 source-specific provenance
 - `[x]` 为 typed signals 提供统一 query surface
 
