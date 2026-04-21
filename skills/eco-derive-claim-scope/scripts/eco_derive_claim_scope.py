@@ -456,7 +456,11 @@ def derive_claim_scope_skill(
             ]
             if scopes
             else [],
-            "suggested_next_skills": ["eco-score-evidence-coverage", "eco-post-board-note", "eco-propose-next-actions"],
+            "suggested_next_skills": [
+                "eco-classify-claim-verifiability",
+                "eco-route-verification-lane",
+                "eco-post-board-note",
+            ],
         },
     }
 

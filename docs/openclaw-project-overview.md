@@ -73,7 +73,7 @@ OpenClaw 当前更准确的定位是：
 
 1. `openclaw-agent` 的 advisory 主路径已基本 DB-native，但 controller/operator 仍默认暴露一批 summary / planner export。
 2. 某些 runtime/post-round/benchmark 控制链路仍保留历史导出物约定。
-3. formal comments 进入系统后，底层仍更像“generic public signal”，而不是一等 formal-comment 契约对象。
+3. formal comments 虽已切成 `formal-comment-signal` 并独立落在 `formal` plane，但 operator-friendly formal query surface 与少数旧 empirical hint 仍有残余待清理。
 
 因此，当前最准确的判断不是“议会已经完全基于数据库运作”，而是：
 
@@ -142,7 +142,7 @@ OpenClaw 当前更准确的定位是：
 2. 关键 phase-2 对象可以 item-level 查询，而不是只存整包 snapshot。
 3. reporting 与 publication 应默认从 DB 重新物化，而不是依赖历史 handoff 文件。
 
-这一标准现在已经在 reporting/publication 与 phase-2 investigation 中间态上基本达到；剩余缺口主要转移到 controller/operator 导出物、formal comments 契约和旧 analysis 主链方向上。
+这一标准现在已经在 reporting/publication、phase-2 investigation 中间态，以及 formal/public/environment signal plane typed 化上基本达到；剩余缺口主要转移到 controller/operator 导出物和少数旧 empirical 主链默认方向上。
 
 ## 6. 下一阶段的目标架构
 

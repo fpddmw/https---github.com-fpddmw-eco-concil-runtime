@@ -7,13 +7,24 @@ import argparse
 import hashlib
 import json
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
+    ensure_signal_plane_schema,
+)
+
 SKILL_NAME = "eco-normalize-gdelt-doc-public-signals"
 SOURCE_SKILL = "gdelt-doc-search"
 PLANE = "public"
+CANONICAL_OBJECT_KIND = "public-discourse-signal"
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
@@ -59,6 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_normalized_signals_artifact ON normalized_signals
 INSERT_SQL = """
 INSERT OR REPLACE INTO normalized_signals (
     signal_id, run_id, round_id, plane, batch_id, source_skill, signal_kind,
+    canonical_object_kind,
     external_id, dedupe_key, title, body_text, url, author_name, channel_name,
     language, query_text, metric, numeric_value, unit, published_at_utc,
     observed_at_utc, window_start_utc, window_end_utc, captured_at_utc,
@@ -66,6 +78,7 @@ INSERT OR REPLACE INTO normalized_signals (
     metadata_json, raw_json, artifact_path, record_locator, artifact_sha256
 ) VALUES (
     :signal_id, :run_id, :round_id, :plane, :batch_id, :source_skill, :signal_kind,
+    :canonical_object_kind,
     :external_id, :dedupe_key, :title, :body_text, :url, :author_name, :channel_name,
     :language, :query_text, :metric, :numeric_value, :unit, :published_at_utc,
     :observed_at_utc, :window_start_utc, :window_end_utc, :captured_at_utc,
@@ -148,7 +161,7 @@ def connect_db(run_dir: Path, db_path: str) -> tuple[sqlite3.Connection, Path]:
     file_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(file_path)
     connection.row_factory = sqlite3.Row
-    connection.executescript(SCHEMA_SQL)
+    ensure_signal_plane_schema(connection)
     return connection, file_path
 
 
@@ -236,6 +249,7 @@ def build_signals(
                 "batch_id": "",
                 "source_skill": SOURCE_SKILL,
                 "signal_kind": "article",
+                "canonical_object_kind": CANONICAL_OBJECT_KIND,
                 "external_id": url,
                 "dedupe_key": url or title or str(index),
                 "title": title,

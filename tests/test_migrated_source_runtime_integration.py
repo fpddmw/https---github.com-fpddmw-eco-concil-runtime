@@ -114,7 +114,9 @@ def normalized_rows_for_source(run_dir: Path, source_skill: str) -> list[dict[st
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
             """
-            SELECT signal_id, source_skill, signal_kind, external_id, artifact_path, record_locator, title
+            SELECT signal_id, source_skill, plane, signal_kind,
+                   canonical_object_kind, external_id, artifact_path,
+                   record_locator, title
             FROM normalized_signals
             WHERE source_skill = ?
             ORDER BY signal_id
@@ -384,6 +386,28 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             self.assertEqual(2, execution["completed_count"])
             self.assertEqual(1, counts["regulationsgov-comments-fetch"])
             self.assertEqual(1, counts["regulationsgov-comment-detail-fetch"])
+            self.assertEqual(
+                {"formal"},
+                {str(row["plane"]) for row in normalized_rows_for_source(run_dir, "regulationsgov-comments-fetch")},
+            )
+            self.assertEqual(
+                {"formal"},
+                {str(row["plane"]) for row in normalized_rows_for_source(run_dir, "regulationsgov-comment-detail-fetch")},
+            )
+            self.assertEqual(
+                {"formal-comment-signal"},
+                {
+                    str(row["canonical_object_kind"])
+                    for row in normalized_rows_for_source(run_dir, "regulationsgov-comments-fetch")
+                },
+            )
+            self.assertEqual(
+                {"formal-comment-signal"},
+                {
+                    str(row["canonical_object_kind"])
+                    for row in normalized_rows_for_source(run_dir, "regulationsgov-comment-detail-fetch")
+                },
+            )
 
     def test_import_execution_falls_back_to_raw_only_when_normalizer_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

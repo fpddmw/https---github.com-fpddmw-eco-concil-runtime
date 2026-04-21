@@ -301,6 +301,24 @@ def route_verification_lane_skill(
             lane_counts[lane] = lane_counts.get(lane, 0) + 1
         if status_value:
             route_status_counts[status_value] = route_status_counts.get(status_value, 0) + 1
+    board_suggested_next_skills = unique_texts(
+        [
+            maybe_text(skill)
+            for route in routes
+            if isinstance(route, dict)
+            for skill in (
+                route.get("suggested_next_skills", [])
+                if isinstance(route.get("suggested_next_skills"), list)
+                else []
+            )
+            if maybe_text(skill)
+        ]
+        + [
+            "eco-materialize-controversy-map",
+            "eco-propose-next-actions",
+            "eco-post-board-note",
+        ]
+    )
 
     wrapper = {
         "schema_version": "n3.0",
@@ -420,11 +438,7 @@ def route_verification_lane_skill(
                 )
                 else []
             ),
-            "suggested_next_skills": [
-                "eco-materialize-controversy-map",
-                "eco-propose-next-actions",
-                "eco-post-board-note",
-            ],
+            "suggested_next_skills": board_suggested_next_skills,
         },
     }
 

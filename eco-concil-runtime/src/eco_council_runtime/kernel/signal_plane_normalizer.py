@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS normalized_signals (
     batch_id TEXT NOT NULL,
     source_skill TEXT NOT NULL,
     signal_kind TEXT NOT NULL,
+    canonical_object_kind TEXT NOT NULL DEFAULT '',
     external_id TEXT NOT NULL DEFAULT '',
     dedupe_key TEXT NOT NULL DEFAULT '',
     title TEXT NOT NULL DEFAULT '',
@@ -46,12 +47,14 @@ CREATE TABLE IF NOT EXISTS normalized_signals (
     artifact_sha256 TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_normalized_signals_round_plane ON normalized_signals(run_id, round_id, plane);
+CREATE INDEX IF NOT EXISTS idx_normalized_signals_round_kind ON normalized_signals(run_id, round_id, canonical_object_kind);
 CREATE INDEX IF NOT EXISTS idx_normalized_signals_artifact ON normalized_signals(artifact_path, record_locator);
 """
 
 INSERT_SQL = """
 INSERT OR REPLACE INTO normalized_signals (
     signal_id, run_id, round_id, plane, batch_id, source_skill, signal_kind,
+    canonical_object_kind,
     external_id, dedupe_key, title, body_text, url, author_name, channel_name,
     language, query_text, metric, numeric_value, unit, published_at_utc,
     observed_at_utc, window_start_utc, window_end_utc, captured_at_utc,
@@ -59,11 +62,57 @@ INSERT OR REPLACE INTO normalized_signals (
     metadata_json, raw_json, artifact_path, record_locator, artifact_sha256
 ) VALUES (
     :signal_id, :run_id, :round_id, :plane, :batch_id, :source_skill, :signal_kind,
+    :canonical_object_kind,
     :external_id, :dedupe_key, :title, :body_text, :url, :author_name, :channel_name,
     :language, :query_text, :metric, :numeric_value, :unit, :published_at_utc,
     :observed_at_utc, :window_start_utc, :window_end_utc, :captured_at_utc,
     :latitude, :longitude, :bbox_json, :quality_flags_json, :engagement_json,
     :metadata_json, :raw_json, :artifact_path, :record_locator, :artifact_sha256
+)
+"""
+
+FORMAL_SOURCE_SKILLS = {
+    "regulationsgov-comments-fetch",
+    "regulationsgov-comment-detail-fetch",
+}
+
+TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS normalized_signals (
+    signal_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    plane TEXT NOT NULL,
+    batch_id TEXT NOT NULL,
+    source_skill TEXT NOT NULL,
+    signal_kind TEXT NOT NULL,
+    canonical_object_kind TEXT NOT NULL DEFAULT '',
+    external_id TEXT NOT NULL DEFAULT '',
+    dedupe_key TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    body_text TEXT NOT NULL DEFAULT '',
+    url TEXT NOT NULL DEFAULT '',
+    author_name TEXT NOT NULL DEFAULT '',
+    channel_name TEXT NOT NULL DEFAULT '',
+    language TEXT NOT NULL DEFAULT '',
+    query_text TEXT NOT NULL DEFAULT '',
+    metric TEXT NOT NULL DEFAULT '',
+    numeric_value REAL,
+    unit TEXT NOT NULL DEFAULT '',
+    published_at_utc TEXT NOT NULL DEFAULT '',
+    observed_at_utc TEXT NOT NULL DEFAULT '',
+    window_start_utc TEXT NOT NULL DEFAULT '',
+    window_end_utc TEXT NOT NULL DEFAULT '',
+    captured_at_utc TEXT NOT NULL DEFAULT '',
+    latitude REAL,
+    longitude REAL,
+    bbox_json TEXT NOT NULL DEFAULT '{}',
+    quality_flags_json TEXT NOT NULL DEFAULT '[]',
+    engagement_json TEXT NOT NULL DEFAULT '{}',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    raw_json TEXT NOT NULL DEFAULT 'null',
+    artifact_path TEXT NOT NULL,
+    record_locator TEXT NOT NULL,
+    artifact_sha256 TEXT NOT NULL DEFAULT ''
 )
 """
 
@@ -136,12 +185,61 @@ def resolve_db_path(run_dir: Path, db_path: str) -> Path:
     return candidate.resolve()
 
 
+def table_columns(connection: sqlite3.Connection, table_name: str) -> set[str]:
+    rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {maybe_text(row[1]) for row in rows if len(row) > 1}
+
+
+def default_canonical_object_kind(*, plane: str) -> str:
+    resolved_plane = maybe_text(plane)
+    if resolved_plane == "formal":
+        return "formal-comment-signal"
+    if resolved_plane == "environment":
+        return "environment-observation-signal"
+    if resolved_plane == "public":
+        return "public-discourse-signal"
+    return ""
+
+
+def resolved_canonical_object_kind(
+    *,
+    plane: str,
+    source_skill: str = "",
+    signal_kind: str = "",
+    canonical_object_kind: str = "",
+) -> str:
+    explicit_kind = maybe_text(canonical_object_kind)
+    if explicit_kind:
+        return explicit_kind
+    if maybe_text(source_skill) in FORMAL_SOURCE_SKILLS:
+        return "formal-comment-signal"
+    return default_canonical_object_kind(plane=plane)
+
+
+def ensure_signal_plane_schema(connection: sqlite3.Connection) -> None:
+    connection.execute(TABLE_SQL)
+    columns = table_columns(connection, "normalized_signals")
+    if "canonical_object_kind" not in columns:
+        connection.execute(
+            "ALTER TABLE normalized_signals ADD COLUMN canonical_object_kind TEXT NOT NULL DEFAULT ''"
+        )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_normalized_signals_round_plane ON normalized_signals(run_id, round_id, plane)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_normalized_signals_round_kind ON normalized_signals(run_id, round_id, canonical_object_kind)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_normalized_signals_artifact ON normalized_signals(artifact_path, record_locator)"
+    )
+
+
 def connect_db(run_dir: Path, db_path: str) -> tuple[sqlite3.Connection, Path]:
     file_path = resolve_db_path(run_dir, db_path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(file_path)
     connection.row_factory = sqlite3.Row
-    connection.executescript(SCHEMA_SQL)
+    ensure_signal_plane_schema(connection)
     return connection, file_path
 
 
@@ -180,6 +278,7 @@ def base_signal(
     plane: str,
     source_skill: str,
     signal_kind: str,
+    canonical_object_kind: str = "",
     external_id: str,
     dedupe_key: str,
     title: str,
@@ -215,6 +314,12 @@ def base_signal(
         "batch_id": "",
         "source_skill": source_skill,
         "signal_kind": signal_kind,
+        "canonical_object_kind": resolved_canonical_object_kind(
+            plane=plane,
+            source_skill=source_skill,
+            signal_kind=signal_kind,
+            canonical_object_kind=canonical_object_kind,
+        ),
         "external_id": external_id,
         "dedupe_key": dedupe_key,
         "title": title,
@@ -257,15 +362,30 @@ def artifact_ref(signal: dict[str, Any]) -> dict[str, str]:
 def plane_gap_hints(plane: str, signals: list[dict[str, Any]]) -> list[str]:
     if signals:
         return []
+    if plane == "formal":
+        return ["No formal-comment signals were normalized from the provided artifact."]
     if plane == "public":
         return ["No public signals were normalized from the provided artifact."]
     return ["No environment signals were normalized from the provided artifact."]
 
 
 def plane_challenge_hints(plane: str) -> list[str]:
+    if plane == "formal":
+        return ["Check whether formal comments retained docket, agency, and record-level provenance before linkage or council review."]
     if plane == "public":
         return ["Check whether normalization kept enough text context for downstream claim clustering and challenge review."]
     return ["Check whether provider-specific observation rows still need spatial or metric-family harmonization before promotion."]
+
+
+def suggested_next_skills_for_plane(plane: str) -> list[str]:
+    if plane == "formal":
+        return [
+            "eco-link-formal-comments-to-public-discourse",
+            "eco-post-board-note",
+        ]
+    if plane == "public":
+        return ["eco-query-public-signals", "eco-extract-claim-candidates"]
+    return ["eco-query-environment-signals", "eco-extract-observation-candidates"]
 
 
 def normalize_limit(value: int | None) -> int | None:
@@ -302,6 +422,7 @@ def finalize_normalization_streaming(
     connection, db_file = connect_db(run_dir_path, db_path)
     returned_artifact_refs: list[dict[str, str]] = []
     returned_canonical_ids: list[str] = []
+    canonical_object_kind_counts: dict[str, int] = {}
     signal_count = 0
     artifact_limit = normalize_limit(artifact_ref_limit)
     canonical_limit = normalize_limit(canonical_id_limit)
@@ -317,6 +438,17 @@ def finalize_normalization_streaming(
             cleanup_artifact_paths or [str(artifact_file)],
         )
         for signal in signals:
+            canonical_object_kind = resolved_canonical_object_kind(
+                plane=maybe_text(signal.get("plane")),
+                source_skill=maybe_text(signal.get("source_skill")),
+                signal_kind=maybe_text(signal.get("signal_kind")),
+                canonical_object_kind=maybe_text(signal.get("canonical_object_kind")),
+            )
+            signal["canonical_object_kind"] = canonical_object_kind
+            if canonical_object_kind:
+                canonical_object_kind_counts[canonical_object_kind] = (
+                    canonical_object_kind_counts.get(canonical_object_kind, 0) + 1
+                )
             signal["batch_id"] = batch_id
             buffer.append(signal)
             signal_count += 1
@@ -353,7 +485,7 @@ def finalize_normalization_streaming(
             }
         )
 
-    suggested_next_skills = ["eco-query-public-signals", "eco-extract-claim-candidates"] if plane == "public" else ["eco-query-environment-signals", "eco-extract-observation-candidates"]
+    suggested_next_skills = suggested_next_skills_for_plane(plane)
     return {
         "status": "completed",
         "summary": {
@@ -363,6 +495,9 @@ def finalize_normalization_streaming(
             "plane": plane,
             "source_skill": source_skill,
             "signal_count": signal_count,
+            "canonical_object_kind_counts": dict(
+                sorted(canonical_object_kind_counts.items())
+            ),
             "warning_count": len(warnings),
             "returned_artifact_ref_count": len(returned_artifact_refs),
             "returned_canonical_id_count": len(returned_canonical_ids),
@@ -376,6 +511,9 @@ def finalize_normalization_streaming(
         "board_handoff": {
             "candidate_ids": returned_canonical_ids,
             "evidence_refs": returned_artifact_refs[:20],
+            "signal_object_kind_counts": dict(
+                sorted(canonical_object_kind_counts.items())
+            ),
             "gap_hints": [] if signal_count else plane_gap_hints(plane, []),
             "challenge_hints": plane_challenge_hints(plane),
             "suggested_next_skills": suggested_next_skills,
@@ -417,6 +555,8 @@ __all__ = [
     "default_db_path",
     "delete_existing_rows",
     "delete_existing_rows_for_artifacts",
+    "default_canonical_object_kind",
+    "ensure_signal_plane_schema",
     "file_sha256",
     "finalize_normalization",
     "finalize_normalization_streaming",
@@ -429,6 +569,9 @@ __all__ = [
     "read_json",
     "resolve_db_path",
     "resolve_run_dir",
+    "resolved_canonical_object_kind",
+    "suggested_next_skills_for_plane",
     "stable_hash",
+    "table_columns",
     "utc_now_iso",
 ]

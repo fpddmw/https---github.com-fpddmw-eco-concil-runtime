@@ -154,6 +154,15 @@
 - `已完成` `kernel/controller.py` 已删除一个残留的 `promotion_basis` artifact fallback；controller completion 现在不会再用旧 export 回填 `promotion_status`。
 - `已完成` `tests/test_phase2_state_surfaces.py / tests/test_runtime_kernel.py / tests/test_orchestration_planner_workflow.py / tests/test_board_workflow.py / tests/test_reporting_publish_workflow.py` 已补强 phase-2 orphaned-artifact、export rebuild、publication supervisor DB recovery 与 DB-canonical test seed；当前扩展后的大回归 `148` 项全部通过。
 
+### 2.17 Batch 13 当前状态
+
+- `已完成` `kernel/signal_plane_normalizer.py` 现在会持久化并迁移 `canonical_object_kind`；signal plane 的 typed contract 已不再停留在文档和 runtime 内存层。
+- `已完成` `eco-normalize-regulationsgov-comments-public-signals / eco-normalize-regulationsgov-comment-detail-public-signals` 已切到 `plane = formal`、`canonical_object_kind = formal-comment-signal`；formal comments 不再伪装成 generic public rows。
+- `已完成` `eco-link-formal-comments-to-public-discourse / eco-detect-cross-platform-diffusion / eco-extract-claim-candidates` 已切到结构化 formal/public 识别，不再依赖 `plane='public' + source_skill` 的历史假设。
+- `已完成` 遗留 standalone public/environment normalizer（`youtube-video / bluesky / gdelt-doc / airnow / openaq / open-meteo`）已同步补上 `canonical_object_kind` 持久化与统一 schema migration。
+- `已完成` `source_queue_profile` 已把默认主链改成 `claim-scope -> verifiability -> route -> controversy-map`，并把 observation extract/merge/link/scope/coverage 降级为 `route-gated optional lane`。
+- `已完成` `tests/test_formal_public_workflow.py / tests/test_migrated_source_runtime_integration.py / tests/test_runtime_source_queue_profiles.py` 已补上 formal-plane、typed signal、optional verification 的结构性回归；本轮 targeted `17` 项与扩展 workflow `87` 项均已本地通过。
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -165,10 +174,10 @@
 
 ### 4.1 Signal plane
 
-- `[ ]` 建立 `formal-comment-signal`
-- `[ ]` 建立 `public-discourse-signal`
-- `[ ]` 建立 `environment-observation-signal`
-- `[ ]` 每类 signal 都带 provenance、artifact refs、source metadata
+- `[x]` 建立 `formal-comment-signal`
+- `[x]` 建立 `public-discourse-signal`
+- `[x]` 建立 `environment-observation-signal`
+- `[x]` 每类 signal 都带 provenance、artifact refs、source metadata
 
 ### 4.2 Analysis plane
 
@@ -205,9 +214,9 @@
 
 ## 5. Work Package 2: Signal plane 重构
 
-- `[ ]` 停止把 formal comments 仅作为 generic public signal 写入系统
+- `[x]` 停止把 formal comments 仅作为 generic public signal 写入系统
 - `[ ]` 为 formal comments 增加 docket / agency / submitter / stance / concern / citation / route 维度
-- `[ ]` 保留 formal/public/environment 三类输入的 source-specific provenance
+- `[x]` 保留 formal/public/environment 三类输入的 source-specific provenance
 - `[ ]` 为 typed signals 提供统一 query surface
 
 ## 6. Work Package 3: Analysis plane 改写为 controversy chain
@@ -226,12 +235,12 @@
 - `[ ]` `[新增 canonical]` `eco-extract-concern-facets`
 - `[ ]` `[新增 canonical]` `eco-extract-actor-profiles`
 - `[ ]` `[新增 canonical]` `eco-extract-evidence-citation-types`
-- `[ ]` `[新增 canonical]` `eco-link-formal-comments-to-public-discourse`
-- `[ ]` `[新增 canonical]` `eco-identify-representation-gaps`
-- `[ ]` `[新增 canonical]` `eco-detect-cross-platform-diffusion`
-- `[ ]` `[新增 canonical]` `eco-classify-claim-verifiability`
-- `[ ]` `[新增 canonical]` `eco-route-verification-lane`
-- `[ ]` `[新增 canonical]` `eco-materialize-controversy-map`
+- `[x]` `[新增 canonical]` `eco-link-formal-comments-to-public-discourse`
+- `[x]` `[新增 canonical]` `eco-identify-representation-gaps`
+- `[x]` `[新增 canonical]` `eco-detect-cross-platform-diffusion`
+- `[x]` `[新增 canonical]` `eco-classify-claim-verifiability`
+- `[x]` `[新增 canonical]` `eco-route-verification-lane`
+- `[x]` `[新增 canonical]` `eco-materialize-controversy-map`
 
 ### 6.3 强约束
 
@@ -355,19 +364,19 @@
 
 ## 11. Work Package 8: Verification lane 降级为 optional lane
 
-- `[ ]` `[降级为 optional lane]` `eco-extract-observation-candidates`
-- `[ ]` `[降级为 optional lane]` `eco-merge-observation-candidates`
-- `[ ]` `[降级为 optional lane]` `eco-derive-observation-scope`
-- `[ ]` `[降级为 optional lane]` `eco-link-claims-to-observations`
-- `[ ]` `[降级为 optional lane]` `eco-score-evidence-coverage`
-- `[ ]` observation chain 只在 verifiability + route 明确允许时触发
+- `[x]` `[降级为 optional lane]` `eco-extract-observation-candidates`
+- `[x]` `[降级为 optional lane]` `eco-merge-observation-candidates`
+- `[x]` `[降级为 optional lane]` `eco-derive-observation-scope`
+- `[x]` `[降级为 optional lane]` `eco-link-claims-to-observations`
+- `[x]` `[降级为 optional lane]` `eco-score-evidence-coverage`
+- `[x]` observation chain 只在 verifiability + route 明确允许时触发
 - `[ ]` readiness 默认不再围绕 coverage 公式展开
 
 ## 12. Work Package 9: 删除兼容债
 
-- `[ ]` 删除“formal comments 只是 generic public signal”的长期假设
+- `[x]` 删除“formal comments 只是 generic public signal”的长期假设
 - `[x]` 删除“next_actions / probes / readiness 只以 artifact wrapper 存在”的长期假设
-- `[ ]` 删除“coverage 是默认主链”的长期假设
+- `[x]` 删除“coverage 是默认主链”的长期假设
 - `[ ]` 删除“board / reporting 依赖 summary artifact 才能推进”的长期假设
 - `[ ]` 删除“kernel 默认承载新增 domain policy”的长期假设
 - `[ ]` 删除“旧 envelope 可以无限期作为 canonical 输出”的长期假设
@@ -380,7 +389,7 @@
 - `[x]` 新增 board canonical query-surface tests
 - `[x]` 新增 reporting canonical query-surface tests
 - `[x]` 新增 kernel boundary tests
-- `[ ]` 新增 optional verification lane tests
+- `[x]` 新增 optional verification lane tests
 - `[ ]` 准备争议型政策 case
 - `[ ]` 准备混合型争议 case
 - `[ ]` 准备可核实事件 case
@@ -388,12 +397,12 @@
 ## 14. 硬完成检查表
 
 - `[ ]` canonical signal / analysis / deliberation 对象已经定义并落库
-- `[ ]` formal comments 已成为一等结构化输入
+- `[x]` formal comments 已成为一等结构化输入
 - `[x]` `hypothesis / challenge / board-task / proposal / next-action / probe / readiness-opinion / readiness-assessment / promotion-basis / decision-trace` 已可 item-level 查询
 - `[x]` `reporting-handoff / council-decision / expert-report / final-publication` 已可 item-level 查询
 - `[x]` 删除 `board_summary / board_brief / next_actions / probes / readiness` artifact 后，round 仍可继续
-- `[ ]` 主链默认输出已不再是 `claim-observation-link-coverage`
-- `[ ]` observation matching 只在明确可核实时触发
+- `[x]` 主链默认输出已不再是 `claim-observation-link-coverage`
+- `[x]` observation matching 只在明确可核实时触发
 - `[ ]` agent proposal 已带 `rationale / confidence / evidence refs / provenance`
 - `[ ]` heuristic 已降为 fallback，并带显式 trace
 - `[x]` reporting / publication 默认从 DB canonical 对象物化

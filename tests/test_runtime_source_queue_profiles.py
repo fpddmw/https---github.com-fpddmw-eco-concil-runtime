@@ -56,6 +56,19 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
         self.assertEqual("direct", profiles["eco-materialize-final-publication"]["queue_status"])
         self.assertEqual("reporting", profiles["eco-materialize-final-publication"]["stage"])
 
+        self.assertFalse(profiles["eco-extract-observation-candidates"]["core_queue_default"])
+        self.assertFalse(profiles["eco-merge-observation-candidates"]["core_queue_default"])
+        self.assertFalse(profiles["eco-link-claims-to-observations"]["core_queue_default"])
+        self.assertFalse(profiles["eco-derive-observation-scope"]["core_queue_default"])
+        self.assertFalse(profiles["eco-score-evidence-coverage"]["core_queue_default"])
+
+        self.assertEqual("direct", profiles["eco-classify-claim-verifiability"]["queue_status"])
+        self.assertTrue(profiles["eco-classify-claim-verifiability"]["core_queue_default"])
+        self.assertEqual("direct", profiles["eco-route-verification-lane"]["queue_status"])
+        self.assertTrue(profiles["eco-route-verification-lane"]["core_queue_default"])
+        self.assertEqual("direct", profiles["eco-materialize-controversy-map"]["queue_status"])
+        self.assertTrue(profiles["eco-materialize-controversy-map"]["core_queue_default"])
+
 
 if __name__ == "__main__":
     unittest.main()

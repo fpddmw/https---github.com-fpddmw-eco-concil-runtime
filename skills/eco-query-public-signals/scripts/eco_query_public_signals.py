@@ -18,6 +18,10 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.source_queue_history import discovered_round_ids  # noqa: E402
+from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
+    ensure_signal_plane_schema,
+    resolved_canonical_object_kind,
+)
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
@@ -115,7 +119,7 @@ def connect_db(run_dir: Path, db_path: str) -> tuple[sqlite3.Connection, Path]:
     file_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(file_path)
     connection.row_factory = sqlite3.Row
-    connection.executescript(SCHEMA_SQL)
+    ensure_signal_plane_schema(connection)
     return connection, file_path
 
 
@@ -221,6 +225,12 @@ def compact_result(row: sqlite3.Row) -> dict[str, Any]:
         "round_id": maybe_text(row["round_id"]),
         "source_skill": maybe_text(row["source_skill"]),
         "signal_kind": maybe_text(row["signal_kind"]),
+        "canonical_object_kind": resolved_canonical_object_kind(
+            plane="public",
+            source_skill=maybe_text(row["source_skill"]),
+            signal_kind=maybe_text(row["signal_kind"]),
+            canonical_object_kind=maybe_text(row["canonical_object_kind"]),
+        ),
         "title": maybe_text(row["title"]),
         "snippet": truncate_text(row["body_text"], 240),
         "published_at_utc": maybe_text(row["published_at_utc"]),

@@ -8,8 +8,18 @@ import json
 import sqlite3
 from pathlib import Path
 from typing import Any
+import sys
 
 SKILL_NAME = "eco-lookup-normalized-signal"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
+    ensure_signal_plane_schema,
+    resolved_canonical_object_kind,
+)
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
@@ -86,7 +96,7 @@ def connect_db(run_dir: Path, db_path: str) -> tuple[sqlite3.Connection, Path]:
     file_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(file_path)
     connection.row_factory = sqlite3.Row
-    connection.executescript(SCHEMA_SQL)
+    ensure_signal_plane_schema(connection)
     return connection, file_path
 
 
@@ -105,6 +115,12 @@ def row_to_result(row: sqlite3.Row, include_raw_json: bool) -> dict[str, Any]:
         "plane": row["plane"],
         "source_skill": row["source_skill"],
         "signal_kind": row["signal_kind"],
+        "canonical_object_kind": resolved_canonical_object_kind(
+            plane=maybe_text(row["plane"]),
+            source_skill=maybe_text(row["source_skill"]),
+            signal_kind=maybe_text(row["signal_kind"]),
+            canonical_object_kind=maybe_text(row["canonical_object_kind"]),
+        ),
         "title": maybe_text(row["title"]),
         "text": maybe_text(row["body_text"]),
         "url": maybe_text(row["url"]),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Normalize regulationsgov-comment-detail-fetch artifacts into public signal-plane rows."""
+"""Normalize regulationsgov-comment-detail-fetch artifacts into formal signal-plane rows."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
 
 SKILL_NAME = "eco-normalize-regulationsgov-comment-detail-public-signals"
 SOURCE_SKILL = "regulationsgov-comment-detail-fetch"
-PLANE = "public"
+PLANE = "formal"
 
 
 def build_signals(payload: Any, run_id: str, round_id: str, artifact_file: Path, artifact_sha256: str) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
@@ -69,6 +69,7 @@ def build_signals(payload: Any, run_id: str, round_id: str, artifact_file: Path,
                 plane=PLANE,
                 source_skill=SOURCE_SKILL,
                 signal_kind="comment-detail",
+                canonical_object_kind="formal-comment-signal",
                 external_id=comment_id,
                 dedupe_key=comment_id,
                 title=title,
@@ -128,7 +129,7 @@ def normalize_regulationsgov_comment_detail(run_dir: str, run_id: str, round_id:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Normalize regulationsgov-comment-detail-fetch artifacts into public signal-plane rows.")
+    parser = argparse.ArgumentParser(description="Normalize regulationsgov-comment-detail-fetch artifacts into formal signal-plane rows.")
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)

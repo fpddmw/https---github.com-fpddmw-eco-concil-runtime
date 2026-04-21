@@ -25,11 +25,10 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_verification_route_context,
     sync_formal_public_link_result_set,
 )
-
-FORMAL_SOURCE_SKILLS = {
-    "regulationsgov-comments-fetch",
-    "regulationsgov-comment-detail-fetch",
-}
+from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
+    ensure_signal_plane_schema,
+    resolved_canonical_object_kind,
+)
 
 STOPWORDS = {
     "a",
@@ -362,6 +361,7 @@ def load_normalized_public_signals(
     connection = sqlite3.connect(db_file)
     connection.row_factory = sqlite3.Row
     try:
+        ensure_signal_plane_schema(connection)
         table_exists = connection.execute(
             """
             SELECT name
@@ -380,14 +380,15 @@ def load_normalized_public_signals(
 
         rows = connection.execute(
             """
-            SELECT signal_id, source_skill, signal_kind, title, body_text, url,
+            SELECT signal_id, plane, source_skill, signal_kind,
+                   canonical_object_kind, title, body_text, url,
                    author_name, channel_name, metadata_json, artifact_path,
                    record_locator
             FROM normalized_signals
             WHERE run_id = ?
               AND round_id = ?
-              AND plane = 'public'
-            ORDER BY source_skill, signal_id
+              AND plane IN ('public', 'formal')
+            ORDER BY plane, source_skill, signal_id
             """,
             (run_id, round_id),
         ).fetchall()
@@ -397,18 +398,26 @@ def load_normalized_public_signals(
     results: list[dict[str, Any]] = []
     for row in rows:
         text = signal_text(row)
+        canonical_object_kind = resolved_canonical_object_kind(
+            plane=maybe_text(row["plane"]),
+            source_skill=maybe_text(row["source_skill"]),
+            signal_kind=maybe_text(row["signal_kind"]),
+            canonical_object_kind=maybe_text(row["canonical_object_kind"]),
+        )
         results.append(
             {
                 "signal_id": maybe_text(row["signal_id"]),
+                "plane": maybe_text(row["plane"]),
                 "source_skill": maybe_text(row["source_skill"]),
                 "signal_kind": maybe_text(row["signal_kind"]),
+                "canonical_object_kind": canonical_object_kind,
                 "title": maybe_text(row["title"]),
                 "body_text": maybe_text(row["body_text"]),
                 "url": maybe_text(row["url"]),
                 "author_name": maybe_text(row["author_name"]),
                 "channel_name": maybe_text(row["channel_name"]),
                 "artifact_ref": signal_ref(row),
-                "is_formal": maybe_text(row["source_skill"]) in FORMAL_SOURCE_SKILLS,
+                "is_formal": canonical_object_kind == "formal-comment-signal",
                 "text": text,
                 "tokens": semantic_tokens(text),
                 "issue_labels": issue_labels_from_text(text),
@@ -418,8 +427,8 @@ def load_normalized_public_signals(
     if not results:
         warnings.append(
             {
-                "code": "no-normalized-public-signals",
-                "message": "No normalized public-plane signals were available for linkage.",
+                "code": "no-normalized-formal-public-signals",
+                "message": "No normalized formal/public signal-plane rows were available for linkage.",
             }
         )
     return results, warnings

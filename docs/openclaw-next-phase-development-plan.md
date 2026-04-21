@@ -196,6 +196,29 @@
    - `tests/test_orchestration_planner_workflow.py / tests/test_board_workflow.py / tests/test_runtime_kernel.py` 已把旧的 artifact-only test seed 收口为 DB canonical seed，防止测试继续帮旧旁路续命。
 6. 当前扩展后的主链大回归已更新到 `148` 项，并在本地全部通过。
 
+## 2.13 Batch 13 当前已交付
+
+第十三批把 “formal comments 只是 generic public signal” 与 “verification / observation chain 仍是默认主链” 两个残留结构错误一起收口，已落地以下硬改动：
+
+1. `normalized_signals` 现在显式持久化 `canonical_object_kind`，signal-plane schema 会自动迁移旧库；`eco-query-public-signals / eco-query-environment-signals / eco-lookup-normalized-signal` 也已直接暴露 typed signal kind。
+2. `regulationsgov-comments-fetch / regulationsgov-comment-detail-fetch` 的 normalizer 已改成写入 `plane = formal`、`canonical_object_kind = formal-comment-signal`；formal comments 不再伪装成 generic `public` rows。
+3. `eco-link-formal-comments-to-public-discourse / eco-detect-cross-platform-diffusion / eco-extract-claim-candidates` 已切到结构化信号语义：
+   - formal/public 区分不再依赖 `source_skill` 白名单。
+   - linkage / diffusion 会同时读取 `formal + public` 两类 signal rows。
+   - public claim extractor 会显式排除 formal-comment rows，即使面对旧 run 的历史数据也会做兼容推断。
+4. 遗留的 standalone public/environment normalizer（`youtube-video / bluesky / gdelt-doc / airnow / openaq / open-meteo`）已同步补上 `canonical_object_kind` 持久化与统一 schema migration，typed signal contract 不再只覆盖部分数据源。
+5. source-queue / board-handoff 的默认主链已经改成 `claim-scope -> verifiability -> route -> controversy-map`：
+   - `eco-classify-claim-verifiability / eco-route-verification-lane / eco-materialize-controversy-map` 已提升为 direct core queue default。
+   - `eco-extract-observation-candidates / eco-merge-observation-candidates / eco-link-claims-to-observations / eco-derive-observation-scope / eco-score-evidence-coverage` 已降级为 `route-gated optional lane`。
+   - import/audit/cluster/scope/route 的 `suggested_next_skills` 已停止默认把 observation/coverage 当作必经链路。
+6. 已补强回归：
+   - `tests/test_formal_public_workflow.py` 现在显式断言 Regulations.gov rows 写入 `formal` plane，并验证 claim extractor 不再吞 formal rows。
+   - `tests/test_migrated_source_runtime_integration.py` 已补上 Regulations.gov anchor chain 的 formal-plane/type 持久化断言。
+   - `tests/test_runtime_source_queue_profiles.py` 已补上 optional verification lane 与新默认主链的 profile 断言。
+7. 本轮本地回归结果：
+   - targeted `17` 项通过。
+   - 扩展 workflow `87` 项通过。
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足

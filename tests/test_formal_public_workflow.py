@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -134,6 +135,35 @@ class FormalPublicWorkflowTests(unittest.TestCase):
             seed_regulationsgov_comments(run_dir, root)
             seed_public_only_trust_signal(run_dir, root)
 
+            with sqlite3.connect(analytics_path(run_dir, "signal_plane.sqlite")) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    """
+                    SELECT source_skill, plane, canonical_object_kind
+                    FROM normalized_signals
+                    WHERE run_id = ? AND round_id = ?
+                    ORDER BY source_skill, signal_id
+                    """,
+                    (RUN_ID, ROUND_ID),
+                ).fetchall()
+            regulations_rows = [
+                row for row in rows if str(row["source_skill"]).startswith("regulationsgov-")
+            ]
+            youtube_rows = [
+                row for row in rows if str(row["source_skill"]) == "youtube-video-search"
+            ]
+            self.assertGreaterEqual(len(regulations_rows), 2)
+            self.assertEqual({"formal"}, {str(row["plane"]) for row in regulations_rows})
+            self.assertEqual(
+                {"formal-comment-signal"},
+                {str(row["canonical_object_kind"]) for row in regulations_rows},
+            )
+            self.assertEqual({"public"}, {str(row["plane"]) for row in youtube_rows})
+            self.assertEqual(
+                {"public-discourse-signal"},
+                {str(row["canonical_object_kind"]) for row in youtube_rows},
+            )
+
             link_payload = run_script(
                 script_path("eco-link-formal-comments-to-public-discourse"),
                 "--run-dir",
@@ -199,6 +229,31 @@ class FormalPublicWorkflowTests(unittest.TestCase):
                 ("representation-trust", "formal-underrepresentation"),
                 gap_pairs,
             )
+
+    def test_claim_extractor_ignores_formal_signal_rows_after_formal_plane_split(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seed_regulationsgov_comments(run_dir, root)
+            seed_public_only_trust_signal(run_dir, root)
+
+            payload = run_script(
+                script_path("eco-extract-claim-candidates"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            artifact = load_json(analytics_path(run_dir, f"claim_candidates_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual(1, artifact["candidate_count"])
+            self.assertEqual("representation-trust", artifact["candidates"][0]["issue_hint"])
+            self.assertEqual(1, len(artifact["candidates"][0]["source_signal_ids"]))
 
 
 if __name__ == "__main__":

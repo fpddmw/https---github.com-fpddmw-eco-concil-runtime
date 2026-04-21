@@ -22,6 +22,10 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     sync_claim_candidate_result_set,
 )
+from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
+    ensure_signal_plane_schema,
+    resolved_canonical_object_kind,
+)
 
 STOPWORDS = {
     "a",
@@ -310,7 +314,7 @@ def connect_db(run_dir: Path, db_path: str) -> tuple[sqlite3.Connection, Path]:
     file_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(file_path)
     connection.row_factory = sqlite3.Row
-    connection.executescript(SCHEMA_SQL)
+    ensure_signal_plane_schema(connection)
     return connection, file_path
 
 
@@ -565,6 +569,16 @@ def extract_claim_candidates_skill(
     wanted_claim_type = maybe_text(claim_type)
     keywords = [maybe_text(keyword).casefold() for keyword in keyword_any if maybe_text(keyword)]
     for row in rows:
+        if (
+            resolved_canonical_object_kind(
+                plane="public",
+                source_skill=maybe_text(row["source_skill"]),
+                signal_kind=maybe_text(row["signal_kind"]),
+                canonical_object_kind=maybe_text(row["canonical_object_kind"]),
+            )
+            != "public-discourse-signal"
+        ):
+            continue
         if maybe_text(source_skill) and maybe_text(row["source_skill"]) != maybe_text(source_skill):
             continue
         text = " ".join(part for part in (maybe_text(row["title"]), maybe_text(row["body_text"])) if part)

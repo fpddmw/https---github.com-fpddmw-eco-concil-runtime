@@ -23,6 +23,10 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_formal_public_link_context,
     sync_diffusion_edge_result_set,
 )
+from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
+    ensure_signal_plane_schema,
+    resolved_canonical_object_kind,
+)
 
 FORMAL_SOURCE_SKILLS = {
     "regulationsgov-comments-fetch",
@@ -230,8 +234,24 @@ def platform_label(source_skill: str) -> str:
     return value or "unknown-platform"
 
 
-def plane_label(source_skill: str) -> str:
-    return "formal" if maybe_text(source_skill) in FORMAL_SOURCE_SKILLS else "public"
+def plane_label(
+    *,
+    plane: str,
+    source_skill: str,
+    signal_kind: str,
+    canonical_object_kind: str,
+) -> str:
+    resolved_kind = resolved_canonical_object_kind(
+        plane=plane,
+        source_skill=source_skill,
+        signal_kind=signal_kind,
+        canonical_object_kind=canonical_object_kind,
+    )
+    if resolved_kind == "formal-comment-signal":
+        return "formal"
+    if resolved_kind == "environment-observation-signal":
+        return "environment"
+    return "public"
 
 
 def signal_ref(row: sqlite3.Row) -> dict[str, str]:
@@ -276,6 +296,7 @@ def load_normalized_signals(
     connection = sqlite3.connect(db_file)
     connection.row_factory = sqlite3.Row
     try:
+        ensure_signal_plane_schema(connection)
         table_exists = connection.execute(
             """
             SELECT name
@@ -293,14 +314,15 @@ def load_normalized_signals(
             return [], warnings
         rows = connection.execute(
             """
-            SELECT signal_id, source_skill, signal_kind, title, body_text, url,
+            SELECT signal_id, plane, source_skill, signal_kind,
+                   canonical_object_kind, title, body_text, url,
                    author_name, channel_name, published_at_utc, observed_at_utc,
                    captured_at_utc, artifact_path, record_locator
             FROM normalized_signals
             WHERE run_id = ?
               AND round_id = ?
-              AND plane = 'public'
-            ORDER BY source_skill, signal_id
+              AND plane IN ('public', 'formal')
+            ORDER BY plane, source_skill, signal_id
             """,
             (run_id, round_id),
         ).fetchall()
@@ -318,10 +340,22 @@ def load_normalized_signals(
         signals.append(
             {
                 "signal_id": maybe_text(row["signal_id"]),
+                "plane": maybe_text(row["plane"]),
                 "source_skill": maybe_text(row["source_skill"]),
                 "signal_kind": maybe_text(row["signal_kind"]),
                 "platform": platform_label(maybe_text(row["source_skill"])),
-                "plane_label": plane_label(maybe_text(row["source_skill"])),
+                "plane_label": plane_label(
+                    plane=maybe_text(row["plane"]),
+                    source_skill=maybe_text(row["source_skill"]),
+                    signal_kind=maybe_text(row["signal_kind"]),
+                    canonical_object_kind=maybe_text(row["canonical_object_kind"]),
+                ),
+                "canonical_object_kind": resolved_canonical_object_kind(
+                    plane=maybe_text(row["plane"]),
+                    source_skill=maybe_text(row["source_skill"]),
+                    signal_kind=maybe_text(row["signal_kind"]),
+                    canonical_object_kind=maybe_text(row["canonical_object_kind"]),
+                ),
                 "title": maybe_text(row["title"]),
                 "body_text": maybe_text(row["body_text"]),
                 "url": maybe_text(row["url"]),
@@ -335,8 +369,8 @@ def load_normalized_signals(
     if not signals:
         warnings.append(
             {
-                "code": "no-normalized-public-signals",
-                "message": "No normalized public-plane signals were available for diffusion detection.",
+                "code": "no-normalized-formal-public-signals",
+                "message": "No normalized formal/public signal-plane rows were available for diffusion detection.",
             }
         )
     return signals, warnings

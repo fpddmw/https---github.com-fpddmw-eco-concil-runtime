@@ -480,8 +480,9 @@ def cluster_claim_candidates_skill(
             else [],
             "suggested_next_skills": [
                 "eco-derive-claim-scope",
+                "eco-classify-claim-verifiability",
+                "eco-route-verification-lane",
                 "eco-post-board-note",
-                "eco-link-claims-to-observations",
             ],
         },
     }

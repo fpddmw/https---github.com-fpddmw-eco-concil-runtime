@@ -293,14 +293,15 @@ def import_fetch_execution_skill(run_dir: str, run_id: str, round_id: str) -> di
             "challenge_hints": [],
             "suggested_next_skills": [
                 "eco-build-normalization-audit",
+                "eco-query-public-signals",
+                "eco-query-environment-signals",
                 "eco-extract-claim-candidates",
                 "eco-extract-observation-candidates",
                 "eco-cluster-claim-candidates",
                 "eco-merge-observation-candidates",
-                "eco-link-claims-to-observations",
                 "eco-derive-claim-scope",
-                "eco-derive-observation-scope",
-                "eco-score-evidence-coverage",
+                "eco-classify-claim-verifiability",
+                "eco-route-verification-lane",
             ],
         },
     }
