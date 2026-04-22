@@ -357,7 +357,7 @@ def claim_board_task_skill(
                 or maybe_text(proposal_target_payload.get("ticket_id"))
                 or (
                     maybe_text(proposal_target_payload.get("object_id"))
-                    if proposal_target_kind in {"challenge-ticket", "ticket"}
+                    if proposal_target_kind in {"challenge", "challenge-ticket", "ticket"}
                     else ""
                 )
                 if isinstance(selected_proposal, dict)

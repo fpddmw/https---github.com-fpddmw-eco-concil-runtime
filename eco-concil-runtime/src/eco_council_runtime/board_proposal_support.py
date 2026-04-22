@@ -19,7 +19,7 @@ CLOSE_CHALLENGE_PROPOSAL_KINDS = {
     "resolve-challenge",
     "dismiss-challenge",
 }
-CLOSE_CHALLENGE_TARGET_KINDS = {"challenge-ticket", "ticket"}
+CLOSE_CHALLENGE_TARGET_KINDS = {"challenge", "challenge-ticket", "ticket"}
 UPDATE_HYPOTHESIS_PROPOSAL_KINDS = {
     "update-hypothesis-status",
     "stabilize-hypothesis",
@@ -41,6 +41,7 @@ CLAIM_BOARD_TASK_PROPOSAL_KINDS = {
 CLAIM_BOARD_TASK_TARGET_KINDS = {
     "task",
     "board-task",
+    "challenge",
     "challenge-ticket",
     "ticket",
     "hypothesis",

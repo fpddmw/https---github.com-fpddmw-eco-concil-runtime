@@ -85,9 +85,9 @@ def proposal_follow_up_skills(proposal: dict[str, Any]) -> list[str]:
         )
     if target_kind in {"hypothesis", "hypothesis-card"} or operation_kinds.intersection(HYPOTHESIS_KINDS):
         suggestions.append("eco-update-hypothesis-status")
-    if target_kind in {"challenge-ticket", "ticket"} or operation_kinds.intersection(OPEN_CHALLENGE_KINDS):
+    if target_kind in {"challenge", "challenge-ticket", "ticket"} or operation_kinds.intersection(OPEN_CHALLENGE_KINDS):
         suggestions.append("eco-open-challenge-ticket")
-    if target_kind in {"challenge-ticket", "ticket"} or operation_kinds.intersection(CLOSE_CHALLENGE_KINDS):
+    if target_kind in {"challenge", "challenge-ticket", "ticket"} or operation_kinds.intersection(CLOSE_CHALLENGE_KINDS):
         suggestions.append("eco-close-challenge-ticket")
     if target_kind in {"board-task", "task"} or operation_kinds.intersection(BOARD_TASK_KINDS):
         suggestions.append("eco-claim-board-task")

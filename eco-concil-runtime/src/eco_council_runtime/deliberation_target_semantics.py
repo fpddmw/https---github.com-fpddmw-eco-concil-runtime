@@ -313,24 +313,16 @@ def proposal_target_from_payload(proposal: dict[str, Any]) -> dict[str, Any]:
         hypothesis_id=maybe_text(payload.get("target_hypothesis_id")),
         ticket_id=maybe_text(payload.get("target_ticket_id")),
         task_id=maybe_text(payload.get("target_task_id")),
-        coverage_id=maybe_text(payload.get("target_coverage_id"))
-        or maybe_text(payload.get("coverage_id")),
-        route_id=maybe_text(payload.get("target_route_id"))
-        or maybe_text(payload.get("route_id")),
-        actor_id=maybe_text(payload.get("target_actor_id"))
-        or maybe_text(payload.get("actor_id")),
-        assessment_id=maybe_text(payload.get("target_assessment_id"))
-        or maybe_text(payload.get("assessment_id")),
-        linkage_id=maybe_text(payload.get("target_linkage_id"))
-        or maybe_text(payload.get("linkage_id")),
-        gap_id=maybe_text(payload.get("target_gap_id"))
-        or maybe_text(payload.get("gap_id")),
-        edge_id=maybe_text(payload.get("target_edge_id"))
-        or maybe_text(payload.get("edge_id")),
-        map_issue_id=maybe_text(payload.get("target_map_issue_id"))
-        or maybe_text(payload.get("map_issue_id")),
-        cluster_id=maybe_text(payload.get("cluster_id")),
-        claim_cluster_id=maybe_text(payload.get("claim_cluster_id")),
+        coverage_id=maybe_text(payload.get("target_coverage_id")),
+        route_id=maybe_text(payload.get("target_route_id")),
+        actor_id=maybe_text(payload.get("target_actor_id")),
+        assessment_id=maybe_text(payload.get("target_assessment_id")),
+        linkage_id=maybe_text(payload.get("target_linkage_id")),
+        gap_id=maybe_text(payload.get("target_gap_id")),
+        edge_id=maybe_text(payload.get("target_edge_id")),
+        map_issue_id=maybe_text(payload.get("target_map_issue_id")),
+        cluster_id=maybe_text(payload.get("target_cluster_id")),
+        claim_cluster_id=maybe_text(payload.get("target_claim_cluster_id")),
         round_id=maybe_text(payload.get("target_round_id")),
         proposal_id=maybe_text(payload.get("target_proposal_id")),
     )

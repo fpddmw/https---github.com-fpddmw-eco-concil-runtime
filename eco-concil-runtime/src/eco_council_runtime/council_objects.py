@@ -10,7 +10,10 @@ from .canonical_contracts import (
     canonical_contract_kinds,
     validate_canonical_payload,
 )
-from .deliberation_target_semantics import proposal_target_from_payload
+from .deliberation_target_semantics import (
+    canonical_target_kind,
+    proposal_target_from_payload,
+)
 from .kernel.deliberation_plane import (
     connect_db as connect_deliberation_db,
     json_text,
@@ -1014,6 +1017,8 @@ def add_supported_filter(
     params: list[str],
 ) -> None:
     value_text = maybe_text(filter_value)
+    if filter_name == "target_kind":
+        value_text = canonical_target_kind(value_text)
     if not value_text:
         return
     filter_columns = (
