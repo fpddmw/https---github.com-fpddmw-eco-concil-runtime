@@ -10,6 +10,7 @@ CHALLENGE_TARGET_KINDS = {"challenge", "challenge-ticket", "ticket"}
 TASK_TARGET_KINDS = {"task", "board-task"}
 ISSUE_TARGET_KINDS = {"controversy-map", "issue", "issue-cluster"}
 ROUTE_TARGET_KINDS = {"route", "verification-route"}
+ACTOR_TARGET_KINDS = {"actor", "actor-profile"}
 ASSESSMENT_TARGET_KINDS = {
     "assessment",
     "claim-assessment",
@@ -43,6 +44,8 @@ def canonical_target_kind(value: Any) -> str:
         return "issue-cluster"
     if normalized in ROUTE_TARGET_KINDS:
         return "verification-route"
+    if normalized in ACTOR_TARGET_KINDS:
+        return "actor-profile"
     if normalized in ASSESSMENT_TARGET_KINDS:
         return "verifiability-assessment"
     if normalized in LINKAGE_TARGET_KINDS:
@@ -65,6 +68,8 @@ def infer_target_object_kind(target: Any) -> str:
         return explicit_kind
     if maybe_text(normalized.get("route_id")):
         return "verification-route"
+    if maybe_text(normalized.get("actor_id")):
+        return "actor-profile"
     if maybe_text(normalized.get("assessment_id")):
         return "verifiability-assessment"
     if maybe_text(normalized.get("linkage_id")):
@@ -104,6 +109,8 @@ def infer_target_object_id(target: Any, object_kind: str = "") -> str:
     kind = canonical_target_kind(object_kind) or infer_target_object_kind(normalized)
     if kind == "verification-route":
         return maybe_text(normalized.get("route_id"))
+    if kind == "actor-profile":
+        return maybe_text(normalized.get("actor_id"))
     if kind == "verifiability-assessment":
         return maybe_text(normalized.get("assessment_id"))
     if kind == "formal-public-link":
@@ -147,6 +154,7 @@ def normalized_deliberation_target(
     task_id: str = "",
     coverage_id: str = "",
     route_id: str = "",
+    actor_id: str = "",
     assessment_id: str = "",
     linkage_id: str = "",
     gap_id: str = "",
@@ -169,6 +177,7 @@ def normalized_deliberation_target(
         "task_id": maybe_text(task_id),
         "coverage_id": maybe_text(coverage_id),
         "route_id": maybe_text(route_id),
+        "actor_id": maybe_text(actor_id),
         "assessment_id": maybe_text(assessment_id),
         "linkage_id": maybe_text(linkage_id),
         "gap_id": maybe_text(gap_id),
@@ -220,6 +229,12 @@ def normalized_deliberation_target(
         and not maybe_text(normalized.get("task_id"))
     ):
         normalized["task_id"] = resolved_id
+    if (
+        resolved_kind == "actor-profile"
+        and resolved_id
+        and not maybe_text(normalized.get("actor_id"))
+    ):
+        normalized["actor_id"] = resolved_id
     if (
         resolved_kind == "evidence-coverage"
         and resolved_id
@@ -302,6 +317,8 @@ def proposal_target_from_payload(proposal: dict[str, Any]) -> dict[str, Any]:
         or maybe_text(payload.get("coverage_id")),
         route_id=maybe_text(payload.get("target_route_id"))
         or maybe_text(payload.get("route_id")),
+        actor_id=maybe_text(payload.get("target_actor_id"))
+        or maybe_text(payload.get("actor_id")),
         assessment_id=maybe_text(payload.get("target_assessment_id"))
         or maybe_text(payload.get("assessment_id")),
         linkage_id=maybe_text(payload.get("target_linkage_id"))
@@ -315,16 +332,19 @@ def proposal_target_from_payload(proposal: dict[str, Any]) -> dict[str, Any]:
         cluster_id=maybe_text(payload.get("cluster_id")),
         claim_cluster_id=maybe_text(payload.get("claim_cluster_id")),
         round_id=maybe_text(payload.get("round_id")),
-        proposal_id=maybe_text(payload.get("proposal_id")),
+        proposal_id=maybe_text(payload.get("target_proposal_id"))
+        or maybe_text(payload.get("proposal_id")),
     )
 
 
 def source_proposal_id_from_payload(payload: dict[str, Any]) -> str:
     normalized = dict_items(payload)
+    target_proposal_id = maybe_text(
+        dict_items(normalized.get("target")).get("proposal_id")
+    ) or maybe_text(normalized.get("target_proposal_id"))
     for candidate in (
         normalized.get("source_proposal_id"),
         dict_items(normalized.get("provenance")).get("proposal_id"),
-        dict_items(normalized.get("target")).get("proposal_id"),
     ):
         text = maybe_text(candidate)
         if text:
@@ -333,10 +353,12 @@ def source_proposal_id_from_payload(payload: dict[str, Any]) -> str:
         normalized.get("lineage")
     ):
         text = maybe_text(candidate)
-        if text.startswith("proposal-"):
+        if text.startswith("proposal-") and text != target_proposal_id:
             return text
     text = maybe_text(normalized.get("proposal_id"))
-    return text if text.startswith("proposal-") else ""
+    if text.startswith("proposal-") and text != target_proposal_id:
+        return text
+    return ""
 
 
 def deliberation_anchor_fields(
@@ -350,9 +372,11 @@ def deliberation_anchor_fields(
         "target_object_id": maybe_text(normalized.get("object_id")),
         "issue_label": maybe_text(normalized.get("issue_label")),
         "target_route_id": maybe_text(normalized.get("route_id")),
+        "target_actor_id": maybe_text(normalized.get("actor_id")),
         "target_assessment_id": maybe_text(normalized.get("assessment_id")),
         "target_linkage_id": maybe_text(normalized.get("linkage_id")),
         "target_gap_id": maybe_text(normalized.get("gap_id")),
+        "target_proposal_id": maybe_text(normalized.get("proposal_id")),
         "source_proposal_id": maybe_text(source_proposal_id),
     }
 

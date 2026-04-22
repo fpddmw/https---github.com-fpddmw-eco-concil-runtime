@@ -66,6 +66,8 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
         self.assertTrue(profiles["eco-classify-claim-verifiability"]["core_queue_default"])
         self.assertEqual("direct", profiles["eco-route-verification-lane"]["queue_status"])
         self.assertTrue(profiles["eco-route-verification-lane"]["core_queue_default"])
+        self.assertEqual("direct", profiles["eco-extract-issue-candidates"]["queue_status"])
+        self.assertTrue(profiles["eco-extract-issue-candidates"]["core_queue_default"])
         self.assertEqual("direct", profiles["eco-cluster-issue-candidates"]["queue_status"])
         self.assertTrue(profiles["eco-cluster-issue-candidates"]["core_queue_default"])
         self.assertEqual("direct", profiles["eco-extract-stance-candidates"]["queue_status"])

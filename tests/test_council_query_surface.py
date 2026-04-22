@@ -84,7 +84,28 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
                         "claim_id": "claim-001",
                         "issue_label": "air-quality-smoke",
                     },
-                }
+                },
+                {
+                    "action_kind": "review-actor-posture",
+                    "priority": "medium",
+                    "assigned_role": "moderator",
+                    "objective": "Review the regulator actor posture for the smoke issue.",
+                    "reason": "Actor posture should remain directly queryable on the deliberation surface.",
+                    "readiness_blocker": False,
+                    "decision_source": "agent-council",
+                    "issue_label": "air-quality-smoke",
+                    "source_proposal_id": "proposal-seeded-actor-001",
+                    "provenance": {"source": "unit-test"},
+                    "evidence_refs": [],
+                    "lineage": [],
+                    "source_ids": ["actor-001", "proposal-seeded-actor-001"],
+                    "target": {
+                        "object_kind": "actor-profile",
+                        "object_id": "actor-001",
+                        "actor_id": "actor-001",
+                        "issue_label": "air-quality-smoke",
+                    },
+                },
             ],
         },
     )
@@ -119,7 +140,27 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
                         "linkage_id": "linkage-001",
                         "issue_label": "air-quality-smoke",
                     },
-                }
+                },
+                {
+                    "probe_type": "proposal-consistency-check",
+                    "probe_status": "open",
+                    "owner_role": "challenger",
+                    "priority": "medium",
+                    "probe_goal": "Test whether proposal-target-001 remains justified.",
+                    "falsification_question": "What evidence would invalidate proposal-target-001?",
+                    "decision_source": "heuristic-fallback",
+                    "issue_label": "air-quality-smoke",
+                    "provenance": {"source": "unit-test"},
+                    "evidence_refs": [],
+                    "lineage": [],
+                    "source_ids": [],
+                    "target": {
+                        "object_kind": "proposal",
+                        "object_id": "proposal-target-001",
+                        "proposal_id": "proposal-target-001",
+                        "issue_label": "air-quality-smoke",
+                    },
+                },
             ],
         },
     )
@@ -346,6 +387,40 @@ class CouncilQuerySurfaceTests(unittest.TestCase):
                         ),
                     )
 
+                    actor_action_row = connection.execute(
+                        """
+                        SELECT action_id, raw_json
+                        FROM moderator_actions
+                        WHERE run_id = ? AND round_id = ? AND target_object_id = ?
+                        """,
+                        (RUN_ID, ROUND_ID, "actor-001"),
+                    ).fetchone()
+                    actor_action_payload = json.loads(actor_action_row["raw_json"])
+                    actor_action_payload.pop("target_object_kind", None)
+                    actor_action_payload.pop("target_object_id", None)
+                    actor_action_payload.pop("target_actor_id", None)
+                    actor_action_payload.pop("issue_label", None)
+                    actor_action_payload.pop("source_proposal_id", None)
+                    actor_target = (
+                        actor_action_payload.get("target", {})
+                        if isinstance(actor_action_payload.get("target"), dict)
+                        else {}
+                    )
+                    for key in ("object_kind", "object_id", "issue_label", "actor_id"):
+                        actor_target.pop(key, None)
+                    actor_action_payload["target"] = actor_target
+                    connection.execute(
+                        "UPDATE moderator_actions SET raw_json = ? WHERE action_id = ?",
+                        (
+                            json.dumps(
+                                actor_action_payload,
+                                ensure_ascii=True,
+                                sort_keys=True,
+                            ),
+                            actor_action_row["action_id"],
+                        ),
+                    )
+
                     probe_row = connection.execute(
                         """
                         SELECT probe_id, raw_json
@@ -372,6 +447,44 @@ class CouncilQuerySurfaceTests(unittest.TestCase):
                         (
                             json.dumps(probe_payload, ensure_ascii=True, sort_keys=True),
                             probe_row["probe_id"],
+                        ),
+                    )
+
+                    proposal_probe_row = connection.execute(
+                        """
+                        SELECT probe_id, raw_json
+                        FROM falsification_probes
+                        WHERE run_id = ? AND round_id = ? AND target_object_id = ?
+                        """,
+                        (RUN_ID, ROUND_ID, "proposal-target-001"),
+                    ).fetchone()
+                    proposal_probe_payload = json.loads(proposal_probe_row["raw_json"])
+                    proposal_probe_payload.pop("target_object_kind", None)
+                    proposal_probe_payload.pop("target_object_id", None)
+                    proposal_probe_payload.pop("target_proposal_id", None)
+                    proposal_probe_payload.pop("issue_label", None)
+                    proposal_target = (
+                        proposal_probe_payload.get("target", {})
+                        if isinstance(proposal_probe_payload.get("target"), dict)
+                        else {}
+                    )
+                    for key in (
+                        "object_kind",
+                        "object_id",
+                        "issue_label",
+                        "proposal_id",
+                    ):
+                        proposal_target.pop(key, None)
+                    proposal_probe_payload["target"] = proposal_target
+                    connection.execute(
+                        "UPDATE falsification_probes SET raw_json = ? WHERE probe_id = ?",
+                        (
+                            json.dumps(
+                                proposal_probe_payload,
+                                ensure_ascii=True,
+                                sort_keys=True,
+                            ),
+                            proposal_probe_row["probe_id"],
                         ),
                     )
             finally:
@@ -412,7 +525,7 @@ class CouncilQuerySurfaceTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            self.assertEqual(2, action_payload["summary"]["returned_object_count"])
+            self.assertEqual(3, action_payload["summary"]["returned_object_count"])
             self.assertEqual(
                 "advance-empirical-verification",
                 action_payload["objects"][0]["action_kind"],
@@ -461,6 +574,41 @@ class CouncilQuerySurfaceTests(unittest.TestCase):
             self.assertEqual(
                 "verification-route",
                 targeted_action_payload["objects"][0]["target"]["object_kind"],
+            )
+
+            actor_action_payload = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "next-action",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-kind",
+                "actor-profile",
+                "--target-id",
+                "actor-001",
+                "--issue-label",
+                "air-quality-smoke",
+                "--actor-id",
+                "actor-001",
+                "--source-proposal-id",
+                "proposal-seeded-actor-001",
+            )
+            self.assertEqual(1, actor_action_payload["summary"]["returned_object_count"])
+            self.assertEqual(
+                "actor-profile",
+                actor_action_payload["objects"][0]["target_object_kind"],
+            )
+            self.assertEqual(
+                "actor-001",
+                actor_action_payload["objects"][0]["target_actor_id"],
+            )
+            self.assertEqual(
+                "actor-profile",
+                actor_action_payload["objects"][0]["target"]["object_kind"],
             )
 
             blocker_actions = run_kernel(
@@ -654,6 +802,43 @@ class CouncilQuerySurfaceTests(unittest.TestCase):
             self.assertEqual(
                 "representation-gap",
                 probe_payload["objects"][0]["target"]["object_kind"],
+            )
+
+            proposal_probe_payload = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "probe",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-kind",
+                "proposal",
+                "--target-id",
+                "proposal-target-001",
+                "--issue-label",
+                "air-quality-smoke",
+                "--proposal-id",
+                "proposal-target-001",
+            )
+            self.assertEqual(1, proposal_probe_payload["summary"]["returned_object_count"])
+            self.assertEqual(
+                "proposal",
+                proposal_probe_payload["objects"][0]["target_object_kind"],
+            )
+            self.assertEqual(
+                "proposal-target-001",
+                proposal_probe_payload["objects"][0]["target_proposal_id"],
+            )
+            self.assertEqual(
+                "proposal",
+                proposal_probe_payload["objects"][0]["target"]["object_kind"],
+            )
+            self.assertEqual(
+                "",
+                proposal_probe_payload["objects"][0]["source_proposal_id"],
             )
 
 

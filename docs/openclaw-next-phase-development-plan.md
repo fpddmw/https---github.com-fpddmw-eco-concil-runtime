@@ -432,6 +432,33 @@
    - `python3 -m unittest tests.test_controversy_workflow -v`
    - `python3 -m unittest tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_controversy_map_items_when_artifact_is_missing tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_issue_cluster_items_when_artifact_is_missing tests.test_runtime_source_queue_profiles -v`
 
+## 2.21 Batch 21 当前已交付
+
+第二十一批把 controversy issue layer 的“extract”缺口与 deliberation target semantics 的 actor/proposal 缺口一起收口，已落地以下硬改动：
+
+1. 新增 `eco_council_runtime/issue_cluster_skill_runner.py`：
+   - `issue-cluster` 的 canonical materialization 已从 `eco-cluster-issue-candidates` 脚本体中继续下沉到共享 runtime helper。
+   - extract/clustering 两个 skill 不再各自维护一份 claim-side issue assembly 逻辑。
+2. 新增 `eco-extract-issue-candidates`：
+   - 现在可以先从 `claim-scope / claim-verifiability / verification-route` 直接派生 scope-level canonical `issue-cluster` candidate。
+   - 默认写出 `analytics/issue_candidates_<round_id>.json`，并同步进 analysis plane 的 canonical `issue-cluster` result set。
+   - 这一步让 “候选 issue surface” 成为独立 queue-visible capability，而不是只能跳过 extract 直接进 cluster。
+3. `source_queue_profile.py` 已把 controversy issue 主链改成 `route -> extract-issue-candidates -> cluster-issue-candidates -> typed issue -> controversy-map`：
+   - `eco-classify-claim-verifiability` 与 `eco-route-verification-lane` 的默认下游都已同步更新。
+   - `eco-cluster-issue-candidates` 现在明确承担 “claim-cluster merged issue surface” 角色，而不是兼任前置 candidate extractor。
+4. deliberation target semantics 已补齐 `actor-profile / proposal` 一等锚点：
+   - `moderator_actions / falsification_probes` 已新增 `target_actor_id / target_proposal_id` 列与索引。
+   - `query-council-objects` 已新增 `--actor-id / --proposal-id` 过滤，actor/proposal 不再只能依赖泛化 `target_kind / target_id` 间接查询。
+   - `source_proposal_id_from_payload(...)` 已修正，不再把 target proposal 误判成 source proposal。
+5. proposal-driven next-action / probe 主链已同步吃到新锚点：
+   - `phase2_proposal_actions.py` 现在允许 actor-targeted 与 proposal-targeted council proposal 进入 queue decision 面。
+   - actor/proposal target 的 `object_id` 现在会稳定进入 projected action source ids，而不是继续依赖脆弱的 raw target 字段。
+6. 本轮新增/更新回归覆盖：
+   - `tests/test_controversy_workflow.py`
+   - `tests/test_council_query_surface.py`
+   - `tests/test_council_autonomy_flow.py`
+   - `tests/test_runtime_source_queue_profiles.py`
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足

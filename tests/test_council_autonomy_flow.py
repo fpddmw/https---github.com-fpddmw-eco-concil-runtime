@@ -104,6 +104,85 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 query_payload["objects"][0]["decision_source"],
             )
 
+    def test_actor_targeted_proposal_can_drive_action_queue_without_fallback_flags(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            proposal_bundle = store_council_proposal_records(
+                run_dir,
+                proposal_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "proposals": [
+                        {
+                            "proposal_kind": "review-actor-posture",
+                            "action_kind": "review-actor-posture",
+                            "agent_role": "moderator",
+                            "assigned_role": "moderator",
+                            "objective": "Review the regulator actor posture on issue-001.",
+                            "rationale": "Council wants explicit follow-up on one actor posture even without a route or gap cue.",
+                            "target_kind": "actor-profile",
+                            "target_id": "actor-001",
+                            "issue_label": "air-quality-smoke",
+                            "decision_source": "agent-council",
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://actor-001"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+            proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
+
+            payload = run_script(
+                script_path("eco-propose-next-actions"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            artifact = load_json(
+                investigation_path(run_dir, f"next_actions_{ROUND_ID}.json")
+            )
+            first_action = artifact["ranked_actions"][0]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("review-actor-posture", first_action["action_kind"])
+            self.assertEqual("actor-profile", first_action["target"]["object_kind"])
+            self.assertEqual("actor-001", first_action["target"]["object_id"])
+            self.assertEqual("actor-001", first_action["target_actor_id"])
+            self.assertEqual(proposal_id, first_action["source_proposal_id"])
+            self.assertIn(proposal_id, first_action["lineage"])
+
+            query_payload = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "next-action",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-kind",
+                "actor-profile",
+                "--target-id",
+                "actor-001",
+                "--actor-id",
+                "actor-001",
+                "--source-proposal-id",
+                proposal_id,
+            )
+            self.assertEqual(1, query_payload["summary"]["returned_object_count"])
+            self.assertEqual(
+                "actor-profile",
+                query_payload["objects"][0]["target_object_kind"],
+            )
+            self.assertEqual("actor-001", query_payload["objects"][0]["target_actor_id"])
+
     def test_next_actions_default_to_proposal_authority_when_heuristic_queue_exists(
         self,
     ) -> None:

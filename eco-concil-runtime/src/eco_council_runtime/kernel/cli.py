@@ -817,9 +817,11 @@ def add_council_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--target-id", default="")
     command.add_argument("--issue-label", default="")
     command.add_argument("--route-id", default="")
+    command.add_argument("--actor-id", default="")
     command.add_argument("--assessment-id", default="")
     command.add_argument("--linkage-id", default="")
     command.add_argument("--gap-id", default="")
+    command.add_argument("--proposal-id", default="")
     command.add_argument("--source-proposal-id", default="")
     command.add_argument("--readiness-blocker-only", action="store_true")
     command.add_argument("--include-contract", action="store_true")
@@ -1686,9 +1688,11 @@ def main(
                 target_id=args.target_id,
                 issue_label=args.issue_label,
                 route_id=args.route_id,
+                actor_id=args.actor_id,
                 assessment_id=args.assessment_id,
                 linkage_id=args.linkage_id,
                 gap_id=args.gap_id,
+                proposal_id=args.proposal_id,
                 source_proposal_id=args.source_proposal_id,
                 readiness_blocker_only=args.readiness_blocker_only,
                 include_contract=args.include_contract,

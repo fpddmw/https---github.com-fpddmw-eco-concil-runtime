@@ -83,7 +83,7 @@ EXACT_PROFILES: dict[str, dict[str, object]] = {
         default_invocation="planned-step",
         core_queue_default=True,
         notes="Classify claim-side verifiability posture before any downstream empirical work is treated as eligible.",
-        downstream_hints=["eco-route-verification-lane", "eco-cluster-issue-candidates"],
+        downstream_hints=["eco-route-verification-lane", "eco-extract-issue-candidates"],
     ),
     "eco-route-verification-lane": _profile(
         queue_status="direct",
@@ -92,6 +92,15 @@ EXACT_PROFILES: dict[str, dict[str, object]] = {
         default_invocation="planned-step",
         core_queue_default=True,
         notes="Freeze whether each issue stays empirical, formal-record, discourse, or mixed before downstream evidence work proceeds.",
+        downstream_hints=["eco-extract-issue-candidates", "eco-cluster-issue-candidates"],
+    ),
+    "eco-extract-issue-candidates": _profile(
+        queue_status="direct",
+        stage="analysis",
+        queue_role="issue-extraction",
+        default_invocation="planned-step",
+        core_queue_default=True,
+        notes="Project claim scopes into scope-level canonical issue-cluster candidates before claim-cluster merge compresses them.",
         downstream_hints=["eco-cluster-issue-candidates", "eco-materialize-controversy-map"],
     ),
     "eco-cluster-issue-candidates": _profile(
@@ -100,7 +109,7 @@ EXACT_PROFILES: dict[str, dict[str, object]] = {
         queue_role="issue-clustering",
         default_invocation="planned-step",
         core_queue_default=True,
-        notes="Project the claim-side chain into canonical issue-cluster rows before any board-facing controversy wrapper is aggregated.",
+        notes="Merge claim-side issue candidates into canonical issue-cluster rows before any board-facing controversy wrapper is aggregated.",
         downstream_hints=[
             "eco-extract-stance-candidates",
             "eco-extract-concern-facets",

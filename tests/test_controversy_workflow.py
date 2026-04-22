@@ -196,6 +196,15 @@ class ControversyWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
+            issue_candidate_payload = run_script(
+                script_path("eco-extract-issue-candidates"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
             issue_cluster_payload = run_script(
                 script_path("eco-cluster-issue-candidates"),
                 "--run-dir",
@@ -254,6 +263,9 @@ class ControversyWorkflowTests(unittest.TestCase):
             issue_cluster_artifact = load_json(
                 analytics_path(run_dir, f"issue_clusters_{ROUND_ID}.json")
             )
+            issue_candidate_artifact = load_json(
+                analytics_path(run_dir, f"issue_candidates_{ROUND_ID}.json")
+            )
             stance_group_artifact = load_json(
                 analytics_path(run_dir, f"stance_groups_{ROUND_ID}.json")
             )
@@ -267,12 +279,29 @@ class ControversyWorkflowTests(unittest.TestCase):
                 analytics_path(run_dir, f"evidence_citation_types_{ROUND_ID}.json")
             )
 
+            self.assertEqual(
+                "completed",
+                issue_candidate_payload["analysis_sync"]["status"],
+            )
             self.assertEqual("completed", issue_cluster_payload["analysis_sync"]["status"])
             self.assertIn(
                 payload["typed_analysis_sync"]["issue-cluster"]["status"],
                 {"completed", "existing-result-set"},
             )
+            self.assertGreaterEqual(issue_candidate_artifact["issue_cluster_count"], 1)
             self.assertGreaterEqual(issue_cluster_artifact["issue_cluster_count"], 1)
+            self.assertGreaterEqual(
+                issue_candidate_artifact["issue_cluster_count"],
+                issue_cluster_artifact["issue_cluster_count"],
+            )
+            self.assertEqual(
+                "claim-scope-derived-candidates",
+                issue_candidate_payload["summary"]["issue_derivation_mode"],
+            )
+            self.assertEqual(
+                "extract-issue-candidates-from-claim-scopes",
+                issue_candidate_artifact["query_basis"]["selection_mode"],
+            )
             self.assertGreaterEqual(stance_group_artifact["stance_group_count"], 1)
             self.assertGreaterEqual(concern_facet_artifact["concern_facet_count"], 1)
             self.assertGreaterEqual(actor_profile_artifact["actor_profile_count"], 1)

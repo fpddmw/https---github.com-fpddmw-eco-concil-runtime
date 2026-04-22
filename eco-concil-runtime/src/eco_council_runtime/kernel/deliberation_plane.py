@@ -355,6 +355,8 @@ CREATE TABLE IF NOT EXISTS moderator_actions (
     target_hypothesis_id TEXT NOT NULL DEFAULT '',
     target_claim_id TEXT NOT NULL DEFAULT '',
     target_ticket_id TEXT NOT NULL DEFAULT '',
+    target_actor_id TEXT NOT NULL DEFAULT '',
+    target_proposal_id TEXT NOT NULL DEFAULT '',
     target_object_kind TEXT NOT NULL DEFAULT '',
     target_object_id TEXT NOT NULL DEFAULT '',
     issue_label TEXT NOT NULL DEFAULT '',
@@ -379,6 +381,10 @@ CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_rank
 ON moderator_actions(run_id, round_id, action_rank, action_id);
 CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_target
 ON moderator_actions(run_id, round_id, target_object_kind, target_object_id, action_id);
+CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_actor
+ON moderator_actions(run_id, round_id, target_actor_id, action_id);
+CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_proposal_target
+ON moderator_actions(run_id, round_id, target_proposal_id, action_id);
 CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_issue
 ON moderator_actions(run_id, round_id, issue_label, source_proposal_id, action_id);
 
@@ -410,6 +416,8 @@ CREATE TABLE IF NOT EXISTS falsification_probes (
     target_hypothesis_id TEXT NOT NULL DEFAULT '',
     target_claim_id TEXT NOT NULL DEFAULT '',
     target_ticket_id TEXT NOT NULL DEFAULT '',
+    target_actor_id TEXT NOT NULL DEFAULT '',
+    target_proposal_id TEXT NOT NULL DEFAULT '',
     target_object_kind TEXT NOT NULL DEFAULT '',
     target_object_id TEXT NOT NULL DEFAULT '',
     issue_label TEXT NOT NULL DEFAULT '',
@@ -434,6 +442,10 @@ CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_status
 ON falsification_probes(run_id, round_id, probe_status, opened_at_utc, probe_id);
 CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_target
 ON falsification_probes(run_id, round_id, target_object_kind, target_object_id, probe_id);
+CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_actor
+ON falsification_probes(run_id, round_id, target_actor_id, probe_id);
+CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_proposal_target
+ON falsification_probes(run_id, round_id, target_proposal_id, probe_id);
 CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_issue
 ON falsification_probes(run_id, round_id, issue_label, source_proposal_id, probe_id);
 
@@ -779,9 +791,11 @@ def payload_from_db_row(row: sqlite3.Row) -> dict[str, Any]:
             "target_hypothesis_id",
             "target_ticket_id",
             "target_route_id",
+            "target_actor_id",
             "target_assessment_id",
             "target_linkage_id",
             "target_gap_id",
+            "target_proposal_id",
         )
     ) or isinstance(normalized.get("target"), dict):
         normalized["target"] = normalized_deliberation_target(
@@ -795,9 +809,11 @@ def payload_from_db_row(row: sqlite3.Row) -> dict[str, Any]:
             hypothesis_id=maybe_text(normalized.get("target_hypothesis_id")),
             ticket_id=maybe_text(normalized.get("target_ticket_id")),
             route_id=maybe_text(normalized.get("target_route_id")),
+            actor_id=maybe_text(normalized.get("target_actor_id")),
             assessment_id=maybe_text(normalized.get("target_assessment_id")),
             linkage_id=maybe_text(normalized.get("target_linkage_id")),
             gap_id=maybe_text(normalized.get("target_gap_id")),
+            proposal_id=maybe_text(normalized.get("target_proposal_id")),
             round_id=maybe_text(normalized.get("round_id")),
         )
     source_proposal_id = source_proposal_id_from_payload(normalized)
@@ -913,9 +929,11 @@ def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
             "target_object_id",
             "issue_label",
             "target_route_id",
+            "target_actor_id",
             "target_assessment_id",
             "target_linkage_id",
             "target_gap_id",
+            "target_proposal_id",
             "source_proposal_id",
         ):
             ensure_column(
@@ -974,6 +992,18 @@ def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
     )
     connection.execute(
         """
+        CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_actor
+        ON moderator_actions(run_id, round_id, target_actor_id, action_id)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_proposal_target
+        ON moderator_actions(run_id, round_id, target_proposal_id, action_id)
+        """
+    )
+    connection.execute(
+        """
         CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_issue
         ON moderator_actions(run_id, round_id, issue_label, source_proposal_id, action_id)
         """
@@ -982,6 +1012,18 @@ def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_target
         ON falsification_probes(run_id, round_id, target_object_kind, target_object_id, probe_id)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_actor
+        ON falsification_probes(run_id, round_id, target_actor_id, probe_id)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_proposal_target
+        ON falsification_probes(run_id, round_id, target_proposal_id, probe_id)
         """
     )
     connection.execute(
@@ -1450,18 +1492,20 @@ def write_moderator_action_row(connection: sqlite3.Connection, row: dict[str, An
         INSERT OR REPLACE INTO moderator_actions (
             action_id, run_id, round_id, generated_at_utc, action_rank, action_kind,
             priority, assigned_role, target_hypothesis_id, target_claim_id,
-            target_ticket_id, target_object_kind, target_object_id, issue_label,
-            target_route_id, target_assessment_id, target_linkage_id,
-            target_gap_id, source_proposal_id, controversy_gap, recommended_lane,
+            target_ticket_id, target_actor_id, target_proposal_id, target_object_kind,
+            target_object_id, issue_label, target_route_id, target_assessment_id,
+            target_linkage_id, target_gap_id, source_proposal_id, controversy_gap,
+            recommended_lane,
             probe_candidate, readiness_blocker,
             objective, reason, evidence_refs_json, source_ids_json, artifact_path,
             record_locator, raw_json
         ) VALUES (
             :action_id, :run_id, :round_id, :generated_at_utc, :action_rank, :action_kind,
             :priority, :assigned_role, :target_hypothesis_id, :target_claim_id,
-            :target_ticket_id, :target_object_kind, :target_object_id, :issue_label,
-            :target_route_id, :target_assessment_id, :target_linkage_id,
-            :target_gap_id, :source_proposal_id, :controversy_gap, :recommended_lane,
+            :target_ticket_id, :target_actor_id, :target_proposal_id,
+            :target_object_kind, :target_object_id, :issue_label, :target_route_id,
+            :target_assessment_id, :target_linkage_id, :target_gap_id,
+            :source_proposal_id, :controversy_gap, :recommended_lane,
             :probe_candidate, :readiness_blocker,
             :objective, :reason, :evidence_refs_json, :source_ids_json, :artifact_path,
             :record_locator, :raw_json
@@ -1494,18 +1538,19 @@ def write_falsification_probe_row(connection: sqlite3.Connection, row: dict[str,
         INSERT OR REPLACE INTO falsification_probes (
             probe_id, run_id, round_id, opened_at_utc, probe_status, action_id,
             priority, owner_role, target_hypothesis_id, target_claim_id,
-            target_ticket_id, target_object_kind, target_object_id, issue_label,
-            target_route_id, target_assessment_id, target_linkage_id,
-            target_gap_id, source_proposal_id, probe_type, controversy_gap,
+            target_ticket_id, target_actor_id, target_proposal_id, target_object_kind,
+            target_object_id, issue_label, target_route_id, target_assessment_id,
+            target_linkage_id, target_gap_id, source_proposal_id, probe_type, controversy_gap,
             recommended_lane, probe_goal, falsification_question,
             requested_skills_json, evidence_refs_json, source_ids_json,
             artifact_path, record_locator, raw_json
         ) VALUES (
             :probe_id, :run_id, :round_id, :opened_at_utc, :probe_status, :action_id,
             :priority, :owner_role, :target_hypothesis_id, :target_claim_id,
-            :target_ticket_id, :target_object_kind, :target_object_id, :issue_label,
-            :target_route_id, :target_assessment_id, :target_linkage_id,
-            :target_gap_id, :source_proposal_id, :probe_type, :controversy_gap,
+            :target_ticket_id, :target_actor_id, :target_proposal_id,
+            :target_object_kind, :target_object_id, :issue_label, :target_route_id,
+            :target_assessment_id, :target_linkage_id, :target_gap_id,
+            :source_proposal_id, :probe_type, :controversy_gap,
             :recommended_lane, :probe_goal, :falsification_question,
             :requested_skills_json, :evidence_refs_json, :source_ids_json,
             :artifact_path, :record_locator, :raw_json
@@ -2112,6 +2157,7 @@ def normalized_action_payload(
         ticket_id=action_target_id(normalized, "ticket_id"),
         route_id=maybe_text(normalized.get("target_route_id"))
         or maybe_text(normalized.get("route_id")),
+        actor_id=action_target_id(normalized, "actor_id"),
         assessment_id=maybe_text(normalized.get("target_assessment_id"))
         or maybe_text(normalized.get("assessment_id")),
         linkage_id=maybe_text(normalized.get("target_linkage_id"))
@@ -2120,6 +2166,7 @@ def normalized_action_payload(
         or maybe_text(normalized.get("gap_id")),
         map_issue_id=maybe_text(normalized.get("target_map_issue_id"))
         or maybe_text(normalized.get("map_issue_id")),
+        proposal_id=action_target_id(normalized, "proposal_id"),
         round_id=normalized["round_id"],
     )
     anchor_fields = deliberation_anchor_fields(
@@ -2130,6 +2177,10 @@ def normalized_action_payload(
     normalized["target_hypothesis_id"] = maybe_text(target.get("hypothesis_id"))
     normalized["target_claim_id"] = maybe_text(target.get("claim_id"))
     normalized["target_ticket_id"] = maybe_text(target.get("ticket_id"))
+    normalized["target_actor_id"] = maybe_text(anchor_fields.get("target_actor_id"))
+    normalized["target_proposal_id"] = maybe_text(
+        anchor_fields.get("target_proposal_id")
+    )
     normalized["target_object_kind"] = maybe_text(anchor_fields.get("target_object_kind"))
     normalized["target_object_id"] = maybe_text(anchor_fields.get("target_object_id"))
     normalized["issue_label"] = (
@@ -2158,6 +2209,8 @@ def normalized_action_payload(
         normalized.get("target_hypothesis_id"),
         normalized.get("target_claim_id"),
         normalized.get("target_ticket_id"),
+        normalized.get("target_actor_id"),
+        normalized.get("target_proposal_id"),
         normalized.get("target_object_id"),
         normalized.get("target_route_id"),
         normalized.get("target_assessment_id"),
@@ -2173,6 +2226,8 @@ def normalized_action_payload(
             "agenda_source": maybe_text(normalized.get("agenda_source")),
             "assigned_role": maybe_text(normalized.get("assigned_role")),
             "action_kind": maybe_text(normalized.get("action_kind")),
+            "target_actor_id": normalized.get("target_actor_id"),
+            "target_proposal_id": normalized.get("target_proposal_id"),
             "source_proposal_id": normalized.get("source_proposal_id"),
         },
     )
@@ -2253,6 +2308,7 @@ def normalized_probe_payload(
         ticket_id=maybe_text(normalized.get("target_ticket_id")),
         route_id=maybe_text(normalized.get("target_route_id"))
         or maybe_text(normalized.get("route_id")),
+        actor_id=action_target_id(normalized, "actor_id"),
         assessment_id=maybe_text(normalized.get("target_assessment_id"))
         or maybe_text(normalized.get("assessment_id")),
         linkage_id=maybe_text(normalized.get("target_linkage_id"))
@@ -2261,6 +2317,7 @@ def normalized_probe_payload(
         or maybe_text(normalized.get("gap_id")),
         map_issue_id=maybe_text(normalized.get("target_map_issue_id"))
         or maybe_text(normalized.get("map_issue_id")),
+        proposal_id=action_target_id(normalized, "proposal_id"),
         round_id=normalized["round_id"],
         action_id=maybe_text(normalized.get("action_id")),
     )
@@ -2272,6 +2329,10 @@ def normalized_probe_payload(
     normalized["target_hypothesis_id"] = maybe_text(target.get("hypothesis_id"))
     normalized["target_claim_id"] = maybe_text(target.get("claim_id"))
     normalized["target_ticket_id"] = maybe_text(target.get("ticket_id"))
+    normalized["target_actor_id"] = maybe_text(anchor_fields.get("target_actor_id"))
+    normalized["target_proposal_id"] = maybe_text(
+        anchor_fields.get("target_proposal_id")
+    )
     normalized["target_object_kind"] = maybe_text(anchor_fields.get("target_object_kind"))
     normalized["target_object_id"] = maybe_text(anchor_fields.get("target_object_id"))
     normalized["issue_label"] = (
@@ -2301,6 +2362,8 @@ def normalized_probe_payload(
         normalized.get("target_hypothesis_id"),
         normalized.get("target_claim_id"),
         normalized.get("target_ticket_id"),
+        normalized.get("target_actor_id"),
+        normalized.get("target_proposal_id"),
         normalized.get("target_object_id"),
         normalized.get("target_route_id"),
         normalized.get("target_assessment_id"),
@@ -2316,6 +2379,8 @@ def normalized_probe_payload(
             "owner_role": maybe_text(normalized.get("owner_role")),
             "probe_status": maybe_text(normalized.get("probe_status")),
             "probe_type": maybe_text(normalized.get("probe_type")),
+            "target_actor_id": normalized.get("target_actor_id"),
+            "target_proposal_id": normalized.get("target_proposal_id"),
             "source_proposal_id": normalized.get("source_proposal_id"),
         },
     )
@@ -3063,6 +3128,8 @@ def moderator_action_row_from_payload(
         "target_hypothesis_id": action_target_id(action, "hypothesis_id"),
         "target_claim_id": action_target_id(action, "claim_id"),
         "target_ticket_id": action_target_id(action, "ticket_id"),
+        "target_actor_id": action_target_id(action, "actor_id"),
+        "target_proposal_id": action_target_id(action, "proposal_id"),
         "target_object_kind": maybe_text(action.get("target_object_kind"))
         or maybe_text(target.get("object_kind")),
         "target_object_id": maybe_text(action.get("target_object_id"))
@@ -3119,6 +3186,8 @@ def falsification_probe_row_from_payload(
         "target_hypothesis_id": maybe_text(probe.get("target_hypothesis_id")),
         "target_claim_id": maybe_text(probe.get("target_claim_id")),
         "target_ticket_id": maybe_text(probe.get("target_ticket_id")),
+        "target_actor_id": action_target_id(probe, "actor_id"),
+        "target_proposal_id": action_target_id(probe, "proposal_id"),
         "target_object_kind": maybe_text(probe.get("target_object_kind"))
         or maybe_text(target.get("object_kind")),
         "target_object_id": maybe_text(probe.get("target_object_id"))
@@ -4238,6 +4307,8 @@ def build_moderator_action_payload(
                 "controversy_gap",
                 "recommended_lane",
                 "issue_label",
+                "target_actor_id",
+                "target_proposal_id",
                 "source_proposal_id",
             ),
         )
@@ -4276,6 +4347,8 @@ def build_falsification_probe_payload(
                 "action_id",
                 "controversy_gap",
                 "recommended_lane",
+                "target_actor_id",
+                "target_proposal_id",
                 "source_proposal_id",
             ),
         )

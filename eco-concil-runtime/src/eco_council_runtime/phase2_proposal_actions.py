@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from .deliberation_target_semantics import proposal_target_from_payload
+from .deliberation_target_semantics import (
+    canonical_target_kind,
+    proposal_target_from_payload,
+)
 from .phase2_fallback_common import maybe_number, maybe_text, stable_hash, unique_texts
 
 COUNCIL_PROPOSAL_POLICY_PROFILE = "agent-council-proposal-v1"
@@ -95,7 +98,14 @@ def proposal_drives_phase2_action_queue(
     )
     if proposal_kind in blocked_proposals or action_kind in blocked_actions:
         return False
-    target_kind = maybe_text(proposal.get("target_kind"))
+    target_payload = (
+        proposal.get("target", {}) if isinstance(proposal.get("target"), dict) else {}
+    )
+    target_kind = canonical_target_kind(
+        maybe_text(proposal.get("target_kind"))
+        or maybe_text(target_payload.get("object_kind"))
+        or maybe_text(target_payload.get("kind"))
+    )
     return bool(action_kind or proposal_kind) and (
         bool(proposal.get("probe_candidate"))
         or bool(proposal.get("readiness_blocker"))
@@ -103,7 +113,9 @@ def proposal_drives_phase2_action_queue(
         or bool(maybe_text(proposal.get("controversy_gap")))
         or target_kind
         in {
+            "actor-profile",
             "issue-cluster",
+            "proposal",
             "claim",
             "claim-candidate",
             "claim-cluster",
@@ -172,7 +184,7 @@ def action_from_council_proposal(
         "objective": objective,
         "reason": reason,
         "source_ids": unique_texts(
-            [proposal_id, maybe_text(proposal.get("target_id")), *response_to_ids]
+            [proposal_id, maybe_text(target.get("object_id")), *response_to_ids]
         ),
         "target": target,
         "controversy_gap": maybe_text(proposal.get("controversy_gap")),

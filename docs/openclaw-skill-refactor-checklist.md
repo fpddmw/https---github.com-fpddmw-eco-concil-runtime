@@ -342,6 +342,24 @@
   - `python3 -m unittest tests.test_controversy_workflow -v`
   - `python3 -m unittest tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_controversy_map_items_when_artifact_is_missing tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_issue_cluster_items_when_artifact_is_missing tests.test_runtime_source_queue_profiles -v`
 
+### 2.25 Batch 21 当前状态
+
+- `已完成` 新增 `eco_council_runtime/issue_cluster_skill_runner.py`，`issue-cluster` 生成链已从 skill 脚本进一步下沉成共享 runtime helper。
+- `已完成` 新增 `eco-extract-issue-candidates`：
+  - 现在可以先从 `claim-scope / verifiability / route` 派生 scope-level `issue-cluster` candidate。
+  - 默认写出 `analytics/issue_candidates_<round_id>.json`，并同步进 analysis plane 的 canonical `issue-cluster` result set。
+- `已完成` `eco-cluster-issue-candidates` 已改为复用共享 helper，只保留 “claim-cluster merged issue surface” 这一层职责。
+- `已完成` `source_queue_profile.py` 已把 controversy issue 主链进一步改成 `route -> extract-issue-candidates -> cluster-issue-candidates -> typed issue -> controversy-map`，candidate stage 已进入默认 queue。
+- `已完成` deliberation target semantics 已补齐 `actor-profile / proposal` 一等锚点：
+  - `moderator_actions / falsification_probes` 已新增 `target_actor_id / target_proposal_id` 列与索引。
+  - `query-council-objects` 已新增 `--actor-id / --proposal-id` 过滤。
+  - `source_proposal_id` 不再把 target proposal 误判成 source proposal。
+- `已完成` 已新增 actor/proposal anchoring 回归与 issue-candidate extractor 回归：
+  - `tests/test_council_query_surface.py`
+  - `tests/test_council_autonomy_flow.py`
+  - `tests/test_controversy_workflow.py`
+  - `tests/test_runtime_source_queue_profiles.py`
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -418,7 +436,7 @@
 
 ### 6.2 新增 controversy 主链 skills
 
-- `[ ]` `[新增 canonical]` `eco-extract-issue-candidates`
+- `[x]` `[新增 canonical]` `eco-extract-issue-candidates`
 - `[x]` `[新增 canonical]` `eco-cluster-issue-candidates`
 - `[x]` `[新增 canonical]` `eco-extract-stance-candidates`
 - `[x]` `[新增 canonical]` `eco-extract-concern-facets`
@@ -457,7 +475,7 @@
 
 ### 7.3 结构性要求
 
-- `[ ]` `next-action` 可锚定 `issue / route / gap / actor / proposal`
+- `[x]` `next-action` 可锚定 `issue / route / gap / actor / proposal`
 - `[x]` `probe` 可由 agent proposal 或 policy fallback 生成
 - `[x]` `readiness-assessment` 能表达多 agent 分歧
 - `[x]` `promotion-basis` 冻结的是 controversy judgement，而不是只冻结 coverages
