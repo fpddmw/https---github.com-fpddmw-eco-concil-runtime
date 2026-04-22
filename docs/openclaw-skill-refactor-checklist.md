@@ -360,6 +360,32 @@
   - `tests/test_controversy_workflow.py`
   - `tests/test_runtime_source_queue_profiles.py`
 
+### 2.26 Batch 22 当前状态
+
+- `已完成` `canonical_contracts.py` 已把 `proposal` 从弱文本壳升级成强 judgement contract：
+  - 强制 `target_kind / target_id / target`。
+  - 强制 `confidence` 为数值字段。
+  - 强制 `evidence_refs` 为非空列表。
+  - 强制 `provenance / target` 为非空字典。
+- `已完成` `deliberation_target_semantics.py` 已移除 proposal target 的隐式自指/隐式 round fallback：
+  - proposal 不再因为自带 `proposal_id / round_id` 就被伪装成“已有 target anchor”。
+  - 现在只有显式 target 字段才会形成 canonical `target`。
+- `已完成` `council_objects.py` 现在会把 canonical `target` 与 `confidence` 写回 `proposal` payload，再做 contract 校验；proposal query surface 与 downstream execution 读取的是同一份 authoritative target。
+- `已完成` `phase2_agent_entry_profile.py / phase2_agent_handoff.py / eco-submit-council-proposal` 技能文档与默认 prompt 已对齐强契约：
+  - 默认提交模板现在显式要求 `--confidence`
+  - `--evidence-ref`
+  - `--provenance-json`
+- `已完成` 本轮本地验证覆盖 proposal contract 收紧后的核心写入/查询主链：
+  - `tests/test_canonical_contracts.py`
+  - `tests/test_council_submission_workflow.py`
+  - `tests/test_council_query_surface.py`
+  - `tests/test_council_autonomy_flow.py`
+  - `tests/test_board_workflow.py`
+  - `tests/test_decision_trace_workflow.py`
+  - `tests/test_direct_council_advisory.py`
+  - `tests/test_orchestration_planner_workflow.py`
+  - `tests/test_agent_entry_gate.py`
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -453,9 +479,9 @@
 
 - `[x]` `claim-candidate / claim-cluster / claim-scope` 输出 `confidence`
 - `[x]` `claim-candidate / claim-cluster / claim-scope` 输出 `rationale`
-- `[ ]` 每个 extractor 输出 `provenance`
-- `[ ]` heuristic 输出显式标记 `decision_source = heuristic-fallback`
-- `[ ]` 旧 claim 输出只保留为兼容视图或 fallback，不再是 canonical 主轴
+- `[x]` 每个 extractor 输出 `provenance`
+- `[x]` heuristic 输出显式标记 `decision_source = heuristic-fallback`
+- `[x]` 旧 claim 输出只保留为兼容视图或 fallback，不再是 canonical 主轴
 
 ## 7. Work Package 4: Deliberation plane 与 council objects
 
@@ -614,7 +640,7 @@
 - `[x]` 删除 `board_summary / board_brief / next_actions / probes / readiness` artifact 后，round 仍可继续
 - `[x]` 主链默认输出已不再是 `claim-observation-link-coverage`
 - `[x]` observation matching 只在明确可核实时触发
-- `[ ]` agent proposal 已带 `rationale / confidence / evidence refs / provenance`
+- `[x]` agent proposal 已带 `rationale / confidence / evidence refs / provenance`
 - `[ ]` heuristic 已降为 fallback，并带显式 trace
 - `[x]` reporting / publication 默认从 DB canonical 对象物化
 - `[ ]` kernel 已不再承载 readiness / promotion / controversy judgement 的主语义

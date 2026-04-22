@@ -331,9 +331,8 @@ def proposal_target_from_payload(proposal: dict[str, Any]) -> dict[str, Any]:
         or maybe_text(payload.get("map_issue_id")),
         cluster_id=maybe_text(payload.get("cluster_id")),
         claim_cluster_id=maybe_text(payload.get("claim_cluster_id")),
-        round_id=maybe_text(payload.get("round_id")),
-        proposal_id=maybe_text(payload.get("target_proposal_id"))
-        or maybe_text(payload.get("proposal_id")),
+        round_id=maybe_text(payload.get("target_round_id")),
+        proposal_id=maybe_text(payload.get("target_proposal_id")),
     )
 
 

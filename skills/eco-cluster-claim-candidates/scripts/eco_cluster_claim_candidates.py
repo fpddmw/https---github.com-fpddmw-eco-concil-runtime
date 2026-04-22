@@ -22,6 +22,10 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     sync_claim_cluster_result_set,
 )
 from eco_council_runtime.analysis_objects import (  # noqa: E402
+    HEURISTIC_DECISION_SOURCE,
+    build_compatibility_view,
+    build_heuristic_wrapper_provenance,
+    canonical_evidence_refs,
     normalize_claim_cluster_payload,
     unique_texts as canonical_unique_texts,
 )
@@ -253,6 +257,15 @@ def cluster_claim_candidates_skill(
     run_dir_path = resolve_run_dir(run_dir)
     input_file = resolve_path(run_dir_path, input_path, f"claim_candidates_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"claim_candidate_clusters_{round_id}.json")
+    decision_source, provenance = build_heuristic_wrapper_provenance(
+        skill_name=SKILL_NAME,
+        output_path=str(output_file),
+        method="controversy-issue-cluster-v2",
+        selection_mode="group-claim-candidates-by-issue-stance-concern",
+        canonical_object_kind="claim-cluster",
+        parent_object_kind="claim-candidate",
+        parent_artifact_path=str(input_file),
+    )
     payload = load_json_if_exists(input_file)
     warnings: list[dict[str, str]] = []
     if payload is None:
@@ -280,6 +293,7 @@ def cluster_claim_candidates_skill(
     clusters: list[dict[str, Any]] = []
     singleton_count = 0
     verification_routing_count = 0
+    legacy_public_refs_fallback_count = 0
     for group in ordered_groups:
         if len(group) < max(1, min_member_count):
             continue
@@ -317,11 +331,10 @@ def cluster_claim_candidates_skill(
             source_ids = item.get("source_signal_ids")
             if isinstance(source_ids, list):
                 unique_signal_ids.update(maybe_text(source_id) for source_id in source_ids if maybe_text(source_id))
-            evidence_refs = item.get("evidence_refs")
-            if isinstance(evidence_refs, list):
-                refs.extend(evidence_refs)
-            elif isinstance(item.get("public_refs"), list):
-                refs.extend(item.get("public_refs", []))
+            item_refs, ref_source = canonical_evidence_refs(item)
+            refs.extend(item_refs)
+            if ref_source == "legacy-public-refs":
+                legacy_public_refs_fallback_count += 1
             lineage_values.extend(
                 canonical_unique_texts(
                     item.get("lineage", []) if isinstance(item.get("lineage"), list) else []
@@ -370,6 +383,7 @@ def cluster_claim_candidates_skill(
                     "cluster_id": cluster_id,
                     "run_id": run_id,
                     "round_id": round_id,
+                    "decision_source": HEURISTIC_DECISION_SOURCE,
                     "claim_type": maybe_text(lead.get("claim_type")),
                     "status": "cluster-candidate",
                     "cluster_label": truncate_text(cluster_title, 160),
@@ -394,7 +408,6 @@ def cluster_claim_candidates_skill(
                     "unique_source_signal_count": len(unique_signal_ids),
                     "source_signal_ids": source_signal_ids,
                     "evidence_refs": evidence_refs,
-                    "public_refs": evidence_refs,
                     "lineage": canonical_unique_texts(lineage_values + claim_ids + source_signal_ids),
                     "rationale": (
                         "Grouped claim candidates with aligned issue, stance, and "
@@ -442,12 +455,24 @@ def cluster_claim_candidates_skill(
         )
         if len(clusters) >= max(1, max_clusters):
             break
+    compatibility = build_compatibility_view(
+        canonical_object_kind="claim-cluster",
+        legacy_aliases={"public_refs": "evidence_refs"},
+        legacy_fallback_hits=legacy_public_refs_fallback_count,
+        notes=[
+            "Claim cluster artifacts are compatibility/export views only; analysis-plane items are authoritative.",
+            "Legacy public_refs fallback is used only when older claim-candidate rows do not yet expose evidence_refs.",
+        ],
+    )
     wrapper = {
         "schema_version": "n2.1",
         "skill": SKILL_NAME,
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
+        "decision_source": decision_source,
+        "provenance": provenance,
+        "compatibility": compatibility,
         "query_basis": {
             "input_path": str(input_file),
             "claim_type": wanted_claim_type,
@@ -510,6 +535,9 @@ def cluster_claim_candidates_skill(
         "canonical_ids": [cluster["cluster_id"] for cluster in clusters],
         "warnings": warnings,
         "analysis_sync": analysis_sync,
+        "decision_source": decision_source,
+        "provenance": provenance,
+        "compatibility": compatibility,
         "board_handoff": {
             "candidate_ids": [cluster["cluster_id"] for cluster in clusters],
             "evidence_refs": unique_refs(artifact_refs, 20),

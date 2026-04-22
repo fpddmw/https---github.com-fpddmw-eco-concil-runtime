@@ -113,6 +113,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
             self.assertIsInstance(first_candidate["provenance"], dict)
             self.assertIsInstance(first_candidate["evidence_refs"], list)
             self.assertIsInstance(first_candidate["lineage"], list)
+            self.assertNotIn("public_refs", first_candidate)
             self.assertGreaterEqual(len(first_candidate["evidence_refs"]), 1)
             self.assertGreaterEqual(len(first_candidate["lineage"]), 1)
             self.assertIn("issue_label", first_cluster)
@@ -125,6 +126,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
             self.assertIsInstance(first_cluster["provenance"], dict)
             self.assertIsInstance(first_cluster["evidence_refs"], list)
             self.assertIsInstance(first_cluster["lineage"], list)
+            self.assertNotIn("public_refs", first_cluster)
             self.assertGreaterEqual(len(first_cluster["source_signal_ids"]), 1)
             self.assertIn("verifiability_kind", first_scope)
             self.assertIn("required_evidence_lane", first_scope)
@@ -135,6 +137,22 @@ class AnalysisWorkflowTests(unittest.TestCase):
             self.assertIsInstance(first_scope["evidence_refs"], list)
             self.assertIsInstance(first_scope["lineage"], list)
             self.assertIn("claim_input_kind", first_scope["provenance"])
+            self.assertEqual("heuristic-fallback", claim_candidates_artifact["decision_source"])
+            self.assertEqual("heuristic-fallback", cluster_artifact["decision_source"])
+            self.assertEqual("heuristic-fallback", claim_scope_artifact["decision_source"])
+            self.assertIn("source_skill", claim_candidates_artifact["provenance"])
+            self.assertIn("selection_mode", cluster_artifact["provenance"])
+            self.assertIn("compatibility", claim_candidates_artifact)
+            self.assertIn("compatibility", cluster_artifact)
+            self.assertIn("compatibility", claim_scope_artifact)
+            self.assertEqual(
+                "analysis-plane",
+                claim_candidates_artifact["compatibility"]["authoritative_surface"],
+            )
+            self.assertEqual(
+                {"public_refs": "evidence_refs"},
+                claim_candidates_artifact["compatibility"]["legacy_aliases"],
+            )
             self.assertGreaterEqual(claim_scope_artifact["scope_count"], 1)
             self.assertEqual(1, observation_scope_artifact["scope_count"])
             self.assertGreaterEqual(coverage_artifact["coverage_count"], 1)

@@ -22,6 +22,8 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     sync_claim_verifiability_result_set,
 )
 from eco_council_runtime.analysis_objects import (  # noqa: E402
+    HEURISTIC_DECISION_SOURCE,
+    build_heuristic_wrapper_provenance,
     normalize_verifiability_assessment_payload,
     unique_artifact_refs,
 )
@@ -146,6 +148,14 @@ def classify_claim_verifiability_skill(
         output_path,
         f"claim_verifiability_assessments_{round_id}.json",
     )
+    decision_source, provenance = build_heuristic_wrapper_provenance(
+        skill_name=SKILL_NAME,
+        output_path=str(output_file),
+        method="controversy-verifiability-routing-v2",
+        selection_mode="classify-each-claim-scope",
+        canonical_object_kind="verifiability-assessment",
+        parent_object_kind="claim-scope",
+    )
     scope_context = load_claim_scope_context(
         run_dir_path,
         run_id=run_id,
@@ -184,6 +194,7 @@ def classify_claim_verifiability_skill(
                     "assessment_id": assessment_id,
                     "run_id": run_id,
                     "round_id": round_id,
+                    "decision_source": HEURISTIC_DECISION_SOURCE,
                     "claim_id": claim_id,
                     "claim_scope_id": claim_scope_id,
                     "claim_type": maybe_text(scope.get("claim_type")),
@@ -235,6 +246,8 @@ def classify_claim_verifiability_skill(
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
+        "decision_source": decision_source,
+        "provenance": provenance,
         "query_basis": {
             "input_path": str(input_file),
             "input_source": input_source,
@@ -316,6 +329,8 @@ def classify_claim_verifiability_skill(
         "warnings": warnings,
         "analysis_sync": analysis_sync,
         "input_analysis_sync": wrapper.get("input_analysis_sync", {}),
+        "decision_source": decision_source,
+        "provenance": provenance,
         "board_handoff": {
             "candidate_ids": [
                 maybe_text(assessment.get("assessment_id"))

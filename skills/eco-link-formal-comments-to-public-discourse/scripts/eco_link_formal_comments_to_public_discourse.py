@@ -25,6 +25,7 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     sync_formal_public_link_result_set,
 )
 from eco_council_runtime.analysis_objects import (  # noqa: E402
+    canonical_evidence_refs,
     normalize_formal_public_link_payload,
 )
 from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
@@ -432,15 +433,7 @@ def build_issue_profiles(
         profile["lineage"].extend(
             cluster.get("lineage", []) if isinstance(cluster.get("lineage"), list) else []
         )
-        profile["evidence_refs"].extend(
-            cluster.get("evidence_refs", [])
-            if isinstance(cluster.get("evidence_refs"), list)
-            else (
-                cluster.get("public_refs", [])
-                if isinstance(cluster.get("public_refs"), list)
-                else []
-            )
-        )
+        profile["evidence_refs"].extend(canonical_evidence_refs(cluster)[0])
         for route in route_index.get(cluster_id, []) if cluster_id else []:
             route_id = maybe_text(route.get("route_id"))
             if route_id:
@@ -481,15 +474,7 @@ def build_issue_profiles(
                     if isinstance(candidate.get("lineage"), list)
                     else []
                 )
-                profile["evidence_refs"].extend(
-                    candidate.get("evidence_refs", [])
-                    if isinstance(candidate.get("evidence_refs"), list)
-                    else (
-                        candidate.get("public_refs", [])
-                        if isinstance(candidate.get("public_refs"), list)
-                        else []
-                    )
-                )
+                profile["evidence_refs"].extend(canonical_evidence_refs(candidate)[0])
             for route in route_index.get(claim_id, []):
                 route_id = maybe_text(route.get("route_id"))
                 if route_id:
@@ -538,15 +523,7 @@ def build_issue_profiles(
             if isinstance(candidate.get("lineage"), list)
             else []
         )
-        profile["evidence_refs"].extend(
-            candidate.get("evidence_refs", [])
-            if isinstance(candidate.get("evidence_refs"), list)
-            else (
-                candidate.get("public_refs", [])
-                if isinstance(candidate.get("public_refs"), list)
-                else []
-            )
-        )
+        profile["evidence_refs"].extend(canonical_evidence_refs(candidate)[0])
         for route in route_index.get(claim_id, []):
             route_id = maybe_text(route.get("route_id"))
             if route_id:

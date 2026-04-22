@@ -20,6 +20,9 @@ OBJECT_KIND_STANCE_GROUP = "stance-group"
 OBJECT_KIND_VERIFIABILITY_ASSESSMENT = "verifiability-assessment"
 OBJECT_KIND_VERIFICATION_ROUTE = "verification-route"
 
+HEURISTIC_DECISION_SOURCE = "heuristic-fallback"
+LEGACY_PUBLIC_REFS_FIELD = "public_refs"
+
 
 def maybe_text(value: Any) -> str:
     if value is None:
@@ -118,6 +121,26 @@ def unique_artifact_refs(values: list[Any], *, limit: int = 0) -> list[dict[str,
     return results
 
 
+def canonical_evidence_refs(
+    payload: dict[str, Any],
+    *,
+    limit: int = 0,
+) -> tuple[list[dict[str, str]], str]:
+    evidence_refs = unique_artifact_refs(
+        list_items(payload.get("evidence_refs")),
+        limit=limit,
+    )
+    if evidence_refs:
+        return evidence_refs, "evidence_refs"
+    legacy_public_refs = unique_artifact_refs(
+        list_items(payload.get(LEGACY_PUBLIC_REFS_FIELD)),
+        limit=limit,
+    )
+    if legacy_public_refs:
+        return legacy_public_refs, "legacy-public-refs"
+    return [], "missing-evidence-refs"
+
+
 def normalized_provenance(
     value: Any,
     *,
@@ -144,6 +167,66 @@ def normalized_provenance(
                 continue
             normalized[key_text] = raw_value
     return normalized
+
+
+def build_heuristic_wrapper_provenance(
+    *,
+    skill_name: str,
+    output_path: str,
+    method: str,
+    selection_mode: str,
+    canonical_object_kind: str,
+    parent_object_kind: str = "",
+    parent_artifact_path: str = "",
+    parent_source: str = "",
+    extra: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    decision_source = HEURISTIC_DECISION_SOURCE
+    return decision_source, normalized_provenance(
+        {},
+        source_skill=skill_name,
+        decision_source=decision_source,
+        artifact_path=output_path,
+        extra={
+            "method": maybe_text(method),
+            "selection_mode": maybe_text(selection_mode),
+            "canonical_object_kind": maybe_text(canonical_object_kind),
+            "authoritative_surface": "analysis-plane",
+            "parent_object_kind": maybe_text(parent_object_kind),
+            "parent_artifact_path": maybe_text(parent_artifact_path),
+            "parent_source": maybe_text(parent_source),
+            **(extra if isinstance(extra, dict) else {}),
+        },
+    )
+
+
+def build_compatibility_view(
+    *,
+    canonical_object_kind: str,
+    legacy_aliases: dict[str, str] | None = None,
+    artifact_role: str = "export-and-fallback-only",
+    notes: list[str] | None = None,
+    legacy_fallback_hits: int = 0,
+) -> dict[str, Any]:
+    normalized_aliases = {
+        maybe_text(key): maybe_text(value)
+        for key, value in (legacy_aliases or {}).items()
+        if maybe_text(key) and maybe_text(value)
+    }
+    normalized_notes = [
+        maybe_text(note)
+        for note in (notes or [])
+        if maybe_text(note)
+    ]
+    return {
+        "migration_status": "compatibility-view",
+        "artifact_role": maybe_text(artifact_role) or "export-and-fallback-only",
+        "authoritative_surface": "analysis-plane",
+        "canonical_object_kind": maybe_text(canonical_object_kind),
+        "legacy_aliases": normalized_aliases,
+        "legacy_fallback_hits": max(0, int(legacy_fallback_hits)),
+        "notes": normalized_notes,
+    }
 
 
 def merged_lineage(existing: Any, *sources: Any) -> list[str]:
@@ -939,14 +1022,15 @@ def normalize_claim_candidate_payload(
     artifact_path: str = "",
 ) -> dict[str, Any]:
     normalized = dict(payload)
-    decision_source = maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+    decision_source = (
+        maybe_text(normalized.get("decision_source")) or HEURISTIC_DECISION_SOURCE
+    )
     source_signal_ids = unique_texts(list_items(normalized.get("source_signal_ids")))
     evidence_citation_types = unique_texts(
         list_items(normalized.get("evidence_citation_types"))
     )
-    evidence_refs = unique_artifact_refs(
-        list_items(normalized.get("evidence_refs"))
-        or list_items(normalized.get("public_refs")),
+    evidence_refs, evidence_ref_source = canonical_evidence_refs(
+        normalized,
         limit=12,
     )
     confidence = maybe_number(normalized.get("confidence"))
@@ -981,10 +1065,14 @@ def normalize_claim_candidate_payload(
         maybe_number(normalized.get("source_signal_count")) or len(source_signal_ids)
     )
     normalized["evidence_refs"] = evidence_refs
-    normalized["public_refs"] = unique_artifact_refs(
-        list_items(normalized.get("public_refs")) or evidence_refs,
+    legacy_public_refs = unique_artifact_refs(
+        list_items(normalized.get(LEGACY_PUBLIC_REFS_FIELD)),
         limit=12,
     )
+    if legacy_public_refs:
+        normalized[LEGACY_PUBLIC_REFS_FIELD] = legacy_public_refs
+    else:
+        normalized.pop(LEGACY_PUBLIC_REFS_FIELD, None)
     normalized["lineage"] = merged_lineage(
         normalized.get("lineage"),
         source_signal_ids,
@@ -1016,6 +1104,7 @@ def normalize_claim_candidate_payload(
         extra={
             "claim_type": maybe_text(normalized.get("claim_type")),
             "source_plane": "public",
+            "evidence_ref_source": evidence_ref_source,
             "selection_mode": maybe_text(
                 dict_items(normalized.get("compact_audit")).get("selection_mode")
             ),
@@ -1031,12 +1120,13 @@ def normalize_claim_cluster_payload(
     artifact_path: str = "",
 ) -> dict[str, Any]:
     normalized = dict(payload)
-    decision_source = maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+    decision_source = (
+        maybe_text(normalized.get("decision_source")) or HEURISTIC_DECISION_SOURCE
+    )
     member_claim_ids = unique_texts(list_items(normalized.get("member_claim_ids")))
     source_signal_ids = unique_texts(list_items(normalized.get("source_signal_ids")))
-    evidence_refs = unique_artifact_refs(
-        list_items(normalized.get("evidence_refs"))
-        or list_items(normalized.get("public_refs")),
+    evidence_refs, evidence_ref_source = canonical_evidence_refs(
+        normalized,
         limit=16,
     )
     confidence = maybe_number(normalized.get("confidence"))
@@ -1094,10 +1184,14 @@ def normalize_claim_cluster_payload(
         list_items(normalized.get("member_summaries"))
     )
     normalized["evidence_refs"] = evidence_refs
-    normalized["public_refs"] = unique_artifact_refs(
-        list_items(normalized.get("public_refs")) or evidence_refs,
+    legacy_public_refs = unique_artifact_refs(
+        list_items(normalized.get(LEGACY_PUBLIC_REFS_FIELD)),
         limit=16,
     )
+    if legacy_public_refs:
+        normalized[LEGACY_PUBLIC_REFS_FIELD] = legacy_public_refs
+    else:
+        normalized.pop(LEGACY_PUBLIC_REFS_FIELD, None)
     normalized["lineage"] = merged_lineage(
         normalized.get("lineage"),
         member_claim_ids,
@@ -1125,6 +1219,7 @@ def normalize_claim_cluster_payload(
         artifact_path=artifact_path,
         extra={
             "claim_type": maybe_text(normalized.get("claim_type")),
+            "evidence_ref_source": evidence_ref_source,
             "selection_mode": "group-claim-candidates-by-issue-stance-concern",
         },
     )
@@ -1138,7 +1233,9 @@ def normalize_claim_scope_payload(
     artifact_path: str = "",
 ) -> dict[str, Any]:
     normalized = dict(payload)
-    decision_source = maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+    decision_source = (
+        maybe_text(normalized.get("decision_source")) or HEURISTIC_DECISION_SOURCE
+    )
     claim_id = maybe_text(normalized.get("claim_id"))
     normalized["schema_version"] = canonical_contract(
         OBJECT_KIND_CLAIM_SCOPE
@@ -1741,11 +1838,16 @@ __all__ = [
     "OBJECT_KIND_DIFFUSION_EDGE",
     "OBJECT_KIND_EVIDENCE_CITATION_TYPE",
     "OBJECT_KIND_FORMAL_PUBLIC_LINK",
+    "HEURISTIC_DECISION_SOURCE",
+    "LEGACY_PUBLIC_REFS_FIELD",
     "OBJECT_KIND_ISSUE_CLUSTER",
     "OBJECT_KIND_REPRESENTATION_GAP",
     "OBJECT_KIND_STANCE_GROUP",
     "OBJECT_KIND_VERIFIABILITY_ASSESSMENT",
     "OBJECT_KIND_VERIFICATION_ROUTE",
+    "build_compatibility_view",
+    "build_heuristic_wrapper_provenance",
+    "canonical_evidence_refs",
     "maybe_number",
     "maybe_text",
     "merged_lineage",

@@ -217,8 +217,9 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
                     "decision_source": "agent-council",
                     "target_kind": "issue-cluster",
                     "target_id": "issue-001",
+                    "confidence": 0.78,
                     "provenance": {"source": "unit-test"},
-                    "evidence_refs": [],
+                    "evidence_refs": ["evidence://issue-001"],
                     "lineage": [],
                 }
             ],
@@ -512,6 +513,15 @@ class CouncilQuerySurfaceTests(unittest.TestCase):
             self.assertEqual(
                 "open-investigation-track",
                 proposal_payload["objects"][0]["proposal_kind"],
+            )
+            self.assertEqual(0.78, proposal_payload["objects"][0]["confidence"])
+            self.assertEqual(
+                "issue-cluster",
+                proposal_payload["objects"][0]["target"]["object_kind"],
+            )
+            self.assertEqual(
+                "issue-001",
+                proposal_payload["objects"][0]["target"]["object_id"],
             )
 
             action_payload = run_kernel(

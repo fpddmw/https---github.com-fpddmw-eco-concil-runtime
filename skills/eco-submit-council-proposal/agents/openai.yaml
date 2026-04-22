@@ -1,4 +1,4 @@
 interface:
   display_name: "Eco Submit Council Proposal"
   short_description: "Write one structured council proposal into the deliberation DB"
-  default_prompt: "Use $eco-submit-council-proposal to submit one structured council proposal directly into the deliberation DB. Always provide explicit proposal_kind, agent_role, rationale, target anchors when available, and any promotion judgement fields instead of hiding them in board notes."
+  default_prompt: "Use $eco-submit-council-proposal to submit one structured council proposal directly into the deliberation DB. Always provide explicit proposal_kind, agent_role, rationale, confidence, target anchors, at least one evidence_ref, provenance_json, and any promotion judgement fields instead of hiding them in board notes."

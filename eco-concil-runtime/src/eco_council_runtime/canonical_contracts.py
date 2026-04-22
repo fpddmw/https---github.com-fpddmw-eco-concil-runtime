@@ -21,6 +21,8 @@ class CanonicalContract:
     required_list_fields: tuple[str, ...]
     required_dict_fields: tuple[str, ...]
     required_number_fields: tuple[str, ...]
+    required_non_empty_list_fields: tuple[str, ...] = ()
+    required_non_empty_dict_fields: tuple[str, ...] = ()
     item_level_query: bool = True
 
     def as_dict(self) -> dict[str, Any]:
@@ -43,6 +45,8 @@ def _contract(
     required_list_fields: tuple[str, ...] = ("evidence_refs", "lineage"),
     required_dict_fields: tuple[str, ...] = ("provenance",),
     required_number_fields: tuple[str, ...] = (),
+    required_non_empty_list_fields: tuple[str, ...] = (),
+    required_non_empty_dict_fields: tuple[str, ...] = (),
     item_level_query: bool = True,
 ) -> CanonicalContract:
     return CanonicalContract(
@@ -54,6 +58,8 @@ def _contract(
         required_list_fields=required_list_fields,
         required_dict_fields=required_dict_fields,
         required_number_fields=required_number_fields,
+        required_non_empty_list_fields=required_non_empty_list_fields,
+        required_non_empty_dict_fields=required_non_empty_dict_fields,
         item_level_query=item_level_query,
     )
 
@@ -273,7 +279,6 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "actor_hints",
             "evidence_citation_types",
             "source_signal_ids",
-            "public_refs",
         ),
         required_dict_fields=(
             "provenance",
@@ -315,7 +320,6 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "source_signal_ids",
             "stance_distribution",
             "member_summaries",
-            "public_refs",
         ),
         required_dict_fields=("provenance", "time_window", "compact_audit"),
         required_number_fields=(
@@ -534,9 +538,15 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "proposal_kind",
             "agent_role",
             "status",
+            "target_kind",
+            "target_id",
             "rationale",
         ),
         required_list_fields=("evidence_refs", "lineage", "response_to_ids"),
+        required_dict_fields=("provenance", "target"),
+        required_number_fields=("confidence",),
+        required_non_empty_list_fields=("evidence_refs",),
+        required_non_empty_dict_fields=("provenance", "target"),
     ),
     "hypothesis": _contract(
         "hypothesis",
@@ -1029,11 +1039,23 @@ def validate_canonical_payload(
         if not isinstance(normalized.get(field_name), (int, float))
         or isinstance(normalized.get(field_name), bool)
     ]
+    empty_list_fields = [
+        field_name
+        for field_name in contract.required_non_empty_list_fields
+        if isinstance(normalized.get(field_name), list) and not normalized.get(field_name)
+    ]
+    empty_dict_fields = [
+        field_name
+        for field_name in contract.required_non_empty_dict_fields
+        if isinstance(normalized.get(field_name), dict) and not normalized.get(field_name)
+    ]
     if (
         missing_text_fields
         or invalid_list_fields
         or invalid_dict_fields
         or invalid_number_fields
+        or empty_list_fields
+        or empty_dict_fields
     ):
         problems: list[str] = []
         if missing_text_fields:
@@ -1051,6 +1073,16 @@ def validate_canonical_payload(
         if invalid_number_fields:
             problems.append(
                 "number fields required: " + ", ".join(sorted(invalid_number_fields))
+            )
+        if empty_list_fields:
+            problems.append(
+                "non-empty list fields required: "
+                + ", ".join(sorted(empty_list_fields))
+            )
+        if empty_dict_fields:
+            problems.append(
+                "non-empty dict fields required: "
+                + ", ".join(sorted(empty_dict_fields))
             )
         raise ValueError(
             f"Invalid canonical payload for {object_kind}: " + "; ".join(problems)

@@ -27,6 +27,9 @@ from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     resolved_canonical_object_kind,
 )
 from eco_council_runtime.analysis_objects import (  # noqa: E402
+    HEURISTIC_DECISION_SOURCE,
+    build_compatibility_view,
+    build_heuristic_wrapper_provenance,
     normalize_claim_candidate_payload,
 )
 
@@ -560,6 +563,21 @@ def extract_claim_candidates_skill(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     candidate_path = resolve_output_path(run_dir_path, output_path, f"claim_candidates_{round_id}.json")
+    decision_source, provenance = build_heuristic_wrapper_provenance(
+        skill_name=SKILL_NAME,
+        output_path=str(candidate_path),
+        method="controversy-seed-extraction-v2",
+        selection_mode="group-by-issue-stance-concern-seed",
+        canonical_object_kind="claim-candidate",
+    )
+    compatibility = build_compatibility_view(
+        canonical_object_kind="claim-candidate",
+        legacy_aliases={"public_refs": "evidence_refs"},
+        notes=[
+            "Claim candidate artifacts are compatibility/export views only; analysis-plane items are authoritative.",
+            "evidence_refs is the canonical evidence surface; public_refs is accepted only as a legacy ingest alias.",
+        ],
+    )
     connection, db_file = connect_db(run_dir_path, db_path)
     try:
         rows = connection.execute(
@@ -639,6 +657,7 @@ def extract_claim_candidates_skill(
                     "claim_id": candidate_id,
                     "run_id": run_id,
                     "round_id": round_id,
+                    "decision_source": HEURISTIC_DECISION_SOURCE,
                     "agent_role": "sociologist",
                     "claim_type": derived_claim_type,
                     "status": "candidate",
@@ -653,7 +672,6 @@ def extract_claim_candidates_skill(
                     "verifiability_hint": maybe_text(profile.get("verifiability_hint")),
                     "dispute_type": maybe_text(profile.get("dispute_type")),
                     "evidence_refs": evidence_refs,
-                    "public_refs": evidence_refs,
                     "lineage": source_signal_ids,
                     "rationale": (
                         "Collapsed repeated public-discourse signals into a single "
@@ -714,6 +732,9 @@ def extract_claim_candidates_skill(
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
+        "decision_source": decision_source,
+        "provenance": provenance,
+        "compatibility": compatibility,
         "query_basis": {
             "source_plane": "public",
             "db_path": str(db_file),
@@ -755,6 +776,9 @@ def extract_claim_candidates_skill(
         "canonical_ids": [candidate["claim_id"] for candidate in candidates],
         "warnings": warnings,
         "analysis_sync": analysis_sync,
+        "decision_source": decision_source,
+        "provenance": provenance,
+        "compatibility": compatibility,
         "board_handoff": {
             "candidate_ids": [candidate["claim_id"] for candidate in candidates],
             "evidence_refs": artifact_refs[:20],

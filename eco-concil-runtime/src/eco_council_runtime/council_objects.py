@@ -10,6 +10,7 @@ from .canonical_contracts import (
     canonical_contract_kinds,
     validate_canonical_payload,
 )
+from .deliberation_target_semantics import proposal_target_from_payload
 from .kernel.deliberation_plane import (
     connect_db as connect_deliberation_db,
     json_text,
@@ -281,6 +282,17 @@ def normalized_provenance(
     return normalized
 
 
+def maybe_number(value: Any) -> float | int | None:
+    if isinstance(value, bool) or value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def proposal_id(
     run_id: str,
     round_id: str,
@@ -340,7 +352,6 @@ def normalized_proposal_payload(
     proposal_index: int,
 ) -> dict[str, Any]:
     normalized = dict(proposal)
-    target = normalized.get("target", {}) if isinstance(normalized.get("target"), dict) else {}
     normalized_run_id = maybe_text(normalized.get("run_id")) or run_id
     normalized_round_id = maybe_text(normalized.get("round_id")) or round_id
     decision_source = maybe_text(normalized.get("decision_source")) or "agent-council"
@@ -354,17 +365,28 @@ def normalized_proposal_payload(
     )
     normalized["agent_role"] = maybe_text(normalized.get("agent_role")) or "moderator"
     normalized["status"] = maybe_text(normalized.get("status")) or "open"
+    target = proposal_target_from_payload(normalized)
+    normalized["target"] = target
     normalized["target_kind"] = (
-        maybe_text(normalized.get("target_kind"))
-        or maybe_text(target.get("object_kind"))
-        or maybe_text(target.get("kind"))
+        maybe_text(target.get("object_kind"))
+        or maybe_text(normalized.get("target_kind"))
     )
     normalized["target_id"] = (
-        maybe_text(normalized.get("target_id"))
-        or maybe_text(target.get("object_id"))
-        or maybe_text(target.get("id"))
+        maybe_text(target.get("object_id"))
+        or maybe_text(normalized.get("target_id"))
     )
+    if maybe_text(target.get("claim_id")):
+        normalized["target_claim_id"] = maybe_text(target.get("claim_id"))
+    if maybe_text(target.get("hypothesis_id")):
+        normalized["target_hypothesis_id"] = maybe_text(target.get("hypothesis_id"))
+    if maybe_text(target.get("ticket_id")):
+        normalized["target_ticket_id"] = maybe_text(target.get("ticket_id"))
+    if maybe_text(target.get("task_id")):
+        normalized["target_task_id"] = maybe_text(target.get("task_id"))
     normalized["rationale"] = maybe_text(normalized.get("rationale"))
+    confidence = maybe_number(normalized.get("confidence"))
+    if confidence is not None:
+        normalized["confidence"] = confidence
     normalized["decision_source"] = decision_source
     normalized["evidence_refs"] = normalized_evidence_refs(
         normalized.get("evidence_refs")

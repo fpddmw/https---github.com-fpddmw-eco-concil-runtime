@@ -25,6 +25,7 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     load_observation_candidate_context,
     sync_claim_observation_link_result_set,
 )
+from eco_council_runtime.analysis_objects import canonical_evidence_refs  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -141,15 +142,7 @@ def normalize_claim_items(payload: Any) -> list[dict[str, Any]]:
                     "text": maybe_text(item.get("representative_statement") or item.get("cluster_label")),
                     "time_window": item.get("time_window") if isinstance(item.get("time_window"), dict) else {},
                     "member_count": item.get("member_count"),
-                    "evidence_refs": (
-                        item.get("evidence_refs")
-                        if isinstance(item.get("evidence_refs"), list)
-                        else (
-                            item.get("public_refs")
-                            if isinstance(item.get("public_refs"), list)
-                            else []
-                        )
-                    ),
+                    "evidence_refs": canonical_evidence_refs(item)[0],
                 }
             )
         return normalized
@@ -165,15 +158,7 @@ def normalize_claim_items(payload: Any) -> list[dict[str, Any]]:
                 "text": maybe_text(item.get("statement") or item.get("summary")),
                 "time_window": item.get("time_window") if isinstance(item.get("time_window"), dict) else {},
                 "member_count": item.get("source_signal_count"),
-                "evidence_refs": (
-                    item.get("evidence_refs")
-                    if isinstance(item.get("evidence_refs"), list)
-                    else (
-                        item.get("public_refs")
-                        if isinstance(item.get("public_refs"), list)
-                        else []
-                    )
-                ),
+                "evidence_refs": canonical_evidence_refs(item)[0],
             }
         )
     return normalized

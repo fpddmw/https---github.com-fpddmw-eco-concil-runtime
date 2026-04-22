@@ -24,6 +24,10 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
     sync_claim_scope_result_set,
 )
 from eco_council_runtime.analysis_objects import (  # noqa: E402
+    HEURISTIC_DECISION_SOURCE,
+    build_compatibility_view,
+    build_heuristic_wrapper_provenance,
+    canonical_evidence_refs,
     merged_lineage,
     normalize_claim_scope_payload,
 )
@@ -300,6 +304,13 @@ def derive_claim_scope_skill(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     output_file = resolve_path(run_dir_path, output_path, f"claim_scope_proposals_{round_id}.json")
+    decision_source, provenance = build_heuristic_wrapper_provenance(
+        skill_name=SKILL_NAME,
+        output_path=str(output_file),
+        method="controversy-routing-scope-v2",
+        selection_mode="prefer-clusters-then-candidates",
+        canonical_object_kind="claim-scope",
+    )
     input_selection = select_claim_input_context(
         run_dir_path,
         run_id=run_id,
@@ -316,6 +327,7 @@ def derive_claim_scope_skill(
     claim_items = claim_items_from_payload(input_selection.get("selected_wrapper"))
     scopes: list[dict[str, Any]] = []
     routed_to_verification_count = 0
+    legacy_public_refs_fallback_count = 0
     for item in claim_items:
         claim_id = maybe_text(item.get("cluster_id") or item.get("claim_id"))
         text = maybe_text(item.get("representative_statement") or item.get("statement") or item.get("cluster_label") or item.get("summary"))
@@ -337,16 +349,10 @@ def derive_claim_scope_skill(
         actor_hints = list_field(item, "actor_hints")
         issue_hint = maybe_text(item.get("issue_hint") or item.get("issue_label"))
         issue_terms = list_field(item, "issue_terms")
-        evidence_refs = unique_refs(
-            item.get("evidence_refs", [])
-            if isinstance(item.get("evidence_refs"), list)
-            else (
-                item.get("public_refs", [])
-                if isinstance(item.get("public_refs"), list)
-                else []
-            ),
-            10,
-        )
+        item_refs, ref_source = canonical_evidence_refs(item, limit=10)
+        if ref_source == "legacy-public-refs":
+            legacy_public_refs_fallback_count += 1
+        evidence_refs = unique_refs(item_refs, 10)
         basis_claim_ids = list_field(item, "member_claim_ids") or ([claim_id] if claim_id else [])
         source_signal_ids = list_field(item, "source_signal_ids")
         scopes.append(
@@ -355,6 +361,7 @@ def derive_claim_scope_skill(
                     "claim_scope_id": "claimscope-" + stable_hash(run_id, round_id, claim_id, location_label, ",".join(tags))[:12],
                     "run_id": run_id,
                     "round_id": round_id,
+                    "decision_source": HEURISTIC_DECISION_SOURCE,
                     "claim_id": claim_id,
                     "claim_object_id": claim_id,
                     "claim_input_kind": claim_input_kind,
@@ -408,12 +415,24 @@ def derive_claim_scope_skill(
                 artifact_path=str(output_file),
             )
         )
+    compatibility = build_compatibility_view(
+        canonical_object_kind="claim-scope",
+        legacy_aliases={"public_refs": "evidence_refs"},
+        legacy_fallback_hits=legacy_public_refs_fallback_count,
+        notes=[
+            "Claim scope artifacts are compatibility/export views only; analysis-plane items are authoritative.",
+            "Legacy public_refs fallback is used only while older claim candidates or clusters are being migrated.",
+        ],
+    )
     wrapper = {
         "schema_version": "n2.2",
         "skill": SKILL_NAME,
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
+        "decision_source": decision_source,
+        "provenance": provenance,
+        "compatibility": compatibility,
         "query_basis": {
             "input_path": str(input_file),
             "input_source": claim_input_source or "missing-claim-input",
@@ -480,6 +499,9 @@ def derive_claim_scope_skill(
         "warnings": warnings,
         "analysis_sync": analysis_sync,
         "input_analysis_sync": wrapper.get("input_analysis_sync", {}),
+        "decision_source": decision_source,
+        "provenance": provenance,
+        "compatibility": compatibility,
         "board_handoff": {
             "candidate_ids": [scope["claim_scope_id"] for scope in scopes],
             "evidence_refs": unique_refs(artifact_refs, 20),

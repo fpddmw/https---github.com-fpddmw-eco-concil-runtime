@@ -91,6 +91,8 @@ class DirectCouncilAdvisoryTests(unittest.TestCase):
                             "target_id": "claim-001",
                             "recommended_lane": "environment-review",
                             "decision_source": "agent-council",
+                            "confidence": 0.79,
+                            "provenance": {"source": "unit-test"},
                             "evidence_refs": ["evidence://claim-001"],
                             "lineage": [],
                         }

@@ -253,6 +253,18 @@ class AgentEntryGateTests(unittest.TestCase):
                 state_payload["agent_entry"]["operator"]["submit_council_proposal_command_template"],
             )
             self.assertIn(
+                "--confidence",
+                state_payload["agent_entry"]["operator"]["submit_council_proposal_command_template"],
+            )
+            self.assertIn(
+                "--evidence-ref",
+                state_payload["agent_entry"]["operator"]["submit_council_proposal_command_template"],
+            )
+            self.assertIn(
+                "--provenance-json",
+                state_payload["agent_entry"]["operator"]["submit_council_proposal_command_template"],
+            )
+            self.assertIn(
                 "supervise-round",
                 state_payload["agent_entry"]["operator"]["return_to_supervisor_command"],
             )
@@ -533,6 +545,9 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("query-council-objects", operator["query_council_proposals_command"])
             self.assertIn("query-council-objects", operator["query_readiness_opinions_command"])
             self.assertIn("eco-submit-council-proposal", operator["submit_council_proposal_command_template"])
+            self.assertIn("--confidence", operator["submit_council_proposal_command_template"])
+            self.assertIn("--evidence-ref", operator["submit_council_proposal_command_template"])
+            self.assertIn("--provenance-json", operator["submit_council_proposal_command_template"])
             self.assertIn("eco-submit-readiness-opinion", operator["submit_readiness_opinion_command_template"])
 
     def test_operator_runbook_includes_agent_entry_section_for_round(self) -> None:

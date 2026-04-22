@@ -18,6 +18,7 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.council_objects import append_council_proposal_record  # noqa: E402
 from eco_council_runtime.council_submission_support import (  # noqa: E402
     council_proposal_payload,
+    maybe_number,
     maybe_text,
     resolve_path,
     resolve_run_dir,
@@ -95,10 +96,11 @@ def proposal_follow_up_skills(proposal: dict[str, Any]) -> list[str]:
 
 def proposal_gap_hints(proposal: dict[str, Any]) -> list[str]:
     hints: list[str] = []
-    if not maybe_text(proposal.get("target_kind")) or not maybe_text(proposal.get("target_id")):
-        hints.append("Proposal still lacks an explicit target anchor; downstream execution may need human disambiguation.")
-    if not isinstance(proposal.get("evidence_refs"), list) or not proposal.get("evidence_refs"):
-        hints.append("Proposal does not cite any evidence refs yet.")
+    confidence = maybe_number(proposal.get("confidence"))
+    if confidence is not None and float(confidence) < 0.5:
+        hints.append(
+            "Proposal confidence is below 0.5; expect challenge or readiness follow-up before downstream execution."
+        )
     if proposal_explicit_signals(proposal) and not maybe_text(proposal.get("publication_readiness")):
         hints.append("Promotion-oriented proposal should normally state publication_readiness explicitly for downstream promotion review.")
     return hints[:3]
@@ -230,11 +232,11 @@ def submit_council_proposal_skill(
     gap_hints = proposal_gap_hints(proposal)
     warnings = [
         {
-            "code": "proposal-target-unspecified",
+            "code": "proposal-low-confidence",
             "message": gap_hints[0],
         }
         for _hint in gap_hints[:1]
-        if "target anchor" in gap_hints[0]
+        if "below 0.5" in gap_hints[0]
     ]
     return {
         "status": "completed",
@@ -245,6 +247,7 @@ def submit_council_proposal_skill(
             "proposal_id": proposal_identifier,
             "proposal_kind": maybe_text(proposal.get("proposal_kind")),
             "decision_source": maybe_text(proposal.get("decision_source")),
+            "confidence": proposal.get("confidence"),
             "target_kind": maybe_text(proposal.get("target_kind")),
             "target_id": maybe_text(proposal.get("target_id")),
             "output_path": str(output_file),

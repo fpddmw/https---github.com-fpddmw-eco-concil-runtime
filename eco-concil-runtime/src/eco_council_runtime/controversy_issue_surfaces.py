@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .analysis_objects import (
+    canonical_evidence_refs,
     normalize_actor_profile_payload,
     normalize_concern_facet_payload,
     normalize_controversy_map_payload,
@@ -330,11 +331,6 @@ def fallback_clusters_from_scopes(scopes: list[dict[str, Any]]) -> list[dict[str
                     if isinstance(scope.get("evidence_refs"), list)
                     else []
                 ),
-                "public_refs": (
-                    scope.get("evidence_refs", [])
-                    if isinstance(scope.get("evidence_refs"), list)
-                    else []
-                ),
                 "controversy_summary": maybe_text(
                     scope.get("matching_eligibility_reason")
                 ),
@@ -444,15 +440,7 @@ def build_controversy_issue_map_items(
             else fallback_env
         )
         evidence_refs = unique_refs(
-            list(
-                cluster.get("evidence_refs", [])
-                if isinstance(cluster.get("evidence_refs"), list)
-                else (
-                    cluster.get("public_refs", [])
-                    if isinstance(cluster.get("public_refs"), list)
-                    else []
-                )
-            )
+            list(canonical_evidence_refs(cluster)[0])
             + list(
                 scope.get("evidence_refs", [])
                 if isinstance(scope.get("evidence_refs"), list)

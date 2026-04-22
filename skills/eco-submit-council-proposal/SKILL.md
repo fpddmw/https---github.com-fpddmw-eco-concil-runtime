@@ -27,22 +27,22 @@ description: Submit one structured council proposal directly into the deliberati
 - `proposal_kind`
 - `agent_role`
 - `rationale`
+- `confidence`
+- `target_kind`
+- `target_id`
+- At least one `evidence_ref`
+- `provenance_json`
 - Optional:
   - `proposal_id`
   - `decision_source`
   - `status`
-  - `confidence`
-  - `target_kind`
-  - `target_id`
   - `target_json`
   - `action_kind`
   - `assigned_role`
   - `objective`
   - `summary`
-  - `evidence_ref`
   - `response_to_id`
   - `lineage_id`
-  - `provenance_json`
   - `extra_json`
   - `promotion_disposition`
   - `promote_allowed`

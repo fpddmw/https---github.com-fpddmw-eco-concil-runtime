@@ -36,6 +36,8 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 "moderator",
                 "--rationale",
                 "Freeze one verification lane directly from the council queue.",
+                "--confidence",
+                "0.81",
                 "--action-kind",
                 "clarify-verification-route",
                 "--assigned-role",
@@ -73,6 +75,8 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 "challenger",
                 "--rationale",
                 "Do not publish until the contradiction path is closed.",
+                "--confidence",
+                "0.93",
                 "--target-kind",
                 "round",
                 "--target-id",
@@ -120,16 +124,21 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
             self.assertEqual("clarify-verification-route", first_proposal["action_kind"])
             self.assertEqual("issue-cluster", first_proposal["target_kind"])
             self.assertEqual("issue-001", first_proposal["target_id"])
+            self.assertEqual(0.81, first_proposal["confidence"])
             self.assertEqual(["challenge-001"], first_proposal["response_to_ids"])
             self.assertEqual(["seed-001"], first_proposal["lineage"])
             self.assertEqual(["evidence://issue-001"], first_proposal["evidence_refs"])
+            self.assertEqual("issue-cluster", first_proposal["target"]["object_kind"])
+            self.assertEqual("issue-001", first_proposal["target"]["object_id"])
             self.assertTrue(first_proposal["promote_allowed"])
             self.assertEqual("ready", first_proposal["publication_readiness"])
 
             self.assertEqual("challenger", second_proposal["agent_role"])
+            self.assertEqual(0.93, second_proposal["confidence"])
             self.assertEqual("hold", second_proposal["promotion_disposition"])
             self.assertFalse(second_proposal["promote_allowed"])
             self.assertEqual(ROUND_ID, second_proposal["target_id"])
+            self.assertEqual("round", second_proposal["target"]["object_kind"])
 
             artifact = load_json(Path(first_payload["summary"]["output_path"]))
             self.assertEqual(first_id, artifact["proposal"]["proposal_id"])
@@ -267,10 +276,16 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 "moderator",
                 "--rationale",
                 "Registry execution should be able to write one structured proposal.",
+                "--confidence",
+                "0.66",
                 "--target-kind",
                 "issue-cluster",
                 "--target-id",
                 "issue-kernel-001",
+                "--evidence-ref",
+                "evidence://issue-kernel-001",
+                "--provenance-json",
+                "{\"source\":\"unit-test\"}",
             )
             query_payload = run_kernel(
                 "query-council-objects",
@@ -292,6 +307,36 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 "route-follow-up",
                 query_payload["objects"][0]["proposal_kind"],
             )
+            self.assertEqual(0.66, query_payload["objects"][0]["confidence"])
+
+    def test_submit_council_proposal_rejects_missing_confidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+
+            with self.assertRaises(AssertionError):
+                run_script(
+                    script_path("eco-submit-council-proposal"),
+                    "--run-dir",
+                    str(run_dir),
+                    "--run-id",
+                    RUN_ID,
+                    "--round-id",
+                    ROUND_ID,
+                    "--proposal-kind",
+                    "route-follow-up",
+                    "--agent-role",
+                    "moderator",
+                    "--rationale",
+                    "Missing confidence should now fail the canonical proposal contract.",
+                    "--target-kind",
+                    "issue-cluster",
+                    "--target-id",
+                    "issue-missing-confidence-001",
+                    "--evidence-ref",
+                    "evidence://issue-missing-confidence-001",
+                    "--provenance-json",
+                    "{\"source\":\"unit-test\"}",
+                )
 
 
 if __name__ == "__main__":

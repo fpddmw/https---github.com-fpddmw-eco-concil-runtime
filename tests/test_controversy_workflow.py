@@ -87,11 +87,17 @@ class ControversyWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", verifiability_payload["analysis_sync"]["status"])
             self.assertEqual("completed", route_payload["analysis_sync"]["status"])
             self.assertEqual("completed", map_payload["analysis_sync"]["status"])
+            self.assertEqual("heuristic-fallback", verifiability_payload["decision_source"])
+            self.assertEqual("heuristic-fallback", route_payload["decision_source"])
             self.assertEqual("heuristic-fallback", map_payload["decision_source"])
             self.assertGreaterEqual(verifiability_artifact["assessment_count"], 1)
             self.assertGreaterEqual(route_artifact["route_count"], 1)
             self.assertGreaterEqual(map_artifact["issue_cluster_count"], 1)
+            self.assertEqual("heuristic-fallback", verifiability_artifact["decision_source"])
+            self.assertEqual("heuristic-fallback", route_artifact["decision_source"])
             self.assertEqual("heuristic-fallback", map_artifact["decision_source"])
+            self.assertIn("source_skill", verifiability_artifact["provenance"])
+            self.assertIn("source_skill", route_artifact["provenance"])
             self.assertIn("source_skill", map_artifact["provenance"])
             self.assertTrue(
                 any(

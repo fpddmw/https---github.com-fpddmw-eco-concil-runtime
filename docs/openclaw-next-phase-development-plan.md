@@ -243,7 +243,7 @@
 6. `eco-materialize-reporting-handoff` 已新增 structural-basis key findings fallback：
    - 当 `selected_coverages` 为空时，会从 `issue_clusters / verification_routes / formal_public_links / representation_gaps / diffusion_edges` 生成 reporting findings。
    - 纯 formal/public/discourse promoted round 不再因为“没有 coverage”而生成空 handoff。
-7. 本轮本地验证通过：
+8. 本轮本地验证通过：
    - `tests/test_signal_plane_workflow.py`
    - `tests/test_agent_entry_gate.py`
    - `tests/test_phase2_state_surfaces.py`
@@ -274,6 +274,10 @@
    - `claim_scope.evidence_refs` 不再被 `unique_texts()` 转成伪字符串。
    - `verifiability / route / controversy-map` 现在能继续消费 artifact-ref dict evidence chain。
 6. `eco-link-claims-to-observations / eco-link-formal-comments-to-public-discourse / eco-materialize-controversy-map` 已切到 `evidence_refs-first` 消费，`public_refs` 降级为兼容 alias。
+7. 后续收口已把 claim-side heuristic trace 与 legacy alias 再收紧一层：
+   - `eco-extract-claim-candidates / eco-cluster-claim-candidates / eco-derive-claim-scope / eco-classify-claim-verifiability / eco-route-verification-lane` 现在都会在 wrapper 与 skill result 顶层显式写出 `decision_source / provenance`。
+   - `claim-candidate / claim-cluster` canonical contract 已不再把 `public_refs` 当必填字段；新 claim canonical 输出默认只写 `evidence_refs`，`public_refs` 仅作为 legacy ingest alias 保留。
+   - claim wrapper artifact 现在会显式暴露 `compatibility.authoritative_surface / legacy_aliases / legacy_fallback_hits`，旧 claim 视图终于被标记为 export/fallback-only。
 7. 本轮本地验证通过：
    - `tests/test_canonical_contracts.py`
    - `tests/test_analysis_workflow.py`
@@ -470,6 +474,12 @@
 1. agent 能在共享状态上提交 `proposal / challenge / readiness opinion`。
 2. 每条提案都带 `rationale / confidence / evidence refs / provenance`。
 3. runtime 不再替 agent 算出唯一“正确动作”。
+
+当前已落地的硬收口：
+
+1. `proposal` canonical contract 已强制 `confidence / target / non-empty evidence refs / provenance`。
+2. `eco-submit-council-proposal` 与 agent entry 默认命令模板已显式要求这些字段，而不是继续靠自由文本补全。
+3. proposal target 不再因为 `proposal_id / round_id` 被隐式伪造，只有显式 target anchor 才会进入 canonical `target`。
 
 ### 3.2 Runtime kernel 边界过宽
 
