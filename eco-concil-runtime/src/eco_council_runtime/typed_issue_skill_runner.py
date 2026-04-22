@@ -132,12 +132,27 @@ def materialize_typed_issue_surface_skill(
     items = typed_surfaces[kind]
     output_file = surface_paths[kind]
     generated_at_utc = utc_now_iso()
+    decision_source = "heuristic-fallback"
+    provenance = {
+        "source_skill": skill_name,
+        "decision_source": decision_source,
+        "selection_mode": maybe_text(config.get("selection_mode")),
+        "method": "controversy-typed-decomposition-v1",
+        "parent_object_kind": "issue-cluster",
+        "parent_artifact_path": maybe_text(issue_context.get("issue_clusters_file"))
+        or str(surface_paths["issue-cluster"]),
+        "parent_source": maybe_text(issue_context.get("issue_cluster_source"))
+        or "missing-issue-cluster",
+        "artifact_path": str(output_file),
+    }
     wrapper = {
         "schema_version": "n3.0",
         "skill": skill_name,
         "generated_at_utc": generated_at_utc,
         "run_id": run_id,
         "round_id": round_id,
+        "decision_source": decision_source,
+        "provenance": provenance,
         "query_basis": {
             "issue_clusters_path": maybe_text(issue_context.get("issue_clusters_file"))
             or str(surface_paths["issue-cluster"]),
@@ -207,6 +222,8 @@ def materialize_typed_issue_surface_skill(
         "input_analysis_sync": {
             "issue_clusters": issue_context.get("analysis_sync", {})
         },
+        "decision_source": decision_source,
+        "provenance": provenance,
         "board_handoff": {
             "candidate_ids": canonical_ids,
             "evidence_refs": [evidence_ref],

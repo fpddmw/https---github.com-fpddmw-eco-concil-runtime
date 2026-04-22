@@ -72,7 +72,6 @@ from .paths import (
     history_bootstrap_state_path,
     ledger_path,
     manifest_path,
-    orchestration_plan_path,
     operator_runbook_path,
     promotion_gate_path,
     replay_report_path,
@@ -89,6 +88,7 @@ from .phase2_state_surfaces import (
     load_council_decision_wrapper,
     load_expert_report_wrapper,
     load_final_publication_wrapper,
+    load_orchestration_plan_wrapper,
     load_promotion_gate_wrapper,
     load_reporting_handoff_wrapper,
     load_supervisor_state_wrapper,
@@ -213,7 +213,15 @@ def phase2_operator_view(
     )
     return {
         "round_id": round_id,
+        "plan_id": maybe_text(plan.get("plan_id")),
+        "planning_status": maybe_text(plan.get("planning_status")),
         "planning_mode": maybe_text(controller.get("planning_mode")) or maybe_text(supervisor.get("planning_mode")),
+        "plan_source": maybe_text(plan.get("plan_source")),
+        "planned_stage_count": (
+            int(plan.get("step_counts", {}).get("planned_stage_count") or 0)
+            if isinstance(plan.get("step_counts"), dict)
+            else 0
+        ),
         "controller_status": maybe_text(controller.get("controller_status")) or "missing",
         "supervisor_status": maybe_text(supervisor.get("supervisor_status")),
         "supervisor_substatus": maybe_text(supervisor.get("supervisor_substatus")),
@@ -265,6 +273,16 @@ def phase2_operator_view(
             if round_id and run_id
             else ""
         ),
+        "query_orchestration_plans_command": (
+            f"query-control-objects --run-dir {run_dir} --object-kind orchestration-plan --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "query_orchestration_plan_steps_command": (
+            f"query-control-objects --run-dir {run_dir} --object-kind orchestration-plan-step --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
         "materialize_phase2_exports_command": (
             f"materialize-phase2-exports --run-dir {run_dir} --run-id {run_id} --round-id {round_id}"
             if round_id and run_id
@@ -299,9 +317,12 @@ def phase2_operator_view(
             else ""
         ),
         "inspection_paths": {
-            "plan_path": maybe_text(controller.get("artifacts", {}).get("orchestration_plan_path"))
-            if isinstance(controller.get("artifacts"), dict)
-            else maybe_text(supervisor.get("orchestration_plan_path")),
+            "plan_path": maybe_text(plan.get("artifact_path"))
+            or (
+                maybe_text(controller.get("artifacts", {}).get("orchestration_plan_path"))
+                if isinstance(controller.get("artifacts"), dict)
+                else maybe_text(supervisor.get("orchestration_plan_path"))
+            ),
             "controller_path": maybe_text(controller.get("artifacts", {}).get("controller_state_path"))
             if isinstance(controller.get("artifacts"), dict)
             else maybe_text(supervisor.get("controller_path")),
@@ -704,8 +725,29 @@ def show_run_state(
                 supervisor_state_path(run_dir, selected_round_id).resolve()
             ),
         )
+        plan_context = load_orchestration_plan_wrapper(
+            run_dir,
+            run_id=resolved_run_id,
+            round_id=selected_round_id,
+            orchestration_plan_path=str(
+                (run_dir / "runtime" / f"orchestration_plan_{selected_round_id}.json").resolve()
+            ),
+        )
         phase2_state = {
-            "plan": load_json_if_exists(orchestration_plan_path(run_dir, selected_round_id)) or {},
+            "plan": plan_context.get("payload", {})
+            if isinstance(plan_context.get("payload"), dict)
+            else (
+                control_state.get("orchestration_plan", {})
+                if isinstance(control_state.get("orchestration_plan"), dict)
+                else {}
+            ),
+            "plan_steps": plan_context.get("step_rows", [])
+            if isinstance(plan_context.get("step_rows"), list)
+            else (
+                control_state.get("orchestration_plan_steps", [])
+                if isinstance(control_state.get("orchestration_plan_steps"), list)
+                else []
+            ),
             "promotion_gate": gate_context.get("payload", {})
             if isinstance(gate_context.get("payload"), dict)
             else {},
@@ -719,6 +761,7 @@ def show_run_state(
             if isinstance(control_state.get("promotion_freeze"), dict)
             else {},
             "control_contexts": {
+                "plan": plan_context,
                 "controller": controller_context,
                 "promotion_gate": gate_context,
                 "supervisor": supervisor_context,
@@ -867,11 +910,19 @@ def add_control_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--promotion-status", default="")
     command.add_argument("--supervisor-status", default="")
     command.add_argument("--planning-mode", default="")
+    command.add_argument("--controller-authority", default="")
+    command.add_argument("--plan-source", default="")
+    command.add_argument("--plan-id", default="")
+    command.add_argument("--plan-step-group", default="")
+    command.add_argument("--phase-group", default="")
     command.add_argument("--readiness-status", default="")
     command.add_argument("--current-stage", default="")
     command.add_argument("--failed-stage", default="")
     command.add_argument("--resume-status", default="")
     command.add_argument("--stage-name", default="")
+    command.add_argument("--stage-kind", default="")
+    command.add_argument("--skill-name", default="")
+    command.add_argument("--assigned-role-hint", default="")
     command.add_argument("--gate-handler", default="")
     command.add_argument("--decision-source", default="")
     command.add_argument("--supervisor-substatus", default="")
@@ -1760,11 +1811,19 @@ def main(
                 promotion_status=args.promotion_status,
                 supervisor_status=args.supervisor_status,
                 planning_mode=args.planning_mode,
+                controller_authority=args.controller_authority,
+                plan_source=args.plan_source,
+                plan_id=args.plan_id,
+                plan_step_group=args.plan_step_group,
+                phase_group=args.phase_group,
                 readiness_status=args.readiness_status,
                 current_stage=args.current_stage,
                 failed_stage=args.failed_stage,
                 resume_status=args.resume_status,
                 stage_name=args.stage_name,
+                stage_kind=args.stage_kind,
+                skill_name=args.skill_name,
+                assigned_role_hint=args.assigned_role_hint,
                 gate_handler=args.gate_handler,
                 decision_source=args.decision_source,
                 supervisor_substatus=args.supervisor_substatus,

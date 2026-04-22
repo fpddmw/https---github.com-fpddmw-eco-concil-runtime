@@ -19,6 +19,8 @@ OBJECT_KIND_PROMOTION_FREEZE = "promotion-freeze"
 OBJECT_KIND_CONTROLLER_STATE = "controller-state"
 OBJECT_KIND_GATE_STATE = "gate-state"
 OBJECT_KIND_SUPERVISOR_STATE = "supervisor-state"
+OBJECT_KIND_ORCHESTRATION_PLAN = "orchestration-plan"
+OBJECT_KIND_ORCHESTRATION_PLAN_STEP = "orchestration-plan-step"
 
 QUERY_CONFIGS: dict[str, dict[str, Any]] = {
     OBJECT_KIND_PROMOTION_FREEZE: {
@@ -86,6 +88,37 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
             "reporting_ready": "reporting_ready",
         },
     },
+    OBJECT_KIND_ORCHESTRATION_PLAN: {
+        "table_name": "orchestration_plans",
+        "id_column": "plan_id",
+        "timestamp_column": "generated_at_utc",
+        "order_by": "generated_at_utc DESC, plan_id DESC",
+        "status_column": "planning_status",
+        "filter_columns": {
+            "planning_mode": "planning_mode",
+            "controller_authority": "controller_authority",
+            "plan_source": "plan_source",
+        },
+    },
+    OBJECT_KIND_ORCHESTRATION_PLAN_STEP: {
+        "table_name": "orchestration_plan_steps",
+        "id_column": "step_id",
+        "timestamp_column": "generated_at_utc",
+        "order_by": "generated_at_utc DESC, plan_step_group, step_index, step_id",
+        "status_column": "",
+        "filter_columns": {
+            "planning_mode": "planning_mode",
+            "controller_authority": "controller_authority",
+            "plan_source": "plan_source",
+            "plan_id": "plan_id",
+            "plan_step_group": "plan_step_group",
+            "phase_group": "phase_group",
+            "stage_name": "stage_name",
+            "stage_kind": "stage_kind",
+            "skill_name": "skill_name",
+            "assigned_role_hint": "assigned_role_hint",
+        },
+    },
 }
 
 
@@ -128,11 +161,18 @@ def _unsupported_filter_error(
     object_kind: str,
     filter_name: str,
 ) -> ValueError:
-    supported_kinds = [
-        query_kind
-        for query_kind, config in QUERY_CONFIGS.items()
-        if filter_name in (config.get("filter_columns") or {})
-    ]
+    if filter_name == "status":
+        supported_kinds = [
+            query_kind
+            for query_kind, config in QUERY_CONFIGS.items()
+            if maybe_text(config.get("status_column"))
+        ]
+    else:
+        supported_kinds = [
+            query_kind
+            for query_kind, config in QUERY_CONFIGS.items()
+            if filter_name in (config.get("filter_columns") or {})
+        ]
     supported = ", ".join(sorted(supported_kinds))
     return ValueError(
         f"Unsupported {filter_name} filter for control object kind: {object_kind}. "
@@ -152,11 +192,19 @@ def query_control_objects(
     promotion_status: str = "",
     supervisor_status: str = "",
     planning_mode: str = "",
+    controller_authority: str = "",
+    plan_source: str = "",
+    plan_id: str = "",
+    plan_step_group: str = "",
+    phase_group: str = "",
     readiness_status: str = "",
     current_stage: str = "",
     failed_stage: str = "",
     resume_status: str = "",
     stage_name: str = "",
+    stage_kind: str = "",
+    skill_name: str = "",
+    assigned_role_hint: str = "",
     gate_handler: str = "",
     decision_source: str = "",
     supervisor_substatus: str = "",
@@ -191,6 +239,11 @@ def query_control_objects(
     status_column = maybe_text(config.get("status_column"))
     status_text = maybe_text(status)
     if status_text:
+        if not status_column:
+            raise _unsupported_filter_error(
+                object_kind=normalized_kind,
+                filter_name="status",
+            )
         where_clauses.append(f"{status_column} = ?")
         params.append(status_text)
 
@@ -200,11 +253,19 @@ def query_control_objects(
         "promotion_status": maybe_text(promotion_status),
         "supervisor_status": maybe_text(supervisor_status),
         "planning_mode": maybe_text(planning_mode),
+        "controller_authority": maybe_text(controller_authority),
+        "plan_source": maybe_text(plan_source),
+        "plan_id": maybe_text(plan_id),
+        "plan_step_group": maybe_text(plan_step_group),
+        "phase_group": maybe_text(phase_group),
         "readiness_status": maybe_text(readiness_status),
         "current_stage": maybe_text(current_stage),
         "failed_stage": maybe_text(failed_stage),
         "resume_status": maybe_text(resume_status),
         "stage_name": maybe_text(stage_name),
+        "stage_kind": maybe_text(stage_kind),
+        "skill_name": maybe_text(skill_name),
+        "assigned_role_hint": maybe_text(assigned_role_hint),
         "gate_handler": maybe_text(gate_handler),
         "decision_source": maybe_text(decision_source),
         "supervisor_substatus": maybe_text(supervisor_substatus),

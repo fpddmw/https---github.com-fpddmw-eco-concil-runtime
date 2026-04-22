@@ -343,6 +343,90 @@ ON supervisor_snapshots(
     snapshot_id
 );
 
+CREATE TABLE IF NOT EXISTS orchestration_plans (
+    plan_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    planning_status TEXT NOT NULL DEFAULT '',
+    planning_mode TEXT NOT NULL DEFAULT '',
+    controller_authority TEXT NOT NULL DEFAULT '',
+    plan_source TEXT NOT NULL DEFAULT '',
+    council_execution_mode TEXT NOT NULL DEFAULT '',
+    downstream_posture TEXT NOT NULL DEFAULT '',
+    probe_stage_included INTEGER NOT NULL DEFAULT 0,
+    artifact_path TEXT NOT NULL DEFAULT '',
+    execution_queue_count INTEGER NOT NULL DEFAULT 0,
+    gate_step_count INTEGER NOT NULL DEFAULT 0,
+    derived_export_count INTEGER NOT NULL DEFAULT 0,
+    post_gate_step_count INTEGER NOT NULL DEFAULT 0,
+    planned_stage_count INTEGER NOT NULL DEFAULT 0,
+    assigned_role_hints_json TEXT NOT NULL DEFAULT '[]',
+    phase_decision_basis_json TEXT NOT NULL DEFAULT '{}',
+    agent_turn_hints_json TEXT NOT NULL DEFAULT '{}',
+    observed_state_json TEXT NOT NULL DEFAULT '{}',
+    inputs_json TEXT NOT NULL DEFAULT '{}',
+    execution_queue_json TEXT NOT NULL DEFAULT '[]',
+    gate_steps_json TEXT NOT NULL DEFAULT '[]',
+    derived_exports_json TEXT NOT NULL DEFAULT '[]',
+    post_gate_steps_json TEXT NOT NULL DEFAULT '[]',
+    stop_conditions_json TEXT NOT NULL DEFAULT '[]',
+    fallback_path_json TEXT NOT NULL DEFAULT '[]',
+    planning_notes_json TEXT NOT NULL DEFAULT '[]',
+    deliberation_sync_json TEXT NOT NULL DEFAULT '{}',
+    step_counts_json TEXT NOT NULL DEFAULT '{}',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_orchestration_plans_round
+ON orchestration_plans(run_id, round_id, generated_at_utc, plan_id);
+CREATE INDEX IF NOT EXISTS idx_orchestration_plans_round_mode
+ON orchestration_plans(
+    run_id,
+    round_id,
+    planning_mode,
+    controller_authority,
+    plan_source,
+    plan_id
+);
+
+CREATE TABLE IF NOT EXISTS orchestration_plan_steps (
+    step_id TEXT PRIMARY KEY,
+    plan_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    plan_step_group TEXT NOT NULL DEFAULT '',
+    step_index INTEGER NOT NULL DEFAULT 0,
+    planning_mode TEXT NOT NULL DEFAULT '',
+    controller_authority TEXT NOT NULL DEFAULT '',
+    plan_source TEXT NOT NULL DEFAULT '',
+    phase_group TEXT NOT NULL DEFAULT '',
+    stage_name TEXT NOT NULL DEFAULT '',
+    stage_kind TEXT NOT NULL DEFAULT '',
+    skill_name TEXT NOT NULL DEFAULT '',
+    expected_skill_name TEXT NOT NULL DEFAULT '',
+    assigned_role_hint TEXT NOT NULL DEFAULT '',
+    blocking INTEGER NOT NULL DEFAULT 0,
+    resume_policy TEXT NOT NULL DEFAULT '',
+    gate_handler TEXT NOT NULL DEFAULT '',
+    readiness_stage_name TEXT NOT NULL DEFAULT '',
+    reason TEXT NOT NULL DEFAULT '',
+    operator_summary TEXT NOT NULL DEFAULT '',
+    expected_output_path TEXT NOT NULL DEFAULT '',
+    required_for_controller INTEGER NOT NULL DEFAULT 1,
+    export_mode TEXT NOT NULL DEFAULT '',
+    required_previous_stages_json TEXT NOT NULL DEFAULT '[]',
+    skill_args_json TEXT NOT NULL DEFAULT '[]',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_orchestration_plan_steps_plan
+ON orchestration_plan_steps(plan_id, plan_step_group, step_index, step_id);
+CREATE INDEX IF NOT EXISTS idx_orchestration_plan_steps_round_stage
+ON orchestration_plan_steps(run_id, round_id, stage_name, skill_name, step_id);
+
 CREATE TABLE IF NOT EXISTS moderator_actions (
     action_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,
@@ -749,10 +833,13 @@ def decode_json(text: str, default: Any) -> Any:
 
 
 BOOLEAN_ROW_COLUMNS = {
+    "blocking",
     "next_round_required",
     "probe_candidate",
+    "probe_stage_included",
     "promote_allowed",
     "readiness_blocker",
+    "required_for_controller",
     "restart_recommended",
     "resume_recommended",
     "reporting_ready",
@@ -1486,6 +1573,72 @@ def write_supervisor_snapshot_row(
     )
 
 
+def write_orchestration_plan_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO orchestration_plans (
+            plan_id, run_id, round_id, generated_at_utc, planning_status,
+            planning_mode, controller_authority, plan_source,
+            council_execution_mode, downstream_posture, probe_stage_included,
+            artifact_path, execution_queue_count, gate_step_count,
+            derived_export_count, post_gate_step_count, planned_stage_count,
+            assigned_role_hints_json, phase_decision_basis_json,
+            agent_turn_hints_json, observed_state_json, inputs_json,
+            execution_queue_json, gate_steps_json, derived_exports_json,
+            post_gate_steps_json, stop_conditions_json, fallback_path_json,
+            planning_notes_json, deliberation_sync_json, step_counts_json,
+            record_locator, raw_json
+        ) VALUES (
+            :plan_id, :run_id, :round_id, :generated_at_utc, :planning_status,
+            :planning_mode, :controller_authority, :plan_source,
+            :council_execution_mode, :downstream_posture, :probe_stage_included,
+            :artifact_path, :execution_queue_count, :gate_step_count,
+            :derived_export_count, :post_gate_step_count, :planned_stage_count,
+            :assigned_role_hints_json, :phase_decision_basis_json,
+            :agent_turn_hints_json, :observed_state_json, :inputs_json,
+            :execution_queue_json, :gate_steps_json, :derived_exports_json,
+            :post_gate_steps_json, :stop_conditions_json, :fallback_path_json,
+            :planning_notes_json, :deliberation_sync_json, :step_counts_json,
+            :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def write_orchestration_plan_step_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO orchestration_plan_steps (
+            step_id, plan_id, run_id, round_id, generated_at_utc,
+            plan_step_group, step_index, planning_mode, controller_authority,
+            plan_source, phase_group, stage_name, stage_kind, skill_name,
+            expected_skill_name, assigned_role_hint, blocking, resume_policy,
+            gate_handler, readiness_stage_name, reason, operator_summary,
+            expected_output_path, required_for_controller, export_mode,
+            required_previous_stages_json, skill_args_json, artifact_path,
+            record_locator, raw_json
+        ) VALUES (
+            :step_id, :plan_id, :run_id, :round_id, :generated_at_utc,
+            :plan_step_group, :step_index, :planning_mode, :controller_authority,
+            :plan_source, :phase_group, :stage_name, :stage_kind, :skill_name,
+            :expected_skill_name, :assigned_role_hint, :blocking, :resume_policy,
+            :gate_handler, :readiness_stage_name, :reason, :operator_summary,
+            :expected_output_path, :required_for_controller, :export_mode,
+            :required_previous_stages_json, :skill_args_json, :artifact_path,
+            :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
 def write_moderator_action_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
     connection.execute(
         """
@@ -1991,6 +2144,38 @@ def gate_snapshot_object_id(
 
 def supervisor_snapshot_object_id(run_id: str, round_id: str) -> str:
     return "supervisor-" + stable_hash("supervisor-state", run_id, round_id)[:12]
+
+
+def orchestration_plan_object_id(
+    run_id: str,
+    round_id: str,
+    plan_source: str,
+    artifact_path: str,
+) -> str:
+    return "orchestration-plan-" + stable_hash(
+        "orchestration-plan",
+        run_id,
+        round_id,
+        plan_source,
+        artifact_path,
+    )[:12]
+
+
+def orchestration_plan_step_object_id(
+    plan_id: str,
+    plan_step_group: str,
+    step_index: int,
+    stage_name: str,
+    skill_name: str,
+) -> str:
+    return "orchestration-step-" + stable_hash(
+        "orchestration-plan-step",
+        plan_id,
+        plan_step_group,
+        step_index,
+        stage_name,
+        skill_name,
+    )[:12]
 
 
 def moderator_action_snapshot_id(run_id: str, round_id: str) -> str:
@@ -3966,6 +4151,400 @@ def supervisor_snapshot_row_from_payload(
     }
 
 
+def planning_source_from_runtime_plan(plan_payload: dict[str, Any]) -> str:
+    explicit_source = maybe_text(plan_payload.get("plan_source"))
+    if explicit_source:
+        return explicit_source
+    planning_mode = maybe_text(plan_payload.get("planning_mode"))
+    controller_authority = maybe_text(plan_payload.get("controller_authority"))
+    if planning_mode == "agent-advisory" or controller_authority == "advisory-only":
+        return "agent-advisory"
+    return "runtime-planner"
+
+
+def normalized_orchestration_plan_payload(
+    plan_payload: dict[str, Any],
+    *,
+    artifact_path: str = "",
+) -> dict[str, Any]:
+    normalized = dict(plan_payload)
+    normalized["run_id"] = maybe_text(normalized.get("run_id"))
+    normalized["round_id"] = maybe_text(normalized.get("round_id"))
+    normalized["generated_at_utc"] = (
+        maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    )
+    normalized["planning_status"] = (
+        maybe_text(normalized.get("planning_status")) or "ready-for-controller"
+    )
+    normalized["planning_mode"] = (
+        maybe_text(normalized.get("planning_mode")) or "planner-backed-phase2"
+    )
+    normalized["controller_authority"] = (
+        maybe_text(normalized.get("controller_authority"))
+        or (
+            "advisory-only"
+            if normalized["planning_mode"] == "agent-advisory"
+            else "queue-owner"
+        )
+    )
+    normalized["plan_source"] = planning_source_from_runtime_plan(normalized)
+    normalized["council_execution_mode"] = maybe_text(
+        normalized.get("council_execution_mode")
+    )
+    normalized["downstream_posture"] = (
+        maybe_text(normalized.get("downstream_posture"))
+        or "hold-investigation-open"
+    )
+    normalized["probe_stage_included"] = bool(
+        maybe_bool(normalized.get("probe_stage_included"))
+    )
+    normalized["assigned_role_hints"] = unique_texts(
+        list_items(normalized.get("assigned_role_hints"))
+    )
+    normalized["phase_decision_basis"] = dict_items(
+        normalized.get("phase_decision_basis")
+    )
+    normalized["agent_turn_hints"] = dict_items(normalized.get("agent_turn_hints"))
+    normalized["observed_state"] = dict_items(normalized.get("observed_state"))
+    normalized["inputs"] = dict_items(normalized.get("inputs"))
+    normalized["execution_queue"] = [
+        dict(item)
+        for item in list_items(normalized.get("execution_queue"))
+        if isinstance(item, dict)
+    ]
+    normalized["gate_steps"] = [
+        dict(item)
+        for item in list_items(normalized.get("gate_steps"))
+        if isinstance(item, dict)
+    ]
+    normalized["derived_exports"] = [
+        dict(item)
+        for item in list_items(normalized.get("derived_exports"))
+        if isinstance(item, dict)
+    ]
+    normalized["post_gate_steps"] = [
+        dict(item)
+        for item in list_items(normalized.get("post_gate_steps"))
+        if isinstance(item, dict)
+    ]
+    normalized["stop_conditions"] = [
+        dict(item)
+        for item in list_items(normalized.get("stop_conditions"))
+        if isinstance(item, dict)
+    ]
+    normalized["fallback_path"] = [
+        dict(item)
+        for item in list_items(normalized.get("fallback_path"))
+        if isinstance(item, dict)
+    ]
+    normalized["planning_notes"] = [
+        maybe_text(item)
+        for item in list_items(normalized.get("planning_notes"))
+        if maybe_text(item)
+    ]
+    normalized["deliberation_sync"] = dict_items(normalized.get("deliberation_sync"))
+    resolved_artifact_path = (
+        maybe_text(artifact_path)
+        or maybe_text(normalized.get("artifact_path"))
+        or maybe_text(normalized.get("output_path"))
+    )
+    normalized["artifact_path"] = resolved_artifact_path
+    normalized["step_counts"] = {
+        "execution_queue_count": len(normalized["execution_queue"]),
+        "gate_step_count": len(normalized["gate_steps"]),
+        "derived_export_count": len(normalized["derived_exports"]),
+        "post_gate_step_count": len(normalized["post_gate_steps"]),
+        "planned_stage_count": len(normalized["execution_queue"])
+        + len(normalized["gate_steps"])
+        + len(normalized["derived_exports"])
+        + len(normalized["post_gate_steps"]),
+    }
+    normalized["plan_id"] = maybe_text(normalized.get("plan_id")) or (
+        orchestration_plan_object_id(
+            normalized["run_id"],
+            normalized["round_id"],
+            normalized["plan_source"],
+            normalized["artifact_path"],
+        )
+    )
+    return validate_canonical_payload("orchestration-plan", normalized)
+
+
+def normalized_orchestration_plan_step_payload(
+    step_payload: dict[str, Any],
+    *,
+    plan_id: str,
+    run_id: str,
+    round_id: str,
+    generated_at_utc: str,
+    planning_mode: str,
+    controller_authority: str,
+    plan_source: str,
+    plan_step_group: str,
+    step_index: int,
+    artifact_path: str,
+) -> dict[str, Any]:
+    normalized = dict(step_payload)
+    skill_name = maybe_text(normalized.get("skill_name"))
+    stage_name = (
+        maybe_text(normalized.get("stage_name"))
+        or maybe_text(normalized.get("stage"))
+        or skill_name
+        or maybe_text(normalized.get("gate_handler"))
+    )
+    default_stage_kind = "gate" if plan_step_group == "gate-step" else "skill"
+    stage_kind = (
+        maybe_text(normalized.get("stage_kind") or normalized.get("kind"))
+        or default_stage_kind
+    )
+    default_phase_group = (
+        "gate"
+        if plan_step_group == "gate-step"
+        else "exports"
+        if plan_step_group == "derived-export"
+        else "execution"
+    )
+    expected_output_path = (
+        maybe_text(normalized.get("expected_output_path"))
+        or maybe_text(normalized.get("output_path"))
+        or artifact_path
+    )
+    required_previous_stages = [
+        maybe_text(value)
+        for value in list_items(normalized.get("required_previous_stages"))
+        if maybe_text(value)
+    ]
+    skill_args = [
+        maybe_text(value)
+        for value in list_items(normalized.get("skill_args"))
+        if maybe_text(value)
+    ]
+    blocking_value = maybe_bool(normalized.get("blocking"))
+    if blocking_value is None:
+        blocking_value = plan_step_group != "derived-export"
+    required_for_controller_value = maybe_bool(
+        normalized.get("required_for_controller")
+    )
+    if required_for_controller_value is None:
+        required_for_controller_value = plan_step_group != "derived-export"
+    normalized.update(
+        {
+            "run_id": run_id,
+            "round_id": round_id,
+            "plan_id": plan_id,
+            "generated_at_utc": generated_at_utc,
+            "plan_step_group": plan_step_group,
+            "planning_mode": planning_mode,
+            "controller_authority": controller_authority,
+            "plan_source": plan_source,
+            "phase_group": maybe_text(normalized.get("phase_group"))
+            or default_phase_group,
+            "stage_name": stage_name,
+            "stage_kind": stage_kind,
+            "skill_name": skill_name,
+            "expected_skill_name": maybe_text(normalized.get("expected_skill_name"))
+            or skill_name,
+            "assigned_role_hint": maybe_text(normalized.get("assigned_role_hint")),
+            "blocking": bool(blocking_value),
+            "resume_policy": maybe_text(normalized.get("resume_policy"))
+            or "skip-if-completed",
+            "gate_handler": maybe_text(normalized.get("gate_handler")),
+            "readiness_stage_name": maybe_text(
+                normalized.get("readiness_stage_name")
+            ),
+            "reason": maybe_text(normalized.get("reason")),
+            "operator_summary": maybe_text(normalized.get("operator_summary")),
+            "expected_output_path": expected_output_path,
+            "required_for_controller": bool(required_for_controller_value),
+            "export_mode": maybe_text(normalized.get("export_mode")),
+            "required_previous_stages": required_previous_stages,
+            "skill_args": skill_args,
+            "artifact_path": artifact_path,
+        }
+    )
+    normalized["step_id"] = maybe_text(normalized.get("step_id")) or (
+        orchestration_plan_step_object_id(
+            plan_id,
+            plan_step_group,
+            step_index,
+            stage_name,
+            skill_name,
+        )
+    )
+    return validate_canonical_payload("orchestration-plan-step", normalized)
+
+
+def orchestration_plan_row_from_payload(
+    plan_payload: dict[str, Any],
+    *,
+    artifact_path: str = "",
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    normalized = normalized_orchestration_plan_payload(
+        plan_payload,
+        artifact_path=artifact_path,
+    )
+    step_counts = (
+        normalized.get("step_counts", {})
+        if isinstance(normalized.get("step_counts"), dict)
+        else {}
+    )
+    return {
+        "plan_id": maybe_text(normalized.get("plan_id")),
+        "run_id": maybe_text(normalized.get("run_id")),
+        "round_id": maybe_text(normalized.get("round_id")),
+        "generated_at_utc": maybe_text(normalized.get("generated_at_utc")),
+        "planning_status": maybe_text(normalized.get("planning_status")),
+        "planning_mode": maybe_text(normalized.get("planning_mode")),
+        "controller_authority": maybe_text(
+            normalized.get("controller_authority")
+        ),
+        "plan_source": maybe_text(normalized.get("plan_source")),
+        "council_execution_mode": maybe_text(
+            normalized.get("council_execution_mode")
+        ),
+        "downstream_posture": maybe_text(normalized.get("downstream_posture")),
+        "probe_stage_included": 1
+        if bool(normalized.get("probe_stage_included"))
+        else 0,
+        "artifact_path": maybe_text(normalized.get("artifact_path")),
+        "execution_queue_count": coerce_int(
+            step_counts.get("execution_queue_count")
+        ),
+        "gate_step_count": coerce_int(step_counts.get("gate_step_count")),
+        "derived_export_count": coerce_int(step_counts.get("derived_export_count")),
+        "post_gate_step_count": coerce_int(
+            step_counts.get("post_gate_step_count")
+        ),
+        "planned_stage_count": coerce_int(step_counts.get("planned_stage_count")),
+        "assigned_role_hints_json": json_text(
+            normalized.get("assigned_role_hints", [])
+        ),
+        "phase_decision_basis_json": json_text(
+            normalized.get("phase_decision_basis", {})
+        ),
+        "agent_turn_hints_json": json_text(
+            normalized.get("agent_turn_hints", {})
+        ),
+        "observed_state_json": json_text(normalized.get("observed_state", {})),
+        "inputs_json": json_text(normalized.get("inputs", {})),
+        "execution_queue_json": json_text(normalized.get("execution_queue", [])),
+        "gate_steps_json": json_text(normalized.get("gate_steps", [])),
+        "derived_exports_json": json_text(normalized.get("derived_exports", [])),
+        "post_gate_steps_json": json_text(normalized.get("post_gate_steps", [])),
+        "stop_conditions_json": json_text(normalized.get("stop_conditions", [])),
+        "fallback_path_json": json_text(normalized.get("fallback_path", [])),
+        "planning_notes_json": json_text(normalized.get("planning_notes", [])),
+        "deliberation_sync_json": json_text(
+            normalized.get("deliberation_sync", {})
+        ),
+        "step_counts_json": json_text(step_counts),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(normalized),
+    }
+
+
+def iter_orchestration_plan_step_rows(
+    plan_payload: dict[str, Any],
+    *,
+    artifact_path: str = "",
+) -> list[dict[str, Any]]:
+    normalized = normalized_orchestration_plan_payload(
+        plan_payload,
+        artifact_path=artifact_path,
+    )
+    rows: list[dict[str, Any]] = []
+    sections = (
+        ("execution_queue", "execution-queue"),
+        ("gate_steps", "gate-step"),
+        ("derived_exports", "derived-export"),
+        ("post_gate_steps", "post-gate-step"),
+    )
+    for section_key, step_group in sections:
+        steps = (
+            normalized.get(section_key, [])
+            if isinstance(normalized.get(section_key), list)
+            else []
+        )
+        for step_index, step in enumerate(steps):
+            if not isinstance(step, dict):
+                continue
+            step_payload = normalized_orchestration_plan_step_payload(
+                step,
+                plan_id=maybe_text(normalized.get("plan_id")),
+                run_id=maybe_text(normalized.get("run_id")),
+                round_id=maybe_text(normalized.get("round_id")),
+                generated_at_utc=maybe_text(normalized.get("generated_at_utc")),
+                planning_mode=maybe_text(normalized.get("planning_mode")),
+                controller_authority=maybe_text(
+                    normalized.get("controller_authority")
+                ),
+                plan_source=maybe_text(normalized.get("plan_source")),
+                plan_step_group=step_group,
+                step_index=step_index,
+                artifact_path=maybe_text(normalized.get("artifact_path")),
+            )
+            rows.append(
+                {
+                    "step_id": maybe_text(step_payload.get("step_id")),
+                    "plan_id": maybe_text(step_payload.get("plan_id")),
+                    "run_id": maybe_text(step_payload.get("run_id")),
+                    "round_id": maybe_text(step_payload.get("round_id")),
+                    "generated_at_utc": maybe_text(
+                        step_payload.get("generated_at_utc")
+                    ),
+                    "plan_step_group": maybe_text(
+                        step_payload.get("plan_step_group")
+                    ),
+                    "step_index": step_index,
+                    "planning_mode": maybe_text(
+                        step_payload.get("planning_mode")
+                    ),
+                    "controller_authority": maybe_text(
+                        step_payload.get("controller_authority")
+                    ),
+                    "plan_source": maybe_text(step_payload.get("plan_source")),
+                    "phase_group": maybe_text(step_payload.get("phase_group")),
+                    "stage_name": maybe_text(step_payload.get("stage_name")),
+                    "stage_kind": maybe_text(step_payload.get("stage_kind")),
+                    "skill_name": maybe_text(step_payload.get("skill_name")),
+                    "expected_skill_name": maybe_text(
+                        step_payload.get("expected_skill_name")
+                    ),
+                    "assigned_role_hint": maybe_text(
+                        step_payload.get("assigned_role_hint")
+                    ),
+                    "blocking": 1 if bool(step_payload.get("blocking")) else 0,
+                    "resume_policy": maybe_text(step_payload.get("resume_policy")),
+                    "gate_handler": maybe_text(step_payload.get("gate_handler")),
+                    "readiness_stage_name": maybe_text(
+                        step_payload.get("readiness_stage_name")
+                    ),
+                    "reason": maybe_text(step_payload.get("reason")),
+                    "operator_summary": maybe_text(
+                        step_payload.get("operator_summary")
+                    ),
+                    "expected_output_path": maybe_text(
+                        step_payload.get("expected_output_path")
+                    ),
+                    "required_for_controller": 1
+                    if bool(step_payload.get("required_for_controller"))
+                    else 0,
+                    "export_mode": maybe_text(step_payload.get("export_mode")),
+                    "required_previous_stages_json": json_text(
+                        step_payload.get("required_previous_stages", [])
+                    ),
+                    "skill_args_json": json_text(
+                        step_payload.get("skill_args", [])
+                    ),
+                    "artifact_path": maybe_text(step_payload.get("artifact_path")),
+                    "record_locator": f"$.{section_key}[{step_index}]",
+                    "raw_json": json_text(step_payload),
+                }
+            )
+    return rows
+
+
 def moderator_action_snapshot_row_from_payload(
     snapshot_payload: dict[str, Any],
     *,
@@ -5557,6 +6136,114 @@ def load_round_task_snapshot(
         connection.close()
 
 
+def load_orchestration_plan_record(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    artifact_path: str = "",
+    controller_authority: str = "",
+    allow_latest_fallback: bool = True,
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        normalized_run_id = maybe_text(run_id)
+        normalized_round_id = maybe_text(round_id)
+        if not normalized_run_id and not normalized_round_id:
+            return None
+        normalized_artifact_path = maybe_text(artifact_path)
+        normalized_controller_authority = maybe_text(controller_authority)
+        if normalized_artifact_path:
+            record = latest_json_row_where(
+                connection,
+                table_name="orchestration_plans",
+                id_column="plan_id",
+                timestamp_column="generated_at_utc",
+                filters={
+                    "run_id": normalized_run_id,
+                    "round_id": normalized_round_id,
+                    "artifact_path": normalized_artifact_path,
+                },
+            )
+            if record is not None:
+                return record
+        if normalized_controller_authority:
+            record = latest_json_row_where(
+                connection,
+                table_name="orchestration_plans",
+                id_column="plan_id",
+                timestamp_column="generated_at_utc",
+                filters={
+                    "run_id": normalized_run_id,
+                    "round_id": normalized_round_id,
+                    "controller_authority": normalized_controller_authority,
+                },
+            )
+            if record is not None:
+                return record
+        if not allow_latest_fallback:
+            return None
+        return latest_json_row_where(
+            connection,
+            table_name="orchestration_plans",
+            id_column="plan_id",
+            timestamp_column="generated_at_utc",
+            filters={
+                "run_id": normalized_run_id,
+                "round_id": normalized_round_id,
+            },
+        )
+    finally:
+        connection.close()
+
+
+def load_orchestration_plan_steps(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    plan_id: str = "",
+    plan_step_group: str = "",
+    stage_name: str = "",
+    skill_name: str = "",
+    db_path: str = "",
+) -> list[dict[str, Any]]:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        clauses: list[str] = []
+        params: list[str] = []
+        for column_name, value in (
+            ("run_id", run_id),
+            ("round_id", round_id),
+            ("plan_id", plan_id),
+            ("plan_step_group", plan_step_group),
+            ("stage_name", stage_name),
+            ("skill_name", skill_name),
+        ):
+            text = maybe_text(value)
+            if not text:
+                continue
+            clauses.append(f"{column_name} = ?")
+            params.append(text)
+        if not clauses:
+            return []
+        rows = connection.execute(
+            f"""
+            SELECT *
+            FROM orchestration_plan_steps
+            WHERE {' AND '.join(clauses)}
+            ORDER BY generated_at_utc DESC, plan_step_group, step_index, step_id
+            """,
+            tuple(params),
+        ).fetchall()
+    finally:
+        connection.close()
+    return [payload_from_db_row(row) for row in rows]
+
+
 def load_moderator_work_surface(
     run_dir: str | Path,
     *,
@@ -5811,7 +6498,31 @@ def load_phase2_control_state(
         round_id=round_id,
         db_path=db_path,
     ) or {}
+    orchestration_plan_record = load_orchestration_plan_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        artifact_path=(
+            maybe_text(controller_record.get("planning", {}).get("plan_path"))
+            if isinstance(controller_record.get("planning"), dict)
+            else ""
+        ),
+        db_path=db_path,
+    ) or {}
+    orchestration_plan_steps = (
+        load_orchestration_plan_steps(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            plan_id=maybe_text(orchestration_plan_record.get("plan_id")),
+            db_path=db_path,
+        )
+        if orchestration_plan_record
+        else []
+    )
     return {
+        "orchestration_plan": orchestration_plan_record,
+        "orchestration_plan_steps": orchestration_plan_steps,
         "promotion_freeze": freeze_record,
         "round_readiness": readiness_record,
         "promotion_basis": promotion_basis_record,
@@ -6589,6 +7300,58 @@ def store_round_transition_record(
     }
 
 
+def store_orchestration_plan_record(
+    run_dir: str | Path,
+    *,
+    plan_payload: dict[str, Any],
+    artifact_path: str = "",
+    run_id: str = "",
+    round_id: str = "",
+    controller_authority: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    resolved_payload = dict(plan_payload)
+    resolved_payload["run_id"] = (
+        maybe_text(resolved_payload.get("run_id")) or maybe_text(run_id)
+    )
+    resolved_payload["round_id"] = (
+        maybe_text(resolved_payload.get("round_id")) or maybe_text(round_id)
+    )
+    if not maybe_text(resolved_payload.get("controller_authority")):
+        resolved_payload["controller_authority"] = maybe_text(controller_authority)
+    row = orchestration_plan_row_from_payload(
+        resolved_payload,
+        artifact_path=artifact_path,
+    )
+    step_rows = iter_orchestration_plan_step_rows(
+        resolved_payload,
+        artifact_path=maybe_text(row.get("artifact_path")),
+    )
+    connection, db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            write_orchestration_plan_row(connection, row)
+            connection.execute(
+                "DELETE FROM orchestration_plan_steps WHERE plan_id = ?",
+                (maybe_text(row.get("plan_id")),),
+            )
+            for step_row in step_rows:
+                write_orchestration_plan_step_row(connection, step_row)
+    finally:
+        connection.close()
+    return {
+        "status": "completed",
+        "run_id": maybe_text(row.get("run_id")),
+        "round_id": maybe_text(row.get("round_id")),
+        "plan_id": maybe_text(row.get("plan_id")),
+        "artifact_path": maybe_text(row.get("artifact_path")),
+        "db_path": str(db_file),
+        "planned_stage_count": coerce_int(row.get("planned_stage_count")),
+        "step_row_count": len(step_rows),
+    }
+
+
 def fetch_round_events(connection: sqlite3.Connection, *, run_id: str, round_id: str) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
@@ -6881,6 +7644,8 @@ __all__ = [
     "load_gate_snapshot_record",
     "load_moderator_action_records",
     "load_moderator_action_snapshot",
+    "load_orchestration_plan_record",
+    "load_orchestration_plan_steps",
     "load_phase2_control_state",
     "load_promotion_basis_items",
     "load_promotion_basis_record",
@@ -6901,6 +7666,7 @@ __all__ = [
     "store_final_publication_record",
     "store_moderator_action_records",
     "store_moderator_action_snapshot",
+    "store_orchestration_plan_record",
     "store_promotion_basis_record",
     "store_promotion_freeze_record",
     "store_reporting_handoff_record",

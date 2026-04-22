@@ -15,6 +15,7 @@ from eco_council_runtime.council_objects import (  # noqa: E402
     store_council_proposal_records,
     store_readiness_opinion_records,
 )
+from eco_council_runtime.kernel.agent_entry import advisory_plan_surface  # noqa: E402
 from eco_council_runtime.phase2_direct_advisory import materialize_direct_council_advisory_plan  # noqa: E402
 
 RUN_ID = "run-direct-advisory-001"
@@ -61,6 +62,14 @@ class DirectCouncilAdvisoryTests(unittest.TestCase):
             self.assertEqual(["round-readiness"], plan["gate_steps"][0]["required_previous_stages"])
             self.assertEqual("promote-candidate", plan["downstream_posture"])
             self.assertTrue(plan["observed_state"]["direct_council_queue"])
+
+            runtime_path(run_dir, f"agent_advisory_plan_{ROUND_ID}.json").unlink()
+            advisory_surface = advisory_plan_surface(run_dir, ROUND_ID)
+            self.assertTrue(advisory_surface["present"])
+            self.assertEqual(
+                "direct-council-advisory",
+                advisory_surface["plan_source"],
+            )
 
     def test_non_probe_proposal_without_readiness_still_compiles_direct_queue(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -8,6 +8,7 @@ from .kernel.deliberation_plane import maybe_text
 from .kernel.phase2_state_surfaces import (
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
+    load_orchestration_plan_wrapper,
     load_promotion_basis_wrapper,
     load_round_readiness_wrapper,
     load_supervisor_state_wrapper,
@@ -24,6 +25,13 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
 
 def export_specs(round_id: str) -> list[dict[str, Any]]:
     return [
+        {
+            "export_kind": "orchestration-plan",
+            "output_relative": f"runtime/orchestration_plan_{round_id}.json",
+            "loader": load_orchestration_plan_wrapper,
+            "loader_kwargs": {},
+            "identifier_fields": ("plan_id", "round_id"),
+        },
         {
             "export_kind": "next-actions",
             "output_relative": f"investigation/next_actions_{round_id}.json",

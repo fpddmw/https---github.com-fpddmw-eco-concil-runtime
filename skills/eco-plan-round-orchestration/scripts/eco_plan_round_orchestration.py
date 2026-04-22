@@ -17,7 +17,10 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.deliberation_plane import load_round_snapshot  # noqa: E402
+from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+    load_round_snapshot,
+    store_orchestration_plan_record,
+)
 from eco_council_runtime.council_objects import query_council_objects  # noqa: E402
 from eco_council_runtime.phase2_council_execution import (  # noqa: E402
     COUNCIL_EXECUTION_MODE_FALLBACK_ONLY,
@@ -1149,6 +1152,11 @@ def plan_round_orchestration_skill(
         "deliberation_sync": deliberation_sync,
     }
     write_json_file(output_file, plan_payload)
+    store_orchestration_plan_record(
+        run_dir_path,
+        plan_payload=plan_payload,
+        artifact_path=str(output_file),
+    )
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
     suggested_next_skills = unique_texts(

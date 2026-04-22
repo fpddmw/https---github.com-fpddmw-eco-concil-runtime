@@ -21,6 +21,7 @@ from .paths import (
     mission_scaffold_path,
     resolve_run_dir,
 )
+from .phase2_state_surfaces import load_orchestration_plan_wrapper
 
 
 def board_counts(round_state: dict[str, Any]) -> dict[str, int]:
@@ -180,10 +181,16 @@ def mission_surface(run_dir: Path, round_id: str) -> dict[str, Any]:
 
 
 def advisory_plan_surface(run_dir: Path, round_id: str) -> dict[str, Any]:
-    payload = load_json_if_exists(agent_advisory_plan_path(run_dir, round_id)) or {}
+    advisory_path = agent_advisory_plan_path(run_dir, round_id)
+    context = load_orchestration_plan_wrapper(
+        run_dir,
+        round_id=round_id,
+        orchestration_plan_path=str(advisory_path.resolve()),
+    )
+    payload = context.get("payload", {}) if isinstance(context.get("payload"), dict) else {}
     return {
         "present": bool(payload),
-        "path": str(agent_advisory_plan_path(run_dir, round_id).resolve()),
+        "path": str(advisory_path.resolve()),
         "planning_mode": maybe_text(payload.get("planning_mode")),
         "controller_authority": maybe_text(payload.get("controller_authority")),
         "plan_source": maybe_text(payload.get("plan_source")),

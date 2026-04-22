@@ -844,7 +844,9 @@ observation matching 不再是默认主链。
 5. `phase2_contract.py` 已降级为 known-stage default metadata / compatibility fallback，显式 plan 依赖可以覆盖内置依赖。
 6. `promotion-gate` 的执行分派、readiness 依赖解析与 controller 状态更新已迁入 `kernel/gate.py`；`controller.py` 现在只消费统一 `gate_result`。
 7. `next_actions / probes / readiness` 的 DB/artifact read surface 已抽到 `kernel/phase2_state_surfaces.py`，`gate.py / supervisor.py / benchmark.py` 已不再直接依赖 `investigation_planning.py`。
-8. `controller.py / gate.py / investigation_planning.py` 仍明显绑定 readiness/promotion 语义与既有 gate handler，这一块仍是后续收边界的主战场。
+8. orchestration plan 已升格为 canonical deliberation-plane object：`orchestration-plan / orchestration-plan-step` contract、表、query surface 与 export rebuild 已补齐；`phase2_planning_profile / controller / cli / benchmark / agent_entry / phase2_exports` 已统一改成 DB-first 读写。
+9. controller 采纳 advisory/runtime plan 时现在会强绑定当前 `run_id / round_id / controller_authority` 再入库；缺字段的 advisory artifact 不再能绕开 DB plan contract。
+10. `controller.py / gate.py / investigation_planning.py` 仍明显绑定 readiness/promotion 语义与既有 gate handler，这一块仍是后续收边界的主战场。
 
 完成标志：
 

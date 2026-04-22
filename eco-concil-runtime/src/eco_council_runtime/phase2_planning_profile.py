@@ -8,6 +8,7 @@ from .phase2_stage_profile import (
     default_gate_steps,
     default_post_gate_steps,
 )
+from .kernel.deliberation_plane import load_orchestration_plan_record
 from .kernel.manifest import load_json_if_exists
 from .kernel.paths import (
     agent_advisory_plan_path,
@@ -126,6 +127,79 @@ def relative_runtime_path(run_dir: Path, path: Path) -> str:
         return str(path)
 
 
+def inferred_plan_controller_authority(plan_path: str) -> str:
+    if Path(plan_path).name.startswith("agent_advisory_plan_"):
+        return "advisory-only"
+    return "queue-owner"
+
+
+def contextualized_runtime_plan_payload(
+    plan_payload: dict[str, Any],
+    *,
+    run_id: str,
+    round_id: str,
+    artifact_path: str,
+    controller_authority: str,
+) -> dict[str, Any]:
+    payload = dict(plan_payload)
+    payload["run_id"] = maybe_text(payload.get("run_id")) or maybe_text(run_id)
+    payload["round_id"] = maybe_text(payload.get("round_id")) or maybe_text(round_id)
+    payload["artifact_path"] = (
+        maybe_text(payload.get("artifact_path")) or maybe_text(artifact_path)
+    )
+    resolved_controller_authority = (
+        maybe_text(payload.get("controller_authority"))
+        or maybe_text(controller_authority)
+    )
+    if resolved_controller_authority:
+        payload["controller_authority"] = resolved_controller_authority
+    if not maybe_text(payload.get("plan_source")):
+        payload["plan_source"] = planning_source_from_payload(payload)
+    return payload
+
+
+def load_runtime_plan_payload(
+    run_dir: Path,
+    round_id: str,
+    *,
+    run_id: str = "",
+    plan_path: str = "",
+    controller_authority: str = "",
+) -> dict[str, Any]:
+    resolved_plan_path = maybe_text(plan_path) or str(
+        orchestration_plan_path(run_dir, round_id).resolve()
+    )
+    resolved_controller_authority = (
+        maybe_text(controller_authority)
+        or inferred_plan_controller_authority(resolved_plan_path)
+    )
+    record = load_orchestration_plan_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        artifact_path=resolved_plan_path,
+        controller_authority=resolved_controller_authority,
+    ) or {}
+    if isinstance(record, dict) and record:
+        return contextualized_runtime_plan_payload(
+            record,
+            run_id=run_id,
+            round_id=round_id,
+            artifact_path=resolved_plan_path,
+            controller_authority=resolved_controller_authority,
+        )
+    payload = load_json_if_exists(Path(resolved_plan_path)) or {}
+    if not payload:
+        return {}
+    return contextualized_runtime_plan_payload(
+        payload,
+        run_id=run_id,
+        round_id=round_id,
+        artifact_path=resolved_plan_path,
+        controller_authority=resolved_controller_authority,
+    )
+
+
 def agent_orchestration_requested(run_dir: Path, round_id: str) -> bool:
     mission_payload = load_json_if_exists(mission_scaffold_path(run_dir, round_id)) or {}
     if maybe_text(mission_payload.get("orchestration_mode")) == "openclaw-agent":
@@ -190,7 +264,12 @@ def planning_bundle(
 ) -> dict[str, Any]:
     planner_wrapper = planner_result.get("skill_payload", {}) if isinstance(planner_result.get("skill_payload"), dict) else {}
     plan_path = resolve_plan_path(run_dir, round_id, planner_wrapper)
-    plan_payload = load_json_if_exists(Path(plan_path)) or {}
+    plan_payload = load_runtime_plan_payload(
+        run_dir,
+        round_id,
+        run_id=maybe_text(planner_wrapper.get("run_id")),
+        plan_path=plan_path,
+    )
     return planning_bundle_from_payload(
         run_dir,
         round_id,
@@ -207,7 +286,12 @@ def advisory_planning_bundle(
     planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
 ) -> dict[str, Any]:
     advisory_path = agent_advisory_plan_path(run_dir, round_id)
-    advisory_payload = load_json_if_exists(advisory_path) or {}
+    advisory_payload = load_runtime_plan_payload(
+        run_dir,
+        round_id,
+        plan_path=str(advisory_path.resolve()),
+        controller_authority="advisory-only",
+    )
     if not advisory_payload:
         return {}
     if (
@@ -271,7 +355,13 @@ def planning_from_controller(
             "plan_payload": {},
         }
     plan_path = maybe_text(planning.get("plan_path")) or str(orchestration_plan_path(run_dir, round_id).resolve())
-    plan_payload = load_json_if_exists(Path(plan_path)) or {}
+    plan_payload = load_runtime_plan_payload(
+        run_dir,
+        round_id,
+        run_id=maybe_text(controller_payload.get("run_id")),
+        plan_path=plan_path,
+        controller_authority=maybe_text(planning.get("controller_authority")),
+    )
     if not plan_payload:
         return {}
     return planning_bundle_from_payload(

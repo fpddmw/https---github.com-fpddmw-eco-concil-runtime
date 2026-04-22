@@ -9,7 +9,10 @@ from .phase2_proposal_actions import (
     proposal_drives_phase2_action_queue as shared_proposal_drives_phase2_action_queue,
 )
 from .phase2_action_semantics import action_is_readiness_blocker
-from .kernel.deliberation_plane import load_round_snapshot
+from .kernel.deliberation_plane import (
+    load_round_snapshot,
+    store_orchestration_plan_record,
+)
 from .kernel.executor import maybe_text, new_runtime_event_id, stable_hash, utc_now_iso
 from .kernel.ledger import append_ledger_event, write_receipt
 from .kernel.manifest import update_after_run, write_json
@@ -576,6 +579,11 @@ def direct_council_advisory_payload(
         "deliberation_sync": deliberation_sync,
     }
     write_json(output_file, plan_payload)
+    store_orchestration_plan_record(
+        run_dir_path,
+        plan_payload=plan_payload,
+        artifact_path=str(output_file),
+    )
 
     artifact_refs = [
         {

@@ -44,7 +44,11 @@ from ..phase2_stage_profile import (
     DEFAULT_PHASE2_PLANNER_SKILL_NAME,
     resolve_stage_definitions,
 )
-from .deliberation_plane import load_phase2_control_state, store_promotion_freeze_record
+from .deliberation_plane import (
+    load_phase2_control_state,
+    store_orchestration_plan_record,
+    store_promotion_freeze_record,
+)
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill, utc_now_iso
 from .gate import GateHandler, execute_gate_step as execute_runtime_gate_step
 from .ledger import append_ledger_event
@@ -353,6 +357,22 @@ def run_phase2_round_with_contract_mode(
     ) -> None:
         nonlocal planning, blueprints, planner_stage_ran
         ensure_executable_planning(selected_planning)
+        plan_payload = (
+            selected_planning.get("plan_payload", {})
+            if isinstance(selected_planning.get("plan_payload"), dict)
+            else {}
+        )
+        if plan_payload:
+            store_orchestration_plan_record(
+                run_dir,
+                plan_payload=plan_payload,
+                artifact_path=maybe_text(selected_planning.get("plan_path")),
+                run_id=run_id,
+                round_id=round_id,
+                controller_authority=maybe_text(
+                    selected_planning.get("controller_authority")
+                ),
+            )
         planning = selected_planning
         resolved_planner_skill_name = (
             maybe_text(selected_planning.get("planner_skill_name"))

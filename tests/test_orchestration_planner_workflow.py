@@ -8,6 +8,7 @@ from pathlib import Path
 from _workflow_support import (
     investigation_path,
     load_json,
+    run_kernel,
     run_script,
     runtime_src_path,
     runtime_path,
@@ -155,6 +156,26 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             self.assertEqual("agent-advisory", plan["planning_mode"])
             self.assertEqual("advisory-only", plan["controller_authority"])
             self.assertIn("recommended_skill_sequence", plan["agent_turn_hints"])
+
+            runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json").unlink()
+            plan_query = run_kernel(
+                "query-control-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "orchestration-plan",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--controller-authority",
+                "advisory-only",
+            )
+            self.assertEqual(1, plan_query["summary"]["returned_object_count"])
+            self.assertEqual(
+                "advisory-only",
+                plan_query["objects"][0]["controller_authority"],
+            )
 
     def test_agent_advisory_plan_can_skip_next_actions_from_council_readiness(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -14,6 +14,7 @@ if str(RUNTIME_SRC) not in sys.path:
 
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     connect_db,
+    store_orchestration_plan_record,
     store_promotion_freeze_record,
 )
 
@@ -22,9 +23,110 @@ ROUND_ID = "round-control-query-001"
 
 
 def seed_control_state(run_dir: Path) -> dict[str, str]:
+    plan_path = (run_dir / "runtime" / f"orchestration_plan_{ROUND_ID}.json").resolve()
     controller_path = (run_dir / "runtime" / f"controller_state_{ROUND_ID}.json").resolve()
     gate_path = (run_dir / "runtime" / f"promotion_gate_{ROUND_ID}.json").resolve()
     supervisor_path = (run_dir / "runtime" / f"supervisor_state_{ROUND_ID}.json").resolve()
+    plan_payload = {
+        "schema_version": "runtime-orchestration-plan-v1",
+        "skill": "eco-plan-round-orchestration",
+        "generated_at_utc": "2024-01-01T00:00:00Z",
+        "run_id": RUN_ID,
+        "round_id": ROUND_ID,
+        "plan_id": "orchestration-plan-control-001",
+        "planning_status": "ready-for-controller",
+        "planning_mode": "planner-backed-phase2",
+        "controller_authority": "queue-owner",
+        "plan_source": "runtime-planner",
+        "probe_stage_included": False,
+        "downstream_posture": "promote-candidate",
+        "assigned_role_hints": ["moderator"],
+        "phase_decision_basis": {
+            "probe_stage_reason_codes": [],
+            "posture_reason_codes": ["promotion-ready"],
+        },
+        "agent_turn_hints": {
+            "primary_role": "moderator",
+            "support_roles": ["moderator"],
+            "recommended_skill_sequence": ["eco-summarize-round-readiness"],
+        },
+        "observed_state": {
+            "direct_council_queue": True,
+            "next_actions_stage_skipped": True,
+        },
+        "inputs": {
+            "readiness_path": str(
+                (run_dir / "reporting" / f"round_readiness_{ROUND_ID}.json").resolve()
+            ),
+        },
+        "execution_queue": [
+            {
+                "stage_name": "round-readiness",
+                "stage_kind": "skill",
+                "phase_group": "readiness",
+                "skill_name": "eco-summarize-round-readiness",
+                "expected_skill_name": "eco-summarize-round-readiness",
+                "assigned_role_hint": "moderator",
+                "required_previous_stages": ["orchestration-planner"],
+                "blocking": True,
+                "resume_policy": "skip-if-completed",
+                "operator_summary": "Summarize whether the round can promote.",
+                "reason": "Readiness review is required before promotion gate.",
+                "expected_output_path": str(
+                    (run_dir / "reporting" / f"round_readiness_{ROUND_ID}.json").resolve()
+                ),
+            }
+        ],
+        "gate_steps": [
+            {
+                "stage_name": "promotion-gate",
+                "stage_kind": "gate",
+                "phase_group": "gate",
+                "required_previous_stages": ["round-readiness"],
+                "blocking": True,
+                "resume_policy": "skip-if-completed",
+                "operator_summary": "Evaluate whether the round can move into promotion.",
+                "reason": "Gate the round after readiness review.",
+                "expected_output_path": str(gate_path),
+                "gate_handler": "promotion-gate",
+                "readiness_stage_name": "round-readiness",
+            }
+        ],
+        "derived_exports": [],
+        "post_gate_steps": [
+            {
+                "stage_name": "promotion-basis",
+                "stage_kind": "skill",
+                "phase_group": "promotion",
+                "skill_name": "eco-promote-evidence-basis",
+                "expected_skill_name": "eco-promote-evidence-basis",
+                "assigned_role_hint": "moderator",
+                "required_previous_stages": ["promotion-gate"],
+                "blocking": True,
+                "resume_policy": "skip-if-completed",
+                "operator_summary": "Freeze the promoted evidence basis.",
+                "reason": "Persist the final promotion basis.",
+                "expected_output_path": str(
+                    (run_dir / "promotion" / f"promoted_evidence_basis_{ROUND_ID}.json").resolve()
+                ),
+            }
+        ],
+        "stop_conditions": [
+            {
+                "condition_id": "planned-skill-failure",
+                "trigger": "Any planned skill returns blocked or failed.",
+                "effect": "Abort controller execution.",
+            }
+        ],
+        "fallback_path": [],
+        "planning_notes": ["Planner output remains DB-backed."],
+        "deliberation_sync": {"status": "completed", "sync_mode": "unit-test"},
+    }
+    store_orchestration_plan_record(
+        run_dir,
+        plan_payload=plan_payload,
+        artifact_path=str(plan_path),
+    )
     controller_snapshot = {
         "schema_version": "runtime-controller-v3",
         "generated_at_utc": "2024-01-01T00:00:00Z",
@@ -52,17 +154,20 @@ def seed_control_state(run_dir: Path) -> dict[str, str]:
         "gate_reasons": [],
         "recommended_next_skills": ["eco-materialize-reporting-handoff"],
         "planning": {
-            "plan_path": str(
-                (run_dir / "runtime" / f"orchestration_plan_{ROUND_ID}.json").resolve()
-            )
+            "plan_id": plan_payload["plan_id"],
+            "plan_path": str(plan_path),
+            "plan_source": plan_payload["plan_source"],
+            "planning_status": plan_payload["planning_status"],
+            "controller_authority": plan_payload["controller_authority"],
+            "execution_queue": plan_payload["execution_queue"],
+            "gate_steps": plan_payload["gate_steps"],
+            "post_gate_steps": plan_payload["post_gate_steps"],
         },
         "steps": [],
         "artifacts": {
             "controller_state_path": str(controller_path),
             "promotion_gate_path": str(gate_path),
-            "orchestration_plan_path": str(
-                (run_dir / "runtime" / f"orchestration_plan_{ROUND_ID}.json").resolve()
-            ),
+            "orchestration_plan_path": str(plan_path),
         },
     }
     gate_snapshot = {
@@ -143,6 +248,7 @@ def seed_control_state(run_dir: Path) -> dict[str, str]:
         },
     )
     return {
+        "plan_path": str(plan_path),
         "controller_path": str(controller_path),
         "gate_path": str(gate_path),
         "supervisor_path": str(supervisor_path),
@@ -257,6 +363,56 @@ class ControlQuerySurfaceTests(unittest.TestCase):
                             freeze_row["freeze_id"],
                         ),
                     )
+
+                    plan_row = connection.execute(
+                        """
+                        SELECT plan_id, raw_json
+                        FROM orchestration_plans
+                        WHERE run_id = ? AND round_id = ?
+                        """,
+                        (RUN_ID, ROUND_ID),
+                    ).fetchone()
+                    self.assertIsNotNone(plan_row)
+                    plan_payload = json.loads(plan_row["raw_json"])
+                    plan_payload["plan_source"] = "stale-plan-source"
+                    plan_payload["planning_status"] = "stale-status"
+                    plan_payload["execution_queue"] = []
+                    connection.execute(
+                        "UPDATE orchestration_plans SET raw_json = ? WHERE plan_id = ?",
+                        (
+                            json.dumps(
+                                plan_payload,
+                                ensure_ascii=True,
+                                sort_keys=True,
+                            ),
+                            plan_row["plan_id"],
+                        ),
+                    )
+
+                    plan_step_row = connection.execute(
+                        """
+                        SELECT step_id, raw_json
+                        FROM orchestration_plan_steps
+                        WHERE run_id = ? AND round_id = ? AND stage_name = ?
+                        """,
+                        (RUN_ID, ROUND_ID, "round-readiness"),
+                    ).fetchone()
+                    self.assertIsNotNone(plan_step_row)
+                    plan_step_payload = json.loads(plan_step_row["raw_json"])
+                    plan_step_payload["stage_name"] = "stale-stage"
+                    plan_step_payload["skill_name"] = "eco-stale-skill"
+                    plan_step_payload["expected_output_path"] = ""
+                    connection.execute(
+                        "UPDATE orchestration_plan_steps SET raw_json = ? WHERE step_id = ?",
+                        (
+                            json.dumps(
+                                plan_step_payload,
+                                ensure_ascii=True,
+                                sort_keys=True,
+                            ),
+                            plan_step_row["step_id"],
+                        ),
+                    )
             finally:
                 connection.close()
 
@@ -303,6 +459,46 @@ class ControlQuerySurfaceTests(unittest.TestCase):
             self.assertEqual("promotion-gate", gate["gate_handler"])
             self.assertEqual("allow-promote", gate["gate_status"])
             self.assertEqual(paths["gate_path"], gate["output_path"])
+
+            plan_query = run_kernel(
+                "query-control-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "orchestration-plan",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            self.assertEqual(1, plan_query["summary"]["returned_object_count"])
+            plan = plan_query["objects"][0]
+            self.assertEqual("runtime-planner", plan["plan_source"])
+            self.assertEqual("ready-for-controller", plan["planning_status"])
+            self.assertEqual(1, len(plan["execution_queue"]))
+            self.assertEqual(paths["plan_path"], plan["artifact_path"])
+
+            plan_step_query = run_kernel(
+                "query-control-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "orchestration-plan-step",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--stage-name",
+                "round-readiness",
+            )
+            self.assertEqual(1, plan_step_query["summary"]["returned_object_count"])
+            plan_step = plan_step_query["objects"][0]
+            self.assertEqual("round-readiness", plan_step["stage_name"])
+            self.assertEqual(
+                "eco-summarize-round-readiness",
+                plan_step["skill_name"],
+            )
+            self.assertTrue(plan_step["blocking"])
 
             supervisor_query = run_kernel(
                 "query-control-objects",

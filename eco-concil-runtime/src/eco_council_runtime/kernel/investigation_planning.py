@@ -72,6 +72,7 @@ from .phase2_state_surfaces import (  # noqa: F401
     load_falsification_probe_wrapper,
     load_final_publication_wrapper,
     load_next_actions_wrapper,
+    load_orchestration_plan_wrapper,
     load_promotion_basis_wrapper,
     load_reporting_handoff_wrapper,
     load_round_readiness_wrapper,

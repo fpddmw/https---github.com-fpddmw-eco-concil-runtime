@@ -126,12 +126,27 @@ def materialize_issue_cluster_skill(
         selection_mode=selection_mode,
         method=method,
     )
+    decision_source = "heuristic-fallback"
+    provenance = {
+        "source_skill": skill_name,
+        "decision_source": decision_source,
+        "selection_mode": selection_mode,
+        "method": method,
+        "issue_derivation_mode": issue_derivation_mode,
+        "artifact_path": str(output_file),
+        "cluster_source": maybe_text(query_basis.get("cluster_source")),
+        "claim_scope_source": maybe_text(query_basis.get("claim_scope_source")),
+        "verifiability_source": maybe_text(query_basis.get("verifiability_source")),
+        "route_source": maybe_text(query_basis.get("route_source")),
+    }
     wrapper = {
         "schema_version": "n3.0",
         "skill": skill_name,
         "generated_at_utc": generated_at_utc,
         "run_id": run_id,
         "round_id": round_id,
+        "decision_source": decision_source,
+        "provenance": provenance,
         "query_basis": query_basis,
         **query_basis,
         "issue_derivation_mode": issue_derivation_mode,
@@ -231,6 +246,8 @@ def materialize_issue_cluster_skill(
         "warnings": warnings,
         "analysis_sync": analysis_sync,
         "input_analysis_sync": wrapper.get("input_analysis_sync", {}),
+        "decision_source": decision_source,
+        "provenance": provenance,
         "board_handoff": {
             "candidate_ids": canonical_ids,
             "evidence_refs": [artifact_ref],

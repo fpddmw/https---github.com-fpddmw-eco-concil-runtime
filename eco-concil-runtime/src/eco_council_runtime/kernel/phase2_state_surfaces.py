@@ -16,6 +16,8 @@ from .deliberation_plane import (
     load_gate_snapshot_record,
     load_moderator_action_records,
     load_moderator_action_snapshot,
+    load_orchestration_plan_record,
+    load_orchestration_plan_steps,
     load_promotion_freeze_record,
     load_promotion_basis_record,
     load_reporting_handoff_record,
@@ -412,6 +414,66 @@ def load_promotion_basis_wrapper(
         "payload": None,
         "source": "missing-promotion",
         "artifact_path": str(promotion_file),
+        "artifact_present": False,
+        "payload_present": False,
+    }
+
+
+def plan_wrapper_kind(plan_file: Path) -> tuple[str, str]:
+    if plan_file.name.startswith("agent_advisory_plan_"):
+        return "advisory-only", "agent-advisory-plan"
+    return "queue-owner", "orchestration-plan"
+
+
+def load_orchestration_plan_wrapper(
+    run_dir: str | Path,
+    *,
+    round_id: str,
+    run_id: str = "",
+    orchestration_plan_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = Path(run_dir).expanduser().resolve()
+    plan_file = resolve_path(
+        run_dir_path,
+        orchestration_plan_path,
+        f"runtime/orchestration_plan_{round_id}.json",
+    )
+    controller_authority, source_suffix = plan_wrapper_kind(plan_file)
+    plan_payload = load_orchestration_plan_record(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        artifact_path=str(plan_file),
+        controller_authority=controller_authority,
+        allow_latest_fallback=False,
+    )
+    if isinstance(plan_payload, dict):
+        step_rows = load_orchestration_plan_steps(
+            run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            plan_id=maybe_text(plan_payload.get("plan_id")),
+        )
+        return {
+            "payload": plan_payload,
+            "step_rows": step_rows,
+            "step_row_count": len(step_rows),
+            "source": f"deliberation-plane-{source_suffix}",
+            "artifact_path": str(plan_file),
+            "artifact_present": plan_file.exists(),
+            "payload_present": True,
+        }
+    if plan_file.exists():
+        return orphaned_artifact_wrapper(
+            plan_file,
+            source=f"orphaned-{source_suffix}-artifact",
+        )
+    return {
+        "payload": None,
+        "step_rows": [],
+        "step_row_count": 0,
+        "source": f"missing-{source_suffix}",
+        "artifact_path": str(plan_file),
         "artifact_present": False,
         "payload_present": False,
     }
@@ -961,6 +1023,7 @@ __all__ = [
     "load_final_publication_wrapper",
     "load_falsification_probe_wrapper",
     "load_next_actions_wrapper",
+    "load_orchestration_plan_wrapper",
     "load_promotion_basis_wrapper",
     "load_promotion_gate_wrapper",
     "load_reporting_handoff_wrapper",

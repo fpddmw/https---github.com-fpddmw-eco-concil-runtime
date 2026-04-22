@@ -192,12 +192,26 @@ def _inline_issue_cluster_surface(
         selection_mode="cluster-issue-candidates-from-claim-chain",
         method="controversy-issue-clustering-v1",
     )
+    decision_source = "heuristic-fallback"
+    provenance = {
+        "source_skill": SKILL_NAME,
+        "decision_source": decision_source,
+        "selection_mode": "cluster-issue-candidates-from-claim-chain",
+        "method": "controversy-issue-clustering-v1",
+        "artifact_path": str(output_file),
+        "cluster_source": maybe_text(query_basis.get("cluster_source")),
+        "claim_scope_source": maybe_text(query_basis.get("claim_scope_source")),
+        "verifiability_source": maybe_text(query_basis.get("verifiability_source")),
+        "route_source": maybe_text(query_basis.get("route_source")),
+    }
     wrapper = {
         "schema_version": "n3.0",
         "skill": SKILL_NAME,
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
+        "decision_source": decision_source,
+        "provenance": provenance,
         "query_basis": query_basis,
         **query_basis,
         "observed_inputs": {
@@ -446,12 +460,29 @@ def materialize_controversy_map_skill(
         "selection_mode": "typed-issue-surface-aggregation",
         "method": "controversy-map-aggregation-v3",
     }
+    decision_source = "heuristic-fallback"
+    provenance = {
+        "source_skill": SKILL_NAME,
+        "decision_source": decision_source,
+        "selection_mode": "typed-issue-surface-aggregation",
+        "method": "controversy-map-aggregation-v3",
+        "artifact_path": str(output_file),
+        "issue_clusters_source": maybe_text(query_basis.get("issue_clusters_source")),
+        "stance_groups_source": maybe_text(query_basis.get("stance_groups_source")),
+        "concern_facets_source": maybe_text(query_basis.get("concern_facets_source")),
+        "actor_profiles_source": maybe_text(query_basis.get("actor_profiles_source")),
+        "evidence_citation_types_source": maybe_text(
+            query_basis.get("evidence_citation_types_source")
+        ),
+    }
     wrapper = {
         "schema_version": "n3.0",
         "skill": SKILL_NAME,
         "generated_at_utc": generated_at_utc,
         "run_id": run_id,
         "round_id": round_id,
+        "decision_source": decision_source,
+        "provenance": provenance,
         "query_basis": query_basis,
         **query_basis,
         "observed_inputs": {
@@ -602,6 +633,8 @@ def materialize_controversy_map_skill(
         "analysis_sync": analysis_sync,
         "typed_analysis_sync": typed_analysis_sync,
         "input_analysis_sync": wrapper.get("input_analysis_sync", {}),
+        "decision_source": decision_source,
+        "provenance": provenance,
         "board_handoff": {
             "candidate_ids": canonical_ids,
             "evidence_refs": artifact_refs[:2],

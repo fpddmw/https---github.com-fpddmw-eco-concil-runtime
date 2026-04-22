@@ -29,12 +29,14 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_falsification_probe_snapshot,
     store_moderator_action_records,
     store_moderator_action_snapshot,
+    store_orchestration_plan_record,
     store_promotion_basis_record,
     store_promotion_freeze_record,
     store_round_readiness_assessment,
 )
 
 WRAPPER_NAMES = (
+    "load_orchestration_plan_wrapper",
     "load_next_actions_wrapper",
     "load_falsification_probe_wrapper",
     "load_round_readiness_wrapper",
@@ -179,6 +181,168 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
             "promotion_source": "deliberation-plane-promotion-basis",
         },
     )
+    plan_artifact_path = runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json").resolve()
+    plan_payload = {
+        "schema_version": "runtime-orchestration-plan-v1",
+        "skill": "eco-plan-round-orchestration",
+        "generated_at_utc": "2024-01-01T00:02:00Z",
+        "run_id": RUN_ID,
+        "round_id": ROUND_ID,
+        "plan_id": "orchestration-plan-surface-001",
+        "planning_status": "ready-for-controller",
+        "planning_mode": "planner-backed-phase2",
+        "controller_authority": "queue-owner",
+        "plan_source": "runtime-planner",
+        "probe_stage_included": True,
+        "downstream_posture": "hold-investigation-open",
+        "assigned_role_hints": ["moderator", "challenger"],
+        "phase_decision_basis": {
+            "probe_stage_reason_codes": ["open-probe"],
+            "posture_reason_codes": ["investigation-open"],
+        },
+        "agent_turn_hints": {
+            "primary_role": "moderator",
+            "support_roles": ["moderator", "challenger"],
+            "recommended_skill_sequence": [
+                "eco-open-falsification-probe",
+                "eco-summarize-round-readiness",
+            ],
+        },
+        "observed_state": {
+            "direct_council_queue": False,
+            "next_actions_stage_skipped": False,
+        },
+        "inputs": {
+            "board_path": str((run_dir / "board" / "investigation_board.json").resolve()),
+            "next_actions_path": str(
+                investigation_path(run_dir, f"next_actions_{ROUND_ID}.json").resolve()
+            ),
+            "probes_path": str(
+                investigation_path(
+                    run_dir, f"falsification_probes_{ROUND_ID}.json"
+                ).resolve()
+            ),
+            "readiness_path": str(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json").resolve()
+            ),
+        },
+        "execution_queue": [
+            {
+                "stage_name": "falsification-probes",
+                "stage_kind": "skill",
+                "phase_group": "investigation",
+                "skill_name": "eco-open-falsification-probe",
+                "expected_skill_name": "eco-open-falsification-probe",
+                "assigned_role_hint": "challenger",
+                "required_previous_stages": ["orchestration-planner"],
+                "blocking": True,
+                "resume_policy": "skip-if-completed",
+                "operator_summary": "Open contradiction probes before readiness review.",
+                "reason": "An open contradiction probe remains.",
+                "expected_output_path": str(
+                    investigation_path(
+                        run_dir, f"falsification_probes_{ROUND_ID}.json"
+                    ).resolve()
+                ),
+            },
+            {
+                "stage_name": "round-readiness",
+                "stage_kind": "skill",
+                "phase_group": "readiness",
+                "skill_name": "eco-summarize-round-readiness",
+                "expected_skill_name": "eco-summarize-round-readiness",
+                "assigned_role_hint": "moderator",
+                "required_previous_stages": ["falsification-probes"],
+                "blocking": True,
+                "resume_policy": "skip-if-completed",
+                "operator_summary": "Summarize whether the round can promote.",
+                "reason": "Readiness depends on the open contradiction probe.",
+                "expected_output_path": str(
+                    reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json").resolve()
+                ),
+            },
+        ],
+        "gate_steps": [
+            {
+                "stage_name": "promotion-gate",
+                "stage_kind": "gate",
+                "phase_group": "gate",
+                "required_previous_stages": ["round-readiness"],
+                "blocking": True,
+                "resume_policy": "skip-if-completed",
+                "operator_summary": "Evaluate whether the current round can promote.",
+                "reason": "Gate the round after readiness review.",
+                "expected_output_path": str(
+                    runtime_path(run_dir, f"promotion_gate_{ROUND_ID}.json").resolve()
+                ),
+                "gate_handler": "promotion-gate",
+                "readiness_stage_name": "round-readiness",
+            }
+        ],
+        "derived_exports": [
+            {
+                "stage_name": "board-summary",
+                "stage_kind": "skill",
+                "phase_group": "exports",
+                "skill_name": "eco-summarize-board-state",
+                "expected_skill_name": "eco-summarize-board-state",
+                "assigned_role_hint": "moderator",
+                "required_previous_stages": ["orchestration-planner"],
+                "blocking": False,
+                "resume_policy": "skip-if-completed",
+                "operator_summary": "Materialize a board summary only as a derived export.",
+                "reason": "Board exports remain derived-only.",
+                "expected_output_path": str(
+                    (run_dir / "board" / f"board_state_summary_{ROUND_ID}.json").resolve()
+                ),
+                "required_for_controller": False,
+                "export_mode": "derived-only",
+            }
+        ],
+        "post_gate_steps": [
+            {
+                "stage_name": "promotion-basis",
+                "stage_kind": "skill",
+                "phase_group": "promotion",
+                "skill_name": "eco-promote-evidence-basis",
+                "expected_skill_name": "eco-promote-evidence-basis",
+                "assigned_role_hint": "moderator",
+                "required_previous_stages": ["promotion-gate"],
+                "blocking": True,
+                "resume_policy": "skip-if-completed",
+                "operator_summary": "Freeze the promoted or withheld evidence basis.",
+                "reason": "Persist the evidence basis after gate evaluation.",
+                "expected_output_path": str(
+                    promotion_path(
+                        run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"
+                    ).resolve()
+                ),
+            }
+        ],
+        "stop_conditions": [
+            {
+                "condition_id": "planned-skill-failure",
+                "trigger": "Any planned skill returns blocked or failed.",
+                "effect": "Abort controller execution.",
+            }
+        ],
+        "fallback_path": [
+            {
+                "when": "Gate withholds promotion after readiness review.",
+                "reason": "The contradiction probe remains open.",
+                "suggested_next_skills": ["eco-open-falsification-probe"],
+            }
+        ],
+        "planning_notes": [
+            "Planner output exists to keep the phase-2 queue auditable.",
+        ],
+        "deliberation_sync": {"status": "completed", "sync_mode": "unit-test"},
+    }
+    store_orchestration_plan_record(
+        run_dir,
+        plan_payload=plan_payload,
+        artifact_path=str(plan_artifact_path),
+    )
     supervisor_snapshot = {
         "schema_version": "runtime-supervisor-v3",
         "generated_at_utc": "2024-01-01T00:15:00Z",
@@ -225,6 +389,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
     probes_export = dict(probes)
     probes_export["action_source"] = "deliberation-plane-probes"
     return {
+        "plan": plan_payload,
         "next_actions": next_actions,
         "next_actions_export": next_actions_export,
         "probes": probes,
@@ -257,6 +422,10 @@ class Phase2StateSurfaceTests(unittest.TestCase):
             db_path = analytics_path(run_dir, "signal_plane.sqlite")
 
             write_json(
+                runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"),
+                payloads["plan"],
+            )
+            write_json(
                 investigation_path(run_dir, f"next_actions_{ROUND_ID}.json"),
                 payloads["next_actions"],
             )
@@ -278,6 +447,8 @@ class Phase2StateSurfaceTests(unittest.TestCase):
             )
 
             for query in (
+                "DELETE FROM orchestration_plan_steps WHERE run_id = ? AND round_id = ?",
+                "DELETE FROM orchestration_plans WHERE run_id = ? AND round_id = ?",
                 "DELETE FROM moderator_actions WHERE run_id = ? AND round_id = ?",
                 "DELETE FROM moderator_action_snapshots WHERE run_id = ? AND round_id = ?",
                 "DELETE FROM falsification_probes WHERE run_id = ? AND round_id = ?",
@@ -293,6 +464,11 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 execute_db(db_path, query, (RUN_ID, ROUND_ID))
 
             contexts = {
+                "plan": phase2_state_surfaces.load_orchestration_plan_wrapper(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                ),
                 "next_actions": phase2_state_surfaces.load_next_actions_wrapper(
                     run_dir,
                     run_id=RUN_ID,
@@ -320,6 +496,13 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 ),
             }
 
+            self.assertIsNone(contexts["plan"]["payload"])
+            self.assertTrue(contexts["plan"]["artifact_present"])
+            self.assertFalse(contexts["plan"]["payload_present"])
+            self.assertEqual(
+                "orphaned-orchestration-plan-artifact",
+                contexts["plan"]["source"],
+            )
             self.assertIsNone(contexts["next_actions"]["payload"])
             self.assertTrue(contexts["next_actions"]["artifact_present"])
             self.assertFalse(contexts["next_actions"]["payload_present"])
@@ -380,62 +563,52 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 "phase2-export-materialization-v1",
                 payload["schema_version"],
             )
-            self.assertEqual(5, payload["summary"]["materialized_export_count"])
+            self.assertEqual(6, payload["summary"]["materialized_export_count"])
             self.assertEqual(0, payload["summary"]["missing_db_object_count"])
             self.assertEqual(0, payload["summary"]["orphaned_artifact_count"])
+            self.assertEqual(6, payload["summary"]["target_export_count"])
 
-            expected_next_actions = fetch_raw_json(
-                db_path,
-                """
-                SELECT raw_json
-                FROM moderator_action_snapshots
-                WHERE run_id = ? AND round_id = ?
-                """,
-                (RUN_ID, ROUND_ID),
-            )
-            expected_next_actions["action_source"] = "deliberation-plane-actions"
             self.assertDictEqual(
-                expected_next_actions,
+                phase2_state_surfaces.load_orchestration_plan_wrapper(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                )["payload"],
+                load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json")),
+            )
+
+            self.assertDictEqual(
+                phase2_state_surfaces.load_next_actions_wrapper(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                )["payload"],
                 load_json(investigation_path(run_dir, f"next_actions_{ROUND_ID}.json")),
             )
-            expected_probes = fetch_raw_json(
-                db_path,
-                """
-                SELECT raw_json
-                FROM falsification_probe_snapshots
-                WHERE run_id = ? AND round_id = ?
-                """,
-                (RUN_ID, ROUND_ID),
-            )
-            expected_probes["action_source"] = "deliberation-plane-probes"
             self.assertDictEqual(
-                expected_probes,
+                phase2_state_surfaces.load_falsification_probe_wrapper(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                )["payload"],
                 load_json(
                     investigation_path(run_dir, f"falsification_probes_{ROUND_ID}.json")
                 ),
             )
             self.assertDictEqual(
-                fetch_raw_json(
-                    db_path,
-                    """
-                    SELECT raw_json
-                    FROM round_readiness_assessments
-                    WHERE run_id = ? AND round_id = ?
-                    """,
-                    (RUN_ID, ROUND_ID),
-                ),
+                phase2_state_surfaces.load_round_readiness_wrapper(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                )["payload"],
                 load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")),
             )
             self.assertDictEqual(
-                fetch_raw_json(
-                    db_path,
-                    """
-                    SELECT raw_json
-                    FROM promotion_basis_records
-                    WHERE run_id = ? AND round_id = ?
-                    """,
-                    (RUN_ID, ROUND_ID),
-                ),
+                phase2_state_surfaces.load_promotion_basis_wrapper(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                )["payload"],
                 load_json(
                     promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
                 ),
@@ -494,6 +667,14 @@ class Phase2StateSurfaceTests(unittest.TestCase):
             self.assertIn(
                 "eco-query-environment-signals",
                 operator["query_environment_signals_command"],
+            )
+            self.assertIn(
+                "--object-kind orchestration-plan",
+                operator["query_orchestration_plans_command"],
+            )
+            self.assertIn(
+                "--object-kind orchestration-plan-step",
+                operator["query_orchestration_plan_steps_command"],
             )
             self.assertIn(
                 "--object-kind probe",

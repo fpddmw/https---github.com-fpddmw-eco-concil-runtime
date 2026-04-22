@@ -87,9 +87,12 @@ class ControversyWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", verifiability_payload["analysis_sync"]["status"])
             self.assertEqual("completed", route_payload["analysis_sync"]["status"])
             self.assertEqual("completed", map_payload["analysis_sync"]["status"])
+            self.assertEqual("heuristic-fallback", map_payload["decision_source"])
             self.assertGreaterEqual(verifiability_artifact["assessment_count"], 1)
             self.assertGreaterEqual(route_artifact["route_count"], 1)
             self.assertGreaterEqual(map_artifact["issue_cluster_count"], 1)
+            self.assertEqual("heuristic-fallback", map_artifact["decision_source"])
+            self.assertIn("source_skill", map_artifact["provenance"])
             self.assertTrue(
                 any(
                     assessment["verifiability_kind"] == "empirical-observable"
@@ -284,12 +287,28 @@ class ControversyWorkflowTests(unittest.TestCase):
                 issue_candidate_payload["analysis_sync"]["status"],
             )
             self.assertEqual("completed", issue_cluster_payload["analysis_sync"]["status"])
+            self.assertEqual(
+                "heuristic-fallback",
+                issue_candidate_payload["decision_source"],
+            )
+            self.assertEqual(
+                "heuristic-fallback",
+                issue_cluster_payload["decision_source"],
+            )
             self.assertIn(
                 payload["typed_analysis_sync"]["issue-cluster"]["status"],
                 {"completed", "existing-result-set"},
             )
             self.assertGreaterEqual(issue_candidate_artifact["issue_cluster_count"], 1)
             self.assertGreaterEqual(issue_cluster_artifact["issue_cluster_count"], 1)
+            self.assertEqual(
+                "heuristic-fallback",
+                issue_candidate_artifact["decision_source"],
+            )
+            self.assertEqual(
+                "heuristic-fallback",
+                issue_cluster_artifact["decision_source"],
+            )
             self.assertGreaterEqual(
                 issue_candidate_artifact["issue_cluster_count"],
                 issue_cluster_artifact["issue_cluster_count"],
@@ -306,6 +325,12 @@ class ControversyWorkflowTests(unittest.TestCase):
             self.assertGreaterEqual(concern_facet_artifact["concern_facet_count"], 1)
             self.assertGreaterEqual(actor_profile_artifact["actor_profile_count"], 1)
             self.assertGreaterEqual(citation_type_artifact["citation_type_count"], 1)
+            self.assertEqual("heuristic-fallback", stance_group_artifact["decision_source"])
+            self.assertEqual("heuristic-fallback", concern_facet_artifact["decision_source"])
+            self.assertEqual("heuristic-fallback", actor_profile_artifact["decision_source"])
+            self.assertEqual("heuristic-fallback", citation_type_artifact["decision_source"])
+            self.assertIn("source_skill", stance_group_artifact["provenance"])
+            self.assertIn("source_skill", issue_candidate_artifact["provenance"])
             first_issue_cluster = issue_cluster_artifact["issue_clusters"][0]
             self.assertEqual("issue-cluster-v1", first_issue_cluster["schema_version"])
             self.assertEqual(

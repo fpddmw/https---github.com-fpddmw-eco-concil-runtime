@@ -14,6 +14,7 @@ from .phase2_state_surfaces import (
     load_falsification_probe_wrapper,
     load_final_publication_wrapper,
     load_next_actions_wrapper,
+    load_orchestration_plan_wrapper,
     load_reporting_handoff_wrapper,
     load_supervisor_state_wrapper,
 )
@@ -110,6 +111,7 @@ RECOVERABLE_INPUT_LOADERS = {
 }
 
 RECOVERABLE_OUTPUT_LOADERS = {
+    "orchestration_plan": load_orchestration_plan_wrapper,
     "next_actions": load_next_actions_wrapper,
     "falsification_probes": load_falsification_probe_wrapper,
 }
@@ -521,7 +523,17 @@ def phase2_state_snapshot(
     artifact_hashes: dict[str, str],
 ) -> dict[str, Any]:
     control_state = load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id)
-    plan = load_json_if_exists(orchestration_plan_path(run_dir, round_id)) or {}
+    plan_context = load_orchestration_plan_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        orchestration_plan_path=str(orchestration_plan_path(run_dir, round_id).resolve()),
+    )
+    plan = (
+        plan_context.get("payload")
+        if isinstance(plan_context.get("payload"), dict)
+        else {}
+    )
     gate = (
         control_state.get("promotion_gate", {})
         if isinstance(control_state.get("promotion_gate"), dict)

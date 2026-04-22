@@ -492,6 +492,7 @@
 - `[x]` `eco-plan-round-orchestration` 在 `agent-advisory` 与 `runtime-phase2` 模式下，若 DB 中已存在直接 `proposal / readiness-opinion`，现在都可以跳过 `next-actions` 重算，直接产出 `probe -> readiness` 或 `readiness-only` 队列。
 - `[x]` advisory plan 现在会显式暴露 `direct_council_queue / next_actions_stage_skipped / council_input_counts`，能区分“由 council inputs 直接驱动的 advisory”与“仍依赖 wrapper/action snapshot 的 advisory”。
 - `[x]` `eco-concil-runtime/src/eco_council_runtime/phase2_direct_advisory.py` 已接入主链，能把 DB 中的 `proposal / readiness-opinion / probe` 直接编译为 advisory queue，并把 `plan_source = direct-council-advisory` 写入 advisory artifact、controller 状态与 planning attempts。
+- `[x]` orchestration plan 已升格为 canonical deliberation-plane object：`orchestration-plan / orchestration-plan-step` contract、表、query surface 与 export rebuild 已补齐；`phase2_planning_profile.py / controller.py / cli.py / benchmark.py / agent_entry.py / phase2_exports.py` 现默认先读 DB，runtime/advisory artifact 退回 export/fallback 载体。
 
 - `[x]` 定义 `proposal contract`
 - `[x]` 定义 `challenge contract`
@@ -507,6 +508,7 @@
 
 - `[x]` `controller.py` 已把 `openclaw-agent` 轮次改成 `direct-council-advisory -> agent-advisory -> runtime-planner` 的三级回退链；`runtime planner` 不再是默认入口。
 - `[x]` phase-2 controller artifact 与 round-controller ledger 事件现在都会暴露 `plan_source`，controller 已能区分 `direct-council-advisory / agent-advisory / runtime-planner`。
+- `[x]` controller 在采纳 advisory/runtime plan 时现在会强绑定当前 `run_id / round_id / controller_authority` 再写入 deliberation plane；弱 advisory artifact 即使缺字段，也不能再绕开 DB plan contract。
 - `[x]` `controller.py` 不再强行注入固定 `promotion-gate` / post-gate 序列；plan 现在可以显式声明 `gate_steps / required_previous_stages / stage_kind / gate_handler`，controller 会按计划执行。
 - `[x]` `phase2_contract.py` 已从“controller 唯一真理表”退化成 known-stage default metadata / compatibility fallback；显式 plan 依赖可以覆盖内置依赖。
 - `[x]` `promotion-gate` 的执行分派、readiness 依赖解析与 controller 状态更新已迁入 `kernel/gate.py`；`controller.py` 现在只消费统一 `gate_result`，不再内嵌 `promotion-gate` 特判。
@@ -530,6 +532,7 @@
 - `[x]` `phase2_posture_profile.py` 已接管 controller completion follow-up、supervisor classification / top-actions / round-transition / operator notes / failure notes；`kernel/controller.py / kernel/supervisor.py / cli.py` 现在只消费 injected posture profile。
 - `[x]` `phase2_round_profile.py` 已接管默认 `next_round_id` sequencing；`kernel/supervisor.py / kernel/agent_entry.py` 不再共享或持有内建轮次递增策略，round handoff policy 可以通过 posture / entry profile 双向覆写。
 - `[x]` `kernel/cli.py / post_round.py / benchmark.py` 已把 reporting/publication operator surface 从 `promotion_status` 主导切到 shared reporting surface；operator/query 现在可直接读取 `reporting_ready / blockers / readiness_blocker`。
+- `[x]` 新增 plan DB 回归，覆盖 phase-2 export rebuild、DB 列覆盖 stale `raw_json`、agent advisory plan identity binding 与 runtime kernel advisory 主链。
 - `[x]` 本地扩展大回归 `139` 项通过，覆盖 phase-2 / agent-entry / council / board / reporting / publication / post-round / benchmark 主链。
 
 ### 9.1 必须收缩或迁出的模块
