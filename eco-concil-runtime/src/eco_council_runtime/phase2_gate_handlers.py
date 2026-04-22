@@ -142,6 +142,8 @@ def apply_promotion_gate(
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
+        "stage_name": "promotion-gate",
+        "gate_handler": "promotion-gate",
         "readiness_path": str(readiness_file),
         "readiness_status": readiness_status,
         "promote_allowed": promote_allowed,

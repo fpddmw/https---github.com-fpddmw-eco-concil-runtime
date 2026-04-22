@@ -20,6 +20,10 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.council_objects import (  # noqa: E402
     query_council_objects,
 )
+from eco_council_runtime.deliberation_target_semantics import (  # noqa: E402
+    normalized_deliberation_target,
+    source_proposal_id_from_payload,
+)
 from eco_council_runtime.phase2_fallback_common import (  # noqa: E402
     maybe_text,
     resolve_path,
@@ -378,7 +382,15 @@ def build_probe(
     default_run_id: str,
     default_round_id: str,
 ) -> dict[str, Any]:
-    target = action.get("target", {}) if isinstance(action.get("target"), dict) else {}
+    raw_target = action.get("target", {}) if isinstance(action.get("target"), dict) else {}
+    target = normalized_deliberation_target(
+        raw_target,
+        issue_label=maybe_text(action.get("issue_label")),
+        claim_id=maybe_text(action.get("target_claim_id")),
+        hypothesis_id=maybe_text(action.get("target_hypothesis_id")),
+        ticket_id=maybe_text(action.get("target_ticket_id")),
+        round_id=maybe_text(action.get("round_id")) or maybe_text(default_round_id),
+    )
     action_id = maybe_text(action.get("action_id"))
     hypothesis_id = maybe_text(target.get("hypothesis_id"))
     claim_id = maybe_text(target.get("claim_id"))
@@ -394,7 +406,10 @@ def build_probe(
     policy_source = maybe_text(action.get("policy_source")) or decision_source
     policy_profile = maybe_text(action.get("policy_profile"))
     policy_owner = maybe_text(action.get("policy_owner"))
-    source_ids = unique_texts(list_items(action.get("source_ids")))
+    source_proposal_id = source_proposal_id_from_payload(action)
+    source_ids = unique_texts(
+        list_items(action.get("source_ids")) + ([source_proposal_id] if source_proposal_id else [])
+    )
     return {
         "probe_id": probe_id,
         "run_id": maybe_text(action.get("run_id")) or maybe_text(default_run_id),
@@ -407,6 +422,7 @@ def build_probe(
         "target_hypothesis_id": hypothesis_id,
         "target_claim_id": claim_id,
         "target_ticket_id": ticket_id,
+        "target": target,
         "probe_type": probe_type,
         "controversy_gap": maybe_text(action.get("controversy_gap")),
         "recommended_lane": maybe_text(action.get("recommended_lane")),
@@ -421,10 +437,12 @@ def build_probe(
             else []
         ),
         "source_ids": source_ids,
+        "issue_label": maybe_text(action.get("issue_label")) or maybe_text(target.get("issue_label")),
         "decision_source": decision_source,
         "policy_source": policy_source,
         "policy_profile": policy_profile,
         "policy_owner": policy_owner,
+        "source_proposal_id": source_proposal_id,
         "lineage": unique_texts(
             list_items(action.get("lineage"))
             + source_ids

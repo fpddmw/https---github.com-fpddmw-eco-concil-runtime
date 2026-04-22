@@ -12,9 +12,9 @@ from .canonical_contracts import (
 )
 from .kernel.deliberation_plane import (
     connect_db as connect_deliberation_db,
-    decode_json,
     json_text,
     maybe_text,
+    payload_from_db_row,
     stable_hash,
     utc_now_iso,
 )
@@ -120,6 +120,10 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
         "agent_role_column": "agent_role",
         "status_column": "status",
         "decision_id_column": "",
+        "filter_columns": {
+            "target_kind": "target_kind",
+            "target_id": "target_id",
+        },
     },
     OBJECT_KIND_HYPOTHESIS: {
         "table_name": "hypothesis_cards",
@@ -157,6 +161,16 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
         "status_column": "",
         "decision_id_column": "",
         "readiness_blocker_column": "readiness_blocker",
+        "filter_columns": {
+            "target_kind": "target_object_kind",
+            "target_id": "target_object_id",
+            "issue_label": "issue_label",
+            "route_id": "target_route_id",
+            "assessment_id": "target_assessment_id",
+            "linkage_id": "target_linkage_id",
+            "gap_id": "target_gap_id",
+            "source_proposal_id": "source_proposal_id",
+        },
     },
     OBJECT_KIND_PROBE: {
         "table_name": "falsification_probes",
@@ -166,6 +180,16 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
         "agent_role_column": "owner_role",
         "status_column": "probe_status",
         "decision_id_column": "",
+        "filter_columns": {
+            "target_kind": "target_object_kind",
+            "target_id": "target_object_id",
+            "issue_label": "issue_label",
+            "route_id": "target_route_id",
+            "assessment_id": "target_assessment_id",
+            "linkage_id": "target_linkage_id",
+            "gap_id": "target_gap_id",
+            "source_proposal_id": "source_proposal_id",
+        },
     },
     OBJECT_KIND_READINESS_OPINION: {
         "table_name": "readiness_opinions",
@@ -921,16 +945,14 @@ def fetch_json_rows(
     row = connection.execute(count_query, tuple(params)).fetchone()
     matching_count = int(row["row_count"]) if row is not None else 0
 
-    query = f"SELECT raw_json FROM {table_name}"
+    query = f"SELECT * FROM {table_name}"
     if where_clauses:
         query += " WHERE " + " AND ".join(where_clauses)
     query += f" ORDER BY {order_by} LIMIT ? OFFSET ?"
     rows = connection.execute(query, tuple([*params, limit, offset])).fetchall()
     results: list[dict[str, Any]] = []
     for row in rows:
-        payload = decode_json(maybe_text(row["raw_json"]), {})
-        if isinstance(payload, dict):
-            results.append(payload)
+        results.append(payload_from_db_row(row))
     return matching_count, results
 
 
@@ -943,7 +965,7 @@ def load_promotion_basis_items_for_record(
 ) -> list[dict[str, Any]]:
     rows = connection.execute(
         """
-        SELECT raw_json
+        SELECT *
         FROM promotion_basis_items
         WHERE run_id = ? AND round_id = ? AND basis_id = ?
         ORDER BY item_group, item_index, item_row_id
@@ -952,10 +974,34 @@ def load_promotion_basis_items_for_record(
     ).fetchall()
     results: list[dict[str, Any]] = []
     for row in rows:
-        payload = decode_json(maybe_text(row["raw_json"]), {})
-        if isinstance(payload, dict):
-            results.append(payload)
+        results.append(payload_from_db_row(row))
     return results
+
+
+def add_supported_filter(
+    *,
+    config: dict[str, Any],
+    filter_name: str,
+    filter_value: str,
+    object_kind: str,
+    where_clauses: list[str],
+    params: list[str],
+) -> None:
+    value_text = maybe_text(filter_value)
+    if not value_text:
+        return
+    filter_columns = (
+        config.get("filter_columns", {})
+        if isinstance(config.get("filter_columns"), dict)
+        else {}
+    )
+    column_name = maybe_text(filter_columns.get(filter_name))
+    if not column_name:
+        raise ValueError(
+            f"Unsupported {filter_name} filter for object kind: {object_kind}."
+        )
+    where_clauses.append(f"{column_name} = ?")
+    params.append(value_text)
 
 
 def query_council_objects(
@@ -967,6 +1013,14 @@ def query_council_objects(
     agent_role: str = "",
     status: str = "",
     decision_id: str = "",
+    target_kind: str = "",
+    target_id: str = "",
+    issue_label: str = "",
+    route_id: str = "",
+    assessment_id: str = "",
+    linkage_id: str = "",
+    gap_id: str = "",
+    source_proposal_id: str = "",
     readiness_blocker_only: bool = False,
     include_contract: bool = False,
     include_items: bool = False,
@@ -1002,6 +1056,70 @@ def query_council_objects(
     if decision_id_column and maybe_text(decision_id):
         where_clauses.append(f"{decision_id_column} = ?")
         params.append(maybe_text(decision_id))
+    add_supported_filter(
+        config=config,
+        filter_name="target_kind",
+        filter_value=target_kind,
+        object_kind=normalized_kind,
+        where_clauses=where_clauses,
+        params=params,
+    )
+    add_supported_filter(
+        config=config,
+        filter_name="target_id",
+        filter_value=target_id,
+        object_kind=normalized_kind,
+        where_clauses=where_clauses,
+        params=params,
+    )
+    add_supported_filter(
+        config=config,
+        filter_name="issue_label",
+        filter_value=issue_label,
+        object_kind=normalized_kind,
+        where_clauses=where_clauses,
+        params=params,
+    )
+    add_supported_filter(
+        config=config,
+        filter_name="route_id",
+        filter_value=route_id,
+        object_kind=normalized_kind,
+        where_clauses=where_clauses,
+        params=params,
+    )
+    add_supported_filter(
+        config=config,
+        filter_name="assessment_id",
+        filter_value=assessment_id,
+        object_kind=normalized_kind,
+        where_clauses=where_clauses,
+        params=params,
+    )
+    add_supported_filter(
+        config=config,
+        filter_name="linkage_id",
+        filter_value=linkage_id,
+        object_kind=normalized_kind,
+        where_clauses=where_clauses,
+        params=params,
+    )
+    add_supported_filter(
+        config=config,
+        filter_name="gap_id",
+        filter_value=gap_id,
+        object_kind=normalized_kind,
+        where_clauses=where_clauses,
+        params=params,
+    )
+    add_supported_filter(
+        config=config,
+        filter_name="source_proposal_id",
+        filter_value=source_proposal_id,
+        object_kind=normalized_kind,
+        where_clauses=where_clauses,
+        params=params,
+    )
     if readiness_blocker_only:
         blocker_column = maybe_text(config.get("readiness_blocker_column"))
         if not blocker_column:
@@ -1047,6 +1165,14 @@ def query_council_objects(
             "agent_role": maybe_text(agent_role),
             "status": maybe_text(status),
             "decision_id": maybe_text(decision_id),
+            "target_kind": maybe_text(target_kind),
+            "target_id": maybe_text(target_id),
+            "issue_label": maybe_text(issue_label),
+            "route_id": maybe_text(route_id),
+            "assessment_id": maybe_text(assessment_id),
+            "linkage_id": maybe_text(linkage_id),
+            "gap_id": maybe_text(gap_id),
+            "source_proposal_id": maybe_text(source_proposal_id),
             "readiness_blocker_only": bool(readiness_blocker_only),
         },
         "paging": {

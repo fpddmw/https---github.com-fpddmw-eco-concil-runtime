@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .council_objects import query_council_objects
+from .deliberation_target_semantics import proposal_target_from_payload
 
 OPEN_CHALLENGE_PROPOSAL_KINDS = {
     "open-challenge",
@@ -91,33 +92,7 @@ def unique_texts(values: list[Any]) -> list[str]:
 
 
 def proposal_target(proposal: dict[str, Any]) -> dict[str, Any]:
-    target = proposal.get("target", {})
-    if isinstance(target, dict) and target:
-        return dict(target)
-    target_kind = maybe_text(proposal.get("target_kind"))
-    target_id = maybe_text(proposal.get("target_id"))
-    resolved: dict[str, Any] = {}
-    if target_kind:
-        resolved["object_kind"] = target_kind
-    if target_id:
-        resolved["object_id"] = target_id
-    if maybe_text(proposal.get("target_claim_id")):
-        resolved["claim_id"] = maybe_text(proposal.get("target_claim_id"))
-    if maybe_text(proposal.get("target_hypothesis_id")):
-        resolved["hypothesis_id"] = maybe_text(proposal.get("target_hypothesis_id"))
-    if maybe_text(proposal.get("target_ticket_id")):
-        resolved["ticket_id"] = maybe_text(proposal.get("target_ticket_id"))
-    if maybe_text(proposal.get("target_task_id")):
-        resolved["task_id"] = maybe_text(proposal.get("target_task_id"))
-    if target_kind in {"claim", "claim-candidate", "claim-cluster"} and target_id:
-        resolved.setdefault("claim_id", target_id)
-    if target_kind in {"hypothesis", "hypothesis-card"} and target_id:
-        resolved.setdefault("hypothesis_id", target_id)
-    if target_kind in {"challenge-ticket", "ticket"} and target_id:
-        resolved.setdefault("ticket_id", target_id)
-    if target_kind in {"task", "board-task"} and target_id:
-        resolved.setdefault("task_id", target_id)
-    return resolved
+    return proposal_target_from_payload(proposal)
 
 
 def proposal_operation_kinds(proposal: dict[str, Any]) -> set[str]:

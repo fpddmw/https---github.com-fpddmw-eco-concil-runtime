@@ -288,6 +288,37 @@
   - `tests/test_deliberation_agenda_workflow.py`
   - `tests/test_diffusion_workflow.py`
 
+### 2.23 Batch 19 当前状态
+
+- `已完成` 新增 runtime/control canonical object registry：
+  - `promotion-freeze`
+  - `controller-state`
+  - `gate-state`
+  - `supervisor-state`
+- `已完成` `promotion_freezes` 已补齐 `reporting_ready / reporting_handoff_status / reporting_blockers` 列；控制冻结面不再只靠 `raw_json` 承载 reporting gate 语义。
+- `已完成` deliberation DB 已新增 `controller_snapshots / gate_snapshots / supervisor_snapshots` 三张独立表：
+  - `controller / gate / supervisor` 不再只是 `promotion_freeze.raw_json` 里的嵌套 blob。
+  - `store_promotion_freeze_record(...)` 现在会同时写聚合 freeze row 与独立控制面 row。
+- `已完成` 新增 `eco_council_runtime/control_objects.py` 与 CLI `query-control-objects`：
+  - runtime control plane 现在拥有与 deliberation / reporting 对称的一等 query surface。
+  - 支持 `controller-status / gate-status / promotion-status / supervisor-status / planning-mode / stage-name / gate-handler / reporting-ready-only` 等过滤。
+- `已完成` `kernel/phase2_state_surfaces.py` 已新增 `load_controller_state_wrapper / load_promotion_gate_wrapper`，并把 `load_supervisor_state_wrapper` 升级为优先消费独立 control rows：
+  - `show-run-state` 不再把 `controller / gate / supervisor` 只当 artifact/freeze summary 读取。
+  - phase-2 operator 现已显式暴露 `query_controller_state_command / query_gate_state_command / query_supervisor_state_command / query_promotion_freeze_command`。
+- `已完成` control query surface 已补上 DB-authoritative 回归：
+  - `tests/test_control_query_surface.py` 会故意篡改 `controller_snapshots / gate_snapshots / supervisor_snapshots / promotion_freezes` 的 `raw_json`，并验证查询结果仍由 DB 列恢复。
+  - `tests/test_runtime_kernel.py / tests/test_phase2_state_surfaces.py` 已同步补上 show-run-state operator command 与 control-row/orphaned-artifact 语义。
+- `已完成` 本轮本地验证通过：
+  - `tests/test_control_query_surface.py`
+  - `tests/test_council_query_surface.py`
+  - `tests/test_council_autonomy_flow.py`
+  - `tests/test_council_submission_workflow.py`
+  - `tests/test_investigation_workflow.py`
+  - `tests/test_deliberation_agenda_workflow.py`
+  - `tests/test_phase2_state_surfaces.py`
+  - `tests/test_runtime_kernel.py`
+  - 扩展相关回归共 `67` 项，本地全部通过。
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -334,7 +365,14 @@
 - `[x]` 建立 `promotion-basis`
 - `[x]` 建立 `decision-trace`
 
-### 4.4 通用要求
+### 4.4 Runtime / control plane
+
+- `[x]` 建立 `promotion-freeze`
+- `[x]` 建立 `controller-state`
+- `[x]` 建立 `gate-state`
+- `[x]` 建立 `supervisor-state`
+
+### 4.5 通用要求
 
 - `[x]` `issue-cluster / stance-group / concern-facet / actor-profile / evidence-citation-type / claim-candidate / claim-cluster / claim-scope / verifiability-assessment / verification-route / formal-public-link / representation-gap / diffusion-edge / controversy-map` 支持 item-level query
 - `[x]` 上述 claim-side + typed controversy-chain analysis object 已具备 ID、provenance、evidence refs、lineage、decision source
@@ -524,9 +562,10 @@
 
 ## 14. 硬完成检查表
 
-- `[ ]` canonical signal / analysis / deliberation 对象已经定义并落库
+- `[x]` canonical signal / analysis / deliberation / runtime control 对象已经定义并落库
 - `[x]` formal comments 已成为一等结构化输入
 - `[x]` `hypothesis / challenge / board-task / proposal / next-action / probe / readiness-opinion / readiness-assessment / promotion-basis / decision-trace` 已可 item-level 查询
+- `[x]` `promotion-freeze / controller-state / gate-state / supervisor-state` 已可 item-level 查询
 - `[x]` `reporting-handoff / council-decision / expert-report / final-publication` 已可 item-level 查询
 - `[x]` 删除 `board_summary / board_brief / next_actions / probes / readiness` artifact 后，round 仍可继续
 - `[x]` 主链默认输出已不再是 `claim-observation-link-coverage`

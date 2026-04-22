@@ -9,8 +9,13 @@ from ..canonical_contracts import (
     PLANE_ANALYSIS,
     PLANE_DELIBERATION,
     PLANE_REPORTING,
+    PLANE_RUNTIME,
     PLANE_SIGNAL,
     canonical_contracts_for_plane,
+)
+from ..control_objects import (
+    control_queryable_object_kinds,
+    query_control_objects,
 )
 from ..council_objects import (
     council_queryable_object_kinds,
@@ -80,9 +85,11 @@ from .paths import (
 )
 from .phase2_state_surfaces import (
     build_reporting_surface,
+    load_controller_state_wrapper,
     load_council_decision_wrapper,
     load_expert_report_wrapper,
     load_final_publication_wrapper,
+    load_promotion_gate_wrapper,
     load_reporting_handoff_wrapper,
     load_supervisor_state_wrapper,
 )
@@ -235,6 +242,26 @@ def phase2_operator_view(
         "inspect_command": inspect_command,
         "show_reporting_state_command": (
             f"show-reporting-state --run-dir {run_dir} --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "query_controller_state_command": (
+            f"query-control-objects --run-dir {run_dir} --object-kind controller-state --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "query_gate_state_command": (
+            f"query-control-objects --run-dir {run_dir} --object-kind gate-state --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "query_supervisor_state_command": (
+            f"query-control-objects --run-dir {run_dir} --object-kind supervisor-state --run-id {run_id} --round-id {round_id}"
+            if round_id and run_id
+            else ""
+        ),
+        "query_promotion_freeze_command": (
+            f"query-control-objects --run-dir {run_dir} --object-kind promotion-freeze --run-id {run_id} --round-id {round_id}"
             if round_id and run_id
             else ""
         ),
@@ -653,29 +680,49 @@ def show_run_state(
             run_id=resolved_run_id,
             round_id=selected_round_id,
         )
+        controller_context = load_controller_state_wrapper(
+            run_dir,
+            run_id=resolved_run_id,
+            round_id=selected_round_id,
+            controller_state_path=str(
+                controller_state_path(run_dir, selected_round_id).resolve()
+            ),
+        )
+        gate_context = load_promotion_gate_wrapper(
+            run_dir,
+            run_id=resolved_run_id,
+            round_id=selected_round_id,
+            promotion_gate_path=str(
+                promotion_gate_path(run_dir, selected_round_id).resolve()
+            ),
+        )
+        supervisor_context = load_supervisor_state_wrapper(
+            run_dir,
+            run_id=resolved_run_id,
+            round_id=selected_round_id,
+            supervisor_state_path=str(
+                supervisor_state_path(run_dir, selected_round_id).resolve()
+            ),
+        )
         phase2_state = {
             "plan": load_json_if_exists(orchestration_plan_path(run_dir, selected_round_id)) or {},
-            "promotion_gate": (
-                control_state.get("promotion_gate", {})
-                if isinstance(control_state.get("promotion_gate"), dict)
-                else {}
-            ) or load_json_if_exists(promotion_gate_path(run_dir, selected_round_id)) or {},
-            "controller": (
-                control_state.get("controller", {})
-                if isinstance(control_state.get("controller"), dict)
-                else {}
-            ) or load_json_if_exists(controller_state_path(run_dir, selected_round_id)) or {},
-            "supervisor": load_supervisor_state_wrapper(
-                run_dir,
-                run_id=resolved_run_id,
-                round_id=selected_round_id,
-                supervisor_state_path=str(
-                    supervisor_state_path(run_dir, selected_round_id).resolve()
-                ),
-            ).get("payload", {}),
+            "promotion_gate": gate_context.get("payload", {})
+            if isinstance(gate_context.get("payload"), dict)
+            else {},
+            "controller": controller_context.get("payload", {})
+            if isinstance(controller_context.get("payload"), dict)
+            else {},
+            "supervisor": supervisor_context.get("payload", {})
+            if isinstance(supervisor_context.get("payload"), dict)
+            else {},
             "promotion_freeze": control_state.get("promotion_freeze", {})
             if isinstance(control_state.get("promotion_freeze"), dict)
             else {},
+            "control_contexts": {
+                "controller": controller_context,
+                "promotion_gate": gate_context,
+                "supervisor": supervisor_context,
+            },
         }
         reporting_state = reporting_state_for_round(
             run_dir,
@@ -766,6 +813,14 @@ def add_council_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--agent-role", default="")
     command.add_argument("--status", default="")
     command.add_argument("--decision-id", default="")
+    command.add_argument("--target-kind", default="")
+    command.add_argument("--target-id", default="")
+    command.add_argument("--issue-label", default="")
+    command.add_argument("--route-id", default="")
+    command.add_argument("--assessment-id", default="")
+    command.add_argument("--linkage-id", default="")
+    command.add_argument("--gap-id", default="")
+    command.add_argument("--source-proposal-id", default="")
     command.add_argument("--readiness-blocker-only", action="store_true")
     command.add_argument("--include-contract", action="store_true")
     command.add_argument("--include-items", action="store_true")
@@ -788,6 +843,40 @@ def add_reporting_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--status", default="")
     command.add_argument("--decision-id", default="")
     command.add_argument("--stage", default="")
+    command.add_argument("--include-contract", action="store_true")
+    command.add_argument("--limit", type=int, default=20)
+    command.add_argument("--offset", type=int, default=0)
+    command.add_argument("--pretty", action="store_true")
+
+
+def add_control_query_args(command: argparse.ArgumentParser) -> None:
+    supported_kinds = ", ".join(control_queryable_object_kinds())
+    command.add_argument("--run-dir", required=True)
+    command.add_argument(
+        "--object-kind",
+        required=True,
+        help=f"Canonical control object kind. Supported kinds: {supported_kinds}.",
+    )
+    command.add_argument("--run-id", default="")
+    command.add_argument("--round-id", default="")
+    command.add_argument("--status", default="")
+    command.add_argument("--controller-status", default="")
+    command.add_argument("--gate-status", default="")
+    command.add_argument("--promotion-status", default="")
+    command.add_argument("--supervisor-status", default="")
+    command.add_argument("--planning-mode", default="")
+    command.add_argument("--readiness-status", default="")
+    command.add_argument("--current-stage", default="")
+    command.add_argument("--failed-stage", default="")
+    command.add_argument("--resume-status", default="")
+    command.add_argument("--stage-name", default="")
+    command.add_argument("--gate-handler", default="")
+    command.add_argument("--decision-source", default="")
+    command.add_argument("--supervisor-substatus", default="")
+    command.add_argument("--phase2-posture", default="")
+    command.add_argument("--terminal-state", default="")
+    command.add_argument("--reporting-handoff-status", default="")
+    command.add_argument("--reporting-ready-only", action="store_true")
     command.add_argument("--include-contract", action="store_true")
     command.add_argument("--limit", type=int, default=20)
     command.add_argument("--offset", type=int, default=0)
@@ -969,6 +1058,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_reporting_query_args(reporting_query_cmd)
 
+    control_query_cmd = sub.add_parser(
+        "query-control-objects",
+        help="Query runtime control objects from the shared SQLite query surface.",
+    )
+    add_control_query_args(control_query_cmd)
+
     phase2_export_cmd = sub.add_parser(
         "materialize-phase2-exports",
         help="Rebuild phase-2 investigation/promotion/runtime exports from canonical DB state.",
@@ -994,7 +1089,14 @@ def build_parser() -> argparse.ArgumentParser:
     contract_list_cmd.add_argument(
         "--plane",
         default="",
-        choices=["", PLANE_SIGNAL, PLANE_ANALYSIS, PLANE_DELIBERATION, PLANE_REPORTING],
+        choices=[
+            "",
+            PLANE_SIGNAL,
+            PLANE_ANALYSIS,
+            PLANE_DELIBERATION,
+            PLANE_REPORTING,
+            PLANE_RUNTIME,
+        ],
     )
     contract_list_cmd.add_argument("--pretty", action="store_true")
 
@@ -1580,6 +1682,14 @@ def main(
                 agent_role=args.agent_role,
                 status=args.status,
                 decision_id=args.decision_id,
+                target_kind=args.target_kind,
+                target_id=args.target_id,
+                issue_label=args.issue_label,
+                route_id=args.route_id,
+                assessment_id=args.assessment_id,
+                linkage_id=args.linkage_id,
+                gap_id=args.gap_id,
+                source_proposal_id=args.source_proposal_id,
                 readiness_blocker_only=args.readiness_blocker_only,
                 include_contract=args.include_contract,
                 include_items=args.include_items,
@@ -1613,6 +1723,51 @@ def main(
                 status=args.status,
                 decision_id=args.decision_id,
                 stage=args.stage,
+                include_contract=args.include_contract,
+                limit=args.limit,
+                offset=args.offset,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_dir": str(run_dir),
+                    "object_kind": args.object_kind,
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "query-control-objects":
+        try:
+            payload = query_control_objects(
+                run_dir,
+                object_kind=args.object_kind,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                status=args.status,
+                controller_status=args.controller_status,
+                gate_status=args.gate_status,
+                promotion_status=args.promotion_status,
+                supervisor_status=args.supervisor_status,
+                planning_mode=args.planning_mode,
+                readiness_status=args.readiness_status,
+                current_stage=args.current_stage,
+                failed_stage=args.failed_stage,
+                resume_status=args.resume_status,
+                stage_name=args.stage_name,
+                gate_handler=args.gate_handler,
+                decision_source=args.decision_source,
+                supervisor_substatus=args.supervisor_substatus,
+                phase2_posture=args.phase2_posture,
+                terminal_state=args.terminal_state,
+                reporting_handoff_status=args.reporting_handoff_status,
+                reporting_ready_only=args.reporting_ready_only,
                 include_contract=args.include_contract,
                 limit=args.limit,
                 offset=args.offset,

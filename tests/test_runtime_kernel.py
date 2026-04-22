@@ -2202,6 +2202,22 @@ class RuntimeKernelTests(unittest.TestCase):
                 state_payload["phase2"]["operator"]["show_reporting_state_command"],
             )
             self.assertIn(
+                "query-control-objects",
+                state_payload["phase2"]["operator"]["query_controller_state_command"],
+            )
+            self.assertIn(
+                "--object-kind gate-state",
+                state_payload["phase2"]["operator"]["query_gate_state_command"],
+            )
+            self.assertIn(
+                "--object-kind supervisor-state",
+                state_payload["phase2"]["operator"]["query_supervisor_state_command"],
+            )
+            self.assertIn(
+                "--object-kind promotion-freeze",
+                state_payload["phase2"]["operator"]["query_promotion_freeze_command"],
+            )
+            self.assertIn(
                 "--readiness-blocker-only",
                 state_payload["phase2"]["operator"]["query_readiness_blockers_command"],
             )

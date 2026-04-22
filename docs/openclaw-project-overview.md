@@ -41,7 +41,11 @@ OpenClaw 当前更准确的定位是：
    - 已能把 hypothesis、challenge、board-task、proposal、next-action、probe、readiness、decision trace、round transition 等议会状态写入 DB-first 状态面。
 5. `reporting plane`
    - 已建立独立 reporting canonical plane、独立 query surface，并把 reporting artifact 降级为 DB-backed export；`materialize-reporting-exports` 已可从 SQLite 重建 handoff / decision / expert report / final publication 全套导出物。
-6. `agent entry / phase-2 orchestration`
+6. `runtime / control plane`
+   - `promotion-freeze / controller-state / gate-state / supervisor-state` 已进入 runtime canonical contract registry。
+   - deliberation DB 已新增 `controller_snapshots / gate_snapshots / supervisor_snapshots` 独立表，`query-control-objects` 也已提供对称的一等 query surface。
+   - `show-run-state` 与 phase-2 state wrapper 现在会优先消费这些 control rows，而不是只读 `promotion_freeze.raw_json` 或 runtime artifact。
+7. `agent entry / phase-2 orchestration`
    - `openclaw-agent` 轮次进入 phase-2 时，controller 与 agent entry 已能优先采用 `direct-council-advisory` plan，并把 `plan_source / planning_attempts` 写入 controller 状态；当 DB 中已有直接 `proposal / readiness-opinion / probe` 时，advisory queue 已能直接由这些对象编译，不再强制重跑 planner skill。与此同时，`next_actions / probes / readiness` 的 DB/artifact read surface 已从 `investigation_planning.py` 抽到独立模块，phase-2 主链对启发式规划模块的直连已经开始断开。
 
 这说明系统已经脱离“抓数据 + 生成文档”的脚本集合，具备了共享状态、受治理执行和跨轮次恢复的骨架。
@@ -60,7 +64,7 @@ OpenClaw 当前更准确的定位是：
 
 ### 4.2 当前状态源的真实情况
 
-当前系统已经明显转向 DB-first；reporting/publication 已基本切到 DB-native，而 phase-2 / investigation 的关键中间态也已经收口到 DB-native only + export rebuild。但整轮议会流程还没有彻底摆脱 controller/operator summary export 与旧主链假设。
+当前系统已经明显转向 DB-first；reporting/publication、phase-2 / investigation 中间态，以及 phase-2 control surface 都已经收口到 DB-native only + export rebuild。但整轮议会流程还没有彻底摆脱 orchestration plan / operator export 与旧主链假设。
 
 已经成立的部分：
 
@@ -68,16 +72,17 @@ OpenClaw 当前更准确的定位是：
 2. result-set / lineage 与 deliberation state 已经形成稳定的 DB 写入面。
 3. reporting / publication 现在已经可以从 DB canonical objects 重新物化；artifact-only 文件也会被显式视为 orphaned export，而不是隐式恢复源。
 4. `next_actions / probes / readiness / promotion_basis / supervisor_state` 现在也都能从 DB canonical rows/snapshots 重建；phase-2 artifact 已降级为 export-only。
+5. `controller / gate / supervisor / promotion_freeze` 现在也拥有独立 runtime canonical rows 与 query surface；控制面不再只是 `promotion_freeze.raw_json` 的嵌套 snapshot。
 
 尚未完全成立的部分：
 
-1. `openclaw-agent` 的 advisory 主路径已基本 DB-native，但 controller/operator 仍默认暴露一批 summary / planner export。
+1. `openclaw-agent` 的 advisory 主路径已基本 DB-native，但 `orchestration_plan` 仍主要是 runtime export，而不是独立 canonical object。
 2. 某些 runtime/post-round/benchmark 控制链路仍保留历史导出物约定。
 3. analysis plane 的 controversy 主结构链已基本 DB-native；当前残余问题已主要收缩到 `issue / stance / concern / actor / citation` typed decomposition、board/reporting issue-centric 化，以及少数 runtime export 约定与旧 fallback heuristic。
 
 因此，当前最准确的判断不是“议会已经完全基于数据库运作”，而是：
 
-`议会关键状态、controversy 主链与 phase-2 / reporting 中间态已大体 DB-native，但整轮议会流程还没有完全摆脱 runtime 控制导出物与少数旧主链假设。`
+`议会关键状态、controversy 主链、phase-2 / reporting 中间态与 phase-2 control surface 已大体 DB-native，但整轮议会流程还没有完全摆脱 orchestration export 与少数旧主链假设。`
 
 ## 5. 当前系统的关键问题
 
@@ -142,7 +147,7 @@ OpenClaw 当前更准确的定位是：
 2. 关键 phase-2 对象可以 item-level 查询，而不是只存整包 snapshot。
 3. reporting 与 publication 应默认从 DB 重新物化，而不是依赖历史 handoff 文件。
 
-这一标准现在已经在 reporting/publication、phase-2 investigation 中间态、formal/public/environment signal plane typed 化，以及 controversy 主结构链和 issue typed layer 上基本达到；剩余缺口主要转移到 controller/operator 导出物、少数 phase-2 snapshot 对象与旧 empirical 主链默认方向上。
+这一标准现在已经在 reporting/publication、phase-2 investigation 中间态、phase-2 control surface、formal/public/environment signal plane typed 化，以及 controversy 主结构链和 issue typed layer 上基本达到；剩余缺口主要转移到 orchestration plan / agent entry / post-round / benchmark 的导出约定，以及旧 empirical 主链默认方向上。
 
 ## 6. 下一阶段的目标架构
 
@@ -205,6 +210,11 @@ OpenClaw 当前更准确的定位是：
    - `probe`
    - `readiness-assessment`
    - `promotion-basis`
+4. `runtime / control plane`
+   - `promotion-freeze`
+   - `controller-state`
+   - `gate-state`
+   - `supervisor-state`
 
 这里的关键是：议会关键对象不能只存在于导出物里，必须进入可查询的 plane。
 

@@ -285,6 +285,9 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 "DELETE FROM round_readiness_assessments WHERE run_id = ? AND round_id = ?",
                 "DELETE FROM promotion_basis_items WHERE run_id = ? AND round_id = ?",
                 "DELETE FROM promotion_basis_records WHERE run_id = ? AND round_id = ?",
+                "DELETE FROM controller_snapshots WHERE run_id = ? AND round_id = ?",
+                "DELETE FROM gate_snapshots WHERE run_id = ? AND round_id = ?",
+                "DELETE FROM supervisor_snapshots WHERE run_id = ? AND round_id = ?",
                 "DELETE FROM promotion_freezes WHERE run_id = ? AND round_id = ?",
             ):
                 execute_db(db_path, query, (RUN_ID, ROUND_ID))

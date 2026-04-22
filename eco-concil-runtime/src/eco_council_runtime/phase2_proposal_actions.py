@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .deliberation_target_semantics import proposal_target_from_payload
 from .phase2_fallback_common import maybe_number, maybe_text, stable_hash, unique_texts
 
 COUNCIL_PROPOSAL_POLICY_PROFILE = "agent-council-proposal-v1"
@@ -51,31 +52,7 @@ def council_proposal_annotation(
 
 
 def proposal_target(proposal: dict[str, Any]) -> dict[str, Any]:
-    target = proposal.get("target", {})
-    if isinstance(target, dict) and target:
-        return dict(target)
-    target_kind = maybe_text(proposal.get("target_kind"))
-    target_id = maybe_text(proposal.get("target_id"))
-    resolved: dict[str, Any] = {}
-    if target_kind:
-        resolved["object_kind"] = target_kind
-    if target_id:
-        resolved["object_id"] = target_id
-    if maybe_text(proposal.get("target_claim_id")):
-        resolved["claim_id"] = maybe_text(proposal.get("target_claim_id"))
-    if maybe_text(proposal.get("target_hypothesis_id")):
-        resolved["hypothesis_id"] = maybe_text(proposal.get("target_hypothesis_id"))
-    if maybe_text(proposal.get("target_ticket_id")):
-        resolved["ticket_id"] = maybe_text(proposal.get("target_ticket_id"))
-    if target_kind in {"claim", "claim-candidate", "claim-cluster"} and target_id:
-        resolved.setdefault("claim_id", target_id)
-    if target_kind in {"hypothesis", "hypothesis-card"} and target_id:
-        resolved.setdefault("hypothesis_id", target_id)
-    if target_kind in {"challenge-ticket", "ticket"} and target_id:
-        resolved.setdefault("ticket_id", target_id)
-    if target_kind == "issue-cluster" and target_id:
-        resolved.setdefault("map_issue_id", target_id)
-    return resolved
+    return proposal_target_from_payload(proposal)
 
 
 def action_signature(action: dict[str, Any]) -> str:
@@ -232,5 +209,6 @@ def action_from_council_proposal(
                 "decision_source": decision_source,
             }
         ),
+        "source_proposal_id": proposal_id,
         **council_proposal_annotation(decision_source=decision_source),
     }

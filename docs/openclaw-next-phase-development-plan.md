@@ -378,6 +378,30 @@
    - `tests/test_deliberation_agenda_workflow.py`
    - `tests/test_diffusion_workflow.py`
 
+## 2.19 Batch 19 当前已交付
+
+第十九批把 phase-2 控制面最后一块“DB 里只有聚合 freeze，`controller / gate / supervisor` 仍主要藏在 nested raw_json / runtime artifact 里”的缺口收口，已落地以下硬改动：
+
+1. 新增 runtime/control canonical object registry：
+   - `promotion-freeze`
+   - `controller-state`
+   - `gate-state`
+   - `supervisor-state`
+2. deliberation DB 已新增 `controller_snapshots / gate_snapshots / supervisor_snapshots` 三张独立表：
+   - `controller / gate / supervisor` 不再只是 `promotion_freeze.raw_json` 里的嵌套 snapshot。
+   - `store_promotion_freeze_record(...)` 现在会同时写聚合 freeze row 与独立 control rows。
+3. `promotion_freezes` 已补齐 `reporting_ready / reporting_handoff_status / reporting_blockers` 列：
+   - runtime control freeze 自身也能直接承担 reporting gate summary，不再只能去 supervisor blob 里翻字段。
+4. 新增 `eco_council_runtime/control_objects.py` 与 CLI `query-control-objects`：
+   - runtime/control plane 现在拥有与 `query-council-objects / query-reporting-objects` 对称的一等 query surface。
+   - 支持 `controller-status / gate-status / promotion-status / supervisor-status / planning-mode / stage-name / gate-handler / reporting-ready-only` 等过滤。
+5. `kernel/phase2_state_surfaces.py` 已新增 `load_controller_state_wrapper / load_promotion_gate_wrapper`，并把 `load_supervisor_state_wrapper` 升级为优先消费独立 control rows：
+   - `show-run-state` 不再把 `controller / gate / supervisor` 只当 `promotion_freeze` summary 或 artifact fallback。
+   - phase-2 operator 现在显式暴露 `query_controller_state_command / query_gate_state_command / query_supervisor_state_command / query_promotion_freeze_command`。
+6. 已新增 `tests/test_control_query_surface.py`，并补强 `tests/test_runtime_kernel.py / tests/test_phase2_state_surfaces.py`：
+   - 新回归会故意篡改 `controller_snapshots / gate_snapshots / supervisor_snapshots / promotion_freezes` 的 `raw_json`，验证 control query surface 仍由 DB 列恢复真值。
+   - 扩展相关回归共 `67` 项，本地全部通过。
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足
@@ -420,7 +444,18 @@
 
 ### 3.5 议会流程还不够 DB-native
 
-当前系统虽然已经 DB-first，但很多控制与恢复链仍显著依赖 artifact。
+当前系统虽然已经 DB-first，但在本批之前，phase-2 控制面仍明显依赖 `promotion_freeze` nested snapshot 与 runtime artifact。
+
+这一层现在已经基本收口：
+
+1. `controller / gate / supervisor / promotion-freeze` 已拥有独立 canonical contract 与 query surface。
+2. `show-run-state` 与 phase-2 state wrapper 已优先走 DB control rows，而不是 artifact。
+3. control query surface 已显式验证“DB 列覆盖 stale raw_json”。
+
+当前剩余尾项主要收缩到：
+
+1. `orchestration_plan` 仍主要是 runtime export，而不是独立 canonical object。
+2. `post-round / benchmark` 个别表面仍保留 artifact 命名与导出约定。
 
 彻底修正后的目标：
 

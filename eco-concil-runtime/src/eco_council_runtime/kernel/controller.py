@@ -726,6 +726,15 @@ def run_phase2_round_with_contract_mode(
                 gate_handler = maybe_text(gate_result.get("gate_handler")) or maybe_text(blueprint.get("gate_handler")) or stage_name
                 readiness_stage_name = maybe_text(gate_result.get("readiness_stage_name"))
                 gate_payload = gate_result.get("gate_payload", {}) if isinstance(gate_result.get("gate_payload"), dict) else {}
+                if gate_payload:
+                    gate_payload["stage_name"] = (
+                        maybe_text(gate_payload.get("stage_name")) or stage_name
+                    )
+                    gate_payload["gate_handler"] = (
+                        maybe_text(gate_payload.get("gate_handler")) or gate_handler
+                    )
+                    if readiness_stage_name:
+                        gate_payload["readiness_stage_name"] = readiness_stage_name
                 gate_updates = gate_result.get("controller_updates", {}) if isinstance(gate_result.get("controller_updates"), dict) else {}
                 gate_event_id = new_runtime_event_id(
                     "runtimeevt",

@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from ..canonical_contracts import canonical_contract, validate_canonical_payload
+from ..deliberation_target_semantics import (
+    deliberation_anchor_fields,
+    normalized_deliberation_target,
+    source_proposal_id_from_payload,
+)
 from ..phase2_action_semantics import action_is_readiness_blocker, maybe_bool
 from ..reporting_status import (
     normalize_reporting_handoff_status,
@@ -187,6 +192,9 @@ CREATE TABLE IF NOT EXISTS promotion_freezes (
     promote_allowed INTEGER NOT NULL DEFAULT 0,
     gate_reasons_json TEXT NOT NULL DEFAULT '[]',
     recommended_next_skills_json TEXT NOT NULL DEFAULT '[]',
+    reporting_ready INTEGER NOT NULL DEFAULT 0,
+    reporting_handoff_status TEXT NOT NULL DEFAULT '',
+    reporting_blockers_json TEXT NOT NULL DEFAULT '[]',
     controller_artifact_path TEXT NOT NULL DEFAULT '',
     gate_artifact_path TEXT NOT NULL DEFAULT '',
     supervisor_artifact_path TEXT NOT NULL DEFAULT '',
@@ -195,6 +203,145 @@ CREATE TABLE IF NOT EXISTS promotion_freezes (
 );
 CREATE INDEX IF NOT EXISTS idx_promotion_freezes_round_updated
 ON promotion_freezes(run_id, round_id, updated_at_utc, freeze_id);
+CREATE INDEX IF NOT EXISTS idx_promotion_freezes_round_statuses
+ON promotion_freezes(
+    run_id,
+    round_id,
+    promotion_status,
+    gate_status,
+    supervisor_status,
+    freeze_id
+);
+
+CREATE TABLE IF NOT EXISTS controller_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    controller_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    controller_status TEXT NOT NULL DEFAULT '',
+    planning_mode TEXT NOT NULL DEFAULT '',
+    current_stage TEXT NOT NULL DEFAULT '',
+    failed_stage TEXT NOT NULL DEFAULT '',
+    resume_status TEXT NOT NULL DEFAULT '',
+    readiness_status TEXT NOT NULL DEFAULT '',
+    gate_status TEXT NOT NULL DEFAULT '',
+    promotion_status TEXT NOT NULL DEFAULT '',
+    resume_recommended INTEGER NOT NULL DEFAULT 0,
+    restart_recommended INTEGER NOT NULL DEFAULT 0,
+    resume_from_stage TEXT NOT NULL DEFAULT '',
+    completed_stage_names_json TEXT NOT NULL DEFAULT '[]',
+    pending_stage_names_json TEXT NOT NULL DEFAULT '[]',
+    gate_reasons_json TEXT NOT NULL DEFAULT '[]',
+    recommended_next_skills_json TEXT NOT NULL DEFAULT '[]',
+    execution_policy_json TEXT NOT NULL DEFAULT '{}',
+    progress_json TEXT NOT NULL DEFAULT '{}',
+    recovery_json TEXT NOT NULL DEFAULT '{}',
+    planning_json TEXT NOT NULL DEFAULT '{}',
+    planning_attempts_json TEXT NOT NULL DEFAULT '[]',
+    stage_contracts_json TEXT NOT NULL DEFAULT '{}',
+    steps_json TEXT NOT NULL DEFAULT '[]',
+    artifacts_json TEXT NOT NULL DEFAULT '{}',
+    failure_json TEXT NOT NULL DEFAULT '{}',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_controller_snapshots_round
+ON controller_snapshots(run_id, round_id, generated_at_utc, snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_controller_snapshots_round_status
+ON controller_snapshots(
+    run_id,
+    round_id,
+    controller_status,
+    planning_mode,
+    snapshot_id
+);
+
+CREATE TABLE IF NOT EXISTS gate_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    gate_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    stage_name TEXT NOT NULL DEFAULT '',
+    gate_handler TEXT NOT NULL DEFAULT '',
+    gate_status TEXT NOT NULL DEFAULT '',
+    readiness_status TEXT NOT NULL DEFAULT '',
+    promote_allowed INTEGER NOT NULL DEFAULT 0,
+    decision_source TEXT NOT NULL DEFAULT '',
+    promotion_resolution_mode TEXT NOT NULL DEFAULT '',
+    gate_reasons_json TEXT NOT NULL DEFAULT '[]',
+    supporting_proposal_ids_json TEXT NOT NULL DEFAULT '[]',
+    rejected_proposal_ids_json TEXT NOT NULL DEFAULT '[]',
+    supporting_opinion_ids_json TEXT NOT NULL DEFAULT '[]',
+    rejected_opinion_ids_json TEXT NOT NULL DEFAULT '[]',
+    council_input_counts_json TEXT NOT NULL DEFAULT '{}',
+    recommended_next_skills_json TEXT NOT NULL DEFAULT '[]',
+    warnings_json TEXT NOT NULL DEFAULT '[]',
+    readiness_path TEXT NOT NULL DEFAULT '',
+    output_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_gate_snapshots_round
+ON gate_snapshots(run_id, round_id, generated_at_utc, snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_gate_snapshots_round_handler
+ON gate_snapshots(
+    run_id,
+    round_id,
+    stage_name,
+    gate_handler,
+    gate_status,
+    snapshot_id
+);
+
+CREATE TABLE IF NOT EXISTS supervisor_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    supervisor_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    supervisor_status TEXT NOT NULL DEFAULT '',
+    supervisor_substatus TEXT NOT NULL DEFAULT '',
+    phase2_posture TEXT NOT NULL DEFAULT '',
+    terminal_state TEXT NOT NULL DEFAULT '',
+    recovery_posture TEXT NOT NULL DEFAULT '',
+    operator_action TEXT NOT NULL DEFAULT '',
+    controller_status TEXT NOT NULL DEFAULT '',
+    planning_mode TEXT NOT NULL DEFAULT '',
+    readiness_status TEXT NOT NULL DEFAULT '',
+    gate_status TEXT NOT NULL DEFAULT '',
+    promotion_status TEXT NOT NULL DEFAULT '',
+    reporting_ready INTEGER NOT NULL DEFAULT 0,
+    reporting_handoff_status TEXT NOT NULL DEFAULT '',
+    resume_status TEXT NOT NULL DEFAULT '',
+    current_stage TEXT NOT NULL DEFAULT '',
+    failed_stage TEXT NOT NULL DEFAULT '',
+    resume_recommended INTEGER NOT NULL DEFAULT 0,
+    restart_recommended INTEGER NOT NULL DEFAULT 0,
+    resume_from_stage TEXT NOT NULL DEFAULT '',
+    reporting_blockers_json TEXT NOT NULL DEFAULT '[]',
+    recommended_next_skills_json TEXT NOT NULL DEFAULT '[]',
+    execution_policy_json TEXT NOT NULL DEFAULT '{}',
+    round_transition_json TEXT NOT NULL DEFAULT '{}',
+    top_actions_json TEXT NOT NULL DEFAULT '[]',
+    operator_notes_json TEXT NOT NULL DEFAULT '[]',
+    inspection_paths_json TEXT NOT NULL DEFAULT '{}',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_supervisor_snapshots_round
+ON supervisor_snapshots(run_id, round_id, generated_at_utc, snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_supervisor_snapshots_round_status
+ON supervisor_snapshots(
+    run_id,
+    round_id,
+    supervisor_status,
+    reporting_ready,
+    snapshot_id
+);
 
 CREATE TABLE IF NOT EXISTS moderator_actions (
     action_id TEXT PRIMARY KEY,
@@ -208,6 +355,14 @@ CREATE TABLE IF NOT EXISTS moderator_actions (
     target_hypothesis_id TEXT NOT NULL DEFAULT '',
     target_claim_id TEXT NOT NULL DEFAULT '',
     target_ticket_id TEXT NOT NULL DEFAULT '',
+    target_object_kind TEXT NOT NULL DEFAULT '',
+    target_object_id TEXT NOT NULL DEFAULT '',
+    issue_label TEXT NOT NULL DEFAULT '',
+    target_route_id TEXT NOT NULL DEFAULT '',
+    target_assessment_id TEXT NOT NULL DEFAULT '',
+    target_linkage_id TEXT NOT NULL DEFAULT '',
+    target_gap_id TEXT NOT NULL DEFAULT '',
+    source_proposal_id TEXT NOT NULL DEFAULT '',
     controversy_gap TEXT NOT NULL DEFAULT '',
     recommended_lane TEXT NOT NULL DEFAULT '',
     probe_candidate INTEGER NOT NULL DEFAULT 0,
@@ -222,6 +377,10 @@ CREATE TABLE IF NOT EXISTS moderator_actions (
 );
 CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_rank
 ON moderator_actions(run_id, round_id, action_rank, action_id);
+CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_target
+ON moderator_actions(run_id, round_id, target_object_kind, target_object_id, action_id);
+CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_issue
+ON moderator_actions(run_id, round_id, issue_label, source_proposal_id, action_id);
 
 CREATE TABLE IF NOT EXISTS moderator_action_snapshots (
     snapshot_id TEXT PRIMARY KEY,
@@ -251,6 +410,14 @@ CREATE TABLE IF NOT EXISTS falsification_probes (
     target_hypothesis_id TEXT NOT NULL DEFAULT '',
     target_claim_id TEXT NOT NULL DEFAULT '',
     target_ticket_id TEXT NOT NULL DEFAULT '',
+    target_object_kind TEXT NOT NULL DEFAULT '',
+    target_object_id TEXT NOT NULL DEFAULT '',
+    issue_label TEXT NOT NULL DEFAULT '',
+    target_route_id TEXT NOT NULL DEFAULT '',
+    target_assessment_id TEXT NOT NULL DEFAULT '',
+    target_linkage_id TEXT NOT NULL DEFAULT '',
+    target_gap_id TEXT NOT NULL DEFAULT '',
+    source_proposal_id TEXT NOT NULL DEFAULT '',
     probe_type TEXT NOT NULL DEFAULT '',
     controversy_gap TEXT NOT NULL DEFAULT '',
     recommended_lane TEXT NOT NULL DEFAULT '',
@@ -265,6 +432,10 @@ CREATE TABLE IF NOT EXISTS falsification_probes (
 );
 CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_status
 ON falsification_probes(run_id, round_id, probe_status, opened_at_utc, probe_id);
+CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_target
+ON falsification_probes(run_id, round_id, target_object_kind, target_object_id, probe_id);
+CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_issue
+ON falsification_probes(run_id, round_id, issue_label, source_proposal_id, probe_id);
 
 CREATE TABLE IF NOT EXISTS falsification_probe_snapshots (
     snapshot_id TEXT PRIMARY KEY,
@@ -565,6 +736,97 @@ def decode_json(text: str, default: Any) -> Any:
         return default
 
 
+BOOLEAN_ROW_COLUMNS = {
+    "next_round_required",
+    "probe_candidate",
+    "promote_allowed",
+    "readiness_blocker",
+    "restart_recommended",
+    "resume_recommended",
+    "reporting_ready",
+    "sufficient_for_promotion",
+}
+
+
+def payload_from_db_row(row: sqlite3.Row) -> dict[str, Any]:
+    payload = decode_json(maybe_text(row["raw_json"]), {})
+    normalized = payload if isinstance(payload, dict) else {}
+    for key in row.keys():
+        if key == "raw_json":
+            continue
+        value = row[key]
+        if key in BOOLEAN_ROW_COLUMNS:
+            normalized[key] = bool(value)
+            continue
+        if key.endswith("_json"):
+            decoded = decode_json(maybe_text(value), None)
+            if isinstance(decoded, (list, dict)):
+                normalized[key[:-5]] = decoded
+            continue
+        if isinstance(value, str):
+            normalized[key] = maybe_text(value)
+            continue
+        if value is not None:
+            normalized[key] = value
+    if any(
+        maybe_text(normalized.get(field_name))
+        for field_name in (
+            "target_object_kind",
+            "target_object_id",
+            "target_kind",
+            "target_id",
+            "target_claim_id",
+            "target_hypothesis_id",
+            "target_ticket_id",
+            "target_route_id",
+            "target_assessment_id",
+            "target_linkage_id",
+            "target_gap_id",
+        )
+    ) or isinstance(normalized.get("target"), dict):
+        normalized["target"] = normalized_deliberation_target(
+            normalized.get("target"),
+            object_kind=maybe_text(normalized.get("target_object_kind"))
+            or maybe_text(normalized.get("target_kind")),
+            object_id=maybe_text(normalized.get("target_object_id"))
+            or maybe_text(normalized.get("target_id")),
+            issue_label=maybe_text(normalized.get("issue_label")),
+            claim_id=maybe_text(normalized.get("target_claim_id")),
+            hypothesis_id=maybe_text(normalized.get("target_hypothesis_id")),
+            ticket_id=maybe_text(normalized.get("target_ticket_id")),
+            route_id=maybe_text(normalized.get("target_route_id")),
+            assessment_id=maybe_text(normalized.get("target_assessment_id")),
+            linkage_id=maybe_text(normalized.get("target_linkage_id")),
+            gap_id=maybe_text(normalized.get("target_gap_id")),
+            round_id=maybe_text(normalized.get("round_id")),
+        )
+    source_proposal_id = source_proposal_id_from_payload(normalized)
+    if source_proposal_id:
+        normalized["source_proposal_id"] = source_proposal_id
+    if (
+        maybe_text(normalized.get("supervisor_id"))
+        and not maybe_text(normalized.get("supervisor_path"))
+        and maybe_text(normalized.get("artifact_path"))
+    ):
+        normalized["supervisor_path"] = maybe_text(normalized.get("artifact_path"))
+    return normalized
+
+
+def cleaned_wrapper_record(
+    payload: dict[str, Any],
+    *,
+    metadata_fields: tuple[str, ...],
+    optional_empty_fields: tuple[str, ...],
+) -> dict[str, Any]:
+    normalized = dict(payload)
+    for field_name in metadata_fields:
+        normalized.pop(field_name, None)
+    for field_name in optional_empty_fields:
+        if field_name in normalized and not maybe_text(normalized.get(field_name)):
+            normalized.pop(field_name, None)
+    return normalized
+
+
 def coerce_int(value: Any) -> int:
     try:
         return max(0, int(value or 0))
@@ -645,6 +907,23 @@ def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
         "readiness_blocker",
         "INTEGER NOT NULL DEFAULT 1",
     )
+    for table_name in ("moderator_actions", "falsification_probes"):
+        for column_name in (
+            "target_object_kind",
+            "target_object_id",
+            "issue_label",
+            "target_route_id",
+            "target_assessment_id",
+            "target_linkage_id",
+            "target_gap_id",
+            "source_proposal_id",
+        ):
+            ensure_column(
+                connection,
+                table_name,
+                column_name,
+                "TEXT NOT NULL DEFAULT ''",
+            )
     ensure_column(
         connection,
         "reporting_handoffs",
@@ -675,10 +954,53 @@ def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
         "reporting_ready",
         "INTEGER NOT NULL DEFAULT 0",
     )
+    for column_name, column_sql in (
+        ("reporting_ready", "INTEGER NOT NULL DEFAULT 0"),
+        ("reporting_handoff_status", "TEXT NOT NULL DEFAULT ''"),
+        ("reporting_blockers_json", "TEXT NOT NULL DEFAULT '[]'"),
+    ):
+        ensure_column(connection, "promotion_freezes", column_name, column_sql)
     connection.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_board_events_round_sequence
         ON board_events(run_id, round_id, event_index, event_id)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_target
+        ON moderator_actions(run_id, round_id, target_object_kind, target_object_id, action_id)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_moderator_actions_round_issue
+        ON moderator_actions(run_id, round_id, issue_label, source_proposal_id, action_id)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_target
+        ON falsification_probes(run_id, round_id, target_object_kind, target_object_id, probe_id)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_falsification_probes_round_issue
+        ON falsification_probes(run_id, round_id, issue_label, source_proposal_id, probe_id)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_promotion_freezes_round_statuses
+        ON promotion_freezes(
+            run_id,
+            round_id,
+            promotion_status,
+            gate_status,
+            supervisor_status,
+            freeze_id
+        )
         """
     )
 
@@ -1012,13 +1334,109 @@ def write_promotion_freeze_row(connection: sqlite3.Connection, row: dict[str, An
             freeze_id, run_id, round_id, updated_at_utc, gate_status, readiness_status,
             promotion_status, controller_status, supervisor_status, planning_mode,
             promote_allowed, gate_reasons_json, recommended_next_skills_json,
+            reporting_ready, reporting_handoff_status, reporting_blockers_json,
             controller_artifact_path, gate_artifact_path, supervisor_artifact_path,
             record_locator, raw_json
         ) VALUES (
             :freeze_id, :run_id, :round_id, :updated_at_utc, :gate_status, :readiness_status,
             :promotion_status, :controller_status, :supervisor_status, :planning_mode,
             :promote_allowed, :gate_reasons_json, :recommended_next_skills_json,
+            :reporting_ready, :reporting_handoff_status, :reporting_blockers_json,
             :controller_artifact_path, :gate_artifact_path, :supervisor_artifact_path,
+            :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def write_controller_snapshot_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO controller_snapshots (
+            snapshot_id, controller_id, run_id, round_id, generated_at_utc,
+            controller_status, planning_mode, current_stage, failed_stage,
+            resume_status, readiness_status, gate_status, promotion_status,
+            resume_recommended, restart_recommended, resume_from_stage,
+            completed_stage_names_json, pending_stage_names_json, gate_reasons_json,
+            recommended_next_skills_json, execution_policy_json, progress_json,
+            recovery_json, planning_json, planning_attempts_json,
+            stage_contracts_json, steps_json, artifacts_json, failure_json,
+            artifact_path, record_locator, raw_json
+        ) VALUES (
+            :snapshot_id, :controller_id, :run_id, :round_id, :generated_at_utc,
+            :controller_status, :planning_mode, :current_stage, :failed_stage,
+            :resume_status, :readiness_status, :gate_status, :promotion_status,
+            :resume_recommended, :restart_recommended, :resume_from_stage,
+            :completed_stage_names_json, :pending_stage_names_json, :gate_reasons_json,
+            :recommended_next_skills_json, :execution_policy_json, :progress_json,
+            :recovery_json, :planning_json, :planning_attempts_json,
+            :stage_contracts_json, :steps_json, :artifacts_json, :failure_json,
+            :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def write_gate_snapshot_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO gate_snapshots (
+            snapshot_id, gate_id, run_id, round_id, generated_at_utc,
+            stage_name, gate_handler, gate_status, readiness_status, promote_allowed,
+            decision_source, promotion_resolution_mode, gate_reasons_json,
+            supporting_proposal_ids_json, rejected_proposal_ids_json,
+            supporting_opinion_ids_json, rejected_opinion_ids_json,
+            council_input_counts_json, recommended_next_skills_json,
+            warnings_json, readiness_path, output_path, record_locator, raw_json
+        ) VALUES (
+            :snapshot_id, :gate_id, :run_id, :round_id, :generated_at_utc,
+            :stage_name, :gate_handler, :gate_status, :readiness_status, :promote_allowed,
+            :decision_source, :promotion_resolution_mode, :gate_reasons_json,
+            :supporting_proposal_ids_json, :rejected_proposal_ids_json,
+            :supporting_opinion_ids_json, :rejected_opinion_ids_json,
+            :council_input_counts_json, :recommended_next_skills_json,
+            :warnings_json, :readiness_path, :output_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def write_supervisor_snapshot_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO supervisor_snapshots (
+            snapshot_id, supervisor_id, run_id, round_id, generated_at_utc,
+            supervisor_status, supervisor_substatus, phase2_posture, terminal_state,
+            recovery_posture, operator_action, controller_status, planning_mode,
+            readiness_status, gate_status, promotion_status, reporting_ready,
+            reporting_handoff_status, resume_status, current_stage, failed_stage,
+            resume_recommended, restart_recommended, resume_from_stage,
+            reporting_blockers_json, recommended_next_skills_json,
+            execution_policy_json, round_transition_json, top_actions_json,
+            operator_notes_json, inspection_paths_json, artifact_path,
+            record_locator, raw_json
+        ) VALUES (
+            :snapshot_id, :supervisor_id, :run_id, :round_id, :generated_at_utc,
+            :supervisor_status, :supervisor_substatus, :phase2_posture, :terminal_state,
+            :recovery_posture, :operator_action, :controller_status, :planning_mode,
+            :readiness_status, :gate_status, :promotion_status, :reporting_ready,
+            :reporting_handoff_status, :resume_status, :current_stage, :failed_stage,
+            :resume_recommended, :restart_recommended, :resume_from_stage,
+            :reporting_blockers_json, :recommended_next_skills_json,
+            :execution_policy_json, :round_transition_json, :top_actions_json,
+            :operator_notes_json, :inspection_paths_json, :artifact_path,
             :record_locator, :raw_json
         )
         """,
@@ -1032,15 +1450,19 @@ def write_moderator_action_row(connection: sqlite3.Connection, row: dict[str, An
         INSERT OR REPLACE INTO moderator_actions (
             action_id, run_id, round_id, generated_at_utc, action_rank, action_kind,
             priority, assigned_role, target_hypothesis_id, target_claim_id,
-            target_ticket_id, controversy_gap, recommended_lane, probe_candidate,
-            readiness_blocker,
+            target_ticket_id, target_object_kind, target_object_id, issue_label,
+            target_route_id, target_assessment_id, target_linkage_id,
+            target_gap_id, source_proposal_id, controversy_gap, recommended_lane,
+            probe_candidate, readiness_blocker,
             objective, reason, evidence_refs_json, source_ids_json, artifact_path,
             record_locator, raw_json
         ) VALUES (
             :action_id, :run_id, :round_id, :generated_at_utc, :action_rank, :action_kind,
             :priority, :assigned_role, :target_hypothesis_id, :target_claim_id,
-            :target_ticket_id, :controversy_gap, :recommended_lane, :probe_candidate,
-            :readiness_blocker,
+            :target_ticket_id, :target_object_kind, :target_object_id, :issue_label,
+            :target_route_id, :target_assessment_id, :target_linkage_id,
+            :target_gap_id, :source_proposal_id, :controversy_gap, :recommended_lane,
+            :probe_candidate, :readiness_blocker,
             :objective, :reason, :evidence_refs_json, :source_ids_json, :artifact_path,
             :record_locator, :raw_json
         )
@@ -1072,17 +1494,21 @@ def write_falsification_probe_row(connection: sqlite3.Connection, row: dict[str,
         INSERT OR REPLACE INTO falsification_probes (
             probe_id, run_id, round_id, opened_at_utc, probe_status, action_id,
             priority, owner_role, target_hypothesis_id, target_claim_id,
-            target_ticket_id, probe_type, controversy_gap, recommended_lane,
-            probe_goal, falsification_question, requested_skills_json,
-            evidence_refs_json, source_ids_json, artifact_path, record_locator,
-            raw_json
+            target_ticket_id, target_object_kind, target_object_id, issue_label,
+            target_route_id, target_assessment_id, target_linkage_id,
+            target_gap_id, source_proposal_id, probe_type, controversy_gap,
+            recommended_lane, probe_goal, falsification_question,
+            requested_skills_json, evidence_refs_json, source_ids_json,
+            artifact_path, record_locator, raw_json
         ) VALUES (
             :probe_id, :run_id, :round_id, :opened_at_utc, :probe_status, :action_id,
             :priority, :owner_role, :target_hypothesis_id, :target_claim_id,
-            :target_ticket_id, :probe_type, :controversy_gap, :recommended_lane,
-            :probe_goal, :falsification_question, :requested_skills_json,
-            :evidence_refs_json, :source_ids_json, :artifact_path, :record_locator,
-            :raw_json
+            :target_ticket_id, :target_object_kind, :target_object_id, :issue_label,
+            :target_route_id, :target_assessment_id, :target_linkage_id,
+            :target_gap_id, :source_proposal_id, :probe_type, :controversy_gap,
+            :recommended_lane, :probe_goal, :falsification_question,
+            :requested_skills_json, :evidence_refs_json, :source_ids_json,
+            :artifact_path, :record_locator, :raw_json
         )
         """,
         row,
@@ -1499,6 +1925,29 @@ def promotion_freeze_record_id(run_id: str, round_id: str) -> str:
     return "freeze-" + stable_hash("promotion-freeze", run_id, round_id)[:12]
 
 
+def controller_snapshot_object_id(run_id: str, round_id: str) -> str:
+    return "controller-" + stable_hash("controller-state", run_id, round_id)[:12]
+
+
+def gate_snapshot_object_id(
+    run_id: str,
+    round_id: str,
+    stage_name: str,
+    gate_handler: str,
+) -> str:
+    return "gate-" + stable_hash(
+        "gate-state",
+        run_id,
+        round_id,
+        stage_name,
+        gate_handler,
+    )[:12]
+
+
+def supervisor_snapshot_object_id(run_id: str, round_id: str) -> str:
+    return "supervisor-" + stable_hash("supervisor-state", run_id, round_id)[:12]
+
+
 def moderator_action_snapshot_id(run_id: str, round_id: str) -> str:
     return "actions-" + stable_hash("moderator-actions", run_id, round_id)[:12]
 
@@ -1633,19 +2082,87 @@ def normalized_action_payload(
     decision_source = (
         maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
     )
+    normalized["action_kind"] = maybe_text(normalized.get("action_kind")) or "follow-up"
+    normalized["assigned_role"] = (
+        maybe_text(normalized.get("assigned_role")) or "moderator"
+    )
+    normalized["objective"] = (
+        maybe_text(normalized.get("objective"))
+        or maybe_text(normalized.get("reason"))
+        or "Advance the current round posture."
+    )
+    normalized["reason"] = (
+        maybe_text(normalized.get("reason"))
+        or maybe_text(normalized.get("objective"))
+        or "Advance the current round posture."
+    )
     normalized["decision_source"] = decision_source
+    normalized["source_ids"] = unique_texts(list_items(normalized.get("source_ids")))
     normalized["evidence_refs"] = list_items(normalized.get("evidence_refs"))
+    normalized["probe_candidate"] = bool(normalized.get("probe_candidate"))
+    normalized["readiness_blocker"] = action_is_readiness_blocker(normalized)
+    source_proposal_id = source_proposal_id_from_payload(normalized)
+    target = normalized_deliberation_target(
+        normalized.get("target"),
+        object_kind=maybe_text(normalized.get("target_object_kind")),
+        object_id=maybe_text(normalized.get("target_object_id")),
+        issue_label=maybe_text(normalized.get("issue_label")),
+        claim_id=action_target_id(normalized, "claim_id"),
+        hypothesis_id=action_target_id(normalized, "hypothesis_id"),
+        ticket_id=action_target_id(normalized, "ticket_id"),
+        route_id=maybe_text(normalized.get("target_route_id"))
+        or maybe_text(normalized.get("route_id")),
+        assessment_id=maybe_text(normalized.get("target_assessment_id"))
+        or maybe_text(normalized.get("assessment_id")),
+        linkage_id=maybe_text(normalized.get("target_linkage_id"))
+        or maybe_text(normalized.get("linkage_id")),
+        gap_id=maybe_text(normalized.get("target_gap_id"))
+        or maybe_text(normalized.get("gap_id")),
+        map_issue_id=maybe_text(normalized.get("target_map_issue_id"))
+        or maybe_text(normalized.get("map_issue_id")),
+        round_id=normalized["round_id"],
+    )
+    anchor_fields = deliberation_anchor_fields(
+        target,
+        source_proposal_id=source_proposal_id,
+    )
+    normalized["target"] = target
+    normalized["target_hypothesis_id"] = maybe_text(target.get("hypothesis_id"))
+    normalized["target_claim_id"] = maybe_text(target.get("claim_id"))
+    normalized["target_ticket_id"] = maybe_text(target.get("ticket_id"))
+    normalized["target_object_kind"] = maybe_text(anchor_fields.get("target_object_kind"))
+    normalized["target_object_id"] = maybe_text(anchor_fields.get("target_object_id"))
+    normalized["issue_label"] = (
+        maybe_text(anchor_fields.get("issue_label"))
+        or maybe_text(normalized.get("issue_label"))
+    )
+    normalized["target_route_id"] = maybe_text(anchor_fields.get("target_route_id"))
+    normalized["target_assessment_id"] = maybe_text(
+        anchor_fields.get("target_assessment_id")
+    )
+    normalized["target_linkage_id"] = maybe_text(
+        anchor_fields.get("target_linkage_id")
+    )
+    normalized["target_gap_id"] = maybe_text(anchor_fields.get("target_gap_id"))
+    normalized["source_proposal_id"] = maybe_text(
+        anchor_fields.get("source_proposal_id")
+    )
+    if normalized["source_proposal_id"]:
+        normalized["source_ids"] = unique_texts(
+            [*normalized["source_ids"], normalized["source_proposal_id"]]
+        )
     normalized["lineage"] = merged_lineage(
         normalized.get("lineage"),
         normalized.get("source_ids"),
-        action_target_id(normalized, "hypothesis_id"),
-        action_target_id(normalized, "claim_id"),
-        action_target_id(normalized, "ticket_id"),
-        (
-            normalized.get("target", {}).get("object_id")
-            if isinstance(normalized.get("target"), dict)
-            else ""
-        ),
+        normalized.get("source_proposal_id"),
+        normalized.get("target_hypothesis_id"),
+        normalized.get("target_claim_id"),
+        normalized.get("target_ticket_id"),
+        normalized.get("target_object_id"),
+        normalized.get("target_route_id"),
+        normalized.get("target_assessment_id"),
+        normalized.get("target_linkage_id"),
+        normalized.get("target_gap_id"),
     )
     normalized["provenance"] = normalized_provenance(
         normalized.get("provenance"),
@@ -1656,6 +2173,7 @@ def normalized_action_payload(
             "agenda_source": maybe_text(normalized.get("agenda_source")),
             "assigned_role": maybe_text(normalized.get("assigned_role")),
             "action_kind": maybe_text(normalized.get("action_kind")),
+            "source_proposal_id": normalized.get("source_proposal_id"),
         },
     )
     return validate_canonical_payload("next-action", normalized)
@@ -1698,15 +2216,96 @@ def normalized_probe_payload(
     decision_source = (
         maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
     )
+    normalized["probe_status"] = maybe_text(normalized.get("probe_status")) or "open"
+    normalized["owner_role"] = maybe_text(normalized.get("owner_role")) or "challenger"
+    normalized["probe_type"] = (
+        maybe_text(normalized.get("probe_type")) or "uncertainty-probe"
+    )
+    normalized["probe_goal"] = (
+        maybe_text(normalized.get("probe_goal"))
+        or maybe_text(normalized.get("falsification_question"))
+        or "Probe the current target."
+    )
+    normalized["falsification_question"] = (
+        maybe_text(normalized.get("falsification_question"))
+        or f"What evidence would materially weaken: {normalized['probe_goal']}"
+    )
     normalized["decision_source"] = decision_source
+    normalized["source_ids"] = unique_texts(list_items(normalized.get("source_ids")))
+    normalized["requested_skills"] = unique_texts(
+        list_items(normalized.get("requested_skills"))
+    )
+    normalized["success_criteria"] = unique_texts(
+        list_items(normalized.get("success_criteria"))
+    )
+    normalized["disconfirm_signals"] = unique_texts(
+        list_items(normalized.get("disconfirm_signals"))
+    )
     normalized["evidence_refs"] = list_items(normalized.get("evidence_refs"))
+    source_proposal_id = source_proposal_id_from_payload(normalized)
+    target = normalized_deliberation_target(
+        normalized.get("target"),
+        object_kind=maybe_text(normalized.get("target_object_kind")),
+        object_id=maybe_text(normalized.get("target_object_id")),
+        issue_label=maybe_text(normalized.get("issue_label")),
+        claim_id=maybe_text(normalized.get("target_claim_id")),
+        hypothesis_id=maybe_text(normalized.get("target_hypothesis_id")),
+        ticket_id=maybe_text(normalized.get("target_ticket_id")),
+        route_id=maybe_text(normalized.get("target_route_id"))
+        or maybe_text(normalized.get("route_id")),
+        assessment_id=maybe_text(normalized.get("target_assessment_id"))
+        or maybe_text(normalized.get("assessment_id")),
+        linkage_id=maybe_text(normalized.get("target_linkage_id"))
+        or maybe_text(normalized.get("linkage_id")),
+        gap_id=maybe_text(normalized.get("target_gap_id"))
+        or maybe_text(normalized.get("gap_id")),
+        map_issue_id=maybe_text(normalized.get("target_map_issue_id"))
+        or maybe_text(normalized.get("map_issue_id")),
+        round_id=normalized["round_id"],
+        action_id=maybe_text(normalized.get("action_id")),
+    )
+    anchor_fields = deliberation_anchor_fields(
+        target,
+        source_proposal_id=source_proposal_id,
+    )
+    normalized["target"] = target
+    normalized["target_hypothesis_id"] = maybe_text(target.get("hypothesis_id"))
+    normalized["target_claim_id"] = maybe_text(target.get("claim_id"))
+    normalized["target_ticket_id"] = maybe_text(target.get("ticket_id"))
+    normalized["target_object_kind"] = maybe_text(anchor_fields.get("target_object_kind"))
+    normalized["target_object_id"] = maybe_text(anchor_fields.get("target_object_id"))
+    normalized["issue_label"] = (
+        maybe_text(anchor_fields.get("issue_label"))
+        or maybe_text(normalized.get("issue_label"))
+    )
+    normalized["target_route_id"] = maybe_text(anchor_fields.get("target_route_id"))
+    normalized["target_assessment_id"] = maybe_text(
+        anchor_fields.get("target_assessment_id")
+    )
+    normalized["target_linkage_id"] = maybe_text(
+        anchor_fields.get("target_linkage_id")
+    )
+    normalized["target_gap_id"] = maybe_text(anchor_fields.get("target_gap_id"))
+    normalized["source_proposal_id"] = maybe_text(
+        anchor_fields.get("source_proposal_id")
+    )
+    if normalized["source_proposal_id"]:
+        normalized["source_ids"] = unique_texts(
+            [*normalized["source_ids"], normalized["source_proposal_id"]]
+        )
     normalized["lineage"] = merged_lineage(
         normalized.get("lineage"),
         normalized.get("source_ids"),
         maybe_text(normalized.get("action_id")),
-        maybe_text(normalized.get("target_hypothesis_id")),
-        maybe_text(normalized.get("target_claim_id")),
-        maybe_text(normalized.get("target_ticket_id")),
+        normalized.get("source_proposal_id"),
+        normalized.get("target_hypothesis_id"),
+        normalized.get("target_claim_id"),
+        normalized.get("target_ticket_id"),
+        normalized.get("target_object_id"),
+        normalized.get("target_route_id"),
+        normalized.get("target_assessment_id"),
+        normalized.get("target_linkage_id"),
+        normalized.get("target_gap_id"),
     )
     normalized["provenance"] = normalized_provenance(
         normalized.get("provenance"),
@@ -1717,6 +2316,7 @@ def normalized_probe_payload(
             "owner_role": maybe_text(normalized.get("owner_role")),
             "probe_status": maybe_text(normalized.get("probe_status")),
             "probe_type": maybe_text(normalized.get("probe_type")),
+            "source_proposal_id": normalized.get("source_proposal_id"),
         },
     )
     return validate_canonical_payload("probe", normalized)
@@ -2446,6 +3046,11 @@ def moderator_action_row_from_payload(
     artifact_path: str,
     record_locator: str,
 ) -> dict[str, Any]:
+    target = (
+        action.get("target", {})
+        if isinstance(action.get("target"), dict)
+        else {}
+    )
     return {
         "action_id": maybe_text(action.get("action_id")),
         "run_id": maybe_text(action.get("run_id")),
@@ -2458,6 +3063,21 @@ def moderator_action_row_from_payload(
         "target_hypothesis_id": action_target_id(action, "hypothesis_id"),
         "target_claim_id": action_target_id(action, "claim_id"),
         "target_ticket_id": action_target_id(action, "ticket_id"),
+        "target_object_kind": maybe_text(action.get("target_object_kind"))
+        or maybe_text(target.get("object_kind")),
+        "target_object_id": maybe_text(action.get("target_object_id"))
+        or maybe_text(target.get("object_id")),
+        "issue_label": maybe_text(action.get("issue_label"))
+        or maybe_text(target.get("issue_label")),
+        "target_route_id": maybe_text(action.get("target_route_id"))
+        or maybe_text(target.get("route_id")),
+        "target_assessment_id": maybe_text(action.get("target_assessment_id"))
+        or maybe_text(target.get("assessment_id")),
+        "target_linkage_id": maybe_text(action.get("target_linkage_id"))
+        or maybe_text(target.get("linkage_id")),
+        "target_gap_id": maybe_text(action.get("target_gap_id"))
+        or maybe_text(target.get("gap_id")),
+        "source_proposal_id": maybe_text(action.get("source_proposal_id")),
         "controversy_gap": maybe_text(action.get("controversy_gap")),
         "recommended_lane": maybe_text(action.get("recommended_lane")),
         "probe_candidate": 1 if bool(action.get("probe_candidate")) else 0,
@@ -2486,6 +3106,7 @@ def falsification_probe_row_from_payload(
     artifact_path: str,
     record_locator: str,
 ) -> dict[str, Any]:
+    target = probe.get("target", {}) if isinstance(probe.get("target"), dict) else {}
     return {
         "probe_id": maybe_text(probe.get("probe_id")),
         "run_id": maybe_text(probe.get("run_id")),
@@ -2498,6 +3119,21 @@ def falsification_probe_row_from_payload(
         "target_hypothesis_id": maybe_text(probe.get("target_hypothesis_id")),
         "target_claim_id": maybe_text(probe.get("target_claim_id")),
         "target_ticket_id": maybe_text(probe.get("target_ticket_id")),
+        "target_object_kind": maybe_text(probe.get("target_object_kind"))
+        or maybe_text(target.get("object_kind")),
+        "target_object_id": maybe_text(probe.get("target_object_id"))
+        or maybe_text(target.get("object_id")),
+        "issue_label": maybe_text(probe.get("issue_label"))
+        or maybe_text(target.get("issue_label")),
+        "target_route_id": maybe_text(probe.get("target_route_id"))
+        or maybe_text(target.get("route_id")),
+        "target_assessment_id": maybe_text(probe.get("target_assessment_id"))
+        or maybe_text(target.get("assessment_id")),
+        "target_linkage_id": maybe_text(probe.get("target_linkage_id"))
+        or maybe_text(target.get("linkage_id")),
+        "target_gap_id": maybe_text(probe.get("target_gap_id"))
+        or maybe_text(target.get("gap_id")),
+        "source_proposal_id": maybe_text(probe.get("source_proposal_id")),
         "probe_type": maybe_text(probe.get("probe_type")),
         "controversy_gap": maybe_text(probe.get("controversy_gap")),
         "recommended_lane": maybe_text(probe.get("recommended_lane")),
@@ -2839,11 +3475,425 @@ def promotion_freeze_row_from_payload(
         "promote_allowed": 1 if bool(freeze_record.get("promote_allowed")) else 0,
         "gate_reasons_json": json_text(freeze_record.get("gate_reasons", [])),
         "recommended_next_skills_json": json_text(freeze_record.get("recommended_next_skills", [])),
+        "reporting_ready": 1 if bool(freeze_record.get("reporting_ready")) else 0,
+        "reporting_handoff_status": maybe_text(
+            freeze_record.get("reporting_handoff_status")
+        ),
+        "reporting_blockers_json": json_text(
+            freeze_record.get("reporting_blockers", [])
+        ),
         "controller_artifact_path": maybe_text(artifacts.get("controller_state_path")),
         "gate_artifact_path": maybe_text(artifacts.get("promotion_gate_path")),
         "supervisor_artifact_path": maybe_text(artifacts.get("supervisor_state_path")),
         "record_locator": maybe_text(record_locator) or "$",
         "raw_json": json_text(freeze_record),
+    }
+
+
+def control_snapshot_row_id(
+    prefix: str,
+    payload: dict[str, Any],
+    *parts: Any,
+) -> str:
+    snapshot_payload = dict(payload)
+    snapshot_payload.pop("snapshot_id", None)
+    return prefix + "-" + stable_hash(prefix, *parts, json_text(snapshot_payload))[:20]
+
+
+def normalized_controller_snapshot_payload(
+    controller_payload: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(controller_payload)
+    normalized["run_id"] = maybe_text(normalized.get("run_id"))
+    normalized["round_id"] = maybe_text(normalized.get("round_id"))
+    normalized["generated_at_utc"] = (
+        maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    )
+    normalized["controller_id"] = maybe_text(
+        normalized.get("controller_id")
+    ) or controller_snapshot_object_id(
+        normalized["run_id"],
+        normalized["round_id"],
+    )
+    normalized["controller_status"] = (
+        maybe_text(normalized.get("controller_status")) or "running"
+    )
+    normalized["planning_mode"] = (
+        maybe_text(normalized.get("planning_mode")) or "planner-backed"
+    )
+    normalized["current_stage"] = maybe_text(normalized.get("current_stage"))
+    normalized["failed_stage"] = maybe_text(normalized.get("failed_stage"))
+    normalized["resume_status"] = maybe_text(normalized.get("resume_status"))
+    normalized["readiness_status"] = (
+        maybe_text(normalized.get("readiness_status")) or "pending"
+    )
+    normalized["gate_status"] = (
+        maybe_text(normalized.get("gate_status")) or "not-evaluated"
+    )
+    normalized["promotion_status"] = (
+        maybe_text(normalized.get("promotion_status")) or "not-evaluated"
+    )
+    normalized["resume_recommended"] = bool(
+        maybe_bool(normalized.get("resume_recommended"))
+    )
+    normalized["restart_recommended"] = bool(
+        maybe_bool(normalized.get("restart_recommended"))
+    )
+    normalized["completed_stage_names"] = unique_texts(
+        list_items(normalized.get("completed_stage_names"))
+    )
+    normalized["pending_stage_names"] = unique_texts(
+        list_items(normalized.get("pending_stage_names"))
+    )
+    normalized["gate_reasons"] = unique_texts(list_items(normalized.get("gate_reasons")))
+    normalized["recommended_next_skills"] = unique_texts(
+        list_items(normalized.get("recommended_next_skills"))
+    )
+    normalized["execution_policy"] = dict_items(normalized.get("execution_policy"))
+    normalized["progress"] = dict_items(normalized.get("progress"))
+    normalized["recovery"] = dict_items(normalized.get("recovery"))
+    normalized["resume_from_stage"] = (
+        maybe_text(normalized.get("resume_from_stage"))
+        or maybe_text(normalized["recovery"].get("resume_from_stage"))
+    )
+    normalized["planning"] = dict_items(normalized.get("planning"))
+    normalized["planning_attempts"] = list_items(normalized.get("planning_attempts"))
+    normalized["stage_contracts"] = dict_items(normalized.get("stage_contracts"))
+    normalized["steps"] = list_items(normalized.get("steps"))
+    normalized["artifacts"] = dict_items(normalized.get("artifacts"))
+    normalized["failure"] = dict_items(normalized.get("failure"))
+    normalized["snapshot_id"] = maybe_text(
+        normalized.get("snapshot_id")
+    ) or maybe_text(normalized.get("controller_id"))
+    return validate_canonical_payload("controller-state", normalized)
+
+
+def controller_snapshot_row_from_payload(
+    controller_payload: dict[str, Any],
+    *,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    normalized = normalized_controller_snapshot_payload(controller_payload)
+    return {
+        "snapshot_id": maybe_text(normalized.get("snapshot_id")),
+        "controller_id": maybe_text(normalized.get("controller_id")),
+        "run_id": maybe_text(normalized.get("run_id")),
+        "round_id": maybe_text(normalized.get("round_id")),
+        "generated_at_utc": maybe_text(normalized.get("generated_at_utc")),
+        "controller_status": maybe_text(normalized.get("controller_status")),
+        "planning_mode": maybe_text(normalized.get("planning_mode")),
+        "current_stage": maybe_text(normalized.get("current_stage")),
+        "failed_stage": maybe_text(normalized.get("failed_stage")),
+        "resume_status": maybe_text(normalized.get("resume_status")),
+        "readiness_status": maybe_text(normalized.get("readiness_status")),
+        "gate_status": maybe_text(normalized.get("gate_status")),
+        "promotion_status": maybe_text(normalized.get("promotion_status")),
+        "resume_recommended": 1 if bool(normalized.get("resume_recommended")) else 0,
+        "restart_recommended": 1
+        if bool(normalized.get("restart_recommended"))
+        else 0,
+        "resume_from_stage": maybe_text(normalized.get("resume_from_stage")),
+        "completed_stage_names_json": json_text(
+            normalized.get("completed_stage_names", [])
+        ),
+        "pending_stage_names_json": json_text(
+            normalized.get("pending_stage_names", [])
+        ),
+        "gate_reasons_json": json_text(normalized.get("gate_reasons", [])),
+        "recommended_next_skills_json": json_text(
+            normalized.get("recommended_next_skills", [])
+        ),
+        "execution_policy_json": json_text(normalized.get("execution_policy", {})),
+        "progress_json": json_text(normalized.get("progress", {})),
+        "recovery_json": json_text(normalized.get("recovery", {})),
+        "planning_json": json_text(normalized.get("planning", {})),
+        "planning_attempts_json": json_text(
+            normalized.get("planning_attempts", [])
+        ),
+        "stage_contracts_json": json_text(normalized.get("stage_contracts", {})),
+        "steps_json": json_text(normalized.get("steps", [])),
+        "artifacts_json": json_text(normalized.get("artifacts", {})),
+        "failure_json": json_text(normalized.get("failure", {})),
+        "artifact_path": maybe_text(normalized.get("artifacts", {}).get("controller_state_path"))
+        or maybe_text(normalized.get("artifact_path")),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(normalized),
+    }
+
+
+def normalized_gate_snapshot_payload(
+    gate_payload: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(gate_payload)
+    normalized["run_id"] = maybe_text(normalized.get("run_id"))
+    normalized["round_id"] = maybe_text(normalized.get("round_id"))
+    normalized["generated_at_utc"] = (
+        maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    )
+    normalized["stage_name"] = (
+        maybe_text(normalized.get("stage_name"))
+        or maybe_text(normalized.get("gate_handler"))
+        or "promotion-gate"
+    )
+    normalized["gate_handler"] = (
+        maybe_text(normalized.get("gate_handler"))
+        or maybe_text(normalized.get("stage_name"))
+        or "promotion-gate"
+    )
+    normalized["gate_id"] = maybe_text(
+        normalized.get("gate_id")
+    ) or gate_snapshot_object_id(
+        normalized["run_id"],
+        normalized["round_id"],
+        normalized["stage_name"],
+        normalized["gate_handler"],
+    )
+    normalized["gate_status"] = (
+        maybe_text(normalized.get("gate_status")) or "not-evaluated"
+    )
+    normalized["readiness_status"] = (
+        maybe_text(normalized.get("readiness_status")) or "pending"
+    )
+    normalized["promote_allowed"] = bool(maybe_bool(normalized.get("promote_allowed")))
+    normalized["decision_source"] = (
+        maybe_text(normalized.get("decision_source")) or "policy-fallback"
+    )
+    normalized["promotion_resolution_mode"] = maybe_text(
+        normalized.get("promotion_resolution_mode")
+    )
+    normalized["gate_reasons"] = unique_texts(list_items(normalized.get("gate_reasons")))
+    normalized["supporting_proposal_ids"] = unique_texts(
+        list_items(normalized.get("supporting_proposal_ids"))
+    )
+    normalized["rejected_proposal_ids"] = unique_texts(
+        list_items(normalized.get("rejected_proposal_ids"))
+    )
+    normalized["supporting_opinion_ids"] = unique_texts(
+        list_items(normalized.get("supporting_opinion_ids"))
+    )
+    normalized["rejected_opinion_ids"] = unique_texts(
+        list_items(normalized.get("rejected_opinion_ids"))
+    )
+    normalized["council_input_counts"] = dict_items(
+        normalized.get("council_input_counts")
+    )
+    normalized["recommended_next_skills"] = unique_texts(
+        list_items(normalized.get("recommended_next_skills"))
+    )
+    normalized["warnings"] = list_items(normalized.get("warnings"))
+    normalized["readiness_path"] = maybe_text(normalized.get("readiness_path"))
+    normalized["output_path"] = (
+        maybe_text(normalized.get("output_path"))
+        or maybe_text(normalized.get("artifact_path"))
+    )
+    normalized["snapshot_id"] = maybe_text(
+        normalized.get("snapshot_id")
+    ) or maybe_text(normalized.get("gate_id"))
+    return validate_canonical_payload("gate-state", normalized)
+
+
+def gate_snapshot_row_from_payload(
+    gate_payload: dict[str, Any],
+    *,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    normalized = normalized_gate_snapshot_payload(gate_payload)
+    return {
+        "snapshot_id": maybe_text(normalized.get("snapshot_id")),
+        "gate_id": maybe_text(normalized.get("gate_id")),
+        "run_id": maybe_text(normalized.get("run_id")),
+        "round_id": maybe_text(normalized.get("round_id")),
+        "generated_at_utc": maybe_text(normalized.get("generated_at_utc")),
+        "stage_name": maybe_text(normalized.get("stage_name")),
+        "gate_handler": maybe_text(normalized.get("gate_handler")),
+        "gate_status": maybe_text(normalized.get("gate_status")),
+        "readiness_status": maybe_text(normalized.get("readiness_status")),
+        "promote_allowed": 1 if bool(normalized.get("promote_allowed")) else 0,
+        "decision_source": maybe_text(normalized.get("decision_source")),
+        "promotion_resolution_mode": maybe_text(
+            normalized.get("promotion_resolution_mode")
+        ),
+        "gate_reasons_json": json_text(normalized.get("gate_reasons", [])),
+        "supporting_proposal_ids_json": json_text(
+            normalized.get("supporting_proposal_ids", [])
+        ),
+        "rejected_proposal_ids_json": json_text(
+            normalized.get("rejected_proposal_ids", [])
+        ),
+        "supporting_opinion_ids_json": json_text(
+            normalized.get("supporting_opinion_ids", [])
+        ),
+        "rejected_opinion_ids_json": json_text(
+            normalized.get("rejected_opinion_ids", [])
+        ),
+        "council_input_counts_json": json_text(
+            normalized.get("council_input_counts", {})
+        ),
+        "recommended_next_skills_json": json_text(
+            normalized.get("recommended_next_skills", [])
+        ),
+        "warnings_json": json_text(normalized.get("warnings", [])),
+        "readiness_path": maybe_text(normalized.get("readiness_path")),
+        "output_path": maybe_text(normalized.get("output_path")),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(normalized),
+    }
+
+
+def normalized_supervisor_snapshot_payload(
+    supervisor_payload: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(supervisor_payload)
+    normalized["run_id"] = maybe_text(normalized.get("run_id"))
+    normalized["round_id"] = maybe_text(normalized.get("round_id"))
+    normalized["generated_at_utc"] = (
+        maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    )
+    normalized["supervisor_id"] = maybe_text(
+        normalized.get("supervisor_id")
+    ) or supervisor_snapshot_object_id(
+        normalized["run_id"],
+        normalized["round_id"],
+    )
+    normalized["supervisor_status"] = (
+        maybe_text(normalized.get("supervisor_status")) or "unavailable"
+    )
+    normalized["supervisor_substatus"] = (
+        maybe_text(normalized.get("supervisor_substatus")) or "unclassified"
+    )
+    normalized["phase2_posture"] = (
+        maybe_text(normalized.get("phase2_posture"))
+        or normalized["supervisor_status"]
+    )
+    normalized["terminal_state"] = (
+        maybe_text(normalized.get("terminal_state"))
+        or normalized["phase2_posture"]
+    )
+    normalized["recovery_posture"] = (
+        maybe_text(normalized.get("recovery_posture")) or "terminal"
+    )
+    normalized["operator_action"] = (
+        maybe_text(normalized.get("operator_action")) or "inspect-runtime"
+    )
+    normalized["controller_status"] = (
+        maybe_text(normalized.get("controller_status")) or "missing"
+    )
+    normalized["planning_mode"] = (
+        maybe_text(normalized.get("planning_mode")) or "planner-backed"
+    )
+    normalized["readiness_status"] = (
+        maybe_text(normalized.get("readiness_status")) or "pending"
+    )
+    normalized["gate_status"] = (
+        maybe_text(normalized.get("gate_status")) or "not-evaluated"
+    )
+    normalized["promotion_status"] = (
+        maybe_text(normalized.get("promotion_status")) or "not-evaluated"
+    )
+    reporting_blockers = unique_texts(list_items(normalized.get("reporting_blockers")))
+    reporting_ready = maybe_bool(normalized.get("reporting_ready"))
+    if reporting_ready is None:
+        reporting_ready = bool(
+            reporting_gate_state(
+                promotion_status=normalized["promotion_status"],
+                readiness_status=normalized["readiness_status"],
+                supervisor_status=normalized["supervisor_status"],
+                require_supervisor=True,
+                reporting_blockers_value=reporting_blockers,
+                handoff_status=maybe_text(
+                    normalized.get("reporting_handoff_status")
+                )
+                or maybe_text(normalized.get("handoff_status")),
+            ).get("reporting_ready")
+        )
+    normalized["reporting_ready"] = bool(reporting_ready)
+    normalized["reporting_handoff_status"] = normalize_reporting_handoff_status(
+        maybe_text(normalized.get("reporting_handoff_status"))
+        or maybe_text(normalized.get("handoff_status"))
+    ) or ("reporting-ready" if normalized["reporting_ready"] else "investigation-open")
+    normalized["resume_status"] = maybe_text(normalized.get("resume_status"))
+    normalized["current_stage"] = maybe_text(normalized.get("current_stage"))
+    normalized["failed_stage"] = maybe_text(normalized.get("failed_stage"))
+    normalized["resume_recommended"] = bool(
+        maybe_bool(normalized.get("resume_recommended"))
+    )
+    normalized["restart_recommended"] = bool(
+        maybe_bool(normalized.get("restart_recommended"))
+    )
+    normalized["resume_from_stage"] = maybe_text(normalized.get("resume_from_stage"))
+    normalized["reporting_blockers"] = reporting_blockers
+    normalized["recommended_next_skills"] = unique_texts(
+        list_items(normalized.get("recommended_next_skills"))
+    )
+    normalized["execution_policy"] = dict_items(normalized.get("execution_policy"))
+    normalized["round_transition"] = dict_items(normalized.get("round_transition"))
+    normalized["top_actions"] = list_items(normalized.get("top_actions"))
+    normalized["operator_notes"] = list_items(normalized.get("operator_notes"))
+    normalized["inspection_paths"] = dict_items(normalized.get("inspection_paths"))
+    normalized["supervisor_path"] = (
+        maybe_text(normalized.get("supervisor_path"))
+        or maybe_text(normalized.get("artifact_path"))
+    )
+    normalized["snapshot_id"] = maybe_text(
+        normalized.get("snapshot_id")
+    ) or maybe_text(normalized.get("supervisor_id"))
+    return validate_canonical_payload("supervisor-state", normalized)
+
+
+def supervisor_snapshot_row_from_payload(
+    supervisor_payload: dict[str, Any],
+    *,
+    record_locator: str = "$",
+) -> dict[str, Any]:
+    normalized = normalized_supervisor_snapshot_payload(supervisor_payload)
+    return {
+        "snapshot_id": maybe_text(normalized.get("snapshot_id")),
+        "supervisor_id": maybe_text(normalized.get("supervisor_id")),
+        "run_id": maybe_text(normalized.get("run_id")),
+        "round_id": maybe_text(normalized.get("round_id")),
+        "generated_at_utc": maybe_text(normalized.get("generated_at_utc")),
+        "supervisor_status": maybe_text(normalized.get("supervisor_status")),
+        "supervisor_substatus": maybe_text(normalized.get("supervisor_substatus")),
+        "phase2_posture": maybe_text(normalized.get("phase2_posture")),
+        "terminal_state": maybe_text(normalized.get("terminal_state")),
+        "recovery_posture": maybe_text(normalized.get("recovery_posture")),
+        "operator_action": maybe_text(normalized.get("operator_action")),
+        "controller_status": maybe_text(normalized.get("controller_status")),
+        "planning_mode": maybe_text(normalized.get("planning_mode")),
+        "readiness_status": maybe_text(normalized.get("readiness_status")),
+        "gate_status": maybe_text(normalized.get("gate_status")),
+        "promotion_status": maybe_text(normalized.get("promotion_status")),
+        "reporting_ready": 1 if bool(normalized.get("reporting_ready")) else 0,
+        "reporting_handoff_status": maybe_text(
+            normalized.get("reporting_handoff_status")
+        ),
+        "resume_status": maybe_text(normalized.get("resume_status")),
+        "current_stage": maybe_text(normalized.get("current_stage")),
+        "failed_stage": maybe_text(normalized.get("failed_stage")),
+        "resume_recommended": 1 if bool(normalized.get("resume_recommended")) else 0,
+        "restart_recommended": 1
+        if bool(normalized.get("restart_recommended"))
+        else 0,
+        "resume_from_stage": maybe_text(normalized.get("resume_from_stage")),
+        "reporting_blockers_json": json_text(
+            normalized.get("reporting_blockers", [])
+        ),
+        "recommended_next_skills_json": json_text(
+            normalized.get("recommended_next_skills", [])
+        ),
+        "execution_policy_json": json_text(normalized.get("execution_policy", {})),
+        "round_transition_json": json_text(
+            normalized.get("round_transition", {})
+        ),
+        "top_actions_json": json_text(normalized.get("top_actions", [])),
+        "operator_notes_json": json_text(normalized.get("operator_notes", [])),
+        "inspection_paths_json": json_text(
+            normalized.get("inspection_paths", {})
+        ),
+        "artifact_path": maybe_text(normalized.get("supervisor_path"))
+        or maybe_text(normalized.get("artifact_path")),
+        "record_locator": maybe_text(record_locator) or "$",
+        "raw_json": json_text(normalized),
     }
 
 
@@ -2950,7 +4000,7 @@ def fetch_promotion_freeze(
         return None
     row = connection.execute(
         f"""
-        SELECT raw_json
+        SELECT *
         FROM promotion_freezes
         WHERE {' AND '.join(clauses)}
         ORDER BY updated_at_utc DESC, freeze_id DESC
@@ -2960,8 +4010,7 @@ def fetch_promotion_freeze(
     ).fetchone()
     if row is None:
         return None
-    payload = decode_json(maybe_text(row["raw_json"]), {})
-    return payload if isinstance(payload, dict) else None
+    return payload_from_db_row(row)
 
 
 def fetch_snapshot_payload(
@@ -3026,7 +4075,7 @@ def fetch_json_rows(
     order_parts.append(id_column)
     rows = connection.execute(
         f"""
-        SELECT raw_json
+        SELECT *
         FROM {table_name}
         WHERE {' AND '.join(clauses)}
         ORDER BY {', '.join(order_parts)}
@@ -3035,9 +4084,7 @@ def fetch_json_rows(
     ).fetchall()
     results: list[dict[str, Any]] = []
     for row in rows:
-        payload = decode_json(maybe_text(row["raw_json"]), {})
-        if isinstance(payload, dict):
-            results.append(payload)
+        results.append(payload_from_db_row(row))
     return results
 
 
@@ -3061,7 +4108,77 @@ def latest_json_row(
     return rows[-1] if rows else None
 
 
+def latest_raw_json_row(
+    connection: sqlite3.Connection,
+    *,
+    table_name: str,
+    id_column: str,
+    timestamp_column: str,
+    run_id: str = "",
+    round_id: str = "",
+) -> dict[str, Any] | None:
+    normalized_run_id = maybe_text(run_id)
+    normalized_round_id = maybe_text(round_id)
+    clauses: list[str] = []
+    params: list[str] = []
+    if normalized_run_id:
+        clauses.append("run_id = ?")
+        params.append(normalized_run_id)
+    if normalized_round_id:
+        clauses.append("round_id = ?")
+        params.append(normalized_round_id)
+    if not clauses:
+        return None
+    row = connection.execute(
+        f"""
+        SELECT raw_json
+        FROM {table_name}
+        WHERE {' AND '.join(clauses)}
+        ORDER BY {timestamp_column} DESC, {id_column} DESC
+        LIMIT 1
+        """,
+        tuple(params),
+    ).fetchone()
+    if row is None:
+        return None
+    payload = decode_json(maybe_text(row["raw_json"]), {})
+    return payload if isinstance(payload, dict) else None
+
+
 def latest_json_row_where(
+    connection: sqlite3.Connection,
+    *,
+    table_name: str,
+    id_column: str,
+    timestamp_column: str,
+    filters: dict[str, Any],
+) -> dict[str, Any] | None:
+    clauses: list[str] = []
+    params: list[str] = []
+    for column_name, value in filters.items():
+        text = maybe_text(value)
+        if not text:
+            continue
+        clauses.append(f"{column_name} = ?")
+        params.append(text)
+    if not clauses:
+        return None
+    row = connection.execute(
+        f"""
+        SELECT *
+        FROM {table_name}
+        WHERE {' AND '.join(clauses)}
+        ORDER BY {timestamp_column} DESC, {id_column} DESC
+        LIMIT 1
+        """,
+        tuple(params),
+    ).fetchone()
+    if row is None:
+        return None
+    return payload_from_db_row(row)
+
+
+def latest_raw_json_row_where(
     connection: sqlite3.Connection,
     *,
     table_name: str,
@@ -3113,7 +4230,19 @@ def build_moderator_action_payload(
     payload["generated_at_utc"] = (
         maybe_text(payload.get("generated_at_utc")) or action_generated_at or utc_now_iso()
     )
-    payload["ranked_actions"] = [dict(action) for action in actions]
+    payload["ranked_actions"] = [
+        cleaned_wrapper_record(
+            dict(action),
+            metadata_fields=("action_rank", "artifact_path", "record_locator"),
+            optional_empty_fields=(
+                "controversy_gap",
+                "recommended_lane",
+                "issue_label",
+                "source_proposal_id",
+            ),
+        )
+        for action in actions
+    ]
     payload["action_count"] = len(actions)
     payload["action_source"] = (
         maybe_text(payload.get("action_source")) or "deliberation-plane-actions"
@@ -3139,7 +4268,19 @@ def build_falsification_probe_payload(
     payload["generated_at_utc"] = (
         maybe_text(payload.get("generated_at_utc")) or probe_generated_at or utc_now_iso()
     )
-    payload["probes"] = [dict(probe) for probe in probes]
+    payload["probes"] = [
+        cleaned_wrapper_record(
+            dict(probe),
+            metadata_fields=("artifact_path", "record_locator"),
+            optional_empty_fields=(
+                "action_id",
+                "controversy_gap",
+                "recommended_lane",
+                "source_proposal_id",
+            ),
+        )
+        for probe in probes
+    ]
     payload["probe_count"] = len(probes)
     return payload
 
@@ -3222,11 +4363,35 @@ def merged_promotion_freeze_record(
     record["run_id"] = normalized_run_id
     record["round_id"] = normalized_round_id
     if isinstance(controller_snapshot, dict) and controller_snapshot:
-        record["controller_snapshot"] = controller_snapshot
+        record["controller_snapshot"] = normalized_controller_snapshot_payload(
+            {
+                **controller_snapshot,
+                "run_id": maybe_text(controller_snapshot.get("run_id"))
+                or normalized_run_id,
+                "round_id": maybe_text(controller_snapshot.get("round_id"))
+                or normalized_round_id,
+            }
+        )
     if isinstance(gate_snapshot, dict) and gate_snapshot:
-        record["gate_snapshot"] = gate_snapshot
+        record["gate_snapshot"] = normalized_gate_snapshot_payload(
+            {
+                **gate_snapshot,
+                "run_id": maybe_text(gate_snapshot.get("run_id"))
+                or normalized_run_id,
+                "round_id": maybe_text(gate_snapshot.get("round_id"))
+                or normalized_round_id,
+            }
+        )
     if isinstance(supervisor_snapshot, dict) and supervisor_snapshot:
-        record["supervisor_snapshot"] = supervisor_snapshot
+        record["supervisor_snapshot"] = normalized_supervisor_snapshot_payload(
+            {
+                **supervisor_snapshot,
+                "run_id": maybe_text(supervisor_snapshot.get("run_id"))
+                or normalized_run_id,
+                "round_id": maybe_text(supervisor_snapshot.get("round_id"))
+                or normalized_round_id,
+            }
+        )
 
     resolved_controller = (
         record.get("controller_snapshot", {})
@@ -3338,6 +4503,27 @@ def merged_promotion_freeze_record(
             else []
         )
     )
+    report_ready_value = maybe_bool(resolved_supervisor.get("reporting_ready"))
+    if report_ready_value is None:
+        report_ready_value = maybe_bool(record.get("reporting_ready"))
+    record["reporting_ready"] = bool(report_ready_value)
+    record["reporting_handoff_status"] = normalize_reporting_handoff_status(
+        maybe_text(resolved_supervisor.get("reporting_handoff_status"))
+        or maybe_text(resolved_supervisor.get("handoff_status"))
+        or maybe_text(record.get("reporting_handoff_status"))
+    ) or ("reporting-ready" if record["reporting_ready"] else "investigation-open")
+    record["reporting_blockers"] = unique_texts(
+        (
+            resolved_supervisor.get("reporting_blockers", [])
+            if isinstance(resolved_supervisor.get("reporting_blockers"), list)
+            else []
+        )
+        + (
+            record.get("reporting_blockers", [])
+            if isinstance(record.get("reporting_blockers"), list)
+            else []
+        )
+    )
     record["artifacts"] = resolved_promotion_freeze_artifacts(
         record,
         controller_snapshot=resolved_controller,
@@ -3345,7 +4531,7 @@ def merged_promotion_freeze_record(
         supervisor_snapshot=resolved_supervisor,
         artifact_paths=artifact_paths,
     )
-    return record
+    return validate_canonical_payload("promotion-freeze", record)
 
 
 def store_promotion_freeze_record(
@@ -3381,6 +4567,36 @@ def store_promotion_freeze_record(
                 connection,
                 promotion_freeze_row_from_payload(freeze_record),
             )
+            normalized_controller = (
+                freeze_record.get("controller_snapshot", {})
+                if isinstance(freeze_record.get("controller_snapshot"), dict)
+                else {}
+            )
+            normalized_gate = (
+                freeze_record.get("gate_snapshot", {})
+                if isinstance(freeze_record.get("gate_snapshot"), dict)
+                else {}
+            )
+            normalized_supervisor = (
+                freeze_record.get("supervisor_snapshot", {})
+                if isinstance(freeze_record.get("supervisor_snapshot"), dict)
+                else {}
+            )
+            if normalized_controller:
+                write_controller_snapshot_row(
+                    connection,
+                    controller_snapshot_row_from_payload(normalized_controller),
+                )
+            if normalized_gate:
+                write_gate_snapshot_row(
+                    connection,
+                    gate_snapshot_row_from_payload(normalized_gate),
+                )
+            if normalized_supervisor:
+                write_supervisor_snapshot_row(
+                    connection,
+                    supervisor_snapshot_row_from_payload(normalized_supervisor),
+                )
     finally:
         connection.close()
     return freeze_record
@@ -3425,7 +4641,7 @@ def fetch_round_readiness_assessment(
     run_id: str = "",
     round_id: str = "",
 ) -> dict[str, Any] | None:
-    return latest_json_row(
+    return latest_raw_json_row(
         connection,
         table_name="round_readiness_assessments",
         id_column="readiness_id",
@@ -3441,7 +4657,7 @@ def fetch_promotion_basis_record(
     run_id: str = "",
     round_id: str = "",
 ) -> dict[str, Any] | None:
-    return latest_json_row(
+    return latest_raw_json_row(
         connection,
         table_name="promotion_basis_records",
         id_column="basis_id",
@@ -3474,7 +4690,7 @@ def fetch_reporting_handoff_record(
     run_id: str = "",
     round_id: str = "",
 ) -> dict[str, Any] | None:
-    return latest_json_row_where(
+    return latest_raw_json_row_where(
         connection,
         table_name="reporting_handoffs",
         id_column="handoff_id",
@@ -3490,7 +4706,7 @@ def fetch_council_decision_record(
     round_id: str = "",
     decision_stage: str = "",
 ) -> dict[str, Any] | None:
-    return latest_json_row_where(
+    return latest_raw_json_row_where(
         connection,
         table_name="council_decision_records",
         id_column="record_id",
@@ -3511,7 +4727,7 @@ def fetch_expert_report_record(
     report_stage: str = "",
     agent_role: str = "",
 ) -> dict[str, Any] | None:
-    return latest_json_row_where(
+    return latest_raw_json_row_where(
         connection,
         table_name="expert_report_records",
         id_column="record_id",
@@ -3531,7 +4747,7 @@ def fetch_final_publication_record(
     run_id: str = "",
     round_id: str = "",
 ) -> dict[str, Any] | None:
-    return latest_json_row_where(
+    return latest_raw_json_row_where(
         connection,
         table_name="final_publications",
         id_column="publication_id",
@@ -4343,6 +5559,88 @@ def load_promotion_freeze_record(
         connection.close()
 
 
+def load_controller_snapshot_record(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return latest_json_row(
+            connection,
+            table_name="controller_snapshots",
+            id_column="snapshot_id",
+            timestamp_column="generated_at_utc",
+            run_id=run_id,
+            round_id=round_id,
+        )
+    finally:
+        connection.close()
+
+
+def load_gate_snapshot_record(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    stage_name: str = "",
+    gate_handler: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    filters = {
+        "run_id": run_id,
+        "round_id": round_id,
+        "stage_name": stage_name,
+        "gate_handler": gate_handler,
+    }
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        if maybe_text(stage_name) or maybe_text(gate_handler):
+            return latest_json_row_where(
+                connection,
+                table_name="gate_snapshots",
+                id_column="snapshot_id",
+                timestamp_column="generated_at_utc",
+                filters=filters,
+            )
+        return latest_json_row(
+            connection,
+            table_name="gate_snapshots",
+            id_column="snapshot_id",
+            timestamp_column="generated_at_utc",
+            run_id=run_id,
+            round_id=round_id,
+        )
+    finally:
+        connection.close()
+
+
+def load_supervisor_snapshot_record(
+    run_dir: str | Path,
+    *,
+    run_id: str = "",
+    round_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        return latest_json_row(
+            connection,
+            table_name="supervisor_snapshots",
+            id_column="snapshot_id",
+            timestamp_column="generated_at_utc",
+            run_id=run_id,
+            round_id=round_id,
+        )
+    finally:
+        connection.close()
+
+
 def load_phase2_control_state(
     run_dir: str | Path,
     *,
@@ -4422,6 +5720,24 @@ def load_phase2_control_state(
         round_id=round_id,
         db_path=db_path,
     ) or {}
+    controller_record = load_controller_snapshot_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    ) or {}
+    gate_record = load_gate_snapshot_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    ) or {}
+    supervisor_record = load_supervisor_snapshot_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        db_path=db_path,
+    ) or {}
     return {
         "promotion_freeze": freeze_record,
         "round_readiness": readiness_record,
@@ -4432,17 +5748,20 @@ def load_phase2_control_state(
         "expert_report_drafts": expert_report_drafts,
         "expert_reports": expert_reports,
         "final_publication": final_publication_record,
-        "controller": (
+        "controller": controller_record
+        or (
             freeze_record.get("controller_snapshot", {})
             if isinstance(freeze_record.get("controller_snapshot"), dict)
             else {}
         ),
-        "promotion_gate": (
+        "promotion_gate": gate_record
+        or (
             freeze_record.get("gate_snapshot", {})
             if isinstance(freeze_record.get("gate_snapshot"), dict)
             else {}
         ),
-        "supervisor": (
+        "supervisor": supervisor_record
+        or (
             freeze_record.get("supervisor_snapshot", {})
             if isinstance(freeze_record.get("supervisor_snapshot"), dict)
             else {}
@@ -5481,10 +6800,12 @@ __all__ = [
     "fetch_round_events",
     "fetch_round_state",
     "load_council_decision_record",
+    "load_controller_snapshot_record",
     "load_expert_report_record",
     "load_falsification_probe_records",
     "load_falsification_probe_snapshot",
     "load_final_publication_record",
+    "load_gate_snapshot_record",
     "load_moderator_action_records",
     "load_moderator_action_snapshot",
     "load_phase2_control_state",
@@ -5495,6 +6816,7 @@ __all__ = [
     "load_reporting_handoff_record",
     "load_round_readiness_assessment",
     "load_round_snapshot",
+    "load_supervisor_snapshot_record",
     "maybe_text",
     "resolve_board_path",
     "resolve_db_path",

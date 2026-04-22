@@ -7,17 +7,20 @@ from ..reporting_status import reporting_gate_state
 from .deliberation_plane import (
     build_falsification_probe_payload,
     build_moderator_action_payload,
+    load_controller_snapshot_record,
     load_council_decision_record,
     load_expert_report_record,
     load_falsification_probe_records,
     load_falsification_probe_snapshot,
     load_final_publication_record,
+    load_gate_snapshot_record,
     load_moderator_action_records,
     load_moderator_action_snapshot,
     load_promotion_freeze_record,
     load_promotion_basis_record,
     load_reporting_handoff_record,
     load_round_readiness_assessment,
+    load_supervisor_snapshot_record,
 )
 
 
@@ -414,6 +417,224 @@ def load_promotion_basis_wrapper(
     }
 
 
+def load_controller_state_wrapper(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    controller_state_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = Path(run_dir).expanduser().resolve()
+    controller_file = resolve_path(
+        run_dir_path,
+        controller_state_path,
+        f"runtime/controller_state_{round_id}.json",
+    )
+    controller_payload = load_controller_snapshot_record(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if isinstance(controller_payload, dict):
+        return {
+            "payload": controller_payload,
+            "source": "deliberation-plane-controller",
+            "artifact_path": str(controller_file),
+            "artifact_present": controller_file.exists(),
+            "payload_present": True,
+        }
+    freeze_payload = load_promotion_freeze_record(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if isinstance(freeze_payload, dict):
+        controller_snapshot = (
+            freeze_payload.get("controller_snapshot", {})
+            if isinstance(freeze_payload.get("controller_snapshot"), dict)
+            else {}
+        )
+        if controller_snapshot:
+            return {
+                "payload": controller_snapshot,
+                "source": "deliberation-plane-promotion-freeze",
+                "artifact_path": str(controller_file),
+                "artifact_present": controller_file.exists(),
+                "payload_present": True,
+            }
+        if maybe_text(freeze_payload.get("controller_status")):
+            artifacts = (
+                freeze_payload.get("artifacts", {})
+                if isinstance(freeze_payload.get("artifacts"), dict)
+                else {}
+            )
+            return {
+                "payload": {
+                    "run_id": maybe_text(freeze_payload.get("run_id")) or run_id,
+                    "round_id": maybe_text(freeze_payload.get("round_id"))
+                    or round_id,
+                    "generated_at_utc": maybe_text(freeze_payload.get("updated_at_utc")),
+                    "controller_status": maybe_text(
+                        freeze_payload.get("controller_status")
+                    ),
+                    "planning_mode": maybe_text(freeze_payload.get("planning_mode")),
+                    "readiness_status": maybe_text(
+                        freeze_payload.get("readiness_status")
+                    ),
+                    "gate_status": maybe_text(freeze_payload.get("gate_status")),
+                    "promotion_status": maybe_text(
+                        freeze_payload.get("promotion_status")
+                    ),
+                    "resume_status": "",
+                    "current_stage": "",
+                    "failed_stage": "",
+                    "resume_from_stage": "",
+                    "resume_recommended": False,
+                    "restart_recommended": False,
+                    "completed_stage_names": [],
+                    "pending_stage_names": [],
+                    "gate_reasons": (
+                        freeze_payload.get("gate_reasons", [])
+                        if isinstance(freeze_payload.get("gate_reasons"), list)
+                        else []
+                    ),
+                    "recommended_next_skills": (
+                        freeze_payload.get("recommended_next_skills", [])
+                        if isinstance(
+                            freeze_payload.get("recommended_next_skills"), list
+                        )
+                        else []
+                    ),
+                    "execution_policy": {},
+                    "progress": {},
+                    "recovery": {},
+                    "planning": {},
+                    "planning_attempts": [],
+                    "stage_contracts": {},
+                    "steps": [],
+                    "artifacts": artifacts,
+                    "failure": {},
+                },
+                "source": "deliberation-plane-promotion-freeze-summary",
+                "artifact_path": str(controller_file),
+                "artifact_present": controller_file.exists(),
+                "payload_present": True,
+            }
+    if controller_file.exists():
+        return orphaned_artifact_wrapper(
+            controller_file,
+            source="orphaned-controller-state-artifact",
+        )
+    return {
+        "payload": None,
+        "source": "missing-controller-state",
+        "artifact_path": str(controller_file),
+        "artifact_present": False,
+        "payload_present": False,
+    }
+
+
+def load_promotion_gate_wrapper(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    promotion_gate_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = Path(run_dir).expanduser().resolve()
+    gate_file = resolve_path(
+        run_dir_path,
+        promotion_gate_path,
+        f"runtime/promotion_gate_{round_id}.json",
+    )
+    gate_payload = load_gate_snapshot_record(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if isinstance(gate_payload, dict):
+        return {
+            "payload": gate_payload,
+            "source": "deliberation-plane-gate",
+            "artifact_path": str(gate_file),
+            "artifact_present": gate_file.exists(),
+            "payload_present": True,
+        }
+    freeze_payload = load_promotion_freeze_record(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if isinstance(freeze_payload, dict):
+        gate_snapshot = (
+            freeze_payload.get("gate_snapshot", {})
+            if isinstance(freeze_payload.get("gate_snapshot"), dict)
+            else {}
+        )
+        if gate_snapshot:
+            return {
+                "payload": gate_snapshot,
+                "source": "deliberation-plane-promotion-freeze",
+                "artifact_path": str(gate_file),
+                "artifact_present": gate_file.exists(),
+                "payload_present": True,
+            }
+        if maybe_text(freeze_payload.get("gate_status")):
+            return {
+                "payload": {
+                    "run_id": maybe_text(freeze_payload.get("run_id")) or run_id,
+                    "round_id": maybe_text(freeze_payload.get("round_id"))
+                    or round_id,
+                    "generated_at_utc": maybe_text(freeze_payload.get("updated_at_utc")),
+                    "stage_name": "promotion-gate",
+                    "gate_handler": "promotion-gate",
+                    "gate_status": maybe_text(freeze_payload.get("gate_status")),
+                    "readiness_status": maybe_text(
+                        freeze_payload.get("readiness_status")
+                    ),
+                    "promote_allowed": bool(freeze_payload.get("promote_allowed")),
+                    "decision_source": "",
+                    "promotion_resolution_mode": "",
+                    "gate_reasons": (
+                        freeze_payload.get("gate_reasons", [])
+                        if isinstance(freeze_payload.get("gate_reasons"), list)
+                        else []
+                    ),
+                    "supporting_proposal_ids": [],
+                    "rejected_proposal_ids": [],
+                    "supporting_opinion_ids": [],
+                    "rejected_opinion_ids": [],
+                    "council_input_counts": {},
+                    "recommended_next_skills": (
+                        freeze_payload.get("recommended_next_skills", [])
+                        if isinstance(
+                            freeze_payload.get("recommended_next_skills"), list
+                        )
+                        else []
+                    ),
+                    "warnings": [],
+                    "readiness_path": "",
+                    "output_path": str(gate_file),
+                },
+                "source": "deliberation-plane-promotion-freeze-summary",
+                "artifact_path": str(gate_file),
+                "artifact_present": gate_file.exists(),
+                "payload_present": True,
+            }
+    if gate_file.exists():
+        return orphaned_artifact_wrapper(
+            gate_file,
+            source="orphaned-promotion-gate-artifact",
+        )
+    return {
+        "payload": None,
+        "source": "missing-promotion-gate",
+        "artifact_path": str(gate_file),
+        "artifact_present": False,
+        "payload_present": False,
+    }
+
+
 def load_supervisor_state_wrapper(
     run_dir: str | Path,
     *,
@@ -427,6 +648,20 @@ def load_supervisor_state_wrapper(
         supervisor_state_path,
         f"runtime/supervisor_state_{round_id}.json",
     )
+    supervisor_payload = load_supervisor_snapshot_record(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if isinstance(supervisor_payload, dict):
+        payload = enrich_supervisor_reporting_payload(supervisor_payload)
+        return {
+            "payload": payload,
+            "source": "deliberation-plane-supervisor",
+            "artifact_path": str(supervisor_file),
+            "artifact_present": supervisor_file.exists(),
+            "payload_present": True,
+        }
     freeze_payload = load_promotion_freeze_record(
         run_dir_path,
         run_id=run_id,
@@ -720,12 +955,14 @@ def load_final_publication_wrapper(
 
 __all__ = [
     "build_reporting_surface",
+    "load_controller_state_wrapper",
     "load_council_decision_wrapper",
     "load_expert_report_wrapper",
     "load_final_publication_wrapper",
     "load_falsification_probe_wrapper",
     "load_next_actions_wrapper",
     "load_promotion_basis_wrapper",
+    "load_promotion_gate_wrapper",
     "load_reporting_handoff_wrapper",
     "load_round_readiness_wrapper",
     "load_supervisor_state_wrapper",

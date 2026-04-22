@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 from typing import Callable
 
+from .deliberation_target_semantics import normalized_deliberation_target
 from .phase2_fallback_common import (
     grouped_by_issue_label,
     indexed_by_claim_id,
@@ -64,6 +65,10 @@ def agenda_action(
     annotation = (
         policy_annotation if isinstance(policy_annotation, dict) else fallback_policy_annotation()
     )
+    normalized_target = normalized_deliberation_target(
+        target,
+        issue_label=maybe_text(issue_label),
+    )
     return {
         "action_id": maybe_text(action_id),
         "action_kind": maybe_text(action_kind),
@@ -72,7 +77,7 @@ def agenda_action(
         "objective": maybe_text(objective),
         "reason": maybe_text(reason),
         "source_ids": unique_texts(source_ids),
-        "target": target if isinstance(target, dict) else {},
+        "target": normalized_target,
         "controversy_gap": maybe_text(controversy_gap),
         "recommended_lane": maybe_text(recommended_lane),
         "expected_outcome": maybe_text(expected_outcome),
@@ -83,7 +88,7 @@ def agenda_action(
         "confidence": confidence,
         "brief_context": maybe_text(brief_context),
         "agenda_source": maybe_text(agenda_source),
-        "issue_label": maybe_text(issue_label),
+        "issue_label": maybe_text(issue_label) or maybe_text(normalized_target.get("issue_label")),
         "pressure_score": round(max(0.0, min(1.0, float(pressure_score or 0.0))), 3),
         "readiness_blocker": bool(readiness_blocker),
         "policy_profile": maybe_text(annotation.get("policy_profile")),
