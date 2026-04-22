@@ -66,6 +66,18 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
         self.assertTrue(profiles["eco-classify-claim-verifiability"]["core_queue_default"])
         self.assertEqual("direct", profiles["eco-route-verification-lane"]["queue_status"])
         self.assertTrue(profiles["eco-route-verification-lane"]["core_queue_default"])
+        self.assertEqual("direct", profiles["eco-cluster-issue-candidates"]["queue_status"])
+        self.assertTrue(profiles["eco-cluster-issue-candidates"]["core_queue_default"])
+        self.assertEqual("direct", profiles["eco-extract-stance-candidates"]["queue_status"])
+        self.assertFalse(profiles["eco-extract-stance-candidates"]["core_queue_default"])
+        self.assertEqual("direct", profiles["eco-extract-concern-facets"]["queue_status"])
+        self.assertFalse(profiles["eco-extract-concern-facets"]["core_queue_default"])
+        self.assertEqual("direct", profiles["eco-extract-actor-profiles"]["queue_status"])
+        self.assertFalse(profiles["eco-extract-actor-profiles"]["core_queue_default"])
+        self.assertEqual("direct", profiles["eco-extract-evidence-citation-types"]["queue_status"])
+        self.assertFalse(
+            profiles["eco-extract-evidence-citation-types"]["core_queue_default"]
+        )
         self.assertEqual("direct", profiles["eco-materialize-controversy-map"]["queue_status"])
         self.assertTrue(profiles["eco-materialize-controversy-map"]["core_queue_default"])
 

@@ -178,16 +178,16 @@ def suggested_skills_for_lane(lane: str) -> list[str]:
         return [
             "eco-build-normalization-audit",
             "eco-post-board-note",
-            "eco-materialize-controversy-map",
+            "eco-cluster-issue-candidates",
         ]
     if lane == "public-discourse-analysis":
         return [
             "eco-post-board-note",
-            "eco-materialize-controversy-map",
+            "eco-cluster-issue-candidates",
         ]
     return [
         "eco-post-board-note",
-        "eco-materialize-controversy-map",
+        "eco-cluster-issue-candidates",
     ]
 
 
@@ -339,6 +339,7 @@ def route_verification_lane_skill(
             if maybe_text(skill)
         ]
         + [
+            "eco-cluster-issue-candidates",
             "eco-materialize-controversy-map",
             "eco-propose-next-actions",
             "eco-post-board-note",

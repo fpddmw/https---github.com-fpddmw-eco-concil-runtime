@@ -346,7 +346,7 @@ def classify_claim_verifiability_skill(
             ),
             "suggested_next_skills": [
                 "eco-route-verification-lane",
-                "eco-materialize-controversy-map",
+                "eco-cluster-issue-candidates",
                 "eco-post-board-note",
             ],
         },

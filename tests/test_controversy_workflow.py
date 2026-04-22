@@ -153,7 +153,13 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ]
             }
             self.assertSetEqual(
-                {"claim-cluster", "claim-scope", "claim-verifiability", "verification-route"},
+                {
+                    "issue-cluster",
+                    "stance-group",
+                    "concern-facet",
+                    "actor-profile",
+                    "evidence-citation-type",
+                },
                 parent_kinds,
             )
 
@@ -190,6 +196,51 @@ class ControversyWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
+            issue_cluster_payload = run_script(
+                script_path("eco-cluster-issue-candidates"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-extract-stance-candidates"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-extract-concern-facets"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-extract-actor-profiles"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("eco-extract-evidence-citation-types"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
             payload = run_script(
                 script_path("eco-materialize-controversy-map"),
                 "--run-dir",
@@ -216,7 +267,11 @@ class ControversyWorkflowTests(unittest.TestCase):
                 analytics_path(run_dir, f"evidence_citation_types_{ROUND_ID}.json")
             )
 
-            self.assertEqual("completed", payload["typed_analysis_sync"]["issue-cluster"]["status"])
+            self.assertEqual("completed", issue_cluster_payload["analysis_sync"]["status"])
+            self.assertIn(
+                payload["typed_analysis_sync"]["issue-cluster"]["status"],
+                {"completed", "existing-result-set"},
+            )
             self.assertGreaterEqual(issue_cluster_artifact["issue_cluster_count"], 1)
             self.assertGreaterEqual(stance_group_artifact["stance_group_count"], 1)
             self.assertGreaterEqual(concern_facet_artifact["concern_facet_count"], 1)
@@ -244,13 +299,30 @@ class ControversyWorkflowTests(unittest.TestCase):
                 analytics_path(run_dir, artifact_name).unlink()
 
             query_expectations = {
-                "issue-cluster": {"schema": "issue-cluster-v1", "parent_kind": "controversy-map"},
-                "stance-group": {"schema": "stance-group-v1", "parent_kind": "issue-cluster"},
-                "concern-facet": {"schema": "concern-facet-v1", "parent_kind": "issue-cluster"},
-                "actor-profile": {"schema": "actor-profile-v1", "parent_kind": "issue-cluster"},
+                "issue-cluster": {
+                    "schema": "issue-cluster-v1",
+                    "parent_kinds": {
+                        "claim-cluster",
+                        "claim-scope",
+                        "claim-verifiability",
+                        "verification-route",
+                    },
+                },
+                "stance-group": {
+                    "schema": "stance-group-v1",
+                    "parent_kinds": {"issue-cluster"},
+                },
+                "concern-facet": {
+                    "schema": "concern-facet-v1",
+                    "parent_kinds": {"issue-cluster"},
+                },
+                "actor-profile": {
+                    "schema": "actor-profile-v1",
+                    "parent_kinds": {"issue-cluster"},
+                },
                 "evidence-citation-type": {
                     "schema": "evidence-citation-type-v1",
-                    "parent_kind": "issue-cluster",
+                    "parent_kinds": {"issue-cluster"},
                 },
             }
             for analysis_kind, expectation in query_expectations.items():
@@ -286,7 +358,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                         "parent_result_sets"
                     ]
                 }
-                self.assertIn(expectation["parent_kind"], parent_kinds)
+                self.assertSetEqual(expectation["parent_kinds"], parent_kinds)
 
     def test_shared_context_prefers_issue_cluster_db_surface_when_artifacts_are_missing(
         self,

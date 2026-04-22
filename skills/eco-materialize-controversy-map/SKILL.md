@@ -1,24 +1,24 @@
 ---
 name: eco-materialize-controversy-map
-description: Materialize a compact controversy map by combining issue clusters, claim scope proposals, verifiability assessments, and verification routes into one board-consumable artifact.
+description: Materialize a compact controversy map by aggregating DB-native issue-cluster and typed controversy surfaces into one board-consumable artifact.
 ---
 
 # Eco Materialize Controversy Map
 
 ## Core Goal
-- Turn the current public-side analysis chain into one explicit controversy-map artifact.
-- Summarize issue clusters, dominant stances, concern facets, actors, and routing posture.
-- Provide a board-ready object that explains what the controversy is before further verification work.
+- Turn typed issue surfaces into one explicit board-facing controversy-map artifact.
+- Aggregate issue clusters, dominant stances, concern facets, actors, and routing posture without making the map skill own all typed extraction.
+- Provide a board-ready object that explains what the controversy is after typed issue surfaces are already queryable on their own.
 
 ## Triggering Conditions
-- Claim clusters and claim scopes already exist.
-- Need a compact issue-level picture rather than raw candidate / cluster / scope lists.
+- Canonical issue clusters already exist, or need to be inlined as a compatibility fallback.
+- Need a compact issue-level picture rather than raw typed result sets.
 - Need an artifact that can support board notes, next actions, and reporting.
 
 ## Read/Write Contract
-- Reads claim clusters from the run-local analysis plane first.
-- Reads claim scopes, claim-verifiability assessments, and verification routes from the run-local analysis plane when present.
-- Falls back to compatible artifact paths when synced result sets are unavailable.
+- Reads `issue-cluster / stance-group / concern-facet / actor-profile / evidence-citation-type` results from the run-local analysis plane first.
+- Falls back to compatible artifact paths when synced typed result sets are unavailable.
+- Can inline regenerate missing issue-cluster and typed issue surfaces from claim-side inputs as an explicit compatibility fallback.
 - Writes `run_dir/analytics/controversy_map_<round_id>.json` by default.
 - Syncs the emitted artifact into the run-local analysis plane as `controversy-map`.
 
@@ -31,6 +31,11 @@ description: Materialize a compact controversy map by combining issue clusters, 
   - `claim_scope_path`
   - `claim_verifiability_path`
   - `verification_route_path`
+  - `issue_clusters_path`
+  - `stance_groups_path`
+  - `concern_facets_path`
+  - `actor_profiles_path`
+  - `evidence_citation_types_path`
   - `output_path`
 
 ## Output Contract

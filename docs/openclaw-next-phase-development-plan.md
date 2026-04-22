@@ -402,6 +402,36 @@
    - 新回归会故意篡改 `controller_snapshots / gate_snapshots / supervisor_snapshots / promotion_freezes` 的 `raw_json`，验证 control query surface 仍由 DB 列恢复真值。
    - 扩展相关回归共 `67` 项，本地全部通过。
 
+## 2.20 Batch 20 当前已交付
+
+第二十批把 controversy typed issue layer 从“虽然已进 DB，但主要仍由 `eco-materialize-controversy-map` 一把生成和托管”推进到“独立 typed skills + map 聚合器 + 更准确的 parent contract”，已落地以下硬改动：
+
+1. 新增 `eco_council_runtime/controversy_issue_surfaces.py`：
+   - claim-side issue clustering、typed issue decomposition、controversy map aggregation 的共享 builder 已从 skill 脚本内联逻辑中抽离。
+   - `issue-cluster -> stance / concern / actor / citation` 的生成链不再继续散落在多个 skill 脚本里各自复制。
+2. 新增五个独立 typed controversy issue skills：
+   - `eco-cluster-issue-candidates`
+   - `eco-extract-stance-candidates`
+   - `eco-extract-concern-facets`
+   - `eco-extract-actor-profiles`
+   - `eco-extract-evidence-citation-types`
+   typed issue surface 现在都可以被单独执行、单独审计、单独查询，而不再必须借道一个高层 map artifact。
+3. `eco-materialize-controversy-map` 已收缩为 `DB-first` 聚合器：
+   - 优先读取 `issue-cluster / stance-group / concern-facet / actor-profile / evidence-citation-type`。
+   - 只有 typed surface 缺失时才内联补齐，并显式给出 compatibility warning。
+   - `controversy-map` 本身重新回到 board-facing 高层聚合物的位置，不再兼任 typed issue extractor。
+4. `kernel/analysis_plane.py` 的 parent contract 已重排：
+   - `issue-cluster` 现在直接锚定 `claim-cluster / claim-scope / claim-verifiability / verification-route`。
+   - `stance-group / concern-facet / actor-profile / evidence-citation-type` 现在只以 `issue-cluster` 为父面。
+   - `controversy-map` 现在反向依赖 typed issue surfaces，而不是继续直接锚在 claim-side chain。
+   这样 DB query surface 终于能忠实表达真实工作流，而不是让高层 wrapper 充当虚假的中心节点。
+5. `source_queue_profile.py` 与 verifiability/route follow-up hints 已同步改写：
+   - `eco-route-verification-lane` 的默认下游现在优先指向 `eco-cluster-issue-candidates`。
+   - typed extractor 已成为一等 queue-visible capability，而不是只能由 `eco-materialize-controversy-map` 顺手派生。
+6. 本轮本地验证通过：
+   - `python3 -m unittest tests.test_controversy_workflow -v`
+   - `python3 -m unittest tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_controversy_map_items_when_artifact_is_missing tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_issue_cluster_items_when_artifact_is_missing tests.test_runtime_source_queue_profiles -v`
+
 ## 3. 本轮必须解决的核心问题
 
 ### 3.1 Agent 自主权不足

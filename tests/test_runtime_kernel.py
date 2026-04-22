@@ -316,7 +316,13 @@ class RuntimeKernelTests(unittest.TestCase):
                 ]
             }
             self.assertSetEqual(
-                {"claim-cluster", "claim-scope", "claim-verifiability", "verification-route"},
+                {
+                    "issue-cluster",
+                    "stance-group",
+                    "concern-facet",
+                    "actor-profile",
+                    "evidence-citation-type",
+                },
                 parent_kinds,
             )
 
@@ -403,7 +409,15 @@ class RuntimeKernelTests(unittest.TestCase):
                     "parent_result_sets"
                 ]
             }
-            self.assertSetEqual({"controversy-map"}, parent_kinds)
+            self.assertSetEqual(
+                {
+                    "claim-cluster",
+                    "claim-scope",
+                    "claim-verifiability",
+                    "verification-route",
+                },
+                parent_kinds,
+            )
 
     def test_kernel_analysis_query_reports_invalid_analysis_kind(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

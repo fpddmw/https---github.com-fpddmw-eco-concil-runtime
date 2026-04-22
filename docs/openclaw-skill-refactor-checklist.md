@@ -319,6 +319,29 @@
   - `tests/test_runtime_kernel.py`
   - 扩展相关回归共 `67` 项，本地全部通过。
 
+### 2.24 Batch 20 当前状态
+
+- `已完成` 新增 `eco_council_runtime/controversy_issue_surfaces.py`，claim-side issue clustering、typed issue decomposition、controversy map aggregation 的共享 builder 已从 skill 脚本内联逻辑中抽离。
+- `已完成` 新增独立 typed controversy issue skills：
+  - `eco-cluster-issue-candidates`
+  - `eco-extract-stance-candidates`
+  - `eco-extract-concern-facets`
+  - `eco-extract-actor-profiles`
+  - `eco-extract-evidence-citation-types`
+- `已完成` `eco-materialize-controversy-map` 已从“大一统 extractor”收缩为 `DB-first` 聚合器：
+  - 优先读取 `issue-cluster / stance-group / concern-facet / actor-profile / evidence-citation-type`。
+  - 只有 typed surface 缺失时才内联补齐，并显式发出 compatibility warning。
+- `已完成` `kernel/analysis_plane.py` 的 parent contract 已重排：
+  - `issue-cluster` 现在直接指向 `claim-cluster / claim-scope / claim-verifiability / verification-route`，不再把 `controversy-map` 当唯一父面。
+  - `stance-group / concern-facet / actor-profile / evidence-citation-type` 现在只以 `issue-cluster` 为父面。
+  - `controversy-map` 现在反向依赖 typed issue surfaces，而不是继续直接锚在 claim-side chain。
+- `已完成` `source_queue_profile.py` 与 verifiability/route follow-up hints 已改写：
+  - `eco-route-verification-lane` 下游现在优先指向 `eco-cluster-issue-candidates`。
+  - typed extractor 已成为一等 queue-visible capability，而不是只能由 `eco-materialize-controversy-map` 顺手派生。
+- `已完成` 本轮本地验证通过：
+  - `python3 -m unittest tests.test_controversy_workflow -v`
+  - `python3 -m unittest tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_controversy_map_items_when_artifact_is_missing tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_issue_cluster_items_when_artifact_is_missing tests.test_runtime_source_queue_profiles -v`
+
 ## 3. Work Package 0: 冻结旧错误增长
 
 - `[ ]` 冻结旧 `claim -> coverage -> readiness` 主链的功能扩张
@@ -396,11 +419,11 @@
 ### 6.2 新增 controversy 主链 skills
 
 - `[ ]` `[新增 canonical]` `eco-extract-issue-candidates`
-- `[ ]` `[新增 canonical]` `eco-cluster-issue-candidates`
-- `[ ]` `[新增 canonical]` `eco-extract-stance-candidates`
-- `[ ]` `[新增 canonical]` `eco-extract-concern-facets`
-- `[ ]` `[新增 canonical]` `eco-extract-actor-profiles`
-- `[ ]` `[新增 canonical]` `eco-extract-evidence-citation-types`
+- `[x]` `[新增 canonical]` `eco-cluster-issue-candidates`
+- `[x]` `[新增 canonical]` `eco-extract-stance-candidates`
+- `[x]` `[新增 canonical]` `eco-extract-concern-facets`
+- `[x]` `[新增 canonical]` `eco-extract-actor-profiles`
+- `[x]` `[新增 canonical]` `eco-extract-evidence-citation-types`
 - `[x]` `[新增 canonical]` `eco-link-formal-comments-to-public-discourse`
 - `[x]` `[新增 canonical]` `eco-identify-representation-gaps`
 - `[x]` `[新增 canonical]` `eco-detect-cross-platform-diffusion`
