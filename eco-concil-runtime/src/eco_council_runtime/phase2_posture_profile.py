@@ -153,6 +153,7 @@ def default_supervisor_round_transition(
             run_id=run_id,
             round_id=next_round_id,
             skill_name="eco-open-investigation-round",
+            actor_role="moderator",
             contract_mode=contract_mode,
             skill_args=["--source-round-id", round_id],
         ),

@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ..runtime_command_hints import kernel_command
 from .deliberation_plane import load_phase2_control_state
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
 from .phase2_state_surfaces import (
@@ -1077,9 +1078,39 @@ def materialize_scenario_fixture(
             "scenario_fingerprint": maybe_text(baseline_payload.get("scenario_fingerprint")),
         },
         "replay_contract": {
-            "benchmark_command_template": f"python3 eco-concil-runtime/scripts/eco_runtime_kernel.py materialize-benchmark-manifest --run-dir <candidate-run-dir> --run-id {run_id} --round-id {round_id}",
-            "compare_command_template": f"python3 eco-concil-runtime/scripts/eco_runtime_kernel.py compare-benchmark-manifests --run-dir <candidate-run-dir> --run-id {run_id} --round-id {round_id} --left-manifest-path {frozen_baseline_path} --right-manifest-path <candidate-run-dir>/runtime/benchmark_manifest_{round_id}.json",
-            "replay_command_template": f"python3 eco-concil-runtime/scripts/eco_runtime_kernel.py replay-runtime-scenario --run-dir <candidate-run-dir> --run-id {run_id} --round-id {round_id} --fixture-path {fixture_path.resolve()}",
+            "benchmark_command_template": kernel_command(
+                "materialize-benchmark-manifest",
+                "--run-dir",
+                "<candidate-run-dir>",
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+            ),
+            "compare_command_template": kernel_command(
+                "compare-benchmark-manifests",
+                "--run-dir",
+                "<candidate-run-dir>",
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+                "--left-manifest-path",
+                str(frozen_baseline_path),
+                "--right-manifest-path",
+                f"<candidate-run-dir>/runtime/benchmark_manifest_{round_id}.json",
+            ),
+            "replay_command_template": kernel_command(
+                "replay-runtime-scenario",
+                "--run-dir",
+                "<candidate-run-dir>",
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+                "--fixture-path",
+                str(fixture_path.resolve()),
+            ),
             "replay_steps": [
                 "Re-run the fixed scenario with the same run_id and round_id.",
                 "Materialize the candidate benchmark manifest if needed.",

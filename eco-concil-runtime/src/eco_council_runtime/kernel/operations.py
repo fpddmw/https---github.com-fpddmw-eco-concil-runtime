@@ -728,6 +728,8 @@ def refresh_runtime_surfaces(run_dir: Path, *, round_id: str = "") -> dict[str, 
 
 
 def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
+    from ..runtime_command_hints import kernel_command, run_skill_command
+
     policy = load_admission_policy(run_dir)
     manifest = load_json_if_exists(manifest_path(run_dir)) or {}
     health = runtime_health_payload(run_dir, round_id=round_id)
@@ -749,9 +751,9 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
         "",
         "## Standard Commands",
         "",
-        f"- Inspect runtime state: `show-run-state --run-dir {run_dir}{f' --round-id {round_id}' if round_id else ''} --tail 20`",
-        f"- Refresh health surface: `materialize-runtime-health --run-dir {run_dir}{f' --round-id {round_id}' if round_id else ''}`",
-        f"- Rebuild runbook: `materialize-operator-runbook --run-dir {run_dir}{f' --round-id {round_id}' if round_id else ''}`",
+        f"- Inspect runtime state: `{kernel_command('show-run-state', '--run-dir', str(run_dir), *(['--round-id', round_id] if round_id else []), '--tail', '20')}`",
+        f"- Refresh health surface: `{kernel_command('materialize-runtime-health', '--run-dir', str(run_dir), *(['--round-id', round_id] if round_id else []))}`",
+        f"- Rebuild runbook: `{kernel_command('materialize-operator-runbook', '--run-dir', str(run_dir), *(['--round-id', round_id] if round_id else []))}`",
         "",
     ]
     if run_id and round_id:
@@ -759,8 +761,8 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
             [
                 "## Agent Entry",
                 "",
-                f"- Materialize agent entry gate: `materialize-agent-entry-gate --run-dir {run_dir} --run-id {run_id} --round-id {round_id}`",
-                f"- Refresh agent advisory plan through runtime governance: `run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-plan-round-orchestration -- --planner-mode agent-advisory --output-path runtime/agent_advisory_plan_{round_id}.json`",
+                f"- Materialize agent entry gate: `{kernel_command('materialize-agent-entry-gate', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id)}`",
+                f"- Refresh agent advisory plan through runtime governance: `{run_skill_command(run_dir=run_dir, run_id=run_id, round_id=round_id, skill_name='eco-plan-round-orchestration', contract_mode='warn', actor_role='moderator', skill_args=['--planner-mode', 'agent-advisory', '--output-path', f'runtime/agent_advisory_plan_{round_id}.json'])}`",
                 "",
             ]
         )

@@ -17,6 +17,20 @@ def load_registry_snapshot():
 
 
 class RuntimeSourceQueueProfileTests(unittest.TestCase):
+    def test_registry_includes_skill_access_policy_for_every_skill(self) -> None:
+        registry = load_registry_snapshot()(WORKSPACE_ROOT)
+
+        self.assertEqual("runtime-registry-v3", registry["schema_version"])
+        self.assertEqual(registry["skill_count"], registry["skill_access_summary"]["skill_count"])
+        self.assertGreater(registry["skill_access_summary"]["operator_approval_required_count"], 0)
+
+        for entry in registry["skills"]:
+            access = entry["skill_access"]
+            self.assertEqual(entry["skill_name"], access["skill_name"])
+            self.assertTrue(access["skill_layer"])
+            self.assertIn("allowed_roles", access)
+            self.assertIn("required_capabilities", access)
+
     def test_registry_assigns_source_queue_profiles_to_every_skill(self) -> None:
         registry = load_registry_snapshot()(WORKSPACE_ROOT)
 

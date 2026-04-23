@@ -451,9 +451,12 @@ class RuntimeKernelTests(unittest.TestCase):
             )
             registry = init_payload["registry"]
             handoff_entry = next(item for item in registry["skills"] if item["skill_name"] == "eco-materialize-reporting-handoff")
-            self.assertEqual("runtime-registry-v2", registry["schema_version"])
+            self.assertEqual("runtime-registry-v3", registry["schema_version"])
+            self.assertEqual(registry["skill_count"], registry["skill_access_summary"]["skill_count"])
             self.assertIn("run_dir/promotion/promoted_evidence_basis_<round_id>.json", handoff_entry["declared_contract"]["reads"])
             self.assertEqual("Eco Materialize Reporting Handoff", handoff_entry["agent"]["display_name"])
+            self.assertEqual("eco-materialize-reporting-handoff", handoff_entry["skill_access"]["skill_name"])
+            self.assertIn("report-editor", handoff_entry["skill_access"]["allowed_roles"])
 
             payload = run_kernel(
                 "run-skill",
@@ -476,10 +479,65 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("runtime-event-v3", event["schema_version"])
             self.assertEqual(["--author-role", "moderator", "--note-text", "Runtime metadata note."], event["skill_args"])
             self.assertEqual("eco-post-board-note", event["skill_registry_entry"]["skill_name"])
+            self.assertEqual("moderator", event["actor_role"])
+            self.assertEqual("moderator", event["resolved_actor_role"])
             self.assertIn(str((run_dir / "board" / f"investigation_board.json").resolve()), event["resolved_write_paths"])
             self.assertIn("argv", event["command_snapshot"])
             self.assertTrue(event["execution_input_hash"])
             self.assertTrue(event["payload_hash"])
+
+    def test_kernel_blocks_write_command_without_explicit_actor_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+
+            completed = run_kernel_process(
+                "init-run",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                auto_actor_role=False,
+            )
+
+            self.assertEqual(1, completed.returncode)
+            payload = json.loads(completed.stdout)
+            self.assertEqual("failed", payload["status"])
+            self.assertIn("missing-actor-role", {item["code"] for item in payload["access_policy"]["issues"]})
+
+    def test_preflight_blocks_unauthorized_actor_role_for_write_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+
+            completed = run_kernel_process(
+                "preflight-skill",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                "eco-summarize-board-state",
+                "--actor-role",
+                "environmentalist",
+                "--contract-mode",
+                "strict",
+                auto_actor_role=False,
+            )
+
+            self.assertEqual(1, completed.returncode)
+            payload = json.loads(completed.stdout)
+            self.assertEqual("blocked", payload["status"])
+            self.assertEqual(
+                "environmental-investigator",
+                payload["preflight"]["resolved_actor_role"],
+            )
+            self.assertIn(
+                "actor-role-not-allowed",
+                {item["code"] for item in payload["preflight"]["issues"]},
+            )
 
     def test_preflight_warn_reports_missing_required_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -636,6 +694,7 @@ class RuntimeKernelTests(unittest.TestCase):
                         run_id=RUN_ID,
                         round_id=ROUND_ID,
                         skill_name="eco-summarize-board-state",
+                        actor_role="moderator",
                         skill_args=[],
                         contract_mode="strict",
                     )
@@ -653,7 +712,7 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.kernel.governance import preflight_skill_execution
 
             fake_skill_entry = {
-                "skill_name": "eco-fake-network-fetch",
+                "skill_name": "youtube-video-search",
                 "script_path": str(root / "fake_skill.py"),
                 "declared_contract": {"reads": [], "writes": []},
                 "declared_inputs": {"required": [], "optional": []},
@@ -667,7 +726,8 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
-                    skill_name="eco-fake-network-fetch",
+                    skill_name="youtube-video-search",
+                    actor_role="environmentalist",
                     skill_args=[],
                     contract_mode="strict",
                 )
@@ -675,7 +735,8 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
-                    skill_name="eco-fake-network-fetch",
+                    skill_name="youtube-video-search",
+                    actor_role="environmentalist",
                     skill_args=[],
                     contract_mode="strict",
                     allow_side_effects=["network-external"],
@@ -697,7 +758,7 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.kernel.ledger import load_ledger_tail
 
             fake_skill_entry = {
-                "skill_name": "eco-fake-retryable-skill",
+                "skill_name": "eco-summarize-board-state",
                 "script_path": str(root / "fake_retry.py"),
                 "declared_contract": {"reads": [], "writes": []},
                 "declared_inputs": {"required": [], "optional": []},
@@ -729,7 +790,8 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
-                    skill_name="eco-fake-retryable-skill",
+                    skill_name="eco-summarize-board-state",
+                    actor_role="moderator",
                     skill_args=[],
                     contract_mode="warn",
                     retry_budget=1,
@@ -758,7 +820,7 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.kernel.ledger import load_ledger_tail
 
             fake_skill_entry = {
-                "skill_name": "eco-fake-slow-skill",
+                "skill_name": "eco-summarize-board-state",
                 "script_path": str(root / "fake_slow.py"),
                 "declared_contract": {"reads": [], "writes": []},
                 "declared_inputs": {"required": [], "optional": []},
@@ -780,7 +842,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         run_dir,
                         run_id=RUN_ID,
                         round_id=ROUND_ID,
-                        skill_name="eco-fake-slow-skill",
+                        skill_name="eco-summarize-board-state",
+                        actor_role="moderator",
                         skill_args=[],
                         contract_mode="warn",
                         timeout_seconds=0.01,
@@ -807,7 +870,7 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.kernel.operations import load_dead_letters, materialize_admission_policy
 
             fake_skill_entry = {
-                "skill_name": "eco-fake-admission-blocked",
+                "skill_name": "eco-summarize-board-state",
                 "script_path": str(root / "fake_blocked.py"),
                 "declared_contract": {"reads": [], "writes": []},
                 "declared_inputs": {"required": [], "optional": []},
@@ -827,7 +890,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         run_dir,
                         run_id=RUN_ID,
                         round_id=ROUND_ID,
-                        skill_name="eco-fake-admission-blocked",
+                        skill_name="eco-summarize-board-state",
+                        actor_role="moderator",
                         skill_args=[],
                         contract_mode="warn",
                         timeout_seconds=2.5,
@@ -2609,6 +2673,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         "2",
                         "--retry-backoff-ms",
                         "50",
+                        "--actor-role",
+                        "moderator",
                         "--allow-side-effect",
                         "network-external",
                         "--allow-side-effect",
@@ -2624,6 +2690,7 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(9.0, run_skill_mock.call_args.kwargs["timeout_seconds"])
             self.assertEqual(2, run_skill_mock.call_args.kwargs["retry_budget"])
             self.assertEqual(50, run_skill_mock.call_args.kwargs["retry_backoff_ms"])
+            self.assertEqual("moderator", run_skill_mock.call_args.kwargs["actor_role"])
             self.assertEqual(["network-external", "destructive-write"], run_skill_mock.call_args.kwargs["allow_side_effects"])
             self.assertEqual(["--author-role", "moderator"], run_skill_mock.call_args.kwargs["skill_args"])
             self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
@@ -2653,6 +2720,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         RUN_ID,
                         "--round-id",
                         ROUND_ID,
+                        "--actor-role",
+                        "runtime-operator",
                         "--archive-failure-policy",
                         "warn",
                         "--timeout-seconds",
@@ -2661,6 +2730,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 )
 
             self.assertEqual(0, exit_code)
+            self.assertEqual("runtime-operator", close_mock.call_args.kwargs["actor_role"])
             self.assertEqual("warn", close_mock.call_args.kwargs["archive_failure_policy"])
             self.assertEqual(6.0, close_mock.call_args.kwargs["timeout_seconds"])
             self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
@@ -2682,12 +2752,15 @@ class RuntimeKernelTests(unittest.TestCase):
                         RUN_ID,
                         "--round-id",
                         ROUND_ID,
+                        "--actor-role",
+                        "runtime-operator",
                         "--retry-budget",
                         "2",
                     ]
                 )
 
             self.assertEqual(0, exit_code)
+            self.assertEqual("runtime-operator", history_mock.call_args.kwargs["actor_role"])
             self.assertEqual(2, history_mock.call_args.kwargs["retry_budget"])
             self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
 
@@ -2716,6 +2789,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         RUN_ID,
                         "--round-id",
                         ROUND_ID,
+                        "--actor-role",
+                        "runtime-operator",
                         "--scenario-id",
                         "scenario-fixed-001",
                         "--baseline-manifest-path",
@@ -2745,6 +2820,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         RUN_ID,
                         "--round-id",
                         ROUND_ID,
+                        "--actor-role",
+                        "runtime-operator",
                     ]
                 )
 
@@ -2769,6 +2846,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         RUN_ID,
                         "--round-id",
                         ROUND_ID,
+                        "--actor-role",
+                        "runtime-operator",
                         "--left-manifest-path",
                         str(root / "left.json"),
                         "--right-manifest-path",
@@ -2798,6 +2877,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         RUN_ID,
                         "--round-id",
                         ROUND_ID,
+                        "--actor-role",
+                        "runtime-operator",
                         "--fixture-path",
                         str(root / "fixture.json"),
                         "--baseline-manifest-path",
@@ -2835,6 +2916,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         RUN_ID,
                         "--round-id",
                         ROUND_ID,
+                        "--actor-role",
+                        "runtime-operator",
                         "--timeout-seconds",
                         "7",
                         "--retry-budget",
@@ -2844,6 +2927,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 )
 
             self.assertEqual(0, exit_code)
+            self.assertEqual("runtime-operator", controller_mock.call_args.kwargs["actor_role"])
             self.assertFalse(controller_mock.call_args.kwargs["force_restart"])
             self.assertEqual(7.0, controller_mock.call_args.kwargs["timeout_seconds"])
             self.assertEqual(1, controller_mock.call_args.kwargs["retry_budget"])
@@ -2866,11 +2950,14 @@ class RuntimeKernelTests(unittest.TestCase):
                         RUN_ID,
                         "--round-id",
                         ROUND_ID,
+                        "--actor-role",
+                        "runtime-operator",
                     ],
                     default_posture_profile=default_phase2_posture_profile_config(),
                 )
 
             self.assertEqual(0, exit_code)
+            self.assertEqual("runtime-operator", controller_mock.call_args.kwargs["actor_role"])
             self.assertTrue(controller_mock.call_args.kwargs["force_restart"])
             self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
 
@@ -2897,6 +2984,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         str(run_dir),
                         "--run-id",
                         RUN_ID,
+                        "--actor-role",
+                        "runtime-operator",
                         "--permission-profile",
                         "restricted",
                         "--max-timeout-seconds",
@@ -2930,6 +3019,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         str(run_dir),
                         "--round-id",
                         ROUND_ID,
+                        "--actor-role",
+                        "runtime-operator",
                     ]
                 )
 
@@ -2952,6 +3043,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         str(run_dir),
                         "--round-id",
                         ROUND_ID,
+                        "--actor-role",
+                        "runtime-operator",
                     ]
                 )
 

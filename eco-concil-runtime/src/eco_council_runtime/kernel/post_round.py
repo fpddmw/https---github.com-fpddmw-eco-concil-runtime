@@ -472,7 +472,13 @@ def history_bootstrap_event(
 
 
 def close_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any]:
-    return close_round_with_contract_mode(run_dir, run_id=run_id, round_id=round_id, contract_mode="warn")
+    return close_round_with_contract_mode(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        actor_role="runtime-operator",
+        contract_mode="warn",
+    )
 
 
 def close_round_with_contract_mode(
@@ -480,6 +486,7 @@ def close_round_with_contract_mode(
     *,
     run_id: str,
     round_id: str,
+    actor_role: str = "runtime-operator",
     contract_mode: str,
     timeout_seconds: float | None = None,
     retry_budget: int | None = None,
@@ -602,6 +609,7 @@ def close_round_with_contract_mode(
                 run_id=run_id,
                 round_id=round_id,
                 skill_name=maybe_text(blueprint.get("skill_name")),
+                actor_role=actor_role,
                 skill_args=[],
                 contract_mode=contract_mode,
                 **execution_kwargs,
@@ -694,7 +702,13 @@ def close_round_with_contract_mode(
 
 
 def bootstrap_history_context(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any]:
-    return bootstrap_history_context_with_contract_mode(run_dir, run_id=run_id, round_id=round_id, contract_mode="warn")
+    return bootstrap_history_context_with_contract_mode(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        actor_role="runtime-operator",
+        contract_mode="warn",
+    )
 
 
 def bootstrap_history_context_with_contract_mode(
@@ -702,6 +716,7 @@ def bootstrap_history_context_with_contract_mode(
     *,
     run_id: str,
     round_id: str,
+    actor_role: str = "runtime-operator",
     contract_mode: str,
     timeout_seconds: float | None = None,
     retry_budget: int | None = None,
@@ -774,6 +789,7 @@ def bootstrap_history_context_with_contract_mode(
             run_id=run_id,
             round_id=round_id,
             skill_name=HISTORY_BOOTSTRAP_SKILL_NAME,
+            actor_role=actor_role,
             skill_args=[],
             contract_mode=contract_mode,
             **execution_kwargs,

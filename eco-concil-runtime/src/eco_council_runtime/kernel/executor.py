@@ -91,6 +91,7 @@ def skill_command_hint(
     run_id: str,
     round_id: str,
     skill_name: str,
+    actor_role: str,
     contract_mode: str,
     skill_args: list[str],
 ) -> str:
@@ -104,6 +105,8 @@ def skill_command_hint(
         round_id,
         "--skill-name",
         skill_name,
+        "--actor-role",
+        actor_role,
         "--contract-mode",
         contract_mode,
     ]
@@ -133,6 +136,7 @@ def run_skill(
     run_id: str,
     round_id: str,
     skill_name: str,
+    actor_role: str,
     skill_args: list[str],
     contract_mode: str = "warn",
     workspace: Path | None = None,
@@ -149,6 +153,7 @@ def run_skill(
         run_id=run_id,
         round_id=round_id,
         skill_name=skill_name,
+        actor_role=actor_role,
         skill_args=skill_args,
         contract_mode=contract_mode,
         workspace=root,
@@ -173,6 +178,7 @@ def run_skill(
         "python_executable": sys.executable,
         "workspace_root": str(root),
         "script_path": str(script_path),
+        "actor_role": actor_role,
     }
     run_command_hint = skill_command_hint(
         "run-skill",
@@ -180,6 +186,7 @@ def run_skill(
         run_id=run_id,
         round_id=round_id,
         skill_name=skill_name,
+        actor_role=actor_role,
         contract_mode=contract_mode,
         skill_args=skill_args,
     )
@@ -189,6 +196,7 @@ def run_skill(
         run_id=run_id,
         round_id=round_id,
         skill_name=skill_name,
+        actor_role=actor_role,
         contract_mode=contract_mode,
         skill_args=skill_args,
     )
@@ -197,6 +205,7 @@ def run_skill(
             "run_id": run_id,
             "round_id": round_id,
             "skill_name": skill_name,
+            "actor_role": actor_role,
             "skill_args": skill_args,
             "skill_options": skill_options,
             "command_snapshot": command_snapshot,
@@ -242,6 +251,8 @@ def run_skill(
                 "run_id": run_id,
                 "round_id": round_id,
                 "skill_name": skill_name,
+                "actor_role": actor_role,
+                "resolved_actor_role": preflight.get("resolved_actor_role", ""),
                 "started_at_utc": started_at,
                 "completed_at_utc": finished_at,
                 "status": "blocked",
@@ -283,7 +294,13 @@ def run_skill(
             operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
             failure_payload = {
                 "status": "failed",
-                "summary": {"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
+                "summary": {
+                    "skill_name": skill_name,
+                    "run_id": run_id,
+                    "round_id": round_id,
+                    "contract_mode": contract_mode,
+                    "actor_role": actor_role,
+                },
                 "message": failure["message"],
                 "failure": failure,
                 "preflight": preflight,
@@ -316,6 +333,8 @@ def run_skill(
                 "run_id": run_id,
                 "round_id": round_id,
                 "skill_name": skill_name,
+                "actor_role": actor_role,
+                "resolved_actor_role": preflight.get("resolved_actor_role", ""),
                 "started_at_utc": started_at,
                 "completed_at_utc": finished_at,
                 "status": "blocked",
@@ -357,7 +376,13 @@ def run_skill(
             operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
             failure_payload = {
                 "status": "failed",
-                "summary": {"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
+                "summary": {
+                    "skill_name": skill_name,
+                    "run_id": run_id,
+                    "round_id": round_id,
+                    "contract_mode": contract_mode,
+                    "actor_role": actor_role,
+                },
                 "message": failure["message"],
                 "failure": failure,
                 "preflight": preflight,
@@ -503,6 +528,8 @@ def run_skill(
             "run_id": run_id,
             "round_id": round_id,
             "skill_name": skill_name,
+            "actor_role": actor_role,
+            "resolved_actor_role": preflight.get("resolved_actor_role", ""),
             "started_at_utc": started_at,
             "completed_at_utc": finished_at,
             "skill_args": skill_args,
@@ -575,7 +602,13 @@ def run_skill(
                 failure["message"],
                 {
                     "status": "failed",
-                    "summary": {"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
+                    "summary": {
+                        "skill_name": skill_name,
+                        "run_id": run_id,
+                        "round_id": round_id,
+                        "contract_mode": contract_mode,
+                        "actor_role": actor_role,
+                    },
                     "message": failure["message"],
                     "failure": failure,
                     "preflight": preflight,
@@ -639,7 +672,13 @@ def run_skill(
         operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
         failure_payload = {
             "status": "failed",
-            "summary": {"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
+            "summary": {
+                "skill_name": skill_name,
+                "run_id": run_id,
+                "round_id": round_id,
+                "contract_mode": contract_mode,
+                "actor_role": actor_role,
+            },
             "message": failure["message"],
             "failure": failure,
             "preflight": preflight,
@@ -677,6 +716,8 @@ def run_skill(
             "event_id": event_id,
             "receipt_id": receipt_id,
             "contract_mode": contract_mode,
+            "actor_role": actor_role,
+            "resolved_actor_role": preflight.get("resolved_actor_role", ""),
             "attempt_count": len(attempts),
             "recovered_after_retry": len(attempts) > 1,
             "timeout_seconds": timeout_seconds,

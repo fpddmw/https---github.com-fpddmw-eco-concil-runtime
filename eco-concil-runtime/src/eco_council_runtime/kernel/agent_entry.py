@@ -5,6 +5,7 @@ from typing import Any
 
 from ..phase2_agent_entry_profile import materialize_agent_entry_advisory_plan
 from ..phase2_agent_handoff import EntryChainBuilder, HardGateCommandBuilder
+from .role_contracts import normalize_actor_role
 from .analysis_plane import query_analysis_result_sets
 from .deliberation_plane import load_round_snapshot
 from .executor import (
@@ -237,6 +238,7 @@ def build_agent_entry_payload(
     *,
     run_id: str,
     round_id: str,
+    actor_role: str,
     contract_mode: str,
     agent_entry_profile: dict[str, Any],
     hard_gate_command_builder: HardGateCommandBuilder,
@@ -275,11 +277,14 @@ def build_agent_entry_payload(
         role_definitions=role_definitions,
     )
     recommended_skills = recommended_skills_builder(advisory_plan=advisory_plan)
+    requested_by_role = maybe_text(actor_role)
     payload = {
         "schema_version": "runtime-agent-entry-gate-v1",
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
+        "requested_by_role": requested_by_role,
+        "resolved_requested_by_role": normalize_actor_role(requested_by_role),
         "entry_id": "agent-entry-" + new_runtime_event_id("gate", run_id, round_id, status).split("-", 1)[1],
         "entry_status": status,
         "orchestration_mode": maybe_text(mission.get("orchestration_mode")) or "openclaw-agent-compatible",
@@ -425,6 +430,7 @@ def materialize_agent_entry_gate(
     *,
     run_id: str,
     round_id: str,
+    actor_role: str = "runtime-operator",
     agent_entry_profile: dict[str, Any],
     hard_gate_command_builder: HardGateCommandBuilder,
     entry_chain_builder: EntryChainBuilder,
@@ -441,6 +447,7 @@ def materialize_agent_entry_gate(
         resolved_run_dir,
         run_id=run_id,
         round_id=round_id,
+        actor_role=actor_role,
         contract_mode=contract_mode,
         agent_entry_profile=profile,
         hard_gate_command_builder=hard_gate_command_builder,
@@ -469,6 +476,7 @@ def materialize_agent_entry_gate(
         resolved_run_dir,
         run_id=run_id,
         round_id=round_id,
+        actor_role=actor_role,
         contract_mode=contract_mode,
         agent_entry_profile=profile,
         hard_gate_command_builder=hard_gate_command_builder,
@@ -491,6 +499,8 @@ def materialize_agent_entry_gate(
             "event_type": "agent-entry-gate",
             "run_id": run_id,
             "round_id": round_id,
+            "actor_role": maybe_text(actor_role),
+            "resolved_actor_role": normalize_actor_role(actor_role),
             "started_at_utc": payload.get("generated_at_utc"),
             "completed_at_utc": payload.get("generated_at_utc"),
             "status": "completed",
@@ -511,6 +521,8 @@ def materialize_agent_entry_gate(
             "run_dir": str(resolved_run_dir),
             "run_id": run_id,
             "round_id": round_id,
+            "requested_by_role": maybe_text(actor_role),
+            "resolved_requested_by_role": normalize_actor_role(actor_role),
             "entry_status": maybe_text(payload.get("entry_status")),
             "orchestration_mode": maybe_text(payload.get("orchestration_mode")),
             "output_path": str(output_file.resolve()),

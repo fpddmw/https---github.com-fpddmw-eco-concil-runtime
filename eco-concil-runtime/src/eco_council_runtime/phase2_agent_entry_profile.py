@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .kernel.executor import maybe_text, run_skill
+from .kernel.skill_registry import default_actor_role_hint
 from .kernel.paths import agent_advisory_plan_path
 from .phase2_direct_advisory import materialize_direct_council_advisory_plan
 from .phase2_planning_profile import planner_skill_args_for_source
@@ -221,6 +222,7 @@ def default_role_entry_points(
                         run_id=run_id,
                         round_id=round_id,
                         skill_name=skill_name,
+                        actor_role=role,
                         contract_mode=contract_mode,
                         skill_args=["--include-closed", "--event-limit", "20"],
                     )
@@ -232,6 +234,7 @@ def default_role_entry_points(
                         run_id=run_id,
                         round_id=round_id,
                         skill_name=skill_name,
+                        actor_role=role,
                         contract_mode=contract_mode,
                     )
                 )
@@ -254,6 +257,7 @@ def default_role_entry_points(
                         run_id=run_id,
                         round_id=round_id,
                         skill_name=skill_name,
+                        actor_role=role,
                         contract_mode=contract_mode,
                         skill_args=[
                             "--agent-role",
@@ -284,6 +288,7 @@ def default_role_entry_points(
                         run_id=run_id,
                         round_id=round_id,
                         skill_name=skill_name,
+                        actor_role=role,
                         contract_mode=contract_mode,
                         skill_args=[
                             "--agent-role",
@@ -304,6 +309,7 @@ def default_role_entry_points(
                         run_id=run_id,
                         round_id=round_id,
                         skill_name=skill_name,
+                        actor_role=role,
                         contract_mode=contract_mode,
                         skill_args=[
                             "--author-role",
@@ -322,6 +328,7 @@ def default_role_entry_points(
                         run_id=run_id,
                         round_id=round_id,
                         skill_name=skill_name,
+                        actor_role=role,
                         contract_mode=contract_mode,
                         skill_args=[
                             "--title",
@@ -342,6 +349,7 @@ def default_role_entry_points(
                         run_id=run_id,
                         round_id=round_id,
                         skill_name=skill_name,
+                        actor_role=role,
                         contract_mode=contract_mode,
                         skill_args=[
                             "--title",
@@ -362,6 +370,7 @@ def default_role_entry_points(
                         run_id=run_id,
                         round_id=round_id,
                         skill_name=skill_name,
+                        actor_role=role,
                         contract_mode=contract_mode,
                         skill_args=["--max-probes", "3"],
                     )
@@ -373,6 +382,7 @@ def default_role_entry_points(
                         run_id=run_id,
                         round_id=round_id,
                         skill_name=skill_name,
+                        actor_role=role,
                         contract_mode=contract_mode,
                         skill_args=["--ticket-id", "<ticket_id>"],
                     )
@@ -384,6 +394,7 @@ def default_role_entry_points(
                         run_id=run_id,
                         round_id=round_id,
                         skill_name=skill_name,
+                        actor_role=role,
                         contract_mode=contract_mode,
                         skill_args=["--task-id", "<task_id>", "--claimed-by-role", "moderator"],
                     )
@@ -395,6 +406,7 @@ def default_role_entry_points(
                         run_id=run_id,
                         round_id=next_round_id,
                         skill_name=skill_name,
+                        actor_role=role,
                         contract_mode=contract_mode,
                         skill_args=["--source-round-id", round_id],
                     )
@@ -683,6 +695,9 @@ def materialize_agent_entry_advisory_plan(
             run_id=run_id,
             round_id=round_id,
             skill_name=maybe_text(source_spec.get("planner_skill_name")) or DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+            actor_role=default_actor_role_hint(
+                maybe_text(source_spec.get("planner_skill_name")) or DEFAULT_PHASE2_PLANNER_SKILL_NAME
+            ),
             skill_args=planner_skill_args_for_source(run_dir, source_spec, output_path),
             contract_mode=contract_mode,
             timeout_seconds=timeout_seconds,

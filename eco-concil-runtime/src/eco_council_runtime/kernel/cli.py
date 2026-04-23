@@ -28,13 +28,17 @@ from ..reporting_objects import (
 )
 from ..reporting_exports import materialize_reporting_exports
 from ..phase2_agent_handoff import EntryChainBuilder, HardGateCommandBuilder
-from ..runtime_command_hints import run_skill_command
+from ..runtime_command_hints import kernel_command, run_skill_command
 from .analysis_plane import (
     analysis_kind_names,
     query_analysis_result_items,
     query_analysis_result_sets,
 )
 from .agent_entry import agent_entry_state, materialize_agent_entry_gate
+from .access_policy import (
+    command_requires_explicit_actor_role,
+    evaluate_kernel_command_access,
+)
 from .benchmark import (
     compare_benchmark_manifests,
     materialize_benchmark_manifest,
@@ -123,6 +127,34 @@ def add_admission_policy_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--allowed-cwd-root", action="append", default=[])
 
 
+def add_actor_role_arg(command: argparse.ArgumentParser) -> None:
+    command.add_argument("--actor-role", default="")
+
+
+def command_access_failure(
+    *,
+    command_name: str,
+    actor_role: str,
+    access: dict[str, Any],
+) -> dict[str, Any]:
+    issues = access.get("issues", []) if isinstance(access.get("issues"), list) else []
+    message = (
+        maybe_text(issues[0].get("message"))
+        if issues and isinstance(issues[0], dict)
+        else f"Actor role validation blocked kernel command `{command_name}`."
+    )
+    return {
+        "status": "failed",
+        "summary": {
+            "command_name": command_name,
+            "actor_role": actor_role,
+            "resolved_actor_role": access.get("resolved_actor_role", ""),
+        },
+        "message": message,
+        "access_policy": access,
+    }
+
+
 def init_run(run_dir: Path, run_id: str) -> dict[str, Any]:
     ensure_runtime_dirs(run_dir)
     registry = write_registry(run_dir)
@@ -170,10 +202,30 @@ def phase2_operator_view(
         or maybe_text(gate.get("run_id"))
     )
     resume_command = maybe_text(supervisor.get("resume_command")) or (
-        f"resume-phase2-round --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if round_id and run_id else ""
+        kernel_command(
+            "resume-phase2-round",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        )
+        if round_id and run_id
+        else ""
     )
     restart_command = maybe_text(supervisor.get("restart_command")) or (
-        f"restart-phase2-round --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if round_id and run_id else ""
+        kernel_command(
+            "restart-phase2-round",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        )
+        if round_id and run_id
+        else ""
     )
     inspect_command = maybe_text(supervisor.get("inspect_command")) or (
         f"show-run-state --run-dir {run_dir} --round-id {round_id} --tail 20" if round_id else ""
@@ -284,7 +336,15 @@ def phase2_operator_view(
             else ""
         ),
         "materialize_phase2_exports_command": (
-            f"materialize-phase2-exports --run-dir {run_dir} --run-id {run_id} --round-id {round_id}"
+            kernel_command(
+                "materialize-phase2-exports",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+            )
             if round_id and run_id
             else ""
         ),
@@ -418,42 +478,103 @@ def reporting_operator_view(
             else ""
         ),
         "materialize_reporting_exports_command": (
-            f"materialize-reporting-exports --run-dir {run_dir} --run-id {run_id} --round-id {round_id}"
+            kernel_command(
+                "materialize-reporting-exports",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+            )
             if round_id and run_id
             else ""
         ),
         "materialize_reporting_handoff_command": (
-            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-materialize-reporting-handoff"
+            run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                skill_name="eco-materialize-reporting-handoff",
+                actor_role="moderator",
+                contract_mode="warn",
+            )
             if round_id and run_id
             else ""
         ),
         "draft_council_decision_command": (
-            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-draft-council-decision"
+            run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                skill_name="eco-draft-council-decision",
+                actor_role="moderator",
+                contract_mode="warn",
+            )
             if round_id and run_id
             else ""
         ),
         "draft_sociologist_report_command": (
-            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-draft-expert-report -- --role sociologist"
+            run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                skill_name="eco-draft-expert-report",
+                actor_role="report-editor",
+                contract_mode="warn",
+                skill_args=["--role", "sociologist"],
+            )
             if round_id and run_id
             else ""
         ),
         "draft_environmentalist_report_command": (
-            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-draft-expert-report -- --role environmentalist"
+            run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                skill_name="eco-draft-expert-report",
+                actor_role="report-editor",
+                contract_mode="warn",
+                skill_args=["--role", "environmentalist"],
+            )
             if round_id and run_id
             else ""
         ),
         "publish_council_decision_command": (
-            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-publish-council-decision"
+            run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                skill_name="eco-publish-council-decision",
+                actor_role="moderator",
+                contract_mode="warn",
+            )
             if round_id and run_id
             else ""
         ),
         "publish_sociologist_report_command": (
-            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-publish-expert-report -- --role sociologist"
+            run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                skill_name="eco-publish-expert-report",
+                actor_role="report-editor",
+                contract_mode="warn",
+                skill_args=["--role", "sociologist"],
+            )
             if round_id and run_id
             else ""
         ),
         "publish_environmentalist_report_command": (
-            f"run-skill --run-dir {run_dir} --run-id {run_id} --round-id {round_id} --skill-name eco-publish-expert-report -- --role environmentalist"
+            run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                skill_name="eco-publish-expert-report",
+                actor_role="report-editor",
+                contract_mode="warn",
+                skill_args=["--role", "environmentalist"],
+            )
             if round_id and run_id
             else ""
         ),
@@ -593,8 +714,32 @@ def post_round_operator_view(run_dir: Path, round_id: str, post_round_state: dic
         "history_bootstrap_status": maybe_text(history_bootstrap.get("bootstrap_status")),
         "selected_case_count": int(history_bootstrap.get("selected_case_count") or 0),
         "selected_signal_count": int(history_bootstrap.get("selected_signal_count") or 0),
-        "close_command": f"close-round --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if run_id and round_id else "",
-        "history_command": f"bootstrap-history-context --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if run_id and round_id else "",
+        "close_command": (
+            kernel_command(
+                "close-round",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+            )
+            if run_id and round_id
+            else ""
+        ),
+        "history_command": (
+            kernel_command(
+                "bootstrap-history-context",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+            )
+            if run_id and round_id
+            else ""
+        ),
         "round_close_path": str(round_close_state_path(run_dir, round_id).resolve()) if round_id else "",
         "history_bootstrap_path": str(history_bootstrap_state_path(run_dir, round_id).resolve()) if round_id else "",
     }
@@ -618,13 +763,29 @@ def benchmark_operator_view(run_dir: Path, round_id: str, benchmark_state: dict[
     compare_command = ""
     replay_command = ""
     if round_id and run_id and baseline_manifest_path:
-        compare_command = (
-            f"compare-benchmark-manifests --run-dir {run_dir} --run-id {run_id} --round-id {round_id} "
-            f"--left-manifest-path {baseline_manifest_path} --right-manifest-path {benchmark_path}"
+        compare_command = kernel_command(
+            "compare-benchmark-manifests",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--left-manifest-path",
+            baseline_manifest_path,
+            "--right-manifest-path",
+            benchmark_path,
         )
-        replay_command = (
-            f"replay-runtime-scenario --run-dir {run_dir} --run-id {run_id} --round-id {round_id} "
-            f"--fixture-path {fixture_path}"
+        replay_command = kernel_command(
+            "replay-runtime-scenario",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--fixture-path",
+            fixture_path,
         )
     return {
         "scenario_id": maybe_text(fixture.get("scenario_id")),
@@ -636,8 +797,32 @@ def benchmark_operator_view(run_dir: Path, round_id: str, benchmark_state: dict[
         else False,
         "compare_verdict": maybe_text(compare.get("verdict")),
         "replay_verdict": maybe_text(replay.get("replay_verdict")),
-        "fixture_command": f"materialize-scenario-fixture --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if run_id and round_id else "",
-        "benchmark_command": f"materialize-benchmark-manifest --run-dir {run_dir} --run-id {run_id} --round-id {round_id}" if run_id and round_id else "",
+        "fixture_command": (
+            kernel_command(
+                "materialize-scenario-fixture",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+            )
+            if run_id and round_id
+            else ""
+        ),
+        "benchmark_command": (
+            kernel_command(
+                "materialize-benchmark-manifest",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+            )
+            if run_id and round_id
+            else ""
+        ),
         "compare_command": compare_command,
         "replay_command": replay_command,
         "fixture_path": fixture_path,
@@ -654,7 +839,13 @@ def operations_state(run_dir: Path, selected_round_id: str) -> dict[str, Any]:
     runbook_path = operator_runbook_path(run_dir, selected_round_id) if selected_round_id else operator_runbook_path(run_dir)
     run_id = maybe_text(admission_policy.get("run_id"))
     materialize_policy_command = (
-        f"materialize-admission-policy --run-dir {run_dir} --run-id {run_id}"
+        kernel_command(
+            "materialize-admission-policy",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+        )
         if run_id
         else ""
     )
@@ -669,8 +860,18 @@ def operations_state(run_dir: Path, selected_round_id: str) -> dict[str, Any]:
             "runtime_health_path": str(runtime_health_path(run_dir).resolve()),
             "operator_runbook_path": str(runbook_path.resolve()),
             "materialize_admission_policy_command": materialize_policy_command,
-            "materialize_runtime_health_command": f"materialize-runtime-health --run-dir {run_dir}{f' --round-id {selected_round_id}' if selected_round_id else ''}",
-            "materialize_operator_runbook_command": f"materialize-operator-runbook --run-dir {run_dir}{f' --round-id {selected_round_id}' if selected_round_id else ''}",
+            "materialize_runtime_health_command": kernel_command(
+                "materialize-runtime-health",
+                "--run-dir",
+                str(run_dir),
+                *(["--round-id", selected_round_id] if selected_round_id else []),
+            ),
+            "materialize_operator_runbook_command": kernel_command(
+                "materialize-operator-runbook",
+                "--run-dir",
+                str(run_dir),
+                *(["--round-id", selected_round_id] if selected_round_id else []),
+            ),
             "show_dead_letters_command": f"show-dead-letters --run-dir {run_dir}{f' --round-id {selected_round_id}' if selected_round_id else ''}",
             "open_dead_letter_count": int(runtime_health.get("summary", {}).get("open_dead_letter_count") or 0),
         },
@@ -943,6 +1144,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_cmd = sub.add_parser("init-run", help="Initialize runtime manifest, cursor, and registry for a run.")
     init_cmd.add_argument("--run-dir", required=True)
     init_cmd.add_argument("--run-id", required=True)
+    add_actor_role_arg(init_cmd)
     init_cmd.add_argument("--pretty", action="store_true")
 
     run_cmd = sub.add_parser("run-skill", help="Execute one skill through the runtime kernel and append a ledger event.")
@@ -950,6 +1152,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_cmd.add_argument("--run-id", required=True)
     run_cmd.add_argument("--round-id", required=True)
     run_cmd.add_argument("--skill-name", required=True)
+    add_actor_role_arg(run_cmd)
     run_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     run_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(run_cmd)
@@ -960,6 +1163,7 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_cmd.add_argument("--run-id", required=True)
     preflight_cmd.add_argument("--round-id", required=True)
     preflight_cmd.add_argument("--skill-name", required=True)
+    add_actor_role_arg(preflight_cmd)
     preflight_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     preflight_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(preflight_cmd)
@@ -969,12 +1173,14 @@ def build_parser() -> argparse.ArgumentParser:
     gate_cmd.add_argument("--run-dir", required=True)
     gate_cmd.add_argument("--run-id", required=True)
     gate_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(gate_cmd)
     gate_cmd.add_argument("--pretty", action="store_true")
 
     phase2_cmd = sub.add_parser("run-phase2-round", help="Run the board -> D1 -> D2 -> promotion phase-2 chain in one command.")
     phase2_cmd.add_argument("--run-dir", required=True)
     phase2_cmd.add_argument("--run-id", required=True)
     phase2_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(phase2_cmd)
     phase2_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     phase2_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(phase2_cmd)
@@ -983,6 +1189,7 @@ def build_parser() -> argparse.ArgumentParser:
     resume_phase2_cmd.add_argument("--run-dir", required=True)
     resume_phase2_cmd.add_argument("--run-id", required=True)
     resume_phase2_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(resume_phase2_cmd)
     resume_phase2_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     resume_phase2_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(resume_phase2_cmd)
@@ -991,6 +1198,7 @@ def build_parser() -> argparse.ArgumentParser:
     restart_phase2_cmd.add_argument("--run-dir", required=True)
     restart_phase2_cmd.add_argument("--run-id", required=True)
     restart_phase2_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(restart_phase2_cmd)
     restart_phase2_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     restart_phase2_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(restart_phase2_cmd)
@@ -999,6 +1207,7 @@ def build_parser() -> argparse.ArgumentParser:
     close_round_cmd.add_argument("--run-dir", required=True)
     close_round_cmd.add_argument("--run-id", required=True)
     close_round_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(close_round_cmd)
     close_round_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     close_round_cmd.add_argument("--archive-failure-policy", default="block", choices=ARCHIVE_FAILURE_POLICIES)
     close_round_cmd.add_argument("--pretty", action="store_true")
@@ -1008,6 +1217,7 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap_history_cmd.add_argument("--run-dir", required=True)
     bootstrap_history_cmd.add_argument("--run-id", required=True)
     bootstrap_history_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(bootstrap_history_cmd)
     bootstrap_history_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     bootstrap_history_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(bootstrap_history_cmd)
@@ -1016,6 +1226,7 @@ def build_parser() -> argparse.ArgumentParser:
     scenario_fixture_cmd.add_argument("--run-dir", required=True)
     scenario_fixture_cmd.add_argument("--run-id", required=True)
     scenario_fixture_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(scenario_fixture_cmd)
     scenario_fixture_cmd.add_argument("--scenario-id", default="")
     scenario_fixture_cmd.add_argument("--baseline-manifest-path", default="")
     scenario_fixture_cmd.add_argument("--pretty", action="store_true")
@@ -1024,12 +1235,14 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_manifest_cmd.add_argument("--run-dir", required=True)
     benchmark_manifest_cmd.add_argument("--run-id", required=True)
     benchmark_manifest_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(benchmark_manifest_cmd)
     benchmark_manifest_cmd.add_argument("--pretty", action="store_true")
 
     compare_manifest_cmd = sub.add_parser("compare-benchmark-manifests", help="Compare two benchmark manifests and materialize one drift report.")
     compare_manifest_cmd.add_argument("--run-dir", required=True)
     compare_manifest_cmd.add_argument("--run-id", required=True)
     compare_manifest_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(compare_manifest_cmd)
     compare_manifest_cmd.add_argument("--left-manifest-path", required=True)
     compare_manifest_cmd.add_argument("--right-manifest-path", required=True)
     compare_manifest_cmd.add_argument("--pretty", action="store_true")
@@ -1038,6 +1251,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay_cmd.add_argument("--run-dir", required=True)
     replay_cmd.add_argument("--run-id", required=True)
     replay_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(replay_cmd)
     replay_cmd.add_argument("--fixture-path", default="")
     replay_cmd.add_argument("--baseline-manifest-path", default="")
     replay_cmd.add_argument("--pretty", action="store_true")
@@ -1046,6 +1260,7 @@ def build_parser() -> argparse.ArgumentParser:
     supervisor_cmd.add_argument("--run-dir", required=True)
     supervisor_cmd.add_argument("--run-id", required=True)
     supervisor_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(supervisor_cmd)
     supervisor_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     supervisor_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(supervisor_cmd)
@@ -1053,23 +1268,27 @@ def build_parser() -> argparse.ArgumentParser:
     admission_policy_cmd = sub.add_parser("materialize-admission-policy", help="Write one runtime admission policy for permission and sandbox enforcement.")
     admission_policy_cmd.add_argument("--run-dir", required=True)
     admission_policy_cmd.add_argument("--run-id", required=True)
+    add_actor_role_arg(admission_policy_cmd)
     admission_policy_cmd.add_argument("--pretty", action="store_true")
     add_admission_policy_args(admission_policy_cmd)
 
     runtime_health_cmd = sub.add_parser("materialize-runtime-health", help="Write one runtime health and alert snapshot.")
     runtime_health_cmd.add_argument("--run-dir", required=True)
     runtime_health_cmd.add_argument("--round-id", default="")
+    add_actor_role_arg(runtime_health_cmd)
     runtime_health_cmd.add_argument("--pretty", action="store_true")
 
     operator_runbook_cmd = sub.add_parser("materialize-operator-runbook", help="Write one operator runbook markdown surface for the runtime.")
     operator_runbook_cmd.add_argument("--run-dir", required=True)
     operator_runbook_cmd.add_argument("--round-id", default="")
+    add_actor_role_arg(operator_runbook_cmd)
     operator_runbook_cmd.add_argument("--pretty", action="store_true")
 
     agent_entry_cmd = sub.add_parser("materialize-agent-entry-gate", help="Write one operator-visible agent entry gate contract for the selected round.")
     agent_entry_cmd.add_argument("--run-dir", required=True)
     agent_entry_cmd.add_argument("--run-id", required=True)
     agent_entry_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(agent_entry_cmd)
     agent_entry_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     agent_entry_cmd.add_argument("--refresh-advisory-plan", action="store_true")
     agent_entry_cmd.add_argument("--pretty", action="store_true")
@@ -1124,6 +1343,7 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_export_cmd.add_argument("--run-dir", required=True)
     phase2_export_cmd.add_argument("--run-id", required=True)
     phase2_export_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(phase2_export_cmd)
     phase2_export_cmd.add_argument("--pretty", action="store_true")
 
     reporting_export_cmd = sub.add_parser(
@@ -1133,6 +1353,7 @@ def build_parser() -> argparse.ArgumentParser:
     reporting_export_cmd.add_argument("--run-dir", required=True)
     reporting_export_cmd.add_argument("--run-id", required=True)
     reporting_export_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(reporting_export_cmd)
     reporting_export_cmd.add_argument("--pretty", action="store_true")
 
     contract_list_cmd = sub.add_parser(
@@ -1220,6 +1441,20 @@ def main(
         print(pretty_json(payload, args.pretty))
         return 0
 
+    if command_requires_explicit_actor_role(args.command):
+        access = evaluate_kernel_command_access(
+            args.command,
+            actor_role=getattr(args, "actor_role", ""),
+        )
+        if bool(access.get("block_execution")):
+            payload = command_access_failure(
+                command_name=args.command,
+                actor_role=getattr(args, "actor_role", ""),
+                access=access,
+            )
+            print(pretty_json(payload, getattr(args, "pretty", False)))
+            return 1
+
     run_dir = resolve_run_dir(args.run_dir)
 
     if args.command == "init-run":
@@ -1238,6 +1473,7 @@ def main(
                 run_id=args.run_id,
                 round_id=args.round_id,
                 skill_name=args.skill_name,
+                actor_role=args.actor_role,
                 skill_args=skill_args,
                 contract_mode=args.contract_mode,
                 timeout_seconds=args.timeout_seconds,
@@ -1262,6 +1498,7 @@ def main(
             run_id=args.run_id,
             round_id=args.round_id,
             skill_name=args.skill_name,
+            actor_role=args.actor_role,
             skill_args=skill_args,
             contract_mode=args.contract_mode,
             timeout_seconds=args.timeout_seconds,
@@ -1292,6 +1529,7 @@ def main(
                 "run_id": args.run_id,
                 "round_id": args.round_id,
                 "skill_name": args.skill_name,
+                "actor_role": args.actor_role,
                 "status": payload["status"],
                 "contract_mode": args.contract_mode,
                 "execution_policy": preflight.get("execution_policy", {}),
@@ -1350,6 +1588,7 @@ def main(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
+                actor_role=args.actor_role,
                 contract_mode=args.contract_mode,
                 gate_handlers=gate_handlers,
                 posture_profile=posture_profile,
@@ -1381,6 +1620,7 @@ def main(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
+                actor_role=args.actor_role,
                 contract_mode=args.contract_mode,
                 gate_handlers=gate_handlers,
                 posture_profile=posture_profile,
@@ -1413,6 +1653,7 @@ def main(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
+                actor_role=args.actor_role,
                 contract_mode=args.contract_mode,
                 gate_handlers=gate_handlers,
                 posture_profile=posture_profile,
@@ -1437,6 +1678,7 @@ def main(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
+                actor_role=args.actor_role,
                 contract_mode=args.contract_mode,
                 timeout_seconds=args.timeout_seconds,
                 retry_budget=args.retry_budget,
@@ -1457,6 +1699,7 @@ def main(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
+                actor_role=args.actor_role,
                 contract_mode=args.contract_mode,
                 timeout_seconds=args.timeout_seconds,
                 retry_budget=args.retry_budget,
@@ -1546,6 +1789,7 @@ def main(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
+                actor_role=args.actor_role,
                 contract_mode=args.contract_mode,
                 gate_handlers=gate_handlers,
                 posture_profile=posture_profile,
@@ -1621,6 +1865,7 @@ def main(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
+                actor_role=args.actor_role,
                 agent_entry_profile=agent_entry_profile,
                 hard_gate_command_builder=hard_gate_command_builder,
                 entry_chain_builder=entry_chain_builder,

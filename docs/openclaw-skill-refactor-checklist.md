@@ -1,5 +1,13 @@
 # OpenClaw 彻底重构执行清单
 
+> 说明：本文件记录的是旧目标架构下的迁移硬化历史，不再适合作为新一轮重构的主清单。
+>
+> 新文档入口：
+>
+> 1. `docs/openclaw-skills-refactor-checklist-v2.md`
+> 2. `docs/openclaw-runtime-kernel-agent-refactor-checklist.md`
+> 3. `docs/openclaw-refactor-overall-notes.md`
+
 ## 1. 使用方式
 
 本清单不是“兼容性维护目录”，而是彻底重构的执行清单。

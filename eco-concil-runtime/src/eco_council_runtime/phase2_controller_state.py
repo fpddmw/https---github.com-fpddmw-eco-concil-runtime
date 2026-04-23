@@ -473,6 +473,7 @@ def controller_result_payload(controller_payload: dict[str, Any], gate_payload: 
         "summary": {
             "run_id": controller_payload.get("run_id"),
             "round_id": controller_payload.get("round_id"),
+            "requested_by_role": controller_payload.get("requested_by_role", ""),
             "controller_path": artifacts.get("controller_state_path", ""),
             "planning_mode": controller_payload.get("planning_mode"),
             "plan_source": controller_payload.get("planning", {}).get("plan_source", "")
@@ -513,6 +514,7 @@ def round_controller_event(
         "completed_at_utc": completed_at,
         "status": status,
         "contract_mode": contract_mode,
+        "requested_by_role": controller_payload.get("requested_by_role", ""),
         "execution_policy": controller_payload.get("execution_policy", {}),
         "planning_mode": controller_payload.get("planning_mode"),
         "plan_source": planning.get("plan_source", ""),

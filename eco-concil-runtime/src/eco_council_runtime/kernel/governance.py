@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .access_policy import evaluate_skill_access
 from .registry import resolve_skill_entry, workspace_root
 
 CONTRACT_MODES = ("off", "warn", "strict")
@@ -124,8 +125,20 @@ def collect_summary_paths(summary: dict[str, Any], run_dir: Path) -> list[dict[s
     return results
 
 
-def issue(code: str, message: str, *, severity: str = "error", field: str = "") -> dict[str, str]:
-    payload = {"code": code, "severity": severity, "message": message}
+def issue(
+    code: str,
+    message: str,
+    *,
+    severity: str = "error",
+    field: str = "",
+    blocking: bool = False,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "code": code,
+        "severity": severity,
+        "message": message,
+        "blocking": blocking,
+    }
     if field:
         payload["field"] = field
     return payload
@@ -196,6 +209,7 @@ def build_contract_context(
     run_id: str,
     round_id: str,
     skill_name: str,
+    actor_role: str = "",
     skill_args: list[str],
     workspace: Path | None = None,
     timeout_seconds: float | None = None,
@@ -220,6 +234,7 @@ def build_contract_context(
     return {
         "workspace_root": str(root),
         "skill_entry": skill_entry,
+        "actor_role": maybe_text(actor_role),
         "skill_options": skill_options,
         "required_inputs": required_inputs,
         "optional_inputs": optional_inputs,
@@ -246,6 +261,7 @@ def preflight_skill_execution(
     run_id: str,
     round_id: str,
     skill_name: str,
+    actor_role: str = "",
     skill_args: list[str],
     contract_mode: str = "warn",
     workspace: Path | None = None,
@@ -259,6 +275,7 @@ def preflight_skill_execution(
         run_id=run_id,
         round_id=round_id,
         skill_name=skill_name,
+        actor_role=actor_role,
         skill_args=skill_args,
         workspace=workspace,
         timeout_seconds=timeout_seconds,
@@ -323,8 +340,22 @@ def preflight_skill_execution(
                 )
             )
 
-    blocking_issue_count = len([item for item in issues if item.get("severity") == "error"])
-    block_execution = contract_mode == "strict" and blocking_issue_count > 0
+    access_policy = evaluate_skill_access(
+        skill_name,
+        actor_role=context["actor_role"],
+        contract_mode=contract_mode,
+    )
+    issues.extend(access_policy.get("issues", []) if isinstance(access_policy.get("issues"), list) else [])
+
+    blocking_issue_count = len(
+        [
+            item
+            for item in issues
+            if bool(item.get("blocking"))
+            or (contract_mode == "strict" and item.get("severity") == "error")
+        ]
+    )
+    block_execution = blocking_issue_count > 0
     return {
         "schema_version": "runtime-preflight-v1",
         "status": "blocked" if block_execution else "completed",
@@ -332,6 +363,8 @@ def preflight_skill_execution(
         "run_id": run_id,
         "round_id": round_id,
         "skill_name": skill_name,
+        "actor_role": context["actor_role"],
+        "resolved_actor_role": access_policy.get("resolved_actor_role", ""),
         "skill_args": skill_args,
         "skill_options": context["skill_options"],
         "required_inputs": context["required_inputs"],
@@ -348,6 +381,8 @@ def preflight_skill_execution(
         "issue_count": len(issues),
         "blocking_issue_count": blocking_issue_count,
         "block_execution": block_execution,
+        "access_policy": access_policy,
+        "skill_access": access_policy.get("skill_policy", {}),
         "skill_registry_entry": context["skill_entry"],
         "workspace_root": context["workspace_root"],
     }

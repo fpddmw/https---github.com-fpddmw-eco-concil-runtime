@@ -72,9 +72,60 @@ def runtime_src_path() -> Path:
     return WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 
 
-def run_kernel_process(*args: str) -> subprocess.CompletedProcess[str]:
+def _kernel_command_args_with_actor_role(args: tuple[str, ...]) -> list[str]:
+    if not args:
+        return []
+    command = args[0]
+    argv = list(args)
+    if "--actor-role" in argv:
+        return argv
+
+    runtime_src = runtime_src_path()
+    if str(runtime_src) not in sys.path:
+        sys.path.insert(0, str(runtime_src))
+
+    from eco_council_runtime.kernel.access_policy import (
+        command_requires_explicit_actor_role,
+        kernel_command_actor_role_hint,
+    )
+    from eco_council_runtime.kernel.skill_registry import default_actor_role_hint
+
+    if not command_requires_explicit_actor_role(command):
+        return argv
+
+    actor_role = ""
+    if command in {"run-skill", "preflight-skill"}:
+        skill_name = ""
+        if "--skill-name" in argv:
+            try:
+                skill_name = argv[argv.index("--skill-name") + 1]
+            except IndexError:
+                skill_name = ""
+        for flag in ("--agent-role", "--author-role", "--owner-role", "--claimed-by-role"):
+            if flag in argv:
+                try:
+                    actor_role = argv[argv.index(flag) + 1]
+                except IndexError:
+                    actor_role = ""
+                if actor_role:
+                    break
+        if not actor_role and skill_name:
+            actor_role = default_actor_role_hint(skill_name)
+        if not actor_role or actor_role.startswith("<"):
+            actor_role = "moderator"
+        if "--" in argv:
+            marker_index = argv.index("--")
+            return [*argv[:marker_index], "--actor-role", actor_role, *argv[marker_index:]]
+        return [*argv, "--actor-role", actor_role]
+
+    actor_role = kernel_command_actor_role_hint(command) or "runtime-operator"
+    return [*argv, "--actor-role", actor_role]
+
+
+def run_kernel_process(*args: str, auto_actor_role: bool = True) -> subprocess.CompletedProcess[str]:
+    argv = _kernel_command_args_with_actor_role(args) if auto_actor_role else list(args)
     return subprocess.run(
-        [sys.executable, str(kernel_script_path()), *args],
+        [sys.executable, str(kernel_script_path()), *argv],
         capture_output=True,
         text=True,
         check=False,

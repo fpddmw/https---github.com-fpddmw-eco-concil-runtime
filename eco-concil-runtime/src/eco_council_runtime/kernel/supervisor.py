@@ -8,6 +8,7 @@ from ..phase2_posture_profile import (
     resolve_phase2_posture_profile,
 )
 from ..reporting_status import reporting_gate_state
+from ..runtime_command_hints import kernel_command
 from .deliberation_plane import store_promotion_freeze_record
 from .executor import SkillExecutionError
 from .controller import run_phase2_round_with_contract_mode
@@ -20,10 +21,25 @@ from .paths import supervisor_state_path
 
 
 def operator_commands(*, run_id: str, round_id: str, run_dir: Path) -> dict[str, str]:
-    base = f"--run-dir {run_dir} --run-id {run_id} --round-id {round_id}"
     return {
-        "resume_command": f"resume-phase2-round {base}",
-        "restart_command": f"restart-phase2-round {base}",
+        "resume_command": kernel_command(
+            "resume-phase2-round",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        ),
+        "restart_command": kernel_command(
+            "restart-phase2-round",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        ),
         "inspect_command": f"show-run-state --run-dir {run_dir} --round-id {round_id} --tail 20",
     }
 
@@ -33,6 +49,7 @@ def supervise_round(
     *,
     run_id: str,
     round_id: str,
+    actor_role: str = "runtime-operator",
     gate_handlers: dict[str, GateHandler] | None = None,
     posture_profile: dict[str, Any] | None = None,
     planning_sources: list[dict[str, Any]] | None = None,
@@ -42,6 +59,7 @@ def supervise_round(
         run_dir,
         run_id=run_id,
         round_id=round_id,
+        actor_role=actor_role,
         contract_mode="warn",
         gate_handlers=gate_handlers,
         posture_profile=posture_profile,
@@ -55,6 +73,7 @@ def supervise_round_with_contract_mode(
     *,
     run_id: str,
     round_id: str,
+    actor_role: str = "runtime-operator",
     contract_mode: str,
     gate_handlers: dict[str, GateHandler] | None = None,
     posture_profile: dict[str, Any] | None = None,
@@ -106,6 +125,7 @@ def supervise_round_with_contract_mode(
         controller_kwargs: dict[str, Any] = {
             "run_id": run_id,
             "round_id": round_id,
+            "actor_role": actor_role,
             "contract_mode": contract_mode,
             "gate_handlers": gate_handlers,
             "posture_profile": profile,

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .paths import registry_path
+from .skill_registry import resolve_skill_policy, skill_registry_snapshot
 from .source_queue_profile import source_queue_profile, source_queue_profile_summary
 
 
@@ -196,6 +197,7 @@ def build_skill_entry(skill_dir: Path) -> dict[str, object] | None:
     skill_doc_text = load_text_if_exists(skill_doc_path)
     frontmatter = parse_frontmatter(skill_doc_text)
     contract = parse_contract(skill_doc_text)
+    skill_access = resolve_skill_policy(skill_name)
     return {
         "skill_name": skill_name,
         "script_path": str(script_path.resolve()),
@@ -208,6 +210,7 @@ def build_skill_entry(skill_dir: Path) -> dict[str, object] | None:
         "execution_policy": parse_execution_policy(skill_doc_text),
         "agent": parse_agent_metadata(agent_config_path),
         "source_queue_profile": source_queue_profile(skill_name),
+        "skill_access": skill_access,
     }
 
 
@@ -229,11 +232,21 @@ def scan_skills(root: Path | None = None) -> list[dict[str, object]]:
 def registry_snapshot(root: Path | None = None) -> dict[str, object]:
     resolved_root = root or workspace_root()
     skills = scan_skills(resolved_root)
+    access_snapshot = skill_registry_snapshot(resolved_root)
     return {
-        "schema_version": "runtime-registry-v2",
+        "schema_version": "runtime-registry-v3",
         "workspace_root": str(resolved_root),
         "skill_count": len(skills),
         "source_queue_profile_summary": source_queue_profile_summary(skills),
+        "skill_access_summary": {
+            "skill_count": access_snapshot.get("skill_count", 0),
+            "operator_approval_required_count": access_snapshot.get(
+                "operator_approval_required_count",
+                0,
+            ),
+            "skill_layer_counts": access_snapshot.get("skill_layer_counts", {}),
+            "write_scope_counts": access_snapshot.get("write_scope_counts", {}),
+        },
         "skills": skills,
     }
 

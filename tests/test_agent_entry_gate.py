@@ -208,10 +208,16 @@ class AgentEntryGateTests(unittest.TestCase):
             )
 
             self.assertEqual("completed", payload["status"])
+            self.assertEqual("runtime-operator", payload["summary"]["requested_by_role"])
             self.assertEqual("ready", payload["summary"]["entry_status"])
             self.assertTrue(payload["summary"]["advisory_plan_present"])
             self.assertTrue(payload["summary"]["advisory_plan_materialized"])
             self.assertEqual("openclaw-agent", payload["agent_entry"]["orchestration_mode"])
+            self.assertEqual("runtime-operator", payload["agent_entry"]["requested_by_role"])
+            self.assertEqual(
+                "runtime-operator",
+                payload["agent_entry"]["resolved_requested_by_role"],
+            )
             self.assertEqual("agent-advisory", payload["agent_entry"]["advisory_plan"]["planning_mode"])
             self.assertIn("eco-read-board-delta", payload["agent_entry"]["recommended_entry_skills"])
             self.assertIn("eco-submit-council-proposal", payload["agent_entry"]["recommended_entry_skills"])
@@ -245,11 +251,19 @@ class AgentEntryGateTests(unittest.TestCase):
                 state_payload["agent_entry"]["operator"]["refresh_agent_entry_gate_command"],
             )
             self.assertIn(
+                "--actor-role runtime-operator",
+                state_payload["agent_entry"]["operator"]["refresh_agent_entry_gate_command"],
+            )
+            self.assertIn(
                 "query-council-objects",
                 state_payload["agent_entry"]["operator"]["query_council_proposals_command"],
             )
             self.assertIn(
                 "eco-submit-council-proposal",
+                state_payload["agent_entry"]["operator"]["submit_council_proposal_command_template"],
+            )
+            self.assertIn(
+                "--actor-role",
                 state_payload["agent_entry"]["operator"]["submit_council_proposal_command_template"],
             )
             self.assertIn(
@@ -568,6 +582,8 @@ class AgentEntryGateTests(unittest.TestCase):
 
             self.assertIn("## Agent Entry", runbook_text)
             self.assertIn("materialize-agent-entry-gate", runbook_text)
+            self.assertIn("--actor-role runtime-operator", runbook_text)
+            self.assertIn("--actor-role moderator", runbook_text)
             self.assertIn(f"runtime/agent_advisory_plan_{ROUND_ID}.json", runbook_text)
 
 

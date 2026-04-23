@@ -63,8 +63,18 @@ from .paths import (
     promotion_gate_path,
 )
 from .registry import write_registry
+from .role_contracts import ROLE_MODERATOR
+from .skill_registry import default_actor_role_hint
 
 PLANNER_SKILL_NAME = DEFAULT_PHASE2_PLANNER_SKILL_NAME
+
+
+def skill_actor_role_hint(skill_name: str, *, preferred_role_hint: Any = "") -> str:
+    return (
+        maybe_text(preferred_role_hint)
+        or default_actor_role_hint(skill_name)
+        or ROLE_MODERATOR
+    )
 
 
 def phase2_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
@@ -173,6 +183,7 @@ def run_phase2_round(
     *,
     run_id: str,
     round_id: str,
+    actor_role: str = "runtime-operator",
     gate_handlers: dict[str, GateHandler] | None,
     posture_profile: dict[str, Any] | None = None,
     planning_sources: list[dict[str, Any]] | None = None,
@@ -182,6 +193,7 @@ def run_phase2_round(
         run_dir,
         run_id=run_id,
         round_id=round_id,
+        actor_role=actor_role,
         contract_mode="warn",
         gate_handlers=gate_handlers,
         posture_profile=posture_profile,
@@ -195,6 +207,7 @@ def run_phase2_round_with_contract_mode(
     *,
     run_id: str,
     round_id: str,
+    actor_role: str = "runtime-operator",
     contract_mode: str,
     gate_handlers: dict[str, GateHandler] | None,
     posture_profile: dict[str, Any] | None = None,
@@ -265,6 +278,7 @@ def run_phase2_round_with_contract_mode(
         resume_status=resume_status,
         resume_count=resume_count,
     )
+    controller_payload["requested_by_role"] = maybe_text(actor_role)
 
     if not force_restart and existing_status in {"running", "failed"}:
         recovered_planning = planning_from_controller(run_dir, round_id, existing_controller)
@@ -286,6 +300,7 @@ def run_phase2_round_with_contract_mode(
                 "run_id": run_id,
                 "round_id": round_id,
                 "contract_mode": contract_mode,
+                "requested_by_role": maybe_text(actor_role),
                 "execution_policy": execution_policy,
                 "controller_status": "running",
                 "resume_status": "resumed",
@@ -593,12 +608,17 @@ def run_phase2_round_with_contract_mode(
                 source_spec,
                 output_path,
             )
+            planner_actor_role = skill_actor_role_hint(
+                skill_name,
+                preferred_role_hint=source_spec.get("assigned_role_hint"),
+            )
             try:
                 planner_result = run_skill(
                     run_dir,
                     run_id=run_id,
                     round_id=round_id,
                     skill_name=skill_name,
+                    actor_role=planner_actor_role,
                     skill_args=skill_args,
                     contract_mode=contract_mode,
                     **execution_kwargs,
@@ -807,11 +827,16 @@ def run_phase2_round_with_contract_mode(
                 persist_controller_state(run_dir, round_id, controller_payload, gate_payload=gate_payload)
                 continue
 
+            stage_actor_role = skill_actor_role_hint(
+                maybe_text(blueprint.get("skill_name")),
+                preferred_role_hint=blueprint.get("assigned_role_hint"),
+            )
             skill_result = run_skill(
                 run_dir,
                 run_id=run_id,
                 round_id=round_id,
                 skill_name=maybe_text(blueprint.get("skill_name")),
+                actor_role=stage_actor_role,
                 skill_args=blueprint.get("skill_args", []) if isinstance(blueprint.get("skill_args"), list) else [],
                 contract_mode=contract_mode,
                 **execution_kwargs,
