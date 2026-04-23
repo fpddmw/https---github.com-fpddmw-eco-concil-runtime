@@ -5,9 +5,33 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .kernel.executor import maybe_text, run_skill
-from .kernel.skill_registry import default_actor_role_hint
+from .kernel.role_contracts import (
+    ROLE_CHALLENGER,
+    ROLE_ENVIRONMENTAL_INVESTIGATOR,
+    ROLE_FORMAL_RECORD_INVESTIGATOR,
+    ROLE_MODERATOR,
+    ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
+    ROLE_REPORT_EDITOR,
+    role_contract,
+)
+from .kernel.skill_registry import (
+    SKILL_LAYER_DELIBERATION_WRITE,
+    SKILL_LAYER_FETCH,
+    SKILL_LAYER_NORMALIZE,
+    SKILL_LAYER_OPTIONAL_ANALYSIS,
+    SKILL_LAYER_QUERY,
+    SKILL_LAYER_REPORTING,
+    SKILL_LAYER_STATE_TRANSITION,
+    available_skill_names,
+    default_actor_role_hint,
+    resolve_skill_policy,
+)
 from .kernel.paths import agent_advisory_plan_path
-from .kernel.transition_requests import TRANSITION_KIND_OPEN_INVESTIGATION_ROUND
+from .kernel.transition_requests import (
+    TRANSITION_KIND_CLOSE_ROUND,
+    TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+    TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+)
 from .phase2_direct_advisory import materialize_direct_council_advisory_plan
 from .phase2_planning_profile import planner_skill_args_for_source
 from .phase2_round_profile import default_next_round_id_builder
@@ -23,8 +47,55 @@ OperatorCommandsBuilder = Callable[..., dict[str, str]]
 
 DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     {
-        "role": "sociologist",
-        "focus": "public/formal evidence query, narrative regrouping, and claim-side analysis.",
+        "role": ROLE_MODERATOR,
+        "focus": "Own the study boundary, review cross-role findings, and file governed transition requests after human-auditable council deliberation.",
+        "read_skills": [
+            "eco-read-board-delta",
+            "eco-query-public-signals",
+            "eco-query-formal-signals",
+            "eco-query-environment-signals",
+        ],
+        "write_skills": [
+            "eco-submit-council-proposal",
+            "eco-submit-readiness-opinion",
+            "eco-claim-board-task",
+            "eco-post-board-note",
+        ],
+        "analysis_kinds": [
+            "issue-cluster",
+            "formal-public-link",
+            "representation-gap",
+            "diffusion-edge",
+            "controversy-map",
+        ],
+        "transition_kinds": [
+            TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+            TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+            TRANSITION_KIND_CLOSE_ROUND,
+        ],
+    },
+    {
+        "role": ROLE_ENVIRONMENTAL_INVESTIGATOR,
+        "focus": "Fetch, normalize, query, and analyze environmental evidence, then submit structured findings or challenge supporting basis back to the council.",
+        "read_skills": [
+            "eco-read-board-delta",
+            "eco-query-environment-signals",
+            "eco-query-formal-signals",
+        ],
+        "write_skills": [
+            "eco-submit-council-proposal",
+            "eco-submit-readiness-opinion",
+            "eco-post-board-note",
+        ],
+        "analysis_kinds": [
+            "issue-cluster",
+            "verifiability-assessment",
+            "verification-route",
+        ],
+    },
+    {
+        "role": ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
+        "focus": "Fetch, normalize, query, and analyze discourse, media, and community signals, then return evidence-backed findings or proposals.",
         "read_skills": [
             "eco-read-board-delta",
             "eco-query-public-signals",
@@ -33,24 +104,37 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "write_skills": [
             "eco-submit-council-proposal",
             "eco-submit-readiness-opinion",
-            "eco-update-hypothesis-status",
+            "eco-post-board-note",
         ],
-        "analysis_kinds": ["claim-candidate", "claim-cluster", "claim-scope", "evidence-coverage"],
+        "analysis_kinds": [
+            "issue-cluster",
+            "representation-gap",
+            "diffusion-edge",
+            "formal-public-link",
+        ],
     },
     {
-        "role": "environmentalist",
-        "focus": "environment evidence query, observation analysis, and corroboration work.",
-        "read_skills": ["eco-read-board-delta", "eco-query-environment-signals"],
+        "role": ROLE_FORMAL_RECORD_INVESTIGATOR,
+        "focus": "Fetch, normalize, query, and analyze formal records, approvals, and policy evidence before submitting structured findings to the moderator.",
+        "read_skills": [
+            "eco-read-board-delta",
+            "eco-query-formal-signals",
+            "eco-query-public-signals",
+        ],
         "write_skills": [
             "eco-submit-council-proposal",
             "eco-submit-readiness-opinion",
-            "eco-update-hypothesis-status",
+            "eco-post-board-note",
         ],
-        "analysis_kinds": ["observation-candidate", "merged-observation", "observation-scope", "evidence-coverage"],
+        "analysis_kinds": [
+            "issue-cluster",
+            "formal-public-link",
+            "representation-gap",
+        ],
     },
     {
-        "role": "challenger",
-        "focus": "contradiction pressure, challenge tickets, and falsification probes.",
+        "role": ROLE_CHALLENGER,
+        "focus": "Surface contradiction pressure, open challenge/probe work, and submit counter-findings without owning phase transitions.",
         "read_skills": [
             "eco-read-board-delta",
             "eco-query-public-signals",
@@ -64,23 +148,31 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "eco-open-falsification-probe",
             "eco-close-challenge-ticket",
         ],
-        "analysis_kinds": ["claim-cluster", "merged-observation", "evidence-coverage"],
+        "analysis_kinds": [
+            "issue-cluster",
+            "representation-gap",
+            "diffusion-edge",
+            "verifiability-assessment",
+        ],
     },
     {
-        "role": "moderator",
-        "focus": "board state progression, formal/public route review, and return to runtime hard gates.",
+        "role": ROLE_REPORT_EDITOR,
+        "focus": "Read frozen evidence basis and reporting state, then draft or publish reporting artifacts without mutating investigation status.",
         "read_skills": [
             "eco-read-board-delta",
             "eco-query-formal-signals",
             "eco-query-public-signals",
+            "eco-query-environment-signals",
         ],
         "write_skills": [
-            "eco-submit-council-proposal",
-            "eco-submit-readiness-opinion",
-            "eco-claim-board-task",
-            "eco-open-investigation-round",
+            "eco-materialize-reporting-handoff",
+            "eco-draft-council-decision",
+            "eco-draft-expert-report",
+            "eco-publish-expert-report",
+            "eco-publish-council-decision",
+            "eco-materialize-final-publication",
         ],
-        "analysis_kinds": ["claim-cluster", "merged-observation", "evidence-coverage"],
+        "analysis_kinds": ["issue-cluster", "formal-public-link", "controversy-map"],
     },
 ]
 
@@ -95,6 +187,45 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def allowed_skills_by_layer(role: str) -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = {}
+    for skill_name in available_skill_names():
+        policy = resolve_skill_policy(skill_name)
+        allowed_roles = (
+            policy.get("allowed_roles", [])
+            if isinstance(policy.get("allowed_roles"), list)
+            else []
+        )
+        if role not in allowed_roles:
+            continue
+        layer = maybe_text(policy.get("skill_layer")) or "unknown"
+        grouped.setdefault(layer, []).append(skill_name)
+    return {layer: sorted(skill_names) for layer, skill_names in grouped.items()}
+
+
+def skill_count_by_layer(role: str) -> dict[str, int]:
+    grouped = allowed_skills_by_layer(role)
+    return {layer: len(skill_names) for layer, skill_names in grouped.items()}
+
+
+def capability_layers(role: str) -> list[str]:
+    grouped = allowed_skills_by_layer(role)
+    ordered_layers = [
+        SKILL_LAYER_FETCH,
+        SKILL_LAYER_NORMALIZE,
+        SKILL_LAYER_QUERY,
+        SKILL_LAYER_OPTIONAL_ANALYSIS,
+        SKILL_LAYER_DELIBERATION_WRITE,
+        SKILL_LAYER_STATE_TRANSITION,
+        SKILL_LAYER_REPORTING,
+    ]
+    return [
+        layer
+        for layer in ordered_layers
+        if layer in grouped
+    ] + [layer for layer in sorted(grouped) if layer not in ordered_layers]
 
 
 def advisory_plan_relative_path(run_dir: Path, round_id: str) -> str:
@@ -214,6 +345,8 @@ def default_role_entry_points(
     results: list[dict[str, Any]] = []
     for definition in role_definitions:
         role = maybe_text(definition.get("role"))
+        role_metadata = role_contract(role)
+        grouped_skill_names = allowed_skills_by_layer(role)
         role_read_commands: list[str] = []
         for skill_name in definition.get("read_skills", []) if isinstance(definition.get("read_skills"), list) else []:
             if skill_name == "eco-read-board-delta":
@@ -322,27 +455,6 @@ def default_role_entry_points(
                         ],
                     )
                 )
-            elif skill_name == "eco-update-hypothesis-status":
-                role_write_commands.append(
-                    run_skill_command(
-                        run_dir=run_dir,
-                        run_id=run_id,
-                        round_id=round_id,
-                        skill_name=skill_name,
-                        actor_role=role,
-                        contract_mode=contract_mode,
-                        skill_args=[
-                            "--title",
-                            "<hypothesis_title>",
-                            "--statement",
-                            "<hypothesis_statement>",
-                            "--status",
-                            "active",
-                            "--owner-role",
-                            role if role in {"sociologist", "environmentalist", "moderator"} else "moderator",
-                        ],
-                    )
-                )
             elif skill_name == "eco-open-challenge-ticket":
                 role_write_commands.append(
                     run_skill_command(
@@ -360,7 +472,7 @@ def default_role_entry_points(
                             "--priority",
                             "high",
                             "--owner-role",
-                            "challenger",
+                            ROLE_CHALLENGER,
                         ],
                     )
                 )
@@ -397,11 +509,28 @@ def default_role_entry_points(
                         skill_name=skill_name,
                         actor_role=role,
                         contract_mode=contract_mode,
-                        skill_args=["--task-id", "<task_id>", "--claimed-by-role", "moderator"],
+                        skill_args=["--task-id", "<task_id>", "--claimed-by-role", ROLE_MODERATOR],
                     )
                 )
-            elif skill_name == "eco-open-investigation-round":
+            else:
                 role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                    )
+                )
+        transition_commands: list[str] = []
+        for transition_kind in (
+            definition.get("transition_kinds", [])
+            if isinstance(definition.get("transition_kinds"), list)
+            else []
+        ):
+            if transition_kind == TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS:
+                transition_commands.append(
                     kernel_command(
                         "request-phase-transition",
                         "--run-dir",
@@ -411,46 +540,75 @@ def default_role_entry_points(
                         "--round-id",
                         round_id,
                         "--transition-kind",
-                        TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+                        transition_kind,
+                        "--rationale",
+                        "<rationale>",
+                        actor_role=ROLE_MODERATOR,
+                    )
+                )
+            elif transition_kind == TRANSITION_KIND_OPEN_INVESTIGATION_ROUND:
+                transition_commands.append(
+                    kernel_command(
+                        "request-phase-transition",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        run_id,
+                        "--round-id",
+                        round_id,
+                        "--transition-kind",
+                        transition_kind,
                         "--target-round-id",
                         next_round_id,
                         "--source-round-id",
                         round_id,
                         "--rationale",
                         "<rationale>",
-                        actor_role="moderator",
+                        actor_role=ROLE_MODERATOR,
+                    )
+                )
+            elif transition_kind == TRANSITION_KIND_CLOSE_ROUND:
+                transition_commands.append(
+                    kernel_command(
+                        "request-phase-transition",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        run_id,
+                        "--round-id",
+                        round_id,
+                        "--transition-kind",
+                        transition_kind,
+                        "--rationale",
+                        "<rationale>",
+                        actor_role=ROLE_MODERATOR,
                     )
                 )
         results.append(
             {
                 "role": role,
                 "focus": maybe_text(definition.get("focus")),
+                "role_description": maybe_text(role_metadata.get("description")),
+                "capabilities": (
+                    role_metadata.get("capabilities", [])
+                    if isinstance(role_metadata.get("capabilities"), list)
+                    else []
+                ),
+                "capability_layers": capability_layers(role),
+                "skill_count_by_layer": skill_count_by_layer(role),
+                "skills_by_layer": grouped_skill_names,
                 "read_commands": role_read_commands,
                 "analysis_commands": analysis_commands,
                 "write_commands": role_write_commands,
+                "transition_commands": transition_commands,
             }
         )
     return results
 
 
 def default_agent_entry_recommended_skills(*, advisory_plan: dict[str, Any]) -> list[str]:
-    return unique_texts(
-        [
-            *(
-                advisory_plan.get("recommended_skill_sequence", [])
-                if isinstance(advisory_plan.get("recommended_skill_sequence"), list)
-                else []
-            ),
-            "eco-read-board-delta",
-            "eco-query-public-signals",
-            "eco-query-environment-signals",
-            "eco-submit-council-proposal",
-            "eco-submit-readiness-opinion",
-            "eco-update-hypothesis-status",
-            "eco-open-challenge-ticket",
-            "eco-open-falsification-probe",
-        ]
-    )
+    del advisory_plan
+    return []
 
 
 def default_agent_entry_operator_notes(
@@ -462,24 +620,22 @@ def default_agent_entry_operator_notes(
     analysis: dict[str, Any],
 ) -> list[str]:
     notes = [
-        "Agent entry remains advisory-first: direct reads and structured proposal/readiness writes can happen through governed skills without replacing runtime hard gates.",
-        "Promotion, round-open, archive, replay, and publication stay outside the agent inner loop and must return to runtime kernel transition requests plus operator approval.",
+        "Agent entry now exposes role capability surfaces instead of a default investigation sequence owned by runtime kernel.",
+        "Moderator remains the only role that can request phase transitions; runtime-operator approval is still required before committed state changes.",
     ]
     if maybe_text(mission.get("orchestration_mode")) == "openclaw-agent":
         notes.append("Mission scaffold already marks this round as `openclaw-agent`, so the operator-visible entry chain is explicitly enabled.")
     if advisory_plan.get("present"):
         notes.append(
-            f"Advisory plan posture is `{maybe_text(advisory_plan.get('downstream_posture')) or 'unspecified'}` with primary role `{maybe_text(advisory_plan.get('primary_role')) or 'moderator'}`."
+            f"An optional advisory plan is present from `{maybe_text(advisory_plan.get('plan_source')) or 'unknown'}`, but it is not part of the default kernel execution path."
         )
-        if maybe_text(advisory_plan.get("plan_source")) == "direct-council-advisory":
-            notes.append("Current advisory queue was compiled directly from DB-backed council objects instead of a planner skill subprocess.")
     if int(analysis.get("matching_result_set_count") or 0) > 0:
         notes.append(
             f"Analysis plane currently exposes {int(analysis.get('matching_result_set_count') or 0)} latest result sets for this round."
         )
     if maybe_text(round_surface_payload.get("state_source")) == "deliberation-plane":
         notes.append("Board state is already readable from the deliberation plane, so agent-side context does not depend on `board_summary` or `board_brief` artifacts.")
-        notes.append("Default write path should now prefer `proposal / readiness-opinion` submissions over freeform board notes whenever the agent is making a council judgement.")
+        notes.append("Structured `proposal / readiness-opinion` submissions should remain the primary council write path; board notes stay human-readable only.")
     if status == "needs-operator-review":
         notes.append("Resolve runtime health alerts or dead letters before trusting agent-guided next steps.")
     return notes[:5]
@@ -505,16 +661,17 @@ def default_agent_entry_operator_commands(
             round_id,
             "--pretty",
         ),
-        "refresh_agent_entry_gate_command": advisory_plan_command(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=round_id,
+        "refresh_agent_entry_gate_command": kernel_command(
+            "materialize-agent-entry-gate",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--pretty",
         ),
-        "materialize_agent_advisory_plan_command": advisory_plan_command(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=round_id,
-        ),
+        "materialize_agent_advisory_plan_command": "",
         "read_board_delta_command": run_skill_command(
             run_dir=run_dir,
             run_id=run_id,
@@ -569,6 +726,50 @@ def default_agent_entry_operator_commands(
             round_id,
             "--include-contract",
             "--pretty",
+        ),
+        "query_transition_requests_command": kernel_command(
+            "query-control-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "transition-request",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--pretty",
+        ),
+        "request_promotion_transition_command": kernel_command(
+            "request-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--transition-kind",
+            TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+            "--rationale",
+            "<rationale>",
+            actor_role=ROLE_MODERATOR,
+        ),
+        "approve_transition_request_command_template": kernel_command(
+            "approve-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--request-id",
+            "<request_id>",
+            "--approval-reason",
+            "<approval_reason>",
+        ),
+        "reject_transition_request_command_template": kernel_command(
+            "reject-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--request-id",
+            "<request_id>",
+            "--rejection-reason",
+            "<rejection_reason>",
         ),
         "submit_council_proposal_command_template": run_skill_command(
             run_dir=run_dir,
@@ -647,19 +848,8 @@ def default_agent_entry_advisory_sources(
     *,
     planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
 ) -> list[dict[str, Any]]:
-    return [
-        agent_entry_advisory_source(
-            "direct-council-advisory",
-            source_kind="direct-council-advisory",
-            planner_skill_name=planner_skill_name,
-        ),
-        agent_entry_advisory_source(
-            "agent-advisory",
-            source_kind="planner-skill",
-            planner_mode="agent-advisory",
-            planner_skill_name=planner_skill_name,
-        ),
-    ]
+    del planner_skill_name
+    return []
 
 
 def materialize_agent_entry_advisory_plan(

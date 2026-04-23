@@ -14,13 +14,21 @@ def _profile(
     notes: str,
     downstream_hints: list[str] | None = None,
 ) -> dict[str, object]:
+    if queue_status == "bridge":
+        phase2_behavior = "governed-bridge"
+    elif queue_status == "direct" and core_queue_default:
+        phase2_behavior = "non-owning-runtime-surface"
+    elif queue_status == "direct":
+        phase2_behavior = "optional-runtime-surface"
+    else:
+        phase2_behavior = "on-demand-runtime-surface"
     return {
         "source_queue_ready": True,
         "queue_status": queue_status,
         "stage": stage,
         "queue_role": queue_role,
         "default_invocation": default_invocation,
-        "core_queue_default": core_queue_default,
+        "phase2_behavior": phase2_behavior,
         "downstream_hints": list(downstream_hints or []),
         "notes": notes,
     }
@@ -569,34 +577,35 @@ def source_queue_profile_summary(skill_entries: Iterable[dict[str, object]]) -> 
     queue_status_counts: Counter[str] = Counter()
     stage_counts: Counter[str] = Counter()
     queue_role_counts: Counter[str] = Counter()
+    phase2_behavior_counts: Counter[str] = Counter()
     skill_count = 0
     source_queue_ready_count = 0
-    core_queue_default_count = 0
 
     for entry in skill_entries:
         profile = entry.get("source_queue_profile") if isinstance(entry.get("source_queue_profile"), dict) else source_queue_profile(str(entry.get("skill_name", "")))
         queue_status = str(profile.get("queue_status", ""))
         stage = str(profile.get("stage", ""))
         queue_role = str(profile.get("queue_role", ""))
+        phase2_behavior = str(profile.get("phase2_behavior", ""))
         skill_count += 1
         if profile.get("source_queue_ready") is True:
             source_queue_ready_count += 1
-        if profile.get("core_queue_default") is True:
-            core_queue_default_count += 1
         if queue_status:
             queue_status_counts[queue_status] += 1
         if stage:
             stage_counts[stage] += 1
         if queue_role:
             queue_role_counts[queue_role] += 1
+        if phase2_behavior:
+            phase2_behavior_counts[phase2_behavior] += 1
 
     return {
         "skill_count": skill_count,
         "source_queue_ready_count": source_queue_ready_count,
-        "core_queue_default_count": core_queue_default_count,
         "queue_status_counts": dict(sorted(queue_status_counts.items())),
         "stage_counts": dict(sorted(stage_counts.items())),
         "queue_role_counts": dict(sorted(queue_role_counts.items())),
+        "phase2_behavior_counts": dict(sorted(phase2_behavior_counts.items())),
     }
 
 

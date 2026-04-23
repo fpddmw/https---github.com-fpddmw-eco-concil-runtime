@@ -215,10 +215,13 @@ def validate_stage_blueprints(
             raise ValueError("Missing phase-2 stage name in planned controller sequence.")
         if stage_name in seen:
             raise ValueError(f"Duplicate phase-2 stage detected: {stage_name}")
-        required_previous_stages = normalized_required_previous_stages(
-            entry.get("required_previous_stages")
+        has_explicit_previous_stages = "required_previous_stages" in entry
+        required_previous_stages = (
+            normalized_required_previous_stages(entry.get("required_previous_stages"))
+            if has_explicit_previous_stages
+            else []
         )
-        if not required_previous_stages:
+        if not has_explicit_previous_stages:
             contract = lookup_stage_contract(
                 stage_name,
                 stage_definitions=stage_definitions,

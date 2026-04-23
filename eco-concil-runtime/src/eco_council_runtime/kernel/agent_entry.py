@@ -295,6 +295,7 @@ def build_agent_entry_payload(
         "round_surface": round_state,
         "analysis_surface": analysis,
         "advisory_plan": advisory_plan,
+        "capability_surface": role_entries,
         "recommended_entry_skills": recommended_skills,
         "role_entry_points": role_entries,
         "entry_chain": entry_chain_builder(
@@ -390,6 +391,10 @@ def agent_entry_operator_view(
         "query_environment_signals_command": maybe_text(entry_commands.get("query_environment_signals_command")),
         "query_council_proposals_command": maybe_text(entry_commands.get("query_council_proposals_command")),
         "query_readiness_opinions_command": maybe_text(entry_commands.get("query_readiness_opinions_command")),
+        "query_transition_requests_command": maybe_text(entry_commands.get("query_transition_requests_command")),
+        "request_promotion_transition_command": maybe_text(entry_commands.get("request_promotion_transition_command")),
+        "approve_transition_request_command_template": maybe_text(entry_commands.get("approve_transition_request_command_template")),
+        "reject_transition_request_command_template": maybe_text(entry_commands.get("reject_transition_request_command_template")),
         "submit_council_proposal_command_template": maybe_text(entry_commands.get("submit_council_proposal_command_template")),
         "submit_readiness_opinion_command_template": maybe_text(entry_commands.get("submit_readiness_opinion_command_template")),
         "list_claim_cluster_result_sets_command": maybe_text(entry_commands.get("list_claim_cluster_result_sets_command")),
@@ -456,15 +461,16 @@ def materialize_agent_entry_gate(
     advisory_plan_file = agent_advisory_plan_path(resolved_run_dir, round_id)
     advisory_plan_materialized = False
     advisory_plan_receipt_id = ""
+    advisory_sources = profile_list(profile, "advisory_sources")
     if maybe_text(initial_payload.get("entry_status")) != "blocked" and (
         refresh_advisory_plan or not advisory_plan_file.exists()
-    ):
+    ) and advisory_sources:
         plan_result = materialize_agent_entry_advisory_plan(
             resolved_run_dir,
             run_id=run_id,
             round_id=round_id,
             contract_mode=contract_mode,
-            advisory_sources=profile_list(profile, "advisory_sources"),
+            advisory_sources=advisory_sources,
             timeout_seconds=timeout_seconds,
             retry_budget=retry_budget,
             retry_backoff_ms=retry_backoff_ms,

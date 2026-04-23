@@ -36,7 +36,10 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
 
         self.assertEqual(registry["skill_count"], registry["source_queue_profile_summary"]["skill_count"])
         self.assertEqual(registry["skill_count"], registry["source_queue_profile_summary"]["source_queue_ready_count"])
-        self.assertGreater(registry["source_queue_profile_summary"]["core_queue_default_count"], 0)
+        self.assertIn(
+            "phase2_behavior_counts",
+            registry["source_queue_profile_summary"],
+        )
 
         for entry in registry["skills"]:
             profile = entry["source_queue_profile"]
@@ -45,6 +48,7 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
             self.assertTrue(profile["stage"])
             self.assertTrue(profile["queue_role"])
             self.assertTrue(profile["default_invocation"])
+            self.assertTrue(profile["phase2_behavior"])
             self.assertIn("notes", profile)
 
     def test_registry_profiles_classify_key_skill_roles(self) -> None:
@@ -70,32 +74,72 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
         self.assertEqual("direct", profiles["eco-materialize-final-publication"]["queue_status"])
         self.assertEqual("reporting", profiles["eco-materialize-final-publication"]["stage"])
 
-        self.assertFalse(profiles["eco-extract-observation-candidates"]["core_queue_default"])
-        self.assertFalse(profiles["eco-merge-observation-candidates"]["core_queue_default"])
-        self.assertFalse(profiles["eco-link-claims-to-observations"]["core_queue_default"])
-        self.assertFalse(profiles["eco-derive-observation-scope"]["core_queue_default"])
-        self.assertFalse(profiles["eco-score-evidence-coverage"]["core_queue_default"])
+        self.assertEqual(
+            "optional-runtime-surface",
+            profiles["eco-extract-observation-candidates"]["phase2_behavior"],
+        )
+        self.assertEqual(
+            "optional-runtime-surface",
+            profiles["eco-merge-observation-candidates"]["phase2_behavior"],
+        )
+        self.assertEqual(
+            "optional-runtime-surface",
+            profiles["eco-link-claims-to-observations"]["phase2_behavior"],
+        )
+        self.assertEqual(
+            "optional-runtime-surface",
+            profiles["eco-derive-observation-scope"]["phase2_behavior"],
+        )
+        self.assertEqual(
+            "optional-runtime-surface",
+            profiles["eco-score-evidence-coverage"]["phase2_behavior"],
+        )
 
         self.assertEqual("direct", profiles["eco-classify-claim-verifiability"]["queue_status"])
-        self.assertTrue(profiles["eco-classify-claim-verifiability"]["core_queue_default"])
+        self.assertEqual(
+            "non-owning-runtime-surface",
+            profiles["eco-classify-claim-verifiability"]["phase2_behavior"],
+        )
         self.assertEqual("direct", profiles["eco-route-verification-lane"]["queue_status"])
-        self.assertTrue(profiles["eco-route-verification-lane"]["core_queue_default"])
+        self.assertEqual(
+            "non-owning-runtime-surface",
+            profiles["eco-route-verification-lane"]["phase2_behavior"],
+        )
         self.assertEqual("direct", profiles["eco-extract-issue-candidates"]["queue_status"])
-        self.assertTrue(profiles["eco-extract-issue-candidates"]["core_queue_default"])
+        self.assertEqual(
+            "non-owning-runtime-surface",
+            profiles["eco-extract-issue-candidates"]["phase2_behavior"],
+        )
         self.assertEqual("direct", profiles["eco-cluster-issue-candidates"]["queue_status"])
-        self.assertTrue(profiles["eco-cluster-issue-candidates"]["core_queue_default"])
+        self.assertEqual(
+            "non-owning-runtime-surface",
+            profiles["eco-cluster-issue-candidates"]["phase2_behavior"],
+        )
         self.assertEqual("direct", profiles["eco-extract-stance-candidates"]["queue_status"])
-        self.assertFalse(profiles["eco-extract-stance-candidates"]["core_queue_default"])
+        self.assertEqual(
+            "optional-runtime-surface",
+            profiles["eco-extract-stance-candidates"]["phase2_behavior"],
+        )
         self.assertEqual("direct", profiles["eco-extract-concern-facets"]["queue_status"])
-        self.assertFalse(profiles["eco-extract-concern-facets"]["core_queue_default"])
+        self.assertEqual(
+            "optional-runtime-surface",
+            profiles["eco-extract-concern-facets"]["phase2_behavior"],
+        )
         self.assertEqual("direct", profiles["eco-extract-actor-profiles"]["queue_status"])
-        self.assertFalse(profiles["eco-extract-actor-profiles"]["core_queue_default"])
+        self.assertEqual(
+            "optional-runtime-surface",
+            profiles["eco-extract-actor-profiles"]["phase2_behavior"],
+        )
         self.assertEqual("direct", profiles["eco-extract-evidence-citation-types"]["queue_status"])
-        self.assertFalse(
-            profiles["eco-extract-evidence-citation-types"]["core_queue_default"]
+        self.assertEqual(
+            "optional-runtime-surface",
+            profiles["eco-extract-evidence-citation-types"]["phase2_behavior"],
         )
         self.assertEqual("direct", profiles["eco-materialize-controversy-map"]["queue_status"])
-        self.assertTrue(profiles["eco-materialize-controversy-map"]["core_queue_default"])
+        self.assertEqual(
+            "non-owning-runtime-surface",
+            profiles["eco-materialize-controversy-map"]["phase2_behavior"],
+        )
 
 
 if __name__ == "__main__":

@@ -44,6 +44,16 @@ def operator_commands(*, run_id: str, round_id: str, run_dir: Path) -> dict[str,
     }
 
 
+def controller_uses_next_actions_surface(controller: dict[str, Any]) -> bool:
+    planning = controller.get("planning", {}) if isinstance(controller.get("planning"), dict) else {}
+    execution_queue = planning.get("execution_queue", []) if isinstance(planning.get("execution_queue"), list) else []
+    return any(
+        maybe_text(item.get("stage_name")) == "next-actions"
+        for item in execution_queue
+        if isinstance(item, dict)
+    )
+
+
 def supervise_round(
     run_dir: Path,
     *,
@@ -266,7 +276,7 @@ def supervise_round_with_contract_mode(
             round_id=round_id,
             next_actions_path=next_actions_path,
         )
-        if next_actions_path
+        if next_actions_path and controller_uses_next_actions_surface(controller)
         else {"payload": {}}
     )
     next_actions = (

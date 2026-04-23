@@ -64,6 +64,13 @@ def append_planning_attempt(controller_payload: dict[str, Any], attempt: dict[st
         attempts.append(attempt)
 
 
+def planning_includes_planner_stage(planning: dict[str, Any]) -> bool:
+    explicit = planning.get("include_planner_stage")
+    if isinstance(explicit, bool):
+        return explicit
+    return True
+
+
 def stage_blueprint(
     stage_name: str,
     *,
@@ -81,6 +88,12 @@ def stage_blueprint(
         stage_name,
         stage_definitions=stage_definitions,
     ) or {}
+    has_explicit_previous_stages = "required_previous_stages" in planned
+    required_previous_stages = (
+        normalized_stage_list(planned.get("required_previous_stages"))
+        if has_explicit_previous_stages
+        else normalized_stage_list(contract.get("required_previous_stages"))
+    )
     stage_kind = (
         maybe_text(planned.get("stage_kind") or planned.get("kind"))
         or maybe_text(contract.get("stage_kind"))
@@ -118,8 +131,7 @@ def stage_blueprint(
         "skill_args": skill_args or [],
         "assigned_role_hint": maybe_text(assigned_role_hint) or maybe_text(planned.get("assigned_role_hint")),
         "planner_reason": maybe_text(planner_reason),
-        "required_previous_stages": normalized_stage_list(planned.get("required_previous_stages"))
-        or normalized_stage_list(contract.get("required_previous_stages")),
+        "required_previous_stages": required_previous_stages,
         "blocking": planned.get("blocking") if isinstance(planned.get("blocking"), bool) else bool(contract.get("blocking")),
         "resume_policy": maybe_text(planned.get("resume_policy")) or maybe_text(contract.get("resume_policy")) or "skip-if-completed",
         "operator_summary": maybe_text(planned.get("operator_summary")) or maybe_text(contract.get("operator_summary")),
@@ -141,20 +153,22 @@ def stage_blueprints(
     planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
     stage_definitions: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    validate_skill_stage(
-        "orchestration-planner",
-        planner_skill_name,
-        stage_definitions=stage_definitions,
-    )
-    blueprints = [
-        stage_blueprint(
+    blueprints: list[dict[str, Any]] = []
+    if planning_includes_planner_stage(planning):
+        validate_skill_stage(
             "orchestration-planner",
-            skill_name=planner_skill_name,
-            artifacts=artifacts,
-            explicit_output_path=artifacts.get("orchestration_plan_path", ""),
+            planner_skill_name,
             stage_definitions=stage_definitions,
         )
-    ]
+        blueprints.append(
+            stage_blueprint(
+                "orchestration-planner",
+                skill_name=planner_skill_name,
+                artifacts=artifacts,
+                explicit_output_path=artifacts.get("orchestration_plan_path", ""),
+                stage_definitions=stage_definitions,
+            )
+        )
     for planned_step in planning.get("execution_queue", []):
         stage_name = maybe_text(planned_step.get("stage_name"))
         blueprints.append(
@@ -226,6 +240,7 @@ def controller_planning_state(planning: dict[str, Any], blueprints: list[dict[st
         "controller_authority": planning.get("controller_authority", ""),
         "plan_source": maybe_text(planning.get("plan_source")) or planning_source_from_payload(planning),
         "probe_stage_included": planning.get("probe_stage_included", False),
+        "include_planner_stage": planning_includes_planner_stage(planning),
         "assigned_role_hints": planning.get("assigned_role_hints", []),
         "planned_skill_count": len(execution_queue) + len(post_gate_steps),
         "gate_step_count": len(gate_steps),

@@ -1394,10 +1394,12 @@ class RuntimeKernelTests(unittest.TestCase):
                     )
 
             self.assertEqual(2, run_skill_mock.call_count)
-            self.assertEqual("blocked", raised.exception.payload["status"])
+            self.assertEqual("failed", raised.exception.payload["status"])
             self.assertEqual(
                 "missing-approved-transition-request",
-                raised.exception.payload["failure"]["error_code"],
+                raised.exception.payload["failure"]["stage_failure"]["failure"][
+                    "error_code"
+                ],
             )
             self.assertIn(
                 "promote-evidence-basis",
@@ -1457,7 +1459,118 @@ class RuntimeKernelTests(unittest.TestCase):
             result["controller_updates"]["recommended_next_skills"],
         )
 
-    def test_controller_prefers_agent_advisory_plan_over_runtime_planner(self) -> None:
+    def test_controller_executes_approved_promotion_request_without_planner_stage(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+
+            promotion_result = {
+                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "event": {"status": "completed"},
+                "skill_payload": {
+                    "artifact_refs": [],
+                    "canonical_ids": [],
+                    "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"},
+                },
+            }
+            gate_payload = {
+                "generated_at_utc": "2024-01-01T00:00:00Z",
+                "gate_status": "allow-promote",
+                "readiness_status": "ready",
+                "promote_allowed": True,
+                "output_path": str(root / "promotion_gate.json"),
+                "gate_reasons": [],
+                "recommended_next_skills": [],
+            }
+            promotion_request_id = approve_promotion_transition(run_dir)
+
+            with (
+                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
+                mock.patch(
+                    "eco_council_runtime.kernel.controller.run_skill",
+                    return_value=promotion_result,
+                ) as run_skill_mock,
+            ):
+                payload = run_phase2_round_with_contract_mode(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    contract_mode="strict",
+                    gate_handlers=default_phase2_gate_handlers(),
+                    posture_profile=default_phase2_posture_profile_config(),
+                )
+
+            self.assertEqual(
+                ["eco-promote-evidence-basis"],
+                [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
+            )
+            self.assertEqual("transition-executor", payload["controller"]["planning_mode"])
+            self.assertEqual("transition-executor", payload["controller"]["planning"]["planning_mode"])
+            self.assertEqual("transition-executor", payload["controller"]["planning"]["controller_authority"])
+            self.assertEqual("approved-transition-request", payload["controller"]["planning"]["plan_source"])
+            self.assertEqual(
+                ["promotion-gate", "promotion-basis"],
+                payload["controller"]["completed_stage_names"],
+            )
+            self.assertEqual("promotion-gate", payload["controller"]["steps"][0]["stage"])
+            self.assertEqual(
+                ["--transition-request-id", promotion_request_id],
+                run_skill_mock.call_args_list[-1].kwargs["skill_args"],
+            )
+            self.assertEqual(
+                [{"source": "approved-transition-request", "status": "adopted"}],
+                [
+                    {"source": item["source"], "status": item["status"]}
+                    for item in payload["controller"]["planning_attempts"]
+                ],
+            )
+
+    def test_controller_completes_without_default_plan_when_no_transition_request_exists(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+
+            with (
+                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
+                mock.patch(
+                    "eco_council_runtime.kernel.controller.run_skill",
+                    side_effect=AssertionError("default controller path should not execute skills without an approved transition request"),
+                ) as run_skill_mock,
+            ):
+                payload = run_phase2_round_with_contract_mode(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    contract_mode="strict",
+                    gate_handlers=default_phase2_gate_handlers(),
+                    posture_profile=default_phase2_posture_profile_config(),
+                )
+
+            run_skill_mock.assert_not_called()
+            self.assertEqual("completed", payload["controller"]["controller_status"])
+            self.assertEqual("transition-executor", payload["controller"]["planning_mode"])
+            self.assertEqual(
+                "transition-request-inspection",
+                payload["controller"]["planning"]["plan_source"],
+            )
+            self.assertEqual([], payload["controller"]["completed_stage_names"])
+            self.assertEqual("needs-more-data", payload["controller"]["readiness_status"])
+            self.assertEqual("withheld", payload["controller"]["promotion_status"])
+            self.assertEqual([], payload["controller"]["planning_attempts"])
+
+    def test_controller_ignores_optional_advisory_artifacts_on_default_path(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -1471,7 +1584,7 @@ class RuntimeKernelTests(unittest.TestCase):
             advisory_plan_path.write_text(
                 json.dumps(
                     {
-                        "plan_id": "agent-plan-001",
+                        "plan_id": "agent-plan-ignored-001",
                         "planning_status": "advisory-plan-ready",
                         "planning_mode": "agent-advisory",
                         "controller_authority": "advisory-only",
@@ -1481,18 +1594,8 @@ class RuntimeKernelTests(unittest.TestCase):
                                 "skill_name": "eco-summarize-round-readiness",
                                 "skill_args": [],
                                 "assigned_role_hint": "moderator",
-                                "reason": "Agent judged the board ready for direct readiness review.",
-                                "expected_output_path": str(root / "readiness.json"),
-                            }
-                        ],
-                        "post_gate_steps": [
-                            {
-                                "stage_name": "promotion-basis",
-                                "skill_name": "eco-promote-evidence-basis",
-                                "skill_args": [],
-                                "assigned_role_hint": "moderator",
-                                "reason": "Freeze the agent-selected gate outcome.",
-                                "expected_output_path": str(root / "basis.json"),
+                                "reason": "This optional advisory plan should not run on the default controller path.",
+                                "expected_output_path": str(root / "ignored_readiness.json"),
                             }
                         ],
                         "fallback_path": [],
@@ -1504,16 +1607,6 @@ class RuntimeKernelTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-
-            readiness_result = {
-                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
-                "event": {"status": "completed"},
-                "skill_payload": {
-                    "artifact_refs": [],
-                    "canonical_ids": [],
-                    "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"},
-                },
-            }
             promotion_result = {
                 "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
@@ -1539,7 +1632,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
-                    side_effect=[readiness_result, promotion_result],
+                    return_value=promotion_result,
                 ) as run_skill_mock,
             ):
                 payload = run_phase2_round_with_contract_mode(
@@ -1552,478 +1645,20 @@ class RuntimeKernelTests(unittest.TestCase):
                 )
 
             self.assertEqual(
-                ["eco-summarize-round-readiness", "eco-promote-evidence-basis"],
+                ["eco-promote-evidence-basis"],
                 [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
             )
-            self.assertEqual("agent-advisory", payload["controller"]["planning_mode"])
-            self.assertEqual("agent-advisory", payload["controller"]["planning"]["planning_mode"])
-            self.assertEqual("advisory-only", payload["controller"]["planning"]["controller_authority"])
-            self.assertEqual("agent-advisory", payload["controller"]["planning"]["plan_source"])
-            self.assertEqual(str(advisory_plan_path.resolve()), payload["controller"]["planning"]["plan_path"])
+            self.assertEqual("approved-transition-request", payload["summary"]["plan_source"])
+            self.assertEqual("transition-executor", payload["controller"]["planning_mode"])
+            self.assertEqual("approved-transition-request", payload["controller"]["planning"]["plan_source"])
+            self.assertNotEqual(str(advisory_plan_path.resolve()), payload["controller"]["planning"]["plan_path"])
             self.assertEqual(
-                ["orchestration-planner", "round-readiness", "promotion-gate", "promotion-basis"],
-                payload["controller"]["completed_stage_names"],
-            )
-            self.assertEqual(
-                str(advisory_plan_path.resolve()),
-                payload["controller"]["steps"][0]["artifact_path"],
-            )
-            self.assertEqual(
-                ["--transition-request-id", promotion_request_id],
-                run_skill_mock.call_args_list[-1].kwargs["skill_args"],
-            )
-
-    def test_controller_materializes_agent_advisory_plan_for_openclaw_agent_round(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            run_dir = root / "run"
-            runtime_dir = run_dir / "runtime"
-            runtime_dir.mkdir(parents=True, exist_ok=True)
-            ensure_runtime_src_on_path()
-
-            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
-
-            advisory_plan_path = runtime_dir / f"agent_advisory_plan_{ROUND_ID}.json"
-            (runtime_dir / f"mission_scaffold_{ROUND_ID}.json").write_text(
-                json.dumps(
-                    {
-                        "run_id": RUN_ID,
-                        "round_id": ROUND_ID,
-                        "orchestration_mode": "openclaw-agent",
-                    },
-                    ensure_ascii=True,
-                    indent=2,
-                    sort_keys=True,
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-
-            readiness_result = {
-                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
-                "event": {"status": "completed"},
-                "skill_payload": {
-                    "artifact_refs": [],
-                    "canonical_ids": [],
-                    "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"},
-                },
-            }
-            promotion_result = {
-                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
-                "event": {"status": "completed"},
-                "skill_payload": {
-                    "artifact_refs": [],
-                    "canonical_ids": [],
-                    "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"},
-                },
-            }
-            gate_payload = {
-                "generated_at_utc": "2024-01-01T00:00:00Z",
-                "gate_status": "allow-promote",
-                "readiness_status": "ready",
-                "promote_allowed": True,
-                "output_path": str(root / "promotion_gate.json"),
-                "gate_reasons": [],
-                "recommended_next_skills": [],
-            }
-            promotion_request_id = approve_promotion_transition(run_dir)
-
-            def run_skill_side_effect(*args: object, **kwargs: object) -> dict[str, object]:
-                skill_name = kwargs["skill_name"]
-                if skill_name == "eco-plan-round-orchestration":
-                    self.assertEqual(
-                        ["--planner-mode", "agent-advisory", "--output-path", f"runtime/agent_advisory_plan_{ROUND_ID}.json"],
-                        kwargs["skill_args"],
-                    )
-                    advisory_plan_path.write_text(
-                        json.dumps(
-                            {
-                                "plan_id": "agent-plan-materialized-001",
-                                "planning_status": "advisory-plan-ready",
-                                "planning_mode": "agent-advisory",
-                                "controller_authority": "advisory-only",
-                                "execution_queue": [
-                                    {
-                                        "stage_name": "round-readiness",
-                                        "skill_name": "eco-summarize-round-readiness",
-                                        "skill_args": [],
-                                        "assigned_role_hint": "moderator",
-                                        "reason": "Agent route goes directly to readiness review.",
-                                        "expected_output_path": str(root / "readiness.json"),
-                                    }
-                                ],
-                                "post_gate_steps": [
-                                    {
-                                        "stage_name": "promotion-basis",
-                                        "skill_name": "eco-promote-evidence-basis",
-                                        "skill_args": [],
-                                        "assigned_role_hint": "moderator",
-                                        "reason": "Freeze the agent-selected readiness outcome.",
-                                        "expected_output_path": str(root / "basis.json"),
-                                    }
-                                ],
-                                "fallback_path": [],
-                            },
-                            ensure_ascii=True,
-                            indent=2,
-                            sort_keys=True,
-                        )
-                        + "\n",
-                        encoding="utf-8",
-                    )
-                    return {
-                        "summary": {
-                            "skill_name": "eco-plan-round-orchestration",
-                            "event_id": "evt-agent-plan",
-                            "receipt_id": "receipt-agent-plan",
-                        },
-                        "event": {"status": "completed"},
-                        "skill_payload": {
-                            "artifact_refs": [],
-                            "canonical_ids": ["agent-plan-materialized-001"],
-                            "summary": {"output_path": str(advisory_plan_path.resolve())},
-                        },
-                    }
-                if skill_name == "eco-summarize-round-readiness":
-                    return readiness_result
-                if skill_name == "eco-promote-evidence-basis":
-                    self.assertEqual(
-                        ["--transition-request-id", promotion_request_id],
-                        kwargs["skill_args"],
-                    )
-                    return promotion_result
-                raise AssertionError(f"Unexpected skill execution: {skill_name}")
-
-            with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
-                mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
-                    side_effect=run_skill_side_effect,
-                ) as run_skill_mock,
-            ):
-                payload = run_phase2_round_with_contract_mode(
-                    run_dir,
-                    run_id=RUN_ID,
-                    round_id=ROUND_ID,
-                    contract_mode="strict",
-                    gate_handlers=default_phase2_gate_handlers(),
-                    posture_profile=default_phase2_posture_profile_config(),
-                )
-
-            self.assertEqual(
-                ["eco-plan-round-orchestration", "eco-summarize-round-readiness", "eco-promote-evidence-basis"],
-                [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
-            )
-            self.assertEqual("agent-advisory", payload["summary"]["plan_source"])
-            self.assertEqual("agent-advisory", payload["controller"]["planning_mode"])
-            self.assertEqual("agent-advisory", payload["controller"]["planning"]["plan_source"])
-            self.assertEqual(str(advisory_plan_path.resolve()), payload["controller"]["planning"]["plan_path"])
-            self.assertEqual(str(advisory_plan_path.resolve()), payload["controller"]["artifacts"]["agent_advisory_plan_path"])
-            self.assertEqual("receipt-agent-plan", payload["controller"]["steps"][0]["receipt_id"])
-            self.assertEqual("agent-advisory", payload["controller"]["steps"][0]["plan_source"])
-            self.assertEqual(
-                [
-                    {
-                        "source": "direct-council-advisory",
-                        "status": "unavailable",
-                    },
-                    {
-                        "source": "agent-advisory",
-                        "status": "materialized",
-                    }
-                ],
+                [{"source": "approved-transition-request", "status": "adopted"}],
                 [
                     {"source": item["source"], "status": item["status"]}
                     for item in payload["controller"]["planning_attempts"]
                 ],
             )
-
-    def test_controller_uses_direct_council_advisory_without_planner_skill(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            run_dir = root / "run"
-            runtime_dir = run_dir / "runtime"
-            runtime_dir.mkdir(parents=True, exist_ok=True)
-            ensure_runtime_src_on_path()
-
-            from eco_council_runtime.council_objects import store_readiness_opinion_records
-            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
-
-            advisory_plan_path = runtime_dir / f"agent_advisory_plan_{ROUND_ID}.json"
-            (runtime_dir / f"mission_scaffold_{ROUND_ID}.json").write_text(
-                json.dumps(
-                    {
-                        "run_id": RUN_ID,
-                        "round_id": ROUND_ID,
-                        "orchestration_mode": "openclaw-agent",
-                    },
-                    ensure_ascii=True,
-                    indent=2,
-                    sort_keys=True,
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            store_readiness_opinion_records(
-                run_dir,
-                opinion_bundle={
-                    "run_id": RUN_ID,
-                    "round_id": ROUND_ID,
-                    "opinions": [
-                        {
-                            "agent_role": "moderator",
-                            "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
-                            "rationale": "The council is ready to send this round to promotion review.",
-                            "decision_source": "agent-council",
-                            "basis_object_ids": ["issue-001"],
-                            "evidence_refs": ["evidence://issue-001"],
-                            "lineage": [],
-                        }
-                    ],
-                },
-            )
-
-            readiness_result = {
-                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
-                "event": {"status": "completed"},
-                "skill_payload": {
-                    "artifact_refs": [],
-                    "canonical_ids": [],
-                    "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"},
-                },
-            }
-            promotion_result = {
-                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
-                "event": {"status": "completed"},
-                "skill_payload": {
-                    "artifact_refs": [],
-                    "canonical_ids": [],
-                    "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"},
-                },
-            }
-            gate_payload = {
-                "generated_at_utc": "2024-01-01T00:00:00Z",
-                "gate_status": "allow-promote",
-                "readiness_status": "ready",
-                "promote_allowed": True,
-                "output_path": str(root / "promotion_gate.json"),
-                "gate_reasons": [],
-                "recommended_next_skills": [],
-            }
-            promotion_request_id = approve_promotion_transition(run_dir)
-
-            def run_skill_side_effect(*args: object, **kwargs: object) -> dict[str, object]:
-                skill_name = kwargs["skill_name"]
-                if skill_name == "eco-plan-round-orchestration":
-                    raise AssertionError("planner skill should not run when direct council advisory is available")
-                if skill_name == "eco-summarize-round-readiness":
-                    return readiness_result
-                if skill_name == "eco-promote-evidence-basis":
-                    self.assertEqual(
-                        ["--transition-request-id", promotion_request_id],
-                        kwargs["skill_args"],
-                    )
-                    return promotion_result
-                raise AssertionError(f"Unexpected skill execution: {skill_name}")
-
-            with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
-                mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
-                    side_effect=run_skill_side_effect,
-                ) as run_skill_mock,
-            ):
-                payload = run_phase2_round_with_contract_mode(
-                    run_dir,
-                    run_id=RUN_ID,
-                    round_id=ROUND_ID,
-                    contract_mode="strict",
-                    gate_handlers=default_phase2_gate_handlers(),
-                    posture_profile=default_phase2_posture_profile_config(),
-                )
-
-            advisory_plan = load_json(advisory_plan_path)
-            self.assertEqual(
-                ["eco-summarize-round-readiness", "eco-promote-evidence-basis"],
-                [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
-            )
-            self.assertEqual("direct-council-advisory", payload["summary"]["plan_source"])
-            self.assertEqual("agent-advisory", payload["controller"]["planning_mode"])
-            self.assertEqual("direct-council-advisory", payload["controller"]["planning"]["plan_source"])
-            self.assertEqual("direct-council-advisory", payload["controller"]["steps"][0]["plan_source"])
-            self.assertEqual("direct-council-advisory", advisory_plan["plan_source"])
-            self.assertEqual(str(advisory_plan_path.resolve()), payload["controller"]["planning"]["plan_path"])
-            self.assertEqual(
-                [{"source": "direct-council-advisory", "status": "materialized"}],
-                [
-                    {"source": item["source"], "status": item["status"]}
-                    for item in payload["controller"]["planning_attempts"]
-                ],
-            )
-
-    def test_controller_falls_back_to_runtime_planner_after_agent_advisory_failure(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            run_dir = root / "run"
-            runtime_dir = run_dir / "runtime"
-            runtime_dir.mkdir(parents=True, exist_ok=True)
-            ensure_runtime_src_on_path()
-
-            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
-            from eco_council_runtime.kernel.executor import SkillExecutionError
-
-            (runtime_dir / f"mission_scaffold_{ROUND_ID}.json").write_text(
-                json.dumps(
-                    {
-                        "run_id": RUN_ID,
-                        "round_id": ROUND_ID,
-                        "orchestration_mode": "openclaw-agent",
-                    },
-                    ensure_ascii=True,
-                    indent=2,
-                    sort_keys=True,
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-
-            planner_result = {
-                "summary": {"skill_name": "eco-plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
-                "event": {"status": "completed"},
-                "skill_payload": {"artifact_refs": [], "canonical_ids": []},
-            }
-            planning = {
-                "plan_id": "plan-runtime-fallback-001",
-                "plan_path": str(root / "plan.json"),
-                "planning_status": "ready-for-controller",
-                "planning_mode": "planner-backed",
-                "planner_skill_name": "eco-plan-round-orchestration",
-                "probe_stage_included": False,
-                "assigned_role_hints": [],
-                "execution_queue": [
-                    {
-                        "stage_name": "round-readiness",
-                        "skill_name": "eco-summarize-round-readiness",
-                        "skill_args": [],
-                        "assigned_role_hint": "moderator",
-                        "reason": "Planner fallback sends the round to readiness review.",
-                        "expected_output_path": str(root / "readiness.json"),
-                    }
-                ],
-                "post_gate_steps": [
-                    {
-                        "stage_name": "promotion-basis",
-                        "skill_name": "eco-promote-evidence-basis",
-                        "skill_args": [],
-                        "assigned_role_hint": "moderator",
-                        "reason": "Freeze the fallback planner result.",
-                        "expected_output_path": str(root / "basis.json"),
-                    }
-                ],
-                "stop_conditions": [],
-                "fallback_path": [],
-                "fallback_suggested_next_skills": [],
-            }
-            readiness_result = {
-                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
-                "event": {"status": "completed"},
-                "skill_payload": {
-                    "artifact_refs": [],
-                    "canonical_ids": [],
-                    "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"},
-                },
-            }
-            promotion_result = {
-                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
-                "event": {"status": "completed"},
-                "skill_payload": {
-                    "artifact_refs": [],
-                    "canonical_ids": [],
-                    "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"},
-                },
-            }
-            gate_payload = {
-                "generated_at_utc": "2024-01-01T00:00:00Z",
-                "gate_status": "allow-promote",
-                "readiness_status": "ready",
-                "promote_allowed": True,
-                "output_path": str(root / "promotion_gate.json"),
-                "gate_reasons": [],
-                "recommended_next_skills": [],
-            }
-            promotion_request_id = approve_promotion_transition(run_dir)
-
-            def run_skill_side_effect(*args: object, **kwargs: object) -> dict[str, object]:
-                skill_name = kwargs["skill_name"]
-                if skill_name == "eco-plan-round-orchestration":
-                    if kwargs["skill_args"]:
-                        self.assertEqual(
-                            ["--planner-mode", "agent-advisory", "--output-path", f"runtime/agent_advisory_plan_{ROUND_ID}.json"],
-                            kwargs["skill_args"],
-                        )
-                        raise SkillExecutionError(
-                            "advisory planner failed",
-                            {
-                                "message": "advisory planner failed",
-                                "failure": {"retryable": False},
-                            },
-                        )
-                    return planner_result
-                if skill_name == "eco-summarize-round-readiness":
-                    return readiness_result
-                if skill_name == "eco-promote-evidence-basis":
-                    self.assertEqual(
-                        ["--transition-request-id", promotion_request_id],
-                        kwargs["skill_args"],
-                    )
-                    return promotion_result
-                raise AssertionError(f"Unexpected skill execution: {skill_name}")
-
-            with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
-                mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
-                    side_effect=run_skill_side_effect,
-                ) as run_skill_mock,
-            ):
-                payload = run_phase2_round_with_contract_mode(
-                    run_dir,
-                    run_id=RUN_ID,
-                    round_id=ROUND_ID,
-                    contract_mode="strict",
-                    gate_handlers=default_phase2_gate_handlers(),
-                    posture_profile=default_phase2_posture_profile_config(),
-                )
-
-            self.assertEqual(
-                [
-                    ("eco-plan-round-orchestration", ["--planner-mode", "agent-advisory", "--output-path", f"runtime/agent_advisory_plan_{ROUND_ID}.json"]),
-                    ("eco-plan-round-orchestration", []),
-                    ("eco-summarize-round-readiness", []),
-                    ("eco-promote-evidence-basis", ["--transition-request-id", promotion_request_id]),
-                ],
-                [(call.kwargs["skill_name"], call.kwargs["skill_args"]) for call in run_skill_mock.call_args_list],
-            )
-            self.assertEqual("planner-backed", payload["controller"]["planning_mode"])
-            self.assertEqual("runtime-planner", payload["controller"]["planning"]["plan_source"])
-            self.assertEqual(
-                [
-                    {"source": "direct-council-advisory", "status": "unavailable"},
-                    {"source": "agent-advisory", "status": "failed"},
-                    {"source": "runtime-planner", "status": "materialized"},
-                ],
-                [
-                    {"source": item["source"], "status": item["status"]}
-                    for item in payload["controller"]["planning_attempts"]
-                ],
-            )
-            self.assertEqual("receipt-plan", payload["controller"]["steps"][0]["receipt_id"])
-            self.assertEqual("runtime-planner", payload["controller"]["steps"][0]["plan_source"])
 
     def test_controller_resume_skips_completed_stages_after_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2033,6 +1668,7 @@ class RuntimeKernelTests(unittest.TestCase):
 
             from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
             from eco_council_runtime.kernel.executor import SkillExecutionError
+            from eco_council_runtime.phase2_planning_profile import phase2_planning_source
 
             planner_result = {
                 "summary": {"skill_name": "eco-plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
@@ -2108,6 +1744,16 @@ class RuntimeKernelTests(unittest.TestCase):
                 },
             )
             promotion_request_id = approve_promotion_transition(run_dir)
+            runtime_only_sources = [
+                phase2_planning_source(
+                    "runtime-planner-only",
+                    source_kind="planner-skill",
+                    output_path_key="orchestration_plan_path",
+                    planner_skill_name="eco-plan-round-orchestration",
+                    materialized_message="Use only the injected runtime planner path.",
+                    failed_message="Injected runtime planner path failed.",
+                )
+            ]
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
@@ -2126,6 +1772,7 @@ class RuntimeKernelTests(unittest.TestCase):
                         contract_mode="warn",
                         gate_handlers=default_phase2_gate_handlers(),
                         posture_profile=default_phase2_posture_profile_config(),
+                        planning_sources=runtime_only_sources,
                     )
 
             controller_artifact = load_json(run_dir / "runtime" / f"round_controller_{ROUND_ID}.json")
@@ -2165,6 +1812,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     contract_mode="warn",
                     gate_handlers=default_phase2_gate_handlers(),
                     posture_profile=default_phase2_posture_profile_config(),
+                    planning_sources=runtime_only_sources,
                 )
 
             planning_bundle_mock.assert_not_called()
@@ -2545,8 +2193,9 @@ class RuntimeKernelTests(unittest.TestCase):
                 run_dir,
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
+                actor_role="runtime-operator",
                 contract_mode="warn",
-                gate_handlers=mock.ANY,
+                gate_handlers=None,
                 posture_profile=mock.ANY,
                 timeout_seconds=8.0,
                 retry_budget=1,
@@ -2659,6 +2308,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 run_dir,
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
+                actor_role="runtime-operator",
                 contract_mode="warn",
                 gate_handlers=None,
                 posture_profile=posture_profile,

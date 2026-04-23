@@ -68,11 +68,16 @@ from .skill_registry import default_actor_role_hint
 from .transition_requests import (
     REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_COMMITTED,
+    REQUEST_STATUS_PENDING,
     TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
     latest_transition_request,
 )
 
 PLANNER_SKILL_NAME = DEFAULT_PHASE2_PLANNER_SKILL_NAME
+TRANSITION_EXECUTOR_PLANNING_MODE = "transition-executor"
+TRANSITION_EXECUTOR_AUTHORITY = "transition-executor"
+TRANSITION_EXECUTOR_PLAN_SOURCE = "approved-transition-request"
+TRANSITION_EXECUTOR_INSPECTION_SOURCE = "transition-request-inspection"
 SKILL_TRANSITION_KIND_REQUIREMENTS = {
     "eco-promote-evidence-basis": TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
 }
@@ -277,6 +282,169 @@ def ensure_executable_planning(planning: dict[str, Any]) -> None:
     ensure_executable_planning_from_profile(planning)
 
 
+def transition_executor_plan_payload(
+    *,
+    run_id: str,
+    round_id: str,
+    request_payload: dict[str, Any],
+    artifacts: dict[str, str],
+) -> dict[str, Any]:
+    request_id = maybe_text(request_payload.get("request_id"))
+    return {
+        "schema_version": "runtime-orchestration-plan-v1",
+        "run_id": run_id,
+        "round_id": round_id,
+        "plan_id": f"transition-executor-{request_id or round_id}",
+        "planning_status": "ready-for-controller",
+        "planning_mode": TRANSITION_EXECUTOR_PLANNING_MODE,
+        "controller_authority": TRANSITION_EXECUTOR_AUTHORITY,
+        "plan_source": TRANSITION_EXECUTOR_PLAN_SOURCE,
+        "include_planner_stage": False,
+        "probe_stage_included": False,
+        "assigned_role_hints": ["moderator", "runtime-operator"],
+        "execution_queue": [],
+        "gate_steps": [
+            {
+                "stage_name": "promotion-gate",
+                "stage_kind": "gate",
+                "phase_group": "gate",
+                "required_previous_stages": [],
+                "blocking": True,
+                "resume_policy": "skip-if-completed",
+                "operator_summary": "Validate DB-backed readiness and council inputs before promotion execution.",
+                "reason": "Execute the approved promote-evidence-basis transition request through the governed runtime gate.",
+                "gate_handler": "promotion-gate",
+                "readiness_stage_name": "round-readiness",
+                "expected_output_path": maybe_text(artifacts.get("promotion_gate_path")),
+            }
+        ],
+        "post_gate_steps": [
+            {
+                "stage_name": "promotion-basis",
+                "stage_kind": "skill",
+                "phase_group": "promotion",
+                "skill_name": "eco-promote-evidence-basis",
+                "expected_skill_name": "eco-promote-evidence-basis",
+                "skill_args": [],
+                "assigned_role_hint": "moderator",
+                "required_previous_stages": ["promotion-gate"],
+                "blocking": True,
+                "resume_policy": "skip-if-completed",
+                "operator_summary": "Freeze the promoted or withheld evidence basis after the approved transition clears the runtime gate.",
+                "reason": "Commit the approved promote-evidence-basis transition request.",
+                "expected_output_path": maybe_text(artifacts.get("promotion_basis_path")),
+            }
+        ],
+        "stop_conditions": [
+            {
+                "condition_id": "promotion-gate-withheld",
+                "trigger": "Promotion gate does not allow promotion after DB-backed readiness / council validation.",
+                "effect": "Freeze the basis as withheld and keep investigation open for moderator follow-up.",
+            },
+            {
+                "condition_id": "promotion-transition-approved",
+                "trigger": "Approved promote-evidence-basis transition request is present for the round.",
+                "effect": "Controller executes gate plus basis freeze without re-planning next-actions or advisory queues.",
+            },
+        ],
+        "fallback_path": [],
+        "phase_decision_basis": {
+            "transition_request_id": request_id,
+            "transition_request_status": maybe_text(request_payload.get("request_status")),
+            "transition_kind": maybe_text(request_payload.get("transition_kind")),
+            "requested_by_role": maybe_text(request_payload.get("requested_by_role")),
+            "latest_decision_status": maybe_text(request_payload.get("latest_decision_status")),
+            "latest_decision_by_role": maybe_text(request_payload.get("latest_decision_by_role")),
+            "basis_object_ids": (
+                request_payload.get("basis_object_ids", [])
+                if isinstance(request_payload.get("basis_object_ids"), list)
+                else []
+            ),
+            "evidence_refs": (
+                request_payload.get("evidence_refs", [])
+                if isinstance(request_payload.get("evidence_refs"), list)
+                else []
+            ),
+        },
+        "planning_notes": [
+            "Runtime controller executed the approved transition request directly.",
+            "No planner, fallback agenda, or direct council advisory source was used on the default kernel path.",
+        ],
+    }
+
+
+def approved_transition_request_planning(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    artifacts: dict[str, str],
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    latest_request = latest_transition_request(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        transition_kind=TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    )
+    if not isinstance(latest_request, dict):
+        return {}, None
+    request_status = maybe_text(latest_request.get("request_status"))
+    if request_status not in {REQUEST_STATUS_APPROVED, REQUEST_STATUS_COMMITTED}:
+        return {}, latest_request
+    plan_payload = transition_executor_plan_payload(
+        run_id=run_id,
+        round_id=round_id,
+        request_payload=latest_request,
+        artifacts=artifacts,
+    )
+    return {
+        "plan_id": maybe_text(plan_payload.get("plan_id")),
+        "plan_path": maybe_text(artifacts.get("orchestration_plan_path")),
+        "planning_status": maybe_text(plan_payload.get("planning_status"))
+        or "ready-for-controller",
+        "planning_mode": TRANSITION_EXECUTOR_PLANNING_MODE,
+        "planner_skill_name": "",
+        "controller_authority": TRANSITION_EXECUTOR_AUTHORITY,
+        "plan_source": TRANSITION_EXECUTOR_PLAN_SOURCE,
+        "probe_stage_included": False,
+        "include_planner_stage": False,
+        "assigned_role_hints": ["moderator", "runtime-operator"],
+        "execution_queue": [],
+        "gate_steps": plan_payload.get("gate_steps", []),
+        "post_gate_steps": plan_payload.get("post_gate_steps", []),
+        "stop_conditions": plan_payload.get("stop_conditions", []),
+        "fallback_path": [],
+        "fallback_suggested_next_skills": [],
+        "plan_payload": plan_payload,
+        "transition_request": latest_request,
+    }, latest_request
+
+
+def inspection_only_planning(
+    *,
+    artifacts: dict[str, str],
+) -> dict[str, Any]:
+    return {
+        "plan_id": "",
+        "plan_path": maybe_text(artifacts.get("orchestration_plan_path")),
+        "planning_status": "no-approved-transition-request",
+        "planning_mode": TRANSITION_EXECUTOR_PLANNING_MODE,
+        "planner_skill_name": "",
+        "controller_authority": TRANSITION_EXECUTOR_AUTHORITY,
+        "plan_source": TRANSITION_EXECUTOR_INSPECTION_SOURCE,
+        "probe_stage_included": False,
+        "include_planner_stage": False,
+        "assigned_role_hints": ["moderator", "runtime-operator"],
+        "execution_queue": [],
+        "gate_steps": [],
+        "post_gate_steps": [],
+        "stop_conditions": [],
+        "fallback_path": [],
+        "fallback_suggested_next_skills": [],
+        "plan_payload": {},
+    }
+
+
 def persist_controller_state(
     run_dir: Path,
     round_id: str,
@@ -383,6 +551,7 @@ def run_phase2_round_with_contract_mode(
         "allow_side_effects": allow_side_effects,
     }
     resolved_planning_sources = resolve_phase2_planning_sources(planning_sources)
+    default_transition_execution_mode = not bool(resolved_planning_sources)
     resolved_stage_definitions = resolve_stage_definitions(stage_definitions)
 
     phase2_control_state = load_phase2_control_state(
@@ -420,6 +589,11 @@ def run_phase2_round_with_contract_mode(
         resume_count=resume_count,
     )
     controller_payload["requested_by_role"] = maybe_text(actor_role)
+    controller_payload["planning_mode"] = (
+        TRANSITION_EXECUTOR_PLANNING_MODE
+        if default_transition_execution_mode
+        else "planner-pending"
+    )
 
     if not force_restart and existing_status in {"running", "failed"}:
         recovered_planning = planning_from_controller(run_dir, round_id, existing_controller)
@@ -554,25 +728,27 @@ def run_phase2_round_with_contract_mode(
             blueprints,
             controller_payload.get("steps"),
         )
-        planner_step_index = step_index(
-            controller_payload["steps"],
-            "orchestration-planner",
-        )
-        if planner_result is None:
-            controller_payload["steps"][planner_step_index] = adopted_planner_stage_summary(
-                run_id=run_id,
-                round_id=round_id,
-                blueprint=blueprints[0],
-                planning=selected_planning,
-                started_at=started_at,
-                completed_at=utc_now_iso(),
+        include_planner_stage = bool(selected_planning.get("include_planner_stage", True))
+        if include_planner_stage:
+            planner_step_index = step_index(
+                controller_payload["steps"],
+                "orchestration-planner",
             )
-        else:
-            controller_payload["steps"][planner_step_index] = planner_stage_summary_from_result(
-                planner_result,
-                blueprints[0],
-                selected_planning,
-            )
+            if planner_result is None:
+                controller_payload["steps"][planner_step_index] = adopted_planner_stage_summary(
+                    run_id=run_id,
+                    round_id=round_id,
+                    blueprint=blueprints[0],
+                    planning=selected_planning,
+                    started_at=started_at,
+                    completed_at=utc_now_iso(),
+                )
+            else:
+                controller_payload["steps"][planner_step_index] = planner_stage_summary_from_result(
+                    planner_result,
+                    blueprints[0],
+                    selected_planning,
+                )
         append_planning_attempt(
             controller_payload,
             planning_attempt_record(
@@ -595,7 +771,7 @@ def run_phase2_round_with_contract_mode(
             ),
         )
         persist_controller_state(run_dir, round_id, controller_payload)
-        planner_stage_ran = True
+        planner_stage_ran = include_planner_stage
 
     def fail_runtime_planner(
         planner_index: int,
@@ -653,6 +829,73 @@ def run_phase2_round_with_contract_mode(
             ),
         )
         raise SkillExecutionError(failure_payload["message"], failure_payload)
+
+    if not planning and default_transition_execution_mode:
+        transition_planning, latest_transition = approved_transition_request_planning(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            artifacts=artifacts,
+        )
+        if transition_planning:
+            adopt_planning(
+                transition_planning,
+                source_name=TRANSITION_EXECUTOR_PLAN_SOURCE,
+                status="adopted",
+                message="Controller adopted the latest approved promote-evidence-basis transition request.",
+            )
+        else:
+            inspection_planning = inspection_only_planning(artifacts=artifacts)
+            controller_payload["planning_mode"] = TRANSITION_EXECUTOR_PLANNING_MODE
+            controller_payload["planning"] = controller_planning_state(
+                inspection_planning,
+                [],
+            )
+            controller_payload["readiness_status"] = "needs-more-data"
+            controller_payload["gate_status"] = "not-evaluated"
+            controller_payload["promotion_status"] = "withheld"
+            controller_payload["recommended_next_skills"] = []
+            controller_payload["controller_status"] = "completed"
+            if isinstance(latest_transition, dict):
+                latest_status = maybe_text(latest_transition.get("request_status"))
+                reason = "Await moderator transition request."
+                if latest_status == REQUEST_STATUS_PENDING:
+                    reason = "Await runtime-operator approval for the latest transition request."
+                elif latest_status:
+                    reason = (
+                        f"Latest promote-evidence-basis request is `{latest_status}`; "
+                        "no default kernel execution path is available."
+                    )
+                append_planning_attempt(
+                    controller_payload,
+                    planning_attempt_record(
+                        source=TRANSITION_EXECUTOR_INSPECTION_SOURCE,
+                        status="unavailable",
+                        plan_path="",
+                        planning_mode=TRANSITION_EXECUTOR_PLANNING_MODE,
+                        controller_authority=TRANSITION_EXECUTOR_AUTHORITY,
+                        message=reason,
+                    ),
+                )
+            persisted_controller = persist_controller_state(
+                run_dir,
+                round_id,
+                controller_payload,
+            )
+            finished_at = utc_now_iso()
+            append_ledger_event(
+                run_dir,
+                round_controller_event(
+                    run_id=run_id,
+                    round_id=round_id,
+                    started_at=started_at,
+                    completed_at=finished_at,
+                    contract_mode=contract_mode,
+                    controller_payload=persisted_controller,
+                    status="completed",
+                ),
+            )
+            return controller_result_payload(persisted_controller, {})
 
     if not planning:
         for source_spec in resolved_planning_sources:

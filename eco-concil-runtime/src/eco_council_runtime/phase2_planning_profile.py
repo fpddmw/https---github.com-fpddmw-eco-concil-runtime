@@ -104,6 +104,8 @@ def normalized_controller_planning_mode(value: Any, *, default: str = "planner-b
         return mode
     if mode == "planner-pending":
         return mode
+    if mode == "transition-executor":
+        return mode
     if mode:
         return "planner-backed"
     return default
@@ -115,6 +117,8 @@ def planning_source_from_payload(plan_payload: dict[str, Any]) -> str:
         return explicit_source
     planning_mode = maybe_text(plan_payload.get("planning_mode"))
     controller_authority = maybe_text(plan_payload.get("controller_authority"))
+    if planning_mode == "transition-executor" or controller_authority == "transition-executor":
+        return "approved-transition-request"
     if planning_mode == "agent-advisory" or controller_authority == "advisory-only":
         return "agent-advisory"
     return "runtime-planner"
@@ -237,6 +241,11 @@ def planning_bundle_from_payload(
         "controller_authority": maybe_text(plan_payload.get("controller_authority")) or "queue-owner",
         "plan_source": planning_source_from_payload(plan_payload),
         "probe_stage_included": bool(plan_payload.get("probe_stage_included")),
+        "include_planner_stage": (
+            bool(plan_payload.get("include_planner_stage"))
+            if isinstance(plan_payload.get("include_planner_stage"), bool)
+            else True
+        ),
         "assigned_role_hints": plan_payload.get("assigned_role_hints", []) if isinstance(plan_payload.get("assigned_role_hints"), list) else [],
         "execution_queue": explicit_execution_queue,
         "gate_steps": gate_steps,
@@ -326,7 +335,7 @@ def planning_from_controller(
     execution_queue = normalized_planned_steps(planning.get("execution_queue"))
     gate_steps = normalized_planned_steps(planning.get("gate_steps"), default_stage_kind="gate")
     post_gate_steps = normalized_planned_steps(planning.get("post_gate_steps"))
-    if execution_queue:
+    if execution_queue or gate_steps or post_gate_steps:
         return {
             "plan_id": maybe_text(planning.get("plan_id")),
             "plan_path": maybe_text(planning.get("plan_path")) or str(orchestration_plan_path(run_dir, round_id).resolve()),
@@ -338,6 +347,11 @@ def planning_from_controller(
             "controller_authority": maybe_text(planning.get("controller_authority")) or "queue-owner",
             "plan_source": maybe_text(planning.get("plan_source")) or "controller-snapshot",
             "probe_stage_included": bool(planning.get("probe_stage_included")),
+            "include_planner_stage": (
+                bool(planning.get("include_planner_stage"))
+                if isinstance(planning.get("include_planner_stage"), bool)
+                else True
+            ),
             "assigned_role_hints": planning.get("assigned_role_hints", []) if isinstance(planning.get("assigned_role_hints"), list) else [],
             "execution_queue": execution_queue,
             "gate_steps": gate_steps or default_gate_steps(),
@@ -375,11 +389,13 @@ def planning_from_controller(
 
 def ensure_executable_planning(planning: dict[str, Any]) -> None:
     execution_queue = planning.get("execution_queue", []) if isinstance(planning.get("execution_queue"), list) else []
-    if execution_queue:
+    gate_steps = planning.get("gate_steps", []) if isinstance(planning.get("gate_steps"), list) else []
+    post_gate_steps = planning.get("post_gate_steps", []) if isinstance(planning.get("post_gate_steps"), list) else []
+    if execution_queue or gate_steps or post_gate_steps:
         return
     plan_path = maybe_text(planning.get("plan_path")) or "<unknown>"
     raise ValueError(
-        f"Planning artifact {plan_path} does not define an execution_queue; runtime kernel will not synthesize phase-2 deliberation stages."
+        f"Planning artifact {plan_path} does not define any executable controller stages; runtime kernel will not synthesize phase-2 deliberation stages."
     )
 
 
@@ -414,43 +430,8 @@ def default_phase2_planning_sources(
     *,
     planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
 ) -> list[dict[str, Any]]:
-    return [
-        phase2_planning_source(
-            "pre-materialized-advisory",
-            source_kind="existing-advisory",
-            output_path_key="agent_advisory_plan_path",
-            planner_skill_name=planner_skill_name,
-            adopted_message="Controller adopted a pre-materialized advisory plan.",
-        ),
-        phase2_planning_source(
-            "direct-council-advisory",
-            source_kind="direct-council-advisory",
-            output_path_key="agent_advisory_plan_path",
-            planner_skill_name=planner_skill_name,
-            requires_agent_orchestration=True,
-            materialized_message="Controller compiled and selected a direct council advisory plan.",
-            failed_message="Direct council advisory compiler completed but did not produce a usable execution_queue.",
-            unavailable_message="Direct council advisory compiler found no usable proposal or readiness inputs.",
-        ),
-        phase2_planning_source(
-            "agent-advisory",
-            source_kind="planner-skill",
-            output_path_key="agent_advisory_plan_path",
-            planner_mode="agent-advisory",
-            planner_skill_name=planner_skill_name,
-            requires_agent_orchestration=True,
-            materialized_message="Controller materialized and selected an agent-advisory plan.",
-            failed_message="Advisory planning completed but did not produce a usable execution_queue.",
-        ),
-        phase2_planning_source(
-            "runtime-planner",
-            source_kind="planner-skill",
-            output_path_key="orchestration_plan_path",
-            planner_skill_name=planner_skill_name,
-            materialized_message="Controller fell back to the runtime planner queue.",
-            failed_message="Runtime planner execution failed before materializing a usable execution_queue.",
-        ),
-    ]
+    del planner_skill_name
+    return []
 
 
 def resolve_phase2_planning_sources(

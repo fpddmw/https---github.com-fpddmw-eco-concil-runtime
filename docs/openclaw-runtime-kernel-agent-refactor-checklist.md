@@ -298,22 +298,89 @@ runtime kernel 只保留以下职责：
 - 是否影响后续计划：
   - 不改变 `9.2 / 9.3` 的主顺序，但 `9.2` 现在可以直接建立在 canonical role + centralized skill policy + explicit actor-role command surfaces 之上，不需要再返工第一批边界层。
 
+- 第一批复核结果：
+  - 运行时角色边界与 `--actor-role` 强制透传本身无需新的功能性补正；本次仅同步修正了 `supervise-round -> controller` 相关 unittest 断言，确认 batch-1 已落地的 actor-role 透传语义确实在主链生效。
+  - 当前没有发现会破坏 `9.2` 的 batch-1 残缺实现，后续可以继续按既定顺序推进 kernel 语义收缩。
+
 ## 9.2 第二批：状态推进与人工确认
 
-- [ ] 新增 `transition_requests / transition_approvals / transition_rejections`
-- [ ] 新增 `request-phase-transition`
-- [ ] 新增 `approve-phase-transition`
-- [ ] 新增 `reject-phase-transition`
-- [ ] 修改 `eco-open-investigation-round`，只能消费已批准 transition request
-- [ ] 修改 promotion / close round 流程，必须经过 operator approval
+- [x] 新增 `transition_requests / transition_approvals / transition_rejections`
+- [x] 新增 `request-phase-transition`
+- [x] 新增 `approve-phase-transition`
+- [x] 新增 `reject-phase-transition`
+- [x] 修改 `eco-open-investigation-round`，只能消费已批准 transition request
+- [x] 修改 promotion / close round 流程，必须经过 operator approval
+
+### 2026-04-23 Session 收口
+
+- 已完成：
+  - `kernel/transition_requests.py` 与 deliberation DB schema 已建立 `transition-request / transition-approval / transition-rejection` canonical 持久化链，`query-control-objects` 与 operator/runbook surface 也已对称暴露这三类 runtime object。
+  - `request-phase-transition / approve-phase-transition / reject-phase-transition / close-round --transition-request-id` 已在 kernel CLI、access policy、operator hints、handoff surface 中贯通；`moderator` 只能发起 request，`runtime-operator` 才能 approve/reject/commit。
+  - `eco-open-investigation-round / eco-promote-evidence-basis / close-round` 现在都只能消费已批准 request；实际 side effect 成功后才把 request 状态写成 `committed`，不再把 `round_transitions` 当审批对象。
+  - `kernel/controller.py` 已补上 promotion-stage 治理前置：`promotion-basis` stage 会解析当前 round 该 kind 的最新 request，并只在状态为 `approved / committed` 时注入 `--transition-request-id` 执行；否则 controller 会以清晰的治理阻断失败收口，而不是回退到旧的“无审批直接 promote”语义。
+  - `phase2_direct_advisory.py` 与 `eco-plan-round-orchestration` 的 stop-condition 文案已同步改成“moderator request + operator approval first”，避免 advisory/operator surface 继续暗示可直接 promote。
+  - 相关测试入口已全部切到新审批链：open-round / promote / close-round / supervise-round / run-phase2-round 相关 unittest 现在都会先创建并批准对应 request，再执行 runtime/skill 主链。
+  - 本次实际回归通过：
+    - `tests.test_runtime_kernel`
+    - `tests.test_board_workflow`
+    - `tests.test_archive_history_workflow`
+    - `tests.test_control_query_surface`
+    - `tests.test_supervisor_simulation_regression`
+    - `tests.test_reporting_workflow`
+    - `tests.test_reporting_publish_workflow`
+    - `tests.test_reporting_query_surface`
+    - `tests.test_decision_trace_workflow`
+    - `tests.test_deliberation_agenda_workflow`
+    - `tests.test_investigation_workflow`
+    - `tests.test_benchmark_replay_workflow`
+    - `tests.test_orchestration_ingress_workflow`
+
+- 未完成：
+  - 就本批明确定义的三条链路（`open-investigation-round / promote-evidence-basis / close-round`）而言，没有新的功能性遗留；更广义的 kernel phase ownership 收缩仍留在 `9.3`。
+  - controller 侧的 transition request 自动注入目前只对当前 batch 实际进入 controller 的 `eco-promote-evidence-basis` 做了硬化；如果后续再把新的 state-transition skill 放回 controller 主链，需要继续沿同一治理模式扩展，而不是重回旧式裸 skill 调用。
+
+- 新发现的问题：
+  - 旧测试中仍有少量断言默认 `supervise-round` 不会把 `actor_role="runtime-operator"` 继续传给 controller；本次已作为 batch-1 复核的一部分修正，说明测试层面对新边界语义曾经落后于代码实现。
+  - 目前 planner/advisory 仍然会产出 `promotion-basis` stage，只是 runtime 不再允许它绕过审批直接执行；这再次说明 `phase2 planner / direct advisory` 的默认 phase ownership 仍需在 `9.3` 继续收缩。
+
+- 是否影响后续计划：
+  - 不阻塞 `9.3`。相反，`9.3` 现在可以建立在已经硬化的 `request -> approve/reject -> commit` 审批链之上，继续把 controller 从“默认 phase owner”收缩成“受治理的 transition executor + audit logger”。
 
 ## 9.3 第三批：缩小 kernel 语义面
 
-- [ ] 把 `phase2_fallback_*` 从 kernel 主路径移除
-- [ ] 把 `phase2_direct_advisory.py` 从默认计划源移除
-- [ ] 重写 `kernel/controller.py`，仅负责任务执行与日志
-- [ ] 重写 `phase2_agent_entry_profile.py`，只输出 capability surface
-- [ ] 移除 `core_queue_default` 对 phase-2 行为的支配
+- [x] 把 `phase2_fallback_*` 从 kernel 主路径移除
+- [x] 把 `phase2_direct_advisory.py` 从默认计划源移除
+- [x] 重写 `kernel/controller.py`，仅负责任务执行与日志
+- [x] 重写 `phase2_agent_entry_profile.py`，只输出 capability surface
+- [x] 移除 `core_queue_default` 对 phase-2 行为的支配
+
+### 本次收口回写
+
+- 已完成：
+  - `phase2_planning_profile.py` 的默认 planning source 已收缩为 `[]`；`kernel/controller.py` 默认路径不再采用 `runtime-planner / agent-advisory / direct-council-advisory`，而是只消费已批准的 `promote-evidence-basis` transition request，或在无批准请求时以 inspection-only/no-op 收口。
+  - `kernel/controller.py` 现已把默认 phase-2 语义改成 `transition-executor`：默认只执行 `promotion-gate -> promotion-basis` 这一条已审批 transition 链，不再默认生成 `next-actions / readiness / advisory` 议程；`kernel/supervisor.py` 也同步改成只有在 planning 真正包含 `next-actions` stage 时才消费该 surface。
+  - `phase2_agent_entry_profile.py` 与 `kernel/agent_entry.py` 已改为输出 canonical role capability surface、技能层级、transition request/approve/reject 命令模板；默认 recommended skills 与 advisory sources 均为空，agent entry 不再把调查者引导到默认 advisory plan 主链。
+  - `kernel/source_queue_profile.py` 已停止向外导出 `core_queue_default`；对外改为 `phase2_behavior` 分类，避免 queue profile 继续暗示 phase-2 默认拥有权。`kernel/operations.py` 的 runbook 文案也已改成 transition/query 导向，而不是 advisory refresh 导向。
+  - 已补充并通过本批最小相关回归 `14` 项：
+    - `tests.test_agent_entry_gate`
+    - `tests.test_runtime_source_queue_profiles`
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_executes_approved_promotion_request_without_planner_stage`
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_completes_without_default_plan_when_no_transition_request_exists`
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_ignores_optional_advisory_artifacts_on_default_path`
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_respects_injected_planning_sources`
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_resume_skips_completed_stages_after_failure`
+
+- 未完成：
+  - `phase2_fallback_*` 与 `phase2_direct_advisory.py` 仍作为可注入 / 可选兼容模块保留在仓库内；本批完成的是“移出 kernel 默认主路径”，不是删除这些模块本身。
+  - 非默认的 injected planner/advisory 路径仍保留历史 plan metadata（例如 `recommended_skill_sequence`）；如果后续目标是进一步压缩兼容语义面，需要在后续批次继续清理这些 optional surface，而不是把它们重新接回默认链。
+
+- 新发现的问题：
+  - stage validation 之前会把显式声明的空 `required_previous_stages=[]` 误当成“未声明”，从而回退到 stage contract 的旧依赖，导致 `transition-executor` 的 `promotion-gate` 被重新绑回 `round-readiness`；本次已同时在 `phase2_controller_state.py` 与 `phase2_stage_profile.py` 修复。
+  - 旧 resume 回归仍默认假设 controller 首轮会自动走 runtime planner；本次已把该测试改为显式注入 planning source，避免测试层继续固化旧的 kernel default ownership。
+
+- 是否影响后续计划：
+  - 不阻塞 `9.4 / 9.5`。相反，batch3 完成后，后续讨论面 / 报告面可以建立在“kernel 无默认议程所有权、moderator 通过 request/approve/reject/commit 推进、证据 basis 依赖 DB canonical state”这一前提上继续展开。
+  - 后续如果再把新的 state-transition skill 放回 controller 执行面，必须沿用本批已经建立的模式：显式 transition request、显式审批状态校验、显式 stage dependency，而不是恢复旧式 planner/fallback 代替治理判断。
 
 ## 9.4 第四批：讨论面与报告面
 

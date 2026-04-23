@@ -48,6 +48,7 @@ def default_controller_completion_updates(
     gate_payload: dict[str, Any],
     planning: dict[str, Any],
 ) -> dict[str, Any]:
+    del planning
     promotion_status = maybe_text(controller_payload.get("promotion_status")) or "withheld"
     if promotion_status == "promoted":
         return {
@@ -58,16 +59,9 @@ def default_controller_completion_updates(
         }
     return {
         "recommended_next_skills": unique_texts(
-            (
-                gate_payload.get("recommended_next_skills", [])
-                if isinstance(gate_payload.get("recommended_next_skills"), list)
-                else []
-            )
-            + (
-                planning.get("fallback_suggested_next_skills", [])
-                if isinstance(planning.get("fallback_suggested_next_skills"), list)
-                else []
-            )
+            gate_payload.get("recommended_next_skills", [])
+            if isinstance(gate_payload.get("recommended_next_skills"), list)
+            else []
         )
     }
 
