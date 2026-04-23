@@ -23,6 +23,12 @@ from .paths import (
     supervisor_state_path,
 )
 from .registry import write_registry
+from .transition_requests import (
+    TRANSITION_KIND_CLOSE_ROUND,
+    mark_transition_request_committed,
+    request_payload_option,
+    resolve_transition_request_for_execution,
+)
 
 ARCHIVE_SIGNAL_SKILL_NAME = "eco-archive-signal-corpus"
 ARCHIVE_CASE_SKILL_NAME = "eco-archive-case-library"
@@ -471,11 +477,18 @@ def history_bootstrap_event(
     }
 
 
-def close_round(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any]:
+def close_round(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    transition_request_id: str,
+) -> dict[str, Any]:
     return close_round_with_contract_mode(
         run_dir,
         run_id=run_id,
         round_id=round_id,
+        transition_request_id=transition_request_id,
         actor_role="runtime-operator",
         contract_mode="warn",
     )
@@ -486,6 +499,7 @@ def close_round_with_contract_mode(
     *,
     run_id: str,
     round_id: str,
+    transition_request_id: str,
     actor_role: str = "runtime-operator",
     contract_mode: str,
     timeout_seconds: float | None = None,
@@ -500,9 +514,35 @@ def close_round_with_contract_mode(
     write_registry(run_dir)
     init_run_manifest(run_dir, run_id)
     init_round_cursor(run_dir, run_id)
+    transition_request = resolve_transition_request_for_execution(
+        run_dir,
+        request_id=transition_request_id,
+        transition_kind=TRANSITION_KIND_CLOSE_ROUND,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    requested_archive_failure_policy = maybe_text(
+        request_payload_option(
+            transition_request,
+            "archive_failure_policy",
+            "",
+        )
+    )
+    if (
+        archive_failure_policy == "block"
+        and requested_archive_failure_policy in ARCHIVE_FAILURE_POLICIES
+    ):
+        archive_failure_policy = requested_archive_failure_policy
     artifacts = round_artifact_paths(run_dir, round_id)
     existing = load_json_if_exists(round_close_state_path(run_dir, round_id)) or {}
     if maybe_text(existing.get("close_status")) in {"completed", "completed-with-warnings"}:
+        mark_transition_request_committed(
+            run_dir,
+            request_id=maybe_text(transition_request.get("request_id")),
+            committed_by_role=actor_role,
+            committed_object_kind="round-close",
+            committed_object_id=round_id,
+        )
         return {
             "status": "completed",
             "summary": {
@@ -512,6 +552,9 @@ def close_round_with_contract_mode(
                 "close_status": existing.get("close_status", ""),
                 "archive_status": existing.get("archive_status", ""),
                 "close_posture": existing.get("close_posture", ""),
+                "transition_request_id": maybe_text(
+                    transition_request.get("request_id")
+                ),
             },
             "round_close": existing,
         }
@@ -677,6 +720,13 @@ def close_round_with_contract_mode(
         unique_texts([failure["skill_name"] for failure in step_failures]) if step_failures else ["eco-materialize-history-context"]
     )
     persist_round_close_state(run_dir, round_id, payload)
+    mark_transition_request_committed(
+        run_dir,
+        request_id=maybe_text(transition_request.get("request_id")),
+        committed_by_role=actor_role,
+        committed_object_kind="round-close",
+        committed_object_id=round_id,
+    )
     append_ledger_event(
         run_dir,
         round_close_event(
@@ -696,6 +746,9 @@ def close_round_with_contract_mode(
             "close_status": payload["close_status"],
             "archive_status": payload["archive_status"],
             "close_posture": payload["close_posture"],
+            "transition_request_id": maybe_text(
+                transition_request.get("request_id")
+            ),
         },
         "round_close": payload,
     }

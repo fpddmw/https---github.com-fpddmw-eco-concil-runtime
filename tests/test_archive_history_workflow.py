@@ -10,6 +10,7 @@ from _workflow_support import (
     analytics_path,
     investigation_path,
     load_json,
+    request_and_approve_transition,
     run_kernel,
     run_script,
     script_path,
@@ -141,6 +142,13 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         outputs["cluster_claims"]["canonical_ids"][0],
         "--confidence",
         "0.93",
+    )
+    request_and_approve_transition(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        transition_kind="promote-evidence-basis",
+        rationale="Approve promotion for archive/history workflow setup.",
     )
     run_kernel(
         "supervise-round",
@@ -286,6 +294,21 @@ def seed_moderator_actions_and_probes(
     )
 
 
+def approve_close_round_transition(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        transition_kind="close-round",
+        rationale="Approve close-round for archive/history workflow coverage.",
+    )
+
+
 class ArchiveHistoryWorkflowTests(unittest.TestCase):
     def test_close_round_runtime_command_archives_terminal_round_and_exposes_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -300,6 +323,11 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 publish=True,
             )
 
+            close_request_id = approve_close_round_transition(
+                run_dir,
+                run_id=HISTORICAL_RUN_ID,
+                round_id=HISTORICAL_ROUND_ID,
+            )
             close_payload = run_kernel(
                 "close-round",
                 "--run-dir",
@@ -308,6 +336,8 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 HISTORICAL_RUN_ID,
                 "--round-id",
                 HISTORICAL_ROUND_ID,
+                "--transition-request-id",
+                close_request_id,
                 "--contract-mode",
                 "strict",
             )
@@ -516,6 +546,11 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 HISTORICAL_ROUND_ID,
                 publish=True,
             )
+            close_request_id = approve_close_round_transition(
+                historical_run_dir,
+                run_id=HISTORICAL_RUN_ID,
+                round_id=HISTORICAL_ROUND_ID,
+            )
             run_kernel(
                 "close-round",
                 "--run-dir",
@@ -524,6 +559,8 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 HISTORICAL_RUN_ID,
                 "--round-id",
                 HISTORICAL_ROUND_ID,
+                "--transition-request-id",
+                close_request_id,
                 "--contract-mode",
                 "strict",
             )
@@ -1076,6 +1113,11 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             ):
                 (run_dir / relative_path).unlink()
 
+            close_request_id = approve_close_round_transition(
+                run_dir,
+                run_id=HISTORICAL_RUN_ID,
+                round_id=HISTORICAL_ROUND_ID,
+            )
             close_payload = run_kernel(
                 "close-round",
                 "--run-dir",
@@ -1084,6 +1126,8 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 HISTORICAL_RUN_ID,
                 "--round-id",
                 HISTORICAL_ROUND_ID,
+                "--transition-request-id",
+                close_request_id,
                 "--contract-mode",
                 "strict",
             )

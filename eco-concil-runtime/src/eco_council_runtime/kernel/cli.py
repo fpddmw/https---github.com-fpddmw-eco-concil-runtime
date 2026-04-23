@@ -99,6 +99,22 @@ from .phase2_state_surfaces import (
 )
 from .registry import write_registry
 from .supervisor import supervise_round, supervise_round_with_contract_mode
+from .transition_requests import (
+    DECISION_STATUS_APPROVED,
+    DECISION_STATUS_REJECTED,
+    REQUEST_STATUS_APPROVED,
+    REQUEST_STATUS_COMMITTED,
+    REQUEST_STATUS_PENDING,
+    REQUEST_STATUS_REJECTED,
+    TRANSITION_KIND_CLOSE_ROUND,
+    TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+    TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    approve_transition_request,
+    latest_transition_request,
+    load_transition_requests,
+    reject_transition_request,
+    store_transition_request,
+)
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -184,6 +200,148 @@ def init_run(run_dir: Path, run_id: str) -> dict[str, Any]:
     }
 
 
+def transition_request_state(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
+    if not run_id or not round_id:
+        return {
+            "summary": {
+                "pending_request_count": 0,
+                "approved_request_count": 0,
+                "rejected_request_count": 0,
+                "committed_request_count": 0,
+            },
+            "latest_requests": [],
+        }
+    latest_requests = load_transition_requests(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        limit=20,
+    )
+    status_counts = {
+        REQUEST_STATUS_PENDING: 0,
+        REQUEST_STATUS_APPROVED: 0,
+        REQUEST_STATUS_REJECTED: 0,
+        REQUEST_STATUS_COMMITTED: 0,
+    }
+    for request in latest_requests:
+        if not isinstance(request, dict):
+            continue
+        status = maybe_text(request.get("request_status"))
+        if status in status_counts:
+            status_counts[status] += 1
+    return {
+        "summary": {
+            "pending_request_count": status_counts[REQUEST_STATUS_PENDING],
+            "approved_request_count": status_counts[REQUEST_STATUS_APPROVED],
+            "rejected_request_count": status_counts[REQUEST_STATUS_REJECTED],
+            "committed_request_count": status_counts[REQUEST_STATUS_COMMITTED],
+        },
+        "latest_requests": latest_requests,
+        "query_transition_requests_command": kernel_command(
+            "query-control-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "transition-request",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        ),
+        "query_transition_approvals_command": kernel_command(
+            "query-control-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "transition-approval",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        ),
+        "query_transition_rejections_command": kernel_command(
+            "query-control-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "transition-rejection",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        ),
+        "request_open_round_command_template": kernel_command(
+            "request-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--transition-kind",
+            TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+            "--target-round-id",
+            "<target_round_id>",
+            "--source-round-id",
+            round_id,
+            "--rationale",
+            "<rationale>",
+            actor_role="moderator",
+        ),
+        "request_promotion_command_template": kernel_command(
+            "request-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--transition-kind",
+            TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+            "--rationale",
+            "<rationale>",
+            actor_role="moderator",
+        ),
+        "request_close_round_command_template": kernel_command(
+            "request-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--transition-kind",
+            TRANSITION_KIND_CLOSE_ROUND,
+            "--rationale",
+            "<rationale>",
+            actor_role="moderator",
+        ),
+        "approve_transition_request_command_template": kernel_command(
+            "approve-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--request-id",
+            "<request_id>",
+            "--approval-reason",
+            "<approval_reason>",
+        ),
+        "reject_transition_request_command_template": kernel_command(
+            "reject-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--request-id",
+            "<request_id>",
+            "--rejection-reason",
+            "<rejection_reason>",
+        ),
+    }
+
+
 def phase2_operator_view(
     run_dir: Path,
     round_id: str,
@@ -263,6 +421,34 @@ def phase2_operator_view(
         if round_id and run_id
         else ""
     )
+    approved_open_request = (
+        latest_transition_request(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            transition_kind=TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+            request_status=REQUEST_STATUS_APPROVED,
+        )
+        if round_id and run_id
+        else None
+    )
+    approved_promotion_request = (
+        latest_transition_request(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            transition_kind=TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+            request_status=REQUEST_STATUS_APPROVED,
+        )
+        if round_id and run_id
+        else None
+    )
+    round_transition = (
+        supervisor.get("round_transition", {})
+        if isinstance(supervisor.get("round_transition"), dict)
+        else {}
+    )
+    suggested_next_round_id = maybe_text(round_transition.get("suggested_round_id"))
     return {
         "round_id": round_id,
         "plan_id": maybe_text(plan.get("plan_id")),
@@ -371,6 +557,121 @@ def phase2_operator_view(
             if round_id and run_id
             else ""
         ),
+        "query_transition_requests_command": (
+            kernel_command(
+                "query-control-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "transition-request",
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+            )
+            if round_id and run_id
+            else ""
+        ),
+        "request_promotion_transition_command": (
+            kernel_command(
+                "request-phase-transition",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+                "--transition-kind",
+                TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+                "--rationale",
+                "<rationale>",
+                actor_role="moderator",
+            )
+            if round_id and run_id
+            else ""
+        ),
+        "approve_transition_request_command_template": (
+            kernel_command(
+                "approve-phase-transition",
+                "--run-dir",
+                str(run_dir),
+                "--request-id",
+                "<request_id>",
+                "--approval-reason",
+                "<approval_reason>",
+            )
+            if round_id and run_id
+            else ""
+        ),
+        "reject_transition_request_command_template": (
+            kernel_command(
+                "reject-phase-transition",
+                "--run-dir",
+                str(run_dir),
+                "--request-id",
+                "<request_id>",
+                "--rejection-reason",
+                "<rejection_reason>",
+            )
+            if round_id and run_id
+            else ""
+        ),
+        "promote_evidence_basis_command": (
+            run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                skill_name="eco-promote-evidence-basis",
+                actor_role="moderator",
+                contract_mode="warn",
+                skill_args=[
+                    "--transition-request-id",
+                    maybe_text(approved_promotion_request.get("request_id")),
+                ],
+            )
+            if round_id and run_id and isinstance(approved_promotion_request, dict)
+            else ""
+        ),
+        "request_open_round_command": (
+            kernel_command(
+                "request-phase-transition",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+                "--transition-kind",
+                TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+                "--target-round-id",
+                suggested_next_round_id or "<target_round_id>",
+                "--source-round-id",
+                round_id,
+                "--rationale",
+                "<rationale>",
+                actor_role="moderator",
+            )
+            if round_id and run_id
+            else ""
+        ),
+        "open_follow_up_round_command": (
+            run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=suggested_next_round_id or "<target_round_id>",
+                skill_name="eco-open-investigation-round",
+                actor_role="moderator",
+                contract_mode="warn",
+                skill_args=[
+                    "--source-round-id",
+                    round_id,
+                    "--transition-request-id",
+                    maybe_text(approved_open_request.get("request_id")),
+                ],
+            )
+            if round_id and run_id and suggested_next_round_id and isinstance(approved_open_request, dict)
+            else ""
+        ),
         "query_readiness_blockers_command": (
             f"query-council-objects --run-dir {run_dir} --object-kind next-action --run-id {run_id} --round-id {round_id} --readiness-blocker-only"
             if round_id and run_id
@@ -397,7 +698,7 @@ def phase2_operator_view(
             else "",
         },
         "recommended_next_skills": supervisor.get("recommended_next_skills", []) if isinstance(supervisor.get("recommended_next_skills"), list) else [],
-        "round_transition": supervisor.get("round_transition", {}) if isinstance(supervisor.get("round_transition"), dict) else {},
+        "round_transition": round_transition,
         "operator_notes": supervisor.get("operator_notes", []) if isinstance(supervisor.get("operator_notes"), list) else [],
     }
 
@@ -700,6 +1001,17 @@ def post_round_operator_view(run_dir: Path, round_id: str, post_round_state: dic
     round_close = post_round_state.get("round_close", {}) if isinstance(post_round_state.get("round_close"), dict) else {}
     history_bootstrap = post_round_state.get("history_bootstrap", {}) if isinstance(post_round_state.get("history_bootstrap"), dict) else {}
     run_id = maybe_text(round_close.get("run_id")) or maybe_text(history_bootstrap.get("run_id"))
+    approved_close_request = (
+        latest_transition_request(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            transition_kind=TRANSITION_KIND_CLOSE_ROUND,
+            request_status=REQUEST_STATUS_APPROVED,
+        )
+        if run_id and round_id
+        else None
+    )
     return {
         "round_close_status": maybe_text(round_close.get("close_status")),
         "archive_status": maybe_text(round_close.get("archive_status")),
@@ -719,6 +1031,67 @@ def post_round_operator_view(run_dir: Path, round_id: str, post_round_state: dic
                 "close-round",
                 "--run-dir",
                 str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+                "--transition-request-id",
+                maybe_text(approved_close_request.get("request_id")),
+            )
+            if run_id and round_id and isinstance(approved_close_request, dict)
+            else ""
+        ),
+        "request_close_round_command": (
+            kernel_command(
+                "request-phase-transition",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+                "--transition-kind",
+                TRANSITION_KIND_CLOSE_ROUND,
+                "--rationale",
+                "<rationale>",
+                actor_role="moderator",
+            )
+            if run_id and round_id
+            else ""
+        ),
+        "approve_transition_request_command_template": (
+            kernel_command(
+                "approve-phase-transition",
+                "--run-dir",
+                str(run_dir),
+                "--request-id",
+                "<request_id>",
+                "--approval-reason",
+                "<approval_reason>",
+            )
+            if run_id and round_id
+            else ""
+        ),
+        "reject_transition_request_command_template": (
+            kernel_command(
+                "reject-phase-transition",
+                "--run-dir",
+                str(run_dir),
+                "--request-id",
+                "<request_id>",
+                "--rejection-reason",
+                "<rejection_reason>",
+            )
+            if run_id and round_id
+            else ""
+        ),
+        "query_transition_requests_command": (
+            kernel_command(
+                "query-control-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "transition-request",
                 "--run-id",
                 run_id,
                 "--round-id",
@@ -896,6 +1269,7 @@ def show_run_state(
     reporting_state: dict[str, Any] = {}
     post_round_state: dict[str, Any] = {}
     benchmark_state: dict[str, Any] = {}
+    transition_state: dict[str, Any] = {}
     if selected_round_id:
         control_state = load_phase2_control_state(
             run_dir,
@@ -993,7 +1367,18 @@ def show_run_state(
             "replay_report": load_json_if_exists(replay_report_path(run_dir, selected_round_id)) or {},
         }
         benchmark_state["operator"] = benchmark_operator_view(run_dir, selected_round_id, benchmark_state)
+        transition_state = transition_request_state(
+            run_dir,
+            run_id=resolved_run_id,
+            round_id=selected_round_id,
+        )
     operations = operations_state(run_dir, selected_round_id)
+    if not transition_state and selected_round_id:
+        transition_state = transition_request_state(
+            run_dir,
+            run_id=resolved_run_id,
+            round_id=selected_round_id,
+        )
     return {
         "status": "completed",
         "summary": {
@@ -1004,6 +1389,11 @@ def show_run_state(
             "alert_status": maybe_text(operations.get("runtime_health", {}).get("alert_status")) if isinstance(operations.get("runtime_health"), dict) else "",
             "open_dead_letter_count": int(operations.get("runtime_health", {}).get("summary", {}).get("open_dead_letter_count") or 0)
             if isinstance(operations.get("runtime_health"), dict)
+            else 0,
+            "pending_transition_request_count": int(
+                transition_state.get("summary", {}).get("pending_request_count") or 0
+            )
+            if isinstance(transition_state.get("summary"), dict)
             else 0,
         },
         "manifest": manifest,
@@ -1021,6 +1411,7 @@ def show_run_state(
         "reporting": reporting_state,
         "post_round": post_round_state,
         "benchmark": benchmark_state,
+        "transitions": transition_state,
         "ledger_tail": load_ledger_tail(run_dir, tail),
     }
 
@@ -1130,6 +1521,14 @@ def add_control_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--phase2-posture", default="")
     command.add_argument("--terminal-state", default="")
     command.add_argument("--reporting-handoff-status", default="")
+    command.add_argument("--transition-kind", default="")
+    command.add_argument("--requested-by-role", default="")
+    command.add_argument("--request-id", default="")
+    command.add_argument("--target-round-id", default="")
+    command.add_argument("--requested-command-name", default="")
+    command.add_argument("--latest-decision-status", default="")
+    command.add_argument("--latest-decision-by-role", default="")
+    command.add_argument("--decision-by-role", default="")
     command.add_argument("--reporting-ready-only", action="store_true")
     command.add_argument("--include-contract", action="store_true")
     command.add_argument("--limit", type=int, default=20)
@@ -1169,6 +1568,57 @@ def build_parser() -> argparse.ArgumentParser:
     add_execution_policy_args(preflight_cmd)
     preflight_cmd.add_argument("skill_args", nargs=argparse.REMAINDER)
 
+    request_transition_cmd = sub.add_parser(
+        "request-phase-transition",
+        help="Persist one moderator-authored phase transition request for later operator approval.",
+    )
+    request_transition_cmd.add_argument("--run-dir", required=True)
+    request_transition_cmd.add_argument("--run-id", required=True)
+    request_transition_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(request_transition_cmd)
+    request_transition_cmd.add_argument(
+        "--transition-kind",
+        required=True,
+        choices=[
+            TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+            TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+            TRANSITION_KIND_CLOSE_ROUND,
+        ],
+    )
+    request_transition_cmd.add_argument("--target-round-id", default="")
+    request_transition_cmd.add_argument("--source-round-id", default="")
+    request_transition_cmd.add_argument("--rationale", default="")
+    request_transition_cmd.add_argument("--evidence-ref", action="append", default=[])
+    request_transition_cmd.add_argument("--basis-object-id", action="append", default=[])
+    request_transition_cmd.add_argument("--request-payload-json", default="")
+    request_transition_cmd.add_argument("--pretty", action="store_true")
+
+    approve_transition_cmd = sub.add_parser(
+        "approve-phase-transition",
+        help="Approve one pending phase transition request without committing the transition side effects.",
+    )
+    approve_transition_cmd.add_argument("--run-dir", required=True)
+    approve_transition_cmd.add_argument("--request-id", required=True)
+    add_actor_role_arg(approve_transition_cmd)
+    approve_transition_cmd.add_argument("--approval-reason", default="")
+    approve_transition_cmd.add_argument("--evidence-ref", action="append", default=[])
+    approve_transition_cmd.add_argument("--basis-object-id", action="append", default=[])
+    approve_transition_cmd.add_argument("--operator-note", action="append", default=[])
+    approve_transition_cmd.add_argument("--pretty", action="store_true")
+
+    reject_transition_cmd = sub.add_parser(
+        "reject-phase-transition",
+        help="Reject one pending phase transition request and persist the operator rationale.",
+    )
+    reject_transition_cmd.add_argument("--run-dir", required=True)
+    reject_transition_cmd.add_argument("--request-id", required=True)
+    add_actor_role_arg(reject_transition_cmd)
+    reject_transition_cmd.add_argument("--rejection-reason", required=True)
+    reject_transition_cmd.add_argument("--evidence-ref", action="append", default=[])
+    reject_transition_cmd.add_argument("--basis-object-id", action="append", default=[])
+    reject_transition_cmd.add_argument("--operator-note", action="append", default=[])
+    reject_transition_cmd.add_argument("--pretty", action="store_true")
+
     gate_cmd = sub.add_parser("apply-promotion-gate", help="Evaluate round readiness and write a promote-or-freeze gate artifact.")
     gate_cmd.add_argument("--run-dir", required=True)
     gate_cmd.add_argument("--run-id", required=True)
@@ -1207,6 +1657,7 @@ def build_parser() -> argparse.ArgumentParser:
     close_round_cmd.add_argument("--run-dir", required=True)
     close_round_cmd.add_argument("--run-id", required=True)
     close_round_cmd.add_argument("--round-id", required=True)
+    close_round_cmd.add_argument("--transition-request-id", required=True)
     add_actor_role_arg(close_round_cmd)
     close_round_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     close_round_cmd.add_argument("--archive-failure-policy", default="block", choices=ARCHIVE_FAILURE_POLICIES)
@@ -1539,6 +1990,217 @@ def main(
         print(pretty_json(payload, args.pretty))
         return 0 if payload["status"] != "blocked" else 1
 
+    if args.command == "request-phase-transition":
+        init_run(run_dir, args.run_id)
+        request_payload_json: dict[str, Any] = {}
+        if maybe_text(args.request_payload_json):
+            try:
+                decoded = json.loads(args.request_payload_json)
+            except json.JSONDecodeError as exc:
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "transition_kind": args.transition_kind,
+                    },
+                    "message": f"Invalid --request-payload-json: {exc}",
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            if not isinstance(decoded, dict):
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "transition_kind": args.transition_kind,
+                    },
+                    "message": "--request-payload-json must decode to a JSON object.",
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            request_payload_json = decoded
+        try:
+            request = store_transition_request(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                transition_kind=args.transition_kind,
+                requested_by_role=args.actor_role,
+                target_round_id=args.target_round_id,
+                source_round_id=args.source_round_id,
+                rationale=args.rationale,
+                evidence_refs=args.evidence_ref,
+                basis_object_ids=args.basis_object_id,
+                request_payload=request_payload_json,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "transition_kind": args.transition_kind,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        append_ledger_event(
+            run_dir,
+            {
+                "schema_version": "runtime-event-v3",
+                "event_id": new_runtime_event_id(
+                    "runtimeevt",
+                    args.run_id,
+                    args.round_id,
+                    "transition-request",
+                    request.get("created_at_utc"),
+                ),
+                "event_type": "transition-request",
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "actor_role": args.actor_role,
+                "status": "completed",
+                "transition_kind": args.transition_kind,
+                "request_id": request.get("request_id"),
+                "request_status": request.get("request_status"),
+            },
+        )
+        payload = {
+            "status": "completed",
+            "summary": {
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "transition_kind": args.transition_kind,
+                "request_id": request.get("request_id"),
+                "request_status": request.get("request_status"),
+                "db_path": request.get("db_path"),
+            },
+            "request": request,
+        }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "approve-phase-transition":
+        try:
+            result = approve_transition_request(
+                run_dir,
+                request_id=args.request_id,
+                approved_by_role=args.actor_role,
+                decision_reason=args.approval_reason,
+                evidence_refs=args.evidence_ref,
+                basis_object_ids=args.basis_object_id,
+                operator_notes=args.operator_note,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {"request_id": args.request_id},
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        request = result.get("request", {}) if isinstance(result.get("request"), dict) else {}
+        approval = result.get("approval", {}) if isinstance(result.get("approval"), dict) else {}
+        if maybe_text(request.get("run_id")):
+            init_run(run_dir, maybe_text(request.get("run_id")))
+        append_ledger_event(
+            run_dir,
+            {
+                "schema_version": "runtime-event-v3",
+                "event_id": new_runtime_event_id(
+                    "runtimeevt",
+                    maybe_text(request.get("run_id")),
+                    maybe_text(request.get("round_id")),
+                    "transition-approval",
+                    approval.get("approved_at_utc"),
+                ),
+                "event_type": "transition-approval",
+                "run_id": request.get("run_id"),
+                "round_id": request.get("round_id"),
+                "actor_role": args.actor_role,
+                "status": "completed",
+                "request_id": request.get("request_id"),
+                "transition_kind": request.get("transition_kind"),
+                "decision_status": approval.get("decision_status"),
+            },
+        )
+        payload = {
+            "status": "completed",
+            "summary": {
+                "request_id": request.get("request_id"),
+                "request_status": request.get("request_status"),
+                "transition_kind": request.get("transition_kind"),
+                "decision_status": approval.get("decision_status"),
+                "db_path": result.get("db_path"),
+            },
+            "request": request,
+            "approval": approval,
+        }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "reject-phase-transition":
+        try:
+            result = reject_transition_request(
+                run_dir,
+                request_id=args.request_id,
+                rejected_by_role=args.actor_role,
+                decision_reason=args.rejection_reason,
+                evidence_refs=args.evidence_ref,
+                basis_object_ids=args.basis_object_id,
+                operator_notes=args.operator_note,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {"request_id": args.request_id},
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        request = result.get("request", {}) if isinstance(result.get("request"), dict) else {}
+        rejection = result.get("rejection", {}) if isinstance(result.get("rejection"), dict) else {}
+        if maybe_text(request.get("run_id")):
+            init_run(run_dir, maybe_text(request.get("run_id")))
+        append_ledger_event(
+            run_dir,
+            {
+                "schema_version": "runtime-event-v3",
+                "event_id": new_runtime_event_id(
+                    "runtimeevt",
+                    maybe_text(request.get("run_id")),
+                    maybe_text(request.get("round_id")),
+                    "transition-rejection",
+                    rejection.get("rejected_at_utc"),
+                ),
+                "event_type": "transition-rejection",
+                "run_id": request.get("run_id"),
+                "round_id": request.get("round_id"),
+                "actor_role": args.actor_role,
+                "status": "completed",
+                "request_id": request.get("request_id"),
+                "transition_kind": request.get("transition_kind"),
+                "decision_status": rejection.get("decision_status"),
+            },
+        )
+        payload = {
+            "status": "completed",
+            "summary": {
+                "request_id": request.get("request_id"),
+                "request_status": request.get("request_status"),
+                "transition_kind": request.get("transition_kind"),
+                "decision_status": rejection.get("decision_status"),
+                "db_path": result.get("db_path"),
+            },
+            "request": request,
+            "rejection": rejection,
+        }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
     if args.command == "apply-promotion-gate":
         init_run(run_dir, args.run_id)
         if not gate_handlers or "promotion-gate" not in gate_handlers:
@@ -1678,6 +2340,7 @@ def main(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
+                transition_request_id=args.transition_request_id,
                 actor_role=args.actor_role,
                 contract_mode=args.contract_mode,
                 timeout_seconds=args.timeout_seconds,
@@ -2075,6 +2738,14 @@ def main(
                 phase2_posture=args.phase2_posture,
                 terminal_state=args.terminal_state,
                 reporting_handoff_status=args.reporting_handoff_status,
+                transition_kind=args.transition_kind,
+                requested_by_role=args.requested_by_role,
+                request_id=args.request_id,
+                target_round_id=args.target_round_id,
+                requested_command_name=args.requested_command_name,
+                latest_decision_status=args.latest_decision_status,
+                latest_decision_by_role=args.latest_decision_by_role,
+                decision_by_role=args.decision_by_role,
                 reporting_ready_only=args.reporting_ready_only,
                 include_contract=args.include_contract,
                 limit=args.limit,

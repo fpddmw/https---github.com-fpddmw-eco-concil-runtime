@@ -7,6 +7,7 @@ from pathlib import Path
 from _workflow_support import (
     load_json,
     promotion_path,
+    request_and_approve_transition,
     run_kernel,
     run_script,
     runtime_path,
@@ -16,6 +17,16 @@ from _workflow_support import (
 
 RUN_ID = "run-phase2-001"
 ROUND_ID = "round-phase2-001"
+
+
+def approve_promotion_transition(run_dir: Path) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        transition_kind="promote-evidence-basis",
+        rationale="Approve promotion for supervisor regression coverage.",
+    )
 
 
 class SupervisorSimulationRegressionTests(unittest.TestCase):
@@ -93,6 +104,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 "0.91",
             )
 
+            approve_promotion_transition(run_dir)
             phase2_payload = run_kernel(
                 "run-phase2-round",
                 "--run-dir",
@@ -213,6 +225,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 coverage_ref,
             )
 
+            approve_promotion_transition(run_dir)
             supervisor_payload = run_kernel(
                 "supervise-round",
                 "--run-dir",

@@ -10,6 +10,7 @@ from _workflow_support import (
     investigation_path,
     load_json,
     promotion_path,
+    request_and_approve_transition,
     reporting_path,
     run_script,
     script_path,
@@ -18,6 +19,16 @@ from _workflow_support import (
 
 RUN_ID = "run-investigation-001"
 ROUND_ID = "round-investigation-001"
+
+
+def approve_promotion_transition(run_dir: Path) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        transition_kind="promote-evidence-basis",
+        rationale="Approve promotion for investigation workflow coverage.",
+    )
 
 
 class InvestigationWorkflowTests(unittest.TestCase):
@@ -634,6 +645,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
+            promotion_request_id = approve_promotion_transition(run_dir)
             promotion_payload = run_script(
                 script_path("eco-promote-evidence-basis"),
                 "--run-dir",
@@ -642,6 +654,8 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--transition-request-id",
+                promotion_request_id,
             )
 
             readiness_artifact = load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json"))
@@ -738,6 +752,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             finally:
                 connection.close()
 
+            promotion_request_id = approve_promotion_transition(run_dir)
             promotion_payload = run_script(
                 script_path("eco-promote-evidence-basis"),
                 "--run-dir",
@@ -746,6 +761,8 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--transition-request-id",
+                promotion_request_id,
             )
             promotion_artifact = load_json(
                 promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
@@ -872,6 +889,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
+            promotion_request_id = approve_promotion_transition(run_dir)
             promotion_payload = run_script(
                 script_path("eco-promote-evidence-basis"),
                 "--run-dir",
@@ -880,6 +898,8 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--transition-request-id",
+                promotion_request_id,
             )
 
             readiness_artifact = load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json"))
@@ -1060,6 +1080,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
+            promotion_request_id = approve_promotion_transition(run_dir)
             promotion_payload = run_script(
                 script_path("eco-promote-evidence-basis"),
                 "--run-dir",
@@ -1068,6 +1089,8 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--transition-request-id",
+                promotion_request_id,
             )
 
             actions_artifact = load_json(investigation_path(run_dir, f"next_actions_{ROUND_ID}.json"))

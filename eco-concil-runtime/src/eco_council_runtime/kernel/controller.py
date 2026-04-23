@@ -65,8 +65,17 @@ from .paths import (
 from .registry import write_registry
 from .role_contracts import ROLE_MODERATOR
 from .skill_registry import default_actor_role_hint
+from .transition_requests import (
+    REQUEST_STATUS_APPROVED,
+    REQUEST_STATUS_COMMITTED,
+    TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    latest_transition_request,
+)
 
 PLANNER_SKILL_NAME = DEFAULT_PHASE2_PLANNER_SKILL_NAME
+SKILL_TRANSITION_KIND_REQUIREMENTS = {
+    "eco-promote-evidence-basis": TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+}
 
 
 def skill_actor_role_hint(skill_name: str, *, preferred_role_hint: Any = "") -> str:
@@ -75,6 +84,138 @@ def skill_actor_role_hint(skill_name: str, *, preferred_role_hint: Any = "") -> 
         or default_actor_role_hint(skill_name)
         or ROLE_MODERATOR
     )
+
+
+def normalized_skill_args(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value]
+
+
+def existing_transition_request_id(skill_args: list[str]) -> str:
+    for index, item in enumerate(skill_args):
+        if maybe_text(item) != "--transition-request-id":
+            continue
+        if index + 1 >= len(skill_args):
+            return ""
+        return maybe_text(skill_args[index + 1])
+    return ""
+
+
+def transition_request_block_payload(
+    *,
+    run_id: str,
+    round_id: str,
+    stage_name: str,
+    skill_name: str,
+    transition_kind: str,
+    latest_request: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    request_id = (
+        maybe_text(latest_request.get("request_id"))
+        if isinstance(latest_request, dict)
+        else ""
+    )
+    request_status = (
+        maybe_text(latest_request.get("request_status"))
+        if isinstance(latest_request, dict)
+        else ""
+    )
+    latest_reason = (
+        maybe_text(latest_request.get("latest_decision_reason"))
+        if isinstance(latest_request, dict)
+        else ""
+    )
+    if request_id:
+        message = (
+            f"Stage `{stage_name}` cannot execute `{skill_name}` because the latest "
+            f"`{transition_kind}` request `{request_id}` is `{request_status or 'unknown'}`."
+        )
+    else:
+        message = (
+            f"Stage `{stage_name}` cannot execute `{skill_name}` because no "
+            f"`{transition_kind}` transition request exists for run `{run_id}` round `{round_id}`."
+        )
+    recovery_hints = [
+        f"Moderator must request `{transition_kind}` for run `{run_id}` round `{round_id}` before this stage can execute.",
+        "Runtime operator must approve that transition request before rerunning phase-2 supervision.",
+    ]
+    if request_id and request_status == REQUEST_STATUS_COMMITTED:
+        recovery_hints = [
+            f"Reuse the already committed request `{request_id}` by supplying `--transition-request-id` explicitly if this stage is being replayed intentionally."
+        ]
+    if latest_reason:
+        recovery_hints.append(f"Latest operator reason: {latest_reason}")
+    return {
+        "status": "blocked",
+        "summary": {
+            "run_id": run_id,
+            "round_id": round_id,
+            "stage_name": stage_name,
+            "skill_name": skill_name,
+            "transition_kind": transition_kind,
+            "transition_request_id": request_id,
+            "transition_request_status": request_status,
+        },
+        "message": message,
+        "failure": {
+            "error_code": "missing-approved-transition-request",
+            "retryable": False,
+            "transition_kind": transition_kind,
+            "transition_request_id": request_id,
+            "transition_request_status": request_status,
+            "recovery_hints": recovery_hints,
+        },
+        "transition_request": latest_request if isinstance(latest_request, dict) else {},
+    }
+
+
+def controller_stage_skill_args(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    stage_name: str,
+    skill_name: str,
+    skill_args: Any,
+) -> list[str]:
+    resolved_skill_args = normalized_skill_args(skill_args)
+    if existing_transition_request_id(resolved_skill_args):
+        return resolved_skill_args
+    required_transition_kind = SKILL_TRANSITION_KIND_REQUIREMENTS.get(
+        maybe_text(skill_name)
+    )
+    if not required_transition_kind:
+        return resolved_skill_args
+    latest_request = latest_transition_request(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        transition_kind=required_transition_kind,
+    )
+    request_status = (
+        maybe_text(latest_request.get("request_status"))
+        if isinstance(latest_request, dict)
+        else ""
+    )
+    if request_status not in {REQUEST_STATUS_APPROVED, REQUEST_STATUS_COMMITTED}:
+        failure_payload = transition_request_block_payload(
+            run_id=run_id,
+            round_id=round_id,
+            stage_name=stage_name,
+            skill_name=skill_name,
+            transition_kind=required_transition_kind,
+            latest_request=latest_request,
+        )
+        raise SkillExecutionError(
+            failure_payload["message"],
+            failure_payload,
+        )
+    return [
+        *resolved_skill_args,
+        "--transition-request-id",
+        maybe_text(latest_request.get("request_id")),
+    ]
 
 
 def phase2_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
@@ -831,17 +972,33 @@ def run_phase2_round_with_contract_mode(
                 maybe_text(blueprint.get("skill_name")),
                 preferred_role_hint=blueprint.get("assigned_role_hint"),
             )
+            resolved_skill_args = controller_stage_skill_args(
+                run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                stage_name=stage_name,
+                skill_name=maybe_text(blueprint.get("skill_name")),
+                skill_args=blueprint.get("skill_args", []),
+            )
+            execution_blueprint = {
+                **blueprint,
+                "skill_args": resolved_skill_args,
+            }
             skill_result = run_skill(
                 run_dir,
                 run_id=run_id,
                 round_id=round_id,
                 skill_name=maybe_text(blueprint.get("skill_name")),
                 actor_role=stage_actor_role,
-                skill_args=blueprint.get("skill_args", []) if isinstance(blueprint.get("skill_args"), list) else [],
+                skill_args=resolved_skill_args,
                 contract_mode=contract_mode,
                 **execution_kwargs,
             )
-            controller_payload["steps"][step_pos] = stage_summary_from_result(stage_name, skill_result, blueprint)
+            controller_payload["steps"][step_pos] = stage_summary_from_result(
+                stage_name,
+                skill_result,
+                execution_blueprint,
+            )
             if stage_name == "round-readiness":
                 readiness_summary = skill_result.get("skill_payload", {}) if isinstance(skill_result.get("skill_payload"), dict) else {}
                 controller_payload["readiness_status"] = maybe_text(readiness_summary.get("summary", {}).get("readiness_status"))

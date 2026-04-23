@@ -10,7 +10,18 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-from _workflow_support import analytics_path, kernel_script_path, load_json, run_kernel, run_kernel_process, run_script, runtime_src_path, script_path, seed_analysis_chain
+from _workflow_support import (
+    analytics_path,
+    kernel_script_path,
+    load_json,
+    request_and_approve_transition,
+    run_kernel,
+    run_kernel_process,
+    run_script,
+    runtime_src_path,
+    script_path,
+    seed_analysis_chain,
+)
 
 RUN_ID = "run-kernel-001"
 ROUND_ID = "round-kernel-001"
@@ -36,6 +47,26 @@ def default_phase2_posture_profile_config() -> dict[str, object]:
     from eco_council_runtime.phase2_posture_profile import default_phase2_posture_profile
 
     return default_phase2_posture_profile()
+
+
+def approve_promotion_transition(run_dir: Path) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        transition_kind="promote-evidence-basis",
+        rationale="Approve promotion for runtime-kernel phase-2 coverage.",
+    )
+
+
+def approve_close_round_transition(run_dir: Path) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        transition_kind="close-round",
+        rationale="Approve close-round for runtime-kernel coverage.",
+    )
 
 
 class RuntimeKernelTests(unittest.TestCase):
@@ -1068,6 +1099,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
+            promotion_request_id = approve_promotion_transition(run_dir)
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
@@ -1103,6 +1135,10 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("runtime-controller-v3", payload["controller"]["schema_version"])
             self.assertEqual("fresh-run", payload["controller"]["resume_status"])
             self.assertEqual("eco-summarize-board-state", payload["controller"]["stage_contracts"]["board-summary"]["expected_skill_name"])
+            self.assertEqual(
+                ["--transition-request-id", promotion_request_id],
+                run_skill_mock.call_args_list[-1].kwargs["skill_args"],
+            )
 
     def test_controller_uses_plan_declared_gate_steps_instead_of_injecting_default_gate_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1205,6 +1241,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
+            promotion_request_id = approve_promotion_transition(run_dir)
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
@@ -1248,6 +1285,124 @@ class RuntimeKernelTests(unittest.TestCase):
                 payload["controller"]["steps"][2]["artifact_path"],
             )
             self.assertEqual(1, payload["controller"]["planning"]["gate_step_count"])
+            self.assertEqual(
+                ["--transition-request-id", promotion_request_id],
+                payload["controller"]["steps"][3]["skill_args"],
+            )
+
+    def test_controller_blocks_promotion_stage_without_approved_transition_request(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.controller import (
+                run_phase2_round_with_contract_mode,
+            )
+            from eco_council_runtime.kernel.executor import SkillExecutionError
+
+            planner_result = {
+                "summary": {
+                    "skill_name": "eco-plan-round-orchestration",
+                    "event_id": "evt-plan",
+                    "receipt_id": "receipt-plan",
+                },
+                "event": {"status": "completed"},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": []},
+            }
+            readiness_result = {
+                "summary": {
+                    "skill_name": "eco-summarize-round-readiness",
+                    "event_id": "evt-ready",
+                    "receipt_id": "receipt-ready",
+                },
+                "event": {"status": "completed"},
+                "skill_payload": {
+                    "artifact_refs": [],
+                    "canonical_ids": [],
+                    "summary": {
+                        "output_path": str(root / "readiness.json"),
+                        "readiness_status": "ready",
+                    },
+                },
+            }
+            planning = {
+                "plan_id": "plan-missing-request-001",
+                "plan_path": str(root / "plan.json"),
+                "planning_status": "ready-for-controller",
+                "planning_mode": "planner-backed",
+                "planner_skill_name": "eco-plan-round-orchestration",
+                "probe_stage_included": False,
+                "execution_queue": [
+                    {
+                        "stage_name": "round-readiness",
+                        "skill_name": "eco-summarize-round-readiness",
+                        "skill_args": [],
+                        "assigned_role_hint": "moderator",
+                        "reason": "Refresh readiness before promotion.",
+                        "expected_output_path": str(root / "readiness.json"),
+                    }
+                ],
+                "post_gate_steps": [
+                    {
+                        "stage_name": "promotion-basis",
+                        "skill_name": "eco-promote-evidence-basis",
+                        "skill_args": [],
+                        "assigned_role_hint": "moderator",
+                        "reason": "Freeze promotion basis after gate review.",
+                    }
+                ],
+                "stop_conditions": [],
+                "fallback_path": [],
+                "fallback_suggested_next_skills": [],
+            }
+            gate_payload = {
+                "generated_at_utc": "2024-01-01T00:00:00Z",
+                "gate_status": "allow-promote",
+                "readiness_status": "ready",
+                "promote_allowed": True,
+                "output_path": str(root / "promotion_gate.json"),
+                "gate_reasons": [],
+                "recommended_next_skills": [],
+            }
+
+            with (
+                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
+                mock.patch(
+                    "eco_council_runtime.kernel.controller.planning_bundle",
+                    return_value=planning,
+                ),
+                mock.patch(
+                    "eco_council_runtime.phase2_gate_handlers.apply_promotion_gate",
+                    return_value=gate_payload,
+                ),
+                mock.patch(
+                    "eco_council_runtime.kernel.controller.run_skill",
+                    side_effect=[planner_result, readiness_result],
+                ) as run_skill_mock,
+            ):
+                with self.assertRaises(SkillExecutionError) as raised:
+                    run_phase2_round_with_contract_mode(
+                        run_dir,
+                        run_id=RUN_ID,
+                        round_id=ROUND_ID,
+                        contract_mode="strict",
+                        gate_handlers=default_phase2_gate_handlers(),
+                        posture_profile=default_phase2_posture_profile_config(),
+                    )
+
+            self.assertEqual(2, run_skill_mock.call_count)
+            self.assertEqual("blocked", raised.exception.payload["status"])
+            self.assertEqual(
+                "missing-approved-transition-request",
+                raised.exception.payload["failure"]["error_code"],
+            )
+            self.assertIn(
+                "promote-evidence-basis",
+                raised.exception.payload["message"],
+            )
 
     def test_gate_runtime_dispatches_custom_handler_registry(self) -> None:
         ensure_runtime_src_on_path()
@@ -1377,6 +1532,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
+            promotion_request_id = approve_promotion_transition(run_dir)
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
@@ -1411,6 +1567,10 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(
                 str(advisory_plan_path.resolve()),
                 payload["controller"]["steps"][0]["artifact_path"],
+            )
+            self.assertEqual(
+                ["--transition-request-id", promotion_request_id],
+                run_skill_mock.call_args_list[-1].kwargs["skill_args"],
             )
 
     def test_controller_materializes_agent_advisory_plan_for_openclaw_agent_round(self) -> None:
@@ -1466,6 +1626,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
+            promotion_request_id = approve_promotion_transition(run_dir)
 
             def run_skill_side_effect(*args: object, **kwargs: object) -> dict[str, object]:
                 skill_name = kwargs["skill_name"]
@@ -1526,6 +1687,10 @@ class RuntimeKernelTests(unittest.TestCase):
                 if skill_name == "eco-summarize-round-readiness":
                     return readiness_result
                 if skill_name == "eco-promote-evidence-basis":
+                    self.assertEqual(
+                        ["--transition-request-id", promotion_request_id],
+                        kwargs["skill_args"],
+                    )
                     return promotion_result
                 raise AssertionError(f"Unexpected skill execution: {skill_name}")
 
@@ -1647,6 +1812,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
+            promotion_request_id = approve_promotion_transition(run_dir)
 
             def run_skill_side_effect(*args: object, **kwargs: object) -> dict[str, object]:
                 skill_name = kwargs["skill_name"]
@@ -1655,6 +1821,10 @@ class RuntimeKernelTests(unittest.TestCase):
                 if skill_name == "eco-summarize-round-readiness":
                     return readiness_result
                 if skill_name == "eco-promote-evidence-basis":
+                    self.assertEqual(
+                        ["--transition-request-id", promotion_request_id],
+                        kwargs["skill_args"],
+                    )
                     return promotion_result
                 raise AssertionError(f"Unexpected skill execution: {skill_name}")
 
@@ -1784,6 +1954,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
+            promotion_request_id = approve_promotion_transition(run_dir)
 
             def run_skill_side_effect(*args: object, **kwargs: object) -> dict[str, object]:
                 skill_name = kwargs["skill_name"]
@@ -1804,6 +1975,10 @@ class RuntimeKernelTests(unittest.TestCase):
                 if skill_name == "eco-summarize-round-readiness":
                     return readiness_result
                 if skill_name == "eco-promote-evidence-basis":
+                    self.assertEqual(
+                        ["--transition-request-id", promotion_request_id],
+                        kwargs["skill_args"],
+                    )
                     return promotion_result
                 raise AssertionError(f"Unexpected skill execution: {skill_name}")
 
@@ -1830,7 +2005,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     ("eco-plan-round-orchestration", ["--planner-mode", "agent-advisory", "--output-path", f"runtime/agent_advisory_plan_{ROUND_ID}.json"]),
                     ("eco-plan-round-orchestration", []),
                     ("eco-summarize-round-readiness", []),
-                    ("eco-promote-evidence-basis", []),
+                    ("eco-promote-evidence-basis", ["--transition-request-id", promotion_request_id]),
                 ],
                 [(call.kwargs["skill_name"], call.kwargs["skill_args"]) for call in run_skill_mock.call_args_list],
             )
@@ -1932,6 +2107,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     "failure": {"error_code": "skill-exit-nonzero", "retryable": True},
                 },
             )
+            promotion_request_id = approve_promotion_transition(run_dir)
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
@@ -2000,6 +2176,10 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("resumed", payload["controller"]["resume_status"])
             self.assertEqual("promoted", payload["controller"]["promotion_status"])
             self.assertFalse(payload["controller"]["resume_recommended"])
+            self.assertEqual(
+                ["--transition-request-id", promotion_request_id],
+                run_skill_mock.call_args_list[-1].kwargs["skill_args"],
+            )
 
     def test_controller_respects_injected_planning_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2120,6 +2300,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     failed_message="Injected runtime planner path failed.",
                 )
             ]
+            promotion_request_id = approve_promotion_transition(run_dir)
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
@@ -2145,6 +2326,10 @@ class RuntimeKernelTests(unittest.TestCase):
                 [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
             )
             self.assertEqual([], run_skill_mock.call_args_list[0].kwargs["skill_args"])
+            self.assertEqual(
+                ["--transition-request-id", promotion_request_id],
+                run_skill_mock.call_args_list[-1].kwargs["skill_args"],
+            )
             self.assertEqual("runtime-planner", payload["controller"]["planning"]["plan_source"])
             self.assertEqual(
                 [{"source": "runtime-planner-only", "status": "materialized"}],
@@ -2621,6 +2806,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     "failure": {"error_code": "skill-exit-nonzero", "retryable": False},
                 },
             )
+            close_request_id = approve_close_round_transition(run_dir)
 
             with (
                 mock.patch("eco_council_runtime.kernel.post_round.write_registry"),
@@ -2630,7 +2816,13 @@ class RuntimeKernelTests(unittest.TestCase):
                 ),
             ):
                 with self.assertRaises(SkillExecutionError) as raised:
-                    close_round_with_contract_mode(run_dir, run_id=RUN_ID, round_id=ROUND_ID, contract_mode="warn")
+                    close_round_with_contract_mode(
+                        run_dir,
+                        run_id=RUN_ID,
+                        round_id=ROUND_ID,
+                        transition_request_id=close_request_id,
+                        contract_mode="warn",
+                    )
 
             close_artifact = load_json(run_dir / "runtime" / f"round_close_{ROUND_ID}.json")
             self.assertEqual("failed", close_artifact["close_status"])
@@ -2720,6 +2912,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         RUN_ID,
                         "--round-id",
                         ROUND_ID,
+                        "--transition-request-id",
+                        "transition-request-test",
                         "--actor-role",
                         "runtime-operator",
                         "--archive-failure-policy",
@@ -2731,6 +2925,10 @@ class RuntimeKernelTests(unittest.TestCase):
 
             self.assertEqual(0, exit_code)
             self.assertEqual("runtime-operator", close_mock.call_args.kwargs["actor_role"])
+            self.assertEqual(
+                "transition-request-test",
+                close_mock.call_args.kwargs["transition_request_id"],
+            )
             self.assertEqual("warn", close_mock.call_args.kwargs["archive_failure_policy"])
             self.assertEqual(6.0, close_mock.call_args.kwargs["timeout_seconds"])
             self.assertEqual("completed", json.loads(stdout.getvalue())["status"])

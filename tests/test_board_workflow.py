@@ -13,6 +13,7 @@ from _workflow_support import (
     board_path,
     investigation_path,
     load_json,
+    request_and_approve_transition,
     run_script,
     runtime_src_path,
     script_path,
@@ -138,6 +139,23 @@ def load_deliberation_row(
     payload = dict(row)
     payload["raw_json"] = json.loads(payload["raw_json"])
     return payload
+
+
+def approve_open_round_transition(
+    run_dir: Path,
+    *,
+    source_round_id: str,
+    target_round_id: str,
+) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=source_round_id,
+        transition_kind="open-investigation-round",
+        target_round_id=target_round_id,
+        source_round_id=source_round_id,
+        rationale="Open a follow-up round for board workflow coverage.",
+    )
 
 
 class BoardWorkflowTests(unittest.TestCase):
@@ -1112,6 +1130,11 @@ class BoardWorkflowTests(unittest.TestCase):
 
             board_path(run_dir).unlink()
 
+            transition_request_id = approve_open_round_transition(
+                run_dir,
+                source_round_id=ROUND_ID,
+                target_round_id=ROUND2_ID,
+            )
             open_round_payload = run_script(
                 script_path("eco-open-investigation-round"),
                 "--run-dir",
@@ -1122,6 +1145,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 ROUND2_ID,
                 "--source-round-id",
                 ROUND_ID,
+                "--transition-request-id",
+                transition_request_id,
             )
 
             board_after = load_json(board_path(run_dir))
@@ -1236,6 +1261,11 @@ class BoardWorkflowTests(unittest.TestCase):
             )
             (investigation_path(run_dir, f"round_tasks_{ROUND_ID}.json")).unlink()
 
+            transition_request_id = approve_open_round_transition(
+                run_dir,
+                source_round_id=ROUND_ID,
+                target_round_id=ROUND2_ID,
+            )
             open_round_payload = run_script(
                 script_path("eco-open-investigation-round"),
                 "--run-dir",
@@ -1246,6 +1276,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 ROUND2_ID,
                 "--source-round-id",
                 ROUND_ID,
+                "--transition-request-id",
+                transition_request_id,
             )
 
             round2_tasks = json.loads(
@@ -1393,6 +1425,11 @@ class BoardWorkflowTests(unittest.TestCase):
 
             investigation_path(run_dir, f"next_actions_{ROUND_ID}.json").unlink()
 
+            transition_request_id = approve_open_round_transition(
+                run_dir,
+                source_round_id=ROUND_ID,
+                target_round_id=ROUND2_ID,
+            )
             open_round_payload = run_script(
                 script_path("eco-open-investigation-round"),
                 "--run-dir",
@@ -1403,6 +1440,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 ROUND2_ID,
                 "--source-round-id",
                 ROUND_ID,
+                "--transition-request-id",
+                transition_request_id,
             )
 
             round2_state = load_json(board_path(run_dir))["rounds"][ROUND2_ID]

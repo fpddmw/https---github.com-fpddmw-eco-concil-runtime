@@ -8,6 +8,7 @@ from pathlib import Path
 from _workflow_support import (
     load_json,
     promotion_path,
+    request_and_approve_transition,
     reporting_path,
     run_kernel,
     run_script,
@@ -105,7 +106,18 @@ def prepare_round_base(run_dir: Path, root: Path) -> dict[str, str]:
     }
 
 
+def approve_promotion_transition(run_dir: Path) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        transition_kind="promote-evidence-basis",
+        rationale="Approve promotion for decision-trace workflow coverage.",
+    )
+
+
 def prepare_reporting_chain(run_dir: Path) -> None:
+    approve_promotion_transition(run_dir)
     run_kernel(
         "supervise-round",
         "--run-dir",
@@ -413,6 +425,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 },
             )
 
+            promotion_request_id = approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",
@@ -430,6 +443,8 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--transition-request-id",
+                promotion_request_id,
             )
             promotion = load_json(
                 promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")

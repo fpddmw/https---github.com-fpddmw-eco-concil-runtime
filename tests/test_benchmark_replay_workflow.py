@@ -5,10 +5,34 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import load_json, run_kernel, run_script, script_path, seed_analysis_chain, write_json
+from _workflow_support import (
+    load_json,
+    request_and_approve_transition,
+    run_kernel,
+    run_script,
+    script_path,
+    seed_analysis_chain,
+    write_json,
+)
 
 RUN_ID = "run-benchmark-001"
 ROUND_ID = "round-benchmark-001"
+
+
+def approve_transition(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    transition_kind: str,
+) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        transition_kind=transition_kind,
+        rationale=f"Approve `{transition_kind}` for benchmark workflow coverage.",
+    )
 
 
 def build_mission_file(root: Path, run_id: str, round_id: str) -> Path:
@@ -127,6 +151,12 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         "--confidence",
         "0.93",
     )
+    approve_transition(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        transition_kind="promote-evidence-basis",
+    )
     run_kernel(
         "supervise-round",
         "--run-dir",
@@ -195,6 +225,12 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         "--round-id",
         round_id,
     )
+    close_request_id = approve_transition(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        transition_kind="close-round",
+    )
     run_kernel(
         "close-round",
         "--run-dir",
@@ -203,6 +239,8 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         run_id,
         "--round-id",
         round_id,
+        "--transition-request-id",
+        close_request_id,
         "--contract-mode",
         "strict",
     )

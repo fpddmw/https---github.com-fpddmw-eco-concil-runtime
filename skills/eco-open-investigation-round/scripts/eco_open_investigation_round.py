@@ -32,6 +32,12 @@ from eco_council_runtime.kernel.source_queue_contract import source_role  # noqa
 from eco_council_runtime.kernel.source_queue_history import (  # noqa: E402
     load_round_tasks_wrapper,
 )
+from eco_council_runtime.kernel.transition_requests import (  # noqa: E402
+    TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+    mark_transition_request_committed,
+    request_payload_option,
+    resolve_transition_request_for_execution,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -450,6 +456,7 @@ def open_investigation_round_skill(
     run_id: str,
     round_id: str,
     source_round_id: str,
+    transition_request_id: str,
     board_path: str,
     source_task_path: str,
     source_next_actions_path: str,
@@ -491,6 +498,30 @@ def open_investigation_round_skill(
     output_file = resolve_path(run_dir_path, output_path, f"runtime/round_transition_{round_id}.json")
     target_task_file = (run_dir_path / "investigation" / f"round_tasks_{round_id}.json").resolve()
     mission_file = (run_dir_path / "mission.json").resolve()
+    transition_request = resolve_transition_request_for_execution(
+        run_dir_path,
+        request_id=transition_request_id,
+        transition_kind=TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+        run_id=run_id,
+        round_id=source_round_id,
+        source_round_id=source_round_id,
+        target_round_id=round_id,
+    )
+    if not maybe_text(transition_note):
+        transition_note = maybe_text(
+            request_payload_option(transition_request, "transition_note", "")
+        ) or maybe_text(
+            request_payload_option(transition_request, "request_note", "")
+        )
+    requested_action_limit = request_payload_option(
+        transition_request,
+        "action_limit",
+        action_limit,
+    )
+    try:
+        action_limit = max(0, int(requested_action_limit or action_limit))
+    except (TypeError, ValueError):
+        action_limit = max(0, int(action_limit or 0))
 
     warnings: list[dict[str, str]] = []
     source_task_source = (
@@ -568,6 +599,17 @@ def open_investigation_round_skill(
             )
         if round_snapshot_has_state(target_snapshot):
             existing_output = load_json_if_exists(output_file)
+            if isinstance(existing_output, dict) and maybe_text(existing_output.get("transition_id")):
+                mark_transition_request_committed(
+                    run_dir_path,
+                    request_id=maybe_text(transition_request.get("request_id")),
+                    committed_by_role=maybe_text(
+                        transition_request.get("requested_by_role")
+                    )
+                    or "moderator",
+                    committed_object_kind="round-transition",
+                    committed_object_id=maybe_text(existing_output.get("transition_id")),
+                )
             target_sync = (
                 target_snapshot.get("deliberation_sync")
                 if isinstance(target_snapshot.get("deliberation_sync"), dict)
@@ -587,6 +629,7 @@ def open_investigation_round_skill(
                     "write_surface": "deliberation-plane",
                     "output_path": str(output_file),
                     "task_path": str(target_task_file),
+                    "transition_request_id": maybe_text(transition_request.get("request_id")),
                 },
                 "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, "noop")[:20],
                 "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, "noop")[:16],
@@ -761,6 +804,9 @@ def open_investigation_round_skill(
             "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
             "board_revision": board_revision,
             "event_id": event_id,
+            "transition_request_id": maybe_text(transition_request.get("request_id")),
+            "transition_request_status": maybe_text(transition_request.get("request_status")),
+            "approved_by_role": maybe_text(transition_request.get("latest_decision_by_role")),
             "observed_inputs": {
                 "source_task_present": source_task_present,
                 "source_task_artifact_present": source_task_artifact_present,
@@ -798,6 +844,16 @@ def open_investigation_round_skill(
                 "record_locator": "$",
             },
         )
+        mark_transition_request_committed(
+            run_dir_path,
+            request_id=maybe_text(transition_request.get("request_id")),
+            committed_by_role=maybe_text(
+                transition_request.get("requested_by_role")
+            )
+            or "moderator",
+            committed_object_kind="round-transition",
+            committed_object_id=transition_id,
+        )
 
     event_id = maybe_text(write_summary.get("event_id"))
     board_revision = max(0, int(write_summary.get("board_revision") or 0))
@@ -828,6 +884,7 @@ def open_investigation_round_skill(
             "source_next_actions_source": source_next_actions_source,
             "db_path": maybe_text(write_summary.get("db_path")),
             "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
+            "transition_request_id": maybe_text(transition_request.get("request_id")),
         },
         "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, transition_id)[:20],
         "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event_id)[:16],
@@ -856,6 +913,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--source-round-id", required=True)
+    parser.add_argument("--transition-request-id", required=True)
     parser.add_argument("--board-path", default="")
     parser.add_argument("--source-task-path", default="")
     parser.add_argument("--source-next-actions-path", default="")
@@ -874,6 +932,7 @@ def main() -> int:
         run_id=args.run_id,
         round_id=args.round_id,
         source_round_id=args.source_round_id,
+        transition_request_id=args.transition_request_id,
         board_path=args.board_path,
         source_task_path=args.source_task_path,
         source_next_actions_path=args.source_next_actions_path,

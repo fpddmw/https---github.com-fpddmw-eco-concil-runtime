@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .kernel.executor import maybe_text
-from .runtime_command_hints import run_skill_command
+from .kernel.transition_requests import TRANSITION_KIND_OPEN_INVESTIGATION_ROUND
+from .runtime_command_hints import kernel_command, run_skill_command
 from .phase2_round_profile import default_next_round_id_builder
 from .reporting_status import SUPERVISOR_REPORTING_READY_STATUS
 
@@ -146,8 +147,36 @@ def default_supervisor_round_transition(
         return {}
     return {
         "skill_name": "eco-open-investigation-round",
+        "transition_kind": TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
         "source_round_id": round_id,
         "suggested_round_id": next_round_id,
+        "request_command": kernel_command(
+            "request-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--transition-kind",
+            TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+            "--target-round-id",
+            next_round_id,
+            "--source-round-id",
+            round_id,
+            "--rationale",
+            "<rationale>",
+            actor_role="moderator",
+        ),
+        "approve_command": kernel_command(
+            "approve-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--request-id",
+            "<request_id>",
+            "--approval-reason",
+            "<approval_reason>",
+        ),
         "command": run_skill_command(
             run_dir=run_dir,
             run_id=run_id,
@@ -155,7 +184,12 @@ def default_supervisor_round_transition(
             skill_name="eco-open-investigation-round",
             actor_role="moderator",
             contract_mode=contract_mode,
-            skill_args=["--source-round-id", round_id],
+            skill_args=[
+                "--source-round-id",
+                round_id,
+                "--transition-request-id",
+                "<approved_request_id>",
+            ],
         ),
     }
 
@@ -212,7 +246,7 @@ def default_supervisor_operator_notes(
             notes.append(f"Highest-priority follow-up remains {top_action_kind}.")
     if round_transition:
         notes.append(
-            f"Moderator may open {round_transition['suggested_round_id']} via eco-open-investigation-round to continue the case with a clean round boundary."
+            f"Moderator should request {round_transition['suggested_round_id']} as an explicit follow-up round transition before operator approval and governed round creation."
         )
     return notes[:4]
 

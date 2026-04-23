@@ -5,10 +5,31 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import analytics_path, load_json, promotion_path, reporting_path, run_kernel, run_script, script_path, seed_analysis_chain, write_json
+from _workflow_support import (
+    analytics_path,
+    load_json,
+    promotion_path,
+    reporting_path,
+    request_and_approve_transition,
+    run_kernel,
+    run_script,
+    script_path,
+    seed_analysis_chain,
+    write_json,
+)
 
 RUN_ID = "run-reporting-publish-001"
 ROUND_ID = "round-reporting-publish-001"
+
+
+def approve_promotion_transition(run_dir: Path) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        transition_kind="promote-evidence-basis",
+        rationale="Approve promotion for reporting publish workflow coverage.",
+    )
 
 
 def execute_db(
@@ -46,6 +67,7 @@ def prepare_ready_round(run_dir: Path, root: Path) -> None:
         "--linked-claim-id", outputs["cluster_claims"]["canonical_ids"][0],
         "--confidence", "0.93",
     )
+    approve_promotion_transition(run_dir)
     run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     run_script(script_path("eco-materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     run_script(script_path("eco-draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
@@ -75,6 +97,7 @@ def prepare_hold_round(run_dir: Path, root: Path) -> None:
         "--target-hypothesis-id", hypothesis_payload["canonical_ids"][0],
         "--priority", "high", "--owner-role", "challenger", "--linked-artifact-ref", coverage_ref,
     )
+    approve_promotion_transition(run_dir)
     run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     run_script(script_path("eco-materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     run_script(script_path("eco-draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)

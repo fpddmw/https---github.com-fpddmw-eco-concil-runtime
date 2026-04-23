@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
+from .kernel.transition_requests import (
+    TRANSITION_KIND_CLOSE_ROUND,
+    TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+)
 from .runtime_command_hints import kernel_command, run_skill_command
 
 HardGateCommandBuilder = Callable[..., dict[str, str]]
@@ -56,7 +60,23 @@ def default_phase2_hard_gate_commands(
             run_id,
             "--round-id",
             round_id,
+            "--transition-request-id",
+            "<approved_request_id>",
             "--pretty",
+        ),
+        "request_close_round": kernel_command(
+            "request-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--transition-kind",
+            TRANSITION_KIND_CLOSE_ROUND,
+            "--rationale",
+            "<rationale>",
+            actor_role="moderator",
         ),
         "open_next_round": run_skill_command(
             run_dir=run_dir,
@@ -65,7 +85,48 @@ def default_phase2_hard_gate_commands(
             skill_name="eco-open-investigation-round",
             actor_role="moderator",
             contract_mode=contract_mode,
-            skill_args=["--source-round-id", round_id],
+            skill_args=[
+                "--source-round-id",
+                round_id,
+                "--transition-request-id",
+                "<approved_request_id>",
+            ],
+        ),
+        "request_open_next_round": kernel_command(
+            "request-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--transition-kind",
+            TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+            "--target-round-id",
+            next_round_id,
+            "--source-round-id",
+            round_id,
+            "--rationale",
+            "<rationale>",
+            actor_role="moderator",
+        ),
+        "approve_transition_request": kernel_command(
+            "approve-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--request-id",
+            "<request_id>",
+            "--approval-reason",
+            "<approval_reason>",
+        ),
+        "reject_transition_request": kernel_command(
+            "reject-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--request-id",
+            "<request_id>",
+            "--rejection-reason",
+            "<rejection_reason>",
         ),
     }
 
@@ -209,15 +270,24 @@ def default_phase2_entry_chain(
         {
             "step_id": "open-follow-up-round",
             "mode": "governed-write",
-            "objective": "If the round remains open, advance the investigation with an explicit next-round transition rather than implicit carryover.",
-            "command": run_skill_command(
-                run_dir=run_dir,
-                run_id=run_id,
-                round_id=next_round_id,
-                skill_name="eco-open-investigation-round",
+            "objective": "If the round remains open, the moderator must file an explicit next-round transition request before operator approval and follow-up round creation.",
+            "command": kernel_command(
+                "request-phase-transition",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+                "--transition-kind",
+                TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+                "--target-round-id",
+                next_round_id,
+                "--source-round-id",
+                round_id,
+                "--rationale",
+                "<rationale>",
                 actor_role="moderator",
-                contract_mode=contract_mode,
-                skill_args=["--source-round-id", round_id],
             ),
         },
     ]

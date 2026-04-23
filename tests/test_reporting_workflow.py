@@ -5,10 +5,29 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import load_json, promotion_path, reporting_path, run_kernel, run_script, script_path, seed_analysis_chain
+from _workflow_support import (
+    load_json,
+    promotion_path,
+    reporting_path,
+    request_and_approve_transition,
+    run_kernel,
+    run_script,
+    script_path,
+    seed_analysis_chain,
+)
 
 RUN_ID = "run-reporting-001"
 ROUND_ID = "round-reporting-001"
+
+
+def approve_promotion_transition(run_dir: Path) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        transition_kind="promote-evidence-basis",
+        rationale="Approve promotion for reporting workflow coverage.",
+    )
 
 
 class ReportingWorkflowTests(unittest.TestCase):
@@ -85,6 +104,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "0.93",
             )
 
+            approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",
@@ -281,6 +301,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "0.93",
             )
 
+            approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",
@@ -423,6 +444,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "0.93",
             )
 
+            approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",
@@ -551,6 +573,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "0.93",
             )
 
+            approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",
@@ -688,6 +711,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
 
+            approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",

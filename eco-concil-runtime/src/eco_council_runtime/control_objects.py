@@ -14,6 +14,11 @@ from .kernel.deliberation_plane import (
     maybe_text,
     payload_from_db_row,
 )
+from .kernel.transition_requests import (
+    OBJECT_KIND_TRANSITION_APPROVAL,
+    OBJECT_KIND_TRANSITION_REJECTION,
+    OBJECT_KIND_TRANSITION_REQUEST,
+)
 
 OBJECT_KIND_PROMOTION_FREEZE = "promotion-freeze"
 OBJECT_KIND_CONTROLLER_STATE = "controller-state"
@@ -119,6 +124,50 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
             "assigned_role_hint": "assigned_role_hint",
         },
     },
+    OBJECT_KIND_TRANSITION_REQUEST: {
+        "table_name": "transition_requests",
+        "id_column": "request_id",
+        "timestamp_column": "updated_at_utc",
+        "order_by": "updated_at_utc DESC, created_at_utc DESC, request_id DESC",
+        "status_column": "request_status",
+        "filter_columns": {
+            "transition_kind": "transition_kind",
+            "requested_by_role": "requested_by_role",
+            "request_id": "request_id",
+            "target_round_id": "target_round_id",
+            "requested_command_name": "requested_command_name",
+            "latest_decision_status": "latest_decision_status",
+            "latest_decision_by_role": "latest_decision_by_role",
+        },
+    },
+    OBJECT_KIND_TRANSITION_APPROVAL: {
+        "table_name": "transition_approvals",
+        "id_column": "approval_id",
+        "timestamp_column": "approved_at_utc",
+        "order_by": "approved_at_utc DESC, approval_id DESC",
+        "status_column": "decision_status",
+        "filter_columns": {
+            "transition_kind": "transition_kind",
+            "requested_by_role": "requested_by_role",
+            "request_id": "request_id",
+            "decision_by_role": "approved_by_role",
+            "requested_command_name": "requested_command_name",
+        },
+    },
+    OBJECT_KIND_TRANSITION_REJECTION: {
+        "table_name": "transition_rejections",
+        "id_column": "rejection_id",
+        "timestamp_column": "rejected_at_utc",
+        "order_by": "rejected_at_utc DESC, rejection_id DESC",
+        "status_column": "decision_status",
+        "filter_columns": {
+            "transition_kind": "transition_kind",
+            "requested_by_role": "requested_by_role",
+            "request_id": "request_id",
+            "decision_by_role": "rejected_by_role",
+            "requested_command_name": "requested_command_name",
+        },
+    },
 }
 
 
@@ -211,6 +260,14 @@ def query_control_objects(
     phase2_posture: str = "",
     terminal_state: str = "",
     reporting_handoff_status: str = "",
+    transition_kind: str = "",
+    requested_by_role: str = "",
+    request_id: str = "",
+    target_round_id: str = "",
+    requested_command_name: str = "",
+    latest_decision_status: str = "",
+    latest_decision_by_role: str = "",
+    decision_by_role: str = "",
     reporting_ready_only: bool = False,
     include_contract: bool = False,
     limit: int = 20,
@@ -272,6 +329,14 @@ def query_control_objects(
         "phase2_posture": maybe_text(phase2_posture),
         "terminal_state": maybe_text(terminal_state),
         "reporting_handoff_status": maybe_text(reporting_handoff_status),
+        "transition_kind": maybe_text(transition_kind),
+        "requested_by_role": maybe_text(requested_by_role),
+        "request_id": maybe_text(request_id),
+        "target_round_id": maybe_text(target_round_id),
+        "requested_command_name": maybe_text(requested_command_name),
+        "latest_decision_status": maybe_text(latest_decision_status),
+        "latest_decision_by_role": maybe_text(latest_decision_by_role),
+        "decision_by_role": maybe_text(decision_by_role),
     }
     filter_columns = (
         config.get("filter_columns", {})
@@ -344,6 +409,14 @@ def query_control_objects(
             "phase2_posture": maybe_text(phase2_posture),
             "terminal_state": maybe_text(terminal_state),
             "reporting_handoff_status": maybe_text(reporting_handoff_status),
+            "transition_kind": maybe_text(transition_kind),
+            "requested_by_role": maybe_text(requested_by_role),
+            "request_id": maybe_text(request_id),
+            "target_round_id": maybe_text(target_round_id),
+            "requested_command_name": maybe_text(requested_command_name),
+            "latest_decision_status": maybe_text(latest_decision_status),
+            "latest_decision_by_role": maybe_text(latest_decision_by_role),
+            "decision_by_role": maybe_text(decision_by_role),
             "reporting_ready_only": bool(reporting_ready_only),
         },
         "paging": {
@@ -364,6 +437,9 @@ __all__ = [
     "OBJECT_KIND_GATE_STATE",
     "OBJECT_KIND_PROMOTION_FREEZE",
     "OBJECT_KIND_SUPERVISOR_STATE",
+    "OBJECT_KIND_TRANSITION_APPROVAL",
+    "OBJECT_KIND_TRANSITION_REJECTION",
+    "OBJECT_KIND_TRANSITION_REQUEST",
     "control_queryable_object_kinds",
     "query_control_objects",
 ]

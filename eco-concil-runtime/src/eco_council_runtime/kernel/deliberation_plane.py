@@ -178,6 +178,104 @@ CREATE TABLE IF NOT EXISTS round_transitions (
 CREATE INDEX IF NOT EXISTS idx_round_transitions_round
 ON round_transitions(run_id, round_id, generated_at_utc, transition_id);
 
+CREATE TABLE IF NOT EXISTS transition_requests (
+    request_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    created_at_utc TEXT NOT NULL DEFAULT '',
+    updated_at_utc TEXT NOT NULL DEFAULT '',
+    transition_kind TEXT NOT NULL DEFAULT '',
+    request_status TEXT NOT NULL DEFAULT '',
+    requested_by_role TEXT NOT NULL DEFAULT '',
+    required_approval_role TEXT NOT NULL DEFAULT '',
+    requested_surface TEXT NOT NULL DEFAULT '',
+    requested_action TEXT NOT NULL DEFAULT '',
+    requested_command_name TEXT NOT NULL DEFAULT '',
+    source_round_id TEXT NOT NULL DEFAULT '',
+    target_round_id TEXT NOT NULL DEFAULT '',
+    rationale TEXT NOT NULL DEFAULT '',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    basis_object_ids_json TEXT NOT NULL DEFAULT '[]',
+    request_payload_json TEXT NOT NULL DEFAULT '{}',
+    operator_notes_json TEXT NOT NULL DEFAULT '[]',
+    decision_ids_json TEXT NOT NULL DEFAULT '[]',
+    latest_decision_id TEXT NOT NULL DEFAULT '',
+    latest_decision_status TEXT NOT NULL DEFAULT '',
+    latest_decision_by_role TEXT NOT NULL DEFAULT '',
+    latest_decision_reason TEXT NOT NULL DEFAULT '',
+    approved_at_utc TEXT NOT NULL DEFAULT '',
+    rejected_at_utc TEXT NOT NULL DEFAULT '',
+    committed_at_utc TEXT NOT NULL DEFAULT '',
+    committed_by_role TEXT NOT NULL DEFAULT '',
+    committed_object_kind TEXT NOT NULL DEFAULT '',
+    committed_object_id TEXT NOT NULL DEFAULT '',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_transition_requests_round_status
+ON transition_requests(run_id, round_id, request_status, updated_at_utc, request_id);
+CREATE INDEX IF NOT EXISTS idx_transition_requests_round_kind
+ON transition_requests(run_id, round_id, transition_kind, updated_at_utc, request_id);
+CREATE INDEX IF NOT EXISTS idx_transition_requests_requester
+ON transition_requests(run_id, round_id, requested_by_role, request_id);
+
+CREATE TABLE IF NOT EXISTS transition_approvals (
+    approval_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    approved_at_utc TEXT NOT NULL DEFAULT '',
+    approved_by_role TEXT NOT NULL DEFAULT '',
+    decision_status TEXT NOT NULL DEFAULT '',
+    decision_reason TEXT NOT NULL DEFAULT '',
+    transition_kind TEXT NOT NULL DEFAULT '',
+    requested_by_role TEXT NOT NULL DEFAULT '',
+    requested_command_name TEXT NOT NULL DEFAULT '',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    basis_object_ids_json TEXT NOT NULL DEFAULT '[]',
+    operator_notes_json TEXT NOT NULL DEFAULT '[]',
+    request_snapshot_json TEXT NOT NULL DEFAULT '{}',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_transition_approvals_request
+ON transition_approvals(request_id, approved_at_utc, approval_id);
+CREATE INDEX IF NOT EXISTS idx_transition_approvals_round
+ON transition_approvals(run_id, round_id, approved_at_utc, approval_id);
+
+CREATE TABLE IF NOT EXISTS transition_rejections (
+    rejection_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    rejected_at_utc TEXT NOT NULL DEFAULT '',
+    rejected_by_role TEXT NOT NULL DEFAULT '',
+    decision_status TEXT NOT NULL DEFAULT '',
+    decision_reason TEXT NOT NULL DEFAULT '',
+    transition_kind TEXT NOT NULL DEFAULT '',
+    requested_by_role TEXT NOT NULL DEFAULT '',
+    requested_command_name TEXT NOT NULL DEFAULT '',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    basis_object_ids_json TEXT NOT NULL DEFAULT '[]',
+    operator_notes_json TEXT NOT NULL DEFAULT '[]',
+    request_snapshot_json TEXT NOT NULL DEFAULT '{}',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_transition_rejections_request
+ON transition_rejections(request_id, rejected_at_utc, rejection_id);
+CREATE INDEX IF NOT EXISTS idx_transition_rejections_round
+ON transition_rejections(run_id, round_id, rejected_at_utc, rejection_id);
+
 CREATE TABLE IF NOT EXISTS promotion_freezes (
     freeze_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,

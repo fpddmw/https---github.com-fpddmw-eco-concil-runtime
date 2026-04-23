@@ -143,6 +143,121 @@ def run_kernel(*args: str) -> dict[str, Any]:
     return payload
 
 
+def request_phase_transition(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    transition_kind: str,
+    target_round_id: str = "",
+    source_round_id: str = "",
+    rationale: str = "Test transition request.",
+    evidence_refs: list[str] | None = None,
+    basis_object_ids: list[str] | None = None,
+    request_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    args = [
+        "request-phase-transition",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--transition-kind",
+        transition_kind,
+        "--rationale",
+        rationale,
+    ]
+    if target_round_id:
+        args.extend(["--target-round-id", target_round_id])
+    if source_round_id:
+        args.extend(["--source-round-id", source_round_id])
+    for evidence_ref in evidence_refs or []:
+        args.extend(["--evidence-ref", evidence_ref])
+    for basis_object_id in basis_object_ids or []:
+        args.extend(["--basis-object-id", basis_object_id])
+    if request_payload:
+        args.extend(
+            [
+                "--request-payload-json",
+                json.dumps(request_payload, ensure_ascii=True, sort_keys=True),
+            ]
+        )
+    return run_kernel(*args)
+
+
+def approve_phase_transition(
+    run_dir: Path,
+    *,
+    request_id: str,
+    approval_reason: str = "Approved for test execution.",
+    evidence_refs: list[str] | None = None,
+    basis_object_ids: list[str] | None = None,
+    operator_notes: list[str] | None = None,
+) -> dict[str, Any]:
+    args = [
+        "approve-phase-transition",
+        "--run-dir",
+        str(run_dir),
+        "--request-id",
+        request_id,
+        "--approval-reason",
+        approval_reason,
+    ]
+    for evidence_ref in evidence_refs or []:
+        args.extend(["--evidence-ref", evidence_ref])
+    for basis_object_id in basis_object_ids or []:
+        args.extend(["--basis-object-id", basis_object_id])
+    for operator_note in operator_notes or []:
+        args.extend(["--operator-note", operator_note])
+    return run_kernel(*args)
+
+
+def request_and_approve_transition(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    transition_kind: str,
+    target_round_id: str = "",
+    source_round_id: str = "",
+    rationale: str = "Test transition request.",
+    approval_reason: str = "Approved for test execution.",
+    evidence_refs: list[str] | None = None,
+    basis_object_ids: list[str] | None = None,
+    request_payload: dict[str, Any] | None = None,
+    operator_notes: list[str] | None = None,
+) -> str:
+    request_payload_result = request_phase_transition(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        transition_kind=transition_kind,
+        target_round_id=target_round_id,
+        source_round_id=source_round_id,
+        rationale=rationale,
+        evidence_refs=evidence_refs,
+        basis_object_ids=basis_object_ids,
+        request_payload=request_payload,
+    )
+    request = (
+        request_payload_result.get("request", {})
+        if isinstance(request_payload_result.get("request"), dict)
+        else {}
+    )
+    request_id = str(request.get("request_id") or request_payload_result["summary"]["request_id"])
+    approve_phase_transition(
+        run_dir,
+        request_id=request_id,
+        approval_reason=approval_reason,
+        evidence_refs=evidence_refs,
+        basis_object_ids=basis_object_ids,
+        operator_notes=operator_notes,
+    )
+    return request_id
+
+
 def seed_signal_plane(
     run_dir: Path,
     root: Path,

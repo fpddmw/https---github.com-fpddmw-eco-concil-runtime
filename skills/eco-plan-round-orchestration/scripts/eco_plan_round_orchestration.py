@@ -643,12 +643,12 @@ def stop_conditions(include_probe: bool) -> list[dict[str, str]]:
         {
             "condition_id": "gate-allows-promotion",
             "trigger": "Promotion gate returns allow-promote after round-readiness.",
-            "effect": "Run eco-promote-evidence-basis and hand off the round to downstream reporting.",
+            "effect": "Run eco-promote-evidence-basis only after moderator request plus operator approval, then hand off the round to downstream reporting.",
         },
         {
             "condition_id": "gate-withholds-promotion",
             "trigger": "Promotion gate returns freeze-withheld after round-readiness.",
-            "effect": "Run eco-promote-evidence-basis in withheld mode and keep investigation open.",
+            "effect": "Run eco-promote-evidence-basis only after moderator request plus operator approval, keep the basis auditable, and leave investigation open when withheld.",
         },
     ]
     if include_probe:

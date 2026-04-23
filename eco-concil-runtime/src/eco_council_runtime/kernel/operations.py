@@ -729,6 +729,16 @@ def refresh_runtime_surfaces(run_dir: Path, *, round_id: str = "") -> dict[str, 
 
 def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
     from ..runtime_command_hints import kernel_command, run_skill_command
+    from .transition_requests import (
+        REQUEST_STATUS_APPROVED,
+        REQUEST_STATUS_COMMITTED,
+        REQUEST_STATUS_PENDING,
+        REQUEST_STATUS_REJECTED,
+        TRANSITION_KIND_CLOSE_ROUND,
+        TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+        TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+        load_transition_requests,
+    )
 
     policy = load_admission_policy(run_dir)
     manifest = load_json_if_exists(manifest_path(run_dir)) or {}
@@ -736,6 +746,23 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
     dead_letters = health.get("open_dead_letters", []) if isinstance(health.get("open_dead_letters"), list) else []
     rollback_policy = policy.get("rollback_policy", {}) if isinstance(policy.get("rollback_policy"), dict) else {}
     run_id = maybe_text(manifest.get("run_id"))
+    transition_requests = (
+        load_transition_requests(run_dir, run_id=run_id, round_id=round_id, limit=20)
+        if run_id and round_id
+        else []
+    )
+    transition_counts = {
+        REQUEST_STATUS_PENDING: 0,
+        REQUEST_STATUS_APPROVED: 0,
+        REQUEST_STATUS_REJECTED: 0,
+        REQUEST_STATUS_COMMITTED: 0,
+    }
+    for request in transition_requests:
+        if not isinstance(request, dict):
+            continue
+        status = maybe_text(request.get("request_status"))
+        if status in transition_counts:
+            transition_counts[status] += 1
     lines = [
         "# Runtime Operator Runbook",
         "",
@@ -748,6 +775,8 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
         f"- Failed events: `{int(health.get('summary', {}).get('failed_event_count') or 0)}`",
         f"- Blocked events: `{int(health.get('summary', {}).get('blocked_event_count') or 0)}`",
         f"- Open dead letters: `{int(health.get('summary', {}).get('open_dead_letter_count') or 0)}`",
+        f"- Pending transition requests: `{transition_counts[REQUEST_STATUS_PENDING]}`",
+        f"- Approved transition requests: `{transition_counts[REQUEST_STATUS_APPROVED]}`",
         "",
         "## Standard Commands",
         "",
@@ -764,8 +793,51 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
                 f"- Materialize agent entry gate: `{kernel_command('materialize-agent-entry-gate', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id)}`",
                 f"- Refresh agent advisory plan through runtime governance: `{run_skill_command(run_dir=run_dir, run_id=run_id, round_id=round_id, skill_name='eco-plan-round-orchestration', contract_mode='warn', actor_role='moderator', skill_args=['--planner-mode', 'agent-advisory', '--output-path', f'runtime/agent_advisory_plan_{round_id}.json'])}`",
                 "",
+                "## Phase Transition Approval",
+                "",
+                f"- Query transition requests: `{kernel_command('query-control-objects', '--run-dir', str(run_dir), '--object-kind', 'transition-request', '--run-id', run_id, '--round-id', round_id)}`",
+                f"- Query approvals: `{kernel_command('query-control-objects', '--run-dir', str(run_dir), '--object-kind', 'transition-approval', '--run-id', run_id, '--round-id', round_id)}`",
+                f"- Query rejections: `{kernel_command('query-control-objects', '--run-dir', str(run_dir), '--object-kind', 'transition-rejection', '--run-id', run_id, '--round-id', round_id)}`",
+                f"- Moderator request promotion: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS, '--rationale', '<rationale>', actor_role='moderator')}`",
+                f"- Moderator request close-round: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_CLOSE_ROUND, '--rationale', '<rationale>', actor_role='moderator')}`",
+                f"- Moderator request follow-up round: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_OPEN_INVESTIGATION_ROUND, '--target-round-id', '<target_round_id>', '--source-round-id', round_id, '--rationale', '<rationale>', actor_role='moderator')}`",
+                f"- Operator approve request: `{kernel_command('approve-phase-transition', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--approval-reason', '<approval_reason>')}`",
+                f"- Operator reject request: `{kernel_command('reject-phase-transition', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--rejection-reason', '<rejection_reason>')}`",
+                "",
             ]
         )
+        if transition_requests:
+            lines.extend(["## Current Transition Requests", ""])
+            for request in transition_requests:
+                if not isinstance(request, dict):
+                    continue
+                lines.append(f"### {maybe_text(request.get('request_id'))}")
+                lines.append("")
+                lines.append(f"- Kind: `{maybe_text(request.get('transition_kind'))}`")
+                lines.append(f"- Status: `{maybe_text(request.get('request_status'))}`")
+                lines.append(f"- Requested by: `{maybe_text(request.get('requested_by_role'))}`")
+                lines.append(f"- Requested command: `{maybe_text(request.get('requested_command_name'))}`")
+                if maybe_text(request.get("target_round_id")) and maybe_text(request.get("target_round_id")) != maybe_text(request.get("round_id")):
+                    lines.append(f"- Target round: `{maybe_text(request.get('target_round_id'))}`")
+                if maybe_text(request.get("latest_decision_by_role")) or maybe_text(request.get("latest_decision_status")):
+                    lines.append(
+                        f"- Latest decision: `{maybe_text(request.get('latest_decision_status'))}` by `{maybe_text(request.get('latest_decision_by_role')) or 'unknown'}`"
+                    )
+                if maybe_text(request.get("latest_decision_reason")):
+                    lines.append(f"- Decision reason: {maybe_text(request.get('latest_decision_reason'))}")
+                if maybe_text(request.get("rationale")):
+                    lines.append(f"- Request rationale: {maybe_text(request.get('rationale'))}")
+                basis_object_ids = request.get("basis_object_ids", []) if isinstance(request.get("basis_object_ids"), list) else []
+                if basis_object_ids:
+                    lines.append(f"- Evidence basis objects: `{', '.join(maybe_text(item) for item in basis_object_ids if maybe_text(item))}`")
+                evidence_refs = request.get("evidence_refs", []) if isinstance(request.get("evidence_refs"), list) else []
+                if evidence_refs:
+                    lines.append(f"- Evidence refs: `{json.dumps(evidence_refs, ensure_ascii=True)}`")
+                if maybe_text(request.get("committed_object_kind")) or maybe_text(request.get("committed_object_id")):
+                    lines.append(
+                        f"- Commit record: `{maybe_text(request.get('committed_object_kind'))}:{maybe_text(request.get('committed_object_id'))}`"
+                    )
+                lines.append("")
     lines.extend(
         [
         "## Failure Classes",

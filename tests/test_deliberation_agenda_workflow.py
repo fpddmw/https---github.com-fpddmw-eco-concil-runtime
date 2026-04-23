@@ -9,6 +9,7 @@ from _workflow_support import (
     investigation_path,
     load_json,
     promotion_path,
+    request_and_approve_transition,
     reporting_path,
     run_script,
     script_path,
@@ -18,6 +19,16 @@ from _workflow_support import (
 
 RUN_ID = "run-deliberation-agenda-001"
 ROUND_ID = "round-deliberation-agenda-001"
+
+
+def approve_promotion_transition(run_dir: Path) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        transition_kind="promote-evidence-basis",
+        rationale="Approve promotion for deliberation agenda workflow coverage.",
+    )
 
 
 def seed_regulationsgov_comments(run_dir: Path, root: Path) -> None:
@@ -369,6 +380,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
+            promotion_request_id = approve_promotion_transition(run_dir)
             payload = run_script(
                 script_path("eco-promote-evidence-basis"),
                 "--run-dir",
@@ -377,6 +389,8 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--transition-request-id",
+                promotion_request_id,
             )
             artifact = load_json(
                 promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
@@ -443,6 +457,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
             readiness_artifact = load_json(
                 reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
             )
+            promotion_request_id = approve_promotion_transition(run_dir)
             promotion_payload = run_script(
                 script_path("eco-promote-evidence-basis"),
                 "--run-dir",
@@ -451,6 +466,8 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--transition-request-id",
+                promotion_request_id,
             )
             promotion_artifact = load_json(
                 promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")

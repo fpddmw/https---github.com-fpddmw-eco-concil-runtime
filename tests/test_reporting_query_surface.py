@@ -10,6 +10,7 @@ from pathlib import Path
 from _workflow_support import (
     analytics_path,
     load_json,
+    request_and_approve_transition,
     reporting_path,
     run_kernel,
     run_script,
@@ -20,6 +21,16 @@ from _workflow_support import (
 
 RUN_ID = "run-reporting-query-001"
 ROUND_ID = "round-reporting-query-001"
+
+
+def approve_promotion_transition(run_dir: Path) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        transition_kind="promote-evidence-basis",
+        rationale="Approve promotion for reporting query workflow coverage.",
+    )
 
 RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
@@ -101,6 +112,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         "--confidence",
         "0.93",
     )
+    approve_promotion_transition(run_dir)
     run_kernel(
         "supervise-round",
         "--run-dir",

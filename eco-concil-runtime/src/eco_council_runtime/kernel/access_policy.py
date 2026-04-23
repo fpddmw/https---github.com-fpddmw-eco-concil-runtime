@@ -29,6 +29,18 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "allowed_roles": [],
         "default_actor_role_hint": "<actor_role>",
     },
+    "request-phase-transition": {
+        "allowed_roles": ["moderator"],
+        "default_actor_role_hint": "moderator",
+    },
+    "approve-phase-transition": {
+        "allowed_roles": [ROLE_RUNTIME_OPERATOR],
+        "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
+    },
+    "reject-phase-transition": {
+        "allowed_roles": [ROLE_RUNTIME_OPERATOR],
+        "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
+    },
     "apply-promotion-gate": {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,

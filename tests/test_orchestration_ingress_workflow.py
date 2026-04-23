@@ -5,10 +5,31 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import board_path, load_json, promotion_path, reporting_path, run_kernel, run_script, runtime_path, script_path, write_json
+from _workflow_support import (
+    board_path,
+    load_json,
+    promotion_path,
+    reporting_path,
+    request_and_approve_transition,
+    run_kernel,
+    run_script,
+    runtime_path,
+    script_path,
+    write_json,
+)
 
 RUN_ID = "run-ingress-001"
 ROUND_ID = "round-001"
+
+
+def approve_promotion_transition(run_dir: Path) -> str:
+    return request_and_approve_transition(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        transition_kind="promote-evidence-basis",
+        rationale="Approve promotion for orchestration ingress workflow coverage.",
+    )
 
 
 def build_raw_artifacts(root: Path) -> dict[str, Path]:
@@ -364,6 +385,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 "0.93",
             )
 
+            approve_promotion_transition(run_dir)
             run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             handoff_payload = run_script(script_path("eco-materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             decision_payload = run_script(script_path("eco-draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)

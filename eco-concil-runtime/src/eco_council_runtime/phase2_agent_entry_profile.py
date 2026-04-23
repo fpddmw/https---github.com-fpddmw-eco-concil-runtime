@@ -7,6 +7,7 @@ from typing import Any, Callable
 from .kernel.executor import maybe_text, run_skill
 from .kernel.skill_registry import default_actor_role_hint
 from .kernel.paths import agent_advisory_plan_path
+from .kernel.transition_requests import TRANSITION_KIND_OPEN_INVESTIGATION_ROUND
 from .phase2_direct_advisory import materialize_direct_council_advisory_plan
 from .phase2_planning_profile import planner_skill_args_for_source
 from .phase2_round_profile import default_next_round_id_builder
@@ -401,14 +402,23 @@ def default_role_entry_points(
                 )
             elif skill_name == "eco-open-investigation-round":
                 role_write_commands.append(
-                    run_skill_command(
-                        run_dir=run_dir,
-                        run_id=run_id,
-                        round_id=next_round_id,
-                        skill_name=skill_name,
-                        actor_role=role,
-                        contract_mode=contract_mode,
-                        skill_args=["--source-round-id", round_id],
+                    kernel_command(
+                        "request-phase-transition",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        run_id,
+                        "--round-id",
+                        round_id,
+                        "--transition-kind",
+                        TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+                        "--target-round-id",
+                        next_round_id,
+                        "--source-round-id",
+                        round_id,
+                        "--rationale",
+                        "<rationale>",
+                        actor_role="moderator",
                     )
                 )
         results.append(
@@ -453,7 +463,7 @@ def default_agent_entry_operator_notes(
 ) -> list[str]:
     notes = [
         "Agent entry remains advisory-first: direct reads and structured proposal/readiness writes can happen through governed skills without replacing runtime hard gates.",
-        "Promotion, archive, replay, and publication stay outside the agent inner loop and must return to runtime kernel commands.",
+        "Promotion, round-open, archive, replay, and publication stay outside the agent inner loop and must return to runtime kernel transition requests plus operator approval.",
     ]
     if maybe_text(mission.get("orchestration_mode")) == "openclaw-agent":
         notes.append("Mission scaffold already marks this round as `openclaw-agent`, so the operator-visible entry chain is explicitly enabled.")

@@ -36,6 +36,12 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
+from eco_council_runtime.kernel.transition_requests import (  # noqa: E402
+    TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    mark_transition_request_committed,
+    request_payload_option,
+    resolve_transition_request_for_execution,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -468,6 +474,7 @@ def promote_evidence_basis_skill(
     run_dir: str,
     run_id: str,
     round_id: str,
+    transition_request_id: str,
     readiness_path: str,
     board_brief_path: str,
     coverage_path: str,
@@ -477,6 +484,26 @@ def promote_evidence_basis_skill(
     max_coverages: int,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
+    transition_request = resolve_transition_request_for_execution(
+        run_dir_path,
+        request_id=transition_request_id,
+        transition_kind=TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if not allow_non_ready:
+        allow_non_ready = bool(
+            request_payload_option(transition_request, "allow_non_ready", False)
+        )
+    requested_max_coverages = request_payload_option(
+        transition_request,
+        "max_coverages",
+        max_coverages,
+    )
+    try:
+        max_coverages = max(1, int(requested_max_coverages or max_coverages))
+    except (TypeError, ValueError):
+        max_coverages = max(1, int(max_coverages or 1))
     readiness_file = resolve_path(run_dir_path, readiness_path, f"reporting/round_readiness_{round_id}.json")
     board_brief_file = resolve_path(run_dir_path, board_brief_path, f"board/board_brief_{round_id}.md")
     next_actions_file = resolve_path(run_dir_path, next_actions_path, f"investigation/next_actions_{round_id}.json")
@@ -874,6 +901,7 @@ def promote_evidence_basis_skill(
         "round_id": round_id,
         "basis_id": basis_id,
         "promotion_status": promotion_status,
+        "transition_request_id": maybe_text(transition_request.get("request_id")),
         "readiness_status": readiness_status,
         "decision_source": decision_source,
         "readiness_path": str(readiness_file),
@@ -923,6 +951,9 @@ def promote_evidence_basis_skill(
             "promotion_resolution_mode": maybe_text(
                 promotion_resolution.get("promotion_resolution_mode")
             ),
+            "transition_request_id": maybe_text(
+                transition_request.get("request_id")
+            ),
             "council_input_counts": (
                 promotion_resolution.get("council_input_counts", {})
                 if isinstance(promotion_resolution.get("council_input_counts"), dict)
@@ -951,6 +982,14 @@ def promote_evidence_basis_skill(
         artifact_path=str(output_file),
     )
     write_json_file(output_file, wrapper)
+    mark_transition_request_committed(
+        run_dir_path,
+        request_id=maybe_text(transition_request.get("request_id")),
+        committed_by_role=maybe_text(transition_request.get("requested_by_role"))
+        or "moderator",
+        committed_object_kind="promotion-basis",
+        committed_object_id=basis_id,
+    )
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
     return {
@@ -968,6 +1007,7 @@ def promote_evidence_basis_skill(
             "board_brief_source": maybe_text(contract_fields.get("board_brief_source")),
             "next_actions_source": maybe_text(contract_fields.get("next_actions_source")),
             "db_path": contract_fields["db_path"],
+            "transition_request_id": maybe_text(transition_request.get("request_id")),
         },
         "receipt_id": "promotion-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, basis_id)[:20],
         "batch_id": "promotionbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
@@ -1004,6 +1044,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
+    parser.add_argument("--transition-request-id", required=True)
     parser.add_argument("--readiness-path", default="")
     parser.add_argument("--board-brief-path", default="")
     parser.add_argument("--coverage-path", default="")
@@ -1021,6 +1062,7 @@ def main() -> int:
         run_dir=args.run_dir,
         run_id=args.run_id,
         round_id=args.round_id,
+        transition_request_id=args.transition_request_id,
         readiness_path=args.readiness_path,
         board_brief_path=args.board_brief_path,
         coverage_path=args.coverage_path,
