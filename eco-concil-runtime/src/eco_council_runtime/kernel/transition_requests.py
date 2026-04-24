@@ -61,6 +61,21 @@ TRANSITION_KIND_SPECS: dict[str, dict[str, str]] = {
 }
 
 
+def require_actor_role(
+    actor_role: Any,
+    *,
+    expected_role: str,
+    action_name: str,
+) -> str:
+    raw_role = maybe_text(actor_role)
+    resolved_role = normalize_actor_role(raw_role) or raw_role
+    if resolved_role != maybe_text(expected_role):
+        raise ValueError(
+            f"{action_name} requires actor role `{expected_role}`, got `{raw_role or '<empty>'}`."
+        )
+    return resolved_role
+
+
 def unique_texts(values: list[Any]) -> list[str]:
     seen: set[str] = set()
     results: list[str] = []
@@ -659,11 +674,16 @@ def store_transition_request(
     lineage: list[Any] | None = None,
     db_path: str = "",
 ) -> dict[str, Any]:
+    resolved_requested_by_role = require_actor_role(
+        requested_by_role,
+        expected_role=ROLE_MODERATOR,
+        action_name="store_transition_request",
+    )
     payload = transition_request_payload(
         run_id=run_id,
         round_id=round_id,
         transition_kind=transition_kind,
-        requested_by_role=requested_by_role,
+        requested_by_role=resolved_requested_by_role,
         target_round_id=target_round_id,
         source_round_id=source_round_id,
         rationale=rationale,
@@ -709,6 +729,15 @@ def approve_transition_request(
             )
             if not isinstance(request, dict):
                 raise ValueError(f"Unknown transition request: {request_id}")
+            required_approval_role = (
+                normalize_actor_role(request.get("required_approval_role"))
+                or ROLE_RUNTIME_OPERATOR
+            )
+            resolved_approved_by_role = require_actor_role(
+                approved_by_role,
+                expected_role=required_approval_role,
+                action_name="approve_transition_request",
+            )
             if maybe_text(request.get("request_status")) == REQUEST_STATUS_REJECTED:
                 raise ValueError(f"Transition request {request_id} is already rejected.")
             if maybe_text(request.get("request_status")) == REQUEST_STATUS_COMMITTED:
@@ -733,7 +762,7 @@ def approve_transition_request(
                 }
             approval = transition_approval_payload(
                 request_payload=request,
-                approved_by_role=approved_by_role,
+                approved_by_role=resolved_approved_by_role,
                 decision_reason=decision_reason,
                 evidence_refs=evidence_refs,
                 basis_object_ids=basis_object_ids,
@@ -840,6 +869,15 @@ def reject_transition_request(
             )
             if not isinstance(request, dict):
                 raise ValueError(f"Unknown transition request: {request_id}")
+            required_approval_role = (
+                normalize_actor_role(request.get("required_approval_role"))
+                or ROLE_RUNTIME_OPERATOR
+            )
+            resolved_rejected_by_role = require_actor_role(
+                rejected_by_role,
+                expected_role=required_approval_role,
+                action_name="reject_transition_request",
+            )
             if maybe_text(request.get("request_status")) == REQUEST_STATUS_COMMITTED:
                 raise ValueError(f"Transition request {request_id} is already committed.")
             if maybe_text(request.get("request_status")) == REQUEST_STATUS_REJECTED:
@@ -862,7 +900,7 @@ def reject_transition_request(
                 }
             rejection = transition_rejection_payload(
                 request_payload=request,
-                rejected_by_role=rejected_by_role,
+                rejected_by_role=resolved_rejected_by_role,
                 decision_reason=decision_reason,
                 evidence_refs=evidence_refs,
                 basis_object_ids=basis_object_ids,
@@ -969,6 +1007,15 @@ def mark_transition_request_committed(
             )
             if not isinstance(request, dict):
                 raise ValueError(f"Unknown transition request: {request_id}")
+            required_approval_role = (
+                normalize_actor_role(request.get("required_approval_role"))
+                or ROLE_RUNTIME_OPERATOR
+            )
+            resolved_committed_by_role = require_actor_role(
+                committed_by_role,
+                expected_role=required_approval_role,
+                action_name="mark_transition_request_committed",
+            )
             status = maybe_text(request.get("request_status"))
             if status not in {REQUEST_STATUS_APPROVED, REQUEST_STATUS_COMMITTED}:
                 raise ValueError(
@@ -1019,8 +1066,7 @@ def mark_transition_request_committed(
                 approved_at_utc=maybe_text(request.get("approved_at_utc")),
                 rejected_at_utc=maybe_text(request.get("rejected_at_utc")),
                 committed_at_utc=committed_at,
-                committed_by_role=normalize_actor_role(committed_by_role)
-                or maybe_text(committed_by_role),
+                committed_by_role=resolved_committed_by_role,
                 committed_object_kind=committed_object_kind,
                 committed_object_id=committed_object_id,
                 created_at_utc=maybe_text(request.get("created_at_utc")),

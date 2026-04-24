@@ -384,11 +384,37 @@ runtime kernel 只保留以下职责：
 
 ## 9.4 第四批：讨论面与报告面
 
-- [ ] 新增 `finding_records`
-- [ ] 新增 `discussion_messages`
-- [ ] 新增 `evidence_bundles`
-- [ ] 新增 `report_section_drafts`
-- [ ] 让 `proposal / readiness opinion` 不再是唯一讨论对象
+- [x] 新增 `finding_records`
+- [x] 新增 `discussion_messages`
+- [x] 新增 `evidence_bundles`
+- [x] 新增 `report_section_drafts`
+- [x] 让 `proposal / readiness opinion` 不再是唯一讨论对象
+
+### 本次收口回写
+
+- 已完成：
+  - 已按本次收口前置要求复核前三批（重点 batch3）最小回归：`tests.test_direct_council_advisory + tests.test_board_workflow` 共 `16` 项通过，未发现回退。
+  - `kernel/deliberation_plane.py` 已落地 `report_section_drafts` canonical table 与索引；reporting plane 讨论输出可直接 DB-native 持久化。
+  - `reporting_objects.py` 已新增 `report-section-draft` canonical object：`normalize / validate / store / query` 全链路可用，并接入 `query-reporting-objects`。
+  - `kernel/cli.py` 已新增四个 direct write 命令：`submit-finding-record`、`post-discussion-message`、`submit-evidence-bundle`、`submit-report-section-draft`。
+  - `phase2_agent_entry_profile.py` + `kernel/agent_entry.py` + `show-reporting-state` 已补齐 operator/role surface：新增 finding/discussion/evidence/report-section-draft 的 query 与 submit command templates。
+  - 已补回归并通过 focused unittest：
+    - `tests.test_council_submission_workflow`
+    - `tests.test_reporting_query_surface`
+    - `tests.test_agent_entry_gate`
+    - 执行命令：`/home/fpddmw/projects/openclaw-eco-concil_v1/.venv/bin/python -m unittest tests.test_council_submission_workflow tests.test_reporting_query_surface tests.test_agent_entry_gate`（`15` 项通过）。
+
+- 未完成：
+  - 本批范围内无新的功能性遗留；`proposal / readiness opinion` 仍保留为有效 deliberation 对象，但已不再是唯一讨论写入通道。
+  - 若后续要继续压缩兼容语义面（例如进一步弱化旧 proposal-first 引导文案），属于后续批次，不属于本批阻塞项。
+
+- 新发现的问题：
+  - 本批接线阶段暴露出 `phase2_agent_entry_profile.py` 与 `kernel/cli.py` 的局部补丁插入风险（缩进/分支边界容易被破坏）；已在同一轮修复并通过回归确认。
+  - reporting workflow 的 `council-decision / expert-report / final-publication` 状态值已转为更动态的 posture（如 `continue / needs-more-evidence / hold-release`）；原有测试中硬编码状态值不再稳健，已改为以 stage/对象存在性为主断言。
+
+- 是否影响后续计划：
+  - 不阻塞后续批次。batch4 已把讨论面与报告面的关键 runtime surface 补齐到 DB-first 主线。
+  - 对后续是正向约束：新增 deliberation/reporting 对象应继续沿用“canonical contract + direct command + query surface + operator template + focused regression”同一交付模式。
 
 ## 10. 验收标准
 
@@ -403,3 +429,34 @@ runtime kernel 只保留以下职责：
 7. agent 间讨论可以只依赖 DB-native finding / challenge / comment / evidence bundle。
 8. 删除 `next-actions / readiness / promotion` artifact 后，核心研究状态仍可从 DB 恢复。
 9. operator 能在 runbook 中看到每一次阶段推进请求、审批人、审批理由和证据 basis。
+
+## 11. 2026-04-24 Session 验收复核（runtime/kernel）
+
+- 已完成：
+  - 逐条复核 `runtime/kernel` 关键边界实现（`controller / access_policy / skill_registry / transition_requests / cli / operations`）并对照本清单第 `10` 节验收标准做代码级核验。
+  - 在 `kernel/transition_requests.py` 增加数据层强制角色校验：
+    - `store_transition_request` 仅接受 `moderator`。
+    - `approve_transition_request / reject_transition_request / mark_transition_request_committed` 仅接受 `required_approval_role`（当前为 `runtime-operator`）。
+    - 该校验位于 DB 写入函数本身，避免仅依赖 CLI `--actor-role` 入口拦截。
+  - 在 `kernel/operations.py` 的 runbook 模板中把 `approve/reject-phase-transition` 命令改为显式 `actor_role='runtime-operator'`，避免 operator 模板语义依赖隐式默认值。
+  - 新增并通过 runtime 最小回归：
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_transition_request_store_rejects_non_moderator_role`
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_transition_request_approval_rejects_non_operator_role`
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_transition_request_commit_rejects_non_operator_role`
+  - 同步通过本批关联既有回归：
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_executes_approved_promotion_request_without_planner_stage`
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_completes_without_default_plan_when_no_transition_request_exists`
+    - `tests.test_agent_entry_gate`（6 项）
+
+- 未完成：
+  - `optional-analysis` 的“人工审计”语义仍主要依赖 `contract_mode=strict` 时的硬阻断；在 `warn` 模式下仍会以 warning 方式放行，尚未落成独立“审批对象 + 持久化审批记录”链。
+  - 本 session 未重跑全量跨面回归（仅执行本批直接相关最小集合）；第 `10` 节中“调查闭环稳定性”与“artifact 删除后的跨链恢复稳定性”仍依赖此前批次回归与后续整体验收。
+
+- 新发现的问题：
+  - 旧实现中 transition request 的角色约束主要落在 CLI 层；若直接调用 kernel 模块函数可绕过入口校验写入越权请求/审批。本次已在数据层修复。
+  - operator runbook 的审批命令模板此前虽可由 `kernel_command(...)` 自动补 actor role，但模板文本本身未显式声明角色，存在运维误读风险；本次已在 runbook 文案侧显式化。
+  - `requires_operator_approval` 与 `allowed_roles` 在 optional-analysis 技能上仍存在“策略提示强、执行阻断弱”的张力，需要后续统一审批语义。
+
+- 是否影响后续计划：
+  - 不阻塞后续批次，且对第 `10.1 / 10.4 / 10.6 / 10.9` 验收项形成正向加固（尤其是 moderator/operator 角色边界与 transition 审批链的一致性）。
+  - 建议下一步把 optional-analysis 的人工审计从 `contract_mode` 提示升级为可查询、可审批、可回放的持久化审批对象，避免再次回退到“warn 可执行”的软约束语义。

@@ -536,6 +536,109 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("failed", payload["status"])
             self.assertIn("missing-actor-role", {item["code"] for item in payload["access_policy"]["issues"]})
 
+    def test_transition_request_store_rejects_non_moderator_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.transition_requests import (
+                store_transition_request,
+            )
+
+            with self.assertRaises(ValueError) as raised:
+                store_transition_request(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    transition_kind="promote-evidence-basis",
+                    requested_by_role="environmental-investigator",
+                    rationale="Only moderator should be able to request transitions.",
+                )
+
+            self.assertIn(
+                "store_transition_request requires actor role `moderator`",
+                str(raised.exception),
+            )
+
+    def test_transition_request_approval_rejects_non_operator_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.transition_requests import (
+                REQUEST_STATUS_PENDING,
+                approve_transition_request,
+                load_transition_request,
+                store_transition_request,
+            )
+
+            request = store_transition_request(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="promote-evidence-basis",
+                requested_by_role="moderator",
+                rationale="Moderator requests promotion transition.",
+            )
+
+            with self.assertRaises(ValueError) as raised:
+                approve_transition_request(
+                    run_dir,
+                    request_id=request["request_id"],
+                    approved_by_role="moderator",
+                    decision_reason="Moderator cannot self-approve transitions.",
+                )
+
+            self.assertIn(
+                "approve_transition_request requires actor role `runtime-operator`",
+                str(raised.exception),
+            )
+            request_after = load_transition_request(
+                run_dir,
+                request_id=request["request_id"],
+            )
+            self.assertEqual(REQUEST_STATUS_PENDING, request_after["request_status"])
+
+    def test_transition_request_commit_rejects_non_operator_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.transition_requests import (
+                approve_transition_request,
+                mark_transition_request_committed,
+                store_transition_request,
+            )
+
+            request = store_transition_request(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="promote-evidence-basis",
+                requested_by_role="moderator",
+                rationale="Moderator requests promotion transition.",
+            )
+            approve_transition_request(
+                run_dir,
+                request_id=request["request_id"],
+                approved_by_role="runtime-operator",
+                decision_reason="Operator approved transition.",
+            )
+
+            with self.assertRaises(ValueError) as raised:
+                mark_transition_request_committed(
+                    run_dir,
+                    request_id=request["request_id"],
+                    committed_by_role="moderator",
+                    committed_object_kind="promotion-basis",
+                    committed_object_id=ROUND_ID,
+                )
+
+            self.assertIn(
+                "mark_transition_request_committed requires actor role `runtime-operator`",
+                str(raised.exception),
+            )
+
     def test_preflight_blocks_unauthorized_actor_role_for_write_skill(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -33,6 +33,44 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "allowed_roles": ["moderator"],
         "default_actor_role_hint": "moderator",
     },
+    "submit-finding-record": {
+        "allowed_roles": [
+            "environmental-investigator",
+            "public-discourse-investigator",
+            "formal-record-investigator",
+            "challenger",
+        ],
+        "default_actor_role_hint": "<actor_role>",
+    },
+    "post-discussion-message": {
+        "allowed_roles": [
+            "moderator",
+            "environmental-investigator",
+            "public-discourse-investigator",
+            "formal-record-investigator",
+            "challenger",
+            "report-editor",
+        ],
+        "default_actor_role_hint": "<actor_role>",
+    },
+    "submit-evidence-bundle": {
+        "allowed_roles": [
+            "moderator",
+            "environmental-investigator",
+            "public-discourse-investigator",
+            "formal-record-investigator",
+            "challenger",
+        ],
+        "default_actor_role_hint": "<actor_role>",
+    },
+    "post-review-comment": {
+        "allowed_roles": ["moderator", "challenger"],
+        "default_actor_role_hint": "challenger",
+    },
+    "submit-report-section-draft": {
+        "allowed_roles": ["moderator", "report-editor"],
+        "default_actor_role_hint": "report-editor",
+    },
     "approve-phase-transition": {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,

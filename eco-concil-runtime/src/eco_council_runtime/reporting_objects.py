@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -8,16 +9,20 @@ from .canonical_contracts import (
     PLANE_REPORTING,
     canonical_contract,
     canonical_contract_kinds,
+    validate_canonical_payload,
 )
 from .kernel.deliberation_plane import (
     connect_db as connect_deliberation_db,
     decode_json,
     maybe_text,
+    stable_hash,
 )
+from .kernel.executor import utc_now_iso
 
 OBJECT_KIND_REPORTING_HANDOFF = "reporting-handoff"
 OBJECT_KIND_COUNCIL_DECISION = "council-decision"
 OBJECT_KIND_EXPERT_REPORT = "expert-report"
+OBJECT_KIND_REPORT_SECTION_DRAFT = "report-section-draft"
 OBJECT_KIND_FINAL_PUBLICATION = "final-publication"
 
 REPORTING_STAGE_VALUES = {"draft", "canonical"}
@@ -52,6 +57,16 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
         "status_column": "status",
         "decision_id_column": "",
         "stage_column": "report_stage",
+    },
+    OBJECT_KIND_REPORT_SECTION_DRAFT: {
+        "table_name": "report_section_drafts",
+        "id_column": "section_id",
+        "timestamp_column": "generated_at_utc",
+        "order_by": "generated_at_utc DESC, section_id DESC",
+        "agent_role_column": "agent_role",
+        "status_column": "status",
+        "decision_id_column": "",
+        "stage_column": "",
     },
     OBJECT_KIND_FINAL_PUBLICATION: {
         "table_name": "final_publications",
@@ -103,6 +118,186 @@ def fetch_json_rows(
         if isinstance(payload, dict):
             results.append(payload)
     return matching_count, results
+
+
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
+def unique_items(values: list[Any]) -> list[Any]:
+    seen: set[str] = set()
+    results: list[Any] = []
+    for value in values:
+        try:
+            key = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        except TypeError:
+            key = maybe_text(value)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        results.append(value)
+    return results
+
+
+def normalized_report_section_draft_payload(
+    section: dict[str, Any],
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
+    normalized = dict(section)
+    normalized_run_id = maybe_text(normalized.get("run_id")) or run_id
+    normalized_round_id = maybe_text(normalized.get("round_id")) or round_id
+    decision_source = maybe_text(normalized.get("decision_source")) or "report-editor"
+    normalized["run_id"] = normalized_run_id
+    normalized["round_id"] = normalized_round_id
+    normalized["generated_at_utc"] = maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    normalized["report_id"] = maybe_text(normalized.get("report_id")) or normalized_round_id
+    normalized["agent_role"] = maybe_text(normalized.get("agent_role")) or "report-editor"
+    normalized["status"] = maybe_text(normalized.get("status")) or "draft"
+    normalized["section_key"] = maybe_text(normalized.get("section_key")) or "section"
+    normalized["section_title"] = maybe_text(normalized.get("section_title")) or normalized["section_key"]
+    normalized["section_text"] = maybe_text(normalized.get("section_text"))
+    normalized["decision_source"] = decision_source
+    normalized["evidence_refs"] = list_items(normalized.get("evidence_refs"))
+    if not normalized["evidence_refs"]:
+        raise ValueError("report-section-draft requires at least one evidence_ref.")
+    normalized["basis_object_ids"] = unique_items(list_items(normalized.get("basis_object_ids")))
+    normalized["bundle_ids"] = unique_items(list_items(normalized.get("bundle_ids")))
+    normalized["finding_ids"] = unique_items(list_items(normalized.get("finding_ids")))
+    normalized["lineage"] = unique_items(
+        [
+            *list_items(normalized.get("lineage")),
+            normalized["report_id"],
+            normalized["section_key"],
+            normalized["agent_role"],
+            *normalized["basis_object_ids"],
+            *normalized["bundle_ids"],
+            *normalized["finding_ids"],
+        ]
+    )
+    provenance_value = normalized.get("provenance")
+    provenance = dict(provenance_value) if isinstance(provenance_value, dict) else {}
+    if not provenance:
+        provenance = {
+            "decision_source": decision_source,
+            "report_id": normalized["report_id"],
+            "section_key": normalized["section_key"],
+        }
+    normalized["provenance"] = provenance
+    normalized["section_id"] = (
+        maybe_text(normalized.get("section_id"))
+        or "report-section-draft-"
+        + stable_hash(
+            "report-section-draft",
+            normalized_run_id,
+            normalized_round_id,
+            normalized["report_id"],
+            normalized["section_key"],
+            normalized["agent_role"],
+            normalized["section_title"],
+            normalized["section_text"],
+        )[:12]
+    )
+    normalized["schema_version"] = canonical_contract(OBJECT_KIND_REPORT_SECTION_DRAFT).schema_version
+    return validate_canonical_payload(OBJECT_KIND_REPORT_SECTION_DRAFT, normalized)
+
+
+def report_section_draft_row_from_payload(
+    section: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str,
+) -> dict[str, Any]:
+    return {
+        "section_id": maybe_text(section.get("section_id")),
+        "run_id": maybe_text(section.get("run_id")),
+        "round_id": maybe_text(section.get("round_id")),
+        "generated_at_utc": maybe_text(section.get("generated_at_utc")),
+        "report_id": maybe_text(section.get("report_id")),
+        "agent_role": maybe_text(section.get("agent_role")),
+        "status": maybe_text(section.get("status")),
+        "section_key": maybe_text(section.get("section_key")),
+        "section_title": maybe_text(section.get("section_title")),
+        "section_text": maybe_text(section.get("section_text")),
+        "decision_source": maybe_text(section.get("decision_source")),
+        "evidence_refs_json": json.dumps(section.get("evidence_refs", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "basis_object_ids_json": json.dumps(section.get("basis_object_ids", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "bundle_ids_json": json.dumps(section.get("bundle_ids", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "finding_ids_json": json.dumps(section.get("finding_ids", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "provenance_json": json.dumps(section.get("provenance", {}), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "lineage_json": json.dumps(section.get("lineage", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator),
+        "raw_json": json.dumps(section, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+    }
+
+
+def write_report_section_draft_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO report_section_drafts (
+            section_id, run_id, round_id, generated_at_utc, report_id,
+            agent_role, status, section_key, section_title, section_text,
+            decision_source, evidence_refs_json, basis_object_ids_json,
+            bundle_ids_json, finding_ids_json, provenance_json, lineage_json,
+            artifact_path, record_locator, raw_json
+        ) VALUES (
+            :section_id, :run_id, :round_id, :generated_at_utc, :report_id,
+            :agent_role, :status, :section_key, :section_title, :section_text,
+            :decision_source, :evidence_refs_json, :basis_object_ids_json,
+            :bundle_ids_json, :finding_ids_json, :provenance_json, :lineage_json,
+            :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def store_report_section_draft_record(
+    run_dir: str | Path,
+    *,
+    section_payload: dict[str, Any],
+    artifact_path: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = Path(run_dir).expanduser().resolve()
+    payload = dict(section_payload) if isinstance(section_payload, dict) else {}
+    normalized_payload = normalized_report_section_draft_payload(
+        payload,
+        run_id=maybe_text(payload.get("run_id")),
+        round_id=maybe_text(payload.get("round_id")),
+    )
+    run_id = maybe_text(normalized_payload.get("run_id"))
+    round_id = maybe_text(normalized_payload.get("round_id"))
+    report_id = maybe_text(normalized_payload.get("report_id"))
+    section_key = maybe_text(normalized_payload.get("section_key"))
+    agent_role = maybe_text(normalized_payload.get("agent_role"))
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            connection.execute(
+                """
+                DELETE FROM report_section_drafts
+                WHERE run_id = ? AND round_id = ? AND report_id = ? AND section_key = ? AND agent_role = ?
+                """,
+                (run_id, round_id, report_id, section_key, agent_role),
+            )
+            write_report_section_draft_row(
+                connection,
+                report_section_draft_row_from_payload(
+                    normalized_payload,
+                    artifact_path=artifact_path,
+                    record_locator="$.section",
+                ),
+            )
+    finally:
+        connection.close()
+    return {
+        "schema_version": "report-section-draft-append-v1",
+        "db_path": str(_db_file),
+        "section": normalized_payload,
+    }
 
 
 def _unsupported_filter_error(
@@ -252,7 +447,9 @@ __all__ = [
     "OBJECT_KIND_COUNCIL_DECISION",
     "OBJECT_KIND_EXPERT_REPORT",
     "OBJECT_KIND_FINAL_PUBLICATION",
+    "OBJECT_KIND_REPORT_SECTION_DRAFT",
     "OBJECT_KIND_REPORTING_HANDOFF",
+    "store_report_section_draft_record",
     "query_reporting_objects",
     "reporting_queryable_object_kinds",
 ]

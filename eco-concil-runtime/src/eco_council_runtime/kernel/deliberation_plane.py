@@ -799,6 +799,34 @@ CREATE TABLE IF NOT EXISTS expert_report_records (
 );
 CREATE INDEX IF NOT EXISTS idx_expert_report_records_round
 ON expert_report_records(run_id, round_id, report_stage, agent_role, generated_at_utc, record_id);
+CREATE TABLE IF NOT EXISTS report_section_drafts (
+    section_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    report_id TEXT NOT NULL DEFAULT '',
+    agent_role TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    section_key TEXT NOT NULL DEFAULT '',
+    section_title TEXT NOT NULL DEFAULT '',
+    section_text TEXT NOT NULL DEFAULT '',
+    decision_source TEXT NOT NULL DEFAULT '',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    basis_object_ids_json TEXT NOT NULL DEFAULT '[]',
+    bundle_ids_json TEXT NOT NULL DEFAULT '[]',
+    finding_ids_json TEXT NOT NULL DEFAULT '[]',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_report_section_drafts_round
+ON report_section_drafts(run_id, round_id, generated_at_utc, section_id);
+CREATE INDEX IF NOT EXISTS idx_report_section_drafts_round_role
+ON report_section_drafts(run_id, round_id, agent_role, status, section_id);
+CREATE INDEX IF NOT EXISTS idx_report_section_drafts_report
+ON report_section_drafts(run_id, round_id, report_id, section_key, section_id);
 
 CREATE TABLE IF NOT EXISTS final_publications (
     publication_id TEXT PRIMARY KEY,

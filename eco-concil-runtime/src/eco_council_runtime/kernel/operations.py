@@ -802,8 +802,8 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
                 f"- Moderator request promotion: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS, '--rationale', '<rationale>', actor_role='moderator')}`",
                 f"- Moderator request close-round: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_CLOSE_ROUND, '--rationale', '<rationale>', actor_role='moderator')}`",
                 f"- Moderator request follow-up round: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_OPEN_INVESTIGATION_ROUND, '--target-round-id', '<target_round_id>', '--source-round-id', round_id, '--rationale', '<rationale>', actor_role='moderator')}`",
-                f"- Operator approve request: `{kernel_command('approve-phase-transition', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--approval-reason', '<approval_reason>')}`",
-                f"- Operator reject request: `{kernel_command('reject-phase-transition', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--rejection-reason', '<rejection_reason>')}`",
+                f"- Operator approve request: `{kernel_command('approve-phase-transition', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--approval-reason', '<approval_reason>', actor_role='runtime-operator')}`",
+                f"- Operator reject request: `{kernel_command('reject-phase-transition', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--rejection-reason', '<rejection_reason>', actor_role='runtime-operator')}`",
                 "",
             ]
         )

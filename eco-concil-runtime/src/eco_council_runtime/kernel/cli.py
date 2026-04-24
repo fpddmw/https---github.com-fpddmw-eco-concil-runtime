@@ -18,6 +18,9 @@ from ..control_objects import (
     query_control_objects,
 )
 from ..council_objects import (
+    append_discussion_message_record,
+    append_evidence_bundle_record,
+    append_finding_record,
     council_queryable_object_kinds,
     query_council_objects,
 )
@@ -25,6 +28,7 @@ from ..phase2_exports import materialize_phase2_exports
 from ..reporting_objects import (
     query_reporting_objects,
     reporting_queryable_object_kinds,
+    store_report_section_draft_record,
 )
 from ..reporting_exports import materialize_reporting_exports
 from ..phase2_agent_handoff import EntryChainBuilder, HardGateCommandBuilder
@@ -51,7 +55,12 @@ from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run
 from .gate import GateHandler
 from .governance import CONTRACT_MODES, preflight_skill_execution
 from .ledger import append_ledger_event, load_ledger_tail
-from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists
+from .manifest import (
+    init_round_cursor,
+    init_run_manifest,
+    load_json_if_exists,
+    write_json,
+)
 from .operations import (
     PERMISSION_PROFILES,
     load_admission_policy,
@@ -121,6 +130,24 @@ def pretty_json(data: Any, pretty: bool) -> str:
     if pretty:
         return json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True)
     return json.dumps(data, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+
+
+def parse_json_object_arg(value: Any, *, field_name: str) -> dict[str, Any]:
+    if not maybe_text(value):
+        return {}
+    try:
+        decoded = json.loads(maybe_text(value))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid --{field_name}: {exc}") from exc
+    if not isinstance(decoded, dict):
+        raise ValueError(f"--{field_name} must decode to a JSON object.")
+    return decoded
+
+
+def write_command_artifact(run_dir: Path, relative_path: str, payload: dict[str, Any]) -> Path:
+    output_file = (run_dir / relative_path).resolve()
+    write_json(output_file, payload)
+    return output_file
 
 
 def add_execution_policy_args(command: argparse.ArgumentParser) -> None:
@@ -770,6 +797,11 @@ def reporting_operator_view(
         ),
         "query_expert_reports_command": (
             f"query-reporting-objects --run-dir {run_dir} --object-kind expert-report --run-id {run_id} --round-id {round_id} --stage canonical"
+            if round_id and run_id
+            else ""
+        ),
+        "query_report_section_drafts_command": (
+            f"query-reporting-objects --run-dir {run_dir} --object-kind report-section-draft --run-id {run_id} --round-id {round_id} --include-contract"
             if round_id and run_id
             else ""
         ),
@@ -1619,6 +1651,94 @@ def build_parser() -> argparse.ArgumentParser:
     reject_transition_cmd.add_argument("--operator-note", action="append", default=[])
     reject_transition_cmd.add_argument("--pretty", action="store_true")
 
+    submit_finding_cmd = sub.add_parser(
+        "submit-finding-record",
+        help="Persist one DB-backed finding record for the selected round.",
+    )
+    submit_finding_cmd.add_argument("--run-dir", required=True)
+    submit_finding_cmd.add_argument("--run-id", required=True)
+    submit_finding_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(submit_finding_cmd)
+    submit_finding_cmd.add_argument("--finding-kind", default="finding")
+    submit_finding_cmd.add_argument("--agent-role", default="")
+    submit_finding_cmd.add_argument("--title", required=True)
+    submit_finding_cmd.add_argument("--summary", required=True)
+    submit_finding_cmd.add_argument("--rationale", required=True)
+    submit_finding_cmd.add_argument("--confidence", type=float, required=True)
+    submit_finding_cmd.add_argument("--target-kind", default="round")
+    submit_finding_cmd.add_argument("--target-id", default="")
+    submit_finding_cmd.add_argument("--basis-object-id", action="append", default=[])
+    submit_finding_cmd.add_argument("--source-signal-id", action="append", default=[])
+    submit_finding_cmd.add_argument("--linked-bundle-id", action="append", default=[])
+    submit_finding_cmd.add_argument("--response-to-id", action="append", default=[])
+    submit_finding_cmd.add_argument("--evidence-ref", action="append", default=[])
+    submit_finding_cmd.add_argument("--provenance-json", default="{}")
+    submit_finding_cmd.add_argument("--pretty", action="store_true")
+
+    post_discussion_cmd = sub.add_parser(
+        "post-discussion-message",
+        help="Persist one DB-backed discussion message for the selected round.",
+    )
+    post_discussion_cmd.add_argument("--run-dir", required=True)
+    post_discussion_cmd.add_argument("--run-id", required=True)
+    post_discussion_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(post_discussion_cmd)
+    post_discussion_cmd.add_argument("--author-role", default="")
+    post_discussion_cmd.add_argument("--message-kind", default="discussion")
+    post_discussion_cmd.add_argument("--thread-id", default="")
+    post_discussion_cmd.add_argument("--message-text", required=True)
+    post_discussion_cmd.add_argument("--target-kind", default="round")
+    post_discussion_cmd.add_argument("--target-id", default="")
+    post_discussion_cmd.add_argument("--response-to-id", action="append", default=[])
+    post_discussion_cmd.add_argument("--related-object-id", action="append", default=[])
+    post_discussion_cmd.add_argument("--evidence-ref", action="append", default=[])
+    post_discussion_cmd.add_argument("--provenance-json", default="{}")
+    post_discussion_cmd.add_argument("--pretty", action="store_true")
+
+    submit_evidence_cmd = sub.add_parser(
+        "submit-evidence-bundle",
+        help="Persist one DB-backed evidence bundle for the selected round.",
+    )
+    submit_evidence_cmd.add_argument("--run-dir", required=True)
+    submit_evidence_cmd.add_argument("--run-id", required=True)
+    submit_evidence_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(submit_evidence_cmd)
+    submit_evidence_cmd.add_argument("--bundle-kind", default="evidence-bundle")
+    submit_evidence_cmd.add_argument("--agent-role", default="")
+    submit_evidence_cmd.add_argument("--title", required=True)
+    submit_evidence_cmd.add_argument("--summary", required=True)
+    submit_evidence_cmd.add_argument("--rationale", required=True)
+    submit_evidence_cmd.add_argument("--confidence", type=float, required=True)
+    submit_evidence_cmd.add_argument("--target-kind", default="round")
+    submit_evidence_cmd.add_argument("--target-id", default="")
+    submit_evidence_cmd.add_argument("--basis-object-id", action="append", default=[])
+    submit_evidence_cmd.add_argument("--source-signal-id", action="append", default=[])
+    submit_evidence_cmd.add_argument("--finding-id", action="append", default=[])
+    submit_evidence_cmd.add_argument("--evidence-ref", action="append", default=[])
+    submit_evidence_cmd.add_argument("--provenance-json", default="{}")
+    submit_evidence_cmd.add_argument("--pretty", action="store_true")
+
+    submit_section_cmd = sub.add_parser(
+        "submit-report-section-draft",
+        help="Persist one DB-backed report section draft for the selected round.",
+    )
+    submit_section_cmd.add_argument("--run-dir", required=True)
+    submit_section_cmd.add_argument("--run-id", required=True)
+    submit_section_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(submit_section_cmd)
+    submit_section_cmd.add_argument("--agent-role", default="")
+    submit_section_cmd.add_argument("--report-id", default="")
+    submit_section_cmd.add_argument("--section-key", required=True)
+    submit_section_cmd.add_argument("--section-title", required=True)
+    submit_section_cmd.add_argument("--section-text", required=True)
+    submit_section_cmd.add_argument("--status", default="draft")
+    submit_section_cmd.add_argument("--basis-object-id", action="append", default=[])
+    submit_section_cmd.add_argument("--bundle-id", action="append", default=[])
+    submit_section_cmd.add_argument("--finding-id", action="append", default=[])
+    submit_section_cmd.add_argument("--evidence-ref", action="append", default=[])
+    submit_section_cmd.add_argument("--provenance-json", default="{}")
+    submit_section_cmd.add_argument("--pretty", action="store_true")
+
     gate_cmd = sub.add_parser("apply-promotion-gate", help="Evaluate round readiness and write a promote-or-freeze gate artifact.")
     gate_cmd.add_argument("--run-dir", required=True)
     gate_cmd.add_argument("--run-id", required=True)
@@ -2200,6 +2320,295 @@ def main(
         }
         print(pretty_json(payload, args.pretty))
         return 0
+
+    if args.command == "submit-finding-record":
+            init_run(run_dir, args.run_id)
+            payload = {
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "finding_kind": args.finding_kind,
+                "agent_role": maybe_text(args.agent_role) or maybe_text(args.actor_role) or "environmental-investigator",
+                "status": "submitted",
+                "title": args.title,
+                "summary": args.summary,
+                "rationale": args.rationale,
+                "confidence": args.confidence,
+                "target_kind": args.target_kind,
+                "target_id": args.target_id,
+                "basis_object_ids": args.basis_object_id,
+                "source_signal_ids": args.source_signal_id,
+                "linked_bundle_ids": args.linked_bundle_id,
+                "response_to_ids": args.response_to_id,
+                "evidence_refs": args.evidence_ref,
+                "provenance": parse_json_object_arg(args.provenance_json, field_name="provenance-json"),
+            }
+            try:
+                record = append_finding_record(
+                    run_dir,
+                    finding_payload=payload,
+                )
+            except ValueError as exc:
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "object_kind": "finding",
+                    },
+                    "message": str(exc),
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            finding = record.get("finding", {}) if isinstance(record, dict) else {}
+            finding_id = maybe_text(finding.get("finding_id"))
+            artifact_file = write_command_artifact(
+                run_dir,
+                f"deliberation/finding_record_{args.round_id}_{finding_id}.json",
+                record,
+            )
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": new_runtime_event_id("runtimeevt", args.run_id, args.round_id, "finding-record", finding_id),
+                    "event_type": "finding-record-submitted",
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "actor_role": args.actor_role,
+                    "status": "completed",
+                    "finding_id": finding_id,
+                    "finding_kind": maybe_text(finding.get("finding_kind")),
+                },
+            )
+            payload_out = {
+                "status": "completed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "object_kind": "finding",
+                    "object_id": finding_id,
+                    "db_path": record.get("db_path"),
+                    "artifact_path": str(artifact_file),
+                },
+                "canonical_ids": [finding_id],
+                "record": record,
+            }
+            print(pretty_json(payload_out, args.pretty))
+            return 0
+
+    if args.command == "post-discussion-message":
+            init_run(run_dir, args.run_id)
+            payload = {
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "author_role": maybe_text(args.author_role) or maybe_text(args.actor_role) or "moderator",
+                "message_kind": args.message_kind,
+                "thread_id": args.thread_id,
+                "message_text": args.message_text,
+                "target_kind": args.target_kind,
+                "target_id": args.target_id,
+                "response_to_ids": args.response_to_id,
+                "related_object_ids": args.related_object_id,
+                "evidence_refs": args.evidence_ref,
+                "provenance": parse_json_object_arg(args.provenance_json, field_name="provenance-json"),
+            }
+            try:
+                record = append_discussion_message_record(
+                    run_dir,
+                    message_payload=payload,
+                )
+            except ValueError as exc:
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "object_kind": "discussion-message",
+                    },
+                    "message": str(exc),
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            message = record.get("message", {}) if isinstance(record, dict) else {}
+            message_id = maybe_text(message.get("message_id"))
+            artifact_file = write_command_artifact(
+                run_dir,
+                f"discussion/discussion_message_{args.round_id}_{message_id}.json",
+                record,
+            )
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": new_runtime_event_id("runtimeevt", args.run_id, args.round_id, "discussion-message", message_id),
+                    "event_type": "discussion-message-posted",
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "actor_role": args.actor_role,
+                    "status": "completed",
+                    "message_id": message_id,
+                    "message_kind": maybe_text(message.get("message_kind")),
+                },
+            )
+            payload_out = {
+                "status": "completed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "object_kind": "discussion-message",
+                    "object_id": message_id,
+                    "db_path": record.get("db_path"),
+                    "artifact_path": str(artifact_file),
+                },
+                "canonical_ids": [message_id],
+                "record": record,
+            }
+            print(pretty_json(payload_out, args.pretty))
+            return 0
+
+    if args.command == "submit-evidence-bundle":
+            init_run(run_dir, args.run_id)
+            payload = {
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "bundle_kind": args.bundle_kind,
+                "agent_role": maybe_text(args.agent_role) or maybe_text(args.actor_role) or "moderator",
+                "status": "submitted",
+                "title": args.title,
+                "summary": args.summary,
+                "rationale": args.rationale,
+                "confidence": args.confidence,
+                "target_kind": args.target_kind,
+                "target_id": args.target_id,
+                "basis_object_ids": args.basis_object_id,
+                "source_signal_ids": args.source_signal_id,
+                "finding_ids": args.finding_id,
+                "evidence_refs": args.evidence_ref,
+                "provenance": parse_json_object_arg(args.provenance_json, field_name="provenance-json"),
+            }
+            try:
+                record = append_evidence_bundle_record(
+                    run_dir,
+                    bundle_payload=payload,
+                )
+            except ValueError as exc:
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "object_kind": "evidence-bundle",
+                    },
+                    "message": str(exc),
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            bundle = record.get("bundle", {}) if isinstance(record, dict) else {}
+            bundle_id = maybe_text(bundle.get("bundle_id"))
+            artifact_file = write_command_artifact(
+                run_dir,
+                f"evidence/evidence_bundle_{args.round_id}_{bundle_id}.json",
+                record,
+            )
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": new_runtime_event_id("runtimeevt", args.run_id, args.round_id, "evidence-bundle", bundle_id),
+                    "event_type": "evidence-bundle-submitted",
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "actor_role": args.actor_role,
+                    "status": "completed",
+                    "bundle_id": bundle_id,
+                    "bundle_kind": maybe_text(bundle.get("bundle_kind")),
+                },
+            )
+            payload_out = {
+                "status": "completed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "object_kind": "evidence-bundle",
+                    "object_id": bundle_id,
+                    "db_path": record.get("db_path"),
+                    "artifact_path": str(artifact_file),
+                },
+                "canonical_ids": [bundle_id],
+                "record": record,
+            }
+            print(pretty_json(payload_out, args.pretty))
+            return 0
+
+    if args.command == "submit-report-section-draft":
+            init_run(run_dir, args.run_id)
+            payload = {
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "report_id": args.report_id or args.round_id,
+                "agent_role": maybe_text(args.agent_role) or maybe_text(args.actor_role) or "report-editor",
+                "status": args.status,
+                "section_key": args.section_key,
+                "section_title": args.section_title,
+                "section_text": args.section_text,
+                "basis_object_ids": args.basis_object_id,
+                "bundle_ids": args.bundle_id,
+                "finding_ids": args.finding_id,
+                "evidence_refs": args.evidence_ref,
+                "provenance": parse_json_object_arg(args.provenance_json, field_name="provenance-json"),
+            }
+            try:
+                record = store_report_section_draft_record(
+                    run_dir,
+                    section_payload=payload,
+                )
+            except ValueError as exc:
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "object_kind": "report-section-draft",
+                    },
+                    "message": str(exc),
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            section_id = maybe_text(record.get("section_id"))
+            artifact_file = write_command_artifact(
+                run_dir,
+                f"reporting/report_section_draft_{args.round_id}_{section_id}.json",
+                {"schema_version": "report-section-draft-append-v1", "section": record},
+            )
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": new_runtime_event_id("runtimeevt", args.run_id, args.round_id, "report-section-draft", section_id),
+                    "event_type": "report-section-draft-submitted",
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "actor_role": args.actor_role,
+                    "status": "completed",
+                    "section_id": section_id,
+                    "report_id": maybe_text(record.get("report_id")),
+                },
+            )
+            payload_out = {
+                "status": "completed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "object_kind": "report-section-draft",
+                    "object_id": section_id,
+                    "db_path": record.get("db_path") if isinstance(record, dict) else "",
+                    "artifact_path": str(artifact_file),
+                },
+                "canonical_ids": [section_id],
+                "record": record,
+            }
+            print(pretty_json(payload_out, args.pretty))
+            return 0
 
     if args.command == "apply-promotion-gate":
         init_run(run_dir, args.run_id)

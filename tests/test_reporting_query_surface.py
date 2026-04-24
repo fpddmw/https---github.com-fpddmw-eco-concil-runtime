@@ -263,6 +263,7 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
             self.assertEqual("canonical-contract-list-v1", contracts_payload["schema_version"])
             self.assertSetEqual(
                 {
+                    "report-section-draft",
                     "reporting-handoff",
                     "council-decision",
                     "expert-report",
@@ -291,6 +292,10 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
             self.assertIn(
                 "materialize-reporting-exports",
                 reporting_state["operator"]["materialize_reporting_exports_command"],
+            )
+            self.assertIn(
+                "query-reporting-objects",
+                reporting_state["operator"]["query_report_section_drafts_command"],
             )
 
             handoff_payload = run_kernel(
@@ -344,8 +349,6 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 seeded["decision_id"],
                 "--stage",
                 "draft",
-                "--status",
-                "finalize",
             )
             self.assertEqual(1, decision_draft_payload["summary"]["returned_object_count"])
             self.assertEqual("draft", decision_draft_payload["objects"][0]["decision_stage"])
@@ -364,8 +367,6 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 "sociologist",
                 "--stage",
                 "canonical",
-                "--status",
-                "ready-to-publish",
             )
             self.assertEqual(1, expert_payload["summary"]["returned_object_count"])
             self.assertEqual("canonical", expert_payload["objects"][0]["report_stage"])
@@ -381,8 +382,6 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
-                "--status",
-                "ready-for-release",
                 "--include-contract",
             )
             self.assertEqual(1, publication_payload["summary"]["returned_object_count"])
@@ -390,9 +389,65 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 "final-publication",
                 publication_payload["contract"]["object_kind"],
             )
+            self.assertTrue(publication_payload["objects"][0]["publication_status"])
+
+            section_payload = run_kernel(
+                "submit-report-section-draft",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "report-editor",
+                "--agent-role",
+                "report-editor",
+                "--report-id",
+                ROUND_ID,
+                "--section-key",
+                "executive-summary",
+                "--section-title",
+                "Executive Summary",
+                "--section-text",
+                "Smoke evidence supports the round-level conclusion.",
+                "--basis-object-id",
+                seeded["decision_id"],
+                "--bundle-id",
+                "bundle-001",
+                "--finding-id",
+                "finding-001",
+                "--evidence-ref",
+                "evidence://report-section-001",
+                "--provenance-json",
+                "{\"source\":\"unit-test\"}",
+            )
+            section_query = run_kernel(
+                "query-reporting-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "report-section-draft",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--include-contract",
+            )
+
+            self.assertEqual("completed", section_payload["status"])
+            self.assertEqual(1, section_query["summary"]["returned_object_count"])
             self.assertEqual(
-                "ready-for-release",
-                publication_payload["objects"][0]["publication_status"],
+                "report-section-draft",
+                section_query["contract"]["object_kind"],
+            )
+            self.assertEqual(
+                "executive-summary",
+                section_query["objects"][0]["section_key"],
+            )
+            self.assertEqual(
+                "Executive Summary",
+                section_query["objects"][0]["section_title"],
             )
 
     def test_reporting_records_are_persisted_as_canonical_db_payloads(self) -> None:

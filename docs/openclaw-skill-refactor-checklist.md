@@ -91,6 +91,8 @@
 - `已完成` `hypothesis / challenge / board-task` canonical contract 与 `query-council-objects` 查询面。
 - `已完成` proposal-only board workflow 回归，覆盖 hypothesis update、challenge open、challenge close、board task claim，并断言 DB 列与 `raw_json` judgement metadata。
 - `已完成` 本地大回归 `75` 项通过，board proposal-first 改造未击穿 council / reporting / runtime 主链。
+- `已完成`（runtime kernel 侧补齐）discussion/reporting direct command lane：`submit-finding-record / post-discussion-message / submit-evidence-bundle / submit-report-section-draft`，并补齐 `report-section-draft` canonical storage/query surface 与 agent-entry/operator command templates。
+- `已完成`（focused 回归）`tests.test_council_submission_workflow + tests.test_reporting_query_surface + tests.test_agent_entry_gate` 共 `15` 项通过，确认 batch4 讨论面与报告面不再只依赖 proposal/readiness 单一路径。
 
 ### 2.9 Batch 5 当前状态
 

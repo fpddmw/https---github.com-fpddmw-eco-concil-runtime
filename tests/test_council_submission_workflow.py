@@ -255,6 +255,167 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 artifact["schema_version"],
             )
 
+    def test_submit_finding_discussion_and_evidence_records_are_queryable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            run_kernel("init-run", "--run-dir", str(run_dir), "--run-id", RUN_ID)
+
+            finding_payload = run_kernel(
+                "submit-finding-record",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "environmental-investigator",
+                "--agent-role",
+                "environmental-investigator",
+                "--finding-kind",
+                "finding",
+                "--title",
+                "Smoke reached the downtown corridor",
+                "--summary",
+                "Observed smoke concentration in the corridor.",
+                "--rationale",
+                "The visible plume and supporting signal were aligned.",
+                "--confidence",
+                "0.87",
+                "--target-kind",
+                "round",
+                "--target-id",
+                ROUND_ID,
+                "--basis-object-id",
+                "basis-001",
+                "--evidence-ref",
+                "evidence://finding-001",
+                "--provenance-json",
+                "{\"source\":\"unit-test\"}",
+            )
+            finding_id = finding_payload["canonical_ids"][0]
+            discussion_payload = run_kernel(
+                "post-discussion-message",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "moderator",
+                "--author-role",
+                "moderator",
+                "--message-text",
+                "Please verify the evidence trail before publication.",
+                "--target-kind",
+                "round",
+                "--target-id",
+                ROUND_ID,
+                "--response-to-id",
+                finding_id,
+                "--evidence-ref",
+                "evidence://discussion-001",
+                "--provenance-json",
+                "{\"source\":\"unit-test\"}",
+            )
+            message_id = discussion_payload["canonical_ids"][0]
+            evidence_payload = run_kernel(
+                "submit-evidence-bundle",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "environmental-investigator",
+                "--agent-role",
+                "environmental-investigator",
+                "--bundle-kind",
+                "evidence-bundle",
+                "--title",
+                "Evidence bundle for smoke plume",
+                "--summary",
+                "Collected the supporting artifact trail.",
+                "--rationale",
+                "Bundle ties the observation to the finding.",
+                "--confidence",
+                "0.91",
+                "--target-kind",
+                "round",
+                "--target-id",
+                ROUND_ID,
+                "--basis-object-id",
+                finding_id,
+                "--finding-id",
+                finding_id,
+                "--evidence-ref",
+                "evidence://bundle-001",
+                "--provenance-json",
+                "{\"source\":\"unit-test\"}",
+            )
+            bundle_id = evidence_payload["canonical_ids"][0]
+
+            finding_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "finding",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--include-contract",
+            )
+            discussion_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "discussion-message",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--include-contract",
+            )
+            evidence_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "evidence-bundle",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--include-contract",
+            )
+
+            self.assertEqual("completed", finding_payload["status"])
+            self.assertEqual("completed", discussion_payload["status"])
+            self.assertEqual("completed", evidence_payload["status"])
+            self.assertEqual(1, finding_query["summary"]["returned_object_count"])
+            self.assertEqual(1, discussion_query["summary"]["returned_object_count"])
+            self.assertEqual(1, evidence_query["summary"]["returned_object_count"])
+            self.assertEqual("finding", finding_query["objects"][0]["finding_kind"])
+            self.assertEqual("discussion", discussion_query["objects"][0]["message_kind"])
+            self.assertEqual("evidence-bundle", evidence_query["objects"][0]["bundle_kind"])
+            self.assertEqual(
+                finding_id,
+                finding_query["objects"][0]["finding_id"],
+            )
+            self.assertEqual(
+                message_id,
+                discussion_query["objects"][0]["message_id"],
+            )
+            self.assertEqual(
+                bundle_id,
+                evidence_query["objects"][0]["bundle_id"],
+            )
+
     def test_kernel_can_execute_submission_skill_through_registry(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
