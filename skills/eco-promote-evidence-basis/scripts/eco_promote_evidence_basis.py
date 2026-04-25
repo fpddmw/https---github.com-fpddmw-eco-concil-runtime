@@ -985,8 +985,11 @@ def promote_evidence_basis_skill(
     mark_transition_request_committed(
         run_dir_path,
         request_id=maybe_text(transition_request.get("request_id")),
-        committed_by_role=maybe_text(transition_request.get("requested_by_role"))
-        or "moderator",
+        committed_by_role=maybe_text(
+            transition_request.get("required_approval_role")
+        )
+        or maybe_text(transition_request.get("latest_decision_by_role"))
+        or "runtime-operator",
         committed_object_kind="promotion-basis",
         committed_object_id=basis_id,
     )

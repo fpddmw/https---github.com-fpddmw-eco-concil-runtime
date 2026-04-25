@@ -488,6 +488,7 @@ def classify_failure(failure: dict[str, Any]) -> dict[str, str]:
         "timeout-exceeds-admission-limit",
         "retry-budget-exceeds-admission-limit",
         "retry-backoff-exceeds-admission-limit",
+        "skill-approval-consumption-failed",
     }:
         return {"failure_class": "admission", "runbook_section": RUNBOOK_SECTIONS["admission"]}
     if error_code in {"skill-timeout", "detached-fetch-timeout"}:
@@ -729,6 +730,13 @@ def refresh_runtime_surfaces(run_dir: Path, *, round_id: str = "") -> dict[str, 
 
 def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
     from ..runtime_command_hints import kernel_command, run_skill_command
+    from .skill_approvals import (
+        REQUEST_STATUS_APPROVED as SKILL_REQUEST_STATUS_APPROVED,
+        REQUEST_STATUS_CONSUMED as SKILL_REQUEST_STATUS_CONSUMED,
+        REQUEST_STATUS_PENDING as SKILL_REQUEST_STATUS_PENDING,
+        REQUEST_STATUS_REJECTED as SKILL_REQUEST_STATUS_REJECTED,
+        load_skill_approval_requests,
+    )
     from .transition_requests import (
         REQUEST_STATUS_APPROVED,
         REQUEST_STATUS_COMMITTED,
@@ -751,6 +759,11 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
         if run_id and round_id
         else []
     )
+    skill_approval_requests = (
+        load_skill_approval_requests(run_dir, run_id=run_id, round_id=round_id, limit=20)
+        if run_id and round_id
+        else []
+    )
     transition_counts = {
         REQUEST_STATUS_PENDING: 0,
         REQUEST_STATUS_APPROVED: 0,
@@ -763,6 +776,18 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
         status = maybe_text(request.get("request_status"))
         if status in transition_counts:
             transition_counts[status] += 1
+    skill_approval_counts = {
+        SKILL_REQUEST_STATUS_PENDING: 0,
+        SKILL_REQUEST_STATUS_APPROVED: 0,
+        SKILL_REQUEST_STATUS_REJECTED: 0,
+        SKILL_REQUEST_STATUS_CONSUMED: 0,
+    }
+    for request in skill_approval_requests:
+        if not isinstance(request, dict):
+            continue
+        status = maybe_text(request.get("request_status"))
+        if status in skill_approval_counts:
+            skill_approval_counts[status] += 1
     lines = [
         "# Runtime Operator Runbook",
         "",
@@ -777,6 +802,8 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
         f"- Open dead letters: `{int(health.get('summary', {}).get('open_dead_letter_count') or 0)}`",
         f"- Pending transition requests: `{transition_counts[REQUEST_STATUS_PENDING]}`",
         f"- Approved transition requests: `{transition_counts[REQUEST_STATUS_APPROVED]}`",
+        f"- Pending skill approval requests: `{skill_approval_counts[SKILL_REQUEST_STATUS_PENDING]}`",
+        f"- Approved skill approval requests: `{skill_approval_counts[SKILL_REQUEST_STATUS_APPROVED]}`",
         "",
         "## Standard Commands",
         "",
@@ -804,6 +831,17 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
                 f"- Moderator request follow-up round: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_OPEN_INVESTIGATION_ROUND, '--target-round-id', '<target_round_id>', '--source-round-id', round_id, '--rationale', '<rationale>', actor_role='moderator')}`",
                 f"- Operator approve request: `{kernel_command('approve-phase-transition', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--approval-reason', '<approval_reason>', actor_role='runtime-operator')}`",
                 f"- Operator reject request: `{kernel_command('reject-phase-transition', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--rejection-reason', '<rejection_reason>', actor_role='runtime-operator')}`",
+                "",
+                "## Optional Analysis Skill Approval",
+                "",
+                f"- Query skill approval requests: `{kernel_command('query-control-objects', '--run-dir', str(run_dir), '--object-kind', 'skill-approval-request', '--run-id', run_id, '--round-id', round_id)}`",
+                f"- Query skill approvals: `{kernel_command('query-control-objects', '--run-dir', str(run_dir), '--object-kind', 'skill-approval', '--run-id', run_id, '--round-id', round_id)}`",
+                f"- Query skill approval rejections: `{kernel_command('query-control-objects', '--run-dir', str(run_dir), '--object-kind', 'skill-approval-rejection', '--run-id', run_id, '--round-id', round_id)}`",
+                f"- Query skill approval consumptions: `{kernel_command('query-control-objects', '--run-dir', str(run_dir), '--object-kind', 'skill-approval-consumption', '--run-id', run_id, '--round-id', round_id)}`",
+                f"- Moderator request optional-analysis run: `{kernel_command('request-skill-approval', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--skill-name', '<skill_name>', '--requested-actor-role', '<requested_actor_role>', '--rationale', '<rationale>', actor_role='moderator')}`",
+                f"- Operator approve skill request: `{kernel_command('approve-skill-approval', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--approval-reason', '<approval_reason>', actor_role='runtime-operator')}`",
+                f"- Operator reject skill request: `{kernel_command('reject-skill-approval', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--rejection-reason', '<rejection_reason>', actor_role='runtime-operator')}`",
+                f"- Run approved optional-analysis skill: `{run_skill_command(run_dir=run_dir, run_id=run_id, round_id=round_id, skill_name='<skill_name>', actor_role='<requested_actor_role>', contract_mode='warn', skill_args=['--example-arg', '<value>'])} --skill-approval-request-id <request_id>`",
                 "",
             ]
         )
@@ -838,6 +876,34 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
                     lines.append(
                         f"- Commit record: `{maybe_text(request.get('committed_object_kind'))}:{maybe_text(request.get('committed_object_id'))}`"
                     )
+                lines.append("")
+        if skill_approval_requests:
+            lines.extend(["## Current Skill Approval Requests", ""])
+            for request in skill_approval_requests:
+                if not isinstance(request, dict):
+                    continue
+                lines.append(f"### {maybe_text(request.get('request_id'))}")
+                lines.append("")
+                lines.append(f"- Skill: `{maybe_text(request.get('skill_name'))}`")
+                lines.append(f"- Status: `{maybe_text(request.get('request_status'))}`")
+                lines.append(f"- Requested by: `{maybe_text(request.get('requested_by_role'))}`")
+                lines.append(f"- Requested actor: `{maybe_text(request.get('requested_actor_role'))}`")
+                if maybe_text(request.get("latest_decision_by_role")) or maybe_text(request.get("latest_decision_status")):
+                    lines.append(
+                        f"- Latest decision: `{maybe_text(request.get('latest_decision_status'))}` by `{maybe_text(request.get('latest_decision_by_role')) or 'unknown'}`"
+                    )
+                if maybe_text(request.get("latest_decision_reason")):
+                    lines.append(f"- Decision reason: {maybe_text(request.get('latest_decision_reason'))}")
+                if maybe_text(request.get("consumed_receipt_id")):
+                    lines.append(f"- Consumed receipt: `{maybe_text(request.get('consumed_receipt_id'))}`")
+                if maybe_text(request.get("rationale")):
+                    lines.append(f"- Request rationale: {maybe_text(request.get('rationale'))}")
+                basis_object_ids = request.get("basis_object_ids", []) if isinstance(request.get("basis_object_ids"), list) else []
+                if basis_object_ids:
+                    lines.append(f"- Evidence basis objects: `{', '.join(maybe_text(item) for item in basis_object_ids if maybe_text(item))}`")
+                evidence_refs = request.get("evidence_refs", []) if isinstance(request.get("evidence_refs"), list) else []
+                if evidence_refs:
+                    lines.append(f"- Evidence refs: `{json.dumps(evidence_refs, ensure_ascii=True)}`")
                 lines.append("")
     lines.extend(
         [

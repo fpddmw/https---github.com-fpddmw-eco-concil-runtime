@@ -79,6 +79,18 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },
+    "request-skill-approval": {
+        "allowed_roles": [],
+        "default_actor_role_hint": "moderator",
+    },
+    "approve-skill-approval": {
+        "allowed_roles": [ROLE_RUNTIME_OPERATOR],
+        "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
+    },
+    "reject-skill-approval": {
+        "allowed_roles": [ROLE_RUNTIME_OPERATOR],
+        "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
+    },
     "apply-promotion-gate": {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,

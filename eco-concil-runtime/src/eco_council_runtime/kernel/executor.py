@@ -16,6 +16,7 @@ from .locking import exclusive_runtime_lock
 from .manifest import update_after_run
 from .operations import admission_error_code, evaluate_execution_admission, materialize_dead_letter, refresh_runtime_surfaces
 from .registry import resolve_skill_entry, workspace_root
+from .skill_approvals import mark_skill_approval_consumed
 
 
 class SkillExecutionError(RuntimeError):
@@ -144,6 +145,7 @@ def run_skill(
     retry_budget: int | None = None,
     retry_backoff_ms: int | None = None,
     allow_side_effects: list[str] | None = None,
+    skill_approval_request_id: str = "",
 ) -> dict[str, Any]:
     if contract_mode not in CONTRACT_MODES:
         raise ValueError(f"Unsupported contract_mode: {contract_mode}")
@@ -161,6 +163,7 @@ def run_skill(
         retry_budget=retry_budget,
         retry_backoff_ms=retry_backoff_ms,
         allow_side_effects=allow_side_effects,
+        skill_approval_request_id=skill_approval_request_id,
     )
     skill_entry = resolve_skill_entry(skill_name, root)
     script_path = Path(maybe_text(skill_entry.get("script_path")))
@@ -179,6 +182,7 @@ def run_skill(
         "workspace_root": str(root),
         "script_path": str(script_path),
         "actor_role": actor_role,
+        "skill_approval_request_id": maybe_text(skill_approval_request_id),
     }
     run_command_hint = skill_command_hint(
         "run-skill",
@@ -215,6 +219,7 @@ def run_skill(
             "execution_policy": execution_policy,
             "declared_side_effects": declared_side_effects,
             "allowed_side_effects": allowed_side_effects,
+            "skill_approval_request_id": maybe_text(skill_approval_request_id),
         }
     )
     runtime_admission = evaluate_execution_admission(
@@ -546,6 +551,7 @@ def run_skill(
             "resolved_read_paths": preflight.get("resolved_read_paths", []),
             "resolved_write_paths": preflight.get("resolved_write_paths", []),
             "preflight": preflight,
+            "skill_approval": preflight.get("skill_approval", {}),
             "runtime_admission": runtime_admission,
             "stdout_hash": stable_hash(final_stdout),
             "stderr_hash": stable_hash(final_stderr),
@@ -691,6 +697,91 @@ def run_skill(
         }
         raise SkillExecutionError(failure_payload["message"], failure_payload)
 
+    skill_approval = (
+        preflight.get("skill_approval", {})
+        if isinstance(preflight.get("skill_approval"), dict)
+        else {}
+    )
+    skill_approval_consumption: dict[str, Any] = {}
+    if bool(skill_approval.get("required")) and maybe_text(skill_approval.get("status")) == "approved":
+        request_id = maybe_text(skill_approval.get("request_id"))
+        if request_id:
+            try:
+                consumed = mark_skill_approval_consumed(
+                    run_dir,
+                    request_id=request_id,
+                    consumed_by_role=preflight.get("resolved_actor_role") or actor_role,
+                    execution_receipt_id=receipt_id,
+                    execution_event_id=event_id,
+                    execution_status=maybe_text(payload.get("status")) or "completed",
+                )
+            except ValueError as exc:
+                failure = structured_failure(
+                    error_code="skill-approval-consumption-failed",
+                    message=str(exc),
+                    retryable=False,
+                    attempts=attempts,
+                    execution_policy=execution_policy,
+                    recovery_hints=[
+                        "Inspect skill approval request state and create a new approved request before retrying.",
+                    ],
+                )
+                event = {
+                    **base_event,
+                    "exit_code": completed.returncode,
+                    "status": "failed",
+                    "receipt_id": receipt_id,
+                    "batch_id": maybe_text(payload.get("batch_id")),
+                    "artifact_refs": payload.get("artifact_refs", []),
+                    "canonical_ids": payload.get("canonical_ids", []),
+                    "summary": payload.get("summary", {}),
+                    "payload_hash": json_hash(payload),
+                    "receipt_path": str(receipt_file),
+                    "postflight": postflight,
+                    "failure": failure,
+                }
+                dead_letter = materialize_dead_letter(
+                    run_dir,
+                    run_id=run_id,
+                    round_id=round_id,
+                    source_type="skill-approval-consumption",
+                    source_name=skill_name,
+                    message=failure["message"],
+                    failure=failure,
+                    summary={"skill_name": skill_name, "run_id": run_id, "round_id": round_id, "contract_mode": contract_mode},
+                    related_paths={
+                        "policy_path": runtime_admission.get("policy_path", ""),
+                        "receipt_path": str(receipt_file),
+                        "script_path": str(script_path),
+                        "workspace_root": str(root),
+                    },
+                    command_hint=run_command_hint,
+                )
+                event["dead_letter_id"] = dead_letter["dead_letter_id"]
+                append_ledger_event(run_dir, event)
+                operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
+                failure_payload = {
+                    "status": "failed",
+                    "summary": {
+                        "skill_name": skill_name,
+                        "run_id": run_id,
+                        "round_id": round_id,
+                        "contract_mode": contract_mode,
+                        "actor_role": actor_role,
+                    },
+                    "message": failure["message"],
+                    "failure": failure,
+                    "preflight": preflight,
+                    "postflight": postflight,
+                    "runtime_admission": runtime_admission,
+                    "receipt_id": receipt_id,
+                    "receipt_path": str(receipt_file),
+                    "dead_letter": dead_letter,
+                    "operator_surface": operator_surface,
+                }
+                raise SkillExecutionError(failure_payload["message"], failure_payload)
+            skill_approval_consumption = consumed
+
     event = {
         **base_event,
         "exit_code": completed.returncode,
@@ -703,6 +794,7 @@ def run_skill(
         "payload_hash": json_hash(payload),
         "receipt_path": str(receipt_file),
         "postflight": postflight,
+        "skill_approval_consumption": skill_approval_consumption,
     }
     append_ledger_event(run_dir, event)
     operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
@@ -722,11 +814,19 @@ def run_skill(
             "recovered_after_retry": len(attempts) > 1,
             "timeout_seconds": timeout_seconds,
             "retry_budget": retry_budget,
+            "skill_approval_request_id": maybe_text(skill_approval.get("request_id"))
+            if isinstance(skill_approval, dict)
+            else "",
         },
         "event": event,
         "manifest": manifest,
         "cursor": cursor,
         "skill_payload": payload,
-        "governance": {"preflight": preflight, "postflight": postflight, "runtime_admission": runtime_admission},
+        "governance": {
+            "preflight": preflight,
+            "postflight": postflight,
+            "runtime_admission": runtime_admission,
+            "skill_approval_consumption": skill_approval_consumption,
+        },
         "operator_surface": operator_surface,
     }

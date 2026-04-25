@@ -258,6 +258,121 @@ def request_and_approve_transition(
     return request_id
 
 
+def request_skill_approval(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    skill_name: str,
+    rationale: str = "Request optional-analysis approval for test execution.",
+    requested_actor_role: str = "",
+    requested_skill_args: list[str] | None = None,
+    evidence_refs: list[str] | None = None,
+    basis_object_ids: list[str] | None = None,
+    request_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    args = [
+        "request-skill-approval",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--skill-name",
+        skill_name,
+        "--rationale",
+        rationale,
+    ]
+    if requested_actor_role:
+        args.extend(["--requested-actor-role", requested_actor_role])
+    for requested_skill_arg in requested_skill_args or []:
+        args.extend(["--requested-skill-arg", requested_skill_arg])
+    for evidence_ref in evidence_refs or []:
+        args.extend(["--evidence-ref", evidence_ref])
+    for basis_object_id in basis_object_ids or []:
+        args.extend(["--basis-object-id", basis_object_id])
+    if request_payload:
+        args.extend(
+            [
+                "--request-payload-json",
+                json.dumps(request_payload, ensure_ascii=True, sort_keys=True),
+            ]
+        )
+    return run_kernel(*args)
+
+
+def approve_skill_approval(
+    run_dir: Path,
+    *,
+    request_id: str,
+    approval_reason: str = "Approved optional-analysis request for test execution.",
+    evidence_refs: list[str] | None = None,
+    basis_object_ids: list[str] | None = None,
+    operator_notes: list[str] | None = None,
+) -> dict[str, Any]:
+    args = [
+        "approve-skill-approval",
+        "--run-dir",
+        str(run_dir),
+        "--request-id",
+        request_id,
+        "--approval-reason",
+        approval_reason,
+    ]
+    for evidence_ref in evidence_refs or []:
+        args.extend(["--evidence-ref", evidence_ref])
+    for basis_object_id in basis_object_ids or []:
+        args.extend(["--basis-object-id", basis_object_id])
+    for operator_note in operator_notes or []:
+        args.extend(["--operator-note", operator_note])
+    return run_kernel(*args)
+
+
+def request_and_approve_skill_approval(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    skill_name: str,
+    rationale: str = "Request optional-analysis approval for test execution.",
+    approval_reason: str = "Approved optional-analysis request for test execution.",
+    requested_actor_role: str = "",
+    requested_skill_args: list[str] | None = None,
+    evidence_refs: list[str] | None = None,
+    basis_object_ids: list[str] | None = None,
+    request_payload: dict[str, Any] | None = None,
+    operator_notes: list[str] | None = None,
+) -> str:
+    request_payload_result = request_skill_approval(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        skill_name=skill_name,
+        rationale=rationale,
+        requested_actor_role=requested_actor_role,
+        requested_skill_args=requested_skill_args,
+        evidence_refs=evidence_refs,
+        basis_object_ids=basis_object_ids,
+        request_payload=request_payload,
+    )
+    request = (
+        request_payload_result.get("request", {})
+        if isinstance(request_payload_result.get("request"), dict)
+        else {}
+    )
+    request_id = str(request.get("request_id") or request_payload_result["summary"]["request_id"])
+    approve_skill_approval(
+        run_dir,
+        request_id=request_id,
+        approval_reason=approval_reason,
+        evidence_refs=evidence_refs,
+        basis_object_ids=basis_object_ids,
+        operator_notes=operator_notes,
+    )
+    return request_id
+
+
 def seed_signal_plane(
     run_dir: Path,
     root: Path,

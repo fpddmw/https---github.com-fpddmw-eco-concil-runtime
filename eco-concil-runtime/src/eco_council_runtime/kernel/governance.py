@@ -6,6 +6,9 @@ from typing import Any
 
 from .access_policy import evaluate_skill_access
 from .registry import resolve_skill_entry, workspace_root
+from .role_contracts import ROLE_RUNTIME_OPERATOR, normalize_actor_role
+from .skill_approvals import resolve_skill_approval_for_execution
+from .skill_registry import SKILL_LAYER_OPTIONAL_ANALYSIS
 
 CONTRACT_MODES = ("off", "warn", "strict")
 BUILTIN_REQUIRED_INPUTS = {"run_dir", "run_id", "round_id"}
@@ -216,6 +219,7 @@ def build_contract_context(
     retry_budget: int | None = None,
     retry_backoff_ms: int | None = None,
     allow_side_effects: list[str] | None = None,
+    skill_approval_request_id: str = "",
 ) -> dict[str, Any]:
     root = workspace or workspace_root()
     skill_entry = resolve_skill_entry(skill_name, root)
@@ -248,10 +252,90 @@ def build_contract_context(
             retry_backoff_ms=retry_backoff_ms,
         ),
         "allowed_side_effects": normalize_allowed_side_effects(allow_side_effects),
+        "skill_approval_request_id": maybe_text(skill_approval_request_id),
         "resolved_read_paths": resolved_read_paths,
         "resolved_write_paths": resolved_write_paths,
         "substitutions": substitutions,
         "path_options": path_option_entries(skill_options, run_dir),
+    }
+
+
+def resolve_skill_approval_context(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    skill_name: str,
+    contract_mode: str,
+    actor_role: str,
+    access_policy: dict[str, Any],
+    skill_approval_request_id: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    skill_policy = (
+        access_policy.get("skill_policy", {})
+        if isinstance(access_policy.get("skill_policy"), dict)
+        else {}
+    )
+    requires_operator_approval = bool(skill_policy.get("requires_operator_approval"))
+    skill_layer = maybe_text(skill_policy.get("skill_layer"))
+    normalized_request_id = maybe_text(skill_approval_request_id)
+    if not requires_operator_approval or skill_layer != SKILL_LAYER_OPTIONAL_ANALYSIS:
+        return [], {
+            "required": False,
+            "status": "not-required",
+            "request_id": normalized_request_id,
+        }
+    resolved_actor_role = maybe_text(access_policy.get("resolved_actor_role")) or maybe_text(
+        actor_role
+    )
+    if normalize_actor_role(resolved_actor_role) == ROLE_RUNTIME_OPERATOR:
+        return [], {
+            "required": False,
+            "status": "runtime-operator-bypass",
+            "request_id": normalized_request_id,
+        }
+    if not normalized_request_id:
+        return [
+            issue(
+                "missing-skill-approval-request-id",
+                "Optional-analysis execution requires --skill-approval-request-id for an operator-approved request.",
+                field="skill_approval_request_id",
+                blocking=True,
+            )
+        ], {
+            "required": True,
+            "status": "missing-request-id",
+            "request_id": "",
+        }
+    try:
+        request = resolve_skill_approval_for_execution(
+            run_dir,
+            request_id=normalized_request_id,
+            skill_name=skill_name,
+            run_id=run_id,
+            round_id=round_id,
+            requested_actor_role=resolved_actor_role,
+        )
+    except ValueError as exc:
+        return [
+            issue(
+                "invalid-skill-approval-request",
+                str(exc),
+                field="skill_approval_request_id",
+                blocking=True,
+            )
+        ], {
+            "required": True,
+            "status": "invalid-request",
+            "request_id": normalized_request_id,
+            "message": str(exc),
+        }
+    return [], {
+        "required": True,
+        "status": "approved",
+        "request_id": normalized_request_id,
+        "request": request,
+        "contract_mode": contract_mode,
     }
 
 
@@ -269,6 +353,7 @@ def preflight_skill_execution(
     retry_budget: int | None = None,
     retry_backoff_ms: int | None = None,
     allow_side_effects: list[str] | None = None,
+    skill_approval_request_id: str = "",
 ) -> dict[str, Any]:
     context = build_contract_context(
         run_dir,
@@ -282,6 +367,7 @@ def preflight_skill_execution(
         retry_budget=retry_budget,
         retry_backoff_ms=retry_backoff_ms,
         allow_side_effects=allow_side_effects,
+        skill_approval_request_id=skill_approval_request_id,
     )
     issues: list[dict[str, str]] = []
 
@@ -346,6 +432,17 @@ def preflight_skill_execution(
         contract_mode=contract_mode,
     )
     issues.extend(access_policy.get("issues", []) if isinstance(access_policy.get("issues"), list) else [])
+    approval_issues, skill_approval = resolve_skill_approval_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        skill_name=skill_name,
+        contract_mode=contract_mode,
+        actor_role=context["actor_role"],
+        access_policy=access_policy,
+        skill_approval_request_id=context["skill_approval_request_id"],
+    )
+    issues.extend(approval_issues)
 
     blocking_issue_count = len(
         [
@@ -373,6 +470,7 @@ def preflight_skill_execution(
         "declared_writes": context["declared_writes"],
         "declared_side_effects": context["declared_side_effects"],
         "allowed_side_effects": context["allowed_side_effects"],
+        "skill_approval_request_id": context["skill_approval_request_id"],
         "execution_policy": context["execution_policy"],
         "resolved_read_paths": context["resolved_read_paths"],
         "resolved_write_paths": context["resolved_write_paths"],
@@ -382,6 +480,7 @@ def preflight_skill_execution(
         "blocking_issue_count": blocking_issue_count,
         "block_execution": block_execution,
         "access_policy": access_policy,
+        "skill_approval": skill_approval,
         "skill_access": access_policy.get("skill_policy", {}),
         "skill_registry_entry": context["skill_entry"],
         "workspace_root": context["workspace_root"],

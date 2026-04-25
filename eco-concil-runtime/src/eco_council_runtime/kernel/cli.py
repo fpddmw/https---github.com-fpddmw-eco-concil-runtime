@@ -106,6 +106,16 @@ from .phase2_state_surfaces import (
     load_reporting_handoff_wrapper,
     load_supervisor_state_wrapper,
 )
+from .skill_approvals import (
+    REQUEST_STATUS_APPROVED as SKILL_REQUEST_STATUS_APPROVED,
+    REQUEST_STATUS_CONSUMED as SKILL_REQUEST_STATUS_CONSUMED,
+    REQUEST_STATUS_PENDING as SKILL_REQUEST_STATUS_PENDING,
+    REQUEST_STATUS_REJECTED as SKILL_REQUEST_STATUS_REJECTED,
+    approve_skill_approval_request,
+    load_skill_approval_requests,
+    reject_skill_approval_request,
+    store_skill_approval_request,
+)
 from .registry import write_registry
 from .supervisor import supervise_round, supervise_round_with_contract_mode
 from .transition_requests import (
@@ -240,8 +250,13 @@ def transition_request_state(
                 "approved_request_count": 0,
                 "rejected_request_count": 0,
                 "committed_request_count": 0,
+                "pending_skill_approval_request_count": 0,
+                "approved_skill_approval_request_count": 0,
+                "rejected_skill_approval_request_count": 0,
+                "consumed_skill_approval_request_count": 0,
             },
             "latest_requests": [],
+            "latest_skill_approval_requests": [],
         }
     latest_requests = load_transition_requests(
         run_dir,
@@ -261,14 +276,45 @@ def transition_request_state(
         status = maybe_text(request.get("request_status"))
         if status in status_counts:
             status_counts[status] += 1
+    latest_skill_approval_requests = load_skill_approval_requests(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        limit=20,
+    )
+    skill_status_counts = {
+        SKILL_REQUEST_STATUS_PENDING: 0,
+        SKILL_REQUEST_STATUS_APPROVED: 0,
+        SKILL_REQUEST_STATUS_REJECTED: 0,
+        SKILL_REQUEST_STATUS_CONSUMED: 0,
+    }
+    for request in latest_skill_approval_requests:
+        if not isinstance(request, dict):
+            continue
+        status = maybe_text(request.get("request_status"))
+        if status in skill_status_counts:
+            skill_status_counts[status] += 1
     return {
         "summary": {
             "pending_request_count": status_counts[REQUEST_STATUS_PENDING],
             "approved_request_count": status_counts[REQUEST_STATUS_APPROVED],
             "rejected_request_count": status_counts[REQUEST_STATUS_REJECTED],
             "committed_request_count": status_counts[REQUEST_STATUS_COMMITTED],
+            "pending_skill_approval_request_count": skill_status_counts[
+                SKILL_REQUEST_STATUS_PENDING
+            ],
+            "approved_skill_approval_request_count": skill_status_counts[
+                SKILL_REQUEST_STATUS_APPROVED
+            ],
+            "rejected_skill_approval_request_count": skill_status_counts[
+                SKILL_REQUEST_STATUS_REJECTED
+            ],
+            "consumed_skill_approval_request_count": skill_status_counts[
+                SKILL_REQUEST_STATUS_CONSUMED
+            ],
         },
         "latest_requests": latest_requests,
+        "latest_skill_approval_requests": latest_skill_approval_requests,
         "query_transition_requests_command": kernel_command(
             "query-control-objects",
             "--run-dir",
@@ -301,6 +347,86 @@ def transition_request_state(
             run_id,
             "--round-id",
             round_id,
+        ),
+        "query_skill_approval_requests_command": kernel_command(
+            "query-control-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "skill-approval-request",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        ),
+        "query_skill_approvals_command": kernel_command(
+            "query-control-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "skill-approval",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        ),
+        "query_skill_approval_rejections_command": kernel_command(
+            "query-control-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "skill-approval-rejection",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        ),
+        "query_skill_approval_consumptions_command": kernel_command(
+            "query-control-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "skill-approval-consumption",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        ),
+        "request_skill_approval_command_template": kernel_command(
+            "request-skill-approval",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--skill-name",
+            "<skill_name>",
+            "--requested-actor-role",
+            "<requested_actor_role>",
+            "--rationale",
+            "<rationale>",
+            actor_role="moderator",
+        ),
+        "approve_skill_approval_request_command_template": kernel_command(
+            "approve-skill-approval",
+            "--run-dir",
+            str(run_dir),
+            "--request-id",
+            "<request_id>",
+            "--approval-reason",
+            "<approval_reason>",
+            actor_role="runtime-operator",
+        ),
+        "reject_skill_approval_request_command_template": kernel_command(
+            "reject-skill-approval",
+            "--run-dir",
+            str(run_dir),
+            "--request-id",
+            "<request_id>",
+            "--rejection-reason",
+            "<rejection_reason>",
+            actor_role="runtime-operator",
         ),
         "request_open_round_command_template": kernel_command(
             "request-phase-transition",
@@ -1427,6 +1553,12 @@ def show_run_state(
             )
             if isinstance(transition_state.get("summary"), dict)
             else 0,
+            "pending_skill_approval_request_count": int(
+                transition_state.get("summary", {}).get("pending_skill_approval_request_count")
+                or 0
+            )
+            if isinstance(transition_state.get("summary"), dict)
+            else 0,
         },
         "manifest": manifest,
         "cursor": cursor,
@@ -1555,6 +1687,7 @@ def add_control_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--reporting-handoff-status", default="")
     command.add_argument("--transition-kind", default="")
     command.add_argument("--requested-by-role", default="")
+    command.add_argument("--requested-actor-role", default="")
     command.add_argument("--request-id", default="")
     command.add_argument("--target-round-id", default="")
     command.add_argument("--requested-command-name", default="")
@@ -1585,6 +1718,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_cmd.add_argument("--skill-name", required=True)
     add_actor_role_arg(run_cmd)
     run_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    run_cmd.add_argument("--skill-approval-request-id", default="")
     run_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(run_cmd)
     run_cmd.add_argument("skill_args", nargs=argparse.REMAINDER)
@@ -1596,6 +1730,7 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_cmd.add_argument("--skill-name", required=True)
     add_actor_role_arg(preflight_cmd)
     preflight_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    preflight_cmd.add_argument("--skill-approval-request-id", default="")
     preflight_cmd.add_argument("--pretty", action="store_true")
     add_execution_policy_args(preflight_cmd)
     preflight_cmd.add_argument("skill_args", nargs=argparse.REMAINDER)
@@ -1650,6 +1785,49 @@ def build_parser() -> argparse.ArgumentParser:
     reject_transition_cmd.add_argument("--basis-object-id", action="append", default=[])
     reject_transition_cmd.add_argument("--operator-note", action="append", default=[])
     reject_transition_cmd.add_argument("--pretty", action="store_true")
+
+    request_skill_approval_cmd = sub.add_parser(
+        "request-skill-approval",
+        help="Persist one optional-analysis skill approval request for operator decision.",
+    )
+    request_skill_approval_cmd.add_argument("--run-dir", required=True)
+    request_skill_approval_cmd.add_argument("--run-id", required=True)
+    request_skill_approval_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(request_skill_approval_cmd)
+    request_skill_approval_cmd.add_argument("--skill-name", required=True)
+    request_skill_approval_cmd.add_argument("--requested-actor-role", default="")
+    request_skill_approval_cmd.add_argument("--rationale", default="")
+    request_skill_approval_cmd.add_argument("--requested-skill-arg", action="append", default=[])
+    request_skill_approval_cmd.add_argument("--evidence-ref", action="append", default=[])
+    request_skill_approval_cmd.add_argument("--basis-object-id", action="append", default=[])
+    request_skill_approval_cmd.add_argument("--request-payload-json", default="")
+    request_skill_approval_cmd.add_argument("--pretty", action="store_true")
+
+    approve_skill_approval_cmd = sub.add_parser(
+        "approve-skill-approval",
+        help="Approve one pending optional-analysis skill approval request.",
+    )
+    approve_skill_approval_cmd.add_argument("--run-dir", required=True)
+    approve_skill_approval_cmd.add_argument("--request-id", required=True)
+    add_actor_role_arg(approve_skill_approval_cmd)
+    approve_skill_approval_cmd.add_argument("--approval-reason", default="")
+    approve_skill_approval_cmd.add_argument("--evidence-ref", action="append", default=[])
+    approve_skill_approval_cmd.add_argument("--basis-object-id", action="append", default=[])
+    approve_skill_approval_cmd.add_argument("--operator-note", action="append", default=[])
+    approve_skill_approval_cmd.add_argument("--pretty", action="store_true")
+
+    reject_skill_approval_cmd = sub.add_parser(
+        "reject-skill-approval",
+        help="Reject one pending optional-analysis skill approval request.",
+    )
+    reject_skill_approval_cmd.add_argument("--run-dir", required=True)
+    reject_skill_approval_cmd.add_argument("--request-id", required=True)
+    add_actor_role_arg(reject_skill_approval_cmd)
+    reject_skill_approval_cmd.add_argument("--rejection-reason", required=True)
+    reject_skill_approval_cmd.add_argument("--evidence-ref", action="append", default=[])
+    reject_skill_approval_cmd.add_argument("--basis-object-id", action="append", default=[])
+    reject_skill_approval_cmd.add_argument("--operator-note", action="append", default=[])
+    reject_skill_approval_cmd.add_argument("--pretty", action="store_true")
 
     submit_finding_cmd = sub.add_parser(
         "submit-finding-record",
@@ -2051,6 +2229,7 @@ def main(
                 retry_budget=args.retry_budget,
                 retry_backoff_ms=args.retry_backoff_ms,
                 allow_side_effects=args.allow_side_effect,
+                skill_approval_request_id=args.skill_approval_request_id,
             )
         except SkillExecutionError as exc:
             failure = exc.payload or {"status": "failed", "summary": {"skill_name": args.skill_name, "run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode}, "message": str(exc)}
@@ -2076,6 +2255,7 @@ def main(
             retry_budget=args.retry_budget,
             retry_backoff_ms=args.retry_backoff_ms,
             allow_side_effects=args.allow_side_effect,
+            skill_approval_request_id=args.skill_approval_request_id,
         )
         payload = {
             "status": "blocked" if bool(preflight.get("block_execution")) else "completed",
@@ -2084,6 +2264,7 @@ def main(
                 "run_id": args.run_id,
                 "round_id": args.round_id,
                 "contract_mode": args.contract_mode,
+                "skill_approval_request_id": args.skill_approval_request_id,
                 "issue_count": preflight.get("issue_count", 0),
                 "blocking_issue_count": preflight.get("blocking_issue_count", 0),
                 "timeout_seconds": preflight.get("execution_policy", {}).get("timeout_seconds"),
@@ -2103,6 +2284,7 @@ def main(
                 "actor_role": args.actor_role,
                 "status": payload["status"],
                 "contract_mode": args.contract_mode,
+                "skill_approval_request_id": args.skill_approval_request_id,
                 "execution_policy": preflight.get("execution_policy", {}),
                 "preflight": preflight,
             },
@@ -2312,6 +2494,219 @@ def main(
                 "request_id": request.get("request_id"),
                 "request_status": request.get("request_status"),
                 "transition_kind": request.get("transition_kind"),
+                "decision_status": rejection.get("decision_status"),
+                "db_path": result.get("db_path"),
+            },
+            "request": request,
+            "rejection": rejection,
+        }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "request-skill-approval":
+        init_run(run_dir, args.run_id)
+        request_payload_json: dict[str, Any] = {}
+        if maybe_text(args.request_payload_json):
+            try:
+                decoded = json.loads(args.request_payload_json)
+            except json.JSONDecodeError as exc:
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "skill_name": args.skill_name,
+                    },
+                    "message": f"Invalid --request-payload-json: {exc}",
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            if not isinstance(decoded, dict):
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "skill_name": args.skill_name,
+                    },
+                    "message": "--request-payload-json must decode to a JSON object.",
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            request_payload_json = decoded
+        try:
+            request = store_skill_approval_request(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                skill_name=args.skill_name,
+                requested_by_role=args.actor_role,
+                requested_actor_role=args.requested_actor_role,
+                rationale=args.rationale,
+                requested_skill_args=args.requested_skill_arg,
+                evidence_refs=args.evidence_ref,
+                basis_object_ids=args.basis_object_id,
+                request_payload=request_payload_json,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "skill_name": args.skill_name,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        append_ledger_event(
+            run_dir,
+            {
+                "schema_version": "runtime-event-v3",
+                "event_id": new_runtime_event_id(
+                    "runtimeevt",
+                    args.run_id,
+                    args.round_id,
+                    "skill-approval-request",
+                    request.get("created_at_utc"),
+                ),
+                "event_type": "skill-approval-request",
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "actor_role": args.actor_role,
+                "status": "completed",
+                "skill_name": args.skill_name,
+                "request_id": request.get("request_id"),
+                "request_status": request.get("request_status"),
+                "requested_actor_role": request.get("requested_actor_role"),
+            },
+        )
+        payload = {
+            "status": "completed",
+            "summary": {
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "skill_name": args.skill_name,
+                "request_id": request.get("request_id"),
+                "request_status": request.get("request_status"),
+                "requested_actor_role": request.get("requested_actor_role"),
+                "db_path": request.get("db_path"),
+            },
+            "request": request,
+        }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "approve-skill-approval":
+        try:
+            result = approve_skill_approval_request(
+                run_dir,
+                request_id=args.request_id,
+                approved_by_role=args.actor_role,
+                decision_reason=args.approval_reason,
+                evidence_refs=args.evidence_ref,
+                basis_object_ids=args.basis_object_id,
+                operator_notes=args.operator_note,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {"request_id": args.request_id},
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        request = result.get("request", {}) if isinstance(result.get("request"), dict) else {}
+        approval = result.get("approval", {}) if isinstance(result.get("approval"), dict) else {}
+        if maybe_text(request.get("run_id")):
+            init_run(run_dir, maybe_text(request.get("run_id")))
+        append_ledger_event(
+            run_dir,
+            {
+                "schema_version": "runtime-event-v3",
+                "event_id": new_runtime_event_id(
+                    "runtimeevt",
+                    maybe_text(request.get("run_id")),
+                    maybe_text(request.get("round_id")),
+                    "skill-approval",
+                    approval.get("approved_at_utc"),
+                ),
+                "event_type": "skill-approval",
+                "run_id": request.get("run_id"),
+                "round_id": request.get("round_id"),
+                "actor_role": args.actor_role,
+                "status": "completed",
+                "request_id": request.get("request_id"),
+                "skill_name": request.get("skill_name"),
+                "decision_status": approval.get("decision_status"),
+            },
+        )
+        payload = {
+            "status": "completed",
+            "summary": {
+                "request_id": request.get("request_id"),
+                "request_status": request.get("request_status"),
+                "skill_name": request.get("skill_name"),
+                "decision_status": approval.get("decision_status"),
+                "db_path": result.get("db_path"),
+            },
+            "request": request,
+            "approval": approval,
+        }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "reject-skill-approval":
+        try:
+            result = reject_skill_approval_request(
+                run_dir,
+                request_id=args.request_id,
+                rejected_by_role=args.actor_role,
+                decision_reason=args.rejection_reason,
+                evidence_refs=args.evidence_ref,
+                basis_object_ids=args.basis_object_id,
+                operator_notes=args.operator_note,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {"request_id": args.request_id},
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        request = result.get("request", {}) if isinstance(result.get("request"), dict) else {}
+        rejection = result.get("rejection", {}) if isinstance(result.get("rejection"), dict) else {}
+        if maybe_text(request.get("run_id")):
+            init_run(run_dir, maybe_text(request.get("run_id")))
+        append_ledger_event(
+            run_dir,
+            {
+                "schema_version": "runtime-event-v3",
+                "event_id": new_runtime_event_id(
+                    "runtimeevt",
+                    maybe_text(request.get("run_id")),
+                    maybe_text(request.get("round_id")),
+                    "skill-approval-rejection",
+                    rejection.get("rejected_at_utc"),
+                ),
+                "event_type": "skill-approval-rejection",
+                "run_id": request.get("run_id"),
+                "round_id": request.get("round_id"),
+                "actor_role": args.actor_role,
+                "status": "completed",
+                "request_id": request.get("request_id"),
+                "skill_name": request.get("skill_name"),
+                "decision_status": rejection.get("decision_status"),
+            },
+        )
+        payload = {
+            "status": "completed",
+            "summary": {
+                "request_id": request.get("request_id"),
+                "request_status": request.get("request_status"),
+                "skill_name": request.get("skill_name"),
                 "decision_status": rejection.get("decision_status"),
                 "db_path": result.get("db_path"),
             },
@@ -3149,6 +3544,7 @@ def main(
                 reporting_handoff_status=args.reporting_handoff_status,
                 transition_kind=args.transition_kind,
                 requested_by_role=args.requested_by_role,
+                requested_actor_role=args.requested_actor_role,
                 request_id=args.request_id,
                 target_round_id=args.target_round_id,
                 requested_command_name=args.requested_command_name,

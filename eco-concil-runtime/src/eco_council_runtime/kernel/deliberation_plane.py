@@ -276,6 +276,139 @@ ON transition_rejections(request_id, rejected_at_utc, rejection_id);
 CREATE INDEX IF NOT EXISTS idx_transition_rejections_round
 ON transition_rejections(run_id, round_id, rejected_at_utc, rejection_id);
 
+CREATE TABLE IF NOT EXISTS skill_approval_requests (
+    request_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    created_at_utc TEXT NOT NULL DEFAULT '',
+    updated_at_utc TEXT NOT NULL DEFAULT '',
+    request_status TEXT NOT NULL DEFAULT '',
+    skill_name TEXT NOT NULL DEFAULT '',
+    skill_layer TEXT NOT NULL DEFAULT '',
+    requested_by_role TEXT NOT NULL DEFAULT '',
+    requested_actor_role TEXT NOT NULL DEFAULT '',
+    required_approval_role TEXT NOT NULL DEFAULT '',
+    requested_surface TEXT NOT NULL DEFAULT '',
+    requested_action TEXT NOT NULL DEFAULT '',
+    requested_command_name TEXT NOT NULL DEFAULT '',
+    rationale TEXT NOT NULL DEFAULT '',
+    requested_skill_args_json TEXT NOT NULL DEFAULT '[]',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    basis_object_ids_json TEXT NOT NULL DEFAULT '[]',
+    request_payload_json TEXT NOT NULL DEFAULT '{}',
+    operator_notes_json TEXT NOT NULL DEFAULT '[]',
+    decision_ids_json TEXT NOT NULL DEFAULT '[]',
+    latest_decision_id TEXT NOT NULL DEFAULT '',
+    latest_decision_status TEXT NOT NULL DEFAULT '',
+    latest_decision_by_role TEXT NOT NULL DEFAULT '',
+    latest_decision_reason TEXT NOT NULL DEFAULT '',
+    approved_at_utc TEXT NOT NULL DEFAULT '',
+    rejected_at_utc TEXT NOT NULL DEFAULT '',
+    consumed_at_utc TEXT NOT NULL DEFAULT '',
+    consumed_by_role TEXT NOT NULL DEFAULT '',
+    consumed_receipt_id TEXT NOT NULL DEFAULT '',
+    consumed_event_id TEXT NOT NULL DEFAULT '',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_skill_approval_requests_round_status
+ON skill_approval_requests(run_id, round_id, request_status, updated_at_utc, request_id);
+CREATE INDEX IF NOT EXISTS idx_skill_approval_requests_round_skill
+ON skill_approval_requests(run_id, round_id, skill_name, request_status, updated_at_utc, request_id);
+CREATE INDEX IF NOT EXISTS idx_skill_approval_requests_requester
+ON skill_approval_requests(run_id, round_id, requested_by_role, request_id);
+CREATE INDEX IF NOT EXISTS idx_skill_approval_requests_actor
+ON skill_approval_requests(run_id, round_id, requested_actor_role, request_id);
+
+CREATE TABLE IF NOT EXISTS skill_approvals (
+    approval_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    approved_at_utc TEXT NOT NULL DEFAULT '',
+    approved_by_role TEXT NOT NULL DEFAULT '',
+    decision_status TEXT NOT NULL DEFAULT '',
+    decision_reason TEXT NOT NULL DEFAULT '',
+    skill_name TEXT NOT NULL DEFAULT '',
+    skill_layer TEXT NOT NULL DEFAULT '',
+    requested_by_role TEXT NOT NULL DEFAULT '',
+    requested_actor_role TEXT NOT NULL DEFAULT '',
+    requested_command_name TEXT NOT NULL DEFAULT '',
+    requested_skill_args_json TEXT NOT NULL DEFAULT '[]',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    basis_object_ids_json TEXT NOT NULL DEFAULT '[]',
+    operator_notes_json TEXT NOT NULL DEFAULT '[]',
+    request_snapshot_json TEXT NOT NULL DEFAULT '{}',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_skill_approvals_request
+ON skill_approvals(request_id, approved_at_utc, approval_id);
+CREATE INDEX IF NOT EXISTS idx_skill_approvals_round
+ON skill_approvals(run_id, round_id, approved_at_utc, approval_id);
+
+CREATE TABLE IF NOT EXISTS skill_approval_rejections (
+    rejection_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    rejected_at_utc TEXT NOT NULL DEFAULT '',
+    rejected_by_role TEXT NOT NULL DEFAULT '',
+    decision_status TEXT NOT NULL DEFAULT '',
+    decision_reason TEXT NOT NULL DEFAULT '',
+    skill_name TEXT NOT NULL DEFAULT '',
+    skill_layer TEXT NOT NULL DEFAULT '',
+    requested_by_role TEXT NOT NULL DEFAULT '',
+    requested_actor_role TEXT NOT NULL DEFAULT '',
+    requested_command_name TEXT NOT NULL DEFAULT '',
+    requested_skill_args_json TEXT NOT NULL DEFAULT '[]',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    basis_object_ids_json TEXT NOT NULL DEFAULT '[]',
+    operator_notes_json TEXT NOT NULL DEFAULT '[]',
+    request_snapshot_json TEXT NOT NULL DEFAULT '{}',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_skill_approval_rejections_request
+ON skill_approval_rejections(request_id, rejected_at_utc, rejection_id);
+CREATE INDEX IF NOT EXISTS idx_skill_approval_rejections_round
+ON skill_approval_rejections(run_id, round_id, rejected_at_utc, rejection_id);
+
+CREATE TABLE IF NOT EXISTS skill_approval_consumptions (
+    consumption_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    approval_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    consumed_at_utc TEXT NOT NULL DEFAULT '',
+    consumed_by_role TEXT NOT NULL DEFAULT '',
+    consumption_status TEXT NOT NULL DEFAULT '',
+    skill_name TEXT NOT NULL DEFAULT '',
+    skill_layer TEXT NOT NULL DEFAULT '',
+    requested_actor_role TEXT NOT NULL DEFAULT '',
+    execution_receipt_id TEXT NOT NULL DEFAULT '',
+    execution_event_id TEXT NOT NULL DEFAULT '',
+    execution_status TEXT NOT NULL DEFAULT '',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_skill_approval_consumptions_request
+ON skill_approval_consumptions(request_id, consumed_at_utc, consumption_id);
+CREATE INDEX IF NOT EXISTS idx_skill_approval_consumptions_round
+ON skill_approval_consumptions(run_id, round_id, consumed_at_utc, consumption_id);
+
 CREATE TABLE IF NOT EXISTS promotion_freezes (
     freeze_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,

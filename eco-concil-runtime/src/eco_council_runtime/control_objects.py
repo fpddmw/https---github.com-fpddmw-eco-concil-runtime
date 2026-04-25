@@ -19,6 +19,12 @@ from .kernel.transition_requests import (
     OBJECT_KIND_TRANSITION_REJECTION,
     OBJECT_KIND_TRANSITION_REQUEST,
 )
+from .kernel.skill_approvals import (
+    OBJECT_KIND_SKILL_APPROVAL,
+    OBJECT_KIND_SKILL_APPROVAL_CONSUMPTION,
+    OBJECT_KIND_SKILL_APPROVAL_REJECTION,
+    OBJECT_KIND_SKILL_APPROVAL_REQUEST,
+)
 
 OBJECT_KIND_PROMOTION_FREEZE = "promotion-freeze"
 OBJECT_KIND_CONTROLLER_STATE = "controller-state"
@@ -168,6 +174,65 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
             "requested_command_name": "requested_command_name",
         },
     },
+    OBJECT_KIND_SKILL_APPROVAL_REQUEST: {
+        "table_name": "skill_approval_requests",
+        "id_column": "request_id",
+        "timestamp_column": "updated_at_utc",
+        "order_by": "updated_at_utc DESC, created_at_utc DESC, request_id DESC",
+        "status_column": "request_status",
+        "filter_columns": {
+            "skill_name": "skill_name",
+            "requested_by_role": "requested_by_role",
+            "requested_actor_role": "requested_actor_role",
+            "request_id": "request_id",
+            "requested_command_name": "requested_command_name",
+            "latest_decision_status": "latest_decision_status",
+            "latest_decision_by_role": "latest_decision_by_role",
+        },
+    },
+    OBJECT_KIND_SKILL_APPROVAL: {
+        "table_name": "skill_approvals",
+        "id_column": "approval_id",
+        "timestamp_column": "approved_at_utc",
+        "order_by": "approved_at_utc DESC, approval_id DESC",
+        "status_column": "decision_status",
+        "filter_columns": {
+            "skill_name": "skill_name",
+            "requested_by_role": "requested_by_role",
+            "requested_actor_role": "requested_actor_role",
+            "request_id": "request_id",
+            "decision_by_role": "approved_by_role",
+            "requested_command_name": "requested_command_name",
+        },
+    },
+    OBJECT_KIND_SKILL_APPROVAL_REJECTION: {
+        "table_name": "skill_approval_rejections",
+        "id_column": "rejection_id",
+        "timestamp_column": "rejected_at_utc",
+        "order_by": "rejected_at_utc DESC, rejection_id DESC",
+        "status_column": "decision_status",
+        "filter_columns": {
+            "skill_name": "skill_name",
+            "requested_by_role": "requested_by_role",
+            "requested_actor_role": "requested_actor_role",
+            "request_id": "request_id",
+            "decision_by_role": "rejected_by_role",
+            "requested_command_name": "requested_command_name",
+        },
+    },
+    OBJECT_KIND_SKILL_APPROVAL_CONSUMPTION: {
+        "table_name": "skill_approval_consumptions",
+        "id_column": "consumption_id",
+        "timestamp_column": "consumed_at_utc",
+        "order_by": "consumed_at_utc DESC, consumption_id DESC",
+        "status_column": "consumption_status",
+        "filter_columns": {
+            "skill_name": "skill_name",
+            "requested_actor_role": "requested_actor_role",
+            "request_id": "request_id",
+            "decision_by_role": "consumed_by_role",
+        },
+    },
 }
 
 
@@ -262,6 +327,7 @@ def query_control_objects(
     reporting_handoff_status: str = "",
     transition_kind: str = "",
     requested_by_role: str = "",
+    requested_actor_role: str = "",
     request_id: str = "",
     target_round_id: str = "",
     requested_command_name: str = "",
@@ -331,6 +397,7 @@ def query_control_objects(
         "reporting_handoff_status": maybe_text(reporting_handoff_status),
         "transition_kind": maybe_text(transition_kind),
         "requested_by_role": maybe_text(requested_by_role),
+        "requested_actor_role": maybe_text(requested_actor_role),
         "request_id": maybe_text(request_id),
         "target_round_id": maybe_text(target_round_id),
         "requested_command_name": maybe_text(requested_command_name),
@@ -411,6 +478,7 @@ def query_control_objects(
             "reporting_handoff_status": maybe_text(reporting_handoff_status),
             "transition_kind": maybe_text(transition_kind),
             "requested_by_role": maybe_text(requested_by_role),
+            "requested_actor_role": maybe_text(requested_actor_role),
             "request_id": maybe_text(request_id),
             "target_round_id": maybe_text(target_round_id),
             "requested_command_name": maybe_text(requested_command_name),
@@ -440,6 +508,10 @@ __all__ = [
     "OBJECT_KIND_TRANSITION_APPROVAL",
     "OBJECT_KIND_TRANSITION_REJECTION",
     "OBJECT_KIND_TRANSITION_REQUEST",
+    "OBJECT_KIND_SKILL_APPROVAL",
+    "OBJECT_KIND_SKILL_APPROVAL_CONSUMPTION",
+    "OBJECT_KIND_SKILL_APPROVAL_REJECTION",
+    "OBJECT_KIND_SKILL_APPROVAL_REQUEST",
     "control_queryable_object_kinds",
     "query_control_objects",
 ]

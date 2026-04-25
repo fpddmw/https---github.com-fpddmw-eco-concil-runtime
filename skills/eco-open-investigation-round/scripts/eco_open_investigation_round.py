@@ -604,9 +604,10 @@ def open_investigation_round_skill(
                     run_dir_path,
                     request_id=maybe_text(transition_request.get("request_id")),
                     committed_by_role=maybe_text(
-                        transition_request.get("requested_by_role")
+                        transition_request.get("required_approval_role")
                     )
-                    or "moderator",
+                    or maybe_text(transition_request.get("latest_decision_by_role"))
+                    or "runtime-operator",
                     committed_object_kind="round-transition",
                     committed_object_id=maybe_text(existing_output.get("transition_id")),
                 )
@@ -848,9 +849,10 @@ def open_investigation_round_skill(
             run_dir_path,
             request_id=maybe_text(transition_request.get("request_id")),
             committed_by_role=maybe_text(
-                transition_request.get("requested_by_role")
+                transition_request.get("required_approval_role")
             )
-            or "moderator",
+            or maybe_text(transition_request.get("latest_decision_by_role"))
+            or "runtime-operator",
             committed_object_kind="round-transition",
             committed_object_id=transition_id,
         )
