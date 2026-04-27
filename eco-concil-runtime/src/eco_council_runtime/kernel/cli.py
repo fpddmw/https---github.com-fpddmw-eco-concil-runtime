@@ -21,6 +21,7 @@ from ..council_objects import (
     append_discussion_message_record,
     append_evidence_bundle_record,
     append_finding_record,
+    append_review_comment_record,
     council_queryable_object_kinds,
     query_council_objects,
 )
@@ -1873,6 +1874,25 @@ def build_parser() -> argparse.ArgumentParser:
     post_discussion_cmd.add_argument("--provenance-json", default="{}")
     post_discussion_cmd.add_argument("--pretty", action="store_true")
 
+    post_review_cmd = sub.add_parser(
+        "post-review-comment",
+        help="Persist one DB-backed challenger or moderator review comment for the selected round.",
+    )
+    post_review_cmd.add_argument("--run-dir", required=True)
+    post_review_cmd.add_argument("--run-id", required=True)
+    post_review_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(post_review_cmd)
+    post_review_cmd.add_argument("--author-role", default="")
+    post_review_cmd.add_argument("--review-kind", default="review")
+    post_review_cmd.add_argument("--thread-id", default="")
+    post_review_cmd.add_argument("--comment-text", required=True)
+    post_review_cmd.add_argument("--target-kind", default="round")
+    post_review_cmd.add_argument("--target-id", default="")
+    post_review_cmd.add_argument("--response-to-id", action="append", default=[])
+    post_review_cmd.add_argument("--evidence-ref", action="append", default=[])
+    post_review_cmd.add_argument("--provenance-json", default="{}")
+    post_review_cmd.add_argument("--pretty", action="store_true")
+
     submit_evidence_cmd = sub.add_parser(
         "submit-evidence-bundle",
         help="Persist one DB-backed evidence bundle for the selected round.",
@@ -2856,6 +2876,75 @@ def main(
                     "artifact_path": str(artifact_file),
                 },
                 "canonical_ids": [message_id],
+                "record": record,
+            }
+            print(pretty_json(payload_out, args.pretty))
+            return 0
+
+    if args.command == "post-review-comment":
+            init_run(run_dir, args.run_id)
+            payload = {
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "author_role": maybe_text(args.author_role) or maybe_text(args.actor_role) or "challenger",
+                "review_kind": args.review_kind,
+                "thread_id": args.thread_id,
+                "comment_text": args.comment_text,
+                "target_kind": args.target_kind,
+                "target_id": args.target_id,
+                "response_to_ids": args.response_to_id,
+                "evidence_refs": args.evidence_ref,
+                "provenance": parse_json_object_arg(args.provenance_json, field_name="provenance-json"),
+            }
+            try:
+                record = append_review_comment_record(
+                    run_dir,
+                    comment_payload=payload,
+                )
+            except ValueError as exc:
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "object_kind": "review-comment",
+                    },
+                    "message": str(exc),
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            comment = record.get("comment", {}) if isinstance(record, dict) else {}
+            comment_id = maybe_text(comment.get("comment_id"))
+            artifact_file = write_command_artifact(
+                run_dir,
+                f"discussion/review_comment_{args.round_id}_{comment_id}.json",
+                record,
+            )
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": new_runtime_event_id("runtimeevt", args.run_id, args.round_id, "review-comment", comment_id),
+                    "event_type": "review-comment-posted",
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "actor_role": args.actor_role,
+                    "status": "completed",
+                    "comment_id": comment_id,
+                    "review_kind": maybe_text(comment.get("review_kind")),
+                },
+            )
+            payload_out = {
+                "status": "completed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "object_kind": "review-comment",
+                    "object_id": comment_id,
+                    "db_path": record.get("db_path"),
+                    "artifact_path": str(artifact_file),
+                },
+                "canonical_ids": [comment_id],
                 "record": record,
             }
             print(pretty_json(payload_out, args.pretty))

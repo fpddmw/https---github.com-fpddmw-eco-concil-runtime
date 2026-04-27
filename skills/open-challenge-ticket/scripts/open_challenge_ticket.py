@@ -148,6 +148,7 @@ def open_challenge_ticket_skill(
     priority: str,
     owner_role: str,
     linked_artifact_refs: list[str],
+    evidence_bundle_ids: list[str],
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
@@ -230,16 +231,28 @@ def open_challenge_ticket_skill(
         if isinstance(selected_proposal, dict)
         else maybe_text(owner_role)
     ) or "challenger"
+    linked_bundle_refs = [
+        f"evidence-bundle:{bundle_id}"
+        for bundle_id in unique_texts(evidence_bundle_ids)
+    ]
     judgement = board_judgement_metadata(
         selected_proposal,
         source_skill=SKILL_NAME,
         default_decision_source="operator-command",
-        base_evidence_refs=linked_artifact_refs,
-        base_lineage=[resolved_target_claim_id, resolved_target_hypothesis_id],
-        base_source_ids=[resolved_target_claim_id, resolved_target_hypothesis_id],
+        base_evidence_refs=[*linked_artifact_refs, *linked_bundle_refs],
+        base_lineage=[
+            resolved_target_claim_id,
+            resolved_target_hypothesis_id,
+            *evidence_bundle_ids,
+        ],
+        base_source_ids=[
+            resolved_target_claim_id,
+            resolved_target_hypothesis_id,
+            *evidence_bundle_ids,
+        ],
     )
     resolved_linked_refs = unique_texts(
-        linked_artifact_refs + judgement["evidence_refs"]
+        linked_artifact_refs + linked_bundle_refs + judgement["evidence_refs"]
     )
     warnings: list[dict[str, Any]] = []
     if not resolved_title or not resolved_statement:
@@ -312,6 +325,7 @@ def open_challenge_ticket_skill(
             "target_claim_id": resolved_target_claim_id,
             "target_hypothesis_id": resolved_target_hypothesis_id,
             "linked_artifact_refs": resolved_linked_refs,
+            "evidence_bundle_ids": unique_texts(evidence_bundle_ids),
             "decision_source": judgement["decision_source"],
             "evidence_refs": resolved_linked_refs,
             "source_ids": judgement["source_ids"],
@@ -370,6 +384,7 @@ def open_challenge_ticket_skill(
             "ticket_id": ticket["ticket_id"],
             "decision_source": ticket["decision_source"],
             "proposal_id": selected_proposal_id,
+            "evidence_bundle_ids": unique_texts(evidence_bundle_ids),
             "db_path": maybe_text(write_summary.get("db_path")),
             "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
         },
@@ -402,6 +417,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--priority", default="")
     parser.add_argument("--owner-role", default="")
     parser.add_argument("--linked-artifact-ref", action="append", default=[])
+    parser.add_argument("--evidence-bundle-id", action="append", default=[])
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
@@ -421,6 +437,7 @@ def main() -> int:
         priority=args.priority,
         owner_role=args.owner_role,
         linked_artifact_refs=args.linked_artifact_ref,
+        evidence_bundle_ids=args.evidence_bundle_id,
     )
     print(pretty_json(payload, args.pretty))
     return 0

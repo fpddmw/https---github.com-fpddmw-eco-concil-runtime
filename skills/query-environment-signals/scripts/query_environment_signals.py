@@ -22,6 +22,10 @@ from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     ensure_signal_plane_schema,
     resolved_canonical_object_kind,
 )
+from eco_council_runtime.kernel.signal_evidence import (  # noqa: E402
+    signal_artifact_ref,
+    with_signal_evidence_fields,
+)
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
@@ -216,34 +220,32 @@ def quality_match(row: sqlite3.Row, wanted: list[str]) -> bool:
 
 
 def compact_result(row: sqlite3.Row) -> dict[str, Any]:
-    return {
-        "signal_id": row["signal_id"],
-        "round_id": maybe_text(row["round_id"]),
-        "source_skill": maybe_text(row["source_skill"]),
-        "canonical_object_kind": resolved_canonical_object_kind(
-            plane="environment",
-            source_skill=maybe_text(row["source_skill"]),
-            signal_kind=maybe_text(row["signal_kind"]),
-            canonical_object_kind=maybe_text(row["canonical_object_kind"]),
-        ),
-        "metric": maybe_text(row["metric"]),
-        "value": row["numeric_value"],
-        "unit": maybe_text(row["unit"]),
-        "observed_at_utc": maybe_text(row["observed_at_utc"]),
-        "location": {"latitude": row["latitude"], "longitude": row["longitude"]},
-        "quality_flags": json.loads(row["quality_flags_json"] or "[]"),
-        "artifact_ref": f"{row['artifact_path']}:{row['record_locator']}",
-    }
+    return with_signal_evidence_fields(
+        {
+            "signal_id": row["signal_id"],
+            "round_id": maybe_text(row["round_id"]),
+            "source_skill": maybe_text(row["source_skill"]),
+            "signal_kind": maybe_text(row["signal_kind"]),
+            "canonical_object_kind": resolved_canonical_object_kind(
+                plane="environment",
+                source_skill=maybe_text(row["source_skill"]),
+                signal_kind=maybe_text(row["signal_kind"]),
+                canonical_object_kind=maybe_text(row["canonical_object_kind"]),
+            ),
+            "metric": maybe_text(row["metric"]),
+            "value": row["numeric_value"],
+            "unit": maybe_text(row["unit"]),
+            "observed_at_utc": maybe_text(row["observed_at_utc"]),
+            "location": {"latitude": row["latitude"], "longitude": row["longitude"]},
+            "quality_flags": json.loads(row["quality_flags_json"] or "[]"),
+        },
+        row,
+        plane="environment",
+    )
 
 
 def artifact_ref(row: sqlite3.Row) -> dict[str, str]:
-    return {
-        "signal_id": row["signal_id"],
-        "round_id": maybe_text(row["round_id"]),
-        "artifact_path": maybe_text(row["artifact_path"]),
-        "record_locator": maybe_text(row["record_locator"]),
-        "artifact_ref": f"{row['artifact_path']}:{row['record_locator']}",
-    }
+    return signal_artifact_ref(row, plane="environment")
 
 
 def query_environment_signals_skill(
@@ -312,9 +314,15 @@ def query_environment_signals_skill(
         "board_handoff": {
             "candidate_ids": [row["signal_id"] for row in limited],
             "evidence_refs": refs,
-            "gap_hints": [] if limited else ["Physical evidence coverage is empty for the current filter set."],
-            "challenge_hints": ["Check whether provider-specific preprocessing has been mixed with direct observations."] if limited else [],
-            "suggested_next_skills": ["query-normalized-signal", "extract-observation-candidates"],
+            "gap_hints": [] if limited else ["No environment signal rows matched this DB query; adjust source, metric, time, bbox, or quality filters before filing a finding."],
+            "challenge_hints": ["When using environment rows, attach the returned item-level evidence_refs and state provider/model/station limitations."] if limited else [],
+            "suggested_next_skills": [
+                "query-normalized-signal",
+                "query-raw-record",
+                "submit-finding-record",
+                "submit-evidence-bundle",
+                "post-discussion-message",
+            ],
         },
     }
 

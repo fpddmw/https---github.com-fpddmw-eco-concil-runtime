@@ -6,10 +6,20 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "query-raw-record"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
+if str(RUNTIME_SRC) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_SRC))
+
+from eco_council_runtime.kernel.signal_evidence import (  # noqa: E402
+    signal_artifact_ref,
+    signal_evidence_basis,
+)
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
@@ -119,19 +129,13 @@ def lookup_raw_record_skill(run_dir: str, signal_id: str, artifact_path: str, re
         {
             "signal_id": row["signal_id"],
             "artifact_ref": f"{row['artifact_path']}:{row['record_locator']}",
+            "evidence_refs": [signal_artifact_ref(row)],
+            "evidence_basis": signal_evidence_basis(row),
             "raw_record": decode_json(row["raw_json"], None),
         }
         for row in rows
     ]
-    refs = [
-        {
-            "signal_id": row["signal_id"],
-            "artifact_path": maybe_text(row["artifact_path"]),
-            "record_locator": maybe_text(row["record_locator"]),
-            "artifact_ref": f"{row['artifact_path']}:{row['record_locator']}",
-        }
-        for row in rows
-    ]
+    refs = [signal_artifact_ref(row) for row in rows]
     return {
         "status": "completed",
         "summary": {
@@ -149,7 +153,12 @@ def lookup_raw_record_skill(run_dir: str, signal_id: str, artifact_path: str, re
             "evidence_refs": refs,
             "gap_hints": [] if results else ["No provenance-linked raw record was found."],
             "challenge_hints": [],
-            "suggested_next_skills": ["query-normalized-signal"],
+            "suggested_next_skills": [
+                "query-normalized-signal",
+                "submit-finding-record",
+                "submit-evidence-bundle",
+                "post-discussion-message",
+            ],
         },
     }
 

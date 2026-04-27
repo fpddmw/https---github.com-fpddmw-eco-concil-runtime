@@ -5,7 +5,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import load_json, run_kernel, run_script, runtime_src_path, script_path
+from _workflow_support import (
+    load_json,
+    run_kernel,
+    run_script,
+    runtime_src_path,
+    script_path,
+    seed_signal_plane,
+)
 
 RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
@@ -415,6 +422,270 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 bundle_id,
                 evidence_query["objects"][0]["bundle_id"],
             )
+
+    def test_investigator_query_to_finding_bundle_proposal_and_review_loop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seed_signal_plane(run_dir, root, RUN_ID, ROUND_ID)
+
+            query_payload = run_script(
+                script_path("query-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--keyword",
+                "smoke",
+            )
+            signal_result = query_payload["results"][0]
+            evidence_ref = signal_result["evidence_refs"][0]["artifact_ref"]
+            signal_id = signal_result["signal_id"]
+
+            finding_payload = run_kernel(
+                "submit-finding-record",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "public-discourse-investigator",
+                "--agent-role",
+                "public-discourse-investigator",
+                "--finding-kind",
+                "public-discourse-finding",
+                "--title",
+                "Public discourse reports smoke impacts",
+                "--summary",
+                "A normalized public signal reports wildfire smoke over the city.",
+                "--rationale",
+                "The finding is anchored to one DB query result and its artifact ref.",
+                "--confidence",
+                "0.82",
+                "--target-kind",
+                "normalized-signal",
+                "--target-id",
+                signal_id,
+                "--basis-object-id",
+                signal_id,
+                "--source-signal-id",
+                signal_id,
+                "--evidence-ref",
+                evidence_ref,
+                "--provenance-json",
+                "{\"source\":\"query-public-signals\"}",
+            )
+            finding_id = finding_payload["canonical_ids"][0]
+
+            bundle_payload = run_kernel(
+                "submit-evidence-bundle",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "public-discourse-investigator",
+                "--agent-role",
+                "public-discourse-investigator",
+                "--bundle-kind",
+                "public-discourse-evidence-bundle",
+                "--title",
+                "Smoke discourse evidence bundle",
+                "--summary",
+                "Bundle contains the queried normalized signal and finding.",
+                "--rationale",
+                "The bundle preserves the query evidence ref before any proposal.",
+                "--confidence",
+                "0.84",
+                "--target-kind",
+                "finding",
+                "--target-id",
+                finding_id,
+                "--basis-object-id",
+                signal_id,
+                "--source-signal-id",
+                signal_id,
+                "--finding-id",
+                finding_id,
+                "--evidence-ref",
+                evidence_ref,
+                "--provenance-json",
+                "{\"source\":\"query-public-signals\"}",
+            )
+            bundle_id = bundle_payload["canonical_ids"][0]
+
+            proposal_payload = run_script(
+                script_path("submit-council-proposal"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--proposal-kind",
+                "investigator-follow-up",
+                "--agent-role",
+                "public-discourse-investigator",
+                "--rationale",
+                "Moderator should review the finding and decide whether additional formal records are needed.",
+                "--confidence",
+                "0.78",
+                "--target-kind",
+                "finding",
+                "--target-id",
+                finding_id,
+                "--evidence-ref",
+                evidence_ref,
+                "--response-to-id",
+                finding_id,
+                "--lineage-id",
+                bundle_id,
+                "--provenance-json",
+                "{\"source\":\"finding-and-bundle\"}",
+            )
+            proposal_id = proposal_payload["canonical_ids"][0]
+
+            review_payload = run_kernel(
+                "post-review-comment",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "challenger",
+                "--author-role",
+                "challenger",
+                "--review-kind",
+                "evidence-bundle-review",
+                "--comment-text",
+                "The public signal is useful but should not be treated as representative without formal-record comparison.",
+                "--target-kind",
+                "evidence-bundle",
+                "--target-id",
+                bundle_id,
+                "--response-to-id",
+                finding_id,
+                "--evidence-ref",
+                f"evidence-bundle:{bundle_id}",
+                "--provenance-json",
+                "{\"source\":\"challenger-review\"}",
+            )
+            review_id = review_payload["canonical_ids"][0]
+
+            challenge_payload = run_script(
+                script_path("open-challenge-ticket"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Check representativeness of smoke discourse evidence",
+                "--challenge-statement",
+                "The evidence bundle may overstate public representativeness without formal or community comparison.",
+                "--priority",
+                "medium",
+                "--owner-role",
+                "challenger",
+                "--linked-artifact-ref",
+                evidence_ref,
+                "--evidence-bundle-id",
+                bundle_id,
+            )
+            challenge_id = challenge_payload["canonical_ids"][0]
+
+            finding_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "finding",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-kind",
+                "normalized-signal",
+                "--target-id",
+                signal_id,
+            )
+            bundle_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "evidence-bundle",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-kind",
+                "finding",
+                "--target-id",
+                finding_id,
+            )
+            proposal_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "proposal",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-kind",
+                "finding",
+                "--target-id",
+                finding_id,
+            )
+            review_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "review-comment",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-kind",
+                "evidence-bundle",
+                "--target-id",
+                bundle_id,
+            )
+            challenge_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "challenge",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            self.assertEqual(finding_id, finding_query["objects"][0]["finding_id"])
+            self.assertEqual(bundle_id, bundle_query["objects"][0]["bundle_id"])
+            self.assertEqual(proposal_id, proposal_query["objects"][0]["proposal_id"])
+            self.assertEqual(review_id, review_query["objects"][0]["comment_id"])
+            self.assertEqual(challenge_id, challenge_query["objects"][0]["ticket_id"])
+            self.assertIn(signal_id, finding_query["objects"][0]["source_signal_ids"])
+            self.assertIn(finding_id, bundle_query["objects"][0]["finding_ids"])
+            self.assertIn(finding_id, proposal_query["objects"][0]["response_to_ids"])
+            self.assertIn(f"evidence-bundle:{bundle_id}", review_query["objects"][0]["evidence_refs"])
+            self.assertIn(f"evidence-bundle:{bundle_id}", challenge_query["objects"][0]["evidence_refs"])
+            self.assertIn(bundle_id, challenge_query["objects"][0]["evidence_bundle_ids"])
 
     def test_kernel_can_execute_submission_skill_through_registry(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

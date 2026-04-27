@@ -1,4 +1,4 @@
 interface:
-  display_name: "Eco Lookup Normalized Signal"
+  display_name: "Query Normalized Signal"
   short_description: "Inspect one normalized signal by id"
-  default_prompt: "Use $query-normalized-signal to inspect one canonical signal from the unified signal plane by signal_id and return compact fields plus provenance, adding raw JSON only when explicitly requested."
+  default_prompt: "Use $query-normalized-signal to inspect one canonical signal from the unified signal plane by signal_id and return compact fields plus item-level evidence_refs and evidence_basis, adding raw JSON only when explicitly requested."

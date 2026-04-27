@@ -1,19 +1,20 @@
 ---
 name: open-challenge-ticket
-description: Open a challenge ticket on the local investigation board, preserve target ids and linked evidence refs, and emit an auditable board event for challenger workflows.
+description: Open a challenge ticket on the local investigation board, preserve target ids, linked evidence refs, evidence bundle ids, and emit an auditable board event for challenger workflows.
 ---
 
-# Eco Open Challenge Ticket
+# Open Challenge Ticket
 
 ## Core Goal
 - Open one challenge ticket on the current round's board state.
-- Preserve target claim or hypothesis ids and linked evidence refs.
+- Preserve target ids, linked evidence refs, and evidence bundle cross-references.
 - Emit an auditable board event for downstream challenger and moderator work.
 
 ## Triggering Conditions
 - Need to turn a contradiction or uncertainty into an explicit review ticket.
 - Need a board-visible object for alternative hypothesis or falsification work.
 - Need a durable challenger queue item rather than an ad hoc note.
+- Need to challenge a finding or evidence bundle while keeping the bundle queryable by moderator and report-editor.
 
 ## Read/Write Contract
 - Reads the shared deliberation plane first and exports `run_dir/board/investigation_board.json` for compatibility.
@@ -33,6 +34,7 @@ description: Open a challenge ticket on the local investigation board, preserve 
   - `priority`
   - `owner_role`
   - `linked_artifact_ref`
+  - `evidence_bundle_id`
 
 ## Output Contract
 - `status`
@@ -48,7 +50,8 @@ description: Open a challenge ticket on the local investigation board, preserve 
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
+- `../../docs/openclaw-investigator-role-runbook.md`
+- `../../docs/openclaw-skills-refactor-checklist-v2.md`
 
 ## Scripts
 - `scripts/open_challenge_ticket.py`

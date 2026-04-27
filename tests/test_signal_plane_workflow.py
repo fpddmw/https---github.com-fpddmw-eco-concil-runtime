@@ -93,6 +93,31 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             self.assertEqual([], result["evidence_citation_types"])
             self.assertEqual("provider-field-normalization", result["decision_source"])
             self.assertEqual("", result["typing_method"])
+            self.assertEqual(result["signal_id"], result["evidence_refs"][0]["signal_id"])
+            self.assertEqual(
+                "formal-comment-signal",
+                result["evidence_basis"]["basis_object_kind"],
+            )
+            self.assertEqual(
+                "none",
+                result["evidence_basis"]["data_quality"]["research_judgement"],
+            )
+            self.assertEqual(
+                "fetch-regulationsgov-comments",
+                result["evidence_basis"]["source_provenance"]["source_skill"],
+            )
+            self.assertIn(
+                "submit-finding-record",
+                query_payload["board_handoff"]["suggested_next_skills"],
+            )
+            self.assertIn(
+                "submit-evidence-bundle",
+                query_payload["board_handoff"]["suggested_next_skills"],
+            )
+            self.assertNotIn(
+                "link-formal-comments-to-public-discourse",
+                query_payload["board_handoff"]["suggested_next_skills"],
+            )
 
             permit_query_payload = run_script(
                 script_path("query-formal-signals"),
@@ -431,6 +456,27 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 "smoke",
             )
             self.assertGreaterEqual(public_payload["result_count"], 2)
+            public_result = public_payload["results"][0]
+            self.assertEqual(
+                public_result["signal_id"],
+                public_result["evidence_refs"][0]["signal_id"],
+            )
+            self.assertEqual(
+                "public-discourse-signal",
+                public_result["evidence_basis"]["basis_object_kind"],
+            )
+            self.assertEqual(
+                "none",
+                public_result["evidence_basis"]["data_quality"]["research_judgement"],
+            )
+            self.assertIn(
+                "submit-finding-record",
+                public_payload["board_handoff"]["suggested_next_skills"],
+            )
+            self.assertNotIn(
+                "extract-claim-candidates",
+                public_payload["board_handoff"]["suggested_next_skills"],
+            )
 
             environment_payload = run_script(
                 script_path("query-environment-signals"),
@@ -449,6 +495,27 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 "41.0",
             )
             self.assertGreaterEqual(environment_payload["result_count"], 2)
+            environment_result = environment_payload["results"][0]
+            self.assertEqual(
+                environment_result["signal_id"],
+                environment_result["evidence_refs"][0]["signal_id"],
+            )
+            self.assertEqual(
+                "environment-observation-signal",
+                environment_result["evidence_basis"]["basis_object_kind"],
+            )
+            self.assertIn(
+                "coverage_limitations",
+                environment_result["evidence_basis"],
+            )
+            self.assertIn(
+                "submit-evidence-bundle",
+                environment_payload["board_handoff"]["suggested_next_skills"],
+            )
+            self.assertNotIn(
+                "extract-observation-candidates",
+                environment_payload["board_handoff"]["suggested_next_skills"],
+            )
 
             signal_id = public_payload["results"][0]["signal_id"]
             lookup_payload = run_script(
@@ -459,6 +526,30 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 signal_id,
             )
             self.assertEqual(1, lookup_payload["result_count"])
+            self.assertEqual(
+                signal_id,
+                lookup_payload["results"][0]["evidence_refs"][0]["signal_id"],
+            )
+            self.assertEqual(
+                "query-raw-record",
+                lookup_payload["board_handoff"]["suggested_next_skills"][0],
+            )
+            raw_payload = run_script(
+                script_path("query-raw-record"),
+                "--run-dir",
+                str(run_dir),
+                "--signal-id",
+                signal_id,
+            )
+            self.assertEqual(1, raw_payload["result_count"])
+            self.assertEqual(
+                signal_id,
+                raw_payload["results"][0]["evidence_refs"][0]["signal_id"],
+            )
+            self.assertEqual(
+                "public-discourse-signal",
+                raw_payload["results"][0]["evidence_basis"]["basis_object_kind"],
+            )
 
             db_path = run_dir / "analytics" / "signal_plane.sqlite"
             self.assertTrue(db_path.exists())

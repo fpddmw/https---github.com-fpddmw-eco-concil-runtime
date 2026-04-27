@@ -661,3 +661,33 @@ skills 侧重构完成至少应满足：
   - 结果：通过。
   - 已运行：`.venv/bin/python -m unittest tests.test_runtime_source_queue_profiles tests.test_source_queue_rebuild tests.test_migrated_source_runtime_integration tests.test_source_queue_governance tests.test_source_queue_family_memory tests.test_orchestration_ingress_workflow tests.test_agent_entry_gate tests.test_signal_plane_workflow tests.test_formal_public_workflow`
   - 结果：`43` 项通过。
+
+## 14. 2026-04-27 Skills Batch 4 / WP3 代码交付回写
+
+- 已完成：
+  - 完成 WP3 query evidence basis 加固：`query-public-signals / query-formal-signals / query-environment-signals / query-normalized-signal / query-raw-record` 的每条结果现在都返回 item-level `evidence_refs` 与 `evidence_basis`，包含 canonical object kind、signal id、artifact ref、source provenance、data quality、temporal/spatial scope、coverage limitations。
+  - query skill 的 `board_handoff.suggested_next_skills` 已从默认 optional extraction/linkage helper 改为 `query-normalized-signal / query-raw-record / submit-finding-record / submit-evidence-bundle / post-discussion-message`，不再把 claim extraction、observation extraction、formal-public linkage 或 representation gap analysis 暗示为默认 investigator 下一步。
+  - 新增 `docs/openclaw-investigator-role-runbook.md`，明确 investigator 默认闭环为 `fetch / normalize -> query / lookup -> finding -> evidence bundle -> optional proposal`，并给出 query evidence basis fixture、finding/evidence bundle/proposal/review comment 命令链。
+  - 补齐 `post-review-comment` kernel direct write 命令：接入 CLI、既有 access policy、ledger、artifact audit、`review-comment` canonical DB 表与 `query-council-objects` 查询面。
+  - agent entry/operator surface 已新增 `query_review_comments_command` 与 `post_review_comment_command_template`，`submit_council_proposal_command_template` 也加入 `--response-to-id <finding_or_bundle_id>` 和 `--lineage-id <finding_or_bundle_id>`，使 proposal 默认锚定 finding/evidence bundle basis。
+  - `open-challenge-ticket` 已支持 `--evidence-bundle-id`，challenge ticket 会把 `evidence-bundle:<id>` 写入 evidence refs，并在 lineage/source ids/raw payload 中保留 bundle id，满足 challenger 对 evidence bundle 的交叉引用约定。
+  - 更新 query / lookup / proposal / challenge 相关 `SKILL.md` 与 agent prompt，移除本批触达路径中的 `board-ready`、旧 phase plan 引用和 proposal-first 口径。
+  - 新增最小闭环回归：从 DB query 结果提交 finding、evidence bundle、proposal、review comment、challenge ticket，并验证 moderator/report-editor 可通过 `query-council-objects` item-level 查询这些对象。
+
+- 未完成：
+  - WP3 范围内没有新的功能性遗留；proposal/readiness opinion 仍保留为有效 deliberation 对象，但已不是 investigator 默认调查记录。
+  - 仍未清理全仓库所有 reporting/archive 文档中的旧 coverage/promotion 表述；这些属于 WP4-WP6 的后续清理面。
+  - `post-review-comment` 当前是 kernel direct command，不是独立 skill 目录；本批选择复用已存在的 canonical `review-comment` 表与 kernel direct write 模式，未新增第 89 个 skill。
+
+- 新发现的问题：
+  - `review-comment` 的 schema、contract 与 access policy 已存在，但 CLI 与 agent-entry surface 之前没有暴露该写入口；这会让 challenger 只能借 `discussion-message` 或 `challenge` 表达 review。本批已补齐。
+  - query skill 之前虽然有顶层 `artifact_refs`，但单条 `results[]` 没有稳定的 item-level evidence basis，investigator 从结果到 finding/evidence bundle 需要隐式拼 ref。本批已统一补齐。
+  - `open-challenge-ticket` 之前只能通过 `linked_artifact_ref` 表达证据交叉引用，不能显式锚定 evidence bundle；本批已增加 bundle id 引用。
+
+- 是否影响后续计划：
+  - 不阻塞 WP4。相反，WP4 可以建立在“默认 investigator loop 不调用 optional heuristic、所有 optional-analysis 仍需 approval、finding/evidence bundle 已成为一等调查记录”的前提上继续做规则审计与降级。
+  - 后续新增 query surface 必须继续返回 item-level `evidence_refs` 与 `evidence_basis`；新增 proposal/challenge/review 路径也应优先引用 finding/evidence bundle，而不是绕过调查记录直接写 judgement。
+
+- 测试：
+  - 已运行：`.venv/bin/python -m unittest tests.test_signal_plane_workflow tests.test_council_submission_workflow tests.test_agent_entry_gate`
+  - 结果：`18` 项通过。

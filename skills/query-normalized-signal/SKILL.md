@@ -1,19 +1,19 @@
 ---
 name: query-normalized-signal
-description: Look up one normalized signal by signal_id from the unified signal plane and return compact details plus provenance. Use when an agent needs precise inspection of a single canonical signal before promoting, challenging, or linking it.
+description: Look up one normalized signal by signal_id from the unified signal plane and return compact details, item-level evidence refs, and evidence basis. Use when an investigator needs precise inspection of a single canonical signal before filing a finding, evidence bundle, challenge, or proposal.
 ---
 
-# Eco Lookup Normalized Signal
+# Query Normalized Signal
 
 ## Core Goal
 - Resolve one normalized signal by `signal_id`.
-- Return compact canonical fields and provenance.
+- Return compact canonical fields, `evidence_refs`, and `evidence_basis`.
 - Optionally include raw JSON only when explicitly requested.
 
 ## Triggering Conditions
 - Need to verify one exact public or environment signal.
 - Need to inspect the canonical row behind a board ref.
-- Need a targeted review step before challenge or evidence linking.
+- Need a targeted review step before finding, evidence-bundle, review-comment, challenge, or proposal submission.
 
 ## Read/Write Contract
 - Read only.
@@ -32,9 +32,11 @@ description: Look up one normalized signal by signal_id from the unified signal 
 - `summary`
 - `result_count`
 - `results`
+  - Each result includes `evidence_refs` and `evidence_basis`.
 - `artifact_refs`
 - `warnings`
 - `board_handoff`
+  - Suggested next steps are raw lookup, finding, evidence bundle, or discussion writes.
 
 ## References
 - `../../docs/openclaw-project-overview.md`

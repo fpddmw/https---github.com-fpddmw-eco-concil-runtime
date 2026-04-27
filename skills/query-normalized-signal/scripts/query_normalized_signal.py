@@ -20,6 +20,10 @@ from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     ensure_signal_plane_schema,
     resolved_canonical_object_kind,
 )
+from eco_council_runtime.kernel.signal_evidence import (  # noqa: E402
+    signal_artifact_ref,
+    with_signal_evidence_fields,
+)
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
@@ -108,38 +112,41 @@ def decode_json(text: str, default: Any) -> Any:
 
 
 def row_to_result(row: sqlite3.Row, include_raw_json: bool) -> dict[str, Any]:
-    result = {
-        "signal_id": row["signal_id"],
-        "run_id": row["run_id"],
-        "round_id": row["round_id"],
-        "plane": row["plane"],
-        "source_skill": row["source_skill"],
-        "signal_kind": row["signal_kind"],
-        "canonical_object_kind": resolved_canonical_object_kind(
-            plane=maybe_text(row["plane"]),
-            source_skill=maybe_text(row["source_skill"]),
-            signal_kind=maybe_text(row["signal_kind"]),
-            canonical_object_kind=maybe_text(row["canonical_object_kind"]),
-        ),
-        "title": maybe_text(row["title"]),
-        "text": maybe_text(row["body_text"]),
-        "url": maybe_text(row["url"]),
-        "metric": maybe_text(row["metric"]),
-        "value": row["numeric_value"],
-        "unit": maybe_text(row["unit"]),
-        "published_at_utc": maybe_text(row["published_at_utc"]),
-        "observed_at_utc": maybe_text(row["observed_at_utc"]),
-        "window_start_utc": maybe_text(row["window_start_utc"]),
-        "window_end_utc": maybe_text(row["window_end_utc"]),
-        "latitude": row["latitude"],
-        "longitude": row["longitude"],
-        "quality_flags": decode_json(row["quality_flags_json"], []),
-        "engagement": decode_json(row["engagement_json"], {}),
-        "metadata": decode_json(row["metadata_json"], {}),
-        "artifact_path": maybe_text(row["artifact_path"]),
-        "record_locator": maybe_text(row["record_locator"]),
-        "artifact_ref": f"{row['artifact_path']}:{row['record_locator']}",
-    }
+    result = with_signal_evidence_fields(
+        {
+            "signal_id": row["signal_id"],
+            "run_id": row["run_id"],
+            "round_id": row["round_id"],
+            "plane": row["plane"],
+            "source_skill": row["source_skill"],
+            "signal_kind": row["signal_kind"],
+            "canonical_object_kind": resolved_canonical_object_kind(
+                plane=maybe_text(row["plane"]),
+                source_skill=maybe_text(row["source_skill"]),
+                signal_kind=maybe_text(row["signal_kind"]),
+                canonical_object_kind=maybe_text(row["canonical_object_kind"]),
+            ),
+            "title": maybe_text(row["title"]),
+            "text": maybe_text(row["body_text"]),
+            "url": maybe_text(row["url"]),
+            "metric": maybe_text(row["metric"]),
+            "value": row["numeric_value"],
+            "unit": maybe_text(row["unit"]),
+            "published_at_utc": maybe_text(row["published_at_utc"]),
+            "observed_at_utc": maybe_text(row["observed_at_utc"]),
+            "window_start_utc": maybe_text(row["window_start_utc"]),
+            "window_end_utc": maybe_text(row["window_end_utc"]),
+            "latitude": row["latitude"],
+            "longitude": row["longitude"],
+            "quality_flags": decode_json(row["quality_flags_json"], []),
+            "engagement": decode_json(row["engagement_json"], {}),
+            "metadata": decode_json(row["metadata_json"], {}),
+            "artifact_path": maybe_text(row["artifact_path"]),
+            "record_locator": maybe_text(row["record_locator"]),
+        },
+        row,
+        plane=maybe_text(row["plane"]),
+    )
     if include_raw_json:
         result["raw_json"] = decode_json(row["raw_json"], None)
     return result
@@ -163,7 +170,7 @@ def lookup_normalized_signal_skill(run_dir: str, signal_id: str, db_path: str, i
             "board_handoff": {"candidate_ids": [], "evidence_refs": [], "gap_hints": ["No normalized signal was found for the requested id."], "challenge_hints": [], "suggested_next_skills": ["query-public-signals", "query-environment-signals"]},
         }
     result = row_to_result(row, include_raw_json)
-    ref = {"signal_id": row["signal_id"], "artifact_path": maybe_text(row["artifact_path"]), "record_locator": maybe_text(row["record_locator"]), "artifact_ref": f"{row['artifact_path']}:{row['record_locator']}"}
+    ref = signal_artifact_ref(row, plane=maybe_text(row["plane"]))
     return {
         "status": "completed",
         "summary": {"skill": SKILL_NAME, "signal_id": signal_id, "result_count": 1, "db_path": str(db_file)},
@@ -171,7 +178,18 @@ def lookup_normalized_signal_skill(run_dir: str, signal_id: str, db_path: str, i
         "results": [result],
         "artifact_refs": [ref],
         "warnings": [],
-        "board_handoff": {"candidate_ids": [signal_id], "evidence_refs": [ref], "gap_hints": [], "challenge_hints": [], "suggested_next_skills": ["query-raw-record"]},
+        "board_handoff": {
+            "candidate_ids": [signal_id],
+            "evidence_refs": [ref],
+            "gap_hints": [],
+            "challenge_hints": [],
+            "suggested_next_skills": [
+                "query-raw-record",
+                "submit-finding-record",
+                "submit-evidence-bundle",
+                "post-discussion-message",
+            ],
+        },
     }
 
 

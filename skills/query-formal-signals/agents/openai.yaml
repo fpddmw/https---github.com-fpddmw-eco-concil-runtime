@@ -1,4 +1,4 @@
 interface:
-  display_name: "Eco Query Formal Signals"
+  display_name: "Query Formal Signals"
   short_description: "Query compact formal signals from the unified signal plane"
-  default_prompt: "Use $query-formal-signals to query compact formal-signal rows from the unified signal plane with run, round, source, kind, time, docket, agency, submitter, optional typed metadata, and keyword filters. Do not infer missing issue, stance, concern, citation, or route metadata while querying."
+  default_prompt: "Use $query-formal-signals to query compact formal-signal rows from the unified signal plane with run, round, source, kind, time, docket, agency, submitter, optional typed metadata, and keyword filters. Use the returned item-level evidence_refs and evidence_basis for findings or evidence bundles; do not infer missing issue, stance, concern, citation, or route metadata while querying."

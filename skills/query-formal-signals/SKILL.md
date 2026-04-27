@@ -1,14 +1,14 @@
 ---
 name: query-formal-signals
-description: Query compact formal-signal rows from the unified signal plane database with run, round, round-scope, source, kind, publication window, docket, agency, submitter, optional typed metadata, and keyword filters. Use when an agent or operator needs DB-backed formal-record evidence refs without reopening raw Regulations.gov artifacts.
+description: Query compact formal-signal rows from the unified signal plane database with run, round, round-scope, source, kind, publication window, docket, agency, submitter, optional typed metadata, and keyword filters. Use when an investigator or operator needs DB-backed formal-record evidence refs and item-level evidence basis without reopening raw Regulations.gov artifacts.
 ---
 
-# Eco Query Formal Signals
+# Query Formal Signals
 
 ## Core Goal
 - Read compact formal signal rows from the unified signal plane database.
 - Filter by run, round or cross-round scope, source skill, signal kind, publication window, docket, agency, submitter, keyword, and optional typed metadata if an approved parser or analysis skill has written it.
-- Return short results with provenance refs and evidence handles.
+- Return short results with item-level `evidence_refs` and `evidence_basis`.
 
 ## Triggering Conditions
 - Need formal-record evidence without reopening raw comment artifacts.
@@ -51,9 +51,11 @@ description: Query compact formal-signal rows from the unified signal plane data
 - `summary`
 - `result_count`
 - `results`
+  - Each result includes `evidence_refs` and `evidence_basis`.
 - `artifact_refs`
 - `warnings`
 - `board_handoff`
+  - Suggested next steps are lookup, finding, evidence bundle, or discussion writes.
 
 ## References
 - `../../docs/openclaw-project-overview.md`

@@ -1,4 +1,4 @@
 interface:
-  display_name: "Eco Lookup Raw Record"
+  display_name: "Query Raw Record"
   short_description: "Inspect one raw record through signal provenance"
-  default_prompt: "Use $query-raw-record to inspect one raw source record by signal_id or by artifact path and record locator, and return only the smallest provenance-preserving raw slice needed for review."
+  default_prompt: "Use $query-raw-record to inspect one raw source record by signal_id or by artifact path and record locator, and return only the smallest provenance-preserving raw slice plus evidence_refs and evidence_basis needed for review."

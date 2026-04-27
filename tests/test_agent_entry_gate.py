@@ -296,6 +296,10 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             self.assertIn(
                 "query-council-objects",
+                state_payload["agent_entry"]["operator"]["query_review_comments_command"],
+            )
+            self.assertIn(
+                "query-council-objects",
                 state_payload["agent_entry"]["operator"]["query_evidence_bundles_command"],
             )
             self.assertIn(
@@ -319,6 +323,10 @@ class AgentEntryGateTests(unittest.TestCase):
                 state_payload["agent_entry"]["operator"]["submit_council_proposal_command_template"],
             )
             self.assertIn(
+                "--response-to-id '<finding_or_bundle_id>'",
+                state_payload["agent_entry"]["operator"]["submit_council_proposal_command_template"],
+            )
+            self.assertIn(
                 "--provenance-json",
                 state_payload["agent_entry"]["operator"]["submit_council_proposal_command_template"],
             )
@@ -329,6 +337,10 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn(
                 "post-discussion-message",
                 state_payload["agent_entry"]["operator"]["post_discussion_message_command_template"],
+            )
+            self.assertIn(
+                "post-review-comment",
+                state_payload["agent_entry"]["operator"]["post_review_comment_command_template"],
             )
             self.assertIn(
                 "submit-evidence-bundle",
@@ -642,15 +654,18 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             self.assertIn("query-council-objects", operator["query_finding_records_command"])
             self.assertIn("query-council-objects", operator["query_discussion_messages_command"])
+            self.assertIn("query-council-objects", operator["query_review_comments_command"])
             self.assertIn("query-council-objects", operator["query_evidence_bundles_command"])
             self.assertIn("query-reporting-objects", operator["query_report_section_drafts_command"])
             self.assertIn("submit-council-proposal", operator["submit_council_proposal_command_template"])
             self.assertIn("--confidence", operator["submit_council_proposal_command_template"])
+            self.assertIn("--response-to-id '<finding_or_bundle_id>'", operator["submit_council_proposal_command_template"])
             self.assertIn("--evidence-ref", operator["submit_council_proposal_command_template"])
             self.assertIn("--provenance-json", operator["submit_council_proposal_command_template"])
             self.assertIn("submit-readiness-opinion", operator["submit_readiness_opinion_command_template"])
             self.assertIn("submit-finding-record", operator["submit_finding_record_command_template"])
             self.assertIn("post-discussion-message", operator["post_discussion_message_command_template"])
+            self.assertIn("post-review-comment", operator["post_review_comment_command_template"])
             self.assertIn("submit-evidence-bundle", operator["submit_evidence_bundle_command_template"])
             self.assertIn("submit-report-section-draft", operator["submit_report_section_draft_command_template"])
             self.assertIn("request-phase-transition", operator["request_promotion_transition_command"])

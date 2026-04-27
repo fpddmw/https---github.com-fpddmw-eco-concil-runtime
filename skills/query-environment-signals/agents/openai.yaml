@@ -1,4 +1,4 @@
 interface:
-  display_name: "Eco Query Environment Signals"
+  display_name: "Query Environment Signals"
   short_description: "Query compact environment signals from the unified signal plane"
-  default_prompt: "Use $query-environment-signals to query compact environment-signal rows from the unified signal plane with run, round, metric, source, time, bbox, and quality filters, and return provenance-aware observation refs only."
+  default_prompt: "Use $query-environment-signals to query compact environment-signal rows from the unified signal plane with run, round, metric, source, time, bbox, and quality filters. Use the returned item-level evidence_refs and evidence_basis for findings or evidence bundles; do not infer exposure, coverage sufficiency, or policy conclusions while querying."

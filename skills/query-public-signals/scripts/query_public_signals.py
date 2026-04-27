@@ -22,6 +22,10 @@ from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     ensure_signal_plane_schema,
     resolved_canonical_object_kind,
 )
+from eco_council_runtime.kernel.signal_evidence import (  # noqa: E402
+    signal_artifact_ref,
+    with_signal_evidence_fields,
+)
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
@@ -219,33 +223,29 @@ def keyword_match(row: sqlite3.Row, keywords: list[str]) -> bool:
 
 
 def compact_result(row: sqlite3.Row) -> dict[str, Any]:
-    artifact_ref = f"{row['artifact_path']}:{row['record_locator']}"
-    return {
-        "signal_id": row["signal_id"],
-        "round_id": maybe_text(row["round_id"]),
-        "source_skill": maybe_text(row["source_skill"]),
-        "signal_kind": maybe_text(row["signal_kind"]),
-        "canonical_object_kind": resolved_canonical_object_kind(
-            plane="public",
-            source_skill=maybe_text(row["source_skill"]),
-            signal_kind=maybe_text(row["signal_kind"]),
-            canonical_object_kind=maybe_text(row["canonical_object_kind"]),
-        ),
-        "title": maybe_text(row["title"]),
-        "snippet": truncate_text(row["body_text"], 240),
-        "published_at_utc": maybe_text(row["published_at_utc"]),
-        "artifact_ref": artifact_ref,
-    }
+    return with_signal_evidence_fields(
+        {
+            "signal_id": row["signal_id"],
+            "round_id": maybe_text(row["round_id"]),
+            "source_skill": maybe_text(row["source_skill"]),
+            "signal_kind": maybe_text(row["signal_kind"]),
+            "canonical_object_kind": resolved_canonical_object_kind(
+                plane="public",
+                source_skill=maybe_text(row["source_skill"]),
+                signal_kind=maybe_text(row["signal_kind"]),
+                canonical_object_kind=maybe_text(row["canonical_object_kind"]),
+            ),
+            "title": maybe_text(row["title"]),
+            "snippet": truncate_text(row["body_text"], 240),
+            "published_at_utc": maybe_text(row["published_at_utc"]),
+        },
+        row,
+        plane="public",
+    )
 
 
 def artifact_ref(row: sqlite3.Row) -> dict[str, str]:
-    return {
-        "signal_id": row["signal_id"],
-        "round_id": maybe_text(row["round_id"]),
-        "artifact_path": maybe_text(row["artifact_path"]),
-        "record_locator": maybe_text(row["record_locator"]),
-        "artifact_ref": f"{row['artifact_path']}:{row['record_locator']}",
-    }
+    return signal_artifact_ref(row, plane="public")
 
 
 def query_public_signals_skill(
@@ -311,9 +311,15 @@ def query_public_signals_skill(
         "board_handoff": {
             "candidate_ids": [row["signal_id"] for row in limited],
             "evidence_refs": refs,
-            "gap_hints": [] if limited else ["Public evidence coverage is empty for the current filter set."],
-            "challenge_hints": ["Check whether repeated public narratives are being overread as independent evidence."] if limited else [],
-            "suggested_next_skills": ["query-normalized-signal", "extract-claim-candidates"],
+            "gap_hints": [] if limited else ["No public signal rows matched this DB query; adjust source, time, or keyword filters before filing a finding."],
+            "challenge_hints": ["When using public discourse rows, attach the returned item-level evidence_refs and note platform representativeness limits."] if limited else [],
+            "suggested_next_skills": [
+                "query-normalized-signal",
+                "query-raw-record",
+                "submit-finding-record",
+                "submit-evidence-bundle",
+                "post-discussion-message",
+            ],
         },
     }
 

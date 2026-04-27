@@ -22,6 +22,10 @@ from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     ensure_signal_plane_schema,
     resolved_canonical_object_kind,
 )
+from eco_council_runtime.kernel.signal_evidence import (  # noqa: E402
+    signal_artifact_ref,
+    with_signal_evidence_fields,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -324,59 +328,55 @@ def keyword_match(row: sqlite3.Row, keywords: list[str]) -> bool:
 
 
 def compact_result(row: sqlite3.Row) -> dict[str, Any]:
-    artifact_ref = f"{row['artifact_path']}:{row['record_locator']}"
     metadata = metadata_dict(row)
-    return {
-        "signal_id": row["signal_id"],
-        "round_id": maybe_text(row["round_id"]),
-        "source_skill": maybe_text(row["source_skill"]),
-        "signal_kind": maybe_text(row["signal_kind"]),
-        "canonical_object_kind": resolved_canonical_object_kind(
-            plane="formal",
-            source_skill=maybe_text(row["source_skill"]),
-            signal_kind=maybe_text(row["signal_kind"]),
-            canonical_object_kind=maybe_text(row["canonical_object_kind"]),
-        ),
-        "title": maybe_text(row["title"]),
-        "snippet": truncate_text(row["body_text"], 240),
-        "author_name": maybe_text(row["author_name"]),
-        "submitter_name": maybe_text(metadata.get("submitter_name"))
-        or maybe_text(row["author_name"]),
-        "submitter_type": maybe_text(metadata.get("submitter_type")),
-        "agency_id": maybe_text(metadata.get("agency_id")),
-        "docket_id": maybe_text(metadata.get("docket_id")),
-        "issue_labels": unique_texts(metadata.get("issue_labels", []))
-        if isinstance(metadata.get("issue_labels"), list)
-        else [],
-        "issue_terms": unique_texts(metadata.get("issue_terms", []))
-        if isinstance(metadata.get("issue_terms"), list)
-        else [],
-        "stance_hint": maybe_text(metadata.get("stance_hint")),
-        "concern_facets": unique_texts(metadata.get("concern_facets", []))
-        if isinstance(metadata.get("concern_facets"), list)
-        else [],
-        "evidence_citation_types": unique_texts(
-            metadata.get("evidence_citation_types", [])
-        )
-        if isinstance(metadata.get("evidence_citation_types"), list)
-        else [],
-        "route_hint": maybe_text(metadata.get("route_hint")),
-        "route_status_hint": maybe_text(metadata.get("route_status_hint")),
-        "decision_source": maybe_text(metadata.get("decision_source")),
-        "typing_method": maybe_text(metadata.get("typing_method")),
-        "published_at_utc": maybe_text(row["published_at_utc"]),
-        "artifact_ref": artifact_ref,
-    }
+    return with_signal_evidence_fields(
+        {
+            "signal_id": row["signal_id"],
+            "round_id": maybe_text(row["round_id"]),
+            "source_skill": maybe_text(row["source_skill"]),
+            "signal_kind": maybe_text(row["signal_kind"]),
+            "canonical_object_kind": resolved_canonical_object_kind(
+                plane="formal",
+                source_skill=maybe_text(row["source_skill"]),
+                signal_kind=maybe_text(row["signal_kind"]),
+                canonical_object_kind=maybe_text(row["canonical_object_kind"]),
+            ),
+            "title": maybe_text(row["title"]),
+            "snippet": truncate_text(row["body_text"], 240),
+            "author_name": maybe_text(row["author_name"]),
+            "submitter_name": maybe_text(metadata.get("submitter_name"))
+            or maybe_text(row["author_name"]),
+            "submitter_type": maybe_text(metadata.get("submitter_type")),
+            "agency_id": maybe_text(metadata.get("agency_id")),
+            "docket_id": maybe_text(metadata.get("docket_id")),
+            "issue_labels": unique_texts(metadata.get("issue_labels", []))
+            if isinstance(metadata.get("issue_labels"), list)
+            else [],
+            "issue_terms": unique_texts(metadata.get("issue_terms", []))
+            if isinstance(metadata.get("issue_terms"), list)
+            else [],
+            "stance_hint": maybe_text(metadata.get("stance_hint")),
+            "concern_facets": unique_texts(metadata.get("concern_facets", []))
+            if isinstance(metadata.get("concern_facets"), list)
+            else [],
+            "evidence_citation_types": unique_texts(
+                metadata.get("evidence_citation_types", [])
+            )
+            if isinstance(metadata.get("evidence_citation_types"), list)
+            else [],
+            "route_hint": maybe_text(metadata.get("route_hint")),
+            "route_status_hint": maybe_text(metadata.get("route_status_hint")),
+            "decision_source": maybe_text(metadata.get("decision_source")),
+            "typing_method": maybe_text(metadata.get("typing_method")),
+            "published_at_utc": maybe_text(row["published_at_utc"]),
+        },
+        row,
+        plane="formal",
+    )
 
 
 def artifact_ref(row: sqlite3.Row) -> dict[str, str]:
-    return {
-        "signal_id": row["signal_id"],
-        "round_id": maybe_text(row["round_id"]),
-        "artifact_path": maybe_text(row["artifact_path"]),
-        "record_locator": maybe_text(row["record_locator"]),
-        "artifact_ref": f"{row['artifact_path']}:{row['record_locator']}",
-    }
+    return signal_artifact_ref(row, plane="formal")
 
 
 def query_formal_signals_skill(
@@ -490,12 +490,14 @@ def query_formal_signals_skill(
         "board_handoff": {
             "candidate_ids": [row["signal_id"] for row in limited],
             "evidence_refs": refs,
-            "gap_hints": [] if limited else ["Formal record coverage is empty for the current filter set."],
-            "challenge_hints": ["Check whether docket-level formal submissions are being conflated with broader public discourse patterns."] if limited else [],
+            "gap_hints": [] if limited else ["No formal signal rows matched this DB query; adjust docket, agency, submitter, time, typed metadata, or keyword filters before filing a finding."],
+            "challenge_hints": ["When using formal rows, attach the returned item-level evidence_refs and distinguish provider fields from optional typed metadata."] if limited else [],
             "suggested_next_skills": [
                 "query-normalized-signal",
-                "link-formal-comments-to-public-discourse",
-                "identify-representation-gaps",
+                "query-raw-record",
+                "submit-finding-record",
+                "submit-evidence-bundle",
+                "post-discussion-message",
             ],
         },
     }
