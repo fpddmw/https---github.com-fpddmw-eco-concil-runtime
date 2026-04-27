@@ -50,96 +50,133 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
             self.assertTrue(profile["default_invocation"])
             self.assertTrue(profile["phase2_behavior"])
             self.assertIn("notes", profile)
+            self.assertEqual([], profile["downstream_hints"])
+            self.assertFalse(profile["default_chain_eligible"])
+            self.assertNotEqual("planned-step", profile["default_invocation"])
+
+    def test_skill_names_use_layer_prefix_without_project_prefix(self) -> None:
+        registry = load_registry_snapshot()(WORKSPACE_ROOT)
+
+        for entry in registry["skills"]:
+            skill_name = entry["skill_name"]
+            script_path = Path(entry["script_path"])
+            profile = entry["source_queue_profile"]
+
+            self.assertFalse(skill_name.startswith("eco-"), skill_name)
+            self.assertEqual(skill_name, script_path.parents[1].name)
+            self.assertEqual(f"{skill_name.replace('-', '_')}.py", script_path.name)
+
+            if profile["stage"] == "fetch":
+                self.assertTrue(skill_name.startswith("fetch-"), skill_name)
+            if profile["stage"] == "normalize":
+                self.assertTrue(skill_name.startswith("normalize-"), skill_name)
+            if profile["stage"] == "query":
+                self.assertTrue(skill_name.startswith("query-"), skill_name)
 
     def test_registry_profiles_classify_key_skill_roles(self) -> None:
         registry = load_registry_snapshot()(WORKSPACE_ROOT)
         profiles = {entry["skill_name"]: entry["source_queue_profile"] for entry in registry["skills"]}
 
-        self.assertEqual("bridge", profiles["eco-prepare-round"]["queue_status"])
-        self.assertEqual("source-selection", profiles["eco-prepare-round"]["stage"])
-        self.assertEqual("queue-planner", profiles["eco-prepare-round"]["queue_role"])
+        self.assertEqual("bridge", profiles["prepare-round"]["queue_status"])
+        self.assertEqual("source-selection", profiles["prepare-round"]["stage"])
+        self.assertEqual("capability-check", profiles["prepare-round"]["queue_role"])
 
-        self.assertEqual("direct", profiles["eco-normalize-airnow-observation-signals"]["queue_status"])
-        self.assertEqual("normalize", profiles["eco-normalize-airnow-observation-signals"]["stage"])
+        self.assertEqual("capability", profiles["normalize-airnow-observation-signals"]["queue_status"])
+        self.assertEqual("normalize", profiles["normalize-airnow-observation-signals"]["stage"])
 
-        self.assertEqual("advisory", profiles["eco-query-public-signals"]["queue_status"])
-        self.assertEqual("context", profiles["eco-query-public-signals"]["stage"])
+        self.assertEqual("advisory", profiles["query-public-signals"]["queue_status"])
+        self.assertEqual("query", profiles["query-public-signals"]["stage"])
 
-        self.assertEqual("advisory", profiles["eco-open-investigation-round"]["queue_status"])
-        self.assertEqual("round-transition", profiles["eco-open-investigation-round"]["queue_role"])
+        self.assertEqual("transition", profiles["open-investigation-round"]["queue_status"])
+        self.assertEqual("round-transition-request-consumer", profiles["open-investigation-round"]["queue_role"])
 
-        self.assertEqual("direct", profiles["eco-summarize-round-readiness"]["queue_status"])
-        self.assertEqual("investigation", profiles["eco-summarize-round-readiness"]["stage"])
+        self.assertEqual("advisory", profiles["summarize-round-readiness"]["queue_status"])
+        self.assertEqual("optional-analysis", profiles["summarize-round-readiness"]["stage"])
+        self.assertTrue(profiles["summarize-round-readiness"]["requires_explicit_approval"])
 
-        self.assertEqual("direct", profiles["eco-materialize-final-publication"]["queue_status"])
-        self.assertEqual("reporting", profiles["eco-materialize-final-publication"]["stage"])
+        self.assertEqual("capability", profiles["materialize-final-publication"]["queue_status"])
+        self.assertEqual("reporting", profiles["materialize-final-publication"]["stage"])
+        self.assertTrue(profiles["materialize-final-publication"]["requires_explicit_approval"])
 
         self.assertEqual(
-            "optional-runtime-surface",
-            profiles["eco-extract-observation-candidates"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["extract-observation-candidates"]["phase2_behavior"],
         )
         self.assertEqual(
-            "optional-runtime-surface",
-            profiles["eco-merge-observation-candidates"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["merge-observation-candidates"]["phase2_behavior"],
         )
         self.assertEqual(
-            "optional-runtime-surface",
-            profiles["eco-link-claims-to-observations"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["link-claims-to-observations"]["phase2_behavior"],
         )
         self.assertEqual(
-            "optional-runtime-surface",
-            profiles["eco-derive-observation-scope"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["derive-observation-scope"]["phase2_behavior"],
         )
         self.assertEqual(
-            "optional-runtime-surface",
-            profiles["eco-score-evidence-coverage"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["score-evidence-coverage"]["phase2_behavior"],
         )
 
-        self.assertEqual("direct", profiles["eco-classify-claim-verifiability"]["queue_status"])
+        self.assertEqual("advisory", profiles["classify-claim-verifiability"]["queue_status"])
         self.assertEqual(
-            "non-owning-runtime-surface",
-            profiles["eco-classify-claim-verifiability"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["classify-claim-verifiability"]["phase2_behavior"],
         )
-        self.assertEqual("direct", profiles["eco-route-verification-lane"]["queue_status"])
+        self.assertEqual("advisory", profiles["route-verification-lane"]["queue_status"])
         self.assertEqual(
-            "non-owning-runtime-surface",
-            profiles["eco-route-verification-lane"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["route-verification-lane"]["phase2_behavior"],
         )
-        self.assertEqual("direct", profiles["eco-extract-issue-candidates"]["queue_status"])
+        self.assertEqual("advisory", profiles["extract-issue-candidates"]["queue_status"])
         self.assertEqual(
-            "non-owning-runtime-surface",
-            profiles["eco-extract-issue-candidates"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["extract-issue-candidates"]["phase2_behavior"],
         )
-        self.assertEqual("direct", profiles["eco-cluster-issue-candidates"]["queue_status"])
+        self.assertEqual("advisory", profiles["cluster-issue-candidates"]["queue_status"])
         self.assertEqual(
-            "non-owning-runtime-surface",
-            profiles["eco-cluster-issue-candidates"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["cluster-issue-candidates"]["phase2_behavior"],
         )
-        self.assertEqual("direct", profiles["eco-extract-stance-candidates"]["queue_status"])
+        self.assertEqual("advisory", profiles["extract-stance-candidates"]["queue_status"])
         self.assertEqual(
-            "optional-runtime-surface",
-            profiles["eco-extract-stance-candidates"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["extract-stance-candidates"]["phase2_behavior"],
         )
-        self.assertEqual("direct", profiles["eco-extract-concern-facets"]["queue_status"])
+        self.assertEqual("advisory", profiles["extract-concern-facets"]["queue_status"])
         self.assertEqual(
-            "optional-runtime-surface",
-            profiles["eco-extract-concern-facets"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["extract-concern-facets"]["phase2_behavior"],
         )
-        self.assertEqual("direct", profiles["eco-extract-actor-profiles"]["queue_status"])
+        self.assertEqual("advisory", profiles["extract-actor-profiles"]["queue_status"])
         self.assertEqual(
-            "optional-runtime-surface",
-            profiles["eco-extract-actor-profiles"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["extract-actor-profiles"]["phase2_behavior"],
         )
-        self.assertEqual("direct", profiles["eco-extract-evidence-citation-types"]["queue_status"])
+        self.assertEqual("advisory", profiles["extract-evidence-citation-types"]["queue_status"])
         self.assertEqual(
-            "optional-runtime-surface",
-            profiles["eco-extract-evidence-citation-types"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["extract-evidence-citation-types"]["phase2_behavior"],
         )
-        self.assertEqual("direct", profiles["eco-materialize-controversy-map"]["queue_status"])
+        self.assertEqual("advisory", profiles["materialize-controversy-map"]["queue_status"])
         self.assertEqual(
-            "non-owning-runtime-surface",
-            profiles["eco-materialize-controversy-map"]["phase2_behavior"],
+            "approval-gated-runtime-surface",
+            profiles["materialize-controversy-map"]["phase2_behavior"],
         )
+
+        for skill_name in [
+            "plan-round-orchestration",
+            "propose-next-actions",
+            "summarize-round-readiness",
+            "link-claims-to-observations",
+            "score-evidence-coverage",
+        ]:
+            self.assertEqual("advisory", profiles[skill_name]["queue_status"])
+            self.assertEqual("operator-approved-on-demand", profiles[skill_name]["default_invocation"])
+            self.assertEqual("approval-gated-runtime-surface", profiles[skill_name]["phase2_behavior"])
+            self.assertTrue(profiles[skill_name]["requires_explicit_approval"])
+            self.assertFalse(profiles[skill_name]["default_chain_eligible"])
 
 
 if __name__ == "__main__":

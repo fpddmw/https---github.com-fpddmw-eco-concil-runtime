@@ -34,7 +34,7 @@ ROUND_ID = "round-decision-trace-001"
 def prepare_round_base(run_dir: Path, root: Path) -> dict[str, str]:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
     run_script(
-        script_path("eco-derive-claim-scope"),
+        script_path("derive-claim-scope"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -43,7 +43,7 @@ def prepare_round_base(run_dir: Path, root: Path) -> dict[str, str]:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-derive-observation-scope"),
+        script_path("derive-observation-scope"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -52,7 +52,7 @@ def prepare_round_base(run_dir: Path, root: Path) -> dict[str, str]:
         ROUND_ID,
     )
     coverage_payload = run_script(
-        script_path("eco-score-evidence-coverage"),
+        script_path("score-evidence-coverage"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -63,7 +63,7 @@ def prepare_round_base(run_dir: Path, root: Path) -> dict[str, str]:
     coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
     claim_id = outputs["cluster_claims"]["canonical_ids"][0]
     run_script(
-        script_path("eco-post-board-note"),
+        script_path("post-board-note"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -80,7 +80,7 @@ def prepare_round_base(run_dir: Path, root: Path) -> dict[str, str]:
         coverage_ref,
     )
     run_script(
-        script_path("eco-update-hypothesis-status"),
+        script_path("update-hypothesis-status"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -128,7 +128,7 @@ def prepare_reporting_chain(run_dir: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-materialize-reporting-handoff"),
+        script_path("materialize-reporting-handoff"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -137,7 +137,7 @@ def prepare_reporting_chain(run_dir: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-draft-council-decision"),
+        script_path("draft-council-decision"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -248,7 +248,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
             )
 
             run_script(
-                script_path("eco-draft-expert-report"),
+                script_path("draft-expert-report"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -259,7 +259,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "sociologist",
             )
             run_script(
-                script_path("eco-draft-expert-report"),
+                script_path("draft-expert-report"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -270,7 +270,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "environmentalist",
             )
             run_script(
-                script_path("eco-publish-expert-report"),
+                script_path("publish-expert-report"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -281,7 +281,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "sociologist",
             )
             run_script(
-                script_path("eco-publish-expert-report"),
+                script_path("publish-expert-report"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -292,7 +292,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "environmentalist",
             )
             decision_publish = run_script(
-                script_path("eco-publish-council-decision"),
+                script_path("publish-council-decision"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -340,7 +340,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
             self.assertTrue(ready_opinion_ids.issubset(trace["accepted_object_ids"]))
 
             publication_payload = run_script(
-                script_path("eco-materialize-final-publication"),
+                script_path("materialize-final-publication"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -436,7 +436,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             promotion_payload = run_script(
-                script_path("eco-promote-evidence-basis"),
+                script_path("promote-evidence-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -572,7 +572,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
             )
 
             decision_publish = run_script(
-                script_path("eco-publish-council-decision"),
+                script_path("publish-council-decision"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -617,7 +617,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
             self.assertTrue(ready_opinion_ids.issubset(trace["rejected_object_ids"]))
 
             publication_payload = run_script(
-                script_path("eco-materialize-final-publication"),
+                script_path("materialize-final-publication"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -710,7 +710,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
             )
 
             decision_publish = run_script(
-                script_path("eco-publish-council-decision"),
+                script_path("publish-council-decision"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -756,7 +756,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
             self.assertTrue(hold_opinion_ids.issubset(trace["accepted_object_ids"]))
 
             publication_payload = run_script(
-                script_path("eco-materialize-final-publication"),
+                script_path("materialize-final-publication"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",

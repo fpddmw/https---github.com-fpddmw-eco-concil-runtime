@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Normalize Regulations.gov Comment Detail Public Signals"
+  short_description: "Normalize provider-field formal-comment detail signals"
+  default_prompt: "Use $normalize-regulationsgov-comment-detail-public-signals to normalize one fetch-regulationsgov-comment-detail artifact into canonical formal-comment-signal rows with provider fields, validation metadata, provenance, and quality flags. Do not derive issue, stance, concern, citation, submitter type, route, board, or report judgements in this normalizer."

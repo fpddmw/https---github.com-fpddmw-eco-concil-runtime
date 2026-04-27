@@ -65,7 +65,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
 
             payload = run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -138,7 +138,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
 
             payload = run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -193,7 +193,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             run_dir = root / "run"
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -203,7 +203,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             )
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -220,7 +220,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -269,7 +269,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
 
             payload = run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -329,7 +329,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             )
 
             payload = run_script(
-                script_path("eco-summarize-round-readiness"),
+                script_path("summarize-round-readiness"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -410,7 +410,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             )
 
             payload = run_script(
-                script_path("eco-summarize-round-readiness"),
+                script_path("summarize-round-readiness"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -424,9 +424,9 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual("agent-council", artifact["decision_source"])
-            self.assertNotIn("eco-propose-next-actions", artifact["recommended_next_skills"])
-            self.assertIn("eco-submit-council-proposal", artifact["recommended_next_skills"])
-            self.assertIn("eco-submit-readiness-opinion", artifact["recommended_next_skills"])
+            self.assertNotIn("propose-next-actions", artifact["recommended_next_skills"])
+            self.assertIn("submit-council-proposal", artifact["recommended_next_skills"])
+            self.assertIn("submit-readiness-opinion", artifact["recommended_next_skills"])
 
     def test_probe_opening_can_execute_directly_from_council_proposal(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -463,7 +463,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
 
             payload = run_script(
-                script_path("eco-open-falsification-probe"),
+                script_path("open-falsification-probe"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -579,7 +579,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
 
             payload = run_script(
-                script_path("eco-open-falsification-probe"),
+                script_path("open-falsification-probe"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",

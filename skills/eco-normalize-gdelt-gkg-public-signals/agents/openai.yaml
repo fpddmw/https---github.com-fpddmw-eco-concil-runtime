@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Normalize GDELT GKG Public Signals"
-  short_description: "Normalize GDELT GKG zip exports into unified public signals"
-  default_prompt: "Use $eco-normalize-gdelt-gkg-public-signals to normalize one gdelt-gkg-fetch manifest and its zip exports into canonical public-signal rows in the unified signal plane and return compact receipts, artifact refs, signal ids, and board-ready hints."

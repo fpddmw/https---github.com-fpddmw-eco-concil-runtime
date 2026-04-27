@@ -91,7 +91,7 @@
 | `B1` | Deliberation Plane Bootstrap | 建立 board 的结构化 DB 状态面 | `completed` | board 事件与 round state 可在 DB 中读取 |
 | `B1.1` | Board Read Path Migration | board readers 改为 deliberation-plane-first | `completed` | board summary / planner 不再依赖 JSON-only |
 | `B1.2` | Moderator Handoff And Readiness Migration | moderator brief 与 readiness 改为 deliberation-plane-first | `completed` | handoff/readiness 不再把 board summary 当作主输入 |
-| `B1.3` | Next-Action Deliberation Migration | D1 action planning 改为 deliberation-plane-first | `completed` | `eco-propose-next-actions` 脱离 board summary 主依赖 |
+| `B1.3` | Next-Action Deliberation Migration | D1 action planning 改为 deliberation-plane-first | `completed` | `propose-next-actions` 脱离 board summary 主依赖 |
 | `B1.4` | Probe Source Decoupling | probe generation 不再硬依赖 `next_actions` artifact | `completed` | probe 可直接从共享 D1 上下文恢复 |
 | `B2` | Board Write-Path Migration | board 状态变更从“JSON first, DB sync”转向“DB first, JSON export” | `completed` | 关键 state-change skills 与 round opening 的主写面切到 deliberation plane |
 | `B2.1` | JSON Board Export Demotion | `board_summary` / `board_brief` 明确降级为导出物 | `completed` | 运营链路不再把 summary/brief 当硬前置 |
@@ -103,7 +103,7 @@
 | --- | --- | --- | --- | --- |
 | `C1` | Coverage Analysis Query Surface | 将 `evidence_coverage` 接入 analysis plane | `completed` | D1/readiness/promotion 可在缺少 coverage JSON 时继续运行 |
 | `C1.1` | Coverage Upstream Analysis Migration | 将 coverage 的上游 `links / claim_scope / observation_scope` 接入 analysis plane | `completed` | coverage 在缺少上游 JSON 时仍可运行 |
-| `C1.2` | History / Archive Read Migration | 将 history/archive 对 `links / scopes / coverage` 的直接 JSON 读取迁到 analysis plane | `completed` | `eco-materialize-history-context`、`eco-archive-case-library` 改为 analysis-plane-first |
+| `C1.2` | History / Archive Read Migration | 将 history/archive 对 `links / scopes / coverage` 的直接 JSON 读取迁到 analysis plane | `completed` | `materialize-history-context`、`archive-case-library` 改为 analysis-plane-first |
 | `C1.3` | Remaining Export Read Migration | 将仍直接读取 analysis JSON 的 reporting/export 消费端迁到 analysis plane | `completed` | 剩余关键 export/read consumers 不再依赖 analysis JSON 作为主输入 |
 | `C2` | Generic Result-Set Contract | 强化 `result_sets / result_items` 的通用契约与 lineage 语义 | `completed` | result set 可追溯 query basis、parent ids、artifact refs |
 | `C2.1` | Candidate / Cluster Result Migration | 将 claim/observation candidate、cluster、merge 等对象纳入 analysis plane | `completed` | 早期分析链的关键压缩对象可被统一查询 |

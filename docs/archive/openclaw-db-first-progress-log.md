@@ -37,11 +37,11 @@ Objective:
 - Restore the board-delta contract expected by board workflow consumers.
 
 Implementation:
-- `skills/eco-open-investigation-round/scripts/eco_open_investigation_round.py`
+- `skills/open-investigation-round/scripts/open_investigation_round.py`
   - Replaced hardcoded source-role grouping with the shared source catalog via `source_role(...)`.
 - `eco-concil-runtime/src/eco_council_runtime/kernel/source_queue_planner.py`
   - Applied `max_source_steps_per_round` during fetch-plan construction instead of leaving it as passive governance metadata.
-- `skills/eco-read-board-delta/scripts/eco_read_board_delta.py`
+- `skills/query-board-delta/scripts/query_board_delta.py`
   - Restored cursor-safe delta reads and expanded the payload with active round state fields.
 
 Validation:
@@ -54,10 +54,10 @@ Tests added or extended:
   - Verifies `build_fetch_plan(...)` respects `max_source_steps_per_round`.
 - `tests/test_board_workflow.py`
   - Verifies board delta reads expose active round state.
-  - Verifies `eco-open-investigation-round` fallback task generation uses the shared source-role catalog.
+  - Verifies `open-investigation-round` fallback task generation uses the shared source-role catalog.
 
 Known limitations:
-- `eco-read-board-delta` still syncs from board JSON first; it does not yet read from a DB-first write path.
+- `query-board-delta` still syncs from board JSON first; it does not yet read from a DB-first write path.
 
 Next:
 - Move more board-facing consumers onto the deliberation plane without breaking current JSON compatibility.
@@ -76,13 +76,13 @@ Implementation:
   - Added round event and round state read helpers for board consumers.
   - Added an `event_index` migration and ordering rule so cursor reads preserve board append order even when multiple events share the same timestamp.
 - Synced board mutations into the deliberation plane after JSON writes in:
-  - `skills/eco-post-board-note/scripts/eco_post_board_note.py`
-  - `skills/eco-update-hypothesis-status/scripts/eco_update_hypothesis_status.py`
-  - `skills/eco-open-challenge-ticket/scripts/eco_open_challenge_ticket.py`
-  - `skills/eco-close-challenge-ticket/scripts/eco_close_challenge_ticket.py`
-  - `skills/eco-claim-board-task/scripts/eco_claim_board_task.py`
-  - `skills/eco-open-investigation-round/scripts/eco_open_investigation_round.py`
-- `skills/eco-read-board-delta/scripts/eco_read_board_delta.py`
+  - `skills/post-board-note/scripts/post_board_note.py`
+  - `skills/update-hypothesis-status/scripts/update_hypothesis_status.py`
+  - `skills/open-challenge-ticket/scripts/open_challenge_ticket.py`
+  - `skills/close-challenge-ticket/scripts/close_challenge_ticket.py`
+  - `skills/claim-board-task/scripts/claim_board_task.py`
+  - `skills/open-investigation-round/scripts/open_investigation_round.py`
+- `skills/query-board-delta/scripts/query_board_delta.py`
   - Now returns `round_state` and `deliberation_sync` in addition to the event slice and board handoff payload.
 
 Validation:
@@ -107,10 +107,10 @@ Objective:
 Implementation:
 - `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
   - Added `load_round_snapshot(...)` so board readers can share one sync-plus-read path for round state and event history.
-- `skills/eco-summarize-board-state/scripts/eco_summarize_board_state.py`
+- `skills/summarize-board-state/scripts/summarize_board_state.py`
   - Now summarizes the round from the deliberation plane instead of manually slicing board JSON.
   - Emits `state_source`, `db_path`, and `deliberation_sync` for artifact traceability.
-- `skills/eco-plan-round-orchestration/scripts/eco_plan_round_orchestration.py`
+- `skills/plan-round-orchestration/scripts/plan_round_orchestration.py`
   - Now derives board posture from the deliberation plane first.
   - Keeps `board_state_summary` as a compatible advisory fallback instead of the primary state source.
   - Emits `board_state_source`, `db_path`, and `deliberation_sync` in planner outputs.
@@ -128,11 +128,11 @@ Tests added or extended:
   - Verifies planner outputs remain `deliberation-plane` backed even when no board summary artifact exists yet.
 
 Known limitations:
-- `eco-materialize-board-brief` still consumes the board summary artifact rather than reading the deliberation plane directly.
+- `materialize-board-brief` still consumes the board summary artifact rather than reading the deliberation plane directly.
 - Planner still reads `next_actions`, `probes`, and `readiness` from file artifacts; this increment only migrates the board-state read path.
 
 Next:
-- Migrate `eco-materialize-board-brief` and then one more planner-side consumer so more of the moderator loop can read from the deliberation plane without depending on precomputed JSON snapshots.
+- Migrate `materialize-board-brief` and then one more planner-side consumer so more of the moderator loop can read from the deliberation plane without depending on precomputed JSON snapshots.
 
 ## 2026-04-02 B1.2: Moderator Handoff And Readiness Migration
 
@@ -142,11 +142,11 @@ Objective:
 - Move the remaining moderator handoff and readiness readers off precomputed board-summary dependence and onto the shared deliberation-plane snapshot path.
 
 Implementation:
-- `skills/eco-materialize-board-brief/scripts/eco_materialize_board_brief.py`
+- `skills/materialize-board-brief/scripts/materialize_board_brief.py`
   - Now materializes the board brief from deliberation-plane round state.
   - Keeps `board_state_summary` only as a compatible fallback when board state is unavailable.
   - Emits `state_source`, `db_path`, and `deliberation_sync`.
-- `skills/eco-summarize-round-readiness/scripts/eco_summarize_round_readiness.py`
+- `skills/summarize-round-readiness/scripts/summarize_round_readiness.py`
   - Now evaluates board readiness from deliberation-plane state first.
   - Keeps `board_state_summary` as an advisory fallback instead of a required primary input.
   - Emits `board_state_source`, `db_path`, `deliberation_sync`, and input-presence flags for traceability.
@@ -166,25 +166,25 @@ Tests added or extended:
   - Verifies round readiness can return `ready` from deliberation-plane state even when `board_summary` and `board_brief` artifacts are absent.
 
 Known limitations:
-- `eco-propose-next-actions` still consumes board summary and board brief artifacts as its primary board context.
-- `eco-summarize-round-readiness` still reads `next_actions`, `probes`, and `coverage` from file artifacts; only the board-state side is migrated in this increment.
+- `propose-next-actions` still consumes board summary and board brief artifacts as its primary board context.
+- `summarize-round-readiness` still reads `next_actions`, `probes`, and `coverage` from file artifacts; only the board-state side is migrated in this increment.
 
 Next:
-- Migrate `eco-propose-next-actions` to deliberation-plane-first board reads, then revisit whether `board_summary` should remain a generated convenience artifact rather than a planning dependency.
+- Migrate `propose-next-actions` to deliberation-plane-first board reads, then revisit whether `board_summary` should remain a generated convenience artifact rather than a planning dependency.
 
 ## 2026-04-02 B1.3: Next-Action Deliberation Migration
 
 Status: completed
 
 Objective:
-- Remove `eco-propose-next-actions` from primary dependence on precomputed board summary artifacts so the D1 planning surface can read shared deliberation state directly.
+- Remove `propose-next-actions` from primary dependence on precomputed board summary artifacts so the D1 planning surface can read shared deliberation state directly.
 
 Implementation:
-- `skills/eco-propose-next-actions/scripts/eco_propose_next_actions.py`
+- `skills/propose-next-actions/scripts/propose_next_actions.py`
   - Now reads board posture from the deliberation plane first through `load_round_snapshot(...)`.
   - Keeps `board_state_summary` as a compatible advisory fallback instead of the primary board source.
   - Emits `board_state_source`, `db_path`, `deliberation_sync`, and input-presence flags in the action artifact for traceability.
-- No change was needed in `eco-open-falsification-probe`; the existing next-actions artifact contract remained stable for downstream consumers.
+- No change was needed in `open-falsification-probe`; the existing next-actions artifact contract remained stable for downstream consumers.
 
 Validation:
 - `python3 -m unittest tests/test_investigation_workflow.py -q`
@@ -198,11 +198,11 @@ Tests added or extended:
   - Verifies `next_actions -> falsification_probes` still works when `board_summary` and `board_brief` artifacts do not exist.
 
 Known limitations:
-- `eco-propose-next-actions` still optionally uses `board_brief` text when present as concise human context.
+- `propose-next-actions` still optionally uses `board_brief` text when present as concise human context.
 - The D1 surface still reads evidence coverage from file artifacts; only the board-state side is migrated in this increment.
 
 Next:
-- Decide whether `eco-open-falsification-probe` should stay artifact-driven or grow a direct deliberation/analysis-plane query path.
+- Decide whether `open-falsification-probe` should stay artifact-driven or grow a direct deliberation/analysis-plane query path.
 - Revisit whether `board_brief` should remain optional context only, instead of an expected upstream step in planner-oriented flows.
 
 ## 2026-04-02 B1.4: Probe Source Decoupling
@@ -210,15 +210,15 @@ Next:
 Status: completed
 
 Objective:
-- Remove the hard runtime dependence of `eco-open-falsification-probe` on a preexisting `next_actions` artifact while keeping probe generation semantics aligned with the D1 action planner.
+- Remove the hard runtime dependence of `open-falsification-probe` on a preexisting `next_actions` artifact while keeping probe generation semantics aligned with the D1 action planner.
 
 Implementation:
 - `eco-concil-runtime/src/eco_council_runtime/kernel/investigation_planning.py`
   - Added a shared runtime helper for D1 action planning.
   - Centralized board-state snapshot fallback, action ranking, and action-context loading from deliberation-plane state plus evidence coverage.
-- `skills/eco-propose-next-actions/scripts/eco_propose_next_actions.py`
+- `skills/propose-next-actions/scripts/propose_next_actions.py`
   - Now delegates action ranking to the shared runtime helper instead of maintaining an isolated local implementation.
-- `skills/eco-open-falsification-probe/scripts/eco_open_falsification_probe.py`
+- `skills/open-falsification-probe/scripts/open_falsification_probe.py`
   - Still consumes `next_actions` when the artifact exists.
   - Rebuilds ranked actions from the shared helper when the artifact is absent.
   - Emits `action_source`, `board_state_source`, `db_path`, `deliberation_sync`, and input-presence flags for traceability.
@@ -236,7 +236,7 @@ Tests added or extended:
   - Verifies probe generation can rebuild candidates directly from deliberation-plane state when the `next_actions` artifact is missing.
 
 Known limitations:
-- `eco-open-falsification-probe` still consumes evidence coverage through the file artifact layer rather than querying an analysis plane directly.
+- `open-falsification-probe` still consumes evidence coverage through the file artifact layer rather than querying an analysis plane directly.
 - The shared D1 planning helper currently lives in runtime Python only; it is not yet surfaced as a first-class reusable contract for non-Python tooling.
 
 Next:
@@ -253,7 +253,7 @@ Objective:
 Implementation:
 - Added this file: `openclaw-db-first-progress-log.md`
 - Replaced stale `../../openclaw-skill-phase-plan.md` references in skill docs with `../../docs/openclaw-next-phase-development-plan.md`
-- Updated `skills/eco-read-board-delta/SKILL.md` to match the current output contract.
+- Updated `skills/query-board-delta/SKILL.md` to match the current output contract.
 
 Validation:
 - `rg -n "openclaw-skill-phase-plan\\.md" skills -g 'SKILL.md'`
@@ -272,20 +272,20 @@ Implementation:
 - `eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py`
   - Added a transitional analysis-plane surface in `analytics/signal_plane.sqlite`.
   - Added `analysis_result_sets` and `analysis_result_items` tables plus helpers to sync and query `evidence_coverage` results.
-- `skills/eco-score-evidence-coverage/scripts/eco_score_evidence_coverage.py`
+- `skills/score-evidence-coverage/scripts/score_evidence_coverage.py`
   - Now syncs the coverage artifact into the analysis plane after JSON export.
   - Emits `db_path` and `analysis_sync` for traceability.
 - `eco-concil-runtime/src/eco_council_runtime/kernel/investigation_planning.py`
   - Replaced direct coverage-file reads with the shared analysis-plane helper.
   - Emits `coverage_source`, `coverage_file`, and `analysis_sync` in shared D1 action context.
-- `skills/eco-propose-next-actions/scripts/eco_propose_next_actions.py`
+- `skills/propose-next-actions/scripts/propose_next_actions.py`
   - Now exposes coverage trace fields from the shared analysis-plane-backed action context.
-- `skills/eco-open-falsification-probe/scripts/eco_open_falsification_probe.py`
+- `skills/open-falsification-probe/scripts/open_falsification_probe.py`
   - Now preserves `coverage_source` and `analysis_sync` when probes are rebuilt from shared D1 context.
-- `skills/eco-summarize-round-readiness/scripts/eco_summarize_round_readiness.py`
+- `skills/summarize-round-readiness/scripts/summarize_round_readiness.py`
   - Now loads coverage posture from the shared analysis plane first.
   - Continues to work when the `evidence_coverage` JSON artifact is absent but the synced result set exists.
-- `skills/eco-promote-evidence-basis/scripts/eco_promote_evidence_basis.py`
+- `skills/promote-evidence-basis/scripts/promote_evidence_basis.py`
   - Now selects promotion-ready coverage objects from the shared analysis plane first.
   - Emits `coverage_source`, `db_path`, and `analysis_sync`.
 
@@ -297,7 +297,7 @@ Validation:
 
 Tests added or extended:
 - `tests/test_analysis_workflow.py`
-  - Verifies `eco-score-evidence-coverage` syncs into `analysis_result_sets` and `analysis_result_items`.
+  - Verifies `score-evidence-coverage` syncs into `analysis_result_sets` and `analysis_result_items`.
   - Verifies custom coverage output paths are also recorded in the analysis plane.
 - `tests/test_investigation_workflow.py`
   - Verifies probe fallback can rebuild from deliberation state when both `next_actions` and the coverage JSON artifact are absent.
@@ -316,7 +316,7 @@ Next:
 Status: completed
 
 Objective:
-- Move `eco-score-evidence-coverage` off direct JSON-only dependence on upstream links and scope artifacts so coverage scoring can continue from the shared analysis plane.
+- Move `score-evidence-coverage` off direct JSON-only dependence on upstream links and scope artifacts so coverage scoring can continue from the shared analysis plane.
 
 Implementation:
 - `eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py`
@@ -326,16 +326,16 @@ Implementation:
     - `claim-scope`
     - `observation-scope`
     - existing `evidence-coverage`
-- `skills/eco-link-claims-to-observations/scripts/eco_link_claims_to_observations.py`
+- `skills/link-claims-to-observations/scripts/link_claims_to_observations.py`
   - Now syncs link results into the analysis plane after JSON export.
   - Emits `db_path` and `analysis_sync`.
-- `skills/eco-derive-claim-scope/scripts/eco_derive_claim_scope.py`
+- `skills/derive-claim-scope/scripts/derive_claim_scope.py`
   - Now syncs claim-scope results into the analysis plane after JSON export.
   - Emits `db_path` and `analysis_sync`.
-- `skills/eco-derive-observation-scope/scripts/eco_derive_observation_scope.py`
+- `skills/derive-observation-scope/scripts/derive_observation_scope.py`
   - Now syncs observation-scope results into the analysis plane after JSON export.
   - Emits `db_path` and `analysis_sync`.
-- `skills/eco-score-evidence-coverage/scripts/eco_score_evidence_coverage.py`
+- `skills/score-evidence-coverage/scripts/score_evidence_coverage.py`
   - Now loads links, claim scopes, and observation scopes from the shared analysis plane first.
   - Falls back to the JSON artifacts only when no synced result set is available.
   - Emits upstream source trace fields, input-presence flags, and `input_analysis_sync`.
@@ -351,7 +351,7 @@ Tests added or extended:
 - Existing custom-path coverage checks now also confirm custom claim-scope and observation-scope artifact paths are recorded in the analysis plane.
 
 Known limitations:
-- `eco-materialize-history-context` and `eco-archive-case-library` still read claim/observation scope artifacts directly instead of querying the shared analysis plane.
+- `materialize-history-context` and `archive-case-library` still read claim/observation scope artifacts directly instead of querying the shared analysis plane.
 - The analysis-plane result-set helper is still local runtime infrastructure rather than a formal public contract for non-Python tooling.
 
 Next:
@@ -396,10 +396,10 @@ Objective:
 - Move history/archive consumers off direct JSON-first reads for scopes and coverage so they can continue from the shared analysis plane.
 
 Implementation:
-- `skills/eco-materialize-history-context/scripts/eco_materialize_history_context.py`
+- `skills/materialize-history-context/scripts/materialize_history_context.py`
   - Replaced direct claim/observation scope JSON reads with analysis-plane-first loading via the shared runtime helper.
   - Added `claim_scope_source`, `observation_scope_source`, `analysis_db_path`, `observed_inputs`, and `input_analysis_sync` to the retrieval artifact and skill summary for traceability.
-- `skills/eco-archive-case-library/scripts/eco_archive_case_library.py`
+- `skills/archive-case-library/scripts/archive_case_library.py`
   - Replaced direct claim-scope, observation-scope, and coverage JSON reads with analysis-plane-first loading via the shared runtime helper.
   - Added source-trace fields, input-presence flags, and `input_analysis_sync` to the archive snapshot and skill summary while preserving the existing archive DB contract.
 - `tests/test_archive_history_workflow.py`
@@ -411,11 +411,11 @@ Validation:
 
 Tests added or extended:
 - `tests/test_archive_history_workflow.py`
-  - Verifies `eco-archive-case-library` continues from analysis-plane state after deleting `claim_scope_proposals`, `observation_scope_proposals`, and `evidence_coverage` JSON artifacts.
-  - Verifies `eco-materialize-history-context` continues from analysis-plane state after deleting current-round claim/observation scope JSON artifacts.
+  - Verifies `archive-case-library` continues from analysis-plane state after deleting `claim_scope_proposals`, `observation_scope_proposals`, and `evidence_coverage` JSON artifacts.
+  - Verifies `materialize-history-context` continues from analysis-plane state after deleting current-round claim/observation scope JSON artifacts.
 
 Known limitations:
-- `eco-materialize-history-context` and `eco-archive-case-library` still assemble the rest of their context from board/reporting/promotion artifacts; this increment only migrates the analysis-side scope/coverage reads.
+- `materialize-history-context` and `archive-case-library` still assemble the rest of their context from board/reporting/promotion artifacts; this increment only migrates the analysis-side scope/coverage reads.
 - The analysis-plane helper is still runtime-local Python infrastructure rather than a formal cross-tool query contract.
 
 Next:
@@ -435,13 +435,13 @@ Implementation:
     - `claim-candidate`
     - `observation-candidate`
   - Added shared sync/load wrappers for claim and observation candidate results.
-- `skills/eco-extract-claim-candidates/scripts/eco_extract_claim_candidates.py`
+- `skills/extract-claim-candidates/scripts/extract_claim_candidates.py`
   - Now syncs claim candidates into the shared analysis plane after JSON export.
   - Emits `db_path` and `analysis_sync`.
-- `skills/eco-extract-observation-candidates/scripts/eco_extract_observation_candidates.py`
+- `skills/extract-observation-candidates/scripts/extract_observation_candidates.py`
   - Now syncs observation candidates into the shared analysis plane after JSON export.
   - Emits `db_path` and `analysis_sync`.
-- `skills/eco-build-normalization-audit/scripts/eco_build_normalization_audit.py`
+- `skills/build-normalization-audit/scripts/build_normalization_audit.py`
   - Now loads claim and observation candidates from the shared analysis plane first.
   - Falls back to candidate JSON artifacts only when no synced result set is available.
   - Emits candidate source trace fields, input-presence flags, `db_path`, and `input_analysis_sync`.
@@ -453,7 +453,7 @@ Validation:
 Tests added or extended:
 - `tests/test_analysis_workflow.py`
   - Verifies claim-candidate and observation-candidate result sets are present in `analysis_result_sets`.
-  - Verifies `eco-build-normalization-audit` continues from analysis-plane state after deleting `claim_candidates` and `observation_candidates` JSON artifacts.
+  - Verifies `build-normalization-audit` continues from analysis-plane state after deleting `claim_candidates` and `observation_candidates` JSON artifacts.
 
 Known limitations:
 - Clustered and merged candidate-family objects still remain outside the shared analysis plane; this increment only migrates raw claim/observation candidate results plus the audit consumer.
@@ -478,13 +478,13 @@ Implementation:
   - Added a shared DB-first mutation commit path that writes deliberation rows first, then exports `investigation_board.json`, and backfills stable record locators.
   - Updated `load_round_snapshot(...)` so readers can continue from DB-only state when the board JSON export is temporarily absent.
 - Migrated core board mutation skills to `deliberation-plane` primary writes:
-  - `skills/eco-post-board-note/scripts/eco_post_board_note.py`
-  - `skills/eco-update-hypothesis-status/scripts/eco_update_hypothesis_status.py`
-  - `skills/eco-open-challenge-ticket/scripts/eco_open_challenge_ticket.py`
-  - `skills/eco-close-challenge-ticket/scripts/eco_close_challenge_ticket.py`
-  - `skills/eco-claim-board-task/scripts/eco_claim_board_task.py`
+  - `skills/post-board-note/scripts/post_board_note.py`
+  - `skills/update-hypothesis-status/scripts/update_hypothesis_status.py`
+  - `skills/open-challenge-ticket/scripts/open_challenge_ticket.py`
+  - `skills/close-challenge-ticket/scripts/close_challenge_ticket.py`
+  - `skills/claim-board-task/scripts/claim_board_task.py`
   - These skills now read existing board state from the deliberation plane, write DB rows first, export the board JSON for compatibility, and emit `summary.db_path` plus `summary.write_surface`.
-- `skills/eco-read-board-delta/scripts/eco_read_board_delta.py`
+- `skills/query-board-delta/scripts/query_board_delta.py`
   - Now reads through `load_round_snapshot(...)` so delta reads can continue from deliberation-plane state even when the board JSON export is missing.
 
 Validation:
@@ -497,11 +497,11 @@ Tests added or extended:
   - Verifies board delta and board brief readers continue from `deliberation-plane` state when the board JSON export is absent.
 
 Known limitations:
-- `eco-open-investigation-round` still performs a JSON-first board mutation and then syncs back into the deliberation plane.
-- `eco-scaffold-mission-run` still seeds the initial board through a JSON artifact; this increment relies on DB bootstrap to import that scaffold on the first DB-first mutation.
+- `open-investigation-round` still performs a JSON-first board mutation and then syncs back into the deliberation plane.
+- `scaffold-mission-run` still seeds the initial board through a JSON artifact; this increment relies on DB bootstrap to import that scaffold on the first DB-first mutation.
 
 Next:
-- Continue `B2` by migrating `eco-open-investigation-round` and any remaining round-transition mutation paths onto the same deliberation-plane-first surface.
+- Continue `B2` by migrating `open-investigation-round` and any remaining round-transition mutation paths onto the same deliberation-plane-first surface.
 - Then move to `B2.1` so `board_summary` and `board_brief` can be treated as derived exports rather than operational prerequisites.
 
 ## 2026-04-03 B2: Round Transition Write-Path Migration
@@ -509,19 +509,19 @@ Next:
 Status: completed
 
 Objective:
-- Finish `B2` by moving `eco-open-investigation-round` off `JSON first -> DB sync` and onto `deliberation-plane first -> JSON export`.
+- Finish `B2` by moving `open-investigation-round` off `JSON first -> DB sync` and onto `deliberation-plane first -> JSON export`.
 - Keep follow-up round transition artifacts queryable in the deliberation plane while preserving the existing JSON exports and task scaffold contract.
 
 Implementation:
 - `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
   - Added `store_round_transition_record(...)` so `round_transitions` can be written directly into SQLite without requiring a full board re-sync.
-- `skills/eco-open-investigation-round/scripts/eco_open_investigation_round.py`
+- `skills/open-investigation-round/scripts/open_investigation_round.py`
   - Replaced in-place board JSON mutation with `load_round_snapshot(...)` plus `commit_board_mutation(...)`.
   - Source and target round existence now resolve from deliberation-plane state, so follow-up round opening continues even when `board/investigation_board.json` is temporarily absent.
   - Added `summary.db_path` and `summary.write_surface`, and now writes the `round_transition` row directly into the deliberation plane after exporting `runtime/round_transition_<round_id>.json`.
 - `eco-concil-runtime/src/eco_council_runtime/kernel/registry.py`
   - Extended contract parsing so DB-first board skills that declare compatibility exports still register their resolved write paths for runtime governance and ledger metadata.
-- `skills/eco-open-investigation-round/SKILL.md`
+- `skills/open-investigation-round/SKILL.md`
   - Updated the read/write contract wording to match deliberation-plane-first behavior.
 
 Validation:
@@ -532,10 +532,10 @@ Validation:
 
 Tests added or extended:
 - `tests/test_board_workflow.py`
-  - Verifies `eco-open-investigation-round` can reopen a follow-up round after deleting `board/investigation_board.json`, recreate the compatibility export from DB state, and persist the round transition into `round_transitions`.
+  - Verifies `open-investigation-round` can reopen a follow-up round after deleting `board/investigation_board.json`, recreate the compatibility export from DB state, and persist the round transition into `round_transitions`.
 
 Known limitations:
-- `eco-scaffold-mission-run` still seeds the initial board through a JSON artifact before DB bootstrap takes over on the first DB-first mutation.
+- `scaffold-mission-run` still seeds the initial board through a JSON artifact before DB bootstrap takes over on the first DB-first mutation.
 - `runtime/round_transition_<round_id>.json` and `investigation/round_tasks_<round_id>.json` remain compatibility exports written after the DB mutation rather than transactional DB-only surfaces.
 
 Next:
@@ -556,14 +556,14 @@ Implementation:
 - `eco-concil-runtime/src/eco_council_runtime/kernel/phase2_contract.py`
   - Reclassified `board-summary` and `board-brief` as non-blocking export-side stages.
   - Relaxed `next-actions` so it depends on `orchestration-planner` directly instead of `board-brief`.
-- `skills/eco-plan-round-orchestration/scripts/eco_plan_round_orchestration.py`
+- `skills/plan-round-orchestration/scripts/plan_round_orchestration.py`
   - Planner-backed execution queues now start from `next-actions`.
   - `board-summary` and `board-brief` are emitted under `derived_exports` rather than `execution_queue`.
   - Added `observed_state.board_exports_are_derived` and `summary.derived_export_count` for traceability.
 - Updated skill docs to match the new semantics:
-  - `skills/eco-plan-round-orchestration/SKILL.md`
-  - `skills/eco-propose-next-actions/SKILL.md`
-  - `skills/eco-summarize-round-readiness/SKILL.md`
+  - `skills/plan-round-orchestration/SKILL.md`
+  - `skills/propose-next-actions/SKILL.md`
+  - `skills/summarize-round-readiness/SKILL.md`
 
 Validation:
 - `python3 -m unittest tests/test_orchestration_planner_workflow.py -q`
@@ -590,7 +590,7 @@ Next:
 Status: completed
 
 Objective:
-- Stop D1 contract metadata from drifting independently between `eco-propose-next-actions`, `eco-open-falsification-probe`, and `eco-summarize-round-readiness`.
+- Stop D1 contract metadata from drifting independently between `propose-next-actions`, `open-falsification-probe`, and `summarize-round-readiness`.
 - Make artifact presence and materialized input presence explicit in `observed_inputs` while preserving compatibility with older payloads.
 
 Implementation:
@@ -607,12 +607,12 @@ Implementation:
     - `deliberation_sync`
     - `analysis_sync`
     - explicit `*_artifact_present` and `*_present` flags inside `observed_inputs`
-- `skills/eco-propose-next-actions/scripts/eco_propose_next_actions.py`
+- `skills/propose-next-actions/scripts/propose_next_actions.py`
   - Now serializes D1 contract metadata through the shared runtime helper instead of hand-copying trace fields.
-- `skills/eco-open-falsification-probe/scripts/eco_open_falsification_probe.py`
+- `skills/open-falsification-probe/scripts/open_falsification_probe.py`
   - Now normalizes contract metadata both when consuming an existing `next_actions` artifact and when rebuilding from shared D1 context.
   - Adds explicit `next_actions_artifact_present` tracking without losing compatibility with the older `next_actions_present` flag.
-- `skills/eco-summarize-round-readiness/scripts/eco_summarize_round_readiness.py`
+- `skills/summarize-round-readiness/scripts/summarize_round_readiness.py`
   - Replaced duplicated deliberation/analysis trace assembly with the shared D1 context helper.
   - Now emits the same normalized input-presence contract as the D1 action/probe artifacts.
 
@@ -663,21 +663,21 @@ Implementation:
     - `supervisor_state`
     - `reporting_handoff`
     - `decision`
-- `skills/eco-promote-evidence-basis/scripts/eco_promote_evidence_basis.py`
+- `skills/promote-evidence-basis/scripts/promote_evidence_basis.py`
   - Now emits shared trace metadata through the reporting contract helper.
   - Preserves readiness-origin deliberation/analysis provenance while making `readiness`, `board_brief`, and `next_actions` artifact-versus-materialized presence explicit.
-- `skills/eco-materialize-reporting-handoff/scripts/eco_materialize_reporting_handoff.py`
+- `skills/materialize-reporting-handoff/scripts/materialize_reporting_handoff.py`
   - Now carries forward normalized promotion/readiness contract metadata instead of emitting a reporting-only summary object with no shared trace surface.
   - Adds explicit `promotion_source`, `readiness_source`, `board_brief_source`, `supervisor_state_source`, `deliberation_sync`, `analysis_sync`, and normalized `observed_inputs`.
-- `skills/eco-draft-council-decision/scripts/eco_draft_council_decision.py`
+- `skills/draft-council-decision/scripts/draft_council_decision.py`
   - Now preserves normalized reporting/promotion trace metadata in the decision draft so downstream consumers can still see board/evidence provenance.
-- `skills/eco-draft-expert-report/scripts/eco_draft_expert_report.py`
+- `skills/draft-expert-report/scripts/draft_expert_report.py`
   - Now preserves normalized reporting/decision trace metadata in role report drafts, including explicit handoff/decision/board-brief presence flags.
 - Updated skill docs to match the new output contract:
-  - `skills/eco-promote-evidence-basis/SKILL.md`
-  - `skills/eco-materialize-reporting-handoff/SKILL.md`
-  - `skills/eco-draft-council-decision/SKILL.md`
-  - `skills/eco-draft-expert-report/SKILL.md`
+  - `skills/promote-evidence-basis/SKILL.md`
+  - `skills/materialize-reporting-handoff/SKILL.md`
+  - `skills/draft-council-decision/SKILL.md`
+  - `skills/draft-expert-report/SKILL.md`
 
 Validation:
 - `python3 -m unittest tests/test_reporting_contracts.py -q`
@@ -700,7 +700,7 @@ Known limitations:
 - This increment intentionally preserves existing schema versions and payload shapes, so some older upstream artifacts may still rely on fallback merge behavior rather than natively carrying every normalized source field.
 
 Next:
-- Continue `A2.2` into `eco-publish-expert-report`, `eco-publish-council-decision`, and `eco-materialize-final-publication` so the rest of the export plane emits the same explicit trace contract.
+- Continue `A2.2` into `publish-expert-report`, `publish-council-decision`, and `materialize-final-publication` so the rest of the export plane emits the same explicit trace contract.
 - Then revisit `C2` once the remaining cross-plane metadata drift is further reduced.
 
 ## 2026-04-04 A2.2: Publish / Final Publication Trace Contract Adoption
@@ -721,13 +721,13 @@ Implementation:
     - `expert_report_draft_source`
     - `sociologist_report_source`
     - `environmentalist_report_source`
-- `skills/eco-publish-expert-report/scripts/eco_publish_expert_report.py`
+- `skills/publish-expert-report/scripts/publish_expert_report.py`
   - Canonical expert reports now preserve reporting-chain provenance from the draft instead of only adding publish metadata.
   - Adds explicit `expert_report_draft_source`, normalized `observed_inputs`, and shared `deliberation_sync` / `analysis_sync` passthrough.
-- `skills/eco-publish-council-decision/scripts/eco_publish_council_decision.py`
+- `skills/publish-council-decision/scripts/publish_council_decision.py`
   - Canonical council decisions now preserve draft-side board/evidence provenance while explicitly recording the presence state of canonical role reports.
   - Adds `decision_source`, `sociologist_report_source`, `environmentalist_report_source`, normalized `observed_inputs`, and shared sync metadata.
-- `skills/eco-materialize-final-publication/scripts/eco_materialize_final_publication.py`
+- `skills/materialize-final-publication/scripts/materialize_final_publication.py`
   - Final publication artifacts now preserve shared board/evidence provenance from upstream decision/handoff payloads instead of collapsing to publish-only metadata.
   - Explicitly records direct input sources and input presence for:
     - `reporting_handoff`
@@ -737,9 +737,9 @@ Implementation:
     - both canonical role reports
   - Makes absent optional canonical reports visible in the final artifact on hold paths through normalized `*_source` and `observed_inputs` fields.
 - Updated skill docs to match the new output contract:
-  - `skills/eco-publish-expert-report/SKILL.md`
-  - `skills/eco-publish-council-decision/SKILL.md`
-  - `skills/eco-materialize-final-publication/SKILL.md`
+  - `skills/publish-expert-report/SKILL.md`
+  - `skills/publish-council-decision/SKILL.md`
+  - `skills/materialize-final-publication/SKILL.md`
 
 Validation:
 - `python3 -m unittest tests/test_reporting_contracts.py -q`
@@ -783,12 +783,12 @@ Implementation:
   - `sync_analysis_result_set(...)` now persists lineage rows alongside `analysis_result_sets` and `analysis_result_items`.
   - `load_analysis_result_context(...)` and all typed analysis-context loaders now return a normalized `result_contract`, and `analysis_sync` now carries the same lineage summary fields.
 - Added explicit `query_basis` emission to current analysis-plane producers:
-  - `skills/eco-extract-claim-candidates/scripts/eco_extract_claim_candidates.py`
-  - `skills/eco-extract-observation-candidates/scripts/eco_extract_observation_candidates.py`
-  - `skills/eco-link-claims-to-observations/scripts/eco_link_claims_to_observations.py`
-  - `skills/eco-derive-claim-scope/scripts/eco_derive_claim_scope.py`
-  - `skills/eco-derive-observation-scope/scripts/eco_derive_observation_scope.py`
-  - `skills/eco-score-evidence-coverage/scripts/eco_score_evidence_coverage.py`
+  - `skills/extract-claim-candidates/scripts/extract_claim_candidates.py`
+  - `skills/extract-observation-candidates/scripts/extract_observation_candidates.py`
+  - `skills/link-claims-to-observations/scripts/link_claims_to_observations.py`
+  - `skills/derive-claim-scope/scripts/derive_claim_scope.py`
+  - `skills/derive-observation-scope/scripts/derive_observation_scope.py`
+  - `skills/score-evidence-coverage/scripts/score_evidence_coverage.py`
 - `tests/test_analysis_workflow.py`
   - Added lineage persistence coverage for both DB rows and analysis-plane load helpers.
 - `openclaw-db-first-master-plan.md`
@@ -945,17 +945,17 @@ Implementation:
     - `deliberation-plane-actions`
     - `falsification-probes-artifact`
     - `deliberation-plane-probes`
-- Updated `skills/eco-propose-next-actions/scripts/eco_propose_next_actions.py`
+- Updated `skills/propose-next-actions/scripts/propose_next_actions.py`
   - After writing the JSON export, it now persists the ranked action snapshot into deliberation plane.
-- Updated `skills/eco-open-falsification-probe/scripts/eco_open_falsification_probe.py`
+- Updated `skills/open-falsification-probe/scripts/open_falsification_probe.py`
   - Reads DB-backed next-action snapshots when the next-actions JSON export is missing.
   - Still falls back to direct deliberation/analysis reconstruction when neither artifact nor DB snapshot exists.
   - Persists the generated probe snapshot into deliberation plane.
-- Updated `skills/eco-summarize-round-readiness/scripts/eco_summarize_round_readiness.py`
+- Updated `skills/summarize-round-readiness/scripts/summarize_round_readiness.py`
   - Reads next actions and probes from deliberation-plane snapshots when the JSON exports are absent.
-- Updated `skills/eco-promote-evidence-basis/scripts/eco_promote_evidence_basis.py`
+- Updated `skills/promote-evidence-basis/scripts/promote_evidence_basis.py`
   - Reads DB-backed next actions when the explicit next-actions export is missing.
-- Updated `skills/eco-plan-round-orchestration/scripts/eco_plan_round_orchestration.py`
+- Updated `skills/plan-round-orchestration/scripts/plan_round_orchestration.py`
   - Planner observed-state reconstruction now falls back to DB-backed next actions and probes.
   - Added explicit `next_actions_source` / `probes_source` reporting in the plan payload.
 - Updated `eco-concil-runtime/src/eco_council_runtime/kernel/supervisor.py`
@@ -978,7 +978,7 @@ Tests added or extended:
 
 Known limitations:
 - This increment persists the latest per-round `next_actions` and `falsification_probes` snapshots, but it still does not model them as deeper per-item deliberation objects with their own mutation history.
-- `eco-open-investigation-round`, `eco-materialize-history-context`, and `eco-archive-case-library` still have some direct next-action/probe artifact reads that have not yet been moved onto the same DB-backed moderator work surface.
+- `open-investigation-round`, `materialize-history-context`, and `archive-case-library` still have some direct next-action/probe artifact reads that have not yet been moved onto the same DB-backed moderator work surface.
 - Challenge/task carryover orchestration still remains the next substantial `B3` gap after this action/probe migration.
 
 Next:
@@ -994,7 +994,7 @@ Objective:
 - Move the remaining history/archive consumers off direct `next_actions` / `falsification_probes` JSON reads so moderator open-question context survives export deletion.
 
 Implementation:
-- Updated `skills/eco-open-investigation-round/scripts/eco_open_investigation_round.py`
+- Updated `skills/open-investigation-round/scripts/open_investigation_round.py`
   - Source-round carryover now resolves `next_actions` through the shared wrapper:
     - artifact
     - deliberation-plane snapshot
@@ -1004,13 +1004,13 @@ Implementation:
     - `observed_inputs.source_next_actions_present`
     - `observed_inputs.source_next_actions_artifact_present`
   - Missing-next-actions warnings now only fire when both the JSON export and deliberation-plane snapshot are absent.
-- Updated `skills/eco-materialize-history-context/scripts/eco_materialize_history_context.py`
+- Updated `skills/materialize-history-context/scripts/materialize_history_context.py`
   - History query assembly now reads `next_actions` and `falsification_probes` through the same artifact-or-DB wrapper path.
   - `history_retrieval_<round>.json` and the skill summary now expose:
     - `next_actions_source`
     - `probes_source`
     - corresponding observed input presence flags
-- Updated `skills/eco-archive-case-library/scripts/eco_archive_case_library.py`
+- Updated `skills/archive-case-library/scripts/archive_case_library.py`
   - Archive import open-question assembly now reads `next_actions` and `falsification_probes` via the shared wrapper instead of direct JSON loads.
   - `case_library_import_<round>.json` and the skill summary now expose:
     - `next_actions_source`
@@ -1033,7 +1033,7 @@ Tests added or extended:
 
 Known limitations:
 - `next_actions` / `falsification_probes` still persist as latest per-round snapshots, not as finer-grained moderator control objects with their own mutation history.
-- `eco-open-investigation-round` still exports follow-up task scaffolds as JSON after the DB-first board mutation; this increment only migrates the source-round carryover input surface.
+- `open-investigation-round` still exports follow-up task scaffolds as JSON after the DB-first board mutation; this increment only migrates the source-round carryover input surface.
 - History/archive still depend on reporting/promotion artifacts for the rest of their context; this increment only migrates the remaining moderator action/probe reads.
 
 Next:
@@ -1046,7 +1046,7 @@ Status: completed
 
 Objective:
 - Stop treating `round_tasks_<round>.json` as the only recoverable round-level orchestration input once a mission scaffold or follow-up round has already materialized that task set.
-- Let `eco-open-investigation-round` and `eco-prepare-round` continue from a deliberation-plane-backed round-task surface when the compatibility JSON export is absent.
+- Let `open-investigation-round` and `prepare-round` continue from a deliberation-plane-backed round-task surface when the compatibility JSON export is absent.
 
 Implementation:
 - Extended `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
@@ -1061,16 +1061,16 @@ Implementation:
   - Normalized the recovered source labels so downstream skills can distinguish:
     - `round-tasks-artifact`
     - `deliberation-plane-round-tasks`
-- Updated `skills/eco-scaffold-mission-run/scripts/eco_scaffold_mission_run.py`
+- Updated `skills/scaffold-mission-run/scripts/scaffold_mission_run.py`
   - After writing the initial `round_tasks_<round>.json`, it now persists the same scaffold into deliberation plane.
-- Updated `skills/eco-open-investigation-round/scripts/eco_open_investigation_round.py`
+- Updated `skills/open-investigation-round/scripts/open_investigation_round.py`
   - Source-round task carryover now reads through the shared round-task wrapper instead of direct JSON-only reads.
   - Follow-up `round_tasks_<round>.json` exports are now also persisted into deliberation plane.
   - `round_transition_<round>.json` now exposes:
     - `source_task_source`
     - `observed_inputs.source_task_present`
     - `observed_inputs.source_task_artifact_present`
-- Updated `skills/eco-prepare-round/scripts/eco_prepare_round.py`
+- Updated `skills/prepare-round/scripts/prepare_round.py`
   - `prepare-round` now reads current-round task scaffolds through the shared wrapper.
   - When the task export is missing but the DB snapshot exists, it recreates the compatibility JSON export before building source selections and fetch plans.
   - `fetch_plan_<round>.json` and the skill summary now expose:
@@ -1183,16 +1183,16 @@ Implementation:
 - Updated `eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py`
   - Added `claim-cluster` and `merged-observation` analysis kinds with result-set configs, lineage support, and shared `sync_* / load_*` wrappers.
   - Wired cluster/merge objects into the same `result_sets / result_items / result_lineage` contract already used by candidates, scopes, links, and coverage.
-- Updated `skills/eco-cluster-claim-candidates/scripts/eco_cluster_claim_candidates.py`
+- Updated `skills/cluster-claim-candidates/scripts/cluster_claim_candidates.py`
   - Added `query_basis` and `input_path` trace metadata to cluster exports.
   - Syncs `claim_candidate_clusters_<round>.json` into the analysis plane immediately after writing the artifact.
-- Updated `skills/eco-merge-observation-candidates/scripts/eco_merge_observation_candidates.py`
+- Updated `skills/merge-observation-candidates/scripts/merge_observation_candidates.py`
   - Added `query_basis` and `input_path` trace metadata to merged-observation exports.
   - Syncs `merged_observation_candidates_<round>.json` into the analysis plane immediately after writing the artifact.
 - Updated the following analysis consumers to load preferred upstreams from the analysis plane first and fall back only when the preferred result kind is truly missing:
-  - `skills/eco-derive-claim-scope/scripts/eco_derive_claim_scope.py`
-  - `skills/eco-derive-observation-scope/scripts/eco_derive_observation_scope.py`
-  - `skills/eco-link-claims-to-observations/scripts/eco_link_claims_to_observations.py`
+  - `skills/derive-claim-scope/scripts/derive_claim_scope.py`
+  - `skills/derive-observation-scope/scripts/derive_observation_scope.py`
+  - `skills/link-claims-to-observations/scripts/link_claims_to_observations.py`
   - Added normalized `*_input_source`, `*_input_kind`, `observed_inputs`, and `input_analysis_sync` trace fields so downstream operators can see whether cluster/merge objects came from artifacts or DB-backed recovery.
 - Updated `openclaw-db-first-master-plan.md`
   - Marked `C2.1` as `completed`.
@@ -1207,10 +1207,10 @@ Tests added or extended:
 - `tests/test_analysis_workflow.py`
   - Verifies `claim-cluster` and `merged-observation` result sets are persisted in the analysis plane alongside the existing candidate/scope/link/coverage families.
   - Verifies cluster/merge lineage now records parent result-set relationships back to the candidate result sets.
-  - Verifies `eco-derive-claim-scope`, `eco-derive-observation-scope`, and `eco-link-claims-to-observations` still run with `analysis-plane` input sources after deleting the cluster/merge JSON artifacts.
+  - Verifies `derive-claim-scope`, `derive-observation-scope`, and `link-claims-to-observations` still run with `analysis-plane` input sources after deleting the cluster/merge JSON artifacts.
 
 Known limitations:
-- `eco-cluster-claim-candidates` and `eco-merge-observation-candidates` still read their own upstream candidate artifacts directly before syncing results into the analysis plane; they are not yet able to rebuild from candidate result sets alone when those artifacts are missing.
+- `cluster-claim-candidates` and `merge-observation-candidates` still read their own upstream candidate artifacts directly before syncing results into the analysis plane; they are not yet able to rebuild from candidate result sets alone when those artifacts are missing.
 - The shared query surface is still runtime-local Python helper code; `C2.2` remains the stage that formalizes non-Python consumption and a more explicit external query contract.
 
 Next:
@@ -1361,17 +1361,17 @@ Implementation:
     - role-level read/write entry points
     - runtime hard-gate return commands
   - Added stable command templates for:
-    - `eco-read-board-delta`
-    - `eco-query-public-signals`
-    - `eco-query-environment-signals`
+    - `query-board-delta`
+    - `query-public-signals`
+    - `query-environment-signals`
     - analysis-plane query CLI reads
-    - `eco-post-board-note`
-    - `eco-update-hypothesis-status`
-    - `eco-open-challenge-ticket`
-    - `eco-open-falsification-probe`
-    - `eco-open-investigation-round`
+    - `post-board-note`
+    - `update-hypothesis-status`
+    - `open-challenge-ticket`
+    - `open-falsification-probe`
+    - `open-investigation-round`
     - `supervise-round / apply-promotion-gate / close-round`
-  - Added logic that materializes a dedicated `agent_advisory_plan_<round>.json` through `eco-plan-round-orchestration --planner-mode agent-advisory --output-path ...` so agent entry does not overwrite the controller-owned phase-2 orchestration plan.
+  - Added logic that materializes a dedicated `agent_advisory_plan_<round>.json` through `plan-round-orchestration --planner-mode agent-advisory --output-path ...` so agent entry does not overwrite the controller-owned phase-2 orchestration plan.
 - Updated `eco-concil-runtime/src/eco_council_runtime/kernel/paths.py`
   - Added runtime path helpers for:
     - `mission_scaffold_<round>.json`

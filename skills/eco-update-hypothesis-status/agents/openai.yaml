@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Update Hypothesis Status"
-  short_description: "Create or update a hypothesis card on the local board"
-  default_prompt: "Use $eco-update-hypothesis-status to create or update a hypothesis card on the current round's board state, preserve linked claim ids and confidence, and emit an auditable board event for downstream review."

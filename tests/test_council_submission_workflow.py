@@ -23,7 +23,7 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
             run_dir = Path(tmpdir) / "run"
 
             first_payload = run_script(
-                script_path("eco-submit-council-proposal"),
+                script_path("submit-council-proposal"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -62,7 +62,7 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 "true",
             )
             second_payload = run_script(
-                script_path("eco-submit-council-proposal"),
+                script_path("submit-council-proposal"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -154,7 +154,7 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
             run_dir = Path(tmpdir) / "run"
 
             ready_payload = run_script(
-                script_path("eco-submit-readiness-opinion"),
+                script_path("submit-readiness-opinion"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -179,7 +179,7 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 "{\"source\":\"unit-test\"}",
             )
             blocked_payload = run_script(
-                script_path("eco-submit-readiness-opinion"),
+                script_path("submit-readiness-opinion"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -429,7 +429,7 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                "eco-submit-council-proposal",
+                "submit-council-proposal",
                 "--",
                 "--proposal-kind",
                 "route-follow-up",
@@ -476,7 +476,7 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
 
             with self.assertRaises(AssertionError):
                 run_script(
-                    script_path("eco-submit-council-proposal"),
+                    script_path("submit-council-proposal"),
                     "--run-dir",
                     str(run_dir),
                     "--run-id",

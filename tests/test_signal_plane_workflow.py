@@ -51,7 +51,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 },
             )
             normalize_payload = run_script(
-                script_path("eco-normalize-regulationsgov-comments-public-signals"),
+                script_path("normalize-regulationsgov-comments-public-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -65,36 +65,53 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             self.assertEqual(2, len(normalize_payload["canonical_ids"]))
 
             query_payload = run_script(
-                script_path("eco-query-formal-signals"),
+                script_path("query-formal-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
-                "--submitter-type",
-                "community-group",
-                "--issue-label",
-                "air-quality-smoke",
-                "--citation-type",
-                "scientific-study",
-                "--stance-hint",
-                "oppose",
+                "--docket-id",
+                "EPA-2023-001",
+                "--agency-id",
+                "EPA",
+                "--keyword",
+                "smoke",
             )
             self.assertEqual(1, query_payload["result_count"])
             result = query_payload["results"][0]
             self.assertEqual("formal-comment-signal", result["canonical_object_kind"])
             self.assertEqual("EPA-2023-001", result["docket_id"])
             self.assertEqual("EPA", result["agency_id"])
-            self.assertEqual("community-group", result["submitter_type"])
-            self.assertEqual("oppose", result["stance_hint"])
-            self.assertEqual("environmental-observation", result["route_hint"])
-            self.assertIn("air-quality-smoke", result["issue_labels"])
-            self.assertIn("health-safety", result["concern_facets"])
-            self.assertIn("scientific-study", result["evidence_citation_types"])
+            self.assertEqual("Coalition of River Residents", result["submitter_name"])
+            self.assertEqual("", result["submitter_type"])
+            self.assertEqual("", result["stance_hint"])
+            self.assertEqual("", result["route_hint"])
+            self.assertEqual([], result["issue_labels"])
+            self.assertEqual([], result["concern_facets"])
+            self.assertEqual([], result["evidence_citation_types"])
+            self.assertEqual("provider-field-normalization", result["decision_source"])
+            self.assertEqual("", result["typing_method"])
 
             permit_query_payload = run_script(
-                script_path("eco-query-formal-signals"),
+                script_path("query-formal-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--docket-id",
+                "EPA-2023-002",
+            )
+            self.assertEqual(1, permit_query_payload["result_count"])
+            self.assertEqual(
+                "EPA-2023-002",
+                permit_query_payload["results"][0]["docket_id"],
+            )
+            typed_filter_payload = run_script(
+                script_path("query-formal-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -103,21 +120,11 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 ROUND_ID,
                 "--issue-label",
                 "permit-process",
-                "--concern-facet",
-                "procedure-governance",
-                "--route-hint",
-                "formal-comment-and-policy-record",
-                "--stance-hint",
-                "request-review",
             )
-            self.assertEqual(1, permit_query_payload["result_count"])
-            self.assertEqual(
-                "EPA-2023-002",
-                permit_query_payload["results"][0]["docket_id"],
-            )
+            self.assertEqual(0, typed_filter_payload["result_count"])
 
             lookup_payload = run_script(
-                script_path("eco-lookup-normalized-signal"),
+                script_path("query-normalized-signal"),
                 "--run-dir",
                 str(run_dir),
                 "--signal-id",
@@ -140,13 +147,28 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                     """,
                     (result["signal_id"],),
                 ).fetchall()
+                raw_row = connection.execute(
+                    """
+                    SELECT metadata_json, quality_flags_json
+                    FROM normalized_signals
+                    WHERE signal_id = ?
+                    """,
+                    (result["signal_id"],),
+                ).fetchone()
             indexed_pairs = {
                 (str(row["field_name"]), str(row["field_value"])) for row in index_rows
             }
-            self.assertIn(("issue_labels", "air-quality-smoke"), indexed_pairs)
-            self.assertIn(("route_hint", "environmental-observation"), indexed_pairs)
-            self.assertIn(("concern_facets", "health-safety"), indexed_pairs)
-            self.assertIn(("evidence_citation_types", "scientific-study"), indexed_pairs)
+            self.assertIn(("docket_id", "EPA-2023-001"), indexed_pairs)
+            self.assertIn(("agency_id", "EPA"), indexed_pairs)
+            self.assertIn(("submitter_name", "Coalition of River Residents"), indexed_pairs)
+            self.assertIn(("decision_source", "provider-field-normalization"), indexed_pairs)
+            self.assertNotIn(("issue_labels", "air-quality-smoke"), indexed_pairs)
+            self.assertNotIn(("route_hint", "environmental-observation"), indexed_pairs)
+            self.assertNotIn(("concern_facets", "health-safety"), indexed_pairs)
+            self.assertNotIn(("evidence_citation_types", "scientific-study"), indexed_pairs)
+            self.assertIsNotNone(raw_row)
+            self.assertIn("provider-fields-only", str(raw_row["metadata_json"]))
+            self.assertIn("provider-field-normalized", str(raw_row["quality_flags_json"]))
 
     def test_formal_comment_detail_signal_enrichment(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -181,7 +203,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 },
             )
             normalize_payload = run_script(
-                script_path("eco-normalize-regulationsgov-comment-detail-public-signals"),
+                script_path("normalize-regulationsgov-comment-detail-public-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -195,7 +217,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             self.assertEqual(1, len(normalize_payload["canonical_ids"]))
 
             query_payload = run_script(
-                script_path("eco-query-formal-signals"),
+                script_path("query-formal-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -203,24 +225,19 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--source-skill",
-                "regulationsgov-comment-detail-fetch",
-                "--submitter-type",
-                "ngo",
-                "--issue-label",
-                "permit-process",
-                "--citation-type",
-                "scientific-study",
-                "--route-hint",
-                "formal-comment-and-policy-record",
-                "--stance-hint",
-                "request-review",
+                "fetch-regulationsgov-comment-detail",
+                "--docket-id",
+                "EPA-2023-009",
             )
             self.assertEqual(1, query_payload["result_count"])
             result = query_payload["results"][0]
             self.assertEqual("EPA-2023-009", result["docket_id"])
-            self.assertEqual("ngo", result["submitter_type"])
-            self.assertIn("procedure-governance", result["concern_facets"])
-            self.assertIn("scientific-study", result["evidence_citation_types"])
+            self.assertEqual("Clean Air Alliance", result["submitter_name"])
+            self.assertEqual("", result["submitter_type"])
+            self.assertEqual([], result["concern_facets"])
+            self.assertEqual([], result["evidence_citation_types"])
+            self.assertEqual("", result["route_hint"])
+            self.assertEqual("provider-field-normalization", result["decision_source"])
 
             with sqlite3.connect(run_dir / "analytics" / "signal_plane.sqlite") as connection:
                 connection.row_factory = sqlite3.Row
@@ -233,12 +250,25 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                     """,
                     (result["signal_id"],),
                 ).fetchall()
+                raw_row = connection.execute(
+                    """
+                    SELECT metadata_json, quality_flags_json
+                    FROM normalized_signals
+                    WHERE signal_id = ?
+                    """,
+                    (result["signal_id"],),
+                ).fetchone()
             indexed_pairs = {
                 (str(row["field_name"]), str(row["field_value"])) for row in index_rows
             }
-            self.assertIn(("submitter_type", "ngo"), indexed_pairs)
-            self.assertIn(("issue_labels", "permit-process"), indexed_pairs)
-            self.assertIn(("route_hint", "formal-comment-and-policy-record"), indexed_pairs)
+            self.assertIn(("docket_id", "EPA-2023-009"), indexed_pairs)
+            self.assertIn(("agency_id", "EPA"), indexed_pairs)
+            self.assertIn(("submitter_name", "Clean Air Alliance"), indexed_pairs)
+            self.assertNotIn(("submitter_type", "ngo"), indexed_pairs)
+            self.assertNotIn(("issue_labels", "permit-process"), indexed_pairs)
+            self.assertNotIn(("route_hint", "formal-comment-and-policy-record"), indexed_pairs)
+            self.assertIsNotNone(raw_row)
+            self.assertIn("comment-detail", str(raw_row["quality_flags_json"]))
 
     def test_public_signal_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -264,7 +294,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 ],
             )
             normalize_payload = run_script(
-                script_path("eco-normalize-youtube-video-public-signals"),
+                script_path("normalize-youtube-video-public-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -278,7 +308,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             self.assertEqual(1, len(normalize_payload["canonical_ids"]))
 
             query_payload = run_script(
-                script_path("eco-query-public-signals"),
+                script_path("query-public-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -292,7 +322,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             signal_id = query_payload["results"][0]["signal_id"]
 
             lookup_payload = run_script(
-                script_path("eco-lookup-normalized-signal"),
+                script_path("query-normalized-signal"),
                 "--run-dir",
                 str(run_dir),
                 "--signal-id",
@@ -302,7 +332,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             self.assertEqual("Smoke over New York City", lookup_payload["results"][0]["title"])
 
             raw_payload = run_script(
-                script_path("eco-lookup-raw-record"),
+                script_path("query-raw-record"),
                 "--run-dir",
                 str(run_dir),
                 "--signal-id",
@@ -333,7 +363,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             )
 
             normalize_payload = run_script(
-                script_path("eco-normalize-openaq-observation-signals"),
+                script_path("normalize-openaq-observation-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -347,7 +377,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             self.assertEqual(1, len(normalize_payload["canonical_ids"]))
 
             query_payload = run_script(
-                script_path("eco-query-environment-signals"),
+                script_path("query-environment-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -366,7 +396,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             signal_id = query_payload["results"][0]["signal_id"]
 
             lookup_payload = run_script(
-                script_path("eco-lookup-normalized-signal"),
+                script_path("query-normalized-signal"),
                 "--run-dir",
                 str(run_dir),
                 "--signal-id",
@@ -375,7 +405,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             self.assertEqual("pm2_5", lookup_payload["results"][0]["metric"])
 
             raw_payload = run_script(
-                script_path("eco-lookup-raw-record"),
+                script_path("query-raw-record"),
                 "--run-dir",
                 str(run_dir),
                 "--signal-id",
@@ -390,7 +420,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             seed_signal_plane(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True, include_openmeteo=True)
 
             public_payload = run_script(
-                script_path("eco-query-public-signals"),
+                script_path("query-public-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -403,7 +433,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             self.assertGreaterEqual(public_payload["result_count"], 2)
 
             environment_payload = run_script(
-                script_path("eco-query-environment-signals"),
+                script_path("query-environment-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -422,7 +452,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
 
             signal_id = public_payload["results"][0]["signal_id"]
             lookup_payload = run_script(
-                script_path("eco-lookup-normalized-signal"),
+                script_path("query-normalized-signal"),
                 "--run-dir",
                 str(run_dir),
                 "--signal-id",
@@ -442,7 +472,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             seed_signal_plane(run_dir, root, RUN_ID, ROUND2_ID, include_airnow=False, include_openmeteo=False)
 
             public_current = run_script(
-                script_path("eco-query-public-signals"),
+                script_path("query-public-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -451,7 +481,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 ROUND2_ID,
             )
             public_cross_round = run_script(
-                script_path("eco-query-public-signals"),
+                script_path("query-public-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -462,7 +492,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 "up-to-current",
             )
             environment_cross_round = run_script(
-                script_path("eco-query-environment-signals"),
+                script_path("query-environment-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",

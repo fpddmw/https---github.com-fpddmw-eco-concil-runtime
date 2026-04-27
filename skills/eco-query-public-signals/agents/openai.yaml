@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Query Public Signals"
-  short_description: "Query compact public signals from the unified signal plane"
-  default_prompt: "Use $eco-query-public-signals to query compact public-signal rows from the unified signal plane with run, round, source, kind, time, and keyword filters, and return provenance-aware evidence refs only."

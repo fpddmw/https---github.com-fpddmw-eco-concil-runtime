@@ -68,11 +68,11 @@ def normalizer_args_for(source_skill: str, payload: dict[str, Any]) -> list[str]
     args: list[str] = []
     query_text = maybe_text(payload.get("query_text"))
     source_mode = maybe_text(payload.get("source_mode"))
-    if source_skill in {"gdelt-doc-search", "youtube-video-search"} and query_text:
+    if source_skill in {"fetch-gdelt-doc-search", "fetch-youtube-video-search"} and query_text:
         args.extend(["--query-text-override", query_text])
-    if source_skill == "openaq-data-fetch" and source_mode:
+    if source_skill == "fetch-openaq" and source_mode:
         args.extend(["--source-mode", source_mode])
-    if source_skill in {"gdelt-events-fetch", "gdelt-mentions-fetch", "gdelt-gkg-fetch"}:
+    if source_skill in {"fetch-gdelt-events", "fetch-gdelt-mentions", "fetch-gdelt-gkg"}:
         for payload_key, option_name in (
             ("max_rows_per_download", "--max-rows-per-download"),
             ("max_total_rows", "--max-total-rows"),

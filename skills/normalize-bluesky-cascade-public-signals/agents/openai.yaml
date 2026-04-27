@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Normalize Bluesky Cascade Public Signals"
+  short_description: "Normalize Bluesky cascade results into unified public signals"
+  default_prompt: "Use $normalize-bluesky-cascade-public-signals to normalize one fetch-bluesky-cascade artifact into canonical public-signal rows in the unified signal plane and return compact receipts, artifact refs, signal ids, and challenge-aware handoff hints."

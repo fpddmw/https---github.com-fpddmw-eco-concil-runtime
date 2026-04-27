@@ -45,7 +45,7 @@ def seed_regulationsgov_smoke_comment(run_dir: Path, root: Path) -> None:
         },
     )
     run_script(
-        script_path("eco-normalize-regulationsgov-comments-public-signals"),
+        script_path("normalize-regulationsgov-comments-public-signals"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -67,7 +67,7 @@ class DiffusionWorkflowTests(unittest.TestCase):
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -76,7 +76,7 @@ class DiffusionWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-classify-claim-verifiability"),
+                script_path("classify-claim-verifiability"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -85,7 +85,7 @@ class DiffusionWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-route-verification-lane"),
+                script_path("route-verification-lane"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -96,7 +96,7 @@ class DiffusionWorkflowTests(unittest.TestCase):
             seed_regulationsgov_smoke_comment(run_dir, root)
 
             run_script(
-                script_path("eco-link-formal-comments-to-public-discourse"),
+                script_path("link-formal-comments-to-public-discourse"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -105,7 +105,7 @@ class DiffusionWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             diffusion_payload = run_script(
-                script_path("eco-detect-cross-platform-diffusion"),
+                script_path("detect-cross-platform-diffusion"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",

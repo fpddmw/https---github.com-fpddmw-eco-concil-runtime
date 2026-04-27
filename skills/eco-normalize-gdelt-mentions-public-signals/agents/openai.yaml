@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Normalize GDELT Mentions Public Signals"
-  short_description: "Normalize GDELT mentions zip exports into unified public signals"
-  default_prompt: "Use $eco-normalize-gdelt-mentions-public-signals to normalize one gdelt-mentions-fetch manifest and its zip exports into canonical public-signal rows in the unified signal plane and return compact receipts, artifact refs, signal ids, and board-ready hints."

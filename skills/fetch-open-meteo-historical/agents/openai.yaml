@@ -1,0 +1,4 @@
+interface:
+  display_name: "Open-Meteo Historical Fetch"
+  short_description: "Fetch historical weather and soil signals"
+  default_prompt: "Use $fetch-open-meteo-historical to fetch Open-Meteo historical weather or soil data for a specified time window and coordinates."

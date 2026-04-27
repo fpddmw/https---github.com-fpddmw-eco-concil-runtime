@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Materialize Reporting Handoff"
-  short_description: "Assemble one compact downstream reporting handoff from promotion-stage artifacts"
-  default_prompt: "Use $eco-materialize-reporting-handoff to assemble one compact downstream reporting handoff from promotion, readiness, board brief, and supervisor artifacts."

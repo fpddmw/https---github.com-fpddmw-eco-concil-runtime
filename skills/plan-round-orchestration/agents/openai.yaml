@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Plan Round Orchestration"
+  short_description: "Optional moderator advisory planner"
+  default_prompt: "Use $plan-round-orchestration only after a skill approval request has been approved. Materialize an advisory plan from DB-backed council state, label heuristic assumptions, and do not treat the output as the controller's default plan."

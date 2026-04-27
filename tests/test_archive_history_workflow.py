@@ -65,7 +65,7 @@ def build_mission_file(root: Path, run_id: str, round_id: str) -> Path:
 def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id: str, *, publish: bool) -> None:
     mission_path = build_mission_file(fixture_root, run_id, round_id)
     run_script(
-        script_path("eco-scaffold-mission-run"),
+        script_path("scaffold-mission-run"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -78,7 +78,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
     outputs = seed_analysis_chain(run_dir, fixture_root, run_id, round_id, include_airnow=True)
 
     run_script(
-        script_path("eco-derive-claim-scope"),
+        script_path("derive-claim-scope"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -87,7 +87,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         round_id,
     )
     run_script(
-        script_path("eco-derive-observation-scope"),
+        script_path("derive-observation-scope"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -96,7 +96,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         round_id,
     )
     coverage_payload = run_script(
-        script_path("eco-score-evidence-coverage"),
+        script_path("score-evidence-coverage"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -106,7 +106,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
     )
     coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
     run_script(
-        script_path("eco-post-board-note"),
+        script_path("post-board-note"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -123,7 +123,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         coverage_ref,
     )
     run_script(
-        script_path("eco-update-hypothesis-status"),
+        script_path("update-hypothesis-status"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -160,7 +160,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         round_id,
     )
     run_script(
-        script_path("eco-materialize-reporting-handoff"),
+        script_path("materialize-reporting-handoff"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -169,7 +169,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         round_id,
     )
     run_script(
-        script_path("eco-draft-council-decision"),
+        script_path("draft-council-decision"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -182,7 +182,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         return
 
     run_script(
-        script_path("eco-draft-expert-report"),
+        script_path("draft-expert-report"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -193,7 +193,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "sociologist",
     )
     run_script(
-        script_path("eco-draft-expert-report"),
+        script_path("draft-expert-report"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -204,7 +204,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "environmentalist",
     )
     run_script(
-        script_path("eco-publish-expert-report"),
+        script_path("publish-expert-report"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -215,7 +215,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "sociologist",
     )
     run_script(
-        script_path("eco-publish-expert-report"),
+        script_path("publish-expert-report"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -226,7 +226,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "environmentalist",
     )
     run_script(
-        script_path("eco-publish-council-decision"),
+        script_path("publish-council-decision"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -235,7 +235,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         round_id,
     )
     run_script(
-        script_path("eco-materialize-final-publication"),
+        script_path("materialize-final-publication"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -251,7 +251,7 @@ def seed_moderator_actions_and_probes(
     round_id: str,
 ) -> tuple[dict[str, object], dict[str, object]]:
     run_script(
-        script_path("eco-summarize-board-state"),
+        script_path("summarize-board-state"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -260,7 +260,7 @@ def seed_moderator_actions_and_probes(
         round_id,
     )
     run_script(
-        script_path("eco-materialize-board-brief"),
+        script_path("materialize-board-brief"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -269,7 +269,7 @@ def seed_moderator_actions_and_probes(
         round_id,
     )
     run_script(
-        script_path("eco-propose-next-actions"),
+        script_path("propose-next-actions"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -278,7 +278,7 @@ def seed_moderator_actions_and_probes(
         round_id,
     )
     run_script(
-        script_path("eco-open-falsification-probe"),
+        script_path("open-falsification-probe"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -362,7 +362,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertIn("reporting_ready", close_artifact)
             self.assertIn("reporting_blockers", close_artifact)
             self.assertIn("reporting_handoff_status", close_artifact)
-            self.assertIn("eco-materialize-history-context", close_artifact["recommended_next_skills"])
+            self.assertIn("materialize-history-context", close_artifact["recommended_next_skills"])
             self.assertEqual(
                 ["archive-signal-corpus", "archive-case-library"],
                 [item["stage"] for item in close_artifact["steps"]],
@@ -413,7 +413,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 "--round-id",
                 HISTORICAL_ROUND_ID,
                 "--skill-name",
-                "eco-archive-signal-corpus",
+                "archive-signal-corpus",
                 "--contract-mode",
                 "strict",
             )
@@ -426,13 +426,13 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 "--round-id",
                 HISTORICAL_ROUND_ID,
                 "--skill-name",
-                "eco-archive-case-library",
+                "archive-case-library",
                 "--contract-mode",
                 "strict",
             )
 
             case_query = run_script(
-                script_path("eco-query-case-library"),
+                script_path("query-case-library"),
                 "--run-dir",
                 str(search_run_dir),
                 "--run-id",
@@ -453,7 +453,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 "station-air-quality",
             )
             signal_query = run_script(
-                script_path("eco-query-signal-corpus"),
+                script_path("query-signal-corpus"),
                 "--run-dir",
                 str(search_run_dir),
                 "--run-id",
@@ -620,7 +620,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 publish=True,
             )
             run_script(
-                script_path("eco-archive-signal-corpus"),
+                script_path("archive-signal-corpus"),
                 "--run-dir",
                 str(historical_run_dir),
                 "--run-id",
@@ -629,7 +629,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 HISTORICAL_ROUND_ID,
             )
             run_script(
-                script_path("eco-archive-case-library"),
+                script_path("archive-case-library"),
                 "--run-dir",
                 str(historical_run_dir),
                 "--run-id",
@@ -662,7 +662,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 "--round-id",
                 CURRENT_ROUND_ID,
                 "--skill-name",
-                "eco-materialize-history-context",
+                "materialize-history-context",
                 "--contract-mode",
                 "strict",
             )
@@ -737,7 +737,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             ).unlink()
 
             archive_payload = run_script(
-                script_path("eco-archive-case-library"),
+                script_path("archive-case-library"),
                 "--run-dir",
                 str(historical_run_dir),
                 "--run-id",
@@ -805,7 +805,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 publish=True,
             )
             run_script(
-                script_path("eco-archive-signal-corpus"),
+                script_path("archive-signal-corpus"),
                 "--run-dir",
                 str(historical_run_dir),
                 "--run-id",
@@ -814,7 +814,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 HISTORICAL_ROUND_ID,
             )
             run_script(
-                script_path("eco-archive-case-library"),
+                script_path("archive-case-library"),
                 "--run-dir",
                 str(historical_run_dir),
                 "--run-id",
@@ -848,7 +848,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             ).unlink()
 
             history_payload = run_script(
-                script_path("eco-materialize-history-context"),
+                script_path("materialize-history-context"),
                 "--run-dir",
                 str(current_run_dir),
                 "--run-id",

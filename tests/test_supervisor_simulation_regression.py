@@ -37,7 +37,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -46,7 +46,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -55,7 +55,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -66,7 +66,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
 
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -83,7 +83,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -153,7 +153,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -162,7 +162,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -171,7 +171,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -181,7 +181,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             )
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -202,7 +202,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 "0.52",
             )
             run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -263,10 +263,10 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             self.assertEqual(str(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json").resolve()), supervisor_artifact["orchestration_plan_path"])
             self.assertEqual("withheld", promotion_artifact["promotion_status"])
             self.assertGreaterEqual(len(supervisor_artifact["top_actions"]), 1)
-            self.assertIn("eco-open-investigation-round", supervisor_artifact["recommended_next_skills"])
-            self.assertEqual("eco-open-investigation-round", supervisor_artifact["round_transition"]["skill_name"])
+            self.assertIn("open-investigation-round", supervisor_artifact["recommended_next_skills"])
+            self.assertEqual("open-investigation-round", supervisor_artifact["round_transition"]["skill_name"])
             self.assertEqual("round-phase2-002", supervisor_artifact["round_transition"]["suggested_round_id"])
-            self.assertIn("eco-propose-next-actions", supervisor_artifact["recommended_next_skills"])
+            self.assertIn("propose-next-actions", supervisor_artifact["recommended_next_skills"])
             self.assertEqual("hold-investigation-open", state_payload["phase2"]["supervisor"]["supervisor_status"])
             event_types = [item.get("event_type") for item in state_payload["ledger_tail"]]
             self.assertIn("supervisor", event_types)

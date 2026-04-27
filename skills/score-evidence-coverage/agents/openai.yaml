@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Score Evidence Coverage"
+  short_description: "Optional empirical evidence sufficiency helper"
+  default_prompt: "Use $score-evidence-coverage only after a skill approval request has been approved for an explicitly routed empirical observation question. Score evidence sufficiency and gaps as heuristic audit material, not as a default readiness gate."

@@ -841,7 +841,7 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
                 f"- Moderator request optional-analysis run: `{kernel_command('request-skill-approval', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--skill-name', '<skill_name>', '--requested-actor-role', '<requested_actor_role>', '--rationale', '<rationale>', actor_role='moderator')}`",
                 f"- Operator approve skill request: `{kernel_command('approve-skill-approval', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--approval-reason', '<approval_reason>', actor_role='runtime-operator')}`",
                 f"- Operator reject skill request: `{kernel_command('reject-skill-approval', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--rejection-reason', '<rejection_reason>', actor_role='runtime-operator')}`",
-                f"- Run approved optional-analysis skill: `{run_skill_command(run_dir=run_dir, run_id=run_id, round_id=round_id, skill_name='<skill_name>', actor_role='<requested_actor_role>', contract_mode='warn', skill_args=['--example-arg', '<value>'])} --skill-approval-request-id <request_id>`",
+                f"- Run approved optional-analysis skill: `{run_skill_command(run_dir=run_dir, run_id=run_id, round_id=round_id, skill_name='<skill_name>', actor_role='<requested_actor_role>', contract_mode='warn', skill_args=['--example-arg', '<value>'], skill_approval_request_id='<request_id>')}`",
                 "",
             ]
         )

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Summarize Round Readiness"
+  short_description: "Optional moderator readiness advisory"
+  default_prompt: "Use $summarize-round-readiness only after a skill approval request has been approved. Compile DB-backed readiness evidence for moderator review, label heuristic aggregation, and leave phase movement to transition request plus operator approval."

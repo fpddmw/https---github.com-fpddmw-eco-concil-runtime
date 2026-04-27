@@ -104,12 +104,12 @@ def build_mission_fixture(root: Path) -> Path:
             ],
             "artifact_imports": [
                 {
-                    "source_skill": "youtube-video-search",
+                    "source_skill": "fetch-youtube-video-search",
                     "artifact_path": str(youtube_path),
                     "query_text": "nyc smoke wildfire",
                 },
                 {
-                    "source_skill": "openaq-data-fetch",
+                    "source_skill": "fetch-openaq",
                     "artifact_path": str(openaq_path),
                     "source_mode": "test-fixture",
                 },
@@ -166,7 +166,7 @@ class BoardWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -178,7 +178,7 @@ class BoardWorkflowTests(unittest.TestCase):
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
 
             note_payload = run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -197,7 +197,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -218,7 +218,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "0.82",
             )
             challenge_payload = run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -241,7 +241,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             delta_payload = run_script(
-                script_path("eco-read-board-delta"),
+                script_path("query-board-delta"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -277,7 +277,7 @@ class BoardWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -288,7 +288,7 @@ class BoardWorkflowTests(unittest.TestCase):
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
 
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -309,7 +309,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "0.82",
             )
             challenge_payload = run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -332,7 +332,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             task_payload = run_script(
-                script_path("eco-claim-board-task"),
+                script_path("claim-board-task"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -357,7 +357,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             close_payload = run_script(
-                script_path("eco-close-challenge-ticket"),
+                script_path("close-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -374,7 +374,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 task_payload["canonical_ids"][0],
             )
             summary_payload = run_script(
-                script_path("eco-summarize-board-state"),
+                script_path("summarize-board-state"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -383,7 +383,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             brief_payload = run_script(
-                script_path("eco-materialize-board-brief"),
+                script_path("materialize-board-brief"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -425,7 +425,7 @@ class BoardWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
 
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -438,7 +438,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "Direct board brief generation should not require a summary artifact.",
             )
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -458,7 +458,7 @@ class BoardWorkflowTests(unittest.TestCase):
             )
 
             brief_payload = run_script(
-                script_path("eco-materialize-board-brief"),
+                script_path("materialize-board-brief"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -485,7 +485,7 @@ class BoardWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -525,7 +525,7 @@ class BoardWorkflowTests(unittest.TestCase):
             proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
 
             payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -582,7 +582,7 @@ class BoardWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -593,7 +593,7 @@ class BoardWorkflowTests(unittest.TestCase):
             claim_id = outputs["cluster_claims"]["canonical_ids"][0]
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -646,7 +646,7 @@ class BoardWorkflowTests(unittest.TestCase):
             proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
 
             payload = run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -701,7 +701,7 @@ class BoardWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -712,7 +712,7 @@ class BoardWorkflowTests(unittest.TestCase):
             claim_id = outputs["cluster_claims"]["canonical_ids"][0]
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -764,7 +764,7 @@ class BoardWorkflowTests(unittest.TestCase):
             )
             open_proposal_id = open_bundle["proposals"][0]["proposal_id"]
             open_payload = run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -806,7 +806,7 @@ class BoardWorkflowTests(unittest.TestCase):
             close_proposal_id = close_bundle["proposals"][0]["proposal_id"]
 
             payload = run_script(
-                script_path("eco-close-challenge-ticket"),
+                script_path("close-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -873,7 +873,7 @@ class BoardWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -884,7 +884,7 @@ class BoardWorkflowTests(unittest.TestCase):
             claim_id = outputs["cluster_claims"]["canonical_ids"][0]
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -906,7 +906,7 @@ class BoardWorkflowTests(unittest.TestCase):
             )
             hypothesis_id = hypothesis_payload["canonical_ids"][0]
             challenge_payload = run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -964,7 +964,7 @@ class BoardWorkflowTests(unittest.TestCase):
             proposal_id = proposal_bundle["proposals"][0]["proposal_id"]
 
             payload = run_script(
-                script_path("eco-claim-board-task"),
+                script_path("claim-board-task"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -975,7 +975,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 proposal_id,
             )
             delta_payload = run_script(
-                script_path("eco-read-board-delta"),
+                script_path("query-board-delta"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1032,7 +1032,7 @@ class BoardWorkflowTests(unittest.TestCase):
             mission_path = build_mission_fixture(root)
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1048,7 +1048,7 @@ class BoardWorkflowTests(unittest.TestCase):
             seeded_hypothesis_id = board_before["rounds"][ROUND_ID]["hypotheses"][0]["hypothesis_id"]
 
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1058,7 +1058,7 @@ class BoardWorkflowTests(unittest.TestCase):
             )
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             challenge_payload = run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1081,7 +1081,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             open_task_payload = run_script(
-                script_path("eco-claim-board-task"),
+                script_path("claim-board-task"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1136,7 +1136,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 target_round_id=ROUND2_ID,
             )
             open_round_payload = run_script(
-                script_path("eco-open-investigation-round"),
+                script_path("open-investigation-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1182,7 +1182,7 @@ class BoardWorkflowTests(unittest.TestCase):
             self.assertEqual("up-to-current", transition_artifact["cross_round_query_hints"]["public_signals"]["round_scope"])
             self.assertEqual("up-to-current", transition_artifact["cross_round_query_hints"]["environment_signals"]["round_scope"])
             self.assertEqual(ROUND_ID, transition_artifact["prior_round_ids"][0])
-            self.assertIn("eco-prepare-round", open_round_payload["board_handoff"]["suggested_next_skills"])
+            self.assertIn("prepare-round", open_round_payload["board_handoff"]["suggested_next_skills"])
             self.assertTrue(
                 any(task.get("carryover_from_task_id") == open_task_payload["canonical_ids"][0] for task in round2_state["tasks"])
             )
@@ -1237,11 +1237,11 @@ class BoardWorkflowTests(unittest.TestCase):
                     ],
                     "artifact_imports": [
                         {
-                            "source_skill": "regulationsgov-comments-fetch",
+                            "source_skill": "fetch-regulationsgov-comments",
                             "artifact_path": str(regulations_path),
                         },
                         {
-                            "source_skill": "open-meteo-flood-fetch",
+                            "source_skill": "fetch-open-meteo-flood",
                             "artifact_path": str(flood_path),
                         },
                     ],
@@ -1249,7 +1249,7 @@ class BoardWorkflowTests(unittest.TestCase):
             )
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1267,7 +1267,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 target_round_id=ROUND2_ID,
             )
             open_round_payload = run_script(
-                script_path("eco-open-investigation-round"),
+                script_path("open-investigation-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1295,11 +1295,11 @@ class BoardWorkflowTests(unittest.TestCase):
             }
 
             self.assertEqual(
-                ["regulationsgov-comments-fetch"],
+                ["fetch-regulationsgov-comments"],
                 role_to_sources["sociologist"],
             )
             self.assertEqual(
-                ["open-meteo-flood-fetch"],
+                ["fetch-open-meteo-flood"],
                 role_to_sources["environmentalist"],
             )
             self.assertEqual(
@@ -1331,7 +1331,7 @@ class BoardWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1342,7 +1342,7 @@ class BoardWorkflowTests(unittest.TestCase):
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
 
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1363,7 +1363,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "0.52",
             )
             run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1386,7 +1386,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-summarize-board-state"),
+                script_path("summarize-board-state"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1395,7 +1395,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-materialize-board-brief"),
+                script_path("materialize-board-brief"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1404,7 +1404,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1431,7 +1431,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 target_round_id=ROUND2_ID,
             )
             open_round_payload = run_script(
-                script_path("eco-open-investigation-round"),
+                script_path("open-investigation-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1486,7 +1486,7 @@ class BoardWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
 
             first_note = run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1500,7 +1500,7 @@ class BoardWorkflowTests(unittest.TestCase):
             )
             first_event_id = first_note["summary"]["event_id"]
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1514,7 +1514,7 @@ class BoardWorkflowTests(unittest.TestCase):
             )
 
             delta_payload = run_script(
-                script_path("eco-read-board-delta"),
+                script_path("query-board-delta"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1532,7 +1532,7 @@ class BoardWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
 
             first_note = run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1545,7 +1545,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "Initial DB-first note.",
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1568,7 +1568,7 @@ class BoardWorkflowTests(unittest.TestCase):
             board_file.unlink()
 
             second_note = run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1601,7 +1601,7 @@ class BoardWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
 
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1614,7 +1614,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "Reader fallback should survive a missing board JSON export.",
             )
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1636,7 +1636,7 @@ class BoardWorkflowTests(unittest.TestCase):
             board_path(run_dir).unlink()
 
             delta_payload = run_script(
-                script_path("eco-read-board-delta"),
+                script_path("query-board-delta"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1645,7 +1645,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             brief_payload = run_script(
-                script_path("eco-materialize-board-brief"),
+                script_path("materialize-board-brief"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1673,7 +1673,7 @@ class BoardWorkflowTests(unittest.TestCase):
 
             def post_note(note_text: str) -> dict[str, object]:
                 return run_script(
-                    script_path("eco-post-board-note"),
+                    script_path("post-board-note"),
                     "--run-dir",
                     str(run_dir),
                     "--run-id",

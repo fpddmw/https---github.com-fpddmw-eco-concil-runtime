@@ -184,7 +184,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
     plan_artifact_path = runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json").resolve()
     plan_payload = {
         "schema_version": "runtime-orchestration-plan-v1",
-        "skill": "eco-plan-round-orchestration",
+        "skill": "plan-round-orchestration",
         "generated_at_utc": "2024-01-01T00:02:00Z",
         "run_id": RUN_ID,
         "round_id": ROUND_ID,
@@ -204,8 +204,8 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
             "primary_role": "moderator",
             "support_roles": ["moderator", "challenger"],
             "recommended_skill_sequence": [
-                "eco-open-falsification-probe",
-                "eco-summarize-round-readiness",
+                "open-falsification-probe",
+                "summarize-round-readiness",
             ],
         },
         "observed_state": {
@@ -231,8 +231,8 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
                 "stage_name": "falsification-probes",
                 "stage_kind": "skill",
                 "phase_group": "investigation",
-                "skill_name": "eco-open-falsification-probe",
-                "expected_skill_name": "eco-open-falsification-probe",
+                "skill_name": "open-falsification-probe",
+                "expected_skill_name": "open-falsification-probe",
                 "assigned_role_hint": "challenger",
                 "required_previous_stages": ["orchestration-planner"],
                 "blocking": True,
@@ -249,8 +249,8 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
                 "stage_name": "round-readiness",
                 "stage_kind": "skill",
                 "phase_group": "readiness",
-                "skill_name": "eco-summarize-round-readiness",
-                "expected_skill_name": "eco-summarize-round-readiness",
+                "skill_name": "summarize-round-readiness",
+                "expected_skill_name": "summarize-round-readiness",
                 "assigned_role_hint": "moderator",
                 "required_previous_stages": ["falsification-probes"],
                 "blocking": True,
@@ -284,8 +284,8 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
                 "stage_name": "board-summary",
                 "stage_kind": "skill",
                 "phase_group": "exports",
-                "skill_name": "eco-summarize-board-state",
-                "expected_skill_name": "eco-summarize-board-state",
+                "skill_name": "summarize-board-state",
+                "expected_skill_name": "summarize-board-state",
                 "assigned_role_hint": "moderator",
                 "required_previous_stages": ["orchestration-planner"],
                 "blocking": False,
@@ -304,8 +304,8 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
                 "stage_name": "promotion-basis",
                 "stage_kind": "skill",
                 "phase_group": "promotion",
-                "skill_name": "eco-promote-evidence-basis",
-                "expected_skill_name": "eco-promote-evidence-basis",
+                "skill_name": "promote-evidence-basis",
+                "expected_skill_name": "promote-evidence-basis",
                 "assigned_role_hint": "moderator",
                 "required_previous_stages": ["promotion-gate"],
                 "blocking": True,
@@ -330,7 +330,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
             {
                 "when": "Gate withholds promotion after readiness review.",
                 "reason": "The contradiction probe remains open.",
-                "suggested_next_skills": ["eco-open-falsification-probe"],
+                "suggested_next_skills": ["open-falsification-probe"],
             }
         ],
         "planning_notes": [
@@ -366,7 +366,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
         "reporting_blockers": ["An open contradiction probe remains."],
         "reporting_handoff_status": "investigation-open",
         "planning_mode": "planner-backed",
-        "recommended_next_skills": ["eco-open-falsification-probe"],
+        "recommended_next_skills": ["open-falsification-probe"],
         "supervisor_path": str(
             runtime_path(run_dir, f"supervisor_state_{ROUND_ID}.json").resolve()
         ),
@@ -657,15 +657,15 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 operator["materialize_phase2_exports_command"],
             )
             self.assertIn(
-                "eco-query-public-signals",
+                "query-public-signals",
                 operator["query_public_signals_command"],
             )
             self.assertIn(
-                "eco-query-formal-signals",
+                "query-formal-signals",
                 operator["query_formal_signals_command"],
             )
             self.assertIn(
-                "eco-query-environment-signals",
+                "query-environment-signals",
                 operator["query_environment_signals_command"],
             )
             self.assertIn(

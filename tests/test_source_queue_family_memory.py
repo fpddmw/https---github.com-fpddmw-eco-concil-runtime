@@ -31,11 +31,11 @@ def mission_payload(raw_artifact_path: Path) -> dict[str, object]:
             "geometry": {"type": "Point", "latitude": 40.7128, "longitude": -74.0060},
         },
         "allowed_sources_by_role": {
-            "sociologist": ["youtube-video-search", "gdelt-doc-search", "bluesky-cascade-fetch"],
+            "sociologist": ["fetch-youtube-video-search", "fetch-gdelt-doc-search", "fetch-bluesky-cascade"],
         },
         "artifact_imports": [
             {
-                "source_skill": "youtube-video-search",
+                "source_skill": "fetch-youtube-video-search",
                 "artifact_path": str(raw_artifact_path),
                 "query_text": "nyc smoke wildfire",
             }
@@ -77,8 +77,8 @@ def write_prior_round_artifacts(run_dir: Path, round_id: str) -> None:
             "status": "complete",
             "summary": "Prior round selected YouTube public signals.",
             "task_ids": [f"task-sociologist-{round_id}-01"],
-            "allowed_sources": ["youtube-video-search", "gdelt-doc-search", "bluesky-cascade-fetch"],
-            "selected_sources": ["youtube-video-search"],
+            "allowed_sources": ["fetch-youtube-video-search", "fetch-gdelt-doc-search", "fetch-bluesky-cascade"],
+            "selected_sources": ["fetch-youtube-video-search"],
             "override_requests": [],
             "evidence_requirements": [],
             "family_plans": [
@@ -93,7 +93,7 @@ def write_prior_round_artifacts(run_dir: Path, round_id: str) -> None:
                             "tier": "l1",
                             "selected": True,
                             "reason": "Select youtube:video-search.",
-                            "source_skills": ["youtube-video-search"],
+                            "source_skills": ["fetch-youtube-video-search"],
                             "anchor_mode": "none",
                             "anchor_refs": [],
                             "authorization_basis": "entry-layer",
@@ -104,7 +104,7 @@ def write_prior_round_artifacts(run_dir: Path, round_id: str) -> None:
             "family_memory": [],
             "source_decisions": [
                 {
-                    "source_skill": "youtube-video-search",
+                    "source_skill": "fetch-youtube-video-search",
                     "selected": True,
                     "reason": "Selected for sociologist.",
                 }
@@ -120,7 +120,7 @@ def write_prior_round_artifacts(run_dir: Path, round_id: str) -> None:
                     "step_kind": "import",
                     "status": "completed",
                     "role": "sociologist",
-                    "source_skill": "youtube-video-search",
+                    "source_skill": "fetch-youtube-video-search",
                 }
             ]
         },
@@ -161,7 +161,7 @@ class SourceQueueFamilyMemoryTests(unittest.TestCase):
             )
 
             youtube_family = next(item for item in payload["family_memory"] if item["family_id"] == "youtube")
-            self.assertEqual(["youtube-video-search"], youtube_family["completed_sources"])
+            self.assertEqual(["fetch-youtube-video-search"], youtube_family["completed_sources"])
             self.assertEqual("round-001", youtube_family["prior_rounds"][0]["round_id"])
             self.assertEqual(["video-search"], youtube_family["prior_rounds"][0]["selected_layers"])
 
@@ -206,7 +206,7 @@ class SourceQueueFamilyMemoryTests(unittest.TestCase):
 
             self.assertEqual([], warnings)
             youtube_family = next(item for item in plan["roles"]["sociologist"]["family_memory"] if item["family_id"] == "youtube")
-            self.assertEqual(["youtube-video-search"], youtube_family["completed_sources"])
+            self.assertEqual(["fetch-youtube-video-search"], youtube_family["completed_sources"])
             self.assertEqual("round-001", youtube_family["prior_rounds"][0]["round_id"])
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -60,10 +61,25 @@ def build_retrying_detached_fetch_script(root: Path, marker_path: Path) -> Path:
     return path
 
 
+def signal_rows(run_dir: Path, source_skill: str) -> list[dict[str, object]]:
+    with sqlite3.connect(run_dir / "analytics" / "signal_plane.sqlite") as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(
+            """
+            SELECT signal_id, source_skill, metadata_json, artifact_path, record_locator
+            FROM normalized_signals
+            WHERE source_skill = ?
+            ORDER BY signal_id
+            """,
+            (source_skill,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def build_mixed_queue_mission(root: Path, openaq_path: Path, fetch_script: Path, *, request_overrides: dict[str, object] | None = None) -> Path:
     mission_path = root / "mission.json"
     source_request = {
-        "source_skill": "youtube-video-search",
+        "source_skill": "fetch-youtube-video-search",
         "query_text": "nyc smoke wildfire",
         "artifact_capture": "stdout-json",
         "fetch_argv": [sys.executable, str(fetch_script)],
@@ -99,7 +115,7 @@ def build_mixed_queue_mission(root: Path, openaq_path: Path, fetch_script: Path,
             ],
             "artifact_imports": [
                 {
-                    "source_skill": "openaq-data-fetch",
+                    "source_skill": "fetch-openaq",
                     "artifact_path": str(openaq_path),
                     "source_mode": "test-fixture",
                 }
@@ -110,11 +126,11 @@ def build_mixed_queue_mission(root: Path, openaq_path: Path, fetch_script: Path,
             "source_selections": {
                 "sociologist": {
                     "status": "complete",
-                    "selected_sources": ["youtube-video-search"],
+                    "selected_sources": ["fetch-youtube-video-search"],
                 },
                 "environmentalist": {
                     "status": "complete",
-                    "selected_sources": ["openaq-data-fetch"],
+                    "selected_sources": ["fetch-openaq"],
                 },
             },
         },
@@ -143,7 +159,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             )
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -154,7 +170,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 str(mission_path),
             )
             run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -188,7 +204,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             )
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -202,7 +218,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             completed = subprocess.run(
                 [
                     sys.executable,
-                    str(script_path("eco-prepare-round")),
+                    str(script_path("prepare-round")),
                     "--run-dir",
                     str(run_dir),
                     "--run-id",
@@ -225,7 +241,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             mission_path = build_mixed_queue_mission(root, build_openaq_artifact(root), build_detached_fetch_script(root))
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -236,7 +252,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 str(mission_path),
             )
             payload = run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -251,11 +267,11 @@ class SourceQueueRebuildTests(unittest.TestCase):
 
             self.assertEqual(2, payload["summary"]["step_count"])
             self.assertEqual({"import", "detached-fetch"}, {step["step_kind"] for step in plan["steps"]})
-            self.assertEqual(["youtube-video-search"], plan["roles"]["sociologist"]["selected_sources"])
-            self.assertEqual(["openaq-data-fetch"], plan["roles"]["environmentalist"]["selected_sources"])
+            self.assertEqual(["fetch-youtube-video-search"], plan["roles"]["sociologist"]["selected_sources"])
+            self.assertEqual(["fetch-openaq"], plan["roles"]["environmentalist"]["selected_sources"])
             self.assertEqual("complete", plan["input_snapshot"]["source_selections"]["sociologist"]["status"])
-            self.assertEqual(["youtube-video-search"], sociologist_selection["selected_sources"])
-            self.assertEqual(["openaq-data-fetch"], environmentalist_selection["selected_sources"])
+            self.assertEqual(["fetch-youtube-video-search"], sociologist_selection["selected_sources"])
+            self.assertEqual(["fetch-openaq"], environmentalist_selection["selected_sources"])
 
     def test_import_execution_runs_mixed_import_and_detached_fetch_steps(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -264,7 +280,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             mission_path = build_mixed_queue_mission(root, build_openaq_artifact(root), build_detached_fetch_script(root))
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -275,7 +291,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 str(mission_path),
             )
             run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -284,7 +300,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 ROUND_ID,
             )
             payload = run_script(
-                script_path("eco-import-fetch-execution"),
+                script_path("normalize-fetch-execution"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -300,6 +316,85 @@ class SourceQueueRebuildTests(unittest.TestCase):
             self.assertEqual(0, execution["failed_count"])
             self.assertEqual({"import", "detached-fetch"}, {status["step_kind"] for status in execution["statuses"]})
             self.assertEqual(2, len(execution["normalized_receipt_ids"]))
+            self.assertEqual("completed", execution["execution_components"]["queue_runner"]["status"])
+            self.assertEqual("completed", execution["execution_components"]["normalizer_runner"]["status"])
+            self.assertEqual("completed", payload["execution_components"]["execution_receipt"]["status"])
+            self.assertEqual("none", execution["statuses"][0]["queue_runner"]["fetch_contract"]["research_judgement"])
+            self.assertEqual("raw-artifact", execution["statuses"][0]["queue_runner"]["fetch_contract"]["output_object_kind"])
+            self.assertNotIn("extract-claim-candidates", payload["board_handoff"]["suggested_next_skills"])
+            self.assertNotIn("extract-observation-candidates", payload["board_handoff"]["suggested_next_skills"])
+
+            openaq_rows = signal_rows(run_dir, "fetch-openaq")
+            self.assertEqual(1, len(openaq_rows))
+            metadata = json.loads(str(openaq_rows[0]["metadata_json"]))
+            self.assertEqual("none", metadata["data_quality"]["research_judgement"])
+            self.assertIn("source_provenance", metadata)
+            self.assertIn("temporal_scope", metadata)
+            self.assertIn("spatial_scope", metadata)
+            self.assertIn("coverage_limitations", metadata)
+
+            runtime_path(run_dir, f"import_execution_{ROUND_ID}.json").unlink()
+            Path(str(openaq_rows[0]["artifact_path"])).unlink()
+            query_payload = run_script(
+                script_path("query-environment-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--source-skill",
+                "fetch-openaq",
+            )
+            self.assertEqual(1, query_payload["result_count"])
+            lookup_payload = run_script(
+                script_path("query-raw-record"),
+                "--run-dir",
+                str(run_dir),
+                "--signal-id",
+                str(openaq_rows[0]["signal_id"]),
+            )
+            self.assertEqual(1, lookup_payload["result_count"])
+
+    def test_openaq_split_commands_emit_raw_fetch_contracts(self) -> None:
+        router = Path("skills/fetch-openaq/scripts/fetch_openaq.py")
+        for args, operation_kind in (
+            (["fetch-metadata", "--entity", "locations", "--api-query", "countries_id=9", "--dry-run"], "metadata-fetch"),
+            (
+                [
+                    "fetch-measurements",
+                    "--sensor-id",
+                    "2178",
+                    "--aggregation",
+                    "hourly",
+                    "--datetime-from",
+                    "2023-06-01T00:00:00Z",
+                    "--datetime-to",
+                    "2023-06-02T00:00:00Z",
+                    "--dry-run",
+                ],
+                "measurement-fetch",
+            ),
+            (
+                ["fetch-archive-backfill", "--location-id", "2178", "--year", "2022", "--month", "5", "--dry-run"],
+                "archive-backfill-fetch",
+            ),
+        ):
+            with self.subTest(operation_kind=operation_kind):
+                completed = subprocess.run(
+                    [sys.executable, str(router), *args],
+                    cwd=str(Path(__file__).resolve().parents[1]),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                payload = json.loads(completed.stdout)
+                self.assertEqual(operation_kind, payload["operation_kind"])
+                self.assertEqual("raw-artifact", payload["fetch_contract"]["output_object_kind"])
+                self.assertEqual("none", payload["fetch_contract"]["research_judgement"])
+                self.assertIn("source_provenance", payload["fetch_contract"])
+                self.assertIn("coverage_limitations", payload["fetch_contract"])
 
     def test_import_execution_retries_detached_fetch_and_records_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -322,7 +417,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             )
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -333,7 +428,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 str(mission_path),
             )
             run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -342,7 +437,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-import-fetch-execution"),
+                script_path("normalize-fetch-execution"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -378,7 +473,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             )
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -389,7 +484,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 str(mission_path),
             )
             run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -401,7 +496,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             completed = subprocess.run(
                 [
                     sys.executable,
-                    str(script_path("eco-import-fetch-execution")),
+                    str(script_path("normalize-fetch-execution")),
                     "--run-dir",
                     str(run_dir),
                     "--run-id",
@@ -439,7 +534,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             mission_path = build_mixed_queue_mission(root, build_openaq_artifact(root), build_detached_fetch_script(root))
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -450,7 +545,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 str(mission_path),
             )
             run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -467,7 +562,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             completed = subprocess.run(
                 [
                     sys.executable,
-                    str(script_path("eco-import-fetch-execution")),
+                    str(script_path("normalize-fetch-execution")),
                     "--run-dir",
                     str(run_dir),
                     "--run-id",

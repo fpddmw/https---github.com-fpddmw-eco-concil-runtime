@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Normalize NASA FIRMS Fire Observation Signals"
-  short_description: "Normalize NASA FIRMS detections into unified environment signals"
-  default_prompt: "Use $eco-normalize-nasa-firms-fire-observation-signals to normalize one nasa-firms-fire-fetch artifact into canonical environment-signal rows in the unified signal plane and return compact receipts, artifact refs, signal ids, and board-ready hints."

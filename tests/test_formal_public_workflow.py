@@ -56,7 +56,7 @@ def seed_regulationsgov_comments(run_dir: Path, root: Path) -> None:
         },
     )
     run_script(
-        script_path("eco-normalize-regulationsgov-comments-public-signals"),
+        script_path("normalize-regulationsgov-comments-public-signals"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -91,7 +91,7 @@ def seed_public_only_trust_signal(run_dir: Path, root: Path) -> None:
         ],
     )
     run_script(
-        script_path("eco-normalize-youtube-video-public-signals"),
+        script_path("normalize-youtube-video-public-signals"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -113,7 +113,7 @@ class FormalPublicWorkflowTests(unittest.TestCase):
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -122,7 +122,7 @@ class FormalPublicWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-classify-claim-verifiability"),
+                script_path("classify-claim-verifiability"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -131,7 +131,7 @@ class FormalPublicWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-route-verification-lane"),
+                script_path("route-verification-lane"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -155,10 +155,10 @@ class FormalPublicWorkflowTests(unittest.TestCase):
                     (RUN_ID, ROUND_ID),
                 ).fetchall()
             regulations_rows = [
-                row for row in rows if str(row["source_skill"]).startswith("regulationsgov-")
+                row for row in rows if str(row["source_skill"]).startswith("fetch-regulationsgov-")
             ]
             youtube_rows = [
-                row for row in rows if str(row["source_skill"]) == "youtube-video-search"
+                row for row in rows if str(row["source_skill"]) == "fetch-youtube-video-search"
             ]
             self.assertGreaterEqual(len(regulations_rows), 2)
             self.assertEqual({"formal"}, {str(row["plane"]) for row in regulations_rows})
@@ -173,7 +173,7 @@ class FormalPublicWorkflowTests(unittest.TestCase):
             )
 
             link_payload = run_script(
-                script_path("eco-link-formal-comments-to-public-discourse"),
+                script_path("link-formal-comments-to-public-discourse"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -182,7 +182,7 @@ class FormalPublicWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             gap_payload = run_script(
-                script_path("eco-identify-representation-gaps"),
+                script_path("identify-representation-gaps"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -300,7 +300,7 @@ class FormalPublicWorkflowTests(unittest.TestCase):
             seed_public_only_trust_signal(run_dir, root)
 
             payload = run_script(
-                script_path("eco-extract-claim-candidates"),
+                script_path("extract-claim-candidates"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",

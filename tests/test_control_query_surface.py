@@ -29,7 +29,7 @@ def seed_control_state(run_dir: Path) -> dict[str, str]:
     supervisor_path = (run_dir / "runtime" / f"supervisor_state_{ROUND_ID}.json").resolve()
     plan_payload = {
         "schema_version": "runtime-orchestration-plan-v1",
-        "skill": "eco-plan-round-orchestration",
+        "skill": "plan-round-orchestration",
         "generated_at_utc": "2024-01-01T00:00:00Z",
         "run_id": RUN_ID,
         "round_id": ROUND_ID,
@@ -48,7 +48,7 @@ def seed_control_state(run_dir: Path) -> dict[str, str]:
         "agent_turn_hints": {
             "primary_role": "moderator",
             "support_roles": ["moderator"],
-            "recommended_skill_sequence": ["eco-summarize-round-readiness"],
+            "recommended_skill_sequence": ["summarize-round-readiness"],
         },
         "observed_state": {
             "direct_council_queue": True,
@@ -64,8 +64,8 @@ def seed_control_state(run_dir: Path) -> dict[str, str]:
                 "stage_name": "round-readiness",
                 "stage_kind": "skill",
                 "phase_group": "readiness",
-                "skill_name": "eco-summarize-round-readiness",
-                "expected_skill_name": "eco-summarize-round-readiness",
+                "skill_name": "summarize-round-readiness",
+                "expected_skill_name": "summarize-round-readiness",
                 "assigned_role_hint": "moderator",
                 "required_previous_stages": ["orchestration-planner"],
                 "blocking": True,
@@ -98,8 +98,8 @@ def seed_control_state(run_dir: Path) -> dict[str, str]:
                 "stage_name": "promotion-basis",
                 "stage_kind": "skill",
                 "phase_group": "promotion",
-                "skill_name": "eco-promote-evidence-basis",
-                "expected_skill_name": "eco-promote-evidence-basis",
+                "skill_name": "promote-evidence-basis",
+                "expected_skill_name": "promote-evidence-basis",
                 "assigned_role_hint": "moderator",
                 "required_previous_stages": ["promotion-gate"],
                 "blocking": True,
@@ -152,7 +152,7 @@ def seed_control_state(run_dir: Path) -> dict[str, str]:
         "restart_recommended": False,
         "recovery": {"resume_from_stage": ""},
         "gate_reasons": [],
-        "recommended_next_skills": ["eco-materialize-reporting-handoff"],
+        "recommended_next_skills": ["materialize-reporting-handoff"],
         "planning": {
             "plan_id": plan_payload["plan_id"],
             "plan_path": str(plan_path),
@@ -217,7 +217,7 @@ def seed_control_state(run_dir: Path) -> dict[str, str]:
         "planning_mode": "planner-backed",
         "promotion_gate_path": str(gate_path),
         "controller_path": str(controller_path),
-        "recommended_next_skills": ["eco-materialize-reporting-handoff"],
+        "recommended_next_skills": ["materialize-reporting-handoff"],
         "round_transition": {},
         "top_actions": [],
         "operator_notes": [
@@ -400,7 +400,7 @@ class ControlQuerySurfaceTests(unittest.TestCase):
                     self.assertIsNotNone(plan_step_row)
                     plan_step_payload = json.loads(plan_step_row["raw_json"])
                     plan_step_payload["stage_name"] = "stale-stage"
-                    plan_step_payload["skill_name"] = "eco-stale-skill"
+                    plan_step_payload["skill_name"] = "stale-skill"
                     plan_step_payload["expected_output_path"] = ""
                     connection.execute(
                         "UPDATE orchestration_plan_steps SET raw_json = ? WHERE step_id = ?",
@@ -495,7 +495,7 @@ class ControlQuerySurfaceTests(unittest.TestCase):
             plan_step = plan_step_query["objects"][0]
             self.assertEqual("round-readiness", plan_step["stage_name"])
             self.assertEqual(
-                "eco-summarize-round-readiness",
+                "summarize-round-readiness",
                 plan_step["skill_name"],
             )
             self.assertTrue(plan_step["blocking"])

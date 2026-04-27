@@ -95,6 +95,7 @@ def skill_command_hint(
     actor_role: str,
     contract_mode: str,
     skill_args: list[str],
+    skill_approval_request_id: str = "",
 ) -> str:
     command = [
         command_name,
@@ -111,6 +112,8 @@ def skill_command_hint(
         "--contract-mode",
         contract_mode,
     ]
+    if maybe_text(skill_approval_request_id):
+        command.extend(["--skill-approval-request-id", maybe_text(skill_approval_request_id)])
     if skill_args:
         command.extend(["--", *skill_args])
     return shlex.join(command)

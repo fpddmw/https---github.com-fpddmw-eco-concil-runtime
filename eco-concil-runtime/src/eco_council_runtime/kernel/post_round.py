@@ -30,9 +30,9 @@ from .transition_requests import (
     resolve_transition_request_for_execution,
 )
 
-ARCHIVE_SIGNAL_SKILL_NAME = "eco-archive-signal-corpus"
-ARCHIVE_CASE_SKILL_NAME = "eco-archive-case-library"
-HISTORY_BOOTSTRAP_SKILL_NAME = "eco-materialize-history-context"
+ARCHIVE_SIGNAL_SKILL_NAME = "archive-signal-corpus"
+ARCHIVE_CASE_SKILL_NAME = "archive-case-library"
+HISTORY_BOOTSTRAP_SKILL_NAME = "materialize-history-context"
 ARCHIVE_FAILURE_POLICIES = ("block", "warn")
 
 
@@ -717,7 +717,7 @@ def close_round_with_contract_mode(
     payload["archive_status"] = "degraded" if step_failures else "completed"
     payload["completed_at_utc"] = utc_now_iso()
     payload["recommended_next_skills"] = (
-        unique_texts([failure["skill_name"] for failure in step_failures]) if step_failures else ["eco-materialize-history-context"]
+        unique_texts([failure["skill_name"] for failure in step_failures]) if step_failures else ["materialize-history-context"]
     )
     persist_round_close_state(run_dir, round_id, payload)
     mark_transition_request_committed(

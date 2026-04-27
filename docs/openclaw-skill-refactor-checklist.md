@@ -65,20 +65,20 @@
 
 - `已完成` deliberation canonical contract registry、council object query surface、reporting DB 恢复链。
 - `已完成` `next-action / probe / readiness-assessment / promotion-basis` 主存储入口 canonical 化与 fallback source 显式标注。
-- `已完成` `eco-propose-next-actions` 对 `proposal` 的优先消费。
-- `已完成` `eco-summarize-round-readiness` 对 `readiness-opinion` 的优先消费。
+- `已完成` `propose-next-actions` 对 `proposal` 的优先消费。
+- `已完成` `summarize-round-readiness` 对 `readiness-opinion` 的优先消费。
 - `已完成` phase-2 controller / post-round 的 DB-first 控制读取。
 
 ### 2.6 Batch 2 当前状态
 
-- `已完成` `eco-promote-evidence-basis` 对 `proposal / readiness-opinion` 的 judgement 吸收，并产出 `supporting_* / rejected_* / council_input_counts`。
-- `已完成` `eco-materialize-reporting-handoff / eco-draft-council-decision / eco-publish-council-decision / eco-materialize-final-publication` 对 trace 链字段的显式透传。
+- `已完成` `promote-evidence-basis` 对 `proposal / readiness-opinion` 的 judgement 吸收，并产出 `supporting_* / rejected_* / council_input_counts`。
+- `已完成` `materialize-reporting-handoff / draft-council-decision / publish-council-decision / materialize-final-publication` 对 trace 链字段的显式透传。
 - `已完成` canonical `decision-trace` 写库、查询与 final publication 暴露。
 - `已完成` `tests/test_decision_trace_workflow.py`，覆盖 ready/hold 两类 decision trace 工作流。
 
 ### 2.7 Batch 3 当前状态
 
-- `已完成` `eco-open-falsification-probe` 对 council proposal 的直接消费，probe 打开不再必须依赖 `next_actions` wrapper。
+- `已完成` `open-falsification-probe` 对 council proposal 的直接消费，probe 打开不再必须依赖 `next_actions` wrapper。
 - `已完成` proposal-first probe candidate 合并逻辑；存在 proposal 时优先于 DB-backed heuristic action。
 - `已完成` canonical probe 对 `decision_source / provenance / lineage / source_ids` 的显式继承。
 - `已完成` `tests/test_council_autonomy_flow.py` 中的 council-driven probe autonomy 回归。
@@ -87,7 +87,7 @@
 
 - `已完成` `board_proposal_support.py`，board judgement 现在直接消费 DB 中的 council proposal，并统一生成 canonical judgement metadata。
 - `已完成` `hypothesis_cards / challenge_tickets / board_tasks` 的 `decision_source / evidence_refs_json / source_ids_json / provenance_json / lineage_json` 落库与迁移。
-- `已完成` `[重写]` `eco-open-challenge-ticket / eco-close-challenge-ticket / eco-update-hypothesis-status / eco-claim-board-task` 的 proposal-first 执行路径。
+- `已完成` `[重写]` `open-challenge-ticket / close-challenge-ticket / update-hypothesis-status / claim-board-task` 的 proposal-first 执行路径。
 - `已完成` `hypothesis / challenge / board-task` canonical contract 与 `query-council-objects` 查询面。
 - `已完成` proposal-only board workflow 回归，覆盖 hypothesis update、challenge open、challenge close、board task claim，并断言 DB 列与 `raw_json` judgement metadata。
 - `已完成` 本地大回归 `75` 项通过，board proposal-first 改造未击穿 council / reporting / runtime 主链。
@@ -97,35 +97,35 @@
 ### 2.9 Batch 5 当前状态
 
 - `已完成` 新增 `eco_council_runtime/phase2_promotion_resolution.py`，统一 promotion-stage council proposal / readiness opinion 的 resolution surface。
-- `已完成` `eco-promote-evidence-basis` 已移除 skill 内部固定 promotion support kind 白名单；现在优先消费 proposal 内显式 `promotion_disposition / promote_allowed / publication_readiness / handoff_status / moderator_status` judgement，legacy kind 仅保留为 compatibility fallback。
+- `已完成` `promote-evidence-basis` 已移除 skill 内部固定 promotion support kind 白名单；现在优先消费 proposal 内显式 `promotion_disposition / promote_allowed / publication_readiness / handoff_status / moderator_status` judgement，legacy kind 仅保留为 compatibility fallback。
 - `已完成` `promotion-gate` 现在会把 `rejected_proposal_ids / supporting_proposal_ids / promotion_resolution_mode / council_input_counts` 写入 gate snapshot，议会 veto 已进入 controller 可见面。
-- `已完成` `eco-materialize-reporting-handoff / eco-draft-council-decision / eco-publish-council-decision` 已显式透传 `rejected_proposal_ids / promotion_resolution_mode / promotion_resolution_reasons / council_input_counts`。
+- `已完成` `materialize-reporting-handoff / draft-council-decision / publish-council-decision` 已显式透传 `rejected_proposal_ids / promotion_resolution_mode / promotion_resolution_reasons / council_input_counts`。
 - `已完成` decision trace / final publication 现在可以把 veto proposal 作为 selected object 落库并对外导出，不再只能通过 readiness opinion 表达 withheld 路径。
 - `已完成` `tests/test_decision_trace_workflow.py` 已新增 explicit support proposal 与 explicit veto proposal 回归；当前相关大回归 `127` 项全部通过。
 
 ### 2.10 Batch 6 当前状态
 
 - `已完成` `council_objects.py` 已新增 append/upsert proposal/readiness 原语，agent 可以逐条提交 canonical council object，而不是依赖整轮 replace bundle。
-- `已完成` 新增 `eco-submit-council-proposal / eco-submit-readiness-opinion`，默认直接写 DB canonical `proposal / readiness-opinion`，并保留 `target / evidence_refs / response_to_ids / lineage / provenance / promotion_*` judgement 字段。
+- `已完成` 新增 `submit-council-proposal / submit-readiness-opinion`，默认直接写 DB canonical `proposal / readiness-opinion`，并保留 `target / evidence_refs / response_to_ids / lineage / provenance / promotion_*` judgement 字段。
 - `已完成` `canonical_contracts.py` 已收紧 `proposal / readiness-opinion` 契约，`status / opinion_status / response_to_ids / basis_object_ids` 已进入强校验面。
 - `已完成` `phase2_agent_entry_profile.py / phase2_agent_handoff.py / kernel/agent_entry.py` 已把默认 agent write path 改为 submission skills，并显式暴露 proposal/readiness 的 query/template command。
-- `已完成` `phase2_direct_advisory.py / eco-plan-round-orchestration / eco-summarize-round-readiness / eco-propose-next-actions / eco-open-falsification-probe` 的 follow-up guidance 已开始从 `eco-post-board-note` 转向结构化 submission。
+- `已完成` `phase2_direct_advisory.py / plan-round-orchestration / summarize-round-readiness / propose-next-actions / open-falsification-probe` 的 follow-up guidance 已开始从 `post-board-note` 转向结构化 submission。
 - `已完成` 新增 `tests/test_council_submission_workflow.py`，并补强 `tests/test_agent_entry_gate.py / tests/test_council_autonomy_flow.py`；当前扩展后的大回归 `130` 项全部通过。
 
 ### 2.11 Batch 7 当前状态
 
 - `已完成` `phase2_promotion_resolution.py` 已移除 legacy promotion support compatibility；旧 `proposal_kind / action_kind` 名称本身不再授予 promotion support 语义。
 - `已完成` legacy 输入现在会被显式标记为 `ignored-implicit-promotion-kind`，并写进 `proposal_resolution_records / proposal_resolution_mode_counts`，而不是静默兼容。
-- `已完成` `eco-promote-evidence-basis` 会对这类旧输入发出 `ignored-implicit-promotion-kind` warning，promotion artifact 已能审计残留旧写法。
-- `已完成` `eco-materialize-reporting-handoff / eco-draft-council-decision / eco-draft-expert-report / eco-publish-expert-report / eco-publish-council-decision` 的 hold-path `suggested_next_skills` 已从 `eco-post-board-note` 转向 `eco-submit-council-proposal / eco-submit-readiness-opinion`。
-- `已完成` `eco-promote-evidence-basis / eco-summarize-round-readiness` 的 skill docs 与 agent prompts 已改写为“explicit DB judgement first”。
+- `已完成` `promote-evidence-basis` 会对这类旧输入发出 `ignored-implicit-promotion-kind` warning，promotion artifact 已能审计残留旧写法。
+- `已完成` `materialize-reporting-handoff / draft-council-decision / draft-expert-report / publish-expert-report / publish-council-decision` 的 hold-path `suggested_next_skills` 已从 `post-board-note` 转向 `submit-council-proposal / submit-readiness-opinion`。
+- `已完成` `promote-evidence-basis / summarize-round-readiness` 的 skill docs 与 agent prompts 已改写为“explicit DB judgement first”。
 - `已完成` 已新增 “legacy named promotion proposal is ignored” 与 reporting/publication hold-path guidance 回归；当前扩展后的大回归 `131` 项全部通过。
 
 ### 2.12 Batch 8 当前状态
 
 - `已完成` 新增 `phase2_action_semantics.py`，`readiness_blocker` 已成为 planner / readiness / promotion 共享语义，不再依赖 `prepare-promotion` 旧 action kind 特判。
 - `已完成` `phase2_fallback_policy.py` 的默认空 agenda cue 已改为 `open-council-readiness-review`，语义从“隐式 promotion cue”切成“显式 council readiness review cue”。
-- `已完成` 新增 `reporting_status.py`，`eco-materialize-reporting-handoff / eco-draft-council-decision / eco-draft-expert-report / phase2_posture_profile` 现在共享 `reporting_ready / reporting_blockers / handoff_status` 判定层。
+- `已完成` 新增 `reporting_status.py`，`materialize-reporting-handoff / draft-council-decision / draft-expert-report / phase2_posture_profile` 现在共享 `reporting_ready / reporting_blockers / handoff_status` 判定层。
 - `已完成` promoted supervisor status 已统一到 `reporting-ready`，handoff hold 状态已统一到 `investigation-open`。
 - `已完成` `phase2_state_surfaces.py` 已新增 `load_supervisor_state_wrapper`；删掉 `runtime/supervisor_state_*.json` 后，reporting handoff 仍可从 deliberation DB 恢复 supervisor state。
 - `已完成` `deliberation_plane.py` 已把 `readiness_blocker / reporting_ready / reporting_blockers / decision_gating` 提升成表列并补迁移，不再只藏在 `raw_json`。
@@ -152,7 +152,7 @@
 - `已完成` `kernel/phase2_state_surfaces.py` 的 reporting wrappers 已改成 `DB-only`；artifact-only 文件不再被当成状态源，而是显式标记为 `orphaned-...-artifact`。
 - `已完成` decision / expert-report wrapper 不再丢弃 `record_id / decision_stage / report_stage`；wrapper 现在暴露完整 reporting canonical row。
 - `已完成` 六个 reporting skill 已统一按 `store_*_record(...)` 返回的 canonical payload 落盘；artifact 与 DB `raw_json` 已不再分叉。
-- `已完成` `eco-publish-expert-report / eco-publish-council-decision` 已显式固定 canonical stage，并在 publish 时清空 draft 继承的 `record_id / provenance`，修正 draft row 被 canonical publish 顶掉的问题。
+- `已完成` `publish-expert-report / publish-council-decision` 已显式固定 canonical stage，并在 publish 时清空 draft 继承的 `record_id / provenance`，修正 draft row 被 canonical publish 顶掉的问题。
 - `已完成` 新增 `eco_council_runtime/reporting_exports.py` 与 CLI `materialize-reporting-exports`，可从 DB 重建全部八个 reporting 导出物；`show-reporting-state` operator 已补上对应 command template。
 - `已完成` `tests/test_reporting_query_surface.py / tests/test_reporting_publish_workflow.py` 已补强 artifact=DB 同构、orphaned artifact、export rebuild、publish block on orphaned draft 等回归；当前扩展后的大回归 `144` 项全部通过。
 
@@ -160,27 +160,27 @@
 
 - `已完成` `kernel/phase2_state_surfaces.py` 的 `next-actions / falsification-probes / round-readiness / promotion-basis / supervisor-state` wrapper 已全部改成 `DB-only`；artifact-only 文件会被显式标记为 `orphaned-...-artifact`，不再回流成 phase-2 payload。
 - `已完成` 新增 `eco_council_runtime/phase2_exports.py` 与 CLI `materialize-phase2-exports`，可从 DB 重建 `next_actions / falsification_probes / round_readiness / promoted_evidence_basis / supervisor_state` 五个 phase-2 导出物；`show-run-state` phase-2 operator 已补上对应 command template 与 query commands。
-- `已完成` `eco-materialize-final-publication` 已切到 `load_supervisor_state_wrapper(...)`；publication 不再旁路直读 supervisor artifact，而是优先走 `promotion_freeze -> supervisor_snapshot`。
+- `已完成` `materialize-final-publication` 已切到 `load_supervisor_state_wrapper(...)`；publication 不再旁路直读 supervisor artifact，而是优先走 `promotion_freeze -> supervisor_snapshot`。
 - `已完成` `kernel/controller.py` 已删除一个残留的 `promotion_basis` artifact fallback；controller completion 现在不会再用旧 export 回填 `promotion_status`。
 - `已完成` `tests/test_phase2_state_surfaces.py / tests/test_runtime_kernel.py / tests/test_orchestration_planner_workflow.py / tests/test_board_workflow.py / tests/test_reporting_publish_workflow.py` 已补强 phase-2 orphaned-artifact、export rebuild、publication supervisor DB recovery 与 DB-canonical test seed；当前扩展后的大回归 `148` 项全部通过。
 
 ### 2.17 Batch 13 当前状态
 
 - `已完成` `kernel/signal_plane_normalizer.py` 现在会持久化并迁移 `canonical_object_kind`；signal plane 的 typed contract 已不再停留在文档和 runtime 内存层。
-- `已完成` `eco-normalize-regulationsgov-comments-public-signals / eco-normalize-regulationsgov-comment-detail-public-signals` 已切到 `plane = formal`、`canonical_object_kind = formal-comment-signal`；formal comments 不再伪装成 generic public rows。
-- `已完成` `eco-link-formal-comments-to-public-discourse / eco-detect-cross-platform-diffusion / eco-extract-claim-candidates` 已切到结构化 formal/public 识别，不再依赖 `plane='public' + source_skill` 的历史假设。
+- `已完成` `normalize-regulationsgov-comments-public-signals / normalize-regulationsgov-comment-detail-public-signals` 已切到 `plane = formal`、`canonical_object_kind = formal-comment-signal`；formal comments 不再伪装成 generic public rows。
+- `已完成` `link-formal-comments-to-public-discourse / detect-cross-platform-diffusion / extract-claim-candidates` 已切到结构化 formal/public 识别，不再依赖 `plane='public' + source_skill` 的历史假设。
 - `已完成` 遗留 standalone public/environment normalizer（`youtube-video / bluesky / gdelt-doc / airnow / openaq / open-meteo`）已同步补上 `canonical_object_kind` 持久化与统一 schema migration。
 - `已完成` `source_queue_profile` 已把默认主链改成 `claim-scope -> verifiability -> route -> controversy-map`，并把 observation extract/merge/link/scope/coverage 降级为 `route-gated optional lane`。
 - `已完成` `tests/test_formal_public_workflow.py / tests/test_migrated_source_runtime_integration.py / tests/test_runtime_source_queue_profiles.py` 已补上 formal-plane、typed signal、optional verification 的结构性回归；本轮 targeted `17` 项与扩展 workflow `87` 项均已本地通过。
 
 ### 2.18 Batch 14 当前状态
 
-- `已完成` 新增 `eco-query-formal-signals`，`formal` plane 现在拥有与 `public / environment` 对称的独立 query surface；可直接按 `source_skill / signal_kind / published window / docket_id / agency_id / keyword` 查询。
+- `已完成` 新增 `query-formal-signals`，`formal` plane 现在拥有与 `public / environment` 对称的独立 query surface；可直接按 `source_skill / signal_kind / published window / docket_id / agency_id / keyword` 查询。
 - `已完成` `phase2 operator / agent entry operator / 默认 role read path` 已全部接入 `query_formal_signals_command`；formal signal 不再只能靠底层表或历史 source whitelist 间接访问。
 - `已完成` `phase2_fallback_agenda.py / phase2_fallback_policy.py / phase2_fallback_context.py` 已把 empirical blocker 进一步改成 `route-gated`：只有显式 routed 到 `environmental-observation` 的问题才会被 coverage/support 继续卡住；纯 `formal / discourse / stakeholder` round 不再因为缺少另一侧 material 或 coverage 被硬阻塞。
-- `已完成` `eco-summarize-round-readiness` 已切成 `lane-aware readiness`：主判断面现在是 `issue / route / linkage / representation / diffusion / council opinions`，coverage 退为 observation lane supporting posture。
-- `已完成` `eco-promote-evidence-basis` 已切成 `lane-aware promotion freeze`：`verification_routes` 现在会冻结 empirical routes，自身成为 basis object；coverage 只在 `route-gated empirical lane` 或 `legacy no-structure fallback` 时进入 `selected_coverages`。
-- `已完成` `eco-materialize-reporting-handoff` 已补上 structural-basis key findings fallback；纯 formal/public/discourse promoted round 即使没有 selected coverages，也能从 `issue_clusters / routes / links / gaps / edges` 生成 reporting handoff findings。
+- `已完成` `summarize-round-readiness` 已切成 `lane-aware readiness`：主判断面现在是 `issue / route / linkage / representation / diffusion / council opinions`，coverage 退为 observation lane supporting posture。
+- `已完成` `promote-evidence-basis` 已切成 `lane-aware promotion freeze`：`verification_routes` 现在会冻结 empirical routes，自身成为 basis object；coverage 只在 `route-gated empirical lane` 或 `legacy no-structure fallback` 时进入 `selected_coverages`。
+- `已完成` `materialize-reporting-handoff` 已补上 structural-basis key findings fallback；纯 formal/public/discourse promoted round 即使没有 selected coverages，也能从 `issue_clusters / routes / links / gaps / edges` 生成 reporting handoff findings。
 - `已完成` 本轮新增/更新回归已覆盖 `formal signal query surface`、`agent entry/operator commands`、`phase2 operator surface`、`non-empirical ready+promote+reporting handoff`、`investigation/reporting/runtime kernel` 主链；本地验证通过：
   - `tests/test_signal_plane_workflow.py`
   - `tests/test_agent_entry_gate.py`
@@ -200,12 +200,12 @@
 - `已完成` `canonical_contracts.py` 已新增 `claim-candidate / claim-cluster / claim-scope` 强契约，并把 `required_number_fields` 提升成一等校验面；claim-side analysis object 不再只有“有几个字符串字段就算过关”。
 - `已完成` 新增 `eco_council_runtime/analysis_objects.py`，把 `claim-candidate / claim-cluster / claim-scope / verifiability-assessment / verification-route` 的 canonical normalization 收口到统一入口；`decision_source / confidence / rationale / provenance / evidence_refs / lineage` 现在不再分散在多个 skill 里各自拼接。
 - `已完成` `kernel/analysis_plane.py` 现在会在 sync 阶段对上述 analysis object 做强校验，并把 `decision_source / lineage_json / provenance_json` 落到 `analysis_result_items`；DB 丢失 artifact 后保留的已不再只是弱 `item_json`。
-- `已完成` `eco-extract-claim-candidates / eco-cluster-claim-candidates / eco-derive-claim-scope` 已重写为 canonical claim-side object 输出：
+- `已完成` `extract-claim-candidates / cluster-claim-candidates / derive-claim-scope` 已重写为 canonical claim-side object 输出：
   - `claim-candidate` 现在直接写出 `evidence_refs / lineage / rationale / provenance / confidence`。
   - `claim-cluster` 现在显式持久化 `source_signal_ids`，并把 canonical `evidence_refs` 取代旧 `public_refs-only` DB lineage。
   - `claim-scope` 现在显式标注 `claim_input_kind / claim_object_id / basis_claim_ids / source_signal_ids`，不再把上游对象语义全部挤进一个模糊 `claim_id`。
-- `已完成` `eco-classify-claim-verifiability / eco-route-verification-lane` 已修正 artifact-ref 证据链错误：`evidence_refs` 不再被 `unique_texts()` 串化成伪字符串，而是继续作为 artifact-ref dict 在 `verifiability / route / controversy-map` 主链中流转。
-- `已完成` `eco-link-claims-to-observations / eco-link-formal-comments-to-public-discourse / eco-materialize-controversy-map` 已改成 `evidence_refs-first` 读取；`public_refs` 降级为兼容 alias，而不是 canonical evidence 面。
+- `已完成` `classify-claim-verifiability / route-verification-lane` 已修正 artifact-ref 证据链错误：`evidence_refs` 不再被 `unique_texts()` 串化成伪字符串，而是继续作为 artifact-ref dict 在 `verifiability / route / controversy-map` 主链中流转。
+- `已完成` `link-claims-to-observations / link-formal-comments-to-public-discourse / materialize-controversy-map` 已改成 `evidence_refs-first` 读取；`public_refs` 降级为兼容 alias，而不是 canonical evidence 面。
 - `已完成` 本轮本地验证通过：
   - `tests/test_canonical_contracts.py`
   - `tests/test_analysis_workflow.py`
@@ -224,10 +224,10 @@
   - `formal-public-link` 现在会显式保留 `claim_scope_ids / assessment_ids / route_ids`。
   - `diffusion-edge` 现在会显式保留 `linkage_ids / claim_scope_ids / assessment_ids / route_ids`。
   - `controversy-map` 现在会把 `claim_scope_id / assessment_id / route_id / source_signal_ids` 写入 item row 与 query surface。
-- `已完成` `eco-link-formal-comments-to-public-discourse / eco-identify-representation-gaps / eco-detect-cross-platform-diffusion / eco-materialize-controversy-map` 已改成 canonical object 输出；controversy 链不再把弱 wrapper dict 直接 sync 进 DB。
+- `已完成` `link-formal-comments-to-public-discourse / identify-representation-gaps / detect-cross-platform-diffusion / materialize-controversy-map` 已改成 canonical object 输出；controversy 链不再把弱 wrapper dict 直接 sync 进 DB。
 - `已完成` controversy 主链的 DB-native 恢复验证已补齐：
   - 删掉 `formal_public_links / representation_gaps / diffusion_edges / controversy_map` artifact 后，`query_analysis_result_items(...)` 与 runtime kernel query surface 仍能从 `analysis_result_items` 恢复完整对象。
-  - `eco-link-formal-comments-to-public-discourse` 已修正 `route.claim_id = cluster_id` 时 route 元数据丢失的问题；formal/public linkage 不再漏掉 `route_ids / assessment_ids / claim_scope_ids` 父链。
+  - `link-formal-comments-to-public-discourse` 已修正 `route.claim_id = cluster_id` 时 route 元数据丢失的问题；formal/public linkage 不再漏掉 `route_ids / assessment_ids / claim_scope_ids` 父链。
 - `已完成` 本轮本地验证通过：
   - `tests/test_canonical_contracts.py`
   - `tests/test_analysis_workflow.py`
@@ -252,7 +252,7 @@
   - 新对象支持 item-level query。
   - 新对象支持 parent result-set / parent artifact / parent id lineage。
   - 删掉 typed artifact 后，kernel query surface 仍能从 DB 恢复对象。
-- `已完成` `eco-materialize-controversy-map` 不再只产出一个 `controversy_map` wrapper：
+- `已完成` `materialize-controversy-map` 不再只产出一个 `controversy_map` wrapper：
   - 现在会同时派生并同步 `issue_clusters / stance_groups / concern_facets / actor_profiles / evidence_citation_types` 五组 typed artifact。
   - `controversy-map` 保留为 routing / readiness-facing 高层对象；议会 issue layer 改由 `issue-cluster` 充当 canonical DB surface。
 - `已完成` `load_d1_shared_context` 已切到 `issue-cluster-first`：
@@ -272,7 +272,7 @@
 ### 2.22 Batch 18 当前状态
 
 - `已完成` 新增 `eco_council_runtime/formal_signal_semantics.py`，formal comment 的 `submitter / issue / stance / concern / citation / route` typed 语义已收口到统一 extractor；列表页与详情页 normalizer 不再各写一套互相漂移的规则。
-- `已完成` `eco-normalize-regulationsgov-comments-public-signals / eco-normalize-regulationsgov-comment-detail-public-signals` 现在都会把以下 typed 字段直接写入 `formal-comment-signal` metadata：
+- `已完成` `normalize-regulationsgov-comments-public-signals / normalize-regulationsgov-comment-detail-public-signals` 现在都会把以下 typed 字段直接写入 `formal-comment-signal` metadata：
   - `submitter_name / submitter_type`
   - `issue_labels / issue_terms`
   - `stance_hint`
@@ -283,10 +283,10 @@
 - `已完成` `kernel/signal_plane_normalizer.py` 已新增 `normalized_signal_index`：
   - formal typed 维度不再只躺在 `metadata_json` blob 里。
   - `docket / agency / submitter / issue / concern / citation / stance / route` 已有可查询的 DB index surface。
-- `已完成` `eco-query-formal-signals` 已升级为 typed formal query surface：
+- `已完成` `query-formal-signals` 已升级为 typed formal query surface：
   - 新增 `submitter_type / issue_label / concern_facet / citation_type / stance_hint / route_hint` 过滤。
   - 返回结果会直接暴露上述 structured fields，而不是只给 `docket / agency`。
-- `已完成` `eco-link-formal-comments-to-public-discourse` 已改成优先消费 DB 中的 formal typed metadata：
+- `已完成` `link-formal-comments-to-public-discourse` 已改成优先消费 DB 中的 formal typed metadata：
   - issue assignment 优先读取 signal 自带 `issue_labels / issue_terms`。
   - profile lane/concern/actor votes 会吸收 `route_hint / concern_facets / submitter_type`，不再只靠正文临时猜。
 - `已完成` 本轮本地验证通过：
@@ -333,12 +333,12 @@
 
 - `已完成` 新增 `eco_council_runtime/controversy_issue_surfaces.py`，claim-side issue clustering、typed issue decomposition、controversy map aggregation 的共享 builder 已从 skill 脚本内联逻辑中抽离。
 - `已完成` 新增独立 typed controversy issue skills：
-  - `eco-cluster-issue-candidates`
-  - `eco-extract-stance-candidates`
-  - `eco-extract-concern-facets`
-  - `eco-extract-actor-profiles`
-  - `eco-extract-evidence-citation-types`
-- `已完成` `eco-materialize-controversy-map` 已从“大一统 extractor”收缩为 `DB-first` 聚合器：
+  - `cluster-issue-candidates`
+  - `extract-stance-candidates`
+  - `extract-concern-facets`
+  - `extract-actor-profiles`
+  - `extract-evidence-citation-types`
+- `已完成` `materialize-controversy-map` 已从“大一统 extractor”收缩为 `DB-first` 聚合器：
   - 优先读取 `issue-cluster / stance-group / concern-facet / actor-profile / evidence-citation-type`。
   - 只有 typed surface 缺失时才内联补齐，并显式发出 compatibility warning。
 - `已完成` `kernel/analysis_plane.py` 的 parent contract 已重排：
@@ -346,8 +346,8 @@
   - `stance-group / concern-facet / actor-profile / evidence-citation-type` 现在只以 `issue-cluster` 为父面。
   - `controversy-map` 现在反向依赖 typed issue surfaces，而不是继续直接锚在 claim-side chain。
 - `已完成` `source_queue_profile.py` 与 verifiability/route follow-up hints 已改写：
-  - `eco-route-verification-lane` 下游现在优先指向 `eco-cluster-issue-candidates`。
-  - typed extractor 已成为一等 queue-visible capability，而不是只能由 `eco-materialize-controversy-map` 顺手派生。
+  - `route-verification-lane` 下游现在优先指向 `cluster-issue-candidates`。
+  - typed extractor 已成为一等 queue-visible capability，而不是只能由 `materialize-controversy-map` 顺手派生。
 - `已完成` 本轮本地验证通过：
   - `python3 -m unittest tests.test_controversy_workflow -v`
   - `python3 -m unittest tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_controversy_map_items_when_artifact_is_missing tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_issue_cluster_items_when_artifact_is_missing tests.test_runtime_source_queue_profiles -v`
@@ -355,10 +355,10 @@
 ### 2.25 Batch 21 当前状态
 
 - `已完成` 新增 `eco_council_runtime/issue_cluster_skill_runner.py`，`issue-cluster` 生成链已从 skill 脚本进一步下沉成共享 runtime helper。
-- `已完成` 新增 `eco-extract-issue-candidates`：
+- `已完成` 新增 `extract-issue-candidates`：
   - 现在可以先从 `claim-scope / verifiability / route` 派生 scope-level `issue-cluster` candidate。
   - 默认写出 `analytics/issue_candidates_<round_id>.json`，并同步进 analysis plane 的 canonical `issue-cluster` result set。
-- `已完成` `eco-cluster-issue-candidates` 已改为复用共享 helper，只保留 “claim-cluster merged issue surface” 这一层职责。
+- `已完成` `cluster-issue-candidates` 已改为复用共享 helper，只保留 “claim-cluster merged issue surface” 这一层职责。
 - `已完成` `source_queue_profile.py` 已把 controversy issue 主链进一步改成 `route -> extract-issue-candidates -> cluster-issue-candidates -> typed issue -> controversy-map`，candidate stage 已进入默认 queue。
 - `已完成` deliberation target semantics 已补齐 `actor-profile / proposal` 一等锚点：
   - `moderator_actions / falsification_probes` 已新增 `target_actor_id / target_proposal_id` 列与索引。
@@ -381,7 +381,7 @@
   - proposal 不再因为自带 `proposal_id / round_id` 就被伪装成“已有 target anchor”。
   - 现在只有显式 target 字段才会形成 canonical `target`。
 - `已完成` `council_objects.py` 现在会把 canonical `target` 与 `confidence` 写回 `proposal` payload，再做 contract 校验；proposal query surface 与 downstream execution 读取的是同一份 authoritative target。
-- `已完成` `phase2_agent_entry_profile.py / phase2_agent_handoff.py / eco-submit-council-proposal` 技能文档与默认 prompt 已对齐强契约：
+- `已完成` `phase2_agent_entry_profile.py / phase2_agent_handoff.py / submit-council-proposal` 技能文档与默认 prompt 已对齐强契约：
   - 默认提交模板现在显式要求 `--confidence`
   - `--evidence-ref`
   - `--provenance-json`
@@ -466,24 +466,24 @@
 
 ### 6.1 重写旧主链 skills
 
-- `[x]` `[重写]` `eco-extract-claim-candidates`
-- `[x]` `[重写]` `eco-cluster-claim-candidates`
-- `[x]` `[重写]` `eco-derive-claim-scope`
+- `[x]` `[重写]` `extract-claim-candidates`
+- `[x]` `[重写]` `cluster-claim-candidates`
+- `[x]` `[重写]` `derive-claim-scope`
 
 ### 6.2 新增 controversy 主链 skills
 
-- `[x]` `[新增 canonical]` `eco-extract-issue-candidates`
-- `[x]` `[新增 canonical]` `eco-cluster-issue-candidates`
-- `[x]` `[新增 canonical]` `eco-extract-stance-candidates`
-- `[x]` `[新增 canonical]` `eco-extract-concern-facets`
-- `[x]` `[新增 canonical]` `eco-extract-actor-profiles`
-- `[x]` `[新增 canonical]` `eco-extract-evidence-citation-types`
-- `[x]` `[新增 canonical]` `eco-link-formal-comments-to-public-discourse`
-- `[x]` `[新增 canonical]` `eco-identify-representation-gaps`
-- `[x]` `[新增 canonical]` `eco-detect-cross-platform-diffusion`
-- `[x]` `[新增 canonical]` `eco-classify-claim-verifiability`
-- `[x]` `[新增 canonical]` `eco-route-verification-lane`
-- `[x]` `[新增 canonical]` `eco-materialize-controversy-map`
+- `[x]` `[新增 canonical]` `extract-issue-candidates`
+- `[x]` `[新增 canonical]` `cluster-issue-candidates`
+- `[x]` `[新增 canonical]` `extract-stance-candidates`
+- `[x]` `[新增 canonical]` `extract-concern-facets`
+- `[x]` `[新增 canonical]` `extract-actor-profiles`
+- `[x]` `[新增 canonical]` `extract-evidence-citation-types`
+- `[x]` `[新增 canonical]` `link-formal-comments-to-public-discourse`
+- `[x]` `[新增 canonical]` `identify-representation-gaps`
+- `[x]` `[新增 canonical]` `detect-cross-platform-diffusion`
+- `[x]` `[新增 canonical]` `classify-claim-verifiability`
+- `[x]` `[新增 canonical]` `route-verification-lane`
+- `[x]` `[新增 canonical]` `materialize-controversy-map`
 
 ### 6.3 强约束
 
@@ -497,17 +497,17 @@
 
 ### 7.1 重写 phase-2 skills
 
-- `[x]` `[重写]` `eco-propose-next-actions`
-- `[x]` `[重写]` `eco-open-falsification-probe`
-- `[x]` `[重写]` `eco-summarize-round-readiness`
-- `[x]` `[重写]` `eco-promote-evidence-basis`
+- `[x]` `[重写]` `propose-next-actions`
+- `[x]` `[重写]` `open-falsification-probe`
+- `[x]` `[重写]` `summarize-round-readiness`
+- `[x]` `[重写]` `promote-evidence-basis`
 
 ### 7.2 重写 board skills
 
-- `[x]` `[重写]` `eco-claim-board-task`
-- `[x]` `[重写]` `eco-open-challenge-ticket`
-- `[x]` `[重写]` `eco-close-challenge-ticket`
-- `[x]` `[重写]` `eco-update-hypothesis-status`
+- `[x]` `[重写]` `claim-board-task`
+- `[x]` `[重写]` `open-challenge-ticket`
+- `[x]` `[重写]` `close-challenge-ticket`
+- `[x]` `[重写]` `update-hypothesis-status`
 
 ### 7.3 结构性要求
 
@@ -525,7 +525,7 @@
 - `[x]` `openclaw-agent` 轮次进入 phase-2 时，controller 与 agent entry 现在都会先尝试 `direct-council-advisory` compiler，只有 direct council inputs 不足或 compiler 失败时才回退 `agent-advisory` planner skill。
 - `[x]` advisory plan 已存在时会直接采用；advisory 物化失败时才会回退 `planner-backed` phase-2。
 - `[x]` controller 状态现在显式记录 `plan_source / planning_attempts / agent_advisory_plan_path`，agent 路径与 fallback 路径不再混在一条隐式 planner 语义里。
-- `[x]` `eco-plan-round-orchestration` 在 `agent-advisory` 与 `runtime-phase2` 模式下，若 DB 中已存在直接 `proposal / readiness-opinion`，现在都可以跳过 `next-actions` 重算，直接产出 `probe -> readiness` 或 `readiness-only` 队列。
+- `[x]` `plan-round-orchestration` 在 `agent-advisory` 与 `runtime-phase2` 模式下，若 DB 中已存在直接 `proposal / readiness-opinion`，现在都可以跳过 `next-actions` 重算，直接产出 `probe -> readiness` 或 `readiness-only` 队列。
 - `[x]` advisory plan 现在会显式暴露 `direct_council_queue / next_actions_stage_skipped / council_input_counts`，能区分“由 council inputs 直接驱动的 advisory”与“仍依赖 wrapper/action snapshot 的 advisory”。
 - `[x]` `eco-concil-runtime/src/eco_council_runtime/phase2_direct_advisory.py` 已接入主链，能把 DB 中的 `proposal / readiness-opinion / probe` 直接编译为 advisory queue，并把 `plan_source = direct-council-advisory` 写入 advisory artifact、controller 状态与 planning attempts。
 - `[x]` orchestration plan 已升格为 canonical deliberation-plane object：`orchestration-plan / orchestration-plan-step` contract、表、query surface 与 export rebuild 已补齐；`phase2_planning_profile.py / controller.py / cli.py / benchmark.py / agent_entry.py / phase2_exports.py` 现默认先读 DB，runtime/advisory artifact 退回 export/fallback 载体。
@@ -555,13 +555,13 @@
 - `[x]` `controller.run_phase2_round_with_contract_mode(...)` 已改成显式接收 `gate_handlers`；默认 gate/profile 现在只能从组合根显式注入，controller 不再默认拥有该 profile。
 - `[x]` `phase2_fallback_planning.py` 已拆成 `phase2_fallback_common.py / phase2_fallback_contracts.py / phase2_fallback_agenda.py / phase2_fallback_context.py` 四个明确职责模块；原文件退成 compatibility facade，skills / reporting contracts / kernel compatibility layer 也开始直接依赖这些新边界。
 - `[x]` `phase2_fallback_agenda.py` 内的 score / pressure / probe / readiness-blocker 规则已继续抽成 `eco_council_runtime/phase2_fallback_policy.py`，fallback 动作现在会显式写出 `policy_profile / policy_source / policy_owner`。
-- `[x]` agent proposal 到执行 action 的投影已统一抽到 `eco_council_runtime/phase2_proposal_actions.py`；`phase2_direct_advisory.py`、`eco-propose-next-actions`、`eco-open-falsification-probe`、`eco-plan-round-orchestration` 不再各自维护一套 proposal->action 规则副本。
+- `[x]` agent proposal 到执行 action 的投影已统一抽到 `eco_council_runtime/phase2_proposal_actions.py`；`phase2_direct_advisory.py`、`propose-next-actions`、`open-falsification-probe`、`plan-round-orchestration` 不再各自维护一套 proposal->action 规则副本。
 - `[x]` phase-2 默认 gate profile 已从 handler 实现文件拆到 `eco_council_runtime/phase2_gate_profile.py`；`phase2_gate_handlers.py` 现在只保留 handler 实现，不再同时承担“默认 profile 注册表”。
 - `[x]` `runtime_command_hints.py / phase2_agent_handoff.py` 已把默认 runtime command hints 与 agent handoff chain 提升到 kernel 外；`kernel/agent_entry.py` 现在只消费注入的 `hard_gate_command_builder / entry_chain_builder`，不再内建默认 runtime handoff 流程。
 - `[x]` `scripts/eco_runtime_kernel.py` 现在是默认 phase-2 gate/profile 与 agent handoff profile 的组合根；`cli.py / supervisor.py / agent_entry.py` 只消费注入参数，不再私自装配默认 profile。
 - `[x]` `phase2_fallback_agenda_profile.py` 已接管 `open-challenge / task / hypothesis / issue / route / assessment / link / gap / edge / coverage -> action` 的映射与启停顺序；`phase2_fallback_agenda.py` 现在只剩通用 context 装配、去重、排序和统计。
 - `[x]` 新增 profile-overridable 回归：可注入自定义 agenda profile 覆盖默认 fallback 议会流程，可注入自定义 agent handoff profile 覆盖默认 runtime handoff 命令链。
-- `[x]` `phase2_council_execution.py` 已统一 `proposal-authoritative / proposal-augmented / fallback-only` 三种议会执行模式；`eco-propose-next-actions / eco-open-falsification-probe / eco-summarize-round-readiness / eco-plan-round-orchestration` 现在共享同一套 proposal-vs-heuristic 决策面，并显式写出 observed / selected / suppressed fallback counts。
+- `[x]` `phase2_council_execution.py` 已统一 `proposal-authoritative / proposal-augmented / fallback-only` 三种议会执行模式；`propose-next-actions / open-falsification-probe / summarize-round-readiness / plan-round-orchestration` 现在共享同一套 proposal-vs-heuristic 决策面，并显式写出 observed / selected / suppressed fallback counts。
 - `[x]` `phase2_stage_profile.py` 现在持有默认 stage definitions、gate/post-gate 默认蓝图与 stage validation；`kernel/phase2_contract.py` 已退成 compatibility facade，不再是 controller 的默认真理表。
 - `[x]` `phase2_controller_state.py` 已接管 phase-2 stage blueprint、controller planning snapshot、step merge、planner attempt summary、failure/event shape；`kernel/controller.py` 现在主要只剩 injected planning source 执行、gate dispatch、skill execution 与持久化。
 - `[x]` `phase2_agent_entry_profile.py` 已接管 agent-entry 默认 role definitions、recommended skills、operator commands/notes、next-round suggestion builder 与 advisory refresh source 顺序；`kernel/agent_entry.py / cli.py` 现在只消费 injected entry profile，不再内建默认议会入口教程或 advisory materialization 链。
@@ -596,25 +596,25 @@
 
 ## 10. Work Package 7: Reporting / publication 重建
 
-- `[x]` `[重写]` `eco-summarize-board-state`
-- `[x]` `[重写]` `eco-materialize-board-brief`
-- `[x]` `[重写]` `eco-materialize-reporting-handoff`
-- `[x]` `[重写]` `eco-draft-council-decision`
-- `[x]` `[重写]` `eco-draft-expert-report`
-- `[x]` `[重写]` `eco-publish-council-decision`
-- `[x]` `[重写]` `eco-publish-expert-report`
-- `[x]` `[重写]` `eco-materialize-final-publication`
+- `[x]` `[重写]` `summarize-board-state`
+- `[x]` `[重写]` `materialize-board-brief`
+- `[x]` `[重写]` `materialize-reporting-handoff`
+- `[x]` `[重写]` `draft-council-decision`
+- `[x]` `[重写]` `draft-expert-report`
+- `[x]` `[重写]` `publish-council-decision`
+- `[x]` `[重写]` `publish-expert-report`
+- `[x]` `[重写]` `materialize-final-publication`
 - `[x]` board summary / brief 只作为 DB 导出物存在
 - `[x]` reporting / publication 默认从 canonical DB 对象物化
 - `[x]` reporting / publication canonical objects 已支持 item-level query
 
 ## 11. Work Package 8: Verification lane 降级为 optional lane
 
-- `[x]` `[降级为 optional lane]` `eco-extract-observation-candidates`
-- `[x]` `[降级为 optional lane]` `eco-merge-observation-candidates`
-- `[x]` `[降级为 optional lane]` `eco-derive-observation-scope`
-- `[x]` `[降级为 optional lane]` `eco-link-claims-to-observations`
-- `[x]` `[降级为 optional lane]` `eco-score-evidence-coverage`
+- `[x]` `[降级为 optional lane]` `extract-observation-candidates`
+- `[x]` `[降级为 optional lane]` `merge-observation-candidates`
+- `[x]` `[降级为 optional lane]` `derive-observation-scope`
+- `[x]` `[降级为 optional lane]` `link-claims-to-observations`
+- `[x]` `[降级为 optional lane]` `score-evidence-coverage`
 - `[x]` observation chain 只在 verifiability + route 明确允许时触发
 - `[x]` readiness 默认不再围绕 coverage 公式展开
 

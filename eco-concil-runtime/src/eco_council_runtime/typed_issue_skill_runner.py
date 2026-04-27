@@ -230,9 +230,9 @@ def materialize_typed_issue_surface_skill(
             "gap_hints": [],
             "challenge_hints": [],
             "suggested_next_skills": [
-                "eco-materialize-controversy-map",
-                "eco-propose-next-actions",
-                "eco-post-board-note",
+                "materialize-controversy-map",
+                "propose-next-actions",
+                "post-board-note",
             ],
         },
     }

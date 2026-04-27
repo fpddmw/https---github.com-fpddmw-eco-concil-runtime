@@ -44,7 +44,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
             )
 
             claim_scope_payload = run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -53,7 +53,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             observation_scope_payload = run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -62,7 +62,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -71,7 +71,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             audit_payload = run_script(
-                script_path("eco-build-normalization-audit"),
+                script_path("build-normalization-audit"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -250,7 +250,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
             ).unlink()
 
             claim_scope_payload = run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -259,7 +259,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             observation_scope_payload = run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -268,7 +268,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             link_payload = run_script(
-                script_path("eco-link-claims-to-observations"),
+                script_path("link-claims-to-observations"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -356,7 +356,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
             coverage_path = root / "custom_evidence_coverage.json"
 
             claim_scope_payload = run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -367,7 +367,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 str(claim_scope_path),
             )
             observation_scope_payload = run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -378,7 +378,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 str(observation_scope_path),
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -419,7 +419,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -428,7 +428,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -442,7 +442,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
             analytics_path(run_dir, f"observation_scope_proposals_{ROUND_ID}.json").unlink()
 
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -489,7 +489,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -498,7 +498,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -507,7 +507,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -692,7 +692,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -701,7 +701,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -710,7 +710,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -773,7 +773,7 @@ class AnalysisWorkflowTests(unittest.TestCase):
             analytics_path(run_dir, f"observation_candidates_{ROUND_ID}.json").unlink()
 
             audit_payload = run_script(
-                script_path("eco-build-normalization-audit"),
+                script_path("build-normalization-audit"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",

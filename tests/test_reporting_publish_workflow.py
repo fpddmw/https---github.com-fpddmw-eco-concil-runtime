@@ -47,19 +47,19 @@ def execute_db(
 
 def prepare_ready_round(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    run_script(script_path("eco-derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("eco-derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_payload = run_script(script_path("eco-score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    coverage_payload = run_script(script_path("score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
     run_script(
-        script_path("eco-post-board-note"),
+        script_path("post-board-note"),
         "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID,
         "--author-role", "moderator", "--category", "analysis",
         "--note-text", "Round is ready to move into role reports and final decision publish.",
         "--linked-artifact-ref", coverage_ref,
     )
     run_script(
-        script_path("eco-update-hypothesis-status"),
+        script_path("update-hypothesis-status"),
         "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID,
         "--title", "Smoke over NYC was materially significant",
         "--statement", "Public smoke reports are backed by elevated PM2.5 observations.",
@@ -69,18 +69,18 @@ def prepare_ready_round(run_dir: Path, root: Path) -> None:
     )
     approve_promotion_transition(run_dir)
     run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("eco-materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("eco-draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
 
 def prepare_hold_round(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    run_script(script_path("eco-derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("eco-derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_payload = run_script(script_path("eco-score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    coverage_payload = run_script(script_path("score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
     hypothesis_payload = run_script(
-        script_path("eco-update-hypothesis-status"),
+        script_path("update-hypothesis-status"),
         "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID,
         "--title", "Smoke over NYC may be overstated",
         "--statement", "Public reports may overstate severity relative to observed PM2.5 coverage.",
@@ -89,7 +89,7 @@ def prepare_hold_round(run_dir: Path, root: Path) -> None:
         "--confidence", "0.52",
     )
     run_script(
-        script_path("eco-open-challenge-ticket"),
+        script_path("open-challenge-ticket"),
         "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID,
         "--title", "Check whether smoke narrative is overstated",
         "--challenge-statement", "Re-test whether the strongest narrative exceeds evidence coverage.",
@@ -99,8 +99,8 @@ def prepare_hold_round(run_dir: Path, root: Path) -> None:
     )
     approve_promotion_transition(run_dir)
     run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("eco-materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("eco-draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
 
 class ReportingPublishWorkflowTests(unittest.TestCase):
@@ -134,7 +134,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual([], payload["surface"]["reporting_blockers"])
             self.assertTrue(payload["operator"]["reporting_ready"])
             self.assertIn(
-                "eco-materialize-reporting-handoff",
+                "materialize-reporting-handoff",
                 payload["operator"]["materialize_reporting_handoff_command"],
             )
 
@@ -144,11 +144,11 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            sociologist_draft = run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            environmentalist_draft = run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            soc_publish = run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            env_publish = run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            decision_publish = run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            sociologist_draft = run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            environmentalist_draft = run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            soc_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            env_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            decision_publish = run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
             soc_report = load_json(reporting_path(run_dir, f"expert_report_sociologist_{ROUND_ID}.json"))
             env_report = load_json(reporting_path(run_dir, f"expert_report_environmentalist_{ROUND_ID}.json"))
@@ -240,7 +240,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            payload = run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            payload = run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
             self.assertEqual("blocked", payload["status"])
             self.assertEqual("blocked", payload["summary"]["operation"])
@@ -256,7 +256,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             reporting_path(run_dir, f"council_decision_draft_{ROUND_ID}.json").unlink()
 
             draft_payload = run_script(
-                script_path("eco-draft-expert-report"),
+                script_path("draft-expert-report"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -297,7 +297,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             prepare_ready_round(run_dir, root)
 
             run_script(
-                script_path("eco-draft-expert-report"),
+                script_path("draft-expert-report"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -310,7 +310,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             reporting_path(run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json").unlink()
 
             publish_payload = run_script(
-                script_path("eco-publish-expert-report"),
+                script_path("publish-expert-report"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -346,7 +346,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             db_path = analytics_path(run_dir, "signal_plane.sqlite")
 
             run_script(
-                script_path("eco-draft-expert-report"),
+                script_path("draft-expert-report"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -366,7 +366,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             )
 
             publish_payload = run_script(
-                script_path("eco-publish-expert-report"),
+                script_path("publish-expert-report"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -392,15 +392,15 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_hold_round(run_dir, root)
 
-            draft_payload = run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            first_publish = run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            decision_publish = run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            draft_payload = run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            first_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            decision_publish = run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
             draft_path = reporting_path(run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json")
             modified = load_json(draft_path)
             modified["summary"] = modified["summary"] + " Changed after first publish."
             write_json(draft_path, modified)
-            second_publish = run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            second_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
             decision = load_json(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json"))
 
             self.assertEqual("needs-more-evidence", draft_payload["summary"]["report_status"])
@@ -408,27 +408,27 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", decision_publish["status"])
             self.assertEqual("hold", decision_publish["summary"]["publication_readiness"])
             self.assertIn(
-                "eco-submit-council-proposal",
+                "submit-council-proposal",
                 draft_payload["board_handoff"]["suggested_next_skills"],
             )
             self.assertIn(
-                "eco-submit-readiness-opinion",
+                "submit-readiness-opinion",
                 draft_payload["board_handoff"]["suggested_next_skills"],
             )
             self.assertNotIn(
-                "eco-post-board-note",
+                "post-board-note",
                 draft_payload["board_handoff"]["suggested_next_skills"],
             )
             self.assertIn(
-                "eco-submit-council-proposal",
+                "submit-council-proposal",
                 decision_publish["board_handoff"]["suggested_next_skills"],
             )
             self.assertIn(
-                "eco-submit-readiness-opinion",
+                "submit-readiness-opinion",
                 decision_publish["board_handoff"]["suggested_next_skills"],
             )
             self.assertNotIn(
-                "eco-post-board-note",
+                "post-board-note",
                 decision_publish["board_handoff"]["suggested_next_skills"],
             )
             self.assertEqual(
@@ -462,14 +462,14 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
-            publication_payload = run_script(script_path("eco-materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            publication_noop = run_script(script_path("eco-materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            publication_payload = run_script(script_path("materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            publication_noop = run_script(script_path("materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             publication = load_json(reporting_path(run_dir, f"final_publication_{ROUND_ID}.json"))
 
             self.assertEqual("completed", publication_payload["status"])
@@ -521,15 +521,15 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json").unlink()
 
             publication_payload = run_script(
-                script_path("eco-materialize-final-publication"),
+                script_path("materialize-final-publication"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -555,15 +555,15 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             (run_dir / "runtime" / f"supervisor_state_{ROUND_ID}.json").unlink()
 
             publication_payload = run_script(
-                script_path("eco-materialize-final-publication"),
+                script_path("materialize-final-publication"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -589,11 +589,11 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("eco-draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("eco-publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
             reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json").unlink()
             reporting_path(run_dir, f"council_decision_{ROUND_ID}.json").unlink()
@@ -601,7 +601,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             reporting_path(run_dir, f"expert_report_environmentalist_{ROUND_ID}.json").unlink()
 
             publication_payload = run_script(
-                script_path("eco-materialize-final-publication"),
+                script_path("materialize-final-publication"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -653,14 +653,14 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_hold_round(run_dir, root)
 
-            run_script(script_path("eco-publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            first_publication = run_script(script_path("eco-materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            first_publication = run_script(script_path("materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
             publication_path = reporting_path(run_dir, f"final_publication_{ROUND_ID}.json")
             modified = load_json(publication_path)
             modified["publication_summary"] = modified["publication_summary"] + " Changed after first publish."
             write_json(publication_path, modified)
-            second_publication = run_script(script_path("eco-materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            second_publication = run_script(script_path("materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             first_payload = load_json(publication_path)
 
             self.assertEqual("hold-release", first_publication["summary"]["publication_status"])

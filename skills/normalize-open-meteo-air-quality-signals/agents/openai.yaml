@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Normalize Open-Meteo Air Quality Signals"
+  short_description: "Normalize Open-Meteo air-quality outputs into unified environment signals"
+  default_prompt: "Use $normalize-open-meteo-air-quality-signals to normalize one fetch-open-meteo-air-quality artifact into DB-backed environment-signal rows with provenance, modeled-data quality flags, temporal/spatial scope, and coverage limitations. Do not infer exposure, readiness, or policy conclusions."

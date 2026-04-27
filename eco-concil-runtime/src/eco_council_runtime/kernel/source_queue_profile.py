@@ -4,24 +4,165 @@ from collections import Counter
 from typing import Any, Iterable
 
 
+FETCH_SKILLS = {
+    "fetch-airnow-hourly-observations",
+    "fetch-bluesky-cascade",
+    "fetch-gdelt-doc-search",
+    "fetch-gdelt-events",
+    "fetch-gdelt-gkg",
+    "fetch-gdelt-mentions",
+    "fetch-nasa-firms-fire",
+    "fetch-open-meteo-air-quality",
+    "fetch-open-meteo-flood",
+    "fetch-open-meteo-historical",
+    "fetch-openaq",
+    "fetch-regulationsgov-comment-detail",
+    "fetch-regulationsgov-comments",
+    "fetch-usgs-water-iv",
+    "fetch-youtube-comments",
+    "fetch-youtube-video-search",
+}
+
+OPTIONAL_ANALYSIS_SKILLS = {
+    "build-normalization-audit",
+    "extract-claim-candidates",
+    "cluster-claim-candidates",
+    "derive-claim-scope",
+    "classify-claim-verifiability",
+    "route-verification-lane",
+    "extract-issue-candidates",
+    "cluster-issue-candidates",
+    "extract-stance-candidates",
+    "extract-concern-facets",
+    "extract-actor-profiles",
+    "extract-evidence-citation-types",
+    "materialize-controversy-map",
+    "extract-observation-candidates",
+    "merge-observation-candidates",
+    "derive-observation-scope",
+    "link-claims-to-observations",
+    "score-evidence-coverage",
+    "link-formal-comments-to-public-discourse",
+    "identify-representation-gaps",
+    "detect-cross-platform-diffusion",
+    "plan-round-orchestration",
+    "propose-next-actions",
+    "open-falsification-probe",
+    "summarize-round-readiness",
+}
+
+OPTIONAL_ANALYSIS_NOTES = {
+    "plan-round-orchestration": (
+        "Moderator-only advisory planner. It can be run only through an approved "
+        "skill-approval request and never owns the controller plan."
+    ),
+    "propose-next-actions": (
+        "Moderator-only optional advisory for investigation suggestions. It does "
+        "not define a default phase owner or required next-action queue."
+    ),
+    "summarize-round-readiness": (
+        "Moderator-only optional advisory for compiling readiness evidence. Formal "
+        "phase movement still requires a transition request and operator approval."
+    ),
+    "build-normalization-audit": (
+        "Operator QA export for signal-plane ingestion checks. It is not a "
+        "board-facing moderation step and requires an approval record."
+    ),
+    "link-claims-to-observations": (
+        "Legacy empirical-link helper. It is approval-gated and must not be used as "
+        "the default basis for policy research reports."
+    ),
+    "score-evidence-coverage": (
+        "Approval-gated empirical evidence sufficiency helper for explicitly routed "
+        "observation lanes, not a global readiness gate."
+    ),
+}
+
+STATE_TRANSITION_PROFILES = {
+    "open-investigation-round": {
+        "stage": "transition",
+        "queue_role": "round-transition-request-consumer",
+        "default_invocation": "approved-transition-request",
+        "notes": (
+            "Consumes an already approved transition request to open a governed "
+            "follow-up round."
+        ),
+    },
+    "promote-evidence-basis": {
+        "stage": "transition",
+        "queue_role": "evidence-basis-freeze",
+        "default_invocation": "approved-transition-request",
+        "notes": (
+            "Freezes DB-backed evidence basis after moderator request and operator "
+            "approval; it does not decide the research conclusion by itself."
+        ),
+    },
+    "scaffold-mission-run": {
+        "stage": "ingress",
+        "queue_role": "run-bootstrap",
+        "default_invocation": "moderator-or-operator-triggered",
+        "notes": "Bootstrap a run and first round without selecting a domain analysis chain.",
+    },
+    "prepare-round": {
+        "stage": "source-selection",
+        "queue_role": "capability-check",
+        "default_invocation": "moderator-or-operator-triggered",
+        "notes": "Prepare source capabilities and governance checks without deciding research method.",
+    },
+}
+
+BRIDGE_PROFILES = {
+    "scaffold-mission-run",
+    "prepare-round",
+    "normalize-fetch-execution",
+}
+
+DELIBERATION_WRITE_SKILLS = {
+    "post-board-note": "human-readable-note",
+    "update-hypothesis-status": "evidence-backed-hypothesis-update",
+    "open-challenge-ticket": "challenge-write",
+    "close-challenge-ticket": "challenge-write",
+    "claim-board-task": "task-write",
+    "submit-council-proposal": "proposal-write",
+    "submit-readiness-opinion": "readiness-opinion-write",
+    "summarize-board-state": "derived-board-export",
+    "materialize-board-brief": "human-handoff-export",
+}
+
+REPORTING_SKILLS = {
+    "materialize-reporting-handoff",
+    "draft-council-decision",
+    "draft-expert-report",
+    "publish-expert-report",
+    "publish-council-decision",
+    "materialize-final-publication",
+}
+
+RUNTIME_ARCHIVE_SKILLS = {
+    "archive-signal-corpus",
+    "archive-case-library",
+    "materialize-history-context",
+}
+
+
 def _profile(
     *,
     queue_status: str,
     stage: str,
     queue_role: str,
     default_invocation: str,
-    core_queue_default: bool,
     notes: str,
-    downstream_hints: list[str] | None = None,
+    requires_explicit_approval: bool = False,
+    default_chain_eligible: bool = False,
 ) -> dict[str, object]:
     if queue_status == "bridge":
         phase2_behavior = "governed-bridge"
-    elif queue_status == "direct" and core_queue_default:
-        phase2_behavior = "non-owning-runtime-surface"
-    elif queue_status == "direct":
-        phase2_behavior = "optional-runtime-surface"
-    else:
+    elif requires_explicit_approval:
+        phase2_behavior = "approval-gated-runtime-surface"
+    elif queue_status == "advisory":
         phase2_behavior = "on-demand-runtime-surface"
+    else:
+        phase2_behavior = "capability-runtime-surface"
     return {
         "source_queue_ready": True,
         "queue_status": queue_status,
@@ -29,547 +170,154 @@ def _profile(
         "queue_role": queue_role,
         "default_invocation": default_invocation,
         "phase2_behavior": phase2_behavior,
-        "downstream_hints": list(downstream_hints or []),
+        "default_chain_eligible": bool(default_chain_eligible),
+        "requires_explicit_approval": bool(requires_explicit_approval),
+        # Kept as an empty compatibility field so registry consumers no longer
+        # receive implied claim-route-coverage chains from source queue metadata.
+        "downstream_hints": [],
         "notes": notes,
     }
 
 
-BRIDGE_PROFILES: dict[str, dict[str, object]] = {
-    "eco-scaffold-mission-run": _profile(
-        queue_status="bridge",
-        stage="ingress",
-        queue_role="run-bootstrap",
-        default_invocation="operator-triggered",
-        core_queue_default=True,
-        notes="Bootstrap one run from mission input and seed the first round state.",
-        downstream_hints=["eco-prepare-round"],
-    ),
-    "eco-prepare-round": _profile(
-        queue_status="bridge",
-        stage="source-selection",
-        queue_role="queue-planner",
-        default_invocation="operator-triggered",
-        core_queue_default=True,
-        notes="Prepare a governed source queue from mission inputs, role coverage, and selected sources.",
-        downstream_hints=["eco-import-fetch-execution"],
-    ),
-    "eco-import-fetch-execution": _profile(
-        queue_status="bridge",
-        stage="fetch-execution",
-        queue_role="queue-executor",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Execute one prepared fetch queue by importing or fetching raw artifacts before normalization.",
-        downstream_hints=["eco-build-normalization-audit", "eco-extract-claim-candidates", "eco-extract-observation-candidates"],
-    ),
-}
-
-
-EXACT_PROFILES: dict[str, dict[str, object]] = {
-    "eco-plan-round-orchestration": _profile(
+def _optional_analysis_profile(skill_name: str) -> dict[str, object]:
+    notes = OPTIONAL_ANALYSIS_NOTES.get(
+        skill_name,
+        (
+            "Approval-gated optional-analysis capability. It can support human "
+            "audit or agent investigation, but it is not part of a default "
+            "runtime-owned investigation chain."
+        ),
+    )
+    if skill_name == "open-falsification-probe":
+        queue_role = "challenge-probe-helper"
+    elif skill_name in {"plan-round-orchestration", "propose-next-actions", "summarize-round-readiness"}:
+        queue_role = "moderator-advisory-helper"
+    else:
+        queue_role = "audited-derived-analysis"
+    return _profile(
         queue_status="advisory",
-        stage="orchestration",
-        queue_role="advisory-planner",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="Keep as an advisory planner; do not let it become the only owner of the runtime queue.",
-        downstream_hints=["eco-propose-next-actions", "eco-summarize-round-readiness"],
-    ),
-    "eco-build-normalization-audit": _profile(
-        queue_status="direct",
-        stage="audit",
-        queue_role="normalization-audit",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Summarize normalization coverage and anomalies after fetch or import execution.",
-        downstream_hints=["eco-extract-claim-candidates", "eco-extract-observation-candidates"],
-    ),
-    "eco-classify-claim-verifiability": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="lane-classifier",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Classify claim-side verifiability posture before any downstream empirical work is treated as eligible.",
-        downstream_hints=["eco-route-verification-lane", "eco-extract-issue-candidates"],
-    ),
-    "eco-route-verification-lane": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="lane-router",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Freeze whether each issue stays empirical, formal-record, discourse, or mixed before downstream evidence work proceeds.",
-        downstream_hints=["eco-extract-issue-candidates", "eco-cluster-issue-candidates"],
-    ),
-    "eco-extract-issue-candidates": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="issue-extraction",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Project claim scopes into scope-level canonical issue-cluster candidates before claim-cluster merge compresses them.",
-        downstream_hints=["eco-cluster-issue-candidates", "eco-materialize-controversy-map"],
-    ),
-    "eco-cluster-issue-candidates": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="issue-clustering",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Merge claim-side issue candidates into canonical issue-cluster rows before any board-facing controversy wrapper is aggregated.",
-        downstream_hints=[
-            "eco-extract-stance-candidates",
-            "eco-extract-concern-facets",
-            "eco-extract-actor-profiles",
-            "eco-extract-evidence-citation-types",
-            "eco-materialize-controversy-map",
-        ],
-    ),
-    "eco-extract-stance-candidates": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="stance-decomposition",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="Materialize typed stance-group rows from canonical issue clusters when the council needs an explicit stance breakdown.",
-        downstream_hints=["eco-materialize-controversy-map", "eco-propose-next-actions"],
-    ),
-    "eco-extract-concern-facets": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="concern-decomposition",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="Materialize typed concern-facet rows from canonical issue clusters when the council needs explicit controversy concerns.",
-        downstream_hints=["eco-materialize-controversy-map", "eco-propose-next-actions"],
-    ),
-    "eco-extract-actor-profiles": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="actor-decomposition",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="Materialize typed actor-profile rows from canonical issue clusters when board or reporting logic needs actor posture.",
-        downstream_hints=["eco-materialize-controversy-map", "eco-propose-next-actions"],
-    ),
-    "eco-extract-evidence-citation-types": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="citation-decomposition",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="Materialize typed evidence-citation-type rows from canonical issue clusters when the council needs explicit citation posture.",
-        downstream_hints=["eco-materialize-controversy-map", "eco-propose-next-actions"],
-    ),
-    "eco-materialize-controversy-map": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="controversy-map",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Aggregate a board-facing controversy map from DB-native typed issue surfaces so the council can branch by controversy posture without relying on one monolithic extractor.",
-        downstream_hints=["eco-propose-next-actions", "eco-post-board-note"],
-    ),
-    "eco-extract-observation-candidates": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="observation-extractor",
-        default_invocation="route-gated",
-        core_queue_default=False,
-        notes="Extract observation candidates only when the current issue set still has empirical routes worth matching.",
-        downstream_hints=["eco-merge-observation-candidates", "eco-route-verification-lane"],
-    ),
-    "eco-merge-observation-candidates": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="observation-merger",
-        default_invocation="route-gated",
-        core_queue_default=False,
-        notes="Merge observation candidates only for rounds that still keep claims in the environmental-observation lane.",
-        downstream_hints=["eco-link-claims-to-observations", "eco-route-verification-lane"],
-    ),
-    "eco-derive-claim-scope": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="claim-scope",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Derive claim-side scope and evidence-lane posture before deciding whether empirical matching is even allowed.",
-        downstream_hints=["eco-classify-claim-verifiability", "eco-route-verification-lane"],
-    ),
-    "eco-link-formal-comments-to-public-discourse": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="formal-public-linker",
-        default_invocation="route-gated",
-        core_queue_default=False,
-        notes="Link formal comments and public discourse only when formal-record or discourse lanes matter to the current issue set.",
-        downstream_hints=["eco-identify-representation-gaps", "eco-detect-cross-platform-diffusion"],
-    ),
-    "eco-identify-representation-gaps": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="representation-gap-analysis",
-        default_invocation="route-gated",
-        core_queue_default=False,
-        notes="Representation-gap analysis stays available, but should run only when the current issue set needs discourse versus formal balancing.",
-        downstream_hints=["eco-propose-next-actions", "eco-post-board-note"],
-    ),
-    "eco-detect-cross-platform-diffusion": _profile(
-        queue_status="direct",
-        stage="analysis",
-        queue_role="diffusion-analysis",
-        default_invocation="route-gated",
-        core_queue_default=False,
-        notes="Cross-platform diffusion tracing is a lane-specific analysis aid, not a mandatory queue step for every round.",
-        downstream_hints=["eco-propose-next-actions", "eco-post-board-note"],
-    ),
-    "eco-score-evidence-coverage": _profile(
-        queue_status="direct",
-        stage="audit",
-        queue_role="coverage-audit",
-        default_invocation="route-gated",
-        core_queue_default=False,
-        notes="Provide an empirical-only evidence-coverage gate after the route actually commits a claim set to observation matching.",
-        downstream_hints=["eco-summarize-round-readiness", "eco-promote-evidence-basis"],
-    ),
-    "eco-post-board-note": _profile(
-        queue_status="advisory",
-        stage="board",
-        queue_role="board-write",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="Queue-compatible board write, but usually triggered by an agent or operator decision rather than the fixed queue.",
-        downstream_hints=["eco-summarize-board-state"],
-    ),
-    "eco-read-board-delta": _profile(
-        queue_status="advisory",
-        stage="board",
-        queue_role="board-read",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="Read board deltas as context for queue recovery, replay, or agent handoff.",
-        downstream_hints=["eco-propose-next-actions", "eco-summarize-round-readiness"],
-    ),
-    "eco-update-hypothesis-status": _profile(
-        queue_status="advisory",
-        stage="board",
-        queue_role="board-write",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="Allow queue-controlled status updates, but keep hypothesis mutation outside the fixed core queue by default.",
-        downstream_hints=["eco-summarize-board-state", "eco-summarize-round-readiness"],
-    ),
-    "eco-open-challenge-ticket": _profile(
-        queue_status="advisory",
-        stage="board",
-        queue_role="challenge-write",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="Challenge-ticket creation stays queue-compatible while remaining an explicit decision point.",
-        downstream_hints=["eco-open-falsification-probe", "eco-summarize-board-state"],
-    ),
-    "eco-close-challenge-ticket": _profile(
-        queue_status="advisory",
-        stage="board",
-        queue_role="challenge-write",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="Challenge closure should remain explicit, even in runtime queue mode.",
-        downstream_hints=["eco-summarize-round-readiness"],
-    ),
-    "eco-claim-board-task": _profile(
-        queue_status="advisory",
-        stage="board",
-        queue_role="task-write",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="Task-claim writes are queue-compatible but are usually driven by a role decision rather than the fixed queue.",
-        downstream_hints=["eco-read-board-delta", "eco-summarize-board-state"],
-    ),
-    "eco-open-investigation-round": _profile(
-        queue_status="advisory",
-        stage="board",
-        queue_role="round-transition",
-        default_invocation="moderator-controlled",
-        core_queue_default=False,
-        notes="Moderator-controlled council-state skill that opens a follow-up round while preserving prior board state and carryover context.",
-        downstream_hints=["eco-prepare-round", "eco-read-board-delta", "eco-query-public-signals", "eco-query-environment-signals"],
-    ),
-    "eco-summarize-board-state": _profile(
-        queue_status="direct",
-        stage="board",
-        queue_role="board-snapshot",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Materialize one stable board summary inside runtime queue or replay flows.",
-        downstream_hints=["eco-materialize-board-brief", "eco-propose-next-actions"],
-    ),
-    "eco-materialize-board-brief": _profile(
-        queue_status="direct",
-        stage="board",
-        queue_role="board-brief",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Produce one compact handoff artifact from board state for queue replay or agent handoff.",
-        downstream_hints=["eco-propose-next-actions", "eco-summarize-round-readiness"],
-    ),
-    "eco-propose-next-actions": _profile(
-        queue_status="direct",
-        stage="investigation",
-        queue_role="round-planning",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Generate the next action set from board and evidence state inside queue mode.",
-        downstream_hints=["eco-open-falsification-probe", "eco-summarize-round-readiness"],
-    ),
-    "eco-open-falsification-probe": _profile(
-        queue_status="direct",
-        stage="investigation",
-        queue_role="probe-planning",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Materialize falsification probes as a controlled investigation step in runtime queue mode.",
-        downstream_hints=["eco-summarize-round-readiness"],
-    ),
-    "eco-summarize-round-readiness": _profile(
-        queue_status="direct",
-        stage="investigation",
-        queue_role="readiness-gate",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Provide one round-readiness gate before promotion or reporting.",
-        downstream_hints=["eco-promote-evidence-basis", "eco-materialize-reporting-handoff"],
-    ),
-    "eco-promote-evidence-basis": _profile(
-        queue_status="direct",
-        stage="promotion",
-        queue_role="promotion-gate",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Freeze promoted evidence as the runtime queue boundary between work state and reporting state.",
-        downstream_hints=["eco-materialize-reporting-handoff"],
-    ),
-    "eco-materialize-reporting-handoff": _profile(
-        queue_status="direct",
-        stage="reporting",
-        queue_role="reporting-handoff",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Convert promoted evidence into the reporting handoff artifact.",
-        downstream_hints=["eco-draft-expert-report", "eco-draft-council-decision"],
-    ),
-    "eco-materialize-final-publication": _profile(
-        queue_status="direct",
-        stage="reporting",
-        queue_role="publication-aggregation",
-        default_invocation="planned-step",
-        core_queue_default=True,
-        notes="Aggregate canonical reports and decisions into the final publication artifact.",
-        downstream_hints=[],
-    ),
-    "eco-materialize-history-context": _profile(
-        queue_status="advisory",
-        stage="context",
-        queue_role="history-context",
-        default_invocation="on-demand",
-        core_queue_default=False,
-        notes="History context remains queue-compatible, but should stay optional and scenario-driven.",
-        downstream_hints=["eco-post-board-note", "eco-materialize-board-brief"],
-    ),
-    "eco-archive-case-library": _profile(
-        queue_status="direct",
-        stage="archive",
-        queue_role="archive-write",
-        default_invocation="post-round",
-        core_queue_default=False,
-        notes="Archive the completed case after runtime queue or agent flow finishes.",
-        downstream_hints=[],
-    ),
-    "eco-archive-signal-corpus": _profile(
-        queue_status="direct",
-        stage="archive",
-        queue_role="archive-write",
-        default_invocation="post-round",
-        core_queue_default=False,
-        notes="Archive normalized signal results after the run or queue replay finishes.",
-        downstream_hints=[],
-    ),
-    "eco-link-claims-to-observations": _profile(
-        queue_status="direct",
-        stage="evidence",
-        queue_role="empirical-linker",
-        default_invocation="route-gated",
-        core_queue_default=False,
-        notes="Link claims to observations only for issues that remain in the environmental-observation lane.",
-        downstream_hints=["eco-derive-observation-scope", "eco-score-evidence-coverage"],
-    ),
-    "eco-derive-observation-scope": _profile(
-        queue_status="direct",
-        stage="evidence",
-        queue_role="observation-scope",
-        default_invocation="route-gated",
-        core_queue_default=False,
-        notes="Derive observation scopes only for claims that still warrant empirical matching.",
-        downstream_hints=["eco-score-evidence-coverage", "eco-post-board-note"],
-    ),
-}
-
-
-DIRECT_PREFIXES: tuple[tuple[str, dict[str, object]], ...] = (
-    (
-        "eco-normalize-",
-        _profile(
-            queue_status="direct",
-            stage="normalize",
-            queue_role="normalizer",
-            default_invocation="planned-step",
-            core_queue_default=True,
-            notes="Normalize one raw artifact into canonical signal-plane rows.",
-            downstream_hints=["eco-build-normalization-audit", "eco-extract-claim-candidates", "eco-extract-observation-candidates"],
-        ),
-    ),
-    (
-        "eco-extract-",
-        _profile(
-            queue_status="direct",
-            stage="analysis",
-            queue_role="extractor",
-            default_invocation="planned-step",
-            core_queue_default=True,
-            notes="Extract claim or observation candidates from the canonical signal plane.",
-            downstream_hints=["eco-cluster-claim-candidates", "eco-merge-observation-candidates", "eco-link-claims-to-observations"],
-        ),
-    ),
-    (
-        "eco-cluster-",
-        _profile(
-            queue_status="direct",
-            stage="analysis",
-            queue_role="clusterer",
-            default_invocation="planned-step",
-            core_queue_default=True,
-            notes="Consolidate extracted claims into queue-stable claim clusters.",
-            downstream_hints=["eco-link-claims-to-observations", "eco-derive-claim-scope"],
-        ),
-    ),
-    (
-        "eco-merge-",
-        _profile(
-            queue_status="direct",
-            stage="analysis",
-            queue_role="merger",
-            default_invocation="planned-step",
-            core_queue_default=True,
-            notes="Merge observation candidates into queue-stable observation sets.",
-            downstream_hints=["eco-link-claims-to-observations", "eco-derive-observation-scope"],
-        ),
-    ),
-    (
-        "eco-link-",
-        _profile(
-            queue_status="direct",
-            stage="evidence",
-            queue_role="evidence-linker",
-            default_invocation="planned-step",
-            core_queue_default=True,
-            notes="Link claims and observations into evidence relations.",
-            downstream_hints=["eco-derive-claim-scope", "eco-derive-observation-scope", "eco-score-evidence-coverage"],
-        ),
-    ),
-    (
-        "eco-derive-",
-        _profile(
-            queue_status="direct",
-            stage="evidence",
-            queue_role="scope-derivation",
-            default_invocation="planned-step",
-            core_queue_default=True,
-            notes="Derive scope objects needed by readiness and reporting gates.",
-            downstream_hints=["eco-score-evidence-coverage", "eco-summarize-round-readiness"],
-        ),
-    ),
-    (
-        "eco-draft-",
-        _profile(
-            queue_status="direct",
-            stage="reporting",
-            queue_role="report-draft",
-            default_invocation="planned-step",
-            core_queue_default=True,
-            notes="Draft reporting artifacts after readiness and promotion have passed.",
-            downstream_hints=["eco-publish-expert-report", "eco-publish-council-decision", "eco-materialize-final-publication"],
-        ),
-    ),
-    (
-        "eco-publish-",
-        _profile(
-            queue_status="direct",
-            stage="reporting",
-            queue_role="publication",
-            default_invocation="planned-step",
-            core_queue_default=True,
-            notes="Publish canonical reporting outputs after draft validation.",
-            downstream_hints=["eco-materialize-final-publication"],
-        ),
-    ),
-)
-
-
-ADVISORY_PREFIXES: tuple[tuple[str, dict[str, object]], ...] = (
-    (
-        "eco-query-",
-        _profile(
-            queue_status="advisory",
-            stage="context",
-            queue_role="context-query",
-            default_invocation="on-demand",
-            core_queue_default=False,
-            notes="Query skills stay queue-compatible, but should remain selective context tools rather than fixed queue steps.",
-            downstream_hints=["eco-post-board-note", "eco-propose-next-actions"],
-        ),
-    ),
-    (
-        "eco-lookup-",
-        _profile(
-            queue_status="advisory",
-            stage="context",
-            queue_role="forensic-lookup",
-            default_invocation="on-demand",
-            core_queue_default=False,
-            notes="Lookup skills remain queue-compatible for replay or forensic recovery, but should stay optional.",
-            downstream_hints=["eco-post-board-note", "eco-open-challenge-ticket"],
-        ),
-    ),
-)
+        stage="optional-analysis",
+        queue_role=queue_role,
+        default_invocation="operator-approved-on-demand",
+        notes=notes,
+        requires_explicit_approval=True,
+    )
 
 
 def source_queue_profile(skill_name: str) -> dict[str, object]:
-    profile = BRIDGE_PROFILES.get(skill_name)
-    if profile is not None:
-        return dict(profile)
+    if skill_name == "normalize-fetch-execution":
+        return _profile(
+            queue_status="bridge",
+            stage="fetch-normalize-bridge",
+            queue_role="execution-receipt",
+            default_invocation="investigator-or-operator-triggered",
+            notes=(
+                "Import or execute approved fetch outputs and write signal-plane receipts; "
+                "it must not select downstream analysis conclusions."
+            ),
+        )
 
-    profile = EXACT_PROFILES.get(skill_name)
-    if profile is not None:
-        return dict(profile)
+    if skill_name in STATE_TRANSITION_PROFILES:
+        data = STATE_TRANSITION_PROFILES[skill_name]
+        return _profile(
+            queue_status="bridge" if skill_name in BRIDGE_PROFILES else "transition",
+            stage=str(data["stage"]),
+            queue_role=str(data["queue_role"]),
+            default_invocation=str(data["default_invocation"]),
+            notes=str(data["notes"]),
+            requires_explicit_approval=skill_name
+            in {"open-investigation-round", "promote-evidence-basis"},
+        )
 
-    for prefix, prefix_profile in DIRECT_PREFIXES:
-        if skill_name.startswith(prefix):
-            return dict(prefix_profile)
+    if skill_name in OPTIONAL_ANALYSIS_SKILLS:
+        return _optional_analysis_profile(skill_name)
 
-    for prefix, prefix_profile in ADVISORY_PREFIXES:
-        if skill_name.startswith(prefix):
-            return dict(prefix_profile)
+    if skill_name in FETCH_SKILLS:
+        return _profile(
+            queue_status="capability",
+            stage="fetch",
+            queue_role="raw-artifact-fetch",
+            default_invocation="investigator-triggered",
+            notes=(
+                "Fetch capability for raw source collection. It writes raw artifacts "
+                "or receipts and carries no default investigation judgement."
+            ),
+        )
+
+    if skill_name.startswith("normalize-"):
+        return _profile(
+            queue_status="capability",
+            stage="normalize",
+            queue_role="signal-normalizer",
+            default_invocation="investigator-triggered",
+            notes=(
+                "Normalize raw artifacts into signal-plane rows with provenance; "
+                "normalization must not emit board or policy conclusions."
+            ),
+        )
+
+    if skill_name in DELIBERATION_WRITE_SKILLS:
+        return _profile(
+            queue_status="capability",
+            stage="deliberation-write",
+            queue_role=DELIBERATION_WRITE_SKILLS[skill_name],
+            default_invocation="role-triggered",
+            notes="DB-native council write surface; execution is driven by role authority, not by source queue ordering.",
+        )
+
+    if skill_name == "query-board-delta":
+        return _profile(
+            queue_status="advisory",
+            stage="query",
+            queue_role="board-read",
+            default_invocation="on-demand",
+            notes="Read-only deliberation query surface for role context and replay.",
+        )
+
+    if skill_name.startswith("query-") or skill_name.startswith("lookup-"):
+        return _profile(
+            queue_status="advisory",
+            stage="query",
+            queue_role="db-query",
+            default_invocation="on-demand",
+            notes="Read-only query capability. It exposes DB evidence surfaces without implying an analysis route.",
+        )
+
+    if skill_name in REPORTING_SKILLS or skill_name.startswith("draft-") or skill_name.startswith("publish-"):
+        return _profile(
+            queue_status="capability",
+            stage="reporting",
+            queue_role="reporting-surface",
+            default_invocation="role-triggered-or-operator-approved",
+            notes=(
+                "Reporting capability that should consume DB-backed evidence basis "
+                "or reporting objects, with approval where the skill policy requires it."
+            ),
+            requires_explicit_approval=skill_name
+            in {
+                "materialize-reporting-handoff",
+                "draft-council-decision",
+                "publish-expert-report",
+                "publish-council-decision",
+                "materialize-final-publication",
+            },
+        )
+
+    if skill_name in RUNTIME_ARCHIVE_SKILLS:
+        return _profile(
+            queue_status="capability",
+            stage="archive",
+            queue_role="operator-archive",
+            default_invocation="post-round-operator",
+            notes="Operator-owned archive or retrieval capability; not a phase-2 investigation step.",
+        )
 
     return _profile(
         queue_status="advisory",
         stage="auxiliary",
         queue_role="manual-review",
         default_invocation="on-demand",
-        core_queue_default=False,
-        notes="No specific runtime source-queue role is defined yet, so keep this skill queue-compatible but operator-triggered.",
-        downstream_hints=[],
+        notes="No default source-queue role is defined; expose only as an operator-triggered capability.",
     )
 
 

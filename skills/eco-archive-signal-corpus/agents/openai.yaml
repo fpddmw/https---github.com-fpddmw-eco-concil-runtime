@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Archive Signal Corpus"
-  short_description: "Archive one run's normalized signals into a cross-run signal corpus"
-  default_prompt: "Use $eco-archive-signal-corpus to import the current run's normalized signal plane into the shared signal corpus archive."

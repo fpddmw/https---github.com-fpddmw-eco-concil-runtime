@@ -53,8 +53,8 @@ def default_controller_completion_updates(
     if promotion_status == "promoted":
         return {
             "recommended_next_skills": [
-                "eco-materialize-reporting-handoff",
-                "eco-draft-council-decision",
+                "materialize-reporting-handoff",
+                "draft-council-decision",
             ]
         }
     return {
@@ -140,7 +140,7 @@ def default_supervisor_round_transition(
     if maybe_text(classification.get("supervisor_status")) != "hold-investigation-open":
         return {}
     return {
-        "skill_name": "eco-open-investigation-round",
+        "skill_name": "open-investigation-round",
         "transition_kind": TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
         "source_round_id": round_id,
         "suggested_round_id": next_round_id,
@@ -175,7 +175,7 @@ def default_supervisor_round_transition(
             run_dir=run_dir,
             run_id=run_id,
             round_id=next_round_id,
-            skill_name="eco-open-investigation-round",
+            skill_name="open-investigation-round",
             actor_role="moderator",
             contract_mode=contract_mode,
             skill_args=[

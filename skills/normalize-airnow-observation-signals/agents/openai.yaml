@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Normalize AirNow Observation Signals"
+  short_description: "Normalize AirNow observations into unified environment signals"
+  default_prompt: "Use $normalize-airnow-observation-signals to normalize one fetch-airnow-hourly-observations artifact into DB-backed environment-signal rows with provenance, quality flags, temporal/spatial scope, and coverage limitations. Do not infer exposure, readiness, or policy conclusions."

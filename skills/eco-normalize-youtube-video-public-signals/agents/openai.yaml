@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Normalize YouTube Video Public Signals"
-  short_description: "Normalize YouTube video results into unified public signals"
-  default_prompt: "Use $eco-normalize-youtube-video-public-signals to normalize one youtube-video-search artifact into canonical public-signal rows in the unified signal plane and return compact receipts, artifact refs, signal ids, and board-ready hints."

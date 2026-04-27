@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Summarize Board State"
+  short_description: "Summarize a round's board state into a compact JSON snapshot"
+  default_prompt: "Use $summarize-board-state to summarize the current round's board state into a compact JSON snapshot with active counts, recent events, and next-step hints for organization or Phase D handoff."

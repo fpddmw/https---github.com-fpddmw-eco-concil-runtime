@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Normalize YouTube Comments Public Signals"
+  short_description: "Normalize YouTube comment outputs into unified public signals"
+  default_prompt: "Use $normalize-youtube-comments-public-signals to normalize one fetch-youtube-comments artifact into DB-backed public-signal rows with provenance, platform quality flags, and coverage limitations. Do not infer claims, readiness, or policy conclusions."

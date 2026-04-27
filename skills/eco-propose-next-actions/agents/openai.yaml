@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Propose Next Actions"
-  short_description: "Propose a ranked investigation action queue from the current board state"
-  default_prompt: "Use $eco-propose-next-actions to turn the current round's board state and controversy agenda into a ranked investigation action queue that downstream probe and readiness skills can consume."

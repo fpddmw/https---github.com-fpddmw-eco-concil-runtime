@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Normalize NASA FIRMS Fire Observation Signals"
+  short_description: "Normalize NASA FIRMS detections into unified environment signals"
+  default_prompt: "Use $normalize-nasa-firms-fire-observation-signals to normalize one fetch-nasa-firms-fire artifact into DB-backed environment-signal rows with provenance, quality flags, temporal/spatial scope, and coverage limitations. Do not infer exposure, readiness, or policy conclusions."

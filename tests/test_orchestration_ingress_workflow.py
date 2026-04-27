@@ -153,21 +153,21 @@ def build_mission_file(root: Path, artifacts: dict[str, Path]) -> Path:
             ],
             "artifact_imports": [
                 {
-                    "source_skill": "youtube-video-search",
+                    "source_skill": "fetch-youtube-video-search",
                     "artifact_path": str(artifacts["youtube"]),
                     "query_text": "nyc smoke wildfire",
                 },
                 {
-                    "source_skill": "bluesky-cascade-fetch",
+                    "source_skill": "fetch-bluesky-cascade",
                     "artifact_path": str(artifacts["bluesky"]),
                 },
                 {
-                    "source_skill": "openaq-data-fetch",
+                    "source_skill": "fetch-openaq",
                     "artifact_path": str(artifacts["openaq"]),
                     "source_mode": "test-fixture",
                 },
                 {
-                    "source_skill": "airnow-hourly-obs-fetch",
+                    "source_skill": "fetch-airnow-hourly-observations",
                     "artifact_path": str(artifacts["airnow"]),
                 },
             ],
@@ -185,7 +185,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             mission_path = build_mission_file(root, artifacts)
 
             scaffold_payload = run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -202,7 +202,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
 
             self.assertEqual("openclaw-agent", scaffold_payload["summary"]["orchestration_mode"])
             self.assertEqual("openclaw-agent", scaffold_artifact["orchestration_mode"])
-            self.assertIn("eco-read-board-delta", scaffold_payload["board_handoff"]["suggested_next_skills"])
+            self.assertIn("query-board-delta", scaffold_payload["board_handoff"]["suggested_next_skills"])
 
     def test_scaffold_and_prepare_round_materialize_fetch_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -212,7 +212,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             mission_path = build_mission_file(root, artifacts)
 
             scaffold_payload = run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -223,7 +223,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 str(mission_path),
             )
             prepare_payload = run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -243,8 +243,8 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             self.assertEqual(2, len(tasks_payload))
             self.assertEqual(4, prepare_payload["summary"]["step_count"])
             self.assertEqual(4, len(plan_artifact["steps"]))
-            self.assertEqual(["youtube-video-search", "bluesky-cascade-fetch"], plan_artifact["roles"]["sociologist"]["selected_sources"])
-            self.assertEqual(["openaq-data-fetch", "airnow-hourly-obs-fetch"], plan_artifact["roles"]["environmentalist"]["selected_sources"])
+            self.assertEqual(["fetch-youtube-video-search", "fetch-bluesky-cascade"], plan_artifact["roles"]["sociologist"]["selected_sources"])
+            self.assertEqual(["fetch-openaq", "fetch-airnow-hourly-observations"], plan_artifact["roles"]["environmentalist"]["selected_sources"])
             self.assertEqual("active", board_artifact["rounds"][ROUND_ID]["hypotheses"][0]["status"])
 
     def test_prepare_round_reads_db_backed_round_tasks_when_export_is_missing(self) -> None:
@@ -255,7 +255,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             mission_path = build_mission_file(root, artifacts)
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -269,7 +269,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             tasks_path.unlink()
 
             prepare_payload = run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -304,7 +304,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             mission_path = build_mission_file(root, artifacts)
 
             scaffold_payload = run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -315,7 +315,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 str(mission_path),
             )
             run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -324,7 +324,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             import_payload = run_script(
-                script_path("eco-import-fetch-execution"),
+                script_path("normalize-fetch-execution"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -333,19 +333,19 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
 
-            run_script(script_path("eco-extract-claim-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            run_script(script_path("eco-extract-observation-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--metric", "pm2_5")
-            cluster_payload = run_script(script_path("eco-cluster-claim-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            run_script(script_path("eco-merge-observation-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--metric", "pm2_5")
-            run_script(script_path("eco-link-claims-to-observations"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            run_script(script_path("eco-derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            run_script(script_path("eco-derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            coverage_payload = run_script(script_path("eco-score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            run_script(script_path("extract-claim-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            run_script(script_path("extract-observation-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--metric", "pm2_5")
+            cluster_payload = run_script(script_path("cluster-claim-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            run_script(script_path("merge-observation-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--metric", "pm2_5")
+            run_script(script_path("link-claims-to-observations"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            run_script(script_path("derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            run_script(script_path("derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            coverage_payload = run_script(script_path("score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             seeded_hypothesis_id = scaffold_payload["summary"]["seeded_hypothesis_ids"][0]
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -362,7 +362,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -384,11 +384,41 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 "--confidence",
                 "0.93",
             )
+            run_script(
+                script_path("submit-readiness-opinion"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--agent-role",
+                "moderator",
+                "--readiness-status",
+                "ready",
+                "--rationale",
+                "DB-backed public and environmental evidence are sufficient for promotion.",
+                "--sufficient-for-promotion",
+                "true",
+                "--basis-object-id",
+                cluster_payload["canonical_ids"][0],
+                "--evidence-ref",
+                coverage_ref,
+            )
+            run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
 
             approve_promotion_transition(run_dir)
             run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            handoff_payload = run_script(script_path("eco-materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            decision_payload = run_script(script_path("eco-draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            handoff_payload = run_script(script_path("materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            decision_payload = run_script(script_path("draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
             import_artifact = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
             handoff_artifact = load_json(reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json"))

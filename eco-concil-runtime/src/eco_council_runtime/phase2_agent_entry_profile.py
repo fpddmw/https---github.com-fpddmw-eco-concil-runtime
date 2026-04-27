@@ -50,16 +50,16 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "role": ROLE_MODERATOR,
         "focus": "Own the study boundary, review cross-role findings, and file governed transition requests after human-auditable council deliberation.",
         "read_skills": [
-            "eco-read-board-delta",
-            "eco-query-public-signals",
-            "eco-query-formal-signals",
-            "eco-query-environment-signals",
+            "query-board-delta",
+            "query-public-signals",
+            "query-formal-signals",
+            "query-environment-signals",
         ],
         "write_skills": [
-            "eco-submit-council-proposal",
-            "eco-submit-readiness-opinion",
-            "eco-claim-board-task",
-            "eco-post-board-note",
+            "submit-council-proposal",
+            "submit-readiness-opinion",
+            "claim-board-task",
+            "post-board-note",
         ],
         "analysis_kinds": [
             "issue-cluster",
@@ -78,14 +78,14 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "role": ROLE_ENVIRONMENTAL_INVESTIGATOR,
         "focus": "Fetch, normalize, query, and analyze environmental evidence, then submit structured findings or challenge supporting basis back to the council.",
         "read_skills": [
-            "eco-read-board-delta",
-            "eco-query-environment-signals",
-            "eco-query-formal-signals",
+            "query-board-delta",
+            "query-environment-signals",
+            "query-formal-signals",
         ],
         "write_skills": [
-            "eco-submit-council-proposal",
-            "eco-submit-readiness-opinion",
-            "eco-post-board-note",
+            "submit-council-proposal",
+            "submit-readiness-opinion",
+            "post-board-note",
         ],
         "analysis_kinds": [
             "issue-cluster",
@@ -97,14 +97,14 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "role": ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
         "focus": "Fetch, normalize, query, and analyze discourse, media, and community signals, then return evidence-backed findings or proposals.",
         "read_skills": [
-            "eco-read-board-delta",
-            "eco-query-public-signals",
-            "eco-query-formal-signals",
+            "query-board-delta",
+            "query-public-signals",
+            "query-formal-signals",
         ],
         "write_skills": [
-            "eco-submit-council-proposal",
-            "eco-submit-readiness-opinion",
-            "eco-post-board-note",
+            "submit-council-proposal",
+            "submit-readiness-opinion",
+            "post-board-note",
         ],
         "analysis_kinds": [
             "issue-cluster",
@@ -117,14 +117,14 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "role": ROLE_FORMAL_RECORD_INVESTIGATOR,
         "focus": "Fetch, normalize, query, and analyze formal records, approvals, and policy evidence before submitting structured findings to the moderator.",
         "read_skills": [
-            "eco-read-board-delta",
-            "eco-query-formal-signals",
-            "eco-query-public-signals",
+            "query-board-delta",
+            "query-formal-signals",
+            "query-public-signals",
         ],
         "write_skills": [
-            "eco-submit-council-proposal",
-            "eco-submit-readiness-opinion",
-            "eco-post-board-note",
+            "submit-council-proposal",
+            "submit-readiness-opinion",
+            "post-board-note",
         ],
         "analysis_kinds": [
             "issue-cluster",
@@ -136,17 +136,17 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "role": ROLE_CHALLENGER,
         "focus": "Surface contradiction pressure, open challenge/probe work, and submit counter-findings without owning phase transitions.",
         "read_skills": [
-            "eco-read-board-delta",
-            "eco-query-public-signals",
-            "eco-query-formal-signals",
-            "eco-query-environment-signals",
+            "query-board-delta",
+            "query-public-signals",
+            "query-formal-signals",
+            "query-environment-signals",
         ],
         "write_skills": [
-            "eco-submit-council-proposal",
-            "eco-submit-readiness-opinion",
-            "eco-open-challenge-ticket",
-            "eco-open-falsification-probe",
-            "eco-close-challenge-ticket",
+            "submit-council-proposal",
+            "submit-readiness-opinion",
+            "open-challenge-ticket",
+            "open-falsification-probe",
+            "close-challenge-ticket",
         ],
         "analysis_kinds": [
             "issue-cluster",
@@ -159,18 +159,18 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "role": ROLE_REPORT_EDITOR,
         "focus": "Read frozen evidence basis and reporting state, then draft or publish reporting artifacts without mutating investigation status.",
         "read_skills": [
-            "eco-read-board-delta",
-            "eco-query-formal-signals",
-            "eco-query-public-signals",
-            "eco-query-environment-signals",
+            "query-board-delta",
+            "query-formal-signals",
+            "query-public-signals",
+            "query-environment-signals",
         ],
         "write_skills": [
-            "eco-materialize-reporting-handoff",
-            "eco-draft-council-decision",
-            "eco-draft-expert-report",
-            "eco-publish-expert-report",
-            "eco-publish-council-decision",
-            "eco-materialize-final-publication",
+            "materialize-reporting-handoff",
+            "draft-council-decision",
+            "draft-expert-report",
+            "publish-expert-report",
+            "publish-council-decision",
+            "materialize-final-publication",
         ],
         "analysis_kinds": ["issue-cluster", "formal-public-link", "controversy-map"],
     },
@@ -349,7 +349,7 @@ def default_role_entry_points(
         grouped_skill_names = allowed_skills_by_layer(role)
         role_read_commands: list[str] = []
         for skill_name in definition.get("read_skills", []) if isinstance(definition.get("read_skills"), list) else []:
-            if skill_name == "eco-read-board-delta":
+            if skill_name == "query-board-delta":
                 role_read_commands.append(
                     run_skill_command(
                         run_dir=run_dir,
@@ -384,7 +384,7 @@ def default_role_entry_points(
         ]
         role_write_commands: list[str] = []
         for skill_name in definition.get("write_skills", []) if isinstance(definition.get("write_skills"), list) else []:
-            if skill_name == "eco-submit-council-proposal":
+            if skill_name == "submit-council-proposal":
                 role_write_commands.append(
                     run_skill_command(
                         run_dir=run_dir,
@@ -415,7 +415,7 @@ def default_role_entry_points(
                         ],
                     )
                 )
-            elif skill_name == "eco-submit-readiness-opinion":
+            elif skill_name == "submit-readiness-opinion":
                 role_write_commands.append(
                     run_skill_command(
                         run_dir=run_dir,
@@ -436,7 +436,7 @@ def default_role_entry_points(
                         ],
                     )
                 )
-            elif skill_name == "eco-post-board-note":
+            elif skill_name == "post-board-note":
                 role_write_commands.append(
                     run_skill_command(
                         run_dir=run_dir,
@@ -455,7 +455,7 @@ def default_role_entry_points(
                         ],
                     )
                 )
-            elif skill_name == "eco-open-challenge-ticket":
+            elif skill_name == "open-challenge-ticket":
                 role_write_commands.append(
                     run_skill_command(
                         run_dir=run_dir,
@@ -476,7 +476,7 @@ def default_role_entry_points(
                         ],
                     )
                 )
-            elif skill_name == "eco-open-falsification-probe":
+            elif skill_name == "open-falsification-probe":
                 role_write_commands.append(
                     run_skill_command(
                         run_dir=run_dir,
@@ -488,7 +488,7 @@ def default_role_entry_points(
                         skill_args=["--max-probes", "3"],
                     )
                 )
-            elif skill_name == "eco-close-challenge-ticket":
+            elif skill_name == "close-challenge-ticket":
                 role_write_commands.append(
                     run_skill_command(
                         run_dir=run_dir,
@@ -500,7 +500,7 @@ def default_role_entry_points(
                         skill_args=["--ticket-id", "<ticket_id>"],
                     )
                 )
-            elif skill_name == "eco-claim-board-task":
+            elif skill_name == "claim-board-task":
                 role_write_commands.append(
                     run_skill_command(
                         run_dir=run_dir,
@@ -814,7 +814,7 @@ def default_agent_entry_operator_commands(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
-            skill_name="eco-read-board-delta",
+            skill_name="query-board-delta",
             contract_mode=contract_mode,
             skill_args=["--include-closed", "--event-limit", "20"],
         ),
@@ -822,21 +822,21 @@ def default_agent_entry_operator_commands(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
-            skill_name="eco-query-public-signals",
+            skill_name="query-public-signals",
             contract_mode=contract_mode,
         ),
         "query_formal_signals_command": run_skill_command(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
-            skill_name="eco-query-formal-signals",
+            skill_name="query-formal-signals",
             contract_mode=contract_mode,
         ),
         "query_environment_signals_command": run_skill_command(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
-            skill_name="eco-query-environment-signals",
+            skill_name="query-environment-signals",
             contract_mode=contract_mode,
         ),
         "query_council_proposals_command": kernel_command(
@@ -929,6 +929,88 @@ def default_agent_entry_operator_commands(
             round_id,
             "--pretty",
         ),
+        "query_skill_approval_requests_command": kernel_command(
+            "query-control-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "skill-approval-request",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--pretty",
+        ),
+        "query_skill_approvals_command": kernel_command(
+            "query-control-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "skill-approval",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--pretty",
+        ),
+        "query_skill_approval_consumptions_command": kernel_command(
+            "query-control-objects",
+            "--run-dir",
+            str(run_dir),
+            "--object-kind",
+            "skill-approval-consumption",
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--pretty",
+        ),
+        "request_optional_analysis_approval_command_template": kernel_command(
+            "request-skill-approval",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--skill-name",
+            "<skill_name>",
+            "--requested-actor-role",
+            "<requested_actor_role>",
+            "--rationale",
+            "<rationale>",
+            actor_role=ROLE_MODERATOR,
+        ),
+        "approve_skill_approval_command_template": kernel_command(
+            "approve-skill-approval",
+            "--run-dir",
+            str(run_dir),
+            "--request-id",
+            "<request_id>",
+            "--approval-reason",
+            "<approval_reason>",
+            actor_role="runtime-operator",
+        ),
+        "reject_skill_approval_command_template": kernel_command(
+            "reject-skill-approval",
+            "--run-dir",
+            str(run_dir),
+            "--request-id",
+            "<request_id>",
+            "--rejection-reason",
+            "<rejection_reason>",
+            actor_role="runtime-operator",
+        ),
+        "run_approved_optional_analysis_command_template": run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="<skill_name>",
+            actor_role="<requested_actor_role>",
+            contract_mode=contract_mode,
+            skill_approval_request_id="<request_id>",
+            skill_args=["<skill_specific_args>"],
+        ),
         "request_promotion_transition_command": kernel_command(
             "request-phase-transition",
             "--run-dir",
@@ -965,7 +1047,7 @@ def default_agent_entry_operator_commands(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
-            skill_name="eco-submit-council-proposal",
+            skill_name="submit-council-proposal",
             contract_mode=contract_mode,
             skill_args=[
                 "--agent-role",
@@ -1112,7 +1194,7 @@ def default_agent_entry_operator_commands(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
-            skill_name="eco-submit-readiness-opinion",
+            skill_name="submit-readiness-opinion",
             contract_mode=contract_mode,
             skill_args=[
                 "--agent-role",

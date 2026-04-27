@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Extract Observation Candidates"
+  short_description: "Build compact environmental observation candidates from normalized signals"
+  default_prompt: "Use $extract-observation-candidates to read normalized environment signals from the unified signal plane, aggregate signal clusters into compact observation candidates, persist the analytics artifact, and return provenance-aware evidence refs with board handoff hints."

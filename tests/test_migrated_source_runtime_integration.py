@@ -20,22 +20,22 @@ RUN_ID = "run-migrated-sources-001"
 ROUND_ID = "round-migrated-sources-001"
 
 MIGRATED_SOURCE_SKILLS = [
-    "bluesky-cascade-fetch",
-    "gdelt-doc-search",
-    "gdelt-events-fetch",
-    "gdelt-mentions-fetch",
-    "gdelt-gkg-fetch",
-    "youtube-video-search",
-    "youtube-comments-fetch",
-    "regulationsgov-comments-fetch",
-    "regulationsgov-comment-detail-fetch",
-    "airnow-hourly-obs-fetch",
-    "openaq-data-fetch",
-    "open-meteo-historical-fetch",
-    "open-meteo-air-quality-fetch",
-    "open-meteo-flood-fetch",
-    "usgs-water-iv-fetch",
-    "nasa-firms-fire-fetch",
+    "fetch-bluesky-cascade",
+    "fetch-gdelt-doc-search",
+    "fetch-gdelt-events",
+    "fetch-gdelt-mentions",
+    "fetch-gdelt-gkg",
+    "fetch-youtube-video-search",
+    "fetch-youtube-comments",
+    "fetch-regulationsgov-comments",
+    "fetch-regulationsgov-comment-detail",
+    "fetch-airnow-hourly-observations",
+    "fetch-openaq",
+    "fetch-open-meteo-historical",
+    "fetch-open-meteo-air-quality",
+    "fetch-open-meteo-flood",
+    "fetch-usgs-water-iv",
+    "fetch-nasa-firms-fire",
 ]
 
 
@@ -184,7 +184,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             self.assertTrue(config.get("normalizer_skill"))
             self.assertTrue(script_path(str(config["normalizer_skill"])).exists())
 
-        self.assertTrue(script_path("openaq-data-fetch").exists())
+        self.assertTrue(script_path("fetch-openaq").exists())
 
     def test_prepare_and_execute_youtube_comment_anchor_chain(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -228,13 +228,13 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 },
                 "source_requests": [
                     {
-                        "source_skill": "youtube-video-search",
+                        "source_skill": "fetch-youtube-video-search",
                         "query_text": "nyc smoke wildfire",
                         "artifact_capture": "stdout-json",
                         "fetch_argv": [sys.executable, str(search_script)],
                     },
                     {
-                        "source_skill": "youtube-comments-fetch",
+                        "source_skill": "fetch-youtube-comments",
                         "artifact_capture": "stdout-json",
                         "fetch_argv": [sys.executable, str(comments_script)],
                     },
@@ -243,11 +243,11 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             write_prepare_inputs(
                 run_dir,
                 mission=mission,
-                tasks=round_tasks(role="sociologist", source_skills=["youtube-video-search", "youtube-comments-fetch"]),
+                tasks=round_tasks(role="sociologist", source_skills=["fetch-youtube-video-search", "fetch-youtube-comments"]),
             )
 
             prepare_payload = run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -259,21 +259,21 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
 
             self.assertEqual("1.3.0", plan["schema_version"])
             self.assertEqual(2, prepare_payload["summary"]["step_count"])
-            self.assertEqual(["youtube-video-search", "youtube-comments-fetch"], plan["roles"]["sociologist"]["selected_sources"])
+            self.assertEqual(["fetch-youtube-video-search", "fetch-youtube-comments"], plan["roles"]["sociologist"]["selected_sources"])
 
             video_step, comments_step = plan["steps"]
-            self.assertEqual("youtube-video-search", video_step["source_skill"])
-            self.assertEqual("youtube-comments-fetch", comments_step["source_skill"])
+            self.assertEqual("fetch-youtube-video-search", video_step["source_skill"])
+            self.assertEqual("fetch-youtube-comments", comments_step["source_skill"])
             self.assertEqual([video_step["step_id"]], comments_step["depends_on"])
             self.assertEqual("same-round-source", comments_step["anchor_mode"])
             self.assertEqual([video_step["artifact_path"]], comments_step["anchor_artifact_paths"])
             self.assertEqual("current-round", comments_step["anchor_refs"][0]["scope"])
-            self.assertEqual("youtube-video-search", comments_step["anchor_refs"][0]["source_skill"])
+            self.assertEqual("fetch-youtube-video-search", comments_step["anchor_refs"][0]["source_skill"])
             video_arg_index = comments_step["fetch_argv"].index("--video-ids-file")
             self.assertEqual(video_step["artifact_path"], comments_step["fetch_argv"][video_arg_index + 1])
 
             import_payload = run_script(
-                script_path("eco-import-fetch-execution"),
+                script_path("normalize-fetch-execution"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -286,8 +286,8 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
 
             self.assertEqual(0, import_payload["summary"]["failed_step_count"])
             self.assertEqual(2, execution["completed_count"])
-            self.assertEqual(1, counts["youtube-video-search"])
-            self.assertEqual(1, counts["youtube-comments-fetch"])
+            self.assertEqual(1, counts["fetch-youtube-video-search"])
+            self.assertEqual(1, counts["fetch-youtube-comments"])
 
     def test_prepare_and_execute_regulationsgov_comment_detail_anchor_chain(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -330,12 +330,12 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 },
                 "source_requests": [
                     {
-                        "source_skill": "regulationsgov-comments-fetch",
+                        "source_skill": "fetch-regulationsgov-comments",
                         "artifact_capture": "stdout-json",
                         "fetch_argv": [sys.executable, str(comments_script)],
                     },
                     {
-                        "source_skill": "regulationsgov-comment-detail-fetch",
+                        "source_skill": "fetch-regulationsgov-comment-detail",
                         "artifact_capture": "stdout-json",
                         "fetch_argv": [sys.executable, str(detail_script)],
                     },
@@ -346,12 +346,12 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 mission=mission,
                 tasks=round_tasks(
                     role="sociologist",
-                    source_skills=["regulationsgov-comments-fetch", "regulationsgov-comment-detail-fetch"],
+                    source_skills=["fetch-regulationsgov-comments", "fetch-regulationsgov-comment-detail"],
                 ),
             )
 
             run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -362,8 +362,8 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             plan = load_json(runtime_path(run_dir, f"fetch_plan_{ROUND_ID}.json"))
             list_step, detail_step = plan["steps"]
 
-            self.assertEqual("regulationsgov-comments-fetch", list_step["source_skill"])
-            self.assertEqual("regulationsgov-comment-detail-fetch", detail_step["source_skill"])
+            self.assertEqual("fetch-regulationsgov-comments", list_step["source_skill"])
+            self.assertEqual("fetch-regulationsgov-comment-detail", detail_step["source_skill"])
             self.assertEqual([list_step["step_id"]], detail_step["depends_on"])
             self.assertEqual("same-round-source", detail_step["anchor_mode"])
             self.assertEqual([list_step["artifact_path"]], detail_step["anchor_artifact_paths"])
@@ -371,7 +371,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             self.assertEqual(list_step["artifact_path"], detail_step["fetch_argv"][comment_arg_index + 1])
 
             import_payload = run_script(
-                script_path("eco-import-fetch-execution"),
+                script_path("normalize-fetch-execution"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -384,28 +384,28 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
 
             self.assertEqual(0, import_payload["summary"]["failed_step_count"])
             self.assertEqual(2, execution["completed_count"])
-            self.assertEqual(1, counts["regulationsgov-comments-fetch"])
-            self.assertEqual(1, counts["regulationsgov-comment-detail-fetch"])
+            self.assertEqual(1, counts["fetch-regulationsgov-comments"])
+            self.assertEqual(1, counts["fetch-regulationsgov-comment-detail"])
             self.assertEqual(
                 {"formal"},
-                {str(row["plane"]) for row in normalized_rows_for_source(run_dir, "regulationsgov-comments-fetch")},
+                {str(row["plane"]) for row in normalized_rows_for_source(run_dir, "fetch-regulationsgov-comments")},
             )
             self.assertEqual(
                 {"formal"},
-                {str(row["plane"]) for row in normalized_rows_for_source(run_dir, "regulationsgov-comment-detail-fetch")},
+                {str(row["plane"]) for row in normalized_rows_for_source(run_dir, "fetch-regulationsgov-comment-detail")},
             )
             self.assertEqual(
                 {"formal-comment-signal"},
                 {
                     str(row["canonical_object_kind"])
-                    for row in normalized_rows_for_source(run_dir, "regulationsgov-comments-fetch")
+                    for row in normalized_rows_for_source(run_dir, "fetch-regulationsgov-comments")
                 },
             )
             self.assertEqual(
                 {"formal-comment-signal"},
                 {
                     str(row["canonical_object_kind"])
-                    for row in normalized_rows_for_source(run_dir, "regulationsgov-comment-detail-fetch")
+                    for row in normalized_rows_for_source(run_dir, "fetch-regulationsgov-comment-detail")
                 },
             )
 
@@ -433,7 +433,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 **base_mission(),
                 "artifact_imports": [
                     {
-                        "source_skill": "openaq-data-fetch",
+                        "source_skill": "fetch-openaq",
                         "artifact_path": str(openaq_path),
                         "source_mode": "test-fixture",
                     }
@@ -442,11 +442,11 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             write_prepare_inputs(
                 run_dir,
                 mission=mission,
-                tasks=round_tasks(role="environmentalist", source_skills=["openaq-data-fetch"]),
+                tasks=round_tasks(role="environmentalist", source_skills=["fetch-openaq"]),
             )
 
             run_script(
-                script_path("eco-prepare-round"),
+                script_path("prepare-round"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -456,11 +456,11 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             )
             plan_path = runtime_path(run_dir, f"fetch_plan_{ROUND_ID}.json")
             plan = load_json(plan_path)
-            plan["steps"][0]["normalizer_skill"] = "eco-normalize-missing-observation-signals"
+            plan["steps"][0]["normalizer_skill"] = "normalize-missing-observation-signals"
             write_json(plan_path, plan)
 
             payload = run_script(
-                script_path("eco-import-fetch-execution"),
+                script_path("normalize-fetch-execution"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -479,14 +479,14 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             self.assertTrue(Path(status["artifact_path"]).exists())
 
     def test_gdelt_export_normalizers_write_row_level_signals_into_signal_plane(self) -> None:
-        events_module = load_skill_module("eco-normalize-gdelt-events-public-signals")
-        mentions_module = load_skill_module("eco-normalize-gdelt-mentions-public-signals")
-        gkg_module = load_skill_module("eco-normalize-gdelt-gkg-public-signals")
+        events_module = load_skill_module("normalize-gdelt-events-public-signals")
+        mentions_module = load_skill_module("normalize-gdelt-mentions-public-signals")
+        gkg_module = load_skill_module("normalize-gdelt-gkg-public-signals")
 
         specs = [
             {
-                "source_skill": "gdelt-events-fetch",
-                "normalizer_skill": "eco-normalize-gdelt-events-public-signals",
+                "source_skill": "fetch-gdelt-events",
+                "normalizer_skill": "normalize-gdelt-events-public-signals",
                 "field_names": list(events_module.EVENT_FIELDS),
                 "member_name": "20230607130000.export.CSV",
                 "signal_kind": "event-row",
@@ -539,8 +539,8 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 ],
             },
             {
-                "source_skill": "gdelt-mentions-fetch",
-                "normalizer_skill": "eco-normalize-gdelt-mentions-public-signals",
+                "source_skill": "fetch-gdelt-mentions",
+                "normalizer_skill": "normalize-gdelt-mentions-public-signals",
                 "field_names": list(mentions_module.MENTION_FIELDS),
                 "member_name": "20230607131500.mentions.CSV",
                 "signal_kind": "mention-row",
@@ -579,8 +579,8 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 ],
             },
             {
-                "source_skill": "gdelt-gkg-fetch",
-                "normalizer_skill": "eco-normalize-gdelt-gkg-public-signals",
+                "source_skill": "fetch-gdelt-gkg",
+                "normalizer_skill": "normalize-gdelt-gkg-public-signals",
                 "field_names": list(gkg_module.GKG_FIELDS),
                 "member_name": "20230607133000.gkg.csv",
                 "signal_kind": "gkg-row",
@@ -651,7 +651,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                     self.assertTrue(all(str(row["record_locator"]).startswith(f"zip://{spec['member_name']}#row=") for row in rows))
 
     def test_gdelt_events_normalizer_replaces_manifest_fallback_rows_on_rerun(self) -> None:
-        events_module = load_skill_module("eco-normalize-gdelt-events-public-signals")
+        events_module = load_skill_module("normalize-gdelt-events-public-signals")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -664,7 +664,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             )
 
             first_payload = run_script(
-                script_path("eco-normalize-gdelt-events-public-signals"),
+                script_path("normalize-gdelt-events-public-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -674,7 +674,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 "--artifact-path",
                 str(manifest_path),
             )
-            first_rows = normalized_rows_for_source(run_dir, "gdelt-events-fetch")
+            first_rows = normalized_rows_for_source(run_dir, "fetch-gdelt-events")
 
             self.assertEqual(1, first_payload["summary"]["signal_count"])
             self.assertEqual(1, len(first_rows))
@@ -708,7 +708,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             )
 
             second_payload = run_script(
-                script_path("eco-normalize-gdelt-events-public-signals"),
+                script_path("normalize-gdelt-events-public-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -718,7 +718,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 "--artifact-path",
                 str(manifest_path),
             )
-            second_rows = normalized_rows_for_source(run_dir, "gdelt-events-fetch")
+            second_rows = normalized_rows_for_source(run_dir, "fetch-gdelt-events")
 
             self.assertEqual(1, second_payload["summary"]["signal_count"])
             self.assertEqual(1, len(second_rows))
@@ -727,7 +727,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             self.assertNotIn(str(manifest_path), {str(row["artifact_path"]) for row in second_rows})
 
     def test_gdelt_events_normalizer_total_row_limit_does_not_emit_manifest_fallback(self) -> None:
-        events_module = load_skill_module("eco-normalize-gdelt-events-public-signals")
+        events_module = load_skill_module("normalize-gdelt-events-public-signals")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -790,7 +790,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             )
 
             payload = run_script(
-                script_path("eco-normalize-gdelt-events-public-signals"),
+                script_path("normalize-gdelt-events-public-signals"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -802,7 +802,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 "--max-total-rows",
                 "1",
             )
-            rows = normalized_rows_for_source(run_dir, "gdelt-events-fetch")
+            rows = normalized_rows_for_source(run_dir, "fetch-gdelt-events")
 
             self.assertEqual(1, payload["summary"]["signal_count"])
             self.assertTrue(any(item.get("code") == "total-row-limit-reached" for item in payload["warnings"]))

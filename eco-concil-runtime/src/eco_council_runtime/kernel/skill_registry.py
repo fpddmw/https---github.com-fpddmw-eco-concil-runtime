@@ -166,76 +166,76 @@ def _group(
 
 
 FETCH_SKILLS = [
-    "airnow-hourly-obs-fetch",
-    "bluesky-cascade-fetch",
-    "gdelt-doc-search",
-    "gdelt-events-fetch",
-    "gdelt-gkg-fetch",
-    "gdelt-mentions-fetch",
-    "nasa-firms-fire-fetch",
-    "open-meteo-air-quality-fetch",
-    "open-meteo-flood-fetch",
-    "open-meteo-historical-fetch",
-    "openaq-data-fetch",
-    "regulationsgov-comment-detail-fetch",
-    "regulationsgov-comments-fetch",
-    "usgs-water-iv-fetch",
-    "youtube-comments-fetch",
-    "youtube-video-search",
+    "fetch-airnow-hourly-observations",
+    "fetch-bluesky-cascade",
+    "fetch-gdelt-doc-search",
+    "fetch-gdelt-events",
+    "fetch-gdelt-gkg",
+    "fetch-gdelt-mentions",
+    "fetch-nasa-firms-fire",
+    "fetch-open-meteo-air-quality",
+    "fetch-open-meteo-flood",
+    "fetch-open-meteo-historical",
+    "fetch-openaq",
+    "fetch-regulationsgov-comment-detail",
+    "fetch-regulationsgov-comments",
+    "fetch-usgs-water-iv",
+    "fetch-youtube-comments",
+    "fetch-youtube-video-search",
 ]
 
 NORMALIZE_SKILLS = [
-    "eco-normalize-airnow-observation-signals",
-    "eco-normalize-bluesky-cascade-public-signals",
-    "eco-normalize-gdelt-doc-public-signals",
-    "eco-normalize-gdelt-events-public-signals",
-    "eco-normalize-gdelt-gkg-public-signals",
-    "eco-normalize-gdelt-mentions-public-signals",
-    "eco-normalize-nasa-firms-fire-observation-signals",
-    "eco-normalize-open-meteo-air-quality-signals",
-    "eco-normalize-open-meteo-flood-signals",
-    "eco-normalize-open-meteo-historical-signals",
-    "eco-normalize-openaq-observation-signals",
-    "eco-normalize-regulationsgov-comment-detail-public-signals",
-    "eco-normalize-regulationsgov-comments-public-signals",
-    "eco-normalize-usgs-water-observation-signals",
-    "eco-normalize-youtube-comments-public-signals",
-    "eco-normalize-youtube-video-public-signals",
+    "normalize-airnow-observation-signals",
+    "normalize-bluesky-cascade-public-signals",
+    "normalize-gdelt-doc-public-signals",
+    "normalize-gdelt-events-public-signals",
+    "normalize-gdelt-gkg-public-signals",
+    "normalize-gdelt-mentions-public-signals",
+    "normalize-nasa-firms-fire-observation-signals",
+    "normalize-open-meteo-air-quality-signals",
+    "normalize-open-meteo-flood-signals",
+    "normalize-open-meteo-historical-signals",
+    "normalize-openaq-observation-signals",
+    "normalize-regulationsgov-comment-detail-public-signals",
+    "normalize-regulationsgov-comments-public-signals",
+    "normalize-usgs-water-observation-signals",
+    "normalize-youtube-comments-public-signals",
+    "normalize-youtube-video-public-signals",
 ]
 
 OPTIONAL_ANALYSIS_SKILLS = [
-    "eco-build-normalization-audit",
-    "eco-extract-claim-candidates",
-    "eco-cluster-claim-candidates",
-    "eco-derive-claim-scope",
-    "eco-classify-claim-verifiability",
-    "eco-route-verification-lane",
-    "eco-extract-issue-candidates",
-    "eco-cluster-issue-candidates",
-    "eco-extract-stance-candidates",
-    "eco-extract-concern-facets",
-    "eco-extract-actor-profiles",
-    "eco-extract-evidence-citation-types",
-    "eco-materialize-controversy-map",
-    "eco-extract-observation-candidates",
-    "eco-merge-observation-candidates",
-    "eco-derive-observation-scope",
-    "eco-link-claims-to-observations",
-    "eco-score-evidence-coverage",
-    "eco-link-formal-comments-to-public-discourse",
-    "eco-identify-representation-gaps",
-    "eco-detect-cross-platform-diffusion",
+    "build-normalization-audit",
+    "extract-claim-candidates",
+    "cluster-claim-candidates",
+    "derive-claim-scope",
+    "classify-claim-verifiability",
+    "route-verification-lane",
+    "extract-issue-candidates",
+    "cluster-issue-candidates",
+    "extract-stance-candidates",
+    "extract-concern-facets",
+    "extract-actor-profiles",
+    "extract-evidence-citation-types",
+    "materialize-controversy-map",
+    "extract-observation-candidates",
+    "merge-observation-candidates",
+    "derive-observation-scope",
+    "link-claims-to-observations",
+    "score-evidence-coverage",
+    "link-formal-comments-to-public-discourse",
+    "identify-representation-gaps",
+    "detect-cross-platform-diffusion",
 ]
 
 QUERY_SKILLS = [
-    "eco-read-board-delta",
-    "eco-query-public-signals",
-    "eco-query-formal-signals",
-    "eco-query-environment-signals",
-    "eco-lookup-normalized-signal",
-    "eco-lookup-raw-record",
-    "eco-query-signal-corpus",
-    "eco-query-case-library",
+    "query-board-delta",
+    "query-public-signals",
+    "query-formal-signals",
+    "query-environment-signals",
+    "query-normalized-signal",
+    "query-raw-record",
+    "query-signal-corpus",
+    "query-case-library",
 ]
 
 POLICIES: dict[str, dict[str, Any]] = {}
@@ -280,7 +280,7 @@ POLICIES.update(
 )
 POLICIES.update(
     _group(
-        [name for name in OPTIONAL_ANALYSIS_SKILLS if name != "eco-build-normalization-audit"],
+        [name for name in OPTIONAL_ANALYSIS_SKILLS if name != "build-normalization-audit"],
         skill_layer=SKILL_LAYER_OPTIONAL_ANALYSIS,
         allowed_roles=RESEARCH_ROLES,
         required_capabilities=[CAPABILITY_ANALYSIS],
@@ -292,8 +292,8 @@ POLICIES.update(
         requires_operator_approval=True,
     )
 )
-POLICIES["eco-build-normalization-audit"] = _policy(
-    skill_name="eco-build-normalization-audit",
+POLICIES["build-normalization-audit"] = _policy(
+    skill_name="build-normalization-audit",
     skill_layer=SKILL_LAYER_OPTIONAL_ANALYSIS,
     allowed_roles=[ROLE_RUNTIME_OPERATOR],
     required_capabilities=[CAPABILITY_RUNTIME_ADMIN],
@@ -308,8 +308,8 @@ POLICIES["eco-build-normalization-audit"] = _policy(
 
 POLICIES.update(
     {
-        "eco-scaffold-mission-run": _policy(
-            skill_name="eco-scaffold-mission-run",
+        "scaffold-mission-run": _policy(
+            skill_name="scaffold-mission-run",
             skill_layer=SKILL_LAYER_STATE_TRANSITION,
             allowed_roles=[ROLE_MODERATOR, ROLE_RUNTIME_OPERATOR],
             required_capabilities=[CAPABILITY_ROUND_BOOTSTRAP],
@@ -320,8 +320,8 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_STATE_TRANSITION,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-prepare-round": _policy(
-            skill_name="eco-prepare-round",
+        "prepare-round": _policy(
+            skill_name="prepare-round",
             skill_layer=SKILL_LAYER_STATE_TRANSITION,
             allowed_roles=[ROLE_MODERATOR, ROLE_RUNTIME_OPERATOR],
             required_capabilities=[CAPABILITY_ROUND_BOOTSTRAP],
@@ -332,8 +332,8 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_ARTIFACT,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-import-fetch-execution": _policy(
-            skill_name="eco-import-fetch-execution",
+        "normalize-fetch-execution": _policy(
+            skill_name="normalize-fetch-execution",
             skill_layer=SKILL_LAYER_NORMALIZE,
             allowed_roles=[*INVESTIGATOR_ROLES, ROLE_RUNTIME_OPERATOR],
             required_capabilities=[CAPABILITY_NORMALIZE],
@@ -343,8 +343,8 @@ POLICIES.update(
             output_object_kinds=["normalized-signal", "execution-receipt"],
             write_scope=WRITE_SCOPE_SIGNAL,
         ),
-        "eco-open-investigation-round": _policy(
-            skill_name="eco-open-investigation-round",
+        "open-investigation-round": _policy(
+            skill_name="open-investigation-round",
             skill_layer=SKILL_LAYER_STATE_TRANSITION,
             allowed_roles=[ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_STATE_TRANSITION],
@@ -356,8 +356,8 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-post-board-note": _policy(
-            skill_name="eco-post-board-note",
+        "post-board-note": _policy(
+            skill_name="post-board-note",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
             allowed_roles=RESEARCH_ROLES,
             required_capabilities=[CAPABILITY_BOARD_NOTE_WRITE],
@@ -367,8 +367,8 @@ POLICIES.update(
             output_object_kinds=["board-note"],
             write_scope=WRITE_SCOPE_DELIBERATION,
         ),
-        "eco-update-hypothesis-status": _policy(
-            skill_name="eco-update-hypothesis-status",
+        "update-hypothesis-status": _policy(
+            skill_name="update-hypothesis-status",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
             allowed_roles=[ROLE_MODERATOR, *INVESTIGATOR_ROLES],
             required_capabilities=[CAPABILITY_HYPOTHESIS_WRITE],
@@ -378,8 +378,8 @@ POLICIES.update(
             output_object_kinds=["hypothesis"],
             write_scope=WRITE_SCOPE_DELIBERATION,
         ),
-        "eco-open-challenge-ticket": _policy(
-            skill_name="eco-open-challenge-ticket",
+        "open-challenge-ticket": _policy(
+            skill_name="open-challenge-ticket",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
             allowed_roles=[ROLE_CHALLENGER, ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_CHALLENGE_WRITE],
@@ -390,8 +390,8 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_DELIBERATION,
             default_actor_role_hint=ROLE_CHALLENGER,
         ),
-        "eco-close-challenge-ticket": _policy(
-            skill_name="eco-close-challenge-ticket",
+        "close-challenge-ticket": _policy(
+            skill_name="close-challenge-ticket",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
             allowed_roles=[ROLE_CHALLENGER, ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_CHALLENGE_WRITE],
@@ -402,8 +402,8 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_DELIBERATION,
             default_actor_role_hint=ROLE_CHALLENGER,
         ),
-        "eco-claim-board-task": _policy(
-            skill_name="eco-claim-board-task",
+        "claim-board-task": _policy(
+            skill_name="claim-board-task",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
             allowed_roles=[ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_BOARD_TASK_WRITE],
@@ -414,8 +414,8 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_DELIBERATION,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-submit-council-proposal": _policy(
-            skill_name="eco-submit-council-proposal",
+        "submit-council-proposal": _policy(
+            skill_name="submit-council-proposal",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
             allowed_roles=[ROLE_MODERATOR, *INVESTIGATOR_ROLES, ROLE_CHALLENGER],
             required_capabilities=[CAPABILITY_PROPOSAL_WRITE],
@@ -425,8 +425,8 @@ POLICIES.update(
             output_object_kinds=["proposal"],
             write_scope=WRITE_SCOPE_DELIBERATION,
         ),
-        "eco-submit-readiness-opinion": _policy(
-            skill_name="eco-submit-readiness-opinion",
+        "submit-readiness-opinion": _policy(
+            skill_name="submit-readiness-opinion",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
             allowed_roles=[ROLE_MODERATOR, *INVESTIGATOR_ROLES, ROLE_CHALLENGER],
             required_capabilities=[CAPABILITY_READINESS_WRITE],
@@ -436,8 +436,8 @@ POLICIES.update(
             output_object_kinds=["readiness-opinion"],
             write_scope=WRITE_SCOPE_DELIBERATION,
         ),
-        "eco-summarize-board-state": _policy(
-            skill_name="eco-summarize-board-state",
+        "summarize-board-state": _policy(
+            skill_name="summarize-board-state",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
             allowed_roles=[ROLE_MODERATOR, ROLE_RUNTIME_OPERATOR],
             required_capabilities=[CAPABILITY_DERIVED_EXPORT],
@@ -448,8 +448,8 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_ARTIFACT,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-materialize-board-brief": _policy(
-            skill_name="eco-materialize-board-brief",
+        "materialize-board-brief": _policy(
+            skill_name="materialize-board-brief",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
             allowed_roles=[ROLE_MODERATOR, ROLE_RUNTIME_OPERATOR],
             required_capabilities=[CAPABILITY_DERIVED_EXPORT],
@@ -460,8 +460,8 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_ARTIFACT,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-plan-round-orchestration": _policy(
-            skill_name="eco-plan-round-orchestration",
+        "plan-round-orchestration": _policy(
+            skill_name="plan-round-orchestration",
             skill_layer=SKILL_LAYER_OPTIONAL_ANALYSIS,
             allowed_roles=[ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_ANALYSIS],
@@ -473,8 +473,8 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-propose-next-actions": _policy(
-            skill_name="eco-propose-next-actions",
+        "propose-next-actions": _policy(
+            skill_name="propose-next-actions",
             skill_layer=SKILL_LAYER_OPTIONAL_ANALYSIS,
             allowed_roles=[ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_ANALYSIS],
@@ -486,8 +486,8 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-open-falsification-probe": _policy(
-            skill_name="eco-open-falsification-probe",
+        "open-falsification-probe": _policy(
+            skill_name="open-falsification-probe",
             skill_layer=SKILL_LAYER_OPTIONAL_ANALYSIS,
             allowed_roles=[ROLE_CHALLENGER, ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_PROBE_WRITE],
@@ -499,8 +499,8 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_CHALLENGER,
         ),
-        "eco-summarize-round-readiness": _policy(
-            skill_name="eco-summarize-round-readiness",
+        "summarize-round-readiness": _policy(
+            skill_name="summarize-round-readiness",
             skill_layer=SKILL_LAYER_OPTIONAL_ANALYSIS,
             allowed_roles=[ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_ANALYSIS],
@@ -512,8 +512,8 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-promote-evidence-basis": _policy(
-            skill_name="eco-promote-evidence-basis",
+        "promote-evidence-basis": _policy(
+            skill_name="promote-evidence-basis",
             skill_layer=SKILL_LAYER_STATE_TRANSITION,
             allowed_roles=[ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_STATE_TRANSITION],
@@ -525,8 +525,8 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-archive-signal-corpus": _policy(
-            skill_name="eco-archive-signal-corpus",
+        "archive-signal-corpus": _policy(
+            skill_name="archive-signal-corpus",
             skill_layer=SKILL_LAYER_RUNTIME_ADMIN,
             allowed_roles=[ROLE_RUNTIME_OPERATOR],
             required_capabilities=[CAPABILITY_ARCHIVE_WRITE],
@@ -537,8 +537,8 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_ARCHIVE,
             default_actor_role_hint=ROLE_RUNTIME_OPERATOR,
         ),
-        "eco-archive-case-library": _policy(
-            skill_name="eco-archive-case-library",
+        "archive-case-library": _policy(
+            skill_name="archive-case-library",
             skill_layer=SKILL_LAYER_RUNTIME_ADMIN,
             allowed_roles=[ROLE_RUNTIME_OPERATOR],
             required_capabilities=[CAPABILITY_ARCHIVE_WRITE],
@@ -549,8 +549,8 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_ARCHIVE,
             default_actor_role_hint=ROLE_RUNTIME_OPERATOR,
         ),
-        "eco-materialize-history-context": _policy(
-            skill_name="eco-materialize-history-context",
+        "materialize-history-context": _policy(
+            skill_name="materialize-history-context",
             skill_layer=SKILL_LAYER_REPORTING,
             allowed_roles=[ROLE_MODERATOR, ROLE_RUNTIME_OPERATOR],
             required_capabilities=[CAPABILITY_DERIVED_EXPORT],
@@ -561,8 +561,8 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_ARTIFACT,
             default_actor_role_hint=ROLE_RUNTIME_OPERATOR,
         ),
-        "eco-materialize-reporting-handoff": _policy(
-            skill_name="eco-materialize-reporting-handoff",
+        "materialize-reporting-handoff": _policy(
+            skill_name="materialize-reporting-handoff",
             skill_layer=SKILL_LAYER_REPORTING,
             allowed_roles=REPORTING_ROLES,
             required_capabilities=[CAPABILITY_REPORT_DRAFT],
@@ -574,8 +574,8 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-draft-council-decision": _policy(
-            skill_name="eco-draft-council-decision",
+        "draft-council-decision": _policy(
+            skill_name="draft-council-decision",
             skill_layer=SKILL_LAYER_REPORTING,
             allowed_roles=REPORTING_ROLES,
             required_capabilities=[CAPABILITY_REPORT_DRAFT],
@@ -587,8 +587,8 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-draft-expert-report": _policy(
-            skill_name="eco-draft-expert-report",
+        "draft-expert-report": _policy(
+            skill_name="draft-expert-report",
             skill_layer=SKILL_LAYER_REPORTING,
             allowed_roles=[ROLE_REPORT_EDITOR],
             required_capabilities=[CAPABILITY_REPORT_DRAFT],
@@ -599,8 +599,8 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_REPORTING,
             default_actor_role_hint=ROLE_REPORT_EDITOR,
         ),
-        "eco-publish-expert-report": _policy(
-            skill_name="eco-publish-expert-report",
+        "publish-expert-report": _policy(
+            skill_name="publish-expert-report",
             skill_layer=SKILL_LAYER_REPORTING,
             allowed_roles=[ROLE_REPORT_EDITOR],
             required_capabilities=[CAPABILITY_REPORT_PUBLISH],
@@ -612,8 +612,8 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_REPORT_EDITOR,
         ),
-        "eco-publish-council-decision": _policy(
-            skill_name="eco-publish-council-decision",
+        "publish-council-decision": _policy(
+            skill_name="publish-council-decision",
             skill_layer=SKILL_LAYER_REPORTING,
             allowed_roles=[ROLE_MODERATOR, ROLE_REPORT_EDITOR],
             required_capabilities=[CAPABILITY_REPORT_PUBLISH],
@@ -625,8 +625,8 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "eco-materialize-final-publication": _policy(
-            skill_name="eco-materialize-final-publication",
+        "materialize-final-publication": _policy(
+            skill_name="materialize-final-publication",
             skill_layer=SKILL_LAYER_REPORTING,
             allowed_roles=REPORTING_ROLES,
             required_capabilities=[CAPABILITY_REPORT_PUBLISH],

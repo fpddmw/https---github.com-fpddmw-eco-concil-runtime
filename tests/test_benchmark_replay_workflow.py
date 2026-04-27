@@ -74,7 +74,7 @@ def build_mission_file(root: Path, run_id: str, round_id: str) -> Path:
 def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id: str) -> None:
     mission_path = build_mission_file(fixture_root, run_id, round_id)
     run_script(
-        script_path("eco-scaffold-mission-run"),
+        script_path("scaffold-mission-run"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -87,7 +87,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
     outputs = seed_analysis_chain(run_dir, fixture_root, run_id, round_id, include_airnow=True)
 
     run_script(
-        script_path("eco-derive-claim-scope"),
+        script_path("derive-claim-scope"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -96,7 +96,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         round_id,
     )
     run_script(
-        script_path("eco-derive-observation-scope"),
+        script_path("derive-observation-scope"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -105,7 +105,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         round_id,
     )
     coverage_payload = run_script(
-        script_path("eco-score-evidence-coverage"),
+        script_path("score-evidence-coverage"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -114,7 +114,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         round_id,
     )
     run_script(
-        script_path("eco-post-board-note"),
+        script_path("post-board-note"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -131,7 +131,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         coverage_payload["artifact_refs"][0]["artifact_ref"],
     )
     run_script(
-        script_path("eco-update-hypothesis-status"),
+        script_path("update-hypothesis-status"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -167,7 +167,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         round_id,
     )
     run_script(
-        script_path("eco-materialize-reporting-handoff"),
+        script_path("materialize-reporting-handoff"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -176,7 +176,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         round_id,
     )
     run_script(
-        script_path("eco-draft-council-decision"),
+        script_path("draft-council-decision"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -186,7 +186,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
     )
     for role in ("sociologist", "environmentalist"):
         run_script(
-            script_path("eco-draft-expert-report"),
+            script_path("draft-expert-report"),
             "--run-dir",
             str(run_dir),
             "--run-id",
@@ -197,7 +197,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
             role,
         )
         run_script(
-            script_path("eco-publish-expert-report"),
+            script_path("publish-expert-report"),
             "--run-dir",
             str(run_dir),
             "--run-id",
@@ -208,7 +208,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
             role,
         )
     run_script(
-        script_path("eco-publish-council-decision"),
+        script_path("publish-council-decision"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -217,7 +217,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         round_id,
     )
     run_script(
-        script_path("eco-materialize-final-publication"),
+        script_path("materialize-final-publication"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -326,7 +326,7 @@ class BenchmarkReplayWorkflowTests(unittest.TestCase):
                 candidate_manifest["phase2_summary"]["reporting_ready"],
                 state_payload["benchmark"]["operator"]["reporting_ready"],
             )
-            self.assertTrue(any(item["skill_name"] == "eco-archive-case-library" for item in candidate_manifest["skill_timing_summary"]))
+            self.assertTrue(any(item["skill_name"] == "archive-case-library" for item in candidate_manifest["skill_timing_summary"]))
             self.assertTrue(any(item["event_type"] == "round-close" for item in candidate_manifest["round_event_summary"]))
 
     def test_runtime_replay_detects_output_regression(self) -> None:

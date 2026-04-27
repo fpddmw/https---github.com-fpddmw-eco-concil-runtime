@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 
-DEFAULT_PHASE2_PLANNER_SKILL_NAME = "eco-plan-round-orchestration"
+DEFAULT_PHASE2_PLANNER_SKILL_NAME = "plan-round-orchestration"
 
 DEFAULT_PHASE2_STAGE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "orchestration-planner": {
@@ -19,7 +19,7 @@ DEFAULT_PHASE2_STAGE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "board-summary": {
         "phase_group": "exports",
         "stage_kind": "skill",
-        "expected_skill_name": "eco-summarize-board-state",
+        "expected_skill_name": "summarize-board-state",
         "artifact_key": "board_summary_path",
         "required_previous_stages": ["orchestration-planner"],
         "blocking": False,
@@ -29,7 +29,7 @@ DEFAULT_PHASE2_STAGE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "board-brief": {
         "phase_group": "exports",
         "stage_kind": "skill",
-        "expected_skill_name": "eco-materialize-board-brief",
+        "expected_skill_name": "materialize-board-brief",
         "artifact_key": "board_brief_path",
         "required_previous_stages": ["orchestration-planner"],
         "blocking": False,
@@ -39,7 +39,7 @@ DEFAULT_PHASE2_STAGE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "next-actions": {
         "phase_group": "execution",
         "stage_kind": "skill",
-        "expected_skill_name": "eco-propose-next-actions",
+        "expected_skill_name": "propose-next-actions",
         "artifact_key": "next_actions_path",
         "required_previous_stages": ["orchestration-planner"],
         "blocking": True,
@@ -49,7 +49,7 @@ DEFAULT_PHASE2_STAGE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "falsification-probes": {
         "phase_group": "execution",
         "stage_kind": "skill",
-        "expected_skill_name": "eco-open-falsification-probe",
+        "expected_skill_name": "open-falsification-probe",
         "artifact_key": "probes_path",
         "required_previous_stages": ["orchestration-planner"],
         "blocking": True,
@@ -59,7 +59,7 @@ DEFAULT_PHASE2_STAGE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "round-readiness": {
         "phase_group": "execution",
         "stage_kind": "skill",
-        "expected_skill_name": "eco-summarize-round-readiness",
+        "expected_skill_name": "summarize-round-readiness",
         "artifact_key": "readiness_path",
         "required_previous_stages": ["orchestration-planner"],
         "blocking": True,
@@ -79,7 +79,7 @@ DEFAULT_PHASE2_STAGE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "promotion-basis": {
         "phase_group": "promotion",
         "stage_kind": "skill",
-        "expected_skill_name": "eco-promote-evidence-basis",
+        "expected_skill_name": "promote-evidence-basis",
         "artifact_key": "promotion_basis_path",
         "required_previous_stages": ["promotion-gate"],
         "blocking": True,
@@ -126,8 +126,8 @@ def default_post_gate_steps() -> list[dict[str, Any]]:
             "stage_name": "promotion-basis",
             "stage_kind": "skill",
             "phase_group": "promotion",
-            "skill_name": "eco-promote-evidence-basis",
-            "expected_skill_name": "eco-promote-evidence-basis",
+            "skill_name": "promote-evidence-basis",
+            "expected_skill_name": "promote-evidence-basis",
             "skill_args": [],
             "assigned_role_hint": "moderator",
             "required_previous_stages": ["promotion-gate"],

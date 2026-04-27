@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Normalize Open-Meteo Flood Signals"
+  short_description: "Normalize Open-Meteo flood outputs into unified environment signals"
+  default_prompt: "Use $normalize-open-meteo-flood-signals to normalize one fetch-open-meteo-flood artifact into DB-backed environment-signal rows with provenance, hydrology-model quality flags, temporal/spatial scope, and coverage limitations. Do not infer exposure, readiness, or policy conclusions."

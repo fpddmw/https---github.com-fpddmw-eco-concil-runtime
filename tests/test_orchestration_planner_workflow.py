@@ -36,12 +36,12 @@ ROUND_ID = "round-planner-001"
 
 def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    run_script(script_path("eco-derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("eco-derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_payload = run_script(script_path("eco-score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    coverage_payload = run_script(script_path("score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
     run_script(
-        script_path("eco-post-board-note"),
+        script_path("post-board-note"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -58,7 +58,7 @@ def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
         coverage_ref,
     )
     run_script(
-        script_path("eco-update-hypothesis-status"),
+        script_path("update-hypothesis-status"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -82,12 +82,12 @@ def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
 
 def prepare_hold_board_state(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    run_script(script_path("eco-derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("eco-derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_payload = run_script(script_path("eco-score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    run_script(script_path("derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+    coverage_payload = run_script(script_path("score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
     hypothesis_payload = run_script(
-        script_path("eco-update-hypothesis-status"),
+        script_path("update-hypothesis-status"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -108,7 +108,7 @@ def prepare_hold_board_state(run_dir: Path, root: Path) -> None:
         "0.52",
     )
     run_script(
-        script_path("eco-open-challenge-ticket"),
+        script_path("open-challenge-ticket"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -140,7 +140,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             prepare_ready_board_state(run_dir, root)
 
             payload = run_script(
-                script_path("eco-plan-round-orchestration"),
+                script_path("plan-round-orchestration"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -213,7 +213,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             )
 
             payload = run_script(
-                script_path("eco-plan-round-orchestration"),
+                script_path("plan-round-orchestration"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -240,7 +240,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                 plan["phase_decision_basis"]["council_input_counts"]["readiness_ready_count"],
             )
             self.assertEqual(
-                ["eco-summarize-round-readiness"],
+                ["summarize-round-readiness"],
                 plan["agent_turn_hints"]["recommended_skill_sequence"],
             )
 
@@ -278,7 +278,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             )
 
             payload = run_script(
-                script_path("eco-plan-round-orchestration"),
+                script_path("plan-round-orchestration"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -347,7 +347,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             )
 
             payload = run_script(
-                script_path("eco-plan-round-orchestration"),
+                script_path("plan-round-orchestration"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -390,7 +390,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_board_state(run_dir, root)
 
-            payload = run_script(script_path("eco-plan-round-orchestration"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            payload = run_script(script_path("plan-round-orchestration"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
             stage_names = [item["stage_name"] for item in plan["execution_queue"]]
             derived_export_stage_names = [item["stage_name"] for item in plan["derived_exports"]]
@@ -405,7 +405,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             self.assertEqual(["board-summary", "board-brief"], derived_export_stage_names)
             self.assertTrue(plan["observed_state"]["board_exports_are_derived"])
             self.assertEqual(2, payload["summary"]["derived_export_count"])
-            self.assertEqual("eco-promote-evidence-basis", plan["post_gate_steps"][0]["skill_name"])
+            self.assertEqual("promote-evidence-basis", plan["post_gate_steps"][0]["skill_name"])
 
     def test_planner_uses_agenda_diffusion_signal_to_keep_probe_stage(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -417,7 +417,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                 run_dir,
                 action_snapshot={
                     "schema_version": "d1.1",
-                    "skill": "eco-propose-next-actions",
+                    "skill": "propose-next-actions",
                     "run_id": RUN_ID,
                     "round_id": ROUND_ID,
                     "agenda_source": "controversy-agenda-materialization",
@@ -446,7 +446,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             store_moderator_action_snapshot(run_dir, action_snapshot=next_actions)
 
             payload = run_script(
-                script_path("eco-plan-round-orchestration"),
+                script_path("plan-round-orchestration"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -475,7 +475,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_hold_board_state(run_dir, root)
 
-            payload = run_script(script_path("eco-plan-round-orchestration"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            payload = run_script(script_path("plan-round-orchestration"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
             stage_names = [item["stage_name"] for item in plan["execution_queue"]]
             fallback_skill_sets = [item.get("suggested_next_skills", []) for item in plan["fallback_path"] if isinstance(item, dict)]
@@ -491,7 +491,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             self.assertIn("falsification-probes", stage_names)
             self.assertNotIn("board-summary", stage_names)
             self.assertNotIn("board-brief", stage_names)
-            self.assertTrue(any("eco-open-falsification-probe" in skill_set for skill_set in fallback_skill_sets))
+            self.assertTrue(any("open-falsification-probe" in skill_set for skill_set in fallback_skill_sets))
 
     def test_planner_reads_db_backed_actions_and_probes_when_exports_are_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -500,7 +500,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             prepare_hold_board_state(run_dir, root)
 
             run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -509,7 +509,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-open-falsification-probe"),
+                script_path("open-falsification-probe"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -521,7 +521,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             (run_dir / "investigation" / f"falsification_probes_{ROUND_ID}.json").unlink()
 
             payload = run_script(
-                script_path("eco-plan-round-orchestration"),
+                script_path("plan-round-orchestration"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",

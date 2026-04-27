@@ -77,7 +77,7 @@ class RuntimeKernelTests(unittest.TestCase):
             run_dir = root / "run"
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -86,7 +86,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -101,7 +101,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 coverage_payload["artifact_refs"][0]["artifact_ref"],
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -140,7 +140,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                "eco-summarize-board-state",
+                "summarize-board-state",
             )
             second_run = run_kernel(
                 "run-skill",
@@ -151,13 +151,13 @@ class RuntimeKernelTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                "eco-propose-next-actions",
+                "propose-next-actions",
                 "--skill-approval-request-id",
                 request_and_approve_skill_approval(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
-                    skill_name="eco-propose-next-actions",
+                    skill_name="propose-next-actions",
                     requested_actor_role="moderator",
                     rationale="Approve optional-analysis next-actions execution for runtime-kernel ledger coverage.",
                 ),
@@ -177,9 +177,9 @@ class RuntimeKernelTests(unittest.TestCase):
 
             self.assertEqual(2, manifest["invocation_count"])
             self.assertEqual(ROUND_ID, manifest["last_round_id"])
-            self.assertEqual("eco-propose-next-actions", manifest["last_skill_name"])
+            self.assertEqual("propose-next-actions", manifest["last_skill_name"])
             self.assertEqual(ROUND_ID, cursor["current_round_id"])
-            self.assertEqual("eco-propose-next-actions", cursor["last_skill_name"])
+            self.assertEqual("propose-next-actions", cursor["last_skill_name"])
             self.assertGreaterEqual(registry["skill_count"], 1)
             self.assertGreaterEqual(len(state_payload["ledger_tail"]), 2)
             ledger_receipt_ids = [
@@ -285,7 +285,7 @@ class RuntimeKernelTests(unittest.TestCase):
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -294,7 +294,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-classify-claim-verifiability"),
+                script_path("classify-claim-verifiability"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -303,7 +303,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-route-verification-lane"),
+                script_path("route-verification-lane"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -312,7 +312,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-materialize-controversy-map"),
+                script_path("materialize-controversy-map"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -379,7 +379,7 @@ class RuntimeKernelTests(unittest.TestCase):
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -388,7 +388,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-classify-claim-verifiability"),
+                script_path("classify-claim-verifiability"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -397,7 +397,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-route-verification-lane"),
+                script_path("route-verification-lane"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -406,7 +406,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-materialize-controversy-map"),
+                script_path("materialize-controversy-map"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -496,12 +496,12 @@ class RuntimeKernelTests(unittest.TestCase):
                 RUN_ID,
             )
             registry = init_payload["registry"]
-            handoff_entry = next(item for item in registry["skills"] if item["skill_name"] == "eco-materialize-reporting-handoff")
+            handoff_entry = next(item for item in registry["skills"] if item["skill_name"] == "materialize-reporting-handoff")
             self.assertEqual("runtime-registry-v3", registry["schema_version"])
             self.assertEqual(registry["skill_count"], registry["skill_access_summary"]["skill_count"])
             self.assertIn("run_dir/promotion/promoted_evidence_basis_<round_id>.json", handoff_entry["declared_contract"]["reads"])
             self.assertEqual("Eco Materialize Reporting Handoff", handoff_entry["agent"]["display_name"])
-            self.assertEqual("eco-materialize-reporting-handoff", handoff_entry["skill_access"]["skill_name"])
+            self.assertEqual("materialize-reporting-handoff", handoff_entry["skill_access"]["skill_name"])
             self.assertIn("report-editor", handoff_entry["skill_access"]["allowed_roles"])
 
             payload = run_kernel(
@@ -513,7 +513,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                "eco-post-board-note",
+                "post-board-note",
                 "--",
                 "--author-role",
                 "moderator",
@@ -524,7 +524,7 @@ class RuntimeKernelTests(unittest.TestCase):
 
             self.assertEqual("runtime-event-v3", event["schema_version"])
             self.assertEqual(["--author-role", "moderator", "--note-text", "Runtime metadata note."], event["skill_args"])
-            self.assertEqual("eco-post-board-note", event["skill_registry_entry"]["skill_name"])
+            self.assertEqual("post-board-note", event["skill_registry_entry"]["skill_name"])
             self.assertEqual("moderator", event["actor_role"])
             self.assertEqual("moderator", event["resolved_actor_role"])
             self.assertIn(str((run_dir / "board" / f"investigation_board.json").resolve()), event["resolved_write_paths"])
@@ -668,7 +668,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                "eco-summarize-board-state",
+                "summarize-board-state",
                 "--actor-role",
                 "environmentalist",
                 "--contract-mode",
@@ -702,7 +702,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                "eco-post-board-note",
+                "post-board-note",
                 "--contract-mode",
                 "warn",
             )
@@ -726,7 +726,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                "eco-post-board-note",
+                "post-board-note",
                 "--contract-mode",
                 "strict",
             )
@@ -751,7 +751,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                "eco-post-board-note",
+                "post-board-note",
                 "--contract-mode",
                 "warn",
                 "--",
@@ -783,7 +783,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                "eco-post-board-note",
+                "post-board-note",
                 "--contract-mode",
                 "strict",
                 "--",
@@ -813,7 +813,7 @@ class RuntimeKernelTests(unittest.TestCase):
             fake_payload = {
                 "status": "completed",
                 "summary": {
-                    "skill": "eco-summarize-board-state",
+                    "skill": "summarize-board-state",
                     "run_id": RUN_ID,
                     "round_id": ROUND_ID,
                     "output_path": str(output_path),
@@ -842,7 +842,7 @@ class RuntimeKernelTests(unittest.TestCase):
                         run_dir,
                         run_id=RUN_ID,
                         round_id=ROUND_ID,
-                        skill_name="eco-summarize-board-state",
+                        skill_name="summarize-board-state",
                         actor_role="moderator",
                         skill_args=[],
                         contract_mode="strict",
@@ -861,7 +861,7 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.kernel.governance import preflight_skill_execution
 
             fake_skill_entry = {
-                "skill_name": "youtube-video-search",
+                "skill_name": "fetch-youtube-video-search",
                 "script_path": str(root / "fake_skill.py"),
                 "declared_contract": {"reads": [], "writes": []},
                 "declared_inputs": {"required": [], "optional": []},
@@ -875,7 +875,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
-                    skill_name="youtube-video-search",
+                    skill_name="fetch-youtube-video-search",
                     actor_role="environmentalist",
                     skill_args=[],
                     contract_mode="strict",
@@ -884,7 +884,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
-                    skill_name="youtube-video-search",
+                    skill_name="fetch-youtube-video-search",
                     actor_role="environmentalist",
                     skill_args=[],
                     contract_mode="strict",
@@ -907,7 +907,7 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.kernel.ledger import load_ledger_tail
 
             fake_skill_entry = {
-                "skill_name": "eco-summarize-board-state",
+                "skill_name": "summarize-board-state",
                 "script_path": str(root / "fake_retry.py"),
                 "declared_contract": {"reads": [], "writes": []},
                 "declared_inputs": {"required": [], "optional": []},
@@ -939,7 +939,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
-                    skill_name="eco-summarize-board-state",
+                    skill_name="summarize-board-state",
                     actor_role="moderator",
                     skill_args=[],
                     contract_mode="warn",
@@ -969,7 +969,7 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.kernel.ledger import load_ledger_tail
 
             fake_skill_entry = {
-                "skill_name": "eco-summarize-board-state",
+                "skill_name": "summarize-board-state",
                 "script_path": str(root / "fake_slow.py"),
                 "declared_contract": {"reads": [], "writes": []},
                 "declared_inputs": {"required": [], "optional": []},
@@ -991,7 +991,7 @@ class RuntimeKernelTests(unittest.TestCase):
                         run_dir,
                         run_id=RUN_ID,
                         round_id=ROUND_ID,
-                        skill_name="eco-summarize-board-state",
+                        skill_name="summarize-board-state",
                         actor_role="moderator",
                         skill_args=[],
                         contract_mode="warn",
@@ -1019,7 +1019,7 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.kernel.operations import load_dead_letters, materialize_admission_policy
 
             fake_skill_entry = {
-                "skill_name": "eco-summarize-board-state",
+                "skill_name": "summarize-board-state",
                 "script_path": str(root / "fake_blocked.py"),
                 "declared_contract": {"reads": [], "writes": []},
                 "declared_inputs": {"required": [], "optional": []},
@@ -1039,7 +1039,7 @@ class RuntimeKernelTests(unittest.TestCase):
                         run_dir,
                         run_id=RUN_ID,
                         round_id=ROUND_ID,
-                        skill_name="eco-summarize-board-state",
+                        skill_name="summarize-board-state",
                         actor_role="moderator",
                         skill_args=[],
                         contract_mode="warn",
@@ -1077,10 +1077,10 @@ class RuntimeKernelTests(unittest.TestCase):
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
                 source_type="skill-execution",
-                source_name="eco-test-skill",
+                source_name="test-skill",
                 message="Synthetic runtime failure for operator surface coverage.",
                 failure={"error_code": "skill-timeout", "message": "timed out", "retryable": False},
-                summary={"skill_name": "eco-test-skill", "run_id": RUN_ID, "round_id": ROUND_ID},
+                summary={"skill_name": "test-skill", "run_id": RUN_ID, "round_id": ROUND_ID},
             )
 
             payload = show_run_state(
@@ -1095,7 +1095,7 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(1, payload["summary"]["open_dead_letter_count"])
             self.assertTrue(payload["operations"]["operator"]["admission_policy_path"].endswith("admission_policy.json"))
             self.assertTrue(payload["operations"]["operator"]["operator_runbook_path"].endswith(f"operator_runbook_{ROUND_ID}.md"))
-            self.assertEqual("eco-test-skill", payload["operations"]["dead_letters"][0]["source_name"])
+            self.assertEqual("test-skill", payload["operations"]["dead_letters"][0]["source_name"])
 
     def test_default_admission_policy_keeps_writes_inside_run_surface(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1131,32 +1131,32 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.phase2_planning_profile import phase2_planning_source
 
             planner_result = {
-                "summary": {"skill_name": "eco-plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
+                "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": []},
             }
             board_summary_result = {
-                "summary": {"skill_name": "eco-summarize-board-state", "event_id": "evt-step", "receipt_id": "receipt-step"},
+                "summary": {"skill_name": "summarize-board-state", "event_id": "evt-step", "receipt_id": "receipt-step"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "board_summary.json")}},
             }
             board_brief_result = {
-                "summary": {"skill_name": "eco-materialize-board-brief", "event_id": "evt-brief", "receipt_id": "receipt-brief"},
+                "summary": {"skill_name": "materialize-board-brief", "event_id": "evt-brief", "receipt_id": "receipt-brief"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "board_brief.md")}},
             }
             next_actions_result = {
-                "summary": {"skill_name": "eco-propose-next-actions", "event_id": "evt-next", "receipt_id": "receipt-next"},
+                "summary": {"skill_name": "propose-next-actions", "event_id": "evt-next", "receipt_id": "receipt-next"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "next_actions.json")}},
             }
             readiness_result = {
-                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
+                "summary": {"skill_name": "summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"}},
             }
             promotion_result = {
-                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
                 "skill_payload": {"summary": {"promotion_status": "promoted"}, "artifact_refs": [], "canonical_ids": []},
             }
@@ -1165,13 +1165,13 @@ class RuntimeKernelTests(unittest.TestCase):
                 "plan_path": str(root / "plan.json"),
                 "planning_status": "ready-for-controller",
                 "planning_mode": "planner-backed",
-                "planner_skill_name": "eco-plan-round-orchestration",
+                "planner_skill_name": "plan-round-orchestration",
                 "probe_stage_included": False,
                 "assigned_role_hints": [],
                 "execution_queue": [
                     {
                         "stage_name": "board-summary",
-                        "skill_name": "eco-summarize-board-state",
+                        "skill_name": "summarize-board-state",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
                         "reason": "test",
@@ -1179,7 +1179,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     },
                     {
                         "stage_name": "board-brief",
-                        "skill_name": "eco-materialize-board-brief",
+                        "skill_name": "materialize-board-brief",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
                         "reason": "test",
@@ -1187,7 +1187,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     },
                     {
                         "stage_name": "next-actions",
-                        "skill_name": "eco-propose-next-actions",
+                        "skill_name": "propose-next-actions",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
                         "reason": "test",
@@ -1195,7 +1195,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     },
                     {
                         "stage_name": "round-readiness",
-                        "skill_name": "eco-summarize-round-readiness",
+                        "skill_name": "summarize-round-readiness",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
                         "reason": "test",
@@ -1203,7 +1203,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     },
                 ],
                 "post_gate_steps": [
-                    {"stage_name": "promotion-basis", "skill_name": "eco-promote-evidence-basis", "skill_args": [], "assigned_role_hint": "moderator", "reason": "test"}
+                    {"stage_name": "promotion-basis", "skill_name": "promote-evidence-basis", "skill_args": [], "assigned_role_hint": "moderator", "reason": "test"}
                 ],
                 "stop_conditions": [],
                 "fallback_path": [],
@@ -1224,7 +1224,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     "runtime-planner-only",
                     source_kind="planner-skill",
                     output_path_key="orchestration_plan_path",
-                    planner_skill_name="eco-plan-round-orchestration",
+                    planner_skill_name="plan-round-orchestration",
                     materialized_message="Use only the injected runtime planner path.",
                     failed_message="Injected runtime planner path failed.",
                 )
@@ -1264,7 +1264,7 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(["network-external"], payload["controller"]["execution_policy"]["allow_side_effects"])
             self.assertEqual("runtime-controller-v3", payload["controller"]["schema_version"])
             self.assertEqual("fresh-run", payload["controller"]["resume_status"])
-            self.assertEqual("eco-summarize-board-state", payload["controller"]["stage_contracts"]["board-summary"]["expected_skill_name"])
+            self.assertEqual("summarize-board-state", payload["controller"]["stage_contracts"]["board-summary"]["expected_skill_name"])
             self.assertEqual(
                 ["--transition-request-id", promotion_request_id],
                 run_skill_mock.call_args_list[-1].kwargs["skill_args"],
@@ -1280,12 +1280,12 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.phase2_planning_profile import phase2_planning_source
 
             planner_result = {
-                "summary": {"skill_name": "eco-plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
+                "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": []},
             }
             readiness_result = {
-                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
+                "summary": {"skill_name": "summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
                 "event": {"status": "completed"},
                 "skill_payload": {
                     "artifact_refs": [],
@@ -1294,7 +1294,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 },
             }
             promotion_result = {
-                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
                 "skill_payload": {
                     "artifact_refs": [],
@@ -1307,7 +1307,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "plan_path": str(root / "plan.json"),
                 "planning_status": "ready-for-controller",
                 "planning_mode": "planner-backed",
-                "planner_skill_name": "eco-plan-round-orchestration",
+                "planner_skill_name": "plan-round-orchestration",
                 "probe_stage_included": False,
                 "assigned_role_hints": [],
                 "execution_queue": [
@@ -1315,8 +1315,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         "stage_name": "round-readiness",
                         "stage_kind": "skill",
                         "phase_group": "execution",
-                        "skill_name": "eco-summarize-round-readiness",
-                        "expected_skill_name": "eco-summarize-round-readiness",
+                        "skill_name": "summarize-round-readiness",
+                        "expected_skill_name": "summarize-round-readiness",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
                         "required_previous_stages": ["orchestration-planner"],
@@ -1347,8 +1347,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         "stage_name": "promotion-basis",
                         "stage_kind": "skill",
                         "phase_group": "promotion",
-                        "skill_name": "eco-promote-evidence-basis",
-                        "expected_skill_name": "eco-promote-evidence-basis",
+                        "skill_name": "promote-evidence-basis",
+                        "expected_skill_name": "promote-evidence-basis",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
                         "required_previous_stages": ["final-promotion-review"],
@@ -1378,7 +1378,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     "runtime-planner-only",
                     source_kind="planner-skill",
                     output_path_key="orchestration_plan_path",
-                    planner_skill_name="eco-plan-round-orchestration",
+                    planner_skill_name="plan-round-orchestration",
                     materialized_message="Use only the injected runtime planner path.",
                     failed_message="Injected runtime planner path failed.",
                 )
@@ -1448,7 +1448,7 @@ class RuntimeKernelTests(unittest.TestCase):
 
             planner_result = {
                 "summary": {
-                    "skill_name": "eco-plan-round-orchestration",
+                    "skill_name": "plan-round-orchestration",
                     "event_id": "evt-plan",
                     "receipt_id": "receipt-plan",
                 },
@@ -1457,7 +1457,7 @@ class RuntimeKernelTests(unittest.TestCase):
             }
             readiness_result = {
                 "summary": {
-                    "skill_name": "eco-summarize-round-readiness",
+                    "skill_name": "summarize-round-readiness",
                     "event_id": "evt-ready",
                     "receipt_id": "receipt-ready",
                 },
@@ -1476,12 +1476,12 @@ class RuntimeKernelTests(unittest.TestCase):
                 "plan_path": str(root / "plan.json"),
                 "planning_status": "ready-for-controller",
                 "planning_mode": "planner-backed",
-                "planner_skill_name": "eco-plan-round-orchestration",
+                "planner_skill_name": "plan-round-orchestration",
                 "probe_stage_included": False,
                 "execution_queue": [
                     {
                         "stage_name": "round-readiness",
-                        "skill_name": "eco-summarize-round-readiness",
+                        "skill_name": "summarize-round-readiness",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
                         "reason": "Refresh readiness before promotion.",
@@ -1491,7 +1491,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "post_gate_steps": [
                     {
                         "stage_name": "promotion-basis",
-                        "skill_name": "eco-promote-evidence-basis",
+                        "skill_name": "promote-evidence-basis",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
                         "reason": "Freeze promotion basis after gate review.",
@@ -1515,7 +1515,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     "runtime-planner-only",
                     source_kind="planner-skill",
                     output_path_key="orchestration_plan_path",
-                    planner_skill_name="eco-plan-round-orchestration",
+                    planner_skill_name="plan-round-orchestration",
                     materialized_message="Use only the injected runtime planner path.",
                     failed_message="Injected runtime planner path failed.",
                 )
@@ -1574,7 +1574,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     "readiness_status": "custom-ready",
                     "gate_status": "custom-approved",
                     "gate_reasons": ["registry-dispatched"],
-                    "recommended_next_skills": ["eco-custom-follow-up"],
+                    "recommended_next_skills": ["custom-follow-up"],
                 },
             }
         )
@@ -1609,7 +1609,7 @@ class RuntimeKernelTests(unittest.TestCase):
         self.assertEqual("custom-readiness-review", result["readiness_stage_name"])
         self.assertEqual("custom-approved", result["controller_updates"]["gate_status"])
         self.assertEqual(
-            ["eco-custom-follow-up"],
+            ["custom-follow-up"],
             result["controller_updates"]["recommended_next_skills"],
         )
 
@@ -1624,7 +1624,7 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
 
             promotion_result = {
-                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
                 "skill_payload": {
                     "artifact_refs": [],
@@ -1661,7 +1661,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 )
 
             self.assertEqual(
-                ["eco-promote-evidence-basis"],
+                ["promote-evidence-basis"],
                 [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
             )
             self.assertEqual("transition-executor", payload["controller"]["planning_mode"])
@@ -1745,7 +1745,7 @@ class RuntimeKernelTests(unittest.TestCase):
                         "execution_queue": [
                             {
                                 "stage_name": "round-readiness",
-                                "skill_name": "eco-summarize-round-readiness",
+                                "skill_name": "summarize-round-readiness",
                                 "skill_args": [],
                                 "assigned_role_hint": "moderator",
                                 "reason": "This optional advisory plan should not run on the default controller path.",
@@ -1762,7 +1762,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 encoding="utf-8",
             )
             promotion_result = {
-                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
                 "skill_payload": {
                     "artifact_refs": [],
@@ -1799,7 +1799,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 )
 
             self.assertEqual(
-                ["eco-promote-evidence-basis"],
+                ["promote-evidence-basis"],
                 [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
             )
             self.assertEqual("approved-transition-request", payload["summary"]["plan_source"])
@@ -1825,27 +1825,27 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.phase2_planning_profile import phase2_planning_source
 
             planner_result = {
-                "summary": {"skill_name": "eco-plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
+                "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": []},
             }
             board_summary_result = {
-                "summary": {"skill_name": "eco-summarize-board-state", "event_id": "evt-summary", "receipt_id": "receipt-summary"},
+                "summary": {"skill_name": "summarize-board-state", "event_id": "evt-summary", "receipt_id": "receipt-summary"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "board_summary.json")}},
             }
             board_brief_result = {
-                "summary": {"skill_name": "eco-materialize-board-brief", "event_id": "evt-brief", "receipt_id": "receipt-brief"},
+                "summary": {"skill_name": "materialize-board-brief", "event_id": "evt-brief", "receipt_id": "receipt-brief"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "board_brief.md")}},
             }
             next_actions_result = {
-                "summary": {"skill_name": "eco-propose-next-actions", "event_id": "evt-next", "receipt_id": "receipt-next"},
+                "summary": {"skill_name": "propose-next-actions", "event_id": "evt-next", "receipt_id": "receipt-next"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "next_actions.json")}},
             }
             readiness_result = {
-                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
+                "summary": {"skill_name": "summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
                 "event": {"status": "completed"},
                 "skill_payload": {
                     "artifact_refs": [],
@@ -1854,7 +1854,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 },
             }
             promotion_result = {
-                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"}},
             }
@@ -1863,21 +1863,21 @@ class RuntimeKernelTests(unittest.TestCase):
                 "plan_path": str(root / "plan.json"),
                 "planning_status": "ready-for-controller",
                 "planning_mode": "planner-backed",
-                "planner_skill_name": "eco-plan-round-orchestration",
+                "planner_skill_name": "plan-round-orchestration",
                 "probe_stage_included": False,
                 "assigned_role_hints": ["moderator"],
                 "execution_queue": [
-                    {"stage_name": "board-summary", "skill_name": "eco-summarize-board-state", "skill_args": [], "assigned_role_hint": "moderator", "reason": "refresh board"},
-                    {"stage_name": "board-brief", "skill_name": "eco-materialize-board-brief", "skill_args": [], "assigned_role_hint": "moderator", "reason": "refresh brief"},
-                    {"stage_name": "next-actions", "skill_name": "eco-propose-next-actions", "skill_args": [], "assigned_role_hint": "moderator", "reason": "rank next actions"},
-                    {"stage_name": "round-readiness", "skill_name": "eco-summarize-round-readiness", "skill_args": [], "assigned_role_hint": "moderator", "reason": "refresh readiness"},
+                    {"stage_name": "board-summary", "skill_name": "summarize-board-state", "skill_args": [], "assigned_role_hint": "moderator", "reason": "refresh board"},
+                    {"stage_name": "board-brief", "skill_name": "materialize-board-brief", "skill_args": [], "assigned_role_hint": "moderator", "reason": "refresh brief"},
+                    {"stage_name": "next-actions", "skill_name": "propose-next-actions", "skill_args": [], "assigned_role_hint": "moderator", "reason": "rank next actions"},
+                    {"stage_name": "round-readiness", "skill_name": "summarize-round-readiness", "skill_args": [], "assigned_role_hint": "moderator", "reason": "refresh readiness"},
                 ],
                 "post_gate_steps": [
-                    {"stage_name": "promotion-basis", "skill_name": "eco-promote-evidence-basis", "skill_args": [], "assigned_role_hint": "moderator", "reason": "freeze promotion basis"}
+                    {"stage_name": "promotion-basis", "skill_name": "promote-evidence-basis", "skill_args": [], "assigned_role_hint": "moderator", "reason": "freeze promotion basis"}
                 ],
                 "stop_conditions": [],
                 "fallback_path": [],
-                "fallback_suggested_next_skills": ["eco-post-board-note"],
+                "fallback_suggested_next_skills": ["post-board-note"],
             }
             gate_payload = {
                 "generated_at_utc": "2024-01-01T00:00:00Z",
@@ -1893,7 +1893,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 {
                     "status": "failed",
                     "message": "board brief failed",
-                    "summary": {"skill_name": "eco-materialize-board-brief", "run_id": RUN_ID, "round_id": ROUND_ID},
+                    "summary": {"skill_name": "materialize-board-brief", "run_id": RUN_ID, "round_id": ROUND_ID},
                     "failure": {"error_code": "skill-exit-nonzero", "retryable": True},
                 },
             )
@@ -1903,7 +1903,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     "runtime-planner-only",
                     source_kind="planner-skill",
                     output_path_key="orchestration_plan_path",
-                    planner_skill_name="eco-plan-round-orchestration",
+                    planner_skill_name="plan-round-orchestration",
                     materialized_message="Use only the injected runtime planner path.",
                     failed_message="Injected runtime planner path failed.",
                 )
@@ -1971,7 +1971,7 @@ class RuntimeKernelTests(unittest.TestCase):
 
             planning_bundle_mock.assert_not_called()
             self.assertEqual(
-                ["eco-materialize-board-brief", "eco-propose-next-actions", "eco-summarize-round-readiness", "eco-promote-evidence-basis"],
+                ["materialize-board-brief", "propose-next-actions", "summarize-round-readiness", "promote-evidence-basis"],
                 [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
             )
             self.assertEqual("completed", payload["controller"]["controller_status"])
@@ -2005,7 +2005,7 @@ class RuntimeKernelTests(unittest.TestCase):
                         "execution_queue": [
                             {
                                 "stage_name": "round-readiness",
-                                "skill_name": "eco-summarize-round-readiness",
+                                "skill_name": "summarize-round-readiness",
                                 "skill_args": [],
                                 "assigned_role_hint": "moderator",
                                 "reason": "This advisory plan should be ignored by injected planning sources.",
@@ -2015,7 +2015,7 @@ class RuntimeKernelTests(unittest.TestCase):
                         "post_gate_steps": [
                             {
                                 "stage_name": "promotion-basis",
-                                "skill_name": "eco-promote-evidence-basis",
+                                "skill_name": "promote-evidence-basis",
                                 "skill_args": [],
                                 "assigned_role_hint": "moderator",
                                 "reason": "Ignore this advisory post-gate path.",
@@ -2033,7 +2033,7 @@ class RuntimeKernelTests(unittest.TestCase):
             )
 
             planner_result = {
-                "summary": {"skill_name": "eco-plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
+                "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": []},
             }
@@ -2042,11 +2042,11 @@ class RuntimeKernelTests(unittest.TestCase):
                 "plan_path": str(root / "plan.json"),
                 "planning_status": "ready-for-controller",
                 "planning_mode": "planner-backed",
-                "planner_skill_name": "eco-plan-round-orchestration",
+                "planner_skill_name": "plan-round-orchestration",
                 "execution_queue": [
                     {
                         "stage_name": "round-readiness",
-                        "skill_name": "eco-summarize-round-readiness",
+                        "skill_name": "summarize-round-readiness",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
                         "reason": "Injected planning sources force runtime planner.",
@@ -2056,7 +2056,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "post_gate_steps": [
                     {
                         "stage_name": "promotion-basis",
-                        "skill_name": "eco-promote-evidence-basis",
+                        "skill_name": "promote-evidence-basis",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
                         "reason": "Freeze the runtime-only planner result.",
@@ -2066,7 +2066,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "fallback_path": [],
             }
             readiness_result = {
-                "summary": {"skill_name": "eco-summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
+                "summary": {"skill_name": "summarize-round-readiness", "event_id": "evt-ready", "receipt_id": "receipt-ready"},
                 "event": {"status": "completed"},
                 "skill_payload": {
                     "artifact_refs": [],
@@ -2075,7 +2075,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 },
             }
             promotion_result = {
-                "summary": {"skill_name": "eco-promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
                 "skill_payload": {
                     "artifact_refs": [],
@@ -2097,7 +2097,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     "runtime-planner-only",
                     source_kind="planner-skill",
                     output_path_key="orchestration_plan_path",
-                    planner_skill_name="eco-plan-round-orchestration",
+                    planner_skill_name="plan-round-orchestration",
                     materialized_message="Use only the injected runtime planner path.",
                     failed_message="Injected runtime planner path failed.",
                 )
@@ -2124,7 +2124,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 )
 
             self.assertEqual(
-                ["eco-plan-round-orchestration", "eco-summarize-round-readiness", "eco-promote-evidence-basis"],
+                ["plan-round-orchestration", "summarize-round-readiness", "promote-evidence-basis"],
                 [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
             )
             self.assertEqual([], run_skill_mock.call_args_list[0].kwargs["skill_args"])
@@ -2171,7 +2171,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "restart_recommended": False,
                 "recovery": {"resume_from_stage": ""},
                 "gate_reasons": [],
-                "recommended_next_skills": ["eco-materialize-reporting-handoff"],
+                "recommended_next_skills": ["materialize-reporting-handoff"],
                 "planning": {"plan_path": str((run_dir / "runtime" / f"orchestration_plan_{ROUND_ID}.json").resolve())},
                 "steps": [],
                 "artifacts": {
@@ -2218,7 +2218,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "planning_mode": "planner-backed",
                 "promotion_gate_path": str(gate_path.resolve()),
                 "controller_path": str(controller_path.resolve()),
-                "recommended_next_skills": ["eco-materialize-reporting-handoff"],
+                "recommended_next_skills": ["materialize-reporting-handoff"],
                 "round_transition": {},
                 "operator_notes": ["Round promotion succeeded and the evidence basis is now ready for downstream reporting."],
                 "inspection_paths": {
@@ -2315,7 +2315,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     "readiness_status": "ready",
                     "gate_status": "promote-ready",
                     "promotion_status": "promoted",
-                    "recommended_next_skills": ["eco-materialize-reporting-handoff"],
+                    "recommended_next_skills": ["materialize-reporting-handoff"],
                     "gate_reasons": [],
                     "artifacts": {
                         "next_actions_path": "",
@@ -2398,16 +2398,16 @@ class RuntimeKernelTests(unittest.TestCase):
             )
             posture_profile["supervisor_round_transition_builder"] = (
                 lambda **kwargs: {
-                    "skill_name": "eco-custom-round-transition",
+                    "skill_name": "custom-round-transition",
                     "source_round_id": kwargs["round_id"],
                     "suggested_round_id": f"{kwargs['round_id']}-custom",
-                    "command": "eco-custom-round-transition --injected",
+                    "command": "custom-round-transition --injected",
                 }
             )
             posture_profile["supervisor_recommended_skills_builder"] = (
                 lambda **kwargs: [
-                    "eco-custom-round-transition",
-                    "eco-custom-follow-up",
+                    "custom-round-transition",
+                    "custom-follow-up",
                 ]
             )
             posture_profile["supervisor_operator_notes_builder"] = (
@@ -2434,7 +2434,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     "readiness_status": "blocked",
                     "gate_status": "freeze-withheld",
                     "promotion_status": "withheld",
-                    "recommended_next_skills": ["eco-kernel-default-follow-up"],
+                    "recommended_next_skills": ["kernel-default-follow-up"],
                     "gate_reasons": ["This should be ignored by the injected operator notes builder."],
                     "artifacts": {
                         "next_actions_path": "",
@@ -2480,11 +2480,11 @@ class RuntimeKernelTests(unittest.TestCase):
                 payload["supervisor"]["operator_action"],
             )
             self.assertEqual(
-                ["eco-custom-round-transition", "eco-custom-follow-up"],
+                ["custom-round-transition", "custom-follow-up"],
                 payload["supervisor"]["recommended_next_skills"],
             )
             self.assertEqual(
-                "eco-custom-round-transition",
+                "custom-round-transition",
                 payload["supervisor"]["round_transition"]["skill_name"],
             )
             self.assertEqual(
@@ -2526,7 +2526,7 @@ class RuntimeKernelTests(unittest.TestCase):
                         "readiness_status": "pending",
                         "gate_status": "not-evaluated",
                         "promotion_status": "not-evaluated",
-                        "recommended_next_skills": ["eco-materialize-board-brief"],
+                        "recommended_next_skills": ["materialize-board-brief"],
                         "artifacts": {
                             "orchestration_plan_path": str(root / "plan.json"),
                             "controller_state_path": str(root / "controller.json"),
@@ -2597,7 +2597,7 @@ class RuntimeKernelTests(unittest.TestCase):
             )
 
             signal_archive_result = {
-                "summary": {"skill_name": "eco-archive-signal-corpus", "event_id": "evt-archive-signal", "receipt_id": "receipt-archive-signal"},
+                "summary": {"skill_name": "archive-signal-corpus", "event_id": "evt-archive-signal", "receipt_id": "receipt-archive-signal"},
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "signal_archive.json")}},
             }
@@ -2606,7 +2606,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 {
                     "status": "failed",
                     "message": "case archive failed",
-                    "summary": {"skill_name": "eco-archive-case-library", "run_id": RUN_ID, "round_id": ROUND_ID},
+                    "summary": {"skill_name": "archive-case-library", "run_id": RUN_ID, "round_id": ROUND_ID},
                     "failure": {"error_code": "skill-exit-nonzero", "retryable": False},
                 },
             )
@@ -2648,7 +2648,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 mock.patch("eco_council_runtime.kernel.cli.init_run", return_value={"status": "completed"}),
                 mock.patch(
                     "eco_council_runtime.kernel.cli.run_skill",
-                    return_value={"status": "completed", "summary": {"skill_name": "eco-post-board-note"}},
+                    return_value={"status": "completed", "summary": {"skill_name": "post-board-note"}},
                 ) as run_skill_mock,
                 redirect_stdout(stdout),
             ):
@@ -2662,7 +2662,7 @@ class RuntimeKernelTests(unittest.TestCase):
                         "--round-id",
                         ROUND_ID,
                         "--skill-name",
-                        "eco-post-board-note",
+                        "post-board-note",
                         "--timeout-seconds",
                         "9",
                         "--retry-budget",

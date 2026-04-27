@@ -39,7 +39,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -48,7 +48,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -57,7 +57,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -68,7 +68,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
 
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -89,7 +89,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "0.52",
             )
             run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -112,7 +112,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-summarize-board-state"),
+                script_path("summarize-board-state"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -121,7 +121,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-materialize-board-brief"),
+                script_path("materialize-board-brief"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -131,7 +131,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             )
 
             actions_payload = run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -140,7 +140,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             probes_payload = run_script(
-                script_path("eco-open-falsification-probe"),
+                script_path("open-falsification-probe"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -178,7 +178,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertTrue(probes_artifact["observed_inputs"]["next_actions_artifact_present"])
             self.assertTrue(probes_artifact["observed_inputs"]["next_actions_present"])
             self.assertTrue(any(probe["target_hypothesis_id"] == hypothesis_payload["canonical_ids"][0] for probe in probes))
-            self.assertTrue(any("eco-close-challenge-ticket" in probe["requested_skills"] for probe in probes))
+            self.assertTrue(any("close-challenge-ticket" in probe["requested_skills"] for probe in probes))
             self.assertTrue(any("probe_type" in probe for probe in probes))
 
     def test_d1_next_actions_and_probes_work_without_board_summary_or_brief(self) -> None:
@@ -188,7 +188,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -197,7 +197,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -206,7 +206,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -217,7 +217,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
 
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -238,7 +238,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "0.52",
             )
             run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -262,7 +262,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             )
 
             actions_payload = run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -271,7 +271,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             probes_payload = run_script(
-                script_path("eco-open-falsification-probe"),
+                script_path("open-falsification-probe"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -307,7 +307,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -316,7 +316,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -325,7 +325,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -336,7 +336,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
 
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -357,7 +357,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "0.52",
             )
             run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -382,7 +382,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json").unlink()
 
             probes_payload = run_script(
-                script_path("eco-open-falsification-probe"),
+                script_path("open-falsification-probe"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -419,7 +419,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -428,7 +428,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -437,7 +437,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -448,7 +448,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
 
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -469,7 +469,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "0.52",
             )
             run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -492,7 +492,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -503,7 +503,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             investigation_path(run_dir, f"next_actions_{ROUND_ID}.json").unlink()
 
             probes_payload = run_script(
-                script_path("eco-open-falsification-probe"),
+                script_path("open-falsification-probe"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -529,7 +529,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -538,7 +538,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -547,7 +547,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -558,7 +558,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
 
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -579,7 +579,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "0.52",
             )
             run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -602,7 +602,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -611,7 +611,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-open-falsification-probe"),
+                script_path("open-falsification-probe"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -637,7 +637,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 connection.close()
 
             readiness_payload = run_script(
-                script_path("eco-summarize-round-readiness"),
+                script_path("summarize-round-readiness"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -647,7 +647,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             )
             promotion_request_id = approve_promotion_transition(run_dir)
             promotion_payload = run_script(
-                script_path("eco-promote-evidence-basis"),
+                script_path("promote-evidence-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -683,7 +683,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -692,7 +692,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -701,7 +701,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -710,7 +710,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -732,7 +732,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             )
 
             readiness_payload = run_script(
-                script_path("eco-summarize-round-readiness"),
+                script_path("summarize-round-readiness"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -754,7 +754,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
 
             promotion_request_id = approve_promotion_transition(run_dir)
             promotion_payload = run_script(
-                script_path("eco-promote-evidence-basis"),
+                script_path("promote-evidence-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -787,7 +787,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -796,7 +796,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -805,7 +805,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -816,7 +816,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
 
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -833,7 +833,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -854,7 +854,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "0.91",
             )
             run_script(
-                script_path("eco-summarize-board-state"),
+                script_path("summarize-board-state"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -863,7 +863,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-materialize-board-brief"),
+                script_path("materialize-board-brief"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -872,7 +872,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             actions_payload = run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -881,7 +881,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             readiness_payload = run_script(
-                script_path("eco-summarize-round-readiness"),
+                script_path("summarize-round-readiness"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -891,7 +891,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             )
             promotion_request_id = approve_promotion_transition(run_dir)
             promotion_payload = run_script(
-                script_path("eco-promote-evidence-basis"),
+                script_path("promote-evidence-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -930,7 +930,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -939,7 +939,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -948,7 +948,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -957,7 +957,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -979,7 +979,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             )
 
             readiness_payload = run_script(
-                script_path("eco-summarize-round-readiness"),
+                script_path("summarize-round-readiness"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1013,7 +1013,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1022,7 +1022,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1031,7 +1031,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1040,7 +1040,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1063,7 +1063,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json").unlink()
 
             actions_payload = run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1072,7 +1072,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             readiness_payload = run_script(
-                script_path("eco-summarize-round-readiness"),
+                script_path("summarize-round-readiness"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1082,7 +1082,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             )
             promotion_request_id = approve_promotion_transition(run_dir)
             promotion_payload = run_script(
-                script_path("eco-promote-evidence-basis"),
+                script_path("promote-evidence-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",

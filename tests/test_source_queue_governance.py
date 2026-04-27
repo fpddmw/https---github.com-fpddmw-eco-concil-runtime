@@ -39,14 +39,14 @@ def mission_with_public_import() -> dict[str, object]:
     return {
         "allowed_sources_by_role": {
             "sociologist": [
-                "youtube-video-search",
-                "gdelt-doc-search",
-                "bluesky-cascade-fetch",
+                "fetch-youtube-video-search",
+                "fetch-gdelt-doc-search",
+                "fetch-bluesky-cascade",
             ]
         },
         "artifact_imports": [
             {
-                "source_skill": "youtube-video-search",
+                "source_skill": "fetch-youtube-video-search",
                 "artifact_path": "/tmp/youtube.json",
                 "query_text": "nyc smoke wildfire",
             }
@@ -80,7 +80,7 @@ class SourceQueueGovernanceTests(unittest.TestCase):
             role="sociologist",
         )
 
-        payload["selected_sources"] = ["gdelt-doc-search"]
+        payload["selected_sources"] = ["fetch-gdelt-doc-search"]
 
         with self.assertRaisesRegex(ValueError, "selected_sources does not match selected family layers"):
             selection_module.validate_source_selection_payload(mission=mission, role="sociologist", source_selection=payload)
@@ -119,16 +119,16 @@ class SourceQueueGovernanceTests(unittest.TestCase):
 
             mission = {
                 "allowed_sources_by_role": {
-                    "sociologist": ["youtube-video-search", "bluesky-cascade-fetch"],
+                    "sociologist": ["fetch-youtube-video-search", "fetch-bluesky-cascade"],
                 },
                 "artifact_imports": [
                     {
-                        "source_skill": "youtube-video-search",
+                        "source_skill": "fetch-youtube-video-search",
                         "artifact_path": str(youtube_path),
                         "query_text": "nyc smoke wildfire",
                     },
                     {
-                        "source_skill": "bluesky-cascade-fetch",
+                        "source_skill": "fetch-bluesky-cascade",
                         "artifact_path": str(bluesky_path),
                     },
                 ],

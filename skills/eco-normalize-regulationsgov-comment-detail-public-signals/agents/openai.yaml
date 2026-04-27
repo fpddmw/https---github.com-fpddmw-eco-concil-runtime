@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Normalize Regulations.gov Comment Detail Public Signals"
-  short_description: "Normalize Regulations.gov comment detail outputs into formal-comment signals"
-  default_prompt: "Use $eco-normalize-regulationsgov-comment-detail-public-signals to normalize one regulationsgov-comment-detail-fetch artifact into canonical formal-comment-signal rows, derive typed submitter/issue/stance/concern/citation/route metadata, write everything into the unified signal plane, and return compact receipts, artifact refs, signal ids, and board-ready hints for formal/public linkage."

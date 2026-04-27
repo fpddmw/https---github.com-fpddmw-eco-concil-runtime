@@ -139,21 +139,21 @@ def build_mission_file(root: Path, artifacts: dict[str, Path]) -> Path:
             ],
             "artifact_imports": [
                 {
-                    "source_skill": "youtube-video-search",
+                    "source_skill": "fetch-youtube-video-search",
                     "artifact_path": str(artifacts["youtube"]),
                     "query_text": "nyc smoke wildfire",
                 },
                 {
-                    "source_skill": "bluesky-cascade-fetch",
+                    "source_skill": "fetch-bluesky-cascade",
                     "artifact_path": str(artifacts["bluesky"]),
                 },
                 {
-                    "source_skill": "openaq-data-fetch",
+                    "source_skill": "fetch-openaq",
                     "artifact_path": str(artifacts["openaq"]),
                     "source_mode": "test-fixture",
                 },
                 {
-                    "source_skill": "airnow-hourly-obs-fetch",
+                    "source_skill": "fetch-airnow-hourly-observations",
                     "artifact_path": str(artifacts["airnow"]),
                 },
             ],
@@ -173,7 +173,7 @@ class AgentEntryGateTests(unittest.TestCase):
             mission_path = build_mission_file(root, artifacts)
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -233,7 +233,7 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             self.assertTrue(
                 any(
-                    "eco-submit-council-proposal" in command
+                    "submit-council-proposal" in command
                     for entry in payload["agent_entry"]["capability_surface"]
                     if isinstance(entry, dict)
                     for command in entry.get("write_commands", [])
@@ -242,7 +242,7 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             self.assertTrue(
                 any(
-                    "eco-submit-readiness-opinion" in command
+                    "submit-readiness-opinion" in command
                     for entry in payload["agent_entry"]["capability_surface"]
                     if isinstance(entry, dict)
                     for command in entry.get("write_commands", [])
@@ -273,6 +273,20 @@ class AgentEntryGateTests(unittest.TestCase):
                 state_payload["agent_entry"]["operator"]["query_transition_requests_command"],
             )
             self.assertIn(
+                "skill-approval-request",
+                state_payload["agent_entry"]["operator"]["query_skill_approval_requests_command"],
+            )
+            self.assertIn(
+                "request-skill-approval",
+                state_payload["agent_entry"]["operator"]["request_optional_analysis_approval_command_template"],
+            )
+            approved_optional_command = state_payload["agent_entry"]["operator"]["run_approved_optional_analysis_command_template"]
+            self.assertIn("--skill-approval-request-id '<request_id>'", approved_optional_command)
+            self.assertLess(
+                approved_optional_command.index("--skill-approval-request-id"),
+                approved_optional_command.index("-- '<skill_specific_args>'"),
+            )
+            self.assertIn(
                 "query-council-objects",
                 state_payload["agent_entry"]["operator"]["query_finding_records_command"],
             )
@@ -289,7 +303,7 @@ class AgentEntryGateTests(unittest.TestCase):
                 state_payload["agent_entry"]["operator"]["query_report_section_drafts_command"],
             )
             self.assertIn(
-                "eco-submit-council-proposal",
+                "submit-council-proposal",
                 state_payload["agent_entry"]["operator"]["submit_council_proposal_command_template"],
             )
             self.assertIn(
@@ -352,7 +366,7 @@ class AgentEntryGateTests(unittest.TestCase):
             mission_path = build_mission_file(root, artifacts)
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -422,7 +436,7 @@ class AgentEntryGateTests(unittest.TestCase):
             mission_path = build_mission_file(root, artifacts)
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -487,7 +501,7 @@ class AgentEntryGateTests(unittest.TestCase):
             mission_path = build_mission_file(root, artifacts)
 
             run_script(
-                script_path("eco-scaffold-mission-run"),
+                script_path("scaffold-mission-run"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -532,7 +546,7 @@ class AgentEntryGateTests(unittest.TestCase):
                     "write_commands": ["custom-write-note"],
                 }
             ]
-            custom_profile["recommended_skills_builder"] = lambda **_: ["eco-audit-round"]
+            custom_profile["recommended_skills_builder"] = lambda **_: ["audit-round"]
             custom_profile["operator_notes_builder"] = lambda **_: ["Use the injected entry profile."]
             custom_profile["next_round_id_builder"] = lambda **_: "round-agent-entry-custom-next"
             custom_profile["operator_commands_builder"] = lambda **_: {
@@ -564,7 +578,7 @@ class AgentEntryGateTests(unittest.TestCase):
                 hard_gate_command_builder=default_phase2_hard_gate_commands,
             )
 
-            self.assertEqual(["eco-audit-round"], payload["agent_entry"]["recommended_entry_skills"])
+            self.assertEqual(["audit-round"], payload["agent_entry"]["recommended_entry_skills"])
             self.assertEqual("auditor", payload["agent_entry"]["role_entry_points"][0]["role"])
             self.assertEqual(
                 "Use the injected entry profile.",
@@ -611,21 +625,30 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertFalse(operator["entry_gate_present"])
             self.assertIn("materialize-agent-entry-gate", operator["materialize_agent_entry_gate_command"])
             self.assertIn("claim-cluster", operator["list_claim_cluster_result_sets_command"])
-            self.assertIn("eco-read-board-delta", operator["read_board_delta_command"])
-            self.assertIn("eco-query-public-signals", operator["query_public_signals_command"])
-            self.assertIn("eco-query-formal-signals", operator["query_formal_signals_command"])
+            self.assertIn("query-board-delta", operator["read_board_delta_command"])
+            self.assertIn("query-public-signals", operator["query_public_signals_command"])
+            self.assertIn("query-formal-signals", operator["query_formal_signals_command"])
             self.assertIn("query-council-objects", operator["query_council_proposals_command"])
             self.assertIn("query-council-objects", operator["query_readiness_opinions_command"])
             self.assertIn("query-control-objects", operator["query_transition_requests_command"])
+            self.assertIn("skill-approval-request", operator["query_skill_approval_requests_command"])
+            self.assertIn("skill-approval", operator["query_skill_approvals_command"])
+            self.assertIn("request-skill-approval", operator["request_optional_analysis_approval_command_template"])
+            self.assertIn("approve-skill-approval", operator["approve_skill_approval_command_template"])
+            self.assertIn("--skill-approval-request-id", operator["run_approved_optional_analysis_command_template"])
+            self.assertLess(
+                operator["run_approved_optional_analysis_command_template"].index("--skill-approval-request-id"),
+                operator["run_approved_optional_analysis_command_template"].index("-- '<skill_specific_args>'"),
+            )
             self.assertIn("query-council-objects", operator["query_finding_records_command"])
             self.assertIn("query-council-objects", operator["query_discussion_messages_command"])
             self.assertIn("query-council-objects", operator["query_evidence_bundles_command"])
             self.assertIn("query-reporting-objects", operator["query_report_section_drafts_command"])
-            self.assertIn("eco-submit-council-proposal", operator["submit_council_proposal_command_template"])
+            self.assertIn("submit-council-proposal", operator["submit_council_proposal_command_template"])
             self.assertIn("--confidence", operator["submit_council_proposal_command_template"])
             self.assertIn("--evidence-ref", operator["submit_council_proposal_command_template"])
             self.assertIn("--provenance-json", operator["submit_council_proposal_command_template"])
-            self.assertIn("eco-submit-readiness-opinion", operator["submit_readiness_opinion_command_template"])
+            self.assertIn("submit-readiness-opinion", operator["submit_readiness_opinion_command_template"])
             self.assertIn("submit-finding-record", operator["submit_finding_record_command_template"])
             self.assertIn("post-discussion-message", operator["post_discussion_message_command_template"])
             self.assertIn("submit-evidence-bundle", operator["submit_evidence_bundle_command_template"])
@@ -654,6 +677,12 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("--actor-role moderator", runbook_text)
             self.assertIn("query-council-objects", runbook_text)
             self.assertIn("request-phase-transition", runbook_text)
+            self.assertIn("request-skill-approval", runbook_text)
+            self.assertIn("--skill-approval-request-id '<request_id>'", runbook_text)
+            self.assertLess(
+                runbook_text.index("--skill-approval-request-id '<request_id>'"),
+                runbook_text.index("-- --example-arg"),
+            )
 
 
 if __name__ == "__main__":

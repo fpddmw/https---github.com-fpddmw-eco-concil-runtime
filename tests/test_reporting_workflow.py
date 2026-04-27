@@ -36,7 +36,7 @@ def prepare_optional_analysis_for_supervision(run_dir: Path) -> None:
         run_dir,
         run_id=RUN_ID,
         round_id=ROUND_ID,
-        skill_name="eco-propose-next-actions",
+        skill_name="propose-next-actions",
         requested_actor_role="moderator",
         rationale="Approve optional-analysis next-actions execution for reporting workflow coverage.",
     )
@@ -49,7 +49,7 @@ def prepare_optional_analysis_for_supervision(run_dir: Path) -> None:
         "--round-id",
         ROUND_ID,
         "--skill-name",
-        "eco-propose-next-actions",
+        "propose-next-actions",
         "--skill-approval-request-id",
         next_actions_request_id,
     )
@@ -58,7 +58,7 @@ def prepare_optional_analysis_for_supervision(run_dir: Path) -> None:
         run_dir,
         run_id=RUN_ID,
         round_id=ROUND_ID,
-        skill_name="eco-summarize-round-readiness",
+        skill_name="summarize-round-readiness",
         requested_actor_role="moderator",
         rationale="Approve optional-analysis readiness execution for reporting workflow coverage.",
     )
@@ -71,7 +71,7 @@ def prepare_optional_analysis_for_supervision(run_dir: Path) -> None:
         "--round-id",
         ROUND_ID,
         "--skill-name",
-        "eco-summarize-round-readiness",
+        "summarize-round-readiness",
         "--skill-approval-request-id",
         readiness_request_id,
     )
@@ -85,7 +85,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -94,7 +94,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -103,7 +103,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -113,7 +113,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -130,7 +130,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -163,7 +163,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             handoff_payload = run_script(
-                script_path("eco-materialize-reporting-handoff"),
+                script_path("materialize-reporting-handoff"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -172,7 +172,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             decision_payload = run_script(
-                script_path("eco-draft-council-decision"),
+                script_path("draft-council-decision"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -283,7 +283,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -292,7 +292,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -301,7 +301,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -311,7 +311,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -328,7 +328,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -377,7 +377,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 connection.close()
 
             handoff_payload = run_script(
-                script_path("eco-materialize-reporting-handoff"),
+                script_path("materialize-reporting-handoff"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -386,7 +386,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             decision_payload = run_script(
-                script_path("eco-draft-council-decision"),
+                script_path("draft-council-decision"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -427,7 +427,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -436,7 +436,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -445,7 +445,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -455,7 +455,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -472,7 +472,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -508,7 +508,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             supervisor_path.unlink()
 
             handoff_payload = run_script(
-                script_path("eco-materialize-reporting-handoff"),
+                script_path("materialize-reporting-handoff"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -517,7 +517,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             decision_payload = run_script(
-                script_path("eco-draft-council-decision"),
+                script_path("draft-council-decision"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -557,7 +557,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -566,7 +566,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -575,7 +575,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -585,7 +585,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             run_script(
-                script_path("eco-post-board-note"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -602,7 +602,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
             run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -635,7 +635,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-materialize-reporting-handoff"),
+                script_path("materialize-reporting-handoff"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -656,7 +656,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 connection.close()
 
             decision_payload = run_script(
-                script_path("eco-draft-council-decision"),
+                script_path("draft-council-decision"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -690,7 +690,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -699,7 +699,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-derive-observation-scope"),
+                script_path("derive-observation-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -708,7 +708,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             coverage_payload = run_script(
-                script_path("eco-score-evidence-coverage"),
+                script_path("score-evidence-coverage"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -718,7 +718,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
             coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             hypothesis_payload = run_script(
-                script_path("eco-update-hypothesis-status"),
+                script_path("update-hypothesis-status"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -739,7 +739,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "0.52",
             )
             run_script(
-                script_path("eco-open-challenge-ticket"),
+                script_path("open-challenge-ticket"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -774,7 +774,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             handoff_payload = run_script(
-                script_path("eco-materialize-reporting-handoff"),
+                script_path("materialize-reporting-handoff"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -783,7 +783,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             decision_payload = run_script(
-                script_path("eco-draft-council-decision"),
+                script_path("draft-council-decision"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -807,15 +807,15 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
             self.assertFalse(handoff_artifact["observed_inputs"]["board_brief_present"])
             self.assertIn(
-                "eco-submit-council-proposal",
+                "submit-council-proposal",
                 handoff_payload["board_handoff"]["suggested_next_skills"],
             )
             self.assertIn(
-                "eco-submit-readiness-opinion",
+                "submit-readiness-opinion",
                 handoff_payload["board_handoff"]["suggested_next_skills"],
             )
             self.assertNotIn(
-                "eco-post-board-note",
+                "post-board-note",
                 handoff_payload["board_handoff"]["suggested_next_skills"],
             )
             self.assertEqual("continue", decision_payload["summary"]["moderator_status"])
@@ -827,15 +827,15 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
             self.assertIn("promotion-withheld", decision_artifact["decision_gating"]["reason_codes"])
             self.assertIn(
-                "eco-submit-council-proposal",
+                "submit-council-proposal",
                 decision_payload["board_handoff"]["suggested_next_skills"],
             )
             self.assertIn(
-                "eco-submit-readiness-opinion",
+                "submit-readiness-opinion",
                 decision_payload["board_handoff"]["suggested_next_skills"],
             )
             self.assertNotIn(
-                "eco-post-board-note",
+                "post-board-note",
                 decision_payload["board_handoff"]["suggested_next_skills"],
             )
 

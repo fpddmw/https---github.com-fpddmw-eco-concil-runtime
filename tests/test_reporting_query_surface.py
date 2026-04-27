@@ -47,7 +47,7 @@ from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
 def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
     run_script(
-        script_path("eco-derive-claim-scope"),
+        script_path("derive-claim-scope"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -56,7 +56,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-derive-observation-scope"),
+        script_path("derive-observation-scope"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -65,7 +65,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         ROUND_ID,
     )
     coverage_payload = run_script(
-        script_path("eco-score-evidence-coverage"),
+        script_path("score-evidence-coverage"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -75,7 +75,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
     )
     coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
     run_script(
-        script_path("eco-post-board-note"),
+        script_path("post-board-note"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -92,7 +92,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         coverage_ref,
     )
     run_script(
-        script_path("eco-update-hypothesis-status"),
+        script_path("update-hypothesis-status"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -123,7 +123,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-materialize-reporting-handoff"),
+        script_path("materialize-reporting-handoff"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -132,7 +132,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-draft-council-decision"),
+        script_path("draft-council-decision"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -141,29 +141,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-draft-expert-report"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-        "--role",
-        "sociologist",
-    )
-    run_script(
-        script_path("eco-draft-expert-report"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-        "--role",
-        "environmentalist",
-    )
-    run_script(
-        script_path("eco-publish-expert-report"),
+        script_path("draft-expert-report"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -174,7 +152,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         "sociologist",
     )
     run_script(
-        script_path("eco-publish-expert-report"),
+        script_path("draft-expert-report"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -185,7 +163,29 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         "environmentalist",
     )
     run_script(
-        script_path("eco-publish-council-decision"),
+        script_path("publish-expert-report"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--role",
+        "sociologist",
+    )
+    run_script(
+        script_path("publish-expert-report"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--role",
+        "environmentalist",
+    )
+    run_script(
+        script_path("publish-council-decision"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -194,7 +194,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-materialize-final-publication"),
+        script_path("materialize-final-publication"),
         "--run-dir",
         str(run_dir),
         "--run-id",

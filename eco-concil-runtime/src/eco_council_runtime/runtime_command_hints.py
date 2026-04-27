@@ -38,6 +38,7 @@ def run_skill_command(
     contract_mode: str,
     skill_args: list[str] | None = None,
     actor_role: str = "",
+    skill_approval_request_id: str = "",
 ) -> str:
     return (
         "python3 eco-concil-runtime/scripts/eco_runtime_kernel.py "
@@ -50,5 +51,6 @@ def run_skill_command(
             actor_role=actor_role or default_actor_role_hint(skill_name),
             contract_mode=contract_mode,
             skill_args=skill_args or [],
+            skill_approval_request_id=skill_approval_request_id,
         )
     )

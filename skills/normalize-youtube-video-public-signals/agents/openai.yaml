@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Normalize YouTube Video Public Signals"
+  short_description: "Normalize YouTube video results into unified public signals"
+  default_prompt: "Use $normalize-youtube-video-public-signals to normalize one fetch-youtube-video-search artifact into DB-backed public-signal rows with provenance, platform quality flags, and coverage limitations. Do not infer claims, readiness, or policy conclusions."

@@ -17,7 +17,7 @@ from .kernel.executor import maybe_text, new_runtime_event_id, stable_hash, utc_
 from .kernel.ledger import append_ledger_event, write_receipt
 from .kernel.manifest import update_after_run, write_json
 
-PLANNER_SKILL_NAME = "eco-plan-round-orchestration"
+PLANNER_SKILL_NAME = "plan-round-orchestration"
 PLAN_SOURCE = "direct-council-advisory"
 
 
@@ -289,12 +289,12 @@ def stop_conditions(include_probe: bool) -> list[dict[str, str]]:
         {
             "condition_id": "gate-allows-promotion",
             "trigger": "Promotion gate returns allow-promote after round-readiness.",
-            "effect": "Run eco-promote-evidence-basis only after moderator request plus operator approval, then hand off the round to downstream reporting.",
+            "effect": "Run promote-evidence-basis only after moderator request plus operator approval, then hand off the round to downstream reporting.",
         },
         {
             "condition_id": "gate-withholds-promotion",
             "trigger": "Promotion gate returns freeze-withheld after round-readiness.",
-            "effect": "Run eco-promote-evidence-basis only after moderator request plus operator approval, keep the basis auditable, and leave investigation open when withheld.",
+            "effect": "Run promote-evidence-basis only after moderator request plus operator approval, keep the basis auditable, and leave investigation open when withheld.",
         },
     ]
     if include_probe:
@@ -399,7 +399,7 @@ def direct_council_advisory_payload(
         execution_queue.append(
             step_entry(
                 "falsification-probes",
-                "eco-open-falsification-probe",
+                "open-falsification-probe",
                 "Open or refresh probe objects directly from council proposals or still-open DB probes.",
                 "challenger",
                 probes_file,
@@ -411,7 +411,7 @@ def direct_council_advisory_payload(
     execution_queue.append(
         step_entry(
             "round-readiness",
-            "eco-summarize-round-readiness",
+            "summarize-round-readiness",
             "Re-evaluate round readiness directly from council readiness opinions, probe state, and governed board state.",
             "moderator",
             readiness_file,
@@ -431,13 +431,13 @@ def direct_council_advisory_payload(
     derived_exports = [
         derived_export_entry(
             "board-summary",
-            "eco-summarize-board-state",
+            "summarize-board-state",
             "Materialize a structured board snapshot only when operators need an explicit export artifact.",
             board_summary_file,
         ),
         derived_export_entry(
             "board-brief",
-            "eco-materialize-board-brief",
+            "materialize-board-brief",
             "Materialize a compact human-readable board brief only when handoff or archival text is needed.",
             board_brief_file,
         ),
@@ -445,7 +445,7 @@ def direct_council_advisory_payload(
     post_gate_steps = [
         step_entry(
             "promotion-basis",
-            "eco-promote-evidence-basis",
+            "promote-evidence-basis",
             "Freeze a promoted or withheld evidence basis after gate evaluation so controller output always stays auditable.",
             "moderator",
             promotion_basis_file,
@@ -459,7 +459,7 @@ def direct_council_advisory_payload(
             {
                 "when": "Promotion succeeds and the basis is frozen.",
                 "reason": "The next system boundary is reporting handoff rather than more investigation work.",
-                "suggested_next_skills": ["eco-materialize-reporting-handoff", "eco-draft-council-decision"],
+                "suggested_next_skills": ["materialize-reporting-handoff", "draft-council-decision"],
             }
         ]
         if posture == "promote-candidate"
@@ -469,9 +469,9 @@ def direct_council_advisory_payload(
                 "reason": top_action_rows[0]["objective"] if top_action_rows else "The board still carries unresolved council-directed investigation work.",
                 "suggested_next_skills": unique_texts(
                     [
-                        "eco-open-falsification-probe",
-                        "eco-submit-council-proposal",
-                        "eco-submit-readiness-opinion",
+                        "open-falsification-probe",
+                        "submit-council-proposal",
+                        "submit-readiness-opinion",
                     ]
                 ),
             }

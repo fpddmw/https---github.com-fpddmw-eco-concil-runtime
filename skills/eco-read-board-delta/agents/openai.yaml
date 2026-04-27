@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Read Board Delta"
-  short_description: "Read compact round-scoped board deltas"
-  default_prompt: "Use $eco-read-board-delta to read a compact round-scoped slice of board events, active hypotheses, and challenge tickets, and return a cursor for continued multi-agent work."

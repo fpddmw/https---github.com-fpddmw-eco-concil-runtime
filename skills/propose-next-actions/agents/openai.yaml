@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Propose Next Actions"
+  short_description: "Optional moderator next-action advisory"
+  default_prompt: "Use $propose-next-actions only after a skill approval request has been approved. Produce advisory follow-up candidates from DB-backed council state, label ranking heuristics, and do not treat the result as a default investigation queue."

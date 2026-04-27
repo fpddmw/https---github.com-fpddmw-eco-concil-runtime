@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Open Investigation Round"
-  short_description: "Open a follow-up round and carry unresolved state forward"
-  default_prompt: "Use $eco-open-investigation-round to open one follow-up investigation round, preserve the prior round on the board, carry forward unresolved hypotheses and tasks, and materialize the next round task scaffold."

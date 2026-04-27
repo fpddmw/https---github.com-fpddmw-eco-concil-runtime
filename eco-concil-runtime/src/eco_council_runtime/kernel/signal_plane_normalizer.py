@@ -72,8 +72,8 @@ INSERT OR REPLACE INTO normalized_signals (
 """
 
 FORMAL_SOURCE_SKILLS = {
-    "regulationsgov-comments-fetch",
-    "regulationsgov-comment-detail-fetch",
+    "fetch-regulationsgov-comments",
+    "fetch-regulationsgov-comment-detail",
 }
 
 TABLE_SQL = """
@@ -181,6 +181,30 @@ def maybe_text(value: Any) -> str:
     if value is None:
         return ""
     return normalize_space(value)
+
+
+def unique_texts(values: Iterable[Any]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
+
+
+def json_list(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+        return parsed if isinstance(parsed, list) else []
+    return []
 
 
 def maybe_number(value: Any) -> float | None:
@@ -337,8 +361,9 @@ def delete_existing_rows_for_artifacts(
 
 def insert_signals(connection: sqlite3.Connection, signals: list[dict[str, Any]]) -> None:
     for signal in signals:
-        connection.execute(INSERT_SQL, signal)
-        replace_signal_index_rows(connection, signal)
+        enriched_signal = enrich_signal_metadata_fields(signal)
+        connection.execute(INSERT_SQL, enriched_signal)
+        replace_signal_index_rows(connection, enriched_signal)
 
 
 def metadata_payload(signal: dict[str, Any]) -> dict[str, Any]:
@@ -352,6 +377,95 @@ def metadata_payload(signal: dict[str, Any]) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def default_coverage_limitations(*, plane: str, source_skill: str) -> list[str]:
+    resolved_plane = maybe_text(plane)
+    source = maybe_text(source_skill)
+    if resolved_plane == "formal":
+        return [
+            "Formal records represent submitted or agency-published material available through the provider export; absence of a row is not evidence that no formal record exists.",
+        ]
+    if resolved_plane == "public":
+        return [
+            "Public discourse rows reflect the queried platform or media source only and are not a representative sample of affected communities.",
+        ]
+    if resolved_plane == "environment":
+        if source.startswith("open-meteo"):
+            return [
+                "Modeled environmental data is useful background context and must not be treated as a ground-station measurement without corroboration.",
+            ]
+        return [
+            "Environmental coverage depends on provider station, sensor, model, or archive availability in the requested place and time window.",
+        ]
+    return ["Coverage is limited to the raw artifact and provider fields normalized into this signal row."]
+
+
+def safe_json_object(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def enrich_signal_metadata_fields(signal: dict[str, Any]) -> dict[str, Any]:
+    """Attach minimal provenance/quality metadata without adding research judgement."""
+
+    metadata = metadata_payload(signal)
+    quality_flags = unique_texts(json_list(signal.get("quality_flags_json")))
+    plane = maybe_text(signal.get("plane"))
+    source_skill = maybe_text(signal.get("source_skill"))
+    bbox = safe_json_object(signal.get("bbox_json"))
+
+    metadata.setdefault(
+        "source_provenance",
+        {
+            "source_skill": source_skill,
+            "signal_kind": maybe_text(signal.get("signal_kind")),
+            "canonical_object_kind": maybe_text(signal.get("canonical_object_kind")),
+            "artifact_path": maybe_text(signal.get("artifact_path")),
+            "record_locator": maybe_text(signal.get("record_locator")),
+            "artifact_sha256": maybe_text(signal.get("artifact_sha256")),
+        },
+    )
+    metadata.setdefault(
+        "data_quality",
+        {
+            "quality_flags": quality_flags,
+            "normalization_scope": maybe_text(metadata.get("normalization_scope"))
+            or "provider-field-normalization",
+            "research_judgement": "none",
+        },
+    )
+    metadata.setdefault(
+        "temporal_scope",
+        {
+            "published_at_utc": maybe_text(signal.get("published_at_utc")),
+            "observed_at_utc": maybe_text(signal.get("observed_at_utc")),
+            "window_start_utc": maybe_text(signal.get("window_start_utc")),
+            "window_end_utc": maybe_text(signal.get("window_end_utc")),
+            "captured_at_utc": maybe_text(signal.get("captured_at_utc")),
+        },
+    )
+    metadata.setdefault(
+        "spatial_scope",
+        {
+            "latitude": signal.get("latitude"),
+            "longitude": signal.get("longitude"),
+            "bbox": bbox,
+        },
+    )
+    metadata.setdefault(
+        "coverage_limitations",
+        default_coverage_limitations(plane=plane, source_skill=source_skill),
+    )
+    signal["metadata_json"] = json_text(metadata)
+    return signal
 
 
 def indexed_signal_rows(signal: dict[str, Any]) -> list[dict[str, str]]:
@@ -510,21 +624,18 @@ def plane_gap_hints(plane: str, signals: list[dict[str, Any]]) -> list[str]:
 
 def plane_challenge_hints(plane: str) -> list[str]:
     if plane == "formal":
-        return ["Check whether formal comments retained docket, agency, and record-level provenance before linkage or council review."]
+        return ["Check whether formal comments retained docket, agency, and record-level provenance before investigator review."]
     if plane == "public":
-        return ["Check whether normalization kept enough text context for downstream claim clustering and challenge review."]
-    return ["Check whether provider-specific observation rows still need spatial or metric-family harmonization before promotion."]
+        return ["Check whether normalization kept enough text context and source provenance for investigator review."]
+    return ["Check whether provider-specific observation rows retained spatial, metric, and quality metadata before investigator review."]
 
 
 def suggested_next_skills_for_plane(plane: str) -> list[str]:
     if plane == "formal":
-        return [
-            "eco-link-formal-comments-to-public-discourse",
-            "eco-post-board-note",
-        ]
+        return ["query-formal-signals"]
     if plane == "public":
-        return ["eco-query-public-signals", "eco-extract-claim-candidates"]
-    return ["eco-query-environment-signals", "eco-extract-observation-candidates"]
+        return ["query-public-signals"]
+    return ["query-environment-signals"]
 
 
 def normalize_limit(value: int | None) -> int | None:
@@ -695,6 +806,7 @@ __all__ = [
     "delete_existing_rows",
     "delete_existing_rows_for_artifacts",
     "default_canonical_object_kind",
+    "enrich_signal_metadata_fields",
     "ensure_signal_plane_schema",
     "file_sha256",
     "finalize_normalization",

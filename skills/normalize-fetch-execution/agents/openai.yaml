@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Import Fetch Execution"
+  short_description: "Run fetch-plan queue, normalization, and execution receipt components"
+  default_prompt: "Use $normalize-fetch-execution to run an approved fetch plan through queue-runner, normalizer-runner, and execution-receipt components. It writes raw artifacts and DB signal rows only; do not treat it as a downstream analysis or extraction plan."

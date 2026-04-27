@@ -446,7 +446,7 @@ def seed_signal_plane(
     )
 
     run_script(
-        script_path("eco-normalize-youtube-video-public-signals"),
+        script_path("normalize-youtube-video-public-signals"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -457,7 +457,7 @@ def seed_signal_plane(
         str(youtube_path),
     )
     run_script(
-        script_path("eco-normalize-bluesky-cascade-public-signals"),
+        script_path("normalize-bluesky-cascade-public-signals"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -468,7 +468,7 @@ def seed_signal_plane(
         str(bluesky_path),
     )
     run_script(
-        script_path("eco-normalize-openaq-observation-signals"),
+        script_path("normalize-openaq-observation-signals"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -499,7 +499,7 @@ def seed_signal_plane(
             },
         )
         run_script(
-            script_path("eco-normalize-airnow-observation-signals"),
+            script_path("normalize-airnow-observation-signals"),
             "--run-dir",
             str(run_dir),
             "--run-id",
@@ -531,7 +531,7 @@ def seed_signal_plane(
             },
         )
         run_script(
-            script_path("eco-normalize-open-meteo-historical-signals"),
+            script_path("normalize-open-meteo-historical-signals"),
             "--run-dir",
             str(run_dir),
             "--run-id",
@@ -554,7 +554,7 @@ def seed_analysis_chain(
     seed_signal_plane(run_dir, root, run_id, round_id, include_airnow=include_airnow)
     outputs: dict[str, dict[str, Any]] = {}
     outputs["extract_claims"] = run_script(
-        script_path("eco-extract-claim-candidates"),
+        script_path("extract-claim-candidates"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -563,7 +563,7 @@ def seed_analysis_chain(
         round_id,
     )
     outputs["extract_observations"] = run_script(
-        script_path("eco-extract-observation-candidates"),
+        script_path("extract-observation-candidates"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -574,7 +574,7 @@ def seed_analysis_chain(
         "pm2_5",
     )
     outputs["cluster_claims"] = run_script(
-        script_path("eco-cluster-claim-candidates"),
+        script_path("cluster-claim-candidates"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -583,7 +583,7 @@ def seed_analysis_chain(
         round_id,
     )
     outputs["merge_observations"] = run_script(
-        script_path("eco-merge-observation-candidates"),
+        script_path("merge-observation-candidates"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -594,7 +594,7 @@ def seed_analysis_chain(
         "pm2_5",
     )
     outputs["link_evidence"] = run_script(
-        script_path("eco-link-claims-to-observations"),
+        script_path("link-claims-to-observations"),
         "--run-dir",
         str(run_dir),
         "--run-id",

@@ -46,12 +46,12 @@ TRANSITION_KIND_SPECS: dict[str, dict[str, str]] = {
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND: {
         "requested_surface": "skill",
         "requested_action": "open-follow-up-round",
-        "requested_command_name": "eco-open-investigation-round",
+        "requested_command_name": "open-investigation-round",
     },
     TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS: {
         "requested_surface": "skill",
         "requested_action": "freeze-report-basis",
-        "requested_command_name": "eco-promote-evidence-basis",
+        "requested_command_name": "promote-evidence-basis",
     },
     TRANSITION_KIND_CLOSE_ROUND: {
         "requested_surface": "kernel-command",

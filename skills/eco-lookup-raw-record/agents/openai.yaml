@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Lookup Raw Record"
-  short_description: "Inspect one raw record through signal provenance"
-  default_prompt: "Use $eco-lookup-raw-record to inspect one raw source record by signal_id or by artifact path and record locator, and return only the smallest provenance-preserving raw slice needed for review."

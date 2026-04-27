@@ -269,7 +269,7 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
         },
     )
     hypothesis_payload = run_script(
-        script_path("eco-update-hypothesis-status"),
+        script_path("update-hypothesis-status"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -289,7 +289,7 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
     )
     hypothesis_id = hypothesis_payload["canonical_ids"][0]
     challenge_payload = run_script(
-        script_path("eco-open-challenge-ticket"),
+        script_path("open-challenge-ticket"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -309,7 +309,7 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
     )
     challenge_id = challenge_payload["canonical_ids"][0]
     task_payload = run_script(
-        script_path("eco-claim-board-task"),
+        script_path("claim-board-task"),
         "--run-dir",
         str(run_dir),
         "--run-id",

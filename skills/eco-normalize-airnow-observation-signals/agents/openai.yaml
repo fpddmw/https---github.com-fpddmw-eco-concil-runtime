@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Normalize AirNow Observation Signals"
-  short_description: "Normalize AirNow observations into unified environment signals"
-  default_prompt: "Use $eco-normalize-airnow-observation-signals to normalize one airnow-hourly-obs-fetch artifact into canonical environment-signal rows in the unified signal plane and return compact receipts, artifact refs, signal ids, and board-ready hints."

@@ -61,7 +61,7 @@ def seed_regulationsgov_comments(run_dir: Path, root: Path) -> None:
         },
     )
     run_script(
-        script_path("eco-normalize-regulationsgov-comments-public-signals"),
+        script_path("normalize-regulationsgov-comments-public-signals"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -96,7 +96,7 @@ def seed_public_only_trust_signal(run_dir: Path, root: Path) -> None:
         ],
     )
     run_script(
-        script_path("eco-normalize-youtube-video-public-signals"),
+        script_path("normalize-youtube-video-public-signals"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -111,7 +111,7 @@ def seed_public_only_trust_signal(run_dir: Path, root: Path) -> None:
 def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
     seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
     run_script(
-        script_path("eco-derive-claim-scope"),
+        script_path("derive-claim-scope"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -120,7 +120,7 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-derive-observation-scope"),
+        script_path("derive-observation-scope"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -129,7 +129,7 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-score-evidence-coverage"),
+        script_path("score-evidence-coverage"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -138,7 +138,7 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-classify-claim-verifiability"),
+        script_path("classify-claim-verifiability"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -147,7 +147,7 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-route-verification-lane"),
+        script_path("route-verification-lane"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -156,7 +156,7 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-materialize-controversy-map"),
+        script_path("materialize-controversy-map"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -167,7 +167,7 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
     seed_regulationsgov_comments(run_dir, root)
     seed_public_only_trust_signal(run_dir, root)
     run_script(
-        script_path("eco-link-formal-comments-to-public-discourse"),
+        script_path("link-formal-comments-to-public-discourse"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -176,7 +176,7 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-identify-representation-gaps"),
+        script_path("identify-representation-gaps"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -185,7 +185,7 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-detect-cross-platform-diffusion"),
+        script_path("detect-cross-platform-diffusion"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -198,7 +198,7 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
 def seed_non_empirical_route_inputs(run_dir: Path, root: Path) -> None:
     seed_public_only_trust_signal(run_dir, root)
     run_script(
-        script_path("eco-extract-claim-candidates"),
+        script_path("extract-claim-candidates"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -207,7 +207,7 @@ def seed_non_empirical_route_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-cluster-claim-candidates"),
+        script_path("cluster-claim-candidates"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -216,7 +216,7 @@ def seed_non_empirical_route_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-derive-claim-scope"),
+        script_path("derive-claim-scope"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -225,7 +225,7 @@ def seed_non_empirical_route_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-classify-claim-verifiability"),
+        script_path("classify-claim-verifiability"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -234,7 +234,7 @@ def seed_non_empirical_route_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-route-verification-lane"),
+        script_path("route-verification-lane"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -243,7 +243,7 @@ def seed_non_empirical_route_inputs(run_dir: Path, root: Path) -> None:
         ROUND_ID,
     )
     run_script(
-        script_path("eco-materialize-controversy-map"),
+        script_path("materialize-controversy-map"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -261,7 +261,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
             seed_agenda_inputs(run_dir, root)
 
             payload = run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -313,7 +313,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
             seed_agenda_inputs(run_dir, root)
 
             run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -324,7 +324,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 "10",
             )
             payload = run_script(
-                script_path("eco-summarize-round-readiness"),
+                script_path("summarize-round-readiness"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -361,7 +361,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
             seed_agenda_inputs(run_dir, root)
 
             run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -372,7 +372,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 "10",
             )
             run_script(
-                script_path("eco-summarize-round-readiness"),
+                script_path("summarize-round-readiness"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -382,7 +382,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
             )
             promotion_request_id = approve_promotion_transition(run_dir)
             payload = run_script(
-                script_path("eco-promote-evidence-basis"),
+                script_path("promote-evidence-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -435,7 +435,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
             seed_non_empirical_route_inputs(run_dir, root)
 
             run_script(
-                script_path("eco-propose-next-actions"),
+                script_path("propose-next-actions"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -446,7 +446,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 "10",
             )
             readiness_payload = run_script(
-                script_path("eco-summarize-round-readiness"),
+                script_path("summarize-round-readiness"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -459,7 +459,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
             )
             promotion_request_id = approve_promotion_transition(run_dir)
             promotion_payload = run_script(
-                script_path("eco-promote-evidence-basis"),
+                script_path("promote-evidence-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -473,7 +473,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
             )
             run_script(
-                script_path("eco-materialize-reporting-handoff"),
+                script_path("materialize-reporting-handoff"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",

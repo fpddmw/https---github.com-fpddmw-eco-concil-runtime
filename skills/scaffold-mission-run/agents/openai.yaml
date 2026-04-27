@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Scaffold Mission Run"
+  short_description: "Materialize mission, round tasks, and seeded board state for a new run"
+  default_prompt: "Use $scaffold-mission-run to scaffold mission.json, first-round task inputs, and initial board hypotheses from one mission contract."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Normalize USGS Water Observation Signals"
-  short_description: "Normalize USGS hydrology outputs into unified environment signals"
-  default_prompt: "Use $eco-normalize-usgs-water-observation-signals to normalize one usgs-water-iv-fetch artifact into canonical environment-signal rows in the unified signal plane and return compact receipts, artifact refs, signal ids, and board-ready hints."

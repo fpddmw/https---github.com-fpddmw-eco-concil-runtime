@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Materialize Final Publication"
-  short_description: "Materialize one final publication artifact from canonical reporting outputs"
-  default_prompt: "Use $eco-materialize-final-publication to assemble one final publication artifact from the canonical decision, canonical expert reports, reporting handoff, promotion basis, and supervisor state."

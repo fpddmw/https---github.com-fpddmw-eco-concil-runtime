@@ -308,7 +308,7 @@ runtime kernel 只保留以下职责：
 - [x] 新增 `request-phase-transition`
 - [x] 新增 `approve-phase-transition`
 - [x] 新增 `reject-phase-transition`
-- [x] 修改 `eco-open-investigation-round`，只能消费已批准 transition request
+- [x] 修改 `open-investigation-round`，只能消费已批准 transition request
 - [x] 修改 promotion / close round 流程，必须经过 operator approval
 
 ### 2026-04-23 Session 收口
@@ -316,9 +316,9 @@ runtime kernel 只保留以下职责：
 - 已完成：
   - `kernel/transition_requests.py` 与 deliberation DB schema 已建立 `transition-request / transition-approval / transition-rejection` canonical 持久化链，`query-control-objects` 与 operator/runbook surface 也已对称暴露这三类 runtime object。
   - `request-phase-transition / approve-phase-transition / reject-phase-transition / close-round --transition-request-id` 已在 kernel CLI、access policy、operator hints、handoff surface 中贯通；`moderator` 只能发起 request，`runtime-operator` 才能 approve/reject/commit。
-  - `eco-open-investigation-round / eco-promote-evidence-basis / close-round` 现在都只能消费已批准 request；实际 side effect 成功后才把 request 状态写成 `committed`，不再把 `round_transitions` 当审批对象。
+  - `open-investigation-round / promote-evidence-basis / close-round` 现在都只能消费已批准 request；实际 side effect 成功后才把 request 状态写成 `committed`，不再把 `round_transitions` 当审批对象。
   - `kernel/controller.py` 已补上 promotion-stage 治理前置：`promotion-basis` stage 会解析当前 round 该 kind 的最新 request，并只在状态为 `approved / committed` 时注入 `--transition-request-id` 执行；否则 controller 会以清晰的治理阻断失败收口，而不是回退到旧的“无审批直接 promote”语义。
-  - `phase2_direct_advisory.py` 与 `eco-plan-round-orchestration` 的 stop-condition 文案已同步改成“moderator request + operator approval first”，避免 advisory/operator surface 继续暗示可直接 promote。
+  - `phase2_direct_advisory.py` 与 `plan-round-orchestration` 的 stop-condition 文案已同步改成“moderator request + operator approval first”，避免 advisory/operator surface 继续暗示可直接 promote。
   - 相关测试入口已全部切到新审批链：open-round / promote / close-round / supervise-round / run-phase2-round 相关 unittest 现在都会先创建并批准对应 request，再执行 runtime/skill 主链。
   - 本次实际回归通过：
     - `tests.test_runtime_kernel`
@@ -337,7 +337,7 @@ runtime kernel 只保留以下职责：
 
 - 未完成：
   - 就本批明确定义的三条链路（`open-investigation-round / promote-evidence-basis / close-round`）而言，没有新的功能性遗留；更广义的 kernel phase ownership 收缩仍留在 `9.3`。
-  - controller 侧的 transition request 自动注入目前只对当前 batch 实际进入 controller 的 `eco-promote-evidence-basis` 做了硬化；如果后续再把新的 state-transition skill 放回 controller 主链，需要继续沿同一治理模式扩展，而不是重回旧式裸 skill 调用。
+  - controller 侧的 transition request 自动注入目前只对当前 batch 实际进入 controller 的 `promote-evidence-basis` 做了硬化；如果后续再把新的 state-transition skill 放回 controller 主链，需要继续沿同一治理模式扩展，而不是重回旧式裸 skill 调用。
 
 - 新发现的问题：
   - 旧测试中仍有少量断言默认 `supervise-round` 不会把 `actor_role="runtime-operator"` 继续传给 controller；本次已作为 batch-1 复核的一部分修正，说明测试层面对新边界语义曾经落后于代码实现。
@@ -475,7 +475,7 @@ runtime kernel 只保留以下职责：
     - `run-skill / preflight-skill` 在 optional-analysis 情况下要求 `--skill-approval-request-id`；即使由 `runtime-operator` 执行 operator-owned optional audit，也必须先留下 approval request / approval 记录。
     - 批准 request 成功执行后会被标记为 `consumed`，不能重复使用。
   - 确认 operator runbook 与 `query-control-objects` 已暴露 skill approval request / approval / rejection / consumption 查询与审批命令模板。
-  - 修复 `eco-materialize-reporting-handoff` 的 hold-path 回归：默认 kernel 不再生成 `next-actions` 后，supervisor `top_actions` 可能为空；handoff 现在会在无 supervisor top actions 时，从 DB-backed `open_risks / reporting_blockers` 生成结构化 `recommended_next_actions`，避免把“kernel 无默认议程”误读成“报告无需后续动作”。
+  - 修复 `materialize-reporting-handoff` 的 hold-path 回归：默认 kernel 不再生成 `next-actions` 后，supervisor `top_actions` 可能为空；handoff 现在会在无 supervisor top actions 时，从 DB-backed `open_risks / reporting_blockers` 生成结构化 `recommended_next_actions`，避免把“kernel 无默认议程”误读成“报告无需后续动作”。
   - 新增并通过回归：`tests.test_skill_approval_workflow.SkillApprovalWorkflowTests.test_preflight_blocks_operator_optional_analysis_without_approval_record`，确认 optional-analysis 不再存在 `runtime-operator` bypass。
   - 本轮实际通过 focused 回归：
     - `tests.test_skill_approval_workflow`
@@ -489,7 +489,7 @@ runtime kernel 只保留以下职责：
 
 - 未完成：
   - 本轮未重跑全量跨面回归；验收结论只覆盖 runtime/kernel 权限、阶段推进、optional-analysis 审批、agent entry/control surface 与 reporting handoff 的直接相关路径。
-  - `phase2_fallback_* / phase2_direct_advisory.py / eco-plan-round-orchestration` 仍作为可注入或可选模块存在；本轮确认它们不在默认 kernel 主路径，但未删除兼容模块。
+  - `phase2_fallback_* / phase2_direct_advisory.py / plan-round-orchestration` 仍作为可注入或可选模块存在；本轮确认它们不在默认 kernel 主路径，但未删除兼容模块。
   - `requires_operator_approval=True` 的非 optional-analysis / 非 state-transition 技能仍没有统一纳入 `skill_approval_requests`；当前硬审批链主要覆盖 optional-analysis，阶段推进则由 `transition_requests` 覆盖。后续若要把 reporting publish/finalize 也变成同等审批对象，需要扩展审批模型或新增 publish transition kind。
 
 - 新发现的问题：

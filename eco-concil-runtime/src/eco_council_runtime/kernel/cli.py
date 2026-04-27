@@ -546,7 +546,7 @@ def phase2_operator_view(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
-            skill_name="eco-query-public-signals",
+            skill_name="query-public-signals",
             contract_mode="warn",
         )
         if round_id and run_id
@@ -557,7 +557,7 @@ def phase2_operator_view(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
-            skill_name="eco-query-formal-signals",
+            skill_name="query-formal-signals",
             contract_mode="warn",
         )
         if round_id and run_id
@@ -568,7 +568,7 @@ def phase2_operator_view(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
-            skill_name="eco-query-environment-signals",
+            skill_name="query-environment-signals",
             contract_mode="warn",
         )
         if round_id and run_id
@@ -774,7 +774,7 @@ def phase2_operator_view(
                 run_dir=run_dir,
                 run_id=run_id,
                 round_id=round_id,
-                skill_name="eco-promote-evidence-basis",
+                skill_name="promote-evidence-basis",
                 actor_role="moderator",
                 contract_mode="warn",
                 skill_args=[
@@ -812,7 +812,7 @@ def phase2_operator_view(
                 run_dir=run_dir,
                 run_id=run_id,
                 round_id=suggested_next_round_id or "<target_round_id>",
-                skill_name="eco-open-investigation-round",
+                skill_name="open-investigation-round",
                 actor_role="moderator",
                 contract_mode="warn",
                 skill_args=[
@@ -954,7 +954,7 @@ def reporting_operator_view(
                 run_dir=run_dir,
                 run_id=run_id,
                 round_id=round_id,
-                skill_name="eco-materialize-reporting-handoff",
+                skill_name="materialize-reporting-handoff",
                 actor_role="moderator",
                 contract_mode="warn",
             )
@@ -966,7 +966,7 @@ def reporting_operator_view(
                 run_dir=run_dir,
                 run_id=run_id,
                 round_id=round_id,
-                skill_name="eco-draft-council-decision",
+                skill_name="draft-council-decision",
                 actor_role="moderator",
                 contract_mode="warn",
             )
@@ -978,7 +978,7 @@ def reporting_operator_view(
                 run_dir=run_dir,
                 run_id=run_id,
                 round_id=round_id,
-                skill_name="eco-draft-expert-report",
+                skill_name="draft-expert-report",
                 actor_role="report-editor",
                 contract_mode="warn",
                 skill_args=["--role", "sociologist"],
@@ -991,7 +991,7 @@ def reporting_operator_view(
                 run_dir=run_dir,
                 run_id=run_id,
                 round_id=round_id,
-                skill_name="eco-draft-expert-report",
+                skill_name="draft-expert-report",
                 actor_role="report-editor",
                 contract_mode="warn",
                 skill_args=["--role", "environmentalist"],
@@ -1004,7 +1004,7 @@ def reporting_operator_view(
                 run_dir=run_dir,
                 run_id=run_id,
                 round_id=round_id,
-                skill_name="eco-publish-council-decision",
+                skill_name="publish-council-decision",
                 actor_role="moderator",
                 contract_mode="warn",
             )
@@ -1016,7 +1016,7 @@ def reporting_operator_view(
                 run_dir=run_dir,
                 run_id=run_id,
                 round_id=round_id,
-                skill_name="eco-publish-expert-report",
+                skill_name="publish-expert-report",
                 actor_role="report-editor",
                 contract_mode="warn",
                 skill_args=["--role", "sociologist"],
@@ -1029,7 +1029,7 @@ def reporting_operator_view(
                 run_dir=run_dir,
                 run_id=run_id,
                 round_id=round_id,
-                skill_name="eco-publish-expert-report",
+                skill_name="publish-expert-report",
                 actor_role="report-editor",
                 contract_mode="warn",
                 skill_args=["--role", "environmentalist"],

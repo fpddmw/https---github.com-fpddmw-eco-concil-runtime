@@ -79,7 +79,7 @@ TRANSITION_EXECUTOR_AUTHORITY = "transition-executor"
 TRANSITION_EXECUTOR_PLAN_SOURCE = "approved-transition-request"
 TRANSITION_EXECUTOR_INSPECTION_SOURCE = "transition-request-inspection"
 SKILL_TRANSITION_KIND_REQUIREMENTS = {
-    "eco-promote-evidence-basis": TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    "promote-evidence-basis": TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
 }
 
 
@@ -323,8 +323,8 @@ def transition_executor_plan_payload(
                 "stage_name": "promotion-basis",
                 "stage_kind": "skill",
                 "phase_group": "promotion",
-                "skill_name": "eco-promote-evidence-basis",
-                "expected_skill_name": "eco-promote-evidence-basis",
+                "skill_name": "promote-evidence-basis",
+                "expected_skill_name": "promote-evidence-basis",
                 "skill_args": [],
                 "assigned_role_hint": "moderator",
                 "required_previous_stages": ["promotion-gate"],

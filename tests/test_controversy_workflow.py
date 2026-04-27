@@ -35,7 +35,7 @@ class ControversyWorkflowTests(unittest.TestCase):
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -44,7 +44,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             verifiability_payload = run_script(
-                script_path("eco-classify-claim-verifiability"),
+                script_path("classify-claim-verifiability"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -53,7 +53,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             route_payload = run_script(
-                script_path("eco-route-verification-lane"),
+                script_path("route-verification-lane"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -62,7 +62,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             map_payload = run_script(
-                script_path("eco-materialize-controversy-map"),
+                script_path("materialize-controversy-map"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -179,7 +179,7 @@ class ControversyWorkflowTests(unittest.TestCase):
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -188,7 +188,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-classify-claim-verifiability"),
+                script_path("classify-claim-verifiability"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -197,7 +197,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-route-verification-lane"),
+                script_path("route-verification-lane"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -206,7 +206,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             issue_candidate_payload = run_script(
-                script_path("eco-extract-issue-candidates"),
+                script_path("extract-issue-candidates"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -215,7 +215,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             issue_cluster_payload = run_script(
-                script_path("eco-cluster-issue-candidates"),
+                script_path("cluster-issue-candidates"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -224,7 +224,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-extract-stance-candidates"),
+                script_path("extract-stance-candidates"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -233,7 +233,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-extract-concern-facets"),
+                script_path("extract-concern-facets"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -242,7 +242,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-extract-actor-profiles"),
+                script_path("extract-actor-profiles"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -251,7 +251,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-extract-evidence-citation-types"),
+                script_path("extract-evidence-citation-types"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -260,7 +260,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             payload = run_script(
-                script_path("eco-materialize-controversy-map"),
+                script_path("materialize-controversy-map"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -429,7 +429,7 @@ class ControversyWorkflowTests(unittest.TestCase):
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             run_script(
-                script_path("eco-derive-claim-scope"),
+                script_path("derive-claim-scope"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -438,7 +438,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-classify-claim-verifiability"),
+                script_path("classify-claim-verifiability"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -447,7 +447,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-route-verification-lane"),
+                script_path("route-verification-lane"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -456,7 +456,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             run_script(
-                script_path("eco-materialize-controversy-map"),
+                script_path("materialize-controversy-map"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -557,7 +557,7 @@ class ControversyWorkflowTests(unittest.TestCase):
             )
 
             run_script(
-                script_path("eco-classify-claim-verifiability"),
+                script_path("classify-claim-verifiability"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -568,7 +568,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 str(scope_path),
             )
             route_payload = run_script(
-                script_path("eco-route-verification-lane"),
+                script_path("route-verification-lane"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -579,7 +579,7 @@ class ControversyWorkflowTests(unittest.TestCase):
                 str(scope_path),
             )
             map_payload = run_script(
-                script_path("eco-materialize-controversy-map"),
+                script_path("materialize-controversy-map"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",

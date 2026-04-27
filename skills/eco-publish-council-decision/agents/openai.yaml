@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Publish Council Decision"
-  short_description: "Publish a canonical council decision from the decision draft"
-  default_prompt: "Use $eco-publish-council-decision to publish a canonical council decision from the current draft while enforcing report prerequisites and overwrite guards."

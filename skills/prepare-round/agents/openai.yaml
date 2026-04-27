@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Prepare Round"
+  short_description: "Build one fetch plan that maps mission imports to raw contract paths and normalizer skills"
+  default_prompt: "Use $prepare-round to turn mission.json and first-round task inputs into one auditable fetch plan for local artifact import and normalization."

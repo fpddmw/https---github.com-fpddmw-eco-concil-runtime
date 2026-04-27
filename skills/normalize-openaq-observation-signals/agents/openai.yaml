@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Normalize OpenAQ Observation Signals"
+  short_description: "Normalize OpenAQ observations into unified environment signals"
+  default_prompt: "Use $normalize-openaq-observation-signals to normalize one fetch-openaq artifact into DB-backed environment-signal rows with provenance, quality flags, temporal/spatial scope, and coverage limitations. Do not infer exposure, readiness, or policy conclusions."

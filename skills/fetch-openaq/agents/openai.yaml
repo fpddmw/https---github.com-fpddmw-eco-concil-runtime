@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAQ Data Fetch"
+  short_description: "Fetch OpenAQ raw metadata, measurements, or archive partitions"
+  default_prompt: "Use $fetch-openaq with an explicit fetch-metadata, fetch-measurements, or fetch-archive-backfill operation. Treat the output as raw evidence with provenance and limitations, not as an environmental or policy conclusion."

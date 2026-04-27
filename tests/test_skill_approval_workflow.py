@@ -21,8 +21,8 @@ if str(RUNTIME_SRC) not in sys.path:
 
 RUN_ID = "run-skill-approval-001"
 ROUND_ID = "round-skill-approval-001"
-OPTIONAL_SKILL = "eco-extract-claim-candidates"
-OPERATOR_OPTIONAL_SKILL = "eco-build-normalization-audit"
+OPTIONAL_SKILL = "extract-claim-candidates"
+OPERATOR_OPTIONAL_SKILL = "build-normalization-audit"
 
 
 class SkillApprovalWorkflowTests(unittest.TestCase):

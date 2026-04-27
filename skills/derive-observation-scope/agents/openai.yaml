@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eco Derive Observation Scope"
+  short_description: "Infer matching-oriented observation scopes from observation-side evidence"
+  default_prompt: "Use $derive-observation-scope to read observation-side evidence objects, normalize compact place and metric scope proposals, persist the scope artifact, and return board-ready handoff hints for evidence coverage and challenge review."
