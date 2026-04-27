@@ -269,7 +269,12 @@ def build_open_risks(
     return list(deduped.values())[:6]
 
 
-def build_recommended_next_actions(supervisor_state: dict[str, Any]) -> list[dict[str, str]]:
+def build_recommended_next_actions(
+    supervisor_state: dict[str, Any],
+    *,
+    open_risks: list[dict[str, str]] | None = None,
+    reporting_blocker_hints: list[str] | None = None,
+) -> list[dict[str, str]]:
     top_actions = supervisor_state.get("top_actions", []) if isinstance(supervisor_state.get("top_actions"), list) else []
     recommendations: list[dict[str, str]] = []
     for action in top_actions[:4]:
@@ -286,6 +291,39 @@ def build_recommended_next_actions(supervisor_state: dict[str, Any]) -> list[dic
                 "assigned_role": assigned_role,
                 "objective": objective,
                 "reason": f"Supervisor ranked this as the next {action_kind} follow-up (priority={priority}).",
+            }
+        )
+    if recommendations:
+        return recommendations
+    for risk in (open_risks or [])[:4]:
+        if not isinstance(risk, dict):
+            continue
+        summary = maybe_text(risk.get("summary"))
+        if not summary:
+            continue
+        priority = maybe_text(risk.get("priority")) or "medium"
+        risk_type = maybe_text(risk.get("risk_type")) or "reporting-blocker"
+        recommendations.append(
+            {
+                "assigned_role": maybe_text(risk.get("assigned_role")) or "moderator",
+                "objective": f"Resolve or explicitly carry forward: {summary}",
+                "reason": (
+                    "Reporting is held because this "
+                    f"{risk_type} remains open (priority={priority})."
+                ),
+            }
+        )
+    if recommendations:
+        return recommendations
+    for hint in (reporting_blocker_hints or [])[:4]:
+        summary = maybe_text(hint)
+        if not summary:
+            continue
+        recommendations.append(
+            {
+                "assigned_role": "moderator",
+                "objective": f"Address reporting blocker: {summary}",
+                "reason": "Reporting is held until the blocker is resolved, accepted, or scoped into a follow-up round.",
             }
         )
     return recommendations
@@ -460,7 +498,11 @@ def materialize_reporting_handoff_skill(
 
     key_findings = build_key_findings(promotion_basis, max_findings)
     open_risks = build_open_risks(promotion_basis=promotion_basis, supervisor_state=supervisor_state, readiness=readiness)
-    next_actions = build_recommended_next_actions(supervisor_state)
+    next_actions = build_recommended_next_actions(
+        supervisor_state,
+        open_risks=open_risks,
+        reporting_blocker_hints=reporting_blocker_hints,
+    )
     board_excerpt = excerpt_text(board_brief_text)
     handoff_id = "reporting-handoff-" + stable_hash(run_id, round_id, handoff_status, promotion_status)[:12]
 

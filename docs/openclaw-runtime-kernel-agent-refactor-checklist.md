@@ -460,3 +460,43 @@ runtime kernel 只保留以下职责：
 - 是否影响后续计划：
   - 不阻塞后续批次，且对第 `10.1 / 10.4 / 10.6 / 10.9` 验收项形成正向加固（尤其是 moderator/operator 角色边界与 transition 审批链的一致性）。
   - 建议下一步把 optional-analysis 的人工审计从 `contract_mode` 提示升级为可查询、可审批、可回放的持久化审批对象，避免再次回退到“warn 可执行”的软约束语义。
+
+## 12. 2026-04-27 Session 验收复核（runtime/kernel）
+
+- 已完成：
+  - 重新对照本清单第 `10` 节验收标准复核 runtime/kernel 主边界，重点核验 `controller / transition_requests / skill_approvals / governance / executor / access_policy / skill_registry / agent_entry / operations / reporting handoff`。
+  - 确认 `phase2_planning_profile.default_phase2_planning_sources()` 当前返回空列表；默认 controller 路径只采用已批准的 `promote-evidence-basis` transition request，或在无批准 request 时以 inspection-only/no-op 收口，不再默认 materialize planner / fallback agenda / direct council advisory。
+  - 确认 88 个 skill 均有显式 `allowed_roles`；当前 32 个 skill 声明 `requires_operator_approval`。
+  - 确认 optional-analysis 已新增持久化审批链：
+    - `skill_approval_requests`
+    - `skill_approvals`
+    - `skill_approval_rejections`
+    - `skill_approval_consumptions`
+    - `run-skill / preflight-skill` 在 optional-analysis 情况下要求 `--skill-approval-request-id`；即使由 `runtime-operator` 执行 operator-owned optional audit，也必须先留下 approval request / approval 记录。
+    - 批准 request 成功执行后会被标记为 `consumed`，不能重复使用。
+  - 确认 operator runbook 与 `query-control-objects` 已暴露 skill approval request / approval / rejection / consumption 查询与审批命令模板。
+  - 修复 `eco-materialize-reporting-handoff` 的 hold-path 回归：默认 kernel 不再生成 `next-actions` 后，supervisor `top_actions` 可能为空；handoff 现在会在无 supervisor top actions 时，从 DB-backed `open_risks / reporting_blockers` 生成结构化 `recommended_next_actions`，避免把“kernel 无默认议程”误读成“报告无需后续动作”。
+  - 新增并通过回归：`tests.test_skill_approval_workflow.SkillApprovalWorkflowTests.test_preflight_blocks_operator_optional_analysis_without_approval_record`，确认 optional-analysis 不再存在 `runtime-operator` bypass。
+  - 本轮实际通过 focused 回归：
+    - `tests.test_skill_approval_workflow`
+    - `tests.test_runtime_kernel`
+    - `tests.test_reporting_workflow`
+    - `tests.test_agent_entry_gate`
+    - `tests.test_control_query_surface`
+    - `tests.test_runtime_source_queue_profiles`
+    - `tests.test_council_submission_workflow`
+    - 执行命令：`.venv/bin/python -m unittest tests.test_skill_approval_workflow tests.test_runtime_kernel tests.test_reporting_workflow tests.test_agent_entry_gate tests.test_control_query_surface tests.test_runtime_source_queue_profiles tests.test_council_submission_workflow`（`67` 项通过）。
+
+- 未完成：
+  - 本轮未重跑全量跨面回归；验收结论只覆盖 runtime/kernel 权限、阶段推进、optional-analysis 审批、agent entry/control surface 与 reporting handoff 的直接相关路径。
+  - `phase2_fallback_* / phase2_direct_advisory.py / eco-plan-round-orchestration` 仍作为可注入或可选模块存在；本轮确认它们不在默认 kernel 主路径，但未删除兼容模块。
+  - `requires_operator_approval=True` 的非 optional-analysis / 非 state-transition 技能仍没有统一纳入 `skill_approval_requests`；当前硬审批链主要覆盖 optional-analysis，阶段推进则由 `transition_requests` 覆盖。后续若要把 reporting publish/finalize 也变成同等审批对象，需要扩展审批模型或新增 publish transition kind。
+
+- 新发现的问题：
+  - reporting handoff 曾隐含依赖 supervisor `top_actions`；在 controller 收缩为 transition executor 后，这会导致 withheld round 缺少 `recommended_next_actions`。本轮已修复为基于 DB 风险/blocker 的结构化 fallback，不恢复旧的 runtime agenda ownership。
+  - 测试层存在 staged 改动，正在把 reporting/runtime workflow 中直接运行 optional-analysis 的路径改为先创建并批准 skill approval request；这与当前代码目标一致，但需要保留这些测试修改，不能回退。
+  - `source_queue_profile.py` 内部仍使用 `core_queue_default` 作为计算 `phase2_behavior` 的私有参数；对外已不导出该字段。本轮未发现它支配 phase-2 默认 controller 行为，但后续清理文案时可进一步改名以避免误读。
+
+- 是否影响后续计划：
+  - 不阻塞后续计划；本轮对第 `10.1 / 10.3 / 10.4 / 10.5 / 10.7 / 10.9` 验收项形成进一步确认。
+  - 对后续的约束是：任何新增默认执行路径都必须继续满足 `moderator request -> runtime-operator approve/reject -> governed execution/commit`；任何 optional-analysis 运行都必须留下可查询的 request / approval / consumption 记录，不能退回到 `warn` 模式软放行。

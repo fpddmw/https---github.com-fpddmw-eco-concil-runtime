@@ -6,7 +6,6 @@ from typing import Any
 
 from .access_policy import evaluate_skill_access
 from .registry import resolve_skill_entry, workspace_root
-from .role_contracts import ROLE_RUNTIME_OPERATOR, normalize_actor_role
 from .skill_approvals import resolve_skill_approval_for_execution
 from .skill_registry import SKILL_LAYER_OPTIONAL_ANALYSIS
 
@@ -288,12 +287,6 @@ def resolve_skill_approval_context(
     resolved_actor_role = maybe_text(access_policy.get("resolved_actor_role")) or maybe_text(
         actor_role
     )
-    if normalize_actor_role(resolved_actor_role) == ROLE_RUNTIME_OPERATOR:
-        return [], {
-            "required": False,
-            "status": "runtime-operator-bypass",
-            "request_id": normalized_request_id,
-        }
     if not normalized_request_id:
         return [
             issue(

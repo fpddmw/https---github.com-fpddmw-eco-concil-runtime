@@ -22,6 +22,7 @@ if str(RUNTIME_SRC) not in sys.path:
 RUN_ID = "run-skill-approval-001"
 ROUND_ID = "round-skill-approval-001"
 OPTIONAL_SKILL = "eco-extract-claim-candidates"
+OPERATOR_OPTIONAL_SKILL = "eco-build-normalization-audit"
 
 
 class SkillApprovalWorkflowTests(unittest.TestCase):
@@ -52,6 +53,84 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 "missing-skill-approval-request-id",
                 {item["code"] for item in payload["preflight"]["issues"]},
             )
+
+    def test_preflight_blocks_operator_optional_analysis_without_approval_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+
+            blocked = run_kernel_process(
+                "preflight-skill",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                OPERATOR_OPTIONAL_SKILL,
+                "--actor-role",
+                "runtime-operator",
+                "--contract-mode",
+                "warn",
+                auto_actor_role=False,
+            )
+
+            self.assertEqual(1, blocked.returncode)
+            blocked_payload = json.loads(blocked.stdout)
+            self.assertIn(
+                "missing-skill-approval-request-id",
+                {item["code"] for item in blocked_payload["preflight"]["issues"]},
+            )
+
+            request_payload = run_kernel(
+                "request-skill-approval",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                OPERATOR_OPTIONAL_SKILL,
+                "--requested-actor-role",
+                "runtime-operator",
+                "--rationale",
+                "Record operator approval for normalization audit.",
+                "--actor-role",
+                "runtime-operator",
+            )
+            request_id = request_payload["summary"]["request_id"]
+            run_kernel(
+                "approve-skill-approval",
+                "--run-dir",
+                str(run_dir),
+                "--request-id",
+                request_id,
+                "--approval-reason",
+                "Approved operator-owned optional audit.",
+                "--actor-role",
+                "runtime-operator",
+            )
+
+            approved = run_kernel(
+                "preflight-skill",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                OPERATOR_OPTIONAL_SKILL,
+                "--actor-role",
+                "runtime-operator",
+                "--contract-mode",
+                "warn",
+                "--skill-approval-request-id",
+                request_id,
+            )
+            self.assertEqual("completed", approved["status"])
+            self.assertEqual("approved", approved["preflight"]["skill_approval"]["status"])
 
     def test_request_approve_and_query_skill_approval_objects(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

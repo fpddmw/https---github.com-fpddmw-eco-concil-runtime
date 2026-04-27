@@ -14,6 +14,7 @@ from _workflow_support import (
     analytics_path,
     kernel_script_path,
     load_json,
+    request_and_approve_skill_approval,
     request_and_approve_transition,
     run_kernel,
     run_kernel_process,
@@ -151,6 +152,15 @@ class RuntimeKernelTests(unittest.TestCase):
                 ROUND_ID,
                 "--skill-name",
                 "eco-propose-next-actions",
+                "--skill-approval-request-id",
+                request_and_approve_skill_approval(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    skill_name="eco-propose-next-actions",
+                    requested_actor_role="moderator",
+                    rationale="Approve optional-analysis next-actions execution for runtime-kernel ledger coverage.",
+                ),
             )
             state_payload = run_kernel(
                 "show-run-state",
@@ -171,9 +181,14 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(ROUND_ID, cursor["current_round_id"])
             self.assertEqual("eco-propose-next-actions", cursor["last_skill_name"])
             self.assertGreaterEqual(registry["skill_count"], 1)
-            self.assertEqual(2, len(state_payload["ledger_tail"]))
-            self.assertEqual(first_run["summary"]["receipt_id"], state_payload["ledger_tail"][0]["receipt_id"])
-            self.assertEqual(second_run["summary"]["receipt_id"], state_payload["ledger_tail"][1]["receipt_id"])
+            self.assertGreaterEqual(len(state_payload["ledger_tail"]), 2)
+            ledger_receipt_ids = [
+                str(entry.get("receipt_id") or "")
+                for entry in state_payload["ledger_tail"]
+                if isinstance(entry, dict)
+            ]
+            self.assertIn(first_run["summary"]["receipt_id"], ledger_receipt_ids)
+            self.assertIn(second_run["summary"]["receipt_id"], ledger_receipt_ids)
             self.assertTrue((runtime_dir / "receipts" / f"{first_run['summary']['receipt_id']}.json").exists())
             self.assertTrue((runtime_dir / "receipts" / f"{second_run['summary']['receipt_id']}.json").exists())
             self.assertEqual(kernel_script_path().name, "eco_runtime_kernel.py")
@@ -1113,6 +1128,7 @@ class RuntimeKernelTests(unittest.TestCase):
             ensure_runtime_src_on_path()
 
             from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+            from eco_council_runtime.phase2_planning_profile import phase2_planning_source
 
             planner_result = {
                 "summary": {"skill_name": "eco-plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
@@ -1203,6 +1219,16 @@ class RuntimeKernelTests(unittest.TestCase):
                 "recommended_next_skills": [],
             }
             promotion_request_id = approve_promotion_transition(run_dir)
+            runtime_only_sources = [
+                phase2_planning_source(
+                    "runtime-planner-only",
+                    source_kind="planner-skill",
+                    output_path_key="orchestration_plan_path",
+                    planner_skill_name="eco-plan-round-orchestration",
+                    materialized_message="Use only the injected runtime planner path.",
+                    failed_message="Injected runtime planner path failed.",
+                )
+            ]
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
@@ -1220,6 +1246,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     contract_mode="strict",
                     gate_handlers=default_phase2_gate_handlers(),
                     posture_profile=default_phase2_posture_profile_config(),
+                    planning_sources=runtime_only_sources,
                     timeout_seconds=12.5,
                     retry_budget=2,
                     retry_backoff_ms=150,
@@ -1250,6 +1277,7 @@ class RuntimeKernelTests(unittest.TestCase):
             ensure_runtime_src_on_path()
 
             from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+            from eco_council_runtime.phase2_planning_profile import phase2_planning_source
 
             planner_result = {
                 "summary": {"skill_name": "eco-plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
@@ -1345,6 +1373,16 @@ class RuntimeKernelTests(unittest.TestCase):
                 "recommended_next_skills": [],
             }
             promotion_request_id = approve_promotion_transition(run_dir)
+            runtime_only_sources = [
+                phase2_planning_source(
+                    "runtime-planner-only",
+                    source_kind="planner-skill",
+                    output_path_key="orchestration_plan_path",
+                    planner_skill_name="eco-plan-round-orchestration",
+                    materialized_message="Use only the injected runtime planner path.",
+                    failed_message="Injected runtime planner path failed.",
+                )
+            ]
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
@@ -1365,6 +1403,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     contract_mode="strict",
                     gate_handlers=default_phase2_gate_handlers(),
                     posture_profile=default_phase2_posture_profile_config(),
+                    planning_sources=runtime_only_sources,
                 )
 
             self.assertEqual(
@@ -1405,6 +1444,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 run_phase2_round_with_contract_mode,
             )
             from eco_council_runtime.kernel.executor import SkillExecutionError
+            from eco_council_runtime.phase2_planning_profile import phase2_planning_source
 
             planner_result = {
                 "summary": {
@@ -1470,6 +1510,16 @@ class RuntimeKernelTests(unittest.TestCase):
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
+            runtime_only_sources = [
+                phase2_planning_source(
+                    "runtime-planner-only",
+                    source_kind="planner-skill",
+                    output_path_key="orchestration_plan_path",
+                    planner_skill_name="eco-plan-round-orchestration",
+                    materialized_message="Use only the injected runtime planner path.",
+                    failed_message="Injected runtime planner path failed.",
+                )
+            ]
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
@@ -1494,6 +1544,7 @@ class RuntimeKernelTests(unittest.TestCase):
                         contract_mode="strict",
                         gate_handlers=default_phase2_gate_handlers(),
                         posture_profile=default_phase2_posture_profile_config(),
+                        planning_sources=runtime_only_sources,
                     )
 
             self.assertEqual(2, run_skill_mock.call_count)

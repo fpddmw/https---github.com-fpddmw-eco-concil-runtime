@@ -9,6 +9,7 @@ from _workflow_support import (
     load_json,
     promotion_path,
     reporting_path,
+    request_and_approve_skill_approval,
     request_and_approve_transition,
     run_kernel,
     run_script,
@@ -27,6 +28,52 @@ def approve_promotion_transition(run_dir: Path) -> str:
         round_id=ROUND_ID,
         transition_kind="promote-evidence-basis",
         rationale="Approve promotion for reporting workflow coverage.",
+    )
+
+
+def prepare_optional_analysis_for_supervision(run_dir: Path) -> None:
+    next_actions_request_id = request_and_approve_skill_approval(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        skill_name="eco-propose-next-actions",
+        requested_actor_role="moderator",
+        rationale="Approve optional-analysis next-actions execution for reporting workflow coverage.",
+    )
+    run_kernel(
+        "run-skill",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--skill-name",
+        "eco-propose-next-actions",
+        "--skill-approval-request-id",
+        next_actions_request_id,
+    )
+
+    readiness_request_id = request_and_approve_skill_approval(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        skill_name="eco-summarize-round-readiness",
+        requested_actor_role="moderator",
+        rationale="Approve optional-analysis readiness execution for reporting workflow coverage.",
+    )
+    run_kernel(
+        "run-skill",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--skill-name",
+        "eco-summarize-round-readiness",
+        "--skill-approval-request-id",
+        readiness_request_id,
     )
 
 
@@ -104,6 +151,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "0.93",
             )
 
+            prepare_optional_analysis_for_supervision(run_dir)
             approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",
@@ -301,6 +349,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "0.93",
             )
 
+            prepare_optional_analysis_for_supervision(run_dir)
             approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",
@@ -444,6 +493,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "0.93",
             )
 
+            prepare_optional_analysis_for_supervision(run_dir)
             approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",
@@ -573,6 +623,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "0.93",
             )
 
+            prepare_optional_analysis_for_supervision(run_dir)
             approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",
@@ -711,6 +762,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 coverage_ref,
             )
 
+            prepare_optional_analysis_for_supervision(run_dir)
             approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",
