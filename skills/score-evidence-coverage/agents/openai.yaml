@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Score Evidence Coverage"
-  short_description: "Deprecated WP4 legacy alias"
-  default_prompt: "Do not use $score-evidence-coverage for new work. It now returns a WP4 deprecated-helper stop artifact and points to a future DB-backed evidence sufficiency review helper that must be approved and DB-council-cited before report-basis use."

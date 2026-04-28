@@ -884,11 +884,11 @@ def promote_evidence_basis_skill(
     if empirical_claim_ids or selected_coverages:
         withheld_next_skills.append("open-falsification-probe")
     if basis_counts["formal_public_link_count"] > 0:
-        withheld_next_skills.append("link-formal-comments-to-public-discourse")
+        withheld_next_skills.append("compare-formal-public-footprints")
     if basis_counts["representation_gap_count"] > 0:
-        withheld_next_skills.append("identify-representation-gaps")
+        withheld_next_skills.append("identify-representation-audit-cues")
     if basis_counts["diffusion_edge_count"] > 0:
-        withheld_next_skills.append("detect-cross-platform-diffusion")
+        withheld_next_skills.append("detect-temporal-cooccurrence-cues")
     deduped_withheld_next_skills: list[str] = []
     for skill_name in withheld_next_skills:
         if skill_name not in deduped_withheld_next_skills:

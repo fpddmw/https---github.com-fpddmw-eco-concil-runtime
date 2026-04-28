@@ -22,13 +22,11 @@ OBJECT_KIND_VERIFICATION_ROUTE = "verification-route"
 
 HEURISTIC_DECISION_SOURCE = "heuristic-fallback"
 WP4_DECISION_SOURCE_APPROVED_HELPER_VIEW = "approved-helper-view"
-WP4_DECISION_SOURCE_DEPRECATED_LEGACY_HELPER = "deprecated-legacy-helper"
 WP4_DECISION_SOURCE_MANUAL_OR_MODERATOR_DEFINED = "manual-or-moderator-defined"
 WP4_DECISION_SOURCE_AGENT_SUBMITTED_FINDING = "agent-submitted-finding"
 WP4_DECISION_SOURCE_SCENARIO = "scenario"
 WP4_ALLOWED_DECISION_SOURCES = {
     WP4_DECISION_SOURCE_APPROVED_HELPER_VIEW,
-    WP4_DECISION_SOURCE_DEPRECATED_LEGACY_HELPER,
     WP4_DECISION_SOURCE_MANUAL_OR_MODERATOR_DEFINED,
     WP4_DECISION_SOURCE_AGENT_SUBMITTED_FINDING,
     WP4_DECISION_SOURCE_SCENARIO,
@@ -246,35 +244,6 @@ def build_heuristic_wrapper_provenance(
             **(extra if isinstance(extra, dict) else {}),
         },
     )
-
-
-def build_compatibility_view(
-    *,
-    canonical_object_kind: str,
-    legacy_aliases: dict[str, str] | None = None,
-    artifact_role: str = "export-and-fallback-only",
-    notes: list[str] | None = None,
-    legacy_fallback_hits: int = 0,
-) -> dict[str, Any]:
-    normalized_aliases = {
-        maybe_text(key): maybe_text(value)
-        for key, value in (legacy_aliases or {}).items()
-        if maybe_text(key) and maybe_text(value)
-    }
-    normalized_notes = [
-        maybe_text(note)
-        for note in (notes or [])
-        if maybe_text(note)
-    ]
-    return {
-        "migration_status": "compatibility-view",
-        "artifact_role": maybe_text(artifact_role) or "export-and-fallback-only",
-        "authoritative_surface": "analysis-plane",
-        "canonical_object_kind": maybe_text(canonical_object_kind),
-        "legacy_aliases": normalized_aliases,
-        "legacy_fallback_hits": max(0, int(legacy_fallback_hits)),
-        "notes": normalized_notes,
-    }
 
 
 def merged_lineage(existing: Any, *sources: Any) -> list[str]:
@@ -1893,7 +1862,6 @@ __all__ = [
     "OBJECT_KIND_STANCE_GROUP",
     "OBJECT_KIND_VERIFIABILITY_ASSESSMENT",
     "OBJECT_KIND_VERIFICATION_ROUTE",
-    "build_compatibility_view",
     "build_heuristic_wrapper_provenance",
     "canonical_evidence_refs",
     "maybe_number",

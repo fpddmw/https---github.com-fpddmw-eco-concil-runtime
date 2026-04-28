@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Merge Observation Candidates"
-  short_description: "Merge nearby observation candidates into stable observation groups"
-  default_prompt: "Use $merge-observation-candidates to read the current round's observation candidates, merge nearby or cross-source duplicates into stable observation groups, persist the merged artifact, and return provenance-aware handoff refs."

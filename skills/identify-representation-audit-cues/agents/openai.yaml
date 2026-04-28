@@ -1,0 +1,4 @@
+interface:
+  display_name: "Identify Representation Audit Cues"
+  short_description: "WP4 representation audit cues"
+  default_prompt: "Use $identify-representation-audit-cues only after approval. Emit human-review cues about source coverage; do not produce representation findings or severity scores."

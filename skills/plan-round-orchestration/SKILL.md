@@ -16,12 +16,12 @@ description: Optional moderator advisory skill for materializing an auditable or
 - A moderator explicitly asks for advisory planning after reviewing DB-native findings, evidence bundles, proposals, or readiness opinions.
 - The operator approves this optional-analysis run for the current round and requested actor role.
 - Need a reviewable planning suggestion, not a committed phase transition or controller plan.
-- Need an explicit `phase_decision_basis` that labels heuristic assumptions and compatibility fallbacks.
+- Need an explicit `phase_decision_basis` that labels heuristic assumptions and missing-input caveats.
 
 ## Read/Write Contract
 - Reads `run_dir/board/investigation_board.json` by default.
 - Syncs the round into the run-local deliberation plane and prefers that state for planning.
-- Reads compatible board, next-action, probe, and readiness exports only as derived advisory context.
+- Reads board, next-action, probe, and readiness exports only as derived advisory context.
 - Writes `run_dir/runtime/orchestration_plan_<round_id>.json` as an advisory export, not canonical phase ownership.
 
 ## Required Input

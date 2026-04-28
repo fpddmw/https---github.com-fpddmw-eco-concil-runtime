@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Research Issue Views"
+  short_description: "WP4 typed issue cue projections"
+  default_prompt: "Use $project-research-issue-views only after approval. Emit actor, concern, citation, and stance cues for audit; do not write conclusions or report prose."

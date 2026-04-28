@@ -1,0 +1,4 @@
+interface:
+  display_name: "Aggregate Environment Evidence"
+  short_description: "WP4 DB-backed environment aggregation helper"
+  default_prompt: "Use $aggregate-environment-evidence only after approval. Summarize normalized environment signals with provenance and limitations; do not perform claim matching, readiness scoring, or phase advancement."

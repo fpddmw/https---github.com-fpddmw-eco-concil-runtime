@@ -553,8 +553,8 @@ def seed_analysis_chain(
 ) -> dict[str, dict[str, Any]]:
     seed_signal_plane(run_dir, root, run_id, round_id, include_airnow=include_airnow)
     outputs: dict[str, dict[str, Any]] = {}
-    outputs["extract_claims"] = run_script(
-        script_path("extract-claim-candidates"),
+    outputs["discourse_issues"] = run_script(
+        script_path("discover-discourse-issues"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -562,19 +562,8 @@ def seed_analysis_chain(
         "--round-id",
         round_id,
     )
-    outputs["extract_observations"] = run_script(
-        script_path("extract-observation-candidates"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
-        "--metric",
-        "pm2_5",
-    )
-    outputs["cluster_claims"] = run_script(
-        script_path("cluster-claim-candidates"),
+    outputs["environment_aggregation"] = run_script(
+        script_path("aggregate-environment-evidence"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -582,24 +571,37 @@ def seed_analysis_chain(
         "--round-id",
         round_id,
     )
-    outputs["merge_observations"] = run_script(
-        script_path("merge-observation-candidates"),
+    outputs["evidence_lanes"] = run_script(
+        script_path("suggest-evidence-lanes"),
         "--run-dir",
         str(run_dir),
         "--run-id",
         run_id,
         "--round-id",
         round_id,
-        "--metric",
-        "pm2_5",
+        "--input-path",
+        outputs["discourse_issues"]["summary"]["output_path"],
     )
-    outputs["link_evidence"] = run_script(
-        script_path("link-claims-to-observations"),
+    outputs["research_issue_surface"] = run_script(
+        script_path("materialize-research-issue-surface"),
         "--run-dir",
         str(run_dir),
         "--run-id",
         run_id,
         "--round-id",
         round_id,
+        "--input-path",
+        outputs["discourse_issues"]["summary"]["output_path"],
+    )
+    outputs["research_issue_views"] = run_script(
+        script_path("project-research-issue-views"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--input-path",
+        outputs["research_issue_surface"]["summary"]["output_path"],
     )
     return outputs

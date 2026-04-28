@@ -1,0 +1,4 @@
+interface:
+  display_name: "Apply Approved Formal Public Taxonomy"
+  short_description: "WP4 approved taxonomy candidate labels"
+  default_prompt: "Use $apply-approved-formal-public-taxonomy only after approval and with an approved mission-scoped taxonomy reference. Emit candidate labels for audit, not report conclusions."

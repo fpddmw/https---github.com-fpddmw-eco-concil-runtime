@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Fact Check Evidence Scope"
+  short_description: "WP4 explicit evidence-scope review helper"
+  default_prompt: "Use $review-fact-check-evidence-scope only after approval and only with explicit verification question, place, period, evidence window, lag assumptions, metric requirements, and source requirements. Emit caveats, not factual conclusions."

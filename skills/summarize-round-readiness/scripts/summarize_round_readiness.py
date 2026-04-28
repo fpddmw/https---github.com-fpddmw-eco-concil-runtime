@@ -598,12 +598,10 @@ def summarize_round_readiness_skill(
         ):
             recommended_next_skills.append("open-falsification-probe")
         if representation_gap_actions > 0 or formal_linkage_actions > 0:
-            recommended_next_skills.append(
-                "link-formal-comments-to-public-discourse"
-            )
-            recommended_next_skills.append("identify-representation-gaps")
+            recommended_next_skills.append("compare-formal-public-footprints")
+            recommended_next_skills.append("identify-representation-audit-cues")
         if diffusion_focus_count > 0:
-            recommended_next_skills.append("detect-cross-platform-diffusion")
+            recommended_next_skills.append("detect-temporal-cooccurrence-cues")
         deduped: list[str] = []
         for skill_name in recommended_next_skills:
             if skill_name not in deduped:
@@ -618,10 +616,10 @@ def summarize_round_readiness_skill(
         if open_probes > 0 or routing_actions > 0 or empirical_gap_actions > 0:
             recommended_next_skills.append("open-falsification-probe")
         if representation_gap_actions > 0 or formal_linkage_actions > 0:
-            recommended_next_skills.append("link-formal-comments-to-public-discourse")
-            recommended_next_skills.append("identify-representation-gaps")
+            recommended_next_skills.append("compare-formal-public-footprints")
+            recommended_next_skills.append("identify-representation-audit-cues")
         if diffusion_focus_count > 0:
-            recommended_next_skills.append("detect-cross-platform-diffusion")
+            recommended_next_skills.append("detect-temporal-cooccurrence-cues")
         deduped: list[str] = []
         for skill_name in recommended_next_skills:
             if skill_name not in deduped:

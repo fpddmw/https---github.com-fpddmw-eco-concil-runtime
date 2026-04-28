@@ -217,7 +217,7 @@ def build_normalization_audit_skill(
         "canonical_ids": canonical_ids,
         "warnings": warnings,
         "input_analysis_sync": wrapper.get("input_analysis_sync", {}),
-        "board_handoff": {"candidate_ids": canonical_ids, "evidence_refs": artifact_refs, "gap_hints": gap_hints, "challenge_hints": ["Compare claim-type diversity and observation-metric diversity before promotion."] if claims or observations else [], "suggested_next_skills": ["derive-claim-scope", "classify-claim-verifiability", "route-verification-lane", "post-board-note"]},
+        "board_handoff": {"candidate_ids": canonical_ids, "evidence_refs": artifact_refs, "gap_hints": gap_hints, "challenge_hints": ["Review normalization diversity before using this QA artifact in a finding or bundle."] if claims or observations else [], "suggested_next_skills": []},
     }
 
 

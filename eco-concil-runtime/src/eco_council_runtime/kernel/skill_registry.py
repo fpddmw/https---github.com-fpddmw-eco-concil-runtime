@@ -205,31 +205,22 @@ NORMALIZE_SKILLS = [
 
 OPTIONAL_ANALYSIS_SKILLS = [
     "build-normalization-audit",
-    "extract-claim-candidates",
-    "cluster-claim-candidates",
-    "derive-claim-scope",
-    "classify-claim-verifiability",
-    "route-verification-lane",
-    "extract-issue-candidates",
-    "cluster-issue-candidates",
-    "extract-stance-candidates",
-    "extract-concern-facets",
-    "extract-actor-profiles",
-    "extract-evidence-citation-types",
-    "materialize-controversy-map",
-    "extract-observation-candidates",
-    "merge-observation-candidates",
-    "derive-observation-scope",
-    "link-claims-to-observations",
-    "score-evidence-coverage",
-    "link-formal-comments-to-public-discourse",
-    "identify-representation-gaps",
-    "detect-cross-platform-diffusion",
+    "aggregate-environment-evidence",
+    "review-fact-check-evidence-scope",
+    "discover-discourse-issues",
+    "suggest-evidence-lanes",
+    "materialize-research-issue-surface",
+    "project-research-issue-views",
+    "export-research-issue-map",
+    "apply-approved-formal-public-taxonomy",
+    "compare-formal-public-footprints",
+    "identify-representation-audit-cues",
+    "detect-temporal-cooccurrence-cues",
+    "review-evidence-sufficiency",
 ]
 
 WP4_ALLOWED_HELPER_DECISION_SOURCES = [
     "approved-helper-view",
-    "deprecated-legacy-helper",
     "manual-or-moderator-defined",
     "agent-submitted-finding",
     "scenario",
@@ -238,93 +229,93 @@ WP4_ALLOWED_HELPER_DECISION_SOURCES = [
 WP4_OPTIONAL_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
     "build-normalization-audit": {
         "rule_id": "HEUR-NORMALIZATION-AUDIT-001",
-        "decision_source": "deprecated-legacy-helper",
-        "destination": "operator QA export or removal",
-        "audit_status": "legacy-isolated; default-frozen; approval-required; audit-pending",
+        "decision_source": "approved-helper-view",
+        "destination": "operator QA export",
+        "audit_status": "default-frozen; approval-required; audit-pending",
     },
-    "extract-claim-candidates": {
-        "rule_id": "HEUR-CLAIM-EXTRACT-001",
-        "destination": "discover-discourse-issues",
+    "aggregate-environment-evidence": {
+        "rule_id": "HEUR-ENV-AGGREGATE-001",
+        "destination": "DB-backed environment evidence aggregation helper",
+        "caveats": [
+            "Aggregation is descriptive only and cannot be used for claim matching or readiness scoring.",
+            "Report use requires finding, evidence bundle, proposal, review comment, or report basis citation.",
+        ],
     },
-    "cluster-claim-candidates": {
-        "rule_id": "HEUR-CLAIM-CLUSTER-001",
-        "destination": "discover-discourse-issues",
+    "review-fact-check-evidence-scope": {
+        "rule_id": "HEUR-FACT-SCOPE-001",
+        "destination": "explicit fact-check scope review helper",
+        "caveats": [
+            "Requires explicit verification question, geography, study period, evidence window, lag assumptions, metric requirements, and source requirements.",
+            "Does not emit factual outcome labels or phase-gate posture.",
+        ],
     },
-    "derive-claim-scope": {
-        "rule_id": "HEUR-CLAIM-SCOPE-001",
-        "destination": "discover-discourse-issues",
+    "discover-discourse-issues": {
+        "rule_id": "HEUR-DISCOURSE-DISCOVERY-001",
+        "destination": "DB-backed public/formal discourse issue hints",
     },
-    "classify-claim-verifiability": {
-        "rule_id": "HEUR-VERIFY-001",
-        "destination": "suggest-evidence-lanes",
+    "suggest-evidence-lanes": {
+        "rule_id": "HEUR-EVIDENCE-LANE-001",
+        "destination": "advisory evidence-lane tags",
+        "caveats": [
+            "Lane tags cannot assign owners, drive the source queue, or promote phases.",
+            "Any investigation action must be carried by DB council objects.",
+        ],
     },
-    "route-verification-lane": {
-        "rule_id": "HEUR-ROUTE-001",
-        "destination": "suggest-evidence-lanes",
+    "materialize-research-issue-surface": {
+        "rule_id": "HEUR-RESEARCH-ISSUE-SURFACE-001",
+        "destination": "candidate research issue surface helper",
     },
-    "extract-issue-candidates": {
-        "rule_id": "HEUR-ISSUE-EXTRACT-001",
-        "destination": "discover-discourse-issues or materialize-research-issue-surface",
+    "project-research-issue-views": {
+        "rule_id": "HEUR-RESEARCH-ISSUE-PROJECTION-001",
+        "destination": "typed research issue cue projections",
     },
-    "cluster-issue-candidates": {
-        "rule_id": "HEUR-ISSUE-CLUSTER-001",
-        "destination": "materialize-research-issue-surface",
+    "export-research-issue-map": {
+        "rule_id": "HEUR-RESEARCH-ISSUE-MAP-001",
+        "destination": "research issue navigation export",
+        "caveats": [
+            "The issue map is traceability/navigation only and is not a conclusion graph.",
+            "Edges do not imply causal relationships.",
+        ],
     },
-    "extract-stance-candidates": {
-        "rule_id": "HEUR-STANCE-001",
-        "destination": "project-research-issue-views",
+    "apply-approved-formal-public-taxonomy": {
+        "rule_id": "HEUR-TAXONOMY-APPLY-001",
+        "destination": "approved formal/public taxonomy label cues",
+        "caveats": [
+            "No default taxonomy may be applied without an approved mission-scoped taxonomy reference.",
+            "Candidate labels require human audit before report use.",
+        ],
     },
-    "extract-concern-facets": {
-        "rule_id": "HEUR-CONCERN-001",
-        "destination": "project-research-issue-views",
+    "compare-formal-public-footprints": {
+        "rule_id": "HEUR-FORMAL-PUBLIC-FOOTPRINT-001",
+        "destination": "formal/public footprint comparison helper",
+        "caveats": [
+            "Footprint comparison describes overlap and absence cues only.",
+            "It does not create paired discourse links or alignment scores.",
+        ],
     },
-    "extract-actor-profiles": {
-        "rule_id": "HEUR-ACTOR-001",
-        "destination": "project-research-issue-views",
+    "identify-representation-audit-cues": {
+        "rule_id": "HEUR-REPRESENTATION-AUDIT-001",
+        "destination": "representation audit cue helper",
+        "caveats": [
+            "Representation audit cues are prompts for human review, not findings.",
+            "No severity score may be emitted by this helper.",
+        ],
     },
-    "extract-evidence-citation-types": {
-        "rule_id": "HEUR-CITATION-001",
-        "destination": "project-research-issue-views",
+    "detect-temporal-cooccurrence-cues": {
+        "rule_id": "HEUR-TEMPORAL-COOCCURRENCE-001",
+        "destination": "temporal co-occurrence cue helper",
+        "caveats": [
+            "Temporal cues are descriptive only and do not imply influence, causality, spread, or direction.",
+            "Missing timestamps must be reported as insufficient temporal basis, not silently defaulted.",
+        ],
     },
-    "materialize-controversy-map": {
-        "rule_id": "HEUR-MAP-001",
-        "destination": "export-research-issue-map",
-    },
-    "extract-observation-candidates": {
-        "rule_id": "HEUR-OBS-EXTRACT-001",
-        "destination": "aggregate-environment-evidence",
-    },
-    "merge-observation-candidates": {
-        "rule_id": "HEUR-OBS-MERGE-001",
-        "destination": "aggregate-environment-evidence",
-    },
-    "derive-observation-scope": {
-        "rule_id": "HEUR-OBS-SCOPE-001",
-        "destination": "aggregate-environment-evidence",
-    },
-    "link-claims-to-observations": {
-        "rule_id": "HEUR-LEGACY-LINK-001",
-        "decision_source": "deprecated-legacy-helper",
-        "destination": "review-fact-check-evidence-scope",
-        "audit_status": "legacy-isolated; default-frozen; approval-required; audit-pending",
-    },
-    "score-evidence-coverage": {
-        "rule_id": "HEUR-COVERAGE-001",
-        "decision_source": "deprecated-legacy-helper",
-        "destination": "review-evidence-sufficiency",
-        "audit_status": "legacy-isolated; default-frozen; approval-required; audit-pending",
-    },
-    "link-formal-comments-to-public-discourse": {
-        "rule_id": "HEUR-FORMAL-PUBLIC-001",
-        "destination": "compare-formal-public-footprints",
-    },
-    "identify-representation-gaps": {
-        "rule_id": "HEUR-REP-GAP-001",
-        "destination": "identify-representation-audit-cues",
-    },
-    "detect-cross-platform-diffusion": {
-        "rule_id": "HEUR-DIFFUSION-001",
-        "destination": "detect-temporal-cooccurrence-cues",
+    "review-evidence-sufficiency": {
+        "rule_id": "HEUR-SUFFICIENCY-REVIEW-001",
+        "destination": "DB-backed evidence sufficiency notes and caveats",
+        "caveats": [
+            "This helper emits review notes only; it is not a phase gate or report basis by itself.",
+            "Report use requires explicit citation through DB council or reporting basis objects.",
+        ],
     },
     "plan-round-orchestration": {
         "rule_id": "HEUR-AGENDA-001",

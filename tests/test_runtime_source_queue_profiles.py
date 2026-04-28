@@ -98,85 +98,53 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
         self.assertEqual("reporting", profiles["materialize-final-publication"]["stage"])
         self.assertTrue(profiles["materialize-final-publication"]["requires_explicit_approval"])
 
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["extract-observation-candidates"]["phase2_behavior"],
-        )
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["merge-observation-candidates"]["phase2_behavior"],
-        )
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["link-claims-to-observations"]["phase2_behavior"],
-        )
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["derive-observation-scope"]["phase2_behavior"],
-        )
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["score-evidence-coverage"]["phase2_behavior"],
-        )
-
-        self.assertEqual("advisory", profiles["classify-claim-verifiability"]["queue_status"])
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["classify-claim-verifiability"]["phase2_behavior"],
-        )
-        self.assertEqual("advisory", profiles["route-verification-lane"]["queue_status"])
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["route-verification-lane"]["phase2_behavior"],
-        )
-        self.assertEqual("advisory", profiles["extract-issue-candidates"]["queue_status"])
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["extract-issue-candidates"]["phase2_behavior"],
-        )
-        self.assertEqual("advisory", profiles["cluster-issue-candidates"]["queue_status"])
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["cluster-issue-candidates"]["phase2_behavior"],
-        )
-        self.assertEqual("advisory", profiles["extract-stance-candidates"]["queue_status"])
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["extract-stance-candidates"]["phase2_behavior"],
-        )
-        self.assertEqual("advisory", profiles["extract-concern-facets"]["queue_status"])
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["extract-concern-facets"]["phase2_behavior"],
-        )
-        self.assertEqual("advisory", profiles["extract-actor-profiles"]["queue_status"])
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["extract-actor-profiles"]["phase2_behavior"],
-        )
-        self.assertEqual("advisory", profiles["extract-evidence-citation-types"]["queue_status"])
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["extract-evidence-citation-types"]["phase2_behavior"],
-        )
-        self.assertEqual("advisory", profiles["materialize-controversy-map"]["queue_status"])
-        self.assertEqual(
-            "approval-gated-runtime-surface",
-            profiles["materialize-controversy-map"]["phase2_behavior"],
-        )
-
         for skill_name in [
+            "aggregate-environment-evidence",
+            "review-fact-check-evidence-scope",
+            "review-evidence-sufficiency",
+            "discover-discourse-issues",
+            "suggest-evidence-lanes",
+            "materialize-research-issue-surface",
+            "project-research-issue-views",
+            "export-research-issue-map",
+            "apply-approved-formal-public-taxonomy",
+            "compare-formal-public-footprints",
+            "identify-representation-audit-cues",
+            "detect-temporal-cooccurrence-cues",
             "plan-round-orchestration",
             "propose-next-actions",
+            "open-falsification-probe",
             "summarize-round-readiness",
-            "link-claims-to-observations",
-            "score-evidence-coverage",
         ]:
             self.assertEqual("advisory", profiles[skill_name]["queue_status"])
             self.assertEqual("operator-approved-on-demand", profiles[skill_name]["default_invocation"])
             self.assertEqual("approval-gated-runtime-surface", profiles[skill_name]["phase2_behavior"])
             self.assertTrue(profiles[skill_name]["requires_explicit_approval"])
             self.assertFalse(profiles[skill_name]["default_chain_eligible"])
+
+        for removed_skill in [
+            "extract-observation-candidates",
+            "merge-observation-candidates",
+            "derive-observation-scope",
+            "extract-claim-candidates",
+            "cluster-claim-candidates",
+            "derive-claim-scope",
+            "classify-claim-verifiability",
+            "route-verification-lane",
+            "extract-issue-candidates",
+            "cluster-issue-candidates",
+            "extract-stance-candidates",
+            "extract-concern-facets",
+            "extract-actor-profiles",
+            "extract-evidence-citation-types",
+            "materialize-controversy-map",
+            "link-formal-comments-to-public-discourse",
+            "identify-representation-gaps",
+            "detect-cross-platform-diffusion",
+            "link-claims-to-observations",
+            "score-evidence-coverage",
+        ]:
+            self.assertNotIn(removed_skill, profiles)
 
 
 if __name__ == "__main__":

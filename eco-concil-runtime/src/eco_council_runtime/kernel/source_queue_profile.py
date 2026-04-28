@@ -25,26 +25,18 @@ FETCH_SKILLS = {
 
 OPTIONAL_ANALYSIS_SKILLS = {
     "build-normalization-audit",
-    "extract-claim-candidates",
-    "cluster-claim-candidates",
-    "derive-claim-scope",
-    "classify-claim-verifiability",
-    "route-verification-lane",
-    "extract-issue-candidates",
-    "cluster-issue-candidates",
-    "extract-stance-candidates",
-    "extract-concern-facets",
-    "extract-actor-profiles",
-    "extract-evidence-citation-types",
-    "materialize-controversy-map",
-    "extract-observation-candidates",
-    "merge-observation-candidates",
-    "derive-observation-scope",
-    "link-claims-to-observations",
-    "score-evidence-coverage",
-    "link-formal-comments-to-public-discourse",
-    "identify-representation-gaps",
-    "detect-cross-platform-diffusion",
+    "aggregate-environment-evidence",
+    "review-fact-check-evidence-scope",
+    "review-evidence-sufficiency",
+    "discover-discourse-issues",
+    "suggest-evidence-lanes",
+    "materialize-research-issue-surface",
+    "project-research-issue-views",
+    "export-research-issue-map",
+    "apply-approved-formal-public-taxonomy",
+    "compare-formal-public-footprints",
+    "identify-representation-audit-cues",
+    "detect-temporal-cooccurrence-cues",
     "plan-round-orchestration",
     "propose-next-actions",
     "open-falsification-probe",
@@ -68,13 +60,41 @@ OPTIONAL_ANALYSIS_NOTES = {
         "Operator QA export for signal-plane ingestion checks. It is not a "
         "board-facing moderation step and requires an approval record."
     ),
-    "link-claims-to-observations": (
-        "Legacy empirical-link helper. It is approval-gated and must not be used as "
-        "the default basis for policy research reports."
+    "aggregate-environment-evidence": (
+        "Approval-gated DB-backed environment aggregation helper. It summarizes "
+        "source, metric, spatial, and temporal coverage without claim matching."
     ),
-    "score-evidence-coverage": (
-        "Approval-gated empirical evidence sufficiency helper for explicitly routed "
-        "observation lanes, not a global readiness gate."
+    "review-fact-check-evidence-scope": (
+        "Approval-gated explicit scope review helper. It requires question, place, "
+        "period, evidence window, lag assumptions, metric, and source requirements."
+    ),
+    "review-evidence-sufficiency": (
+        "Approval-gated evidence sufficiency review helper. It emits notes and "
+        "caveats only, and it is not a readiness score or phase gate."
+    ),
+    "discover-discourse-issues": (
+        "Approval-gated discourse discovery helper. It emits reversible issue hints, "
+        "not claims or report conclusions."
+    ),
+    "suggest-evidence-lanes": (
+        "Approval-gated advisory lane tag helper. It must not assign owners, drive "
+        "the source queue, or advance phases."
+    ),
+    "apply-approved-formal-public-taxonomy": (
+        "Approval-gated taxonomy helper. It requires a mission-scoped approved "
+        "taxonomy reference and emits candidate labels only."
+    ),
+    "compare-formal-public-footprints": (
+        "Approval-gated formal/public footprint helper. It describes overlap and "
+        "absence cues without link or alignment scoring."
+    ),
+    "identify-representation-audit-cues": (
+        "Approval-gated representation audit cue helper. It emits human-review "
+        "prompts, not representation findings."
+    ),
+    "detect-temporal-cooccurrence-cues": (
+        "Approval-gated temporal co-occurrence helper. It is descriptive only and "
+        "does not infer influence, causality, spread, or direction."
     ),
 }
 
@@ -172,8 +192,7 @@ def _profile(
         "phase2_behavior": phase2_behavior,
         "default_chain_eligible": bool(default_chain_eligible),
         "requires_explicit_approval": bool(requires_explicit_approval),
-        # Kept as an empty compatibility field so registry consumers no longer
-        # receive implied claim-route-coverage chains from source queue metadata.
+        # Source queue metadata must not emit implied analysis chains.
         "downstream_hints": [],
         "notes": notes,
     }

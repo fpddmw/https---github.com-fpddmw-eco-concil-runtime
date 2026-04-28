@@ -702,19 +702,19 @@ def fallback_path(
             "submit-readiness-opinion",
         ]
         if signal_counts.get("routing_actions", 0) > 0:
-            suggested_next_skills.insert(0, "route-verification-lane")
+            suggested_next_skills.insert(0, "suggest-evidence-lanes")
         if signal_counts.get("representation_gap_actions", 0) > 0 or signal_counts.get(
             "formal_linkage_actions",
             0,
         ) > 0:
             suggested_next_skills.extend(
                 [
-                    "link-formal-comments-to-public-discourse",
-                    "identify-representation-gaps",
+                    "compare-formal-public-footprints",
+                    "identify-representation-audit-cues",
                 ]
             )
         if signal_counts.get("diffusion_focus_count", 0) > 0:
-            suggested_next_skills.append("detect-cross-platform-diffusion")
+            suggested_next_skills.append("detect-temporal-cooccurrence-cues")
         fallback_rows.append(
             {
                 "when": "Controversy agenda still carries unresolved probe-worthy work.",
@@ -1062,7 +1062,7 @@ def plan_round_orchestration_skill(
     plan_id = "orchestration-plan-" + stable_hash(run_id, round_id, posture, *(step["skill_name"] for step in execution_queue))[:12]
     planning_notes = [
         "Planner artifact exists to make the phase-2 controller queue explicit and auditable.",
-        "Probe materialization is decided from agenda artifacts first; direct board heuristics only remain as a compatibility fallback when those artifacts are absent.",
+        "Probe materialization is decided from DB council objects and agenda artifacts; missing derived artifacts must be recorded as caveats.",
         "Board summary and board brief are treated as derived exports rather than controller prerequisites.",
     ]
     if direct_council_queue:

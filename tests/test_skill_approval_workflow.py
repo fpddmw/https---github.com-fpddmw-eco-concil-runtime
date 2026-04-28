@@ -21,7 +21,7 @@ if str(RUNTIME_SRC) not in sys.path:
 
 RUN_ID = "run-skill-approval-001"
 ROUND_ID = "round-skill-approval-001"
-OPTIONAL_SKILL = "extract-claim-candidates"
+OPTIONAL_SKILL = "discover-discourse-issues"
 OPERATOR_OPTIONAL_SKILL = "build-normalization-audit"
 
 
@@ -149,7 +149,7 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 "--requested-actor-role",
                 "environmental-investigator",
                 "--rationale",
-                "Need optional analysis for claim extraction.",
+                "Need optional discourse issue discovery for this round.",
                 "--actor-role",
                 "moderator",
             )
@@ -237,7 +237,7 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 },
                 "receipt_id": "runtime-receipt-skill-approval-consume",
                 "artifact_refs": [],
-                "canonical_ids": ["claim-candidate-1"],
+                "canonical_ids": ["discourse-hint-1"],
             }
 
             with (

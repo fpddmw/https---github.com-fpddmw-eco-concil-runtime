@@ -32,7 +32,7 @@ WP4 的核心结论：
 
 | 原 skill / helper | 原职责与主要问题 | WP4 操作 | 重构后 skill / helper | 重构后职责 | 来源关系与硬边界 |
 | --- | --- | --- | --- | --- | --- |
-| `link-claims-to-observations` | 把 claim 文本映射到环境指标、时间窗和阈值，输出 `support / contradiction / contextual`。风险是复活 claim truth matching。 | 废弃当前形态；短期只可作为 deprecated alias 阻断旧调用。 | `review-fact-check-evidence-scope` | 在 agent 显式提交核验问题、地理范围、研究期、证据匹配窗口、传播/滞后假设、metric/source 要求后，检查环境证据是否覆盖这些范围。 | 由 `link-claims-to-observations` 重建；不得输出 support / contradiction / true / false；不得默认进入报告 basis。 |
+| `link-claims-to-observations` | 把 claim 文本映射到环境指标、时间窗和阈值，输出 `support / contradiction / contextual`。风险是复活 claim truth matching。 | 删除旧入口；不保留 alias 或兼容脚本。 | `review-fact-check-evidence-scope` | 在 agent 显式提交核验问题、地理范围、研究期、证据匹配窗口、传播/滞后假设、metric/source 要求后，检查环境证据是否覆盖这些范围。 | 由 `link-claims-to-observations` 重建；不得输出 support / contradiction / true / false；不得默认进入报告 basis。 |
 | `score-evidence-coverage` | 用 claim-observation link、scope、support/contradiction 计数和 confidence 计算 coverage/readiness。 | 废弃当前公式。 | `review-evidence-sufficiency` | 基于 finding / evidence bundle / report section basis 做结构化 sufficiency review，指出覆盖维度、缺口、counter-evidence、不确定性。 | 由 `score-evidence-coverage` 重建；默认不使用 numeric readiness score；不得成为 phase gate。 |
 | `extract-observation-candidates` | 从 environment normalized signals 按 source/metric/rounded point 聚合 observation candidates。 | 与 merge/scope 合并重建。 | `aggregate-environment-evidence` | 从 DB normalized environment signals 生成环境证据集合/聚合视图，含统计、空间/时间/指标/source 分布和 coverage limitations。 | 由 observation 三件套合并而成；不再生成 observation candidate；只描述证据覆盖与限制。 |
 | `merge-observation-candidates` | 对 observation candidates 做第二级 point/date bucket 合并。风险是抹平 provider、空间、时间、质量差异。 | 与 extract/scope 合并重建。 | `aggregate-environment-evidence` | 同上；聚合必须由 caller 显式给出 region/time/metric/source/quality/aggregation method。 | 不再保留 `merged observation candidate` 抽象；输出必须记录 bucket/aggregation basis 与 caveats。 |
@@ -63,9 +63,9 @@ WP4 的核心结论：
 ### WP4.0 规则元数据与总护栏
 
 - [x] 在 shared helper / canonical contract 中补齐 helper metadata：`decision_source`、`rule_id`、`rule_version`、`taxonomy_version` 或 `rubric_version`、`approval_ref`、`audit_ref`、`rule_trace`、`caveats`。
-- [x] 定义允许的 `decision_source`：`approved-helper-view`、`deprecated-legacy-helper`、`manual-or-moderator-defined`、`agent-submitted-finding`、`scenario`。
+- [x] 定义允许的 `decision_source`：`approved-helper-view`、`manual-or-moderator-defined`、`agent-submitted-finding`、`scenario`。
 - [ ] 所有 optional-analysis 输出必须带 item-level `evidence_refs`、`lineage`、`provenance`。
-- [ ] 清理所有 `board_handoff.suggested_next_skills` 中的旧链路提示。
+- [x] 清理所有 `board_handoff.suggested_next_skills` 中的旧链路提示。
 - [x] runtime registry / source queue / agent prompt 中继续保证 heuristic helper approval-gated，不进默认链。
 
 验收：
@@ -77,89 +77,89 @@ WP4 的核心结论：
 ### WP4.1 Legacy link 与 coverage 替换
 
 - [x] 废弃或阻断 `link-claims-to-observations` 当前入口。
-- [ ] 新增或重建 `review-fact-check-evidence-scope`。
+- [x] 新增或重建 `review-fact-check-evidence-scope`。
 - [x] 废弃 `score-evidence-coverage` 当前公式。
-- [ ] 新增或重建 `review-evidence-sufficiency`。
+- [x] 新增或重建 `review-evidence-sufficiency`。
 - [x] 移除 support / contradiction / claim_true / claim_false / readiness score 默认输出。
 
 验收：
 
-- [ ] 事实核验 helper 必须要求显式核验问题、地理范围、研究期、证据匹配窗口、传播/滞后假设、metric/source 要求。
-- [ ] evidence sufficiency review 默认输出 notes，不输出 numeric readiness score。
+- [x] 事实核验 helper 必须要求显式核验问题、地理范围、研究期、证据匹配窗口、传播/滞后假设、metric/source 要求。
+- [x] evidence sufficiency review 默认输出 notes，不输出 numeric readiness score。
 - [ ] 旧 coverage/link 测试改写为 scope/sufficiency/caveat 测试。
 
 ### WP4.2 Environment evidence aggregation
 
-- [ ] 将 `extract-observation-candidates`、`merge-observation-candidates`、`derive-observation-scope` 收敛为 `aggregate-environment-evidence`。
-- [ ] 删除 `observation candidate / merged observation / usable_for_matching` 主语义。
-- [ ] 输出 statistics summary、spatial distribution、temporal distribution、metric distribution、source distribution、coverage limitations、metadata tags。
-- [ ] 保留 source signal ids、provider/source_skill、artifact refs、record locator。
+- [x] 将 `extract-observation-candidates`、`merge-observation-candidates`、`derive-observation-scope` 收敛为 `aggregate-environment-evidence`。
+- [x] 删除 `observation candidate / merged observation / usable_for_matching` 主语义。
+- [x] 输出 statistics summary、spatial distribution、temporal distribution、metric distribution、source distribution、coverage limitations、metadata tags。
+- [x] 保留 source signal ids、provider/source_skill、artifact refs、record locator。
 
 验收：
 
-- [ ] 不再输出 `usable_for_matching`。
-- [ ] 不再建议 `link-claims-to-observations` 或 `score-evidence-coverage`。
-- [ ] 聚合方法、bucket、source distribution 和 caveats 可从 DB 复原。
+- [x] 不再输出 `usable_for_matching`。
+- [x] 不再建议 `link-claims-to-observations` 或 `score-evidence-coverage`。
+- [x] 聚合方法、bucket、source distribution 和 caveats 可从 DB 复原。
 
 ### WP4.3 Discourse discovery 与 evidence-lane advisory
 
-- [ ] 将 `extract-claim-candidates`、`cluster-claim-candidates`、`derive-claim-scope` 收敛为 `discover-discourse-issues`。
-- [ ] 将 `classify-claim-verifiability`、`route-verification-lane` 收敛为 `suggest-evidence-lanes`。
-- [ ] 删除 claim candidate / claim cluster / claim scope / route owner / matching readiness 主语义。
-- [ ] 输出 public discourse issue hints、text evidence snippets、source distribution、taxonomy labels、mentioned_scope_metadata、coverage caveats。
+- [x] 将 `extract-claim-candidates`、`cluster-claim-candidates`、`derive-claim-scope` 收敛为 `discover-discourse-issues`。
+- [x] 将 `classify-claim-verifiability`、`route-verification-lane` 收敛为 `suggest-evidence-lanes`。
+- [x] 删除 claim candidate / claim cluster / claim scope / route owner / matching readiness 主语义。
+- [x] 输出 public discourse issue hints、text evidence snippets、source distribution、taxonomy labels、mentioned_scope_metadata、coverage caveats。
 
 验收：
 
-- [ ] discovery 输出不得称为事实 claim。
-- [ ] `mentioned_*` 不得被提升为 study scope。
-- [ ] evidence-lane suggestion 不得驱动 workflow、source queue 或 phase。
+- [x] discovery 输出不得称为事实 claim。
+- [x] `mentioned_*` 不得被提升为 study scope。
+- [x] evidence-lane suggestion 不得驱动 workflow、source queue 或 phase。
 
 ### WP4.4 Research issue surface 与 typed projections
 
-- [ ] 将旧 `extract-issue-candidates` / `cluster-issue-candidates` 重建为 `materialize-research-issue-surface` 或废弃为 discovery alias。
+- [x] 将旧 `extract-issue-candidates` / `cluster-issue-candidates` 重建为 `materialize-research-issue-surface`；删除旧入口，不保留 discovery alias。
 - [ ] research issue surface 只消费 mission/moderator question、approved discovery、formal typed signals、environment summaries、findings、evidence bundles、challenger objections。
-- [ ] typed issue skills 收敛为 `project-research-issue-views`。
-- [ ] `materialize-controversy-map` 收敛为 `export-research-issue-map`。
+- [x] typed issue skills 收敛为 `project-research-issue-views`。
+- [x] `materialize-controversy-map` 收敛为 `export-research-issue-map`。
 
 验收：
 
-- [ ] 不得从未批准 claim/scope/route fallback 生成 issue。
-- [ ] typed projections 不重新编码证据。
-- [ ] controversy map 禁止 inline fallback，缺输入时报告 missing inputs。
+- [x] 不得从未批准 claim/scope/route fallback 生成 issue。
+- [x] typed projections 不重新编码证据。
+- [x] controversy map 禁止 inline fallback，缺输入时报告 missing inputs。
 
 ### WP4.5 Formal/Public footprint 与 taxonomy
 
 - [ ] 将 `formal_signal_semantics.py` 拆为 approved taxonomy family records。
-- [ ] 将 `link-formal-comments-to-public-discourse` 重建为 `compare-formal-public-footprints`。
-- [ ] 删除 `aligned`、alignment score、claim-side-only、claim support bonus。
-- [ ] 输出 formal footprint、public footprint、overlap status、descriptive balance metrics、coverage caveats。
+- [x] 将 `link-formal-comments-to-public-discourse` 重建为 `compare-formal-public-footprints`。
+- [x] 删除 `aligned`、alignment score、claim-side-only、claim support bonus。
+- [x] 输出 formal footprint、public footprint、overlap status、descriptive balance metrics、coverage caveats。
 
 验收：
 
-- [ ] footprint comparison 不表示观点一致或代表性充分。
-- [ ] submitter type 只作为 candidate label，并保留 metadata/text basis。
-- [ ] taxonomy 未审批时不能输出强标签。
+- [x] footprint comparison 不表示观点一致或代表性充分。
+- [x] submitter type 只作为 candidate label，并保留 metadata/text basis。
+- [x] taxonomy 未审批时不能输出强标签。
 
 ### WP4.6 Representation 与 temporal co-occurrence cues
 
-- [ ] 将 `identify-representation-gaps` 重建为 `identify-representation-audit-cues`。
-- [ ] 将 `detect-cross-platform-diffusion` 重建为 `detect-temporal-cooccurrence-cues`。
-- [ ] 删除 gap/severity/influence/causality/spillover 确定语义。
-- [ ] timestamp 缺失时输出 insufficient temporal basis，不得 fallback 到 1970。
+- [x] 将 `identify-representation-gaps` 重建为 `identify-representation-audit-cues`。
+- [x] 将 `detect-cross-platform-diffusion` 重建为 `detect-temporal-cooccurrence-cues`。
+- [x] 删除 gap/severity/influence/causality/spillover 确定语义。
+- [x] timestamp 缺失时输出 insufficient temporal basis，不得 fallback 到 1970。
 
 验收：
 
-- [ ] representation cue 不输出已证实 underrepresentation。
-- [ ] temporal cue 不输出传播方向已确定。
-- [ ] 报告正文默认不消费 cue，除非 report basis 明确引用。
+- [x] representation cue 不输出已证实 underrepresentation。
+- [x] temporal cue 不输出传播方向已确定。
+- [x] 报告正文默认不消费 cue，除非 report basis 明确引用。
 
 ### WP4.7 Audit records、docs、tests 收口
 
 - [ ] 将本文件第 `8` 节 freeze-line placeholder rows 替换为最终 versioned audit records。
-- [ ] 更新所有触达 skill 的 `SKILL.md`、agent prompts、runtime registry description。
+- [x] 更新所有触达 skill 的 `SKILL.md`、agent prompts、runtime registry description。
 - [ ] 重写依赖 coverage/linkage/route/map 的旧测试。
-- [ ] 增加 approval-gated helper、deprecated alias、DB-only recovery、report basis 引用测试。
-- [ ] 更新本文件的完成状态、未完成项、新发现问题、是否影响后续计划。
+- [x] 增加 approval-gated helper、旧入口移除、DB-only recovery、report basis 引用测试。
+- [x] 更新本文件的完成状态、未完成项、新发现问题、是否影响后续计划。
 
 ## 5. 必须删除或替换的旧语义
 
@@ -198,39 +198,44 @@ WP4 helper 必须支持 challenger 对以下内容提交 review comment / challe
 4. 是否影响后续计划。
 5. 实际运行的最小测试集合与结果。
 
-## 7.1 2026-04-28 本批收口（WP4.0 / WP4.1 起步）
+## 7.1 2026-04-28 本批交付（WP4 skills 无兼容收口）
 
 已完成：
 
-1. `eco_council_runtime.analysis_objects` 新增 WP4 helper metadata helper 和允许的 `decision_source` 集合：`approved-helper-view / deprecated-legacy-helper / manual-or-moderator-defined / agent-submitted-finding / scenario`。
-2. `kernel/skill_registry.py` 已为 WP4 optional-analysis / advisory helper 补齐 freeze-line metadata：`rule_id / rule_version / audit_status / wp4_destination / caveats`，并通过 registry snapshot 暴露。
-3. `link-claims-to-observations` 默认入口已改为 `deprecated-blocked`，只写 deprecated-helper stop artifact；不再加载旧输入、不再输出 link rows、不再 sync analysis result、不再通过 `board_handoff.suggested_next_skills` 指向旧链。
-4. `score-evidence-coverage` 默认入口已改为 `deprecated-blocked`，只写 deprecated-helper stop artifact；不再运行旧 coverage 公式、不再输出 numeric gate posture、不再 sync analysis result、不再返回旧链路建议。
-5. 已更新上述两个 skill 的 `SKILL.md` 与 OpenAI agent prompt，明确它们是 WP4 deprecated alias，不应用于新调查链。
-6. 新增 `tests/test_wp4_helper_guardrails.py`，覆盖 registry freeze metadata、两个 deprecated alias 不输出旧默认语义、`board_handoff.suggested_next_skills` 为空。
+1. 新增共享实现 `eco_council_runtime.wp4_helpers`，统一 WP4 helper metadata、DB signal 查询、artifact refs、lineage、provenance、safe board handoff 与命名规则。
+2. 新增 successor skills：`aggregate-environment-evidence`、`review-fact-check-evidence-scope`、`review-evidence-sufficiency`、`discover-discourse-issues`、`suggest-evidence-lanes`、`materialize-research-issue-surface`、`project-research-issue-views`、`export-research-issue-map`、`apply-approved-formal-public-taxonomy`、`compare-formal-public-footprints`、`identify-representation-audit-cues`、`detect-temporal-cooccurrence-cues`。
+3. 删除 20 个旧 skill 目录和脚本：observation、claim、issue、typed issue、controversy map、formal/public link、representation gap、diffusion、link、coverage 系列均不再作为可执行 skill 存在。
+4. 删除不再有调用者的旧 issue / typed issue runner 与旧 controversy issue surface 构造模块，避免继续保留旧启发式引擎。
+5. `kernel/skill_registry.py` 与 `source_queue_profile.py` 只登记 successor / advisory helpers；所有 WP4 helper 仍为 approval-gated optional-analysis，不进入默认 source queue chain。
+6. `analysis_objects.py` 与 `skill_registry.py` 已移除旧 helper 决策源；允许的 WP4 `decision_source` 只剩 `approved-helper-view`、`manual-or-moderator-defined`、`agent-submitted-finding`、`scenario`。
+7. `analysis_plane.py` 中残留的 `default_source_skill` 已全部指向 successor skill 名称，不再指向已删除旧 skill。
+8. 清理 `board_handoff.suggested_next_skills / recommended_next_skills / withheld_next_skills` 中残留的旧 skill 名称。
+9. 更新 focused tests：旧 skill 在 registry 与脚本路径上都必须不存在；source queue profile 对旧 skill 名称也必须不存在。
 
 未完成：
 
-1. 尚未新增 `review-fact-check-evidence-scope` 与 `review-evidence-sufficiency` successor skills。
-2. 尚未把全部 optional-analysis skill 的 item-level 输出统一补齐 `evidence_refs / lineage / provenance / wp4_helper_metadata`。
-3. 尚未清理所有 helper 的旧 `board_handoff.suggested_next_skills`；本批只阻断了 `link-claims-to-observations` 与 `score-evidence-coverage` 两个 WP4.1 高风险入口。
-4. 尚未批量改写依赖旧 coverage/link/map 的历史 workflow 测试；本批新增的是 guardrail 回归。
+1. `formal_signal_semantics.py` 尚未物理拆分为 versioned taxonomy family records；当前由 `apply-approved-formal-public-taxonomy` 承接显式 approved taxonomy 输入。
+2. 全仓历史 workflow 测试仍有大量旧脚本直接调用，需要逐步改写为 successor helper 与 DB council-object 承接模式；这些测试不应通过恢复旧入口解决。
+3. 所有 optional-analysis 的 item-level `evidence_refs / lineage / provenance` 尚未逐一做全仓验收；本批覆盖 successor helpers 与当前 guardrail 路径。
+4. `analysis_plane.py` 仍保留若干历史 analysis kind 名称用于 DB result-set 查询结构；本批已移除旧 skill 来源，但尚未重命名这些 DB/query object kind。
 
 新发现的问题：
 
-1. 旧 workflow 测试和若干历史链路仍直接调用 `link-claims-to-observations` / `score-evidence-coverage` 作为中间产物生成器；本批阻断默认语义后，这些旧测试需要按 WP4 successor helper 与 DB council-object 承接模式重写。
-2. runtime 的审批链已经存在，但直接运行 skill 脚本仍可得到 deprecated stop artifact；这符合本批“阻断旧语义”的目标，但 successor helper 落地前不会产出可替代的 scope/sufficiency review。
-3. `build-normalization-audit` 原本不在本文件 freeze-line 表中；本批在 registry metadata 中补了 `HEUR-NORMALIZATION-AUDIT-001`，后续应决定是否把它正式纳入第 8 节审计表。
+1. 多个历史 workflow 测试仍直接调用已删除旧脚本；全量测试在完成测试迁移前会按预期暴露缺失入口。
+2. phase-2 fallback/context 模块仍会读取历史 analysis result kind 名称；它们不再指向旧 skill，但后续若要彻底消除 claim/route/coverage 命名债，需要另立 DB schema/query migration。
+3. 旧测试 fixture 曾把 skill 链当作中间产物生成器；按 WP4 原则，后续 fixture 应从 normalized DB signals、finding/evidence bundle/proposal/report basis 等 DB objects 构造输入。
 
 是否影响后续计划：
 
-1. 不阻塞后续 WP4.2-WP4.7，但会使依赖旧 link/coverage 产物的旧测试或 demo 需要重写，不能再用旧语义维持兼容。
-2. 下一批建议优先实现 `review-evidence-sufficiency` 的 DB-backed notes/caveats 输出，再处理 `aggregate-environment-evidence`，这样可先恢复报告 evidence sufficiency review 的新链路。
+1. 会影响所有依赖旧 skill 名称的外部调用、demo 和历史测试；失败是有意行为，不做兼容修复。
+2. 不阻塞后续 successor helper 扩展，但 full regression 必须先完成旧 workflow 测试迁移。
+3. 后续优先级应是：taxonomy family records、历史 workflow 测试迁移、analysis kind 命名迁移、report basis 显式引用链。
 
 本批实际运行测试：
 
-1. `.venv/bin/python -m unittest tests.test_wp4_helper_guardrails tests.test_skill_approval_workflow`：8 项通过。
-2. `.venv/bin/python -m unittest tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`：10 项通过。
+1. `PYTHONPATH=eco-concil-runtime/src .venv/bin/python - <<'PY' ... validate_skill_registry()`：通过；当前 registry 识别 `80` 个 skill、`24` 个需要 operator approval、`17` 个 optional-analysis skill。
+2. `.venv/bin/python -m py_compile eco-concil-runtime/src/eco_council_runtime/wp4_helpers.py eco-concil-runtime/src/eco_council_runtime/analysis_objects.py eco-concil-runtime/src/eco_council_runtime/kernel/skill_registry.py eco-concil-runtime/src/eco_council_runtime/kernel/source_queue_profile.py eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py tests/_workflow_support.py tests/test_wp4_helper_guardrails.py tests/test_runtime_source_queue_profiles.py tests/test_skill_approval_workflow.py`：通过。
+3. `.venv/bin/python -m unittest tests.test_wp4_helper_guardrails tests.test_skill_approval_workflow tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`：21 项通过。
 
 ## 8. 规则审计 freeze line
 
@@ -255,31 +260,22 @@ WP4 helper 必须支持 challenger 对以下内容提交 review comment / challe
 1. `default-frozen`：不得进入默认 investigator、moderator、source queue 或 controller chain。
 2. `approval-required`：执行必须经过 `skill_approval_requests -> approval -> run-skill --skill-approval-request-id`。
 3. `audit-pending`：仍待详细人工审计；该行只是 freeze-line placeholder。
-4. `legacy-isolated`：当前语义属于 legacy 或 deprecated，重建前不得作为新链路使用。
 
 | rule_id | skill | current status | WP4 destination |
 | --- | --- | --- | --- |
-| `HEUR-NORMALIZATION-AUDIT-001` | `build-normalization-audit` | `legacy-isolated; default-frozen; approval-required; audit-pending` | operator QA export or removal |
-| `HEUR-CLAIM-EXTRACT-001` | `extract-claim-candidates` | `default-frozen; approval-required; audit-pending` | `discover-discourse-issues` |
-| `HEUR-CLAIM-CLUSTER-001` | `cluster-claim-candidates` | `default-frozen; approval-required; audit-pending` | `discover-discourse-issues` |
-| `HEUR-CLAIM-SCOPE-001` | `derive-claim-scope` | `default-frozen; approval-required; audit-pending` | `discover-discourse-issues` |
-| `HEUR-VERIFY-001` | `classify-claim-verifiability` | `default-frozen; approval-required; audit-pending` | `suggest-evidence-lanes` |
-| `HEUR-ROUTE-001` | `route-verification-lane` | `default-frozen; approval-required; audit-pending` | `suggest-evidence-lanes` |
-| `HEUR-ISSUE-EXTRACT-001` | `extract-issue-candidates` | `default-frozen; approval-required; audit-pending` | `discover-discourse-issues` or `materialize-research-issue-surface` |
-| `HEUR-ISSUE-CLUSTER-001` | `cluster-issue-candidates` | `default-frozen; approval-required; audit-pending` | `materialize-research-issue-surface` |
-| `HEUR-STANCE-001` | `extract-stance-candidates` | `default-frozen; approval-required; audit-pending` | `project-research-issue-views` |
-| `HEUR-CONCERN-001` | `extract-concern-facets` | `default-frozen; approval-required; audit-pending` | `project-research-issue-views` |
-| `HEUR-ACTOR-001` | `extract-actor-profiles` | `default-frozen; approval-required; audit-pending` | `project-research-issue-views` |
-| `HEUR-CITATION-001` | `extract-evidence-citation-types` | `default-frozen; approval-required; audit-pending` | `project-research-issue-views` |
-| `HEUR-MAP-001` | `materialize-controversy-map` | `default-frozen; approval-required; audit-pending` | `export-research-issue-map` |
-| `HEUR-OBS-EXTRACT-001` | `extract-observation-candidates` | `default-frozen; approval-required; audit-pending` | `aggregate-environment-evidence` |
-| `HEUR-OBS-MERGE-001` | `merge-observation-candidates` | `default-frozen; approval-required; audit-pending` | `aggregate-environment-evidence` |
-| `HEUR-OBS-SCOPE-001` | `derive-observation-scope` | `default-frozen; approval-required; audit-pending` | `aggregate-environment-evidence` |
-| `HEUR-LEGACY-LINK-001` | `link-claims-to-observations` | `legacy-isolated; default-frozen; approval-required; audit-pending` | `review-fact-check-evidence-scope` |
-| `HEUR-COVERAGE-001` | `score-evidence-coverage` | `default-frozen; approval-required; audit-pending` | `review-evidence-sufficiency` |
-| `HEUR-FORMAL-PUBLIC-001` | `link-formal-comments-to-public-discourse` | `default-frozen; approval-required; audit-pending` | `compare-formal-public-footprints` |
-| `HEUR-REP-GAP-001` | `identify-representation-gaps` | `default-frozen; approval-required; audit-pending` | `identify-representation-audit-cues` |
-| `HEUR-DIFFUSION-001` | `detect-cross-platform-diffusion` | `default-frozen; approval-required; audit-pending` | `detect-temporal-cooccurrence-cues` |
+| `HEUR-NORMALIZATION-AUDIT-001` | `build-normalization-audit` | `default-frozen; approval-required; audit-pending` | operator QA export |
+| `HEUR-ENV-AGGREGATE-001` | `aggregate-environment-evidence` | `default-frozen; approval-required; audit-pending` | DB-backed environment evidence aggregation helper |
+| `HEUR-FACT-SCOPE-001` | `review-fact-check-evidence-scope` | `default-frozen; approval-required; audit-pending` | explicit fact-check scope review helper |
+| `HEUR-DISCOURSE-DISCOVERY-001` | `discover-discourse-issues` | `default-frozen; approval-required; audit-pending` | DB-backed public/formal discourse issue hints |
+| `HEUR-EVIDENCE-LANE-001` | `suggest-evidence-lanes` | `default-frozen; approval-required; audit-pending` | advisory evidence-lane tags |
+| `HEUR-RESEARCH-ISSUE-SURFACE-001` | `materialize-research-issue-surface` | `default-frozen; approval-required; audit-pending` | candidate research issue surface helper |
+| `HEUR-RESEARCH-ISSUE-PROJECTION-001` | `project-research-issue-views` | `default-frozen; approval-required; audit-pending` | typed research issue cue projections |
+| `HEUR-RESEARCH-ISSUE-MAP-001` | `export-research-issue-map` | `default-frozen; approval-required; audit-pending` | research issue navigation export |
+| `HEUR-TAXONOMY-APPLY-001` | `apply-approved-formal-public-taxonomy` | `default-frozen; approval-required; audit-pending` | approved formal/public taxonomy label cues |
+| `HEUR-FORMAL-PUBLIC-FOOTPRINT-001` | `compare-formal-public-footprints` | `default-frozen; approval-required; audit-pending` | formal/public footprint comparison helper |
+| `HEUR-REPRESENTATION-AUDIT-001` | `identify-representation-audit-cues` | `default-frozen; approval-required; audit-pending` | representation audit cue helper |
+| `HEUR-TEMPORAL-COOCCURRENCE-001` | `detect-temporal-cooccurrence-cues` | `default-frozen; approval-required; audit-pending` | temporal co-occurrence cue helper |
+| `HEUR-SUFFICIENCY-REVIEW-001` | `review-evidence-sufficiency` | `default-frozen; approval-required; audit-pending` | DB-backed sufficiency notes and caveats |
 | `HEUR-AGENDA-001` | `plan-round-orchestration` | `default-frozen; approval-required; audit-pending` | approval-gated advisory helper |
 | `HEUR-NEXT-ACTION-001` | `propose-next-actions` | `default-frozen; approval-required; audit-pending` | approval-gated advisory helper |
 | `HEUR-PROBE-001` | `open-falsification-probe` | `default-frozen; approval-required; audit-pending` | challenger/moderator helper |
@@ -289,4 +285,5 @@ WP4 helper 必须支持 challenger 对以下内容提交 review comment / challe
 
 1. 上表 skill 不得出现在默认 agent entry recommendations 或 source-queue downstream hints。
 2. 上表 skill 不得绕过已批准且未消费的 skill approval request 执行。
-3. 上表输出在完成后续审计前只能视为 derived advisory 或 legacy helper surface。
+3. 上表输出在完成后续审计前只能视为 derived advisory helper surface。
+4. 第 3 节列出的原 skill 只作为历史映射说明；它们不再是 active freeze-line rows，也不得重新作为 skill registry entry 出现。

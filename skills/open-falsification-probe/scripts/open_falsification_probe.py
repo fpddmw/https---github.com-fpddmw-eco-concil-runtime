@@ -116,22 +116,22 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
     if action_kind == "clarify-verification-route":
         suggestions.extend(
             [
-                "route-verification-lane",
+                "suggest-evidence-lanes",
                 "submit-council-proposal",
             ]
         )
     if action_kind == "advance-empirical-verification":
         suggestions.extend(
             [
-                "link-claims-to-observations",
-                "score-evidence-coverage",
+                "review-fact-check-evidence-scope",
+                "review-evidence-sufficiency",
                 "submit-council-proposal",
             ]
         )
     if action_kind == "review-formal-record":
         suggestions.extend(
             [
-                "link-formal-comments-to-public-discourse",
+                "compare-formal-public-footprints",
                 "submit-council-proposal",
             ]
         )
@@ -142,23 +142,23 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
     }:
         suggestions.extend(
             [
-                "link-formal-comments-to-public-discourse",
-                "identify-representation-gaps",
+                "compare-formal-public-footprints",
+                "identify-representation-audit-cues",
                 "submit-council-proposal",
             ]
         )
     if action_kind == "address-representation-gap":
         suggestions.extend(
             [
-                "identify-representation-gaps",
-                "link-formal-comments-to-public-discourse",
+                "identify-representation-audit-cues",
+                "compare-formal-public-footprints",
                 "submit-council-proposal",
             ]
         )
     if action_kind == "trace-cross-platform-diffusion":
         suggestions.extend(
             [
-                "detect-cross-platform-diffusion",
+                "detect-temporal-cooccurrence-cues",
                 "submit-council-proposal",
             ]
         )

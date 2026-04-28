@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Extract Claim Candidates"
-  short_description: "Optional audited public narrative seed extractor"
-  default_prompt: "Use $extract-claim-candidates only after a skill approval request has been approved. Extract public narrative seed candidates from normalized signals with evidence refs, provenance, and rule metadata; do not treat this as a default investigation ontology."
