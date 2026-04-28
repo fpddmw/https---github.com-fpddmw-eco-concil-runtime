@@ -1,29 +1,24 @@
 ---
 name: link-claims-to-observations
-description: Legacy optional empirical-link helper for explicitly routed observation questions. It requires operator-approved skill approval and must not be a default report evidence basis.
+description: Deprecated WP4 legacy alias. It now blocks old claim/observation matching and points operators to the scoped successor helper.
 ---
 
 # Eco Link Claims To Observations
 
 ## Core Goal
-- Read claim-side and observation-side candidate or grouped result sets from the analysis plane, with artifact-compatible fallback behavior.
-- Propose support, contradiction, or contextual links only for issues explicitly routed to an empirical observation lane.
-- Persist a link artifact with rule traces and provenance for audit or challenge work.
-- Keep claim-observation matching out of the default policy research workflow and out of reporting basis unless explicitly selected and approved.
-- Require `request-skill-approval -> approve-skill-approval -> run-skill --skill-approval-request-id` before execution.
+- This skill is a WP4 deprecated alias for the old claim/observation matching path.
+- Default execution no longer loads legacy inputs, emits empirical relation objects, syncs link result sets, or suggests follow-on legacy helpers.
+- The replacement direction is `review-fact-check-evidence-scope`, which must require an explicit verification question, geographic scope, study period, evidence window, lag assumptions, and metric/source requirements.
+- Any successor helper output must remain advisory until a DB council object explicitly cites it.
 
 ## Triggering Conditions
-- A moderator or investigator has an approved empirical question with time/place/source scope.
-- The operator has approved this optional-analysis run for the current round and actor role.
-- Need claim-to-observation evidence hypotheses as audit material, not as the default investigation frame.
-- Need stable link ids, rule traces, and provenance refs for auditability.
+- Existing callers need a governed, auditable stop instead of silently running the removed legacy path.
+- Operator approval is still required at runtime because the registry classifies this as optional analysis.
 
 ## Read/Write Contract
-- Loads `claim-cluster` result sets from the analysis plane first and falls back to `claim-candidate` results only when the preferred claim-side grouping is missing.
-- Loads `merged-observation` result sets from the analysis plane first and falls back to `observation-candidate` results only when the preferred observation-side grouping is missing.
-- Uses `claim_candidate_clusters_<round_id>.json`, `claim_candidates_<round_id>.json`, `merged_observation_candidates_<round_id>.json`, and `observation_candidates_<round_id>.json` as the default artifact paths behind those result kinds.
-- Writes `runs/<run_id>/analytics/claim_observation_links_<round_id>.json` by default.
-- Syncs the same link result set into `runs/<run_id>/analytics/signal_plane.sqlite` as analysis-plane state.
+- Writes `runs/<run_id>/analytics/claim_observation_links_<round_id>.json` as a deprecated-helper stop artifact.
+- Does not write analysis-plane link rows.
+- Does not emit candidate ids for board use.
 
 ## Required Input
 - `run_dir`
@@ -39,21 +34,22 @@ description: Legacy optional empirical-link helper for explicitly routed observa
   - `top_links_per_claim`
 
 ## Output Contract
-- `status`
+- `status` is `deprecated-blocked`
 - `summary`
 - `receipt_id`
 - `batch_id`
 - `artifact_refs`
-- `canonical_ids`
+- `canonical_ids` is empty
 - `warnings`
-- `analysis_sync`
-- `input_analysis_sync`
-- `board_handoff`
+- `analysis_sync.status` is `skipped`
+- `board_handoff.suggested_next_skills` is empty
+- `wp4_helper_metadata` is written into the stop artifact
 
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-refactor-overall-notes.md`
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-wp4-skills-refactor-workplan.md`
 
 ## Scripts
 - `scripts/link_claims_to_observations.py`

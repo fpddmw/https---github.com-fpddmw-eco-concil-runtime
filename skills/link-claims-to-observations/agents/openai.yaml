@@ -1,4 +1,4 @@
 interface:
   display_name: "Eco Link Claims To Observations"
-  short_description: "Legacy optional empirical-link helper"
-  default_prompt: "Use $link-claims-to-observations only after a skill approval request has been approved for an explicitly routed empirical observation question. Persist provenance-aware rule traces and do not treat claim-observation matching as the default report basis."
+  short_description: "Deprecated WP4 legacy alias"
+  default_prompt: "Do not use $link-claims-to-observations for new work. It now returns a WP4 deprecated-helper stop artifact and points to a future scoped evidence review helper that must be approved and DB-council-cited before report-basis use."

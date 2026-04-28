@@ -1,27 +1,24 @@
 ---
 name: score-evidence-coverage
-description: Optional audited empirical evidence sufficiency helper for explicitly routed observation questions. It requires operator-approved skill approval and is not a global readiness gate.
+description: Deprecated WP4 legacy alias. It now blocks the old empirical coverage formula and points operators to DB-backed sufficiency review.
 ---
 
 # Eco Score Evidence Coverage
 
 ## Core Goal
-- Read empirical link and scope proposals only for issues explicitly routed to an observation lane.
-- Score evidence sufficiency and unresolved gaps as heuristic audit material.
-- Persist a compact coverage artifact for challenge or review without making it the default readiness basis.
-- Require `request-skill-approval -> approve-skill-approval -> run-skill --skill-approval-request-id` before execution.
+- This skill is a WP4 deprecated alias for the old empirical coverage formula.
+- Default execution no longer loads legacy link/scope inputs, emits formula outputs, syncs coverage result sets, or suggests follow-on legacy helpers.
+- The replacement direction is `review-evidence-sufficiency`, which must review DB-backed findings, evidence bundles, report section basis, and challenger review comments.
+- Any successor helper output must remain advisory until a DB council object explicitly cites it.
 
 ## Triggering Conditions
-- A moderator or investigator has an approved empirical question with explicit time, place, and source scope.
-- The operator has approved this optional-analysis run for the current round and actor role.
-- Need a compact sufficiency review for empirical evidence, not a system-wide promotion or reporting gate.
+- Existing callers need a governed, auditable stop instead of silently running the removed legacy formula.
+- Operator approval is still required at runtime because the registry classifies this as optional analysis.
 
 ## Read/Write Contract
-- Reads claim-observation links from the run-local analysis plane first.
-- Reads claim and observation scope proposals from the run-local analysis plane first.
-- Falls back to the corresponding JSON artifacts when the synced result sets are unavailable.
-- Writes `runs/<run_id>/analytics/evidence_coverage_<round_id>.json` by default.
-- Syncs the same coverage result set into `runs/<run_id>/analytics/signal_plane.sqlite` as analysis-plane state.
+- Writes `runs/<run_id>/analytics/evidence_coverage_<round_id>.json` as a deprecated-helper stop artifact.
+- Does not write analysis-plane coverage rows.
+- Does not emit candidate ids for board use.
 
 ## Required Input
 - `run_dir`
@@ -34,21 +31,22 @@ description: Optional audited empirical evidence sufficiency helper for explicit
   - `output_path`
 
 ## Output Contract
-- `status`
+- `status` is `deprecated-blocked`
 - `summary`
 - `receipt_id`
 - `batch_id`
 - `artifact_refs`
-- `canonical_ids`
+- `canonical_ids` is empty
 - `warnings`
-- `analysis_sync`
-- `input_analysis_sync`
-- `board_handoff`
+- `analysis_sync.status` is `skipped`
+- `board_handoff.suggested_next_skills` is empty
+- `wp4_helper_metadata` is written into the stop artifact
 
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-refactor-overall-notes.md`
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-wp4-skills-refactor-workplan.md`
 
 ## Scripts
 - `scripts/score_evidence_coverage.py`

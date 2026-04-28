@@ -541,7 +541,7 @@ skills 侧重构完成至少应满足：
   - 尚未清理 `source_queue_profile.py` 和各 `SKILL.md` 中仍容易暗示旧默认链的文案。
 
 - 新发现的问题：
-  - 多个 `SKILL.md` 仍引用 `docs/openclaw-next-phase-development-plan.md`，但当前仓库根目录未发现该文件；后续需要补文档或改引用入口。
+  - 多个 `SKILL.md` 当时仍引用已不存在的旧规划入口；后续批次已改为清理旧引用，不再补单独规划文档。
   - `source_queue_profile.py` 对外虽已不导出 `core_queue_default`，内部仍大量使用 `planned-step / core_queue_default / downstream_hints` 描述 claim、route、coverage、readiness、promotion 链，存在被误读为默认调查链的风险。
   - 部分 skill 文档仍使用 `board-ready`、`claim-observation`、`coverage readiness`、`promotion-stage artifact` 等旧目标表达，需要先做文档级语义清理，再做代码拆分。
   - reporting handoff 文档仍强调读取 promotion/readiness/supervisor artifact；代码侧已具备 DB wrapper 和 orphaned artifact 识别，文档需要同步为 DB-first/export-only 口径。
@@ -557,8 +557,8 @@ skills 侧重构完成至少应满足：
   - `plan-round-orchestration / propose-next-actions / summarize-round-readiness / link-claims-to-observations / score-evidence-coverage` 等高风险 heuristic 不再通过 source queue 暗示默认主链，只能作为审批后的 optional advisory / legacy helper。
   - agent-entry operator surface 已补齐 skill approval 查询、请求、批准、拒绝、消费和 approved optional-analysis run command template。
   - 修复 approved optional-analysis command template：`--skill-approval-request-id` 现在由 `skill_command_hint / run_skill_command` 插入到 `--` 之前，避免被误传给 skill 脚本。
-  - 更新代表性高风险 `SKILL.md` 与 agent prompt：orchestration、next actions、readiness、reporting handoff、claim extraction、claim-observation link、coverage scoring 均改成 DB-backed / optional / approval-required 口径，并移除当前文档中发现的旧 `openclaw-next-phase-development-plan.md` 引用。
-  - 新增 `docs/openclaw-skill-rule-audit-ledger.md`，作为第一版 heuristic 规则审计台账和 freeze line；当前状态均为 `default-frozen / approval-required / audit-pending`，未标记任何规则为审计通过。
+  - 更新代表性高风险 `SKILL.md` 与 agent prompt：orchestration、next actions、readiness、reporting handoff、claim extraction、claim-observation link、coverage scoring 均改成 DB-backed / optional / approval-required 口径，并移除当前文档中发现的旧规划入口引用。
+  - 已形成第一版 heuristic 规则审计 freeze line；当前状态均为 `default-frozen / approval-required / audit-pending`，未标记任何规则为审计通过。后续规则审计记录统一收敛到 `docs/openclaw-wp4-skills-refactor-workplan.md`。
   - registry 复核结果：当前 `skills/` 目录与 registry 均为 `88` 个 skill；`32` 个 skill 声明 `requires_operator_approval`；source queue summary 覆盖 `88/88`。
 
 - 未完成：
@@ -575,7 +575,7 @@ skills 侧重构完成至少应满足：
 - 是否影响后续计划：
   - 不阻塞后续计划；WP2 可以在“默认链已冻结、optional-analysis 已审批化、operator surface 可见审批链”的基础上继续推进 fetch/normalize 原子化。
   - 后续任何新增 source queue 或 agent-entry surface 都必须保持 `default_chain_eligible=false`，并且不得重新暴露 claim-route-coverage 链式 `downstream_hints`。
-  - 后续规则审计若要把某 heuristic 从 `audit-pending` 改成可用，必须更新 `docs/openclaw-skill-rule-audit-ledger.md` 并保留审批/消费记录。
+  - 后续规则审计若要把某 heuristic 从 `audit-pending` 改成可用，必须更新 `docs/openclaw-wp4-skills-refactor-workplan.md` 中的 freeze line / audit records，并保留审批/消费记录。
 
 - 测试：
   - 已运行：`.venv/bin/python -m unittest tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate tests.test_skill_approval_workflow`
@@ -603,7 +603,7 @@ skills 侧重构完成至少应满足：
 
 - 是否影响后续计划：
   - 不阻塞后续 WP2；下一步可继续处理 `fetch-openaq` 拆分或 `normalize-fetch-execution` 职责拆分。
-  - 对后续 parser/analysis 的约束是：如果要重新产生 submitter type、issue、stance、concern、citation、route，必须作为 optional-analysis 或独立 parser 输出，并进入 `docs/openclaw-skill-rule-audit-ledger.md` 的规则审计与 approval consumption 链。
+  - 对后续 parser/analysis 的约束是：如果要重新产生 submitter type、issue、stance、concern、citation、route，必须作为 optional-analysis 或独立 parser 输出，并进入 `docs/openclaw-wp4-skills-refactor-workplan.md` 的规则审计与 approval consumption 链。
 
 - 测试：
   - 已运行：`.venv/bin/python -m unittest tests.test_signal_plane_workflow tests.test_formal_public_workflow`
@@ -650,7 +650,7 @@ skills 侧重构完成至少应满足：
 
 - 新发现的问题：
   - 旧 ingress 测试仍隐含“无 readiness 也可 promoted”的兼容假设；本批已按当前治理规则修正测试流程。
-  - 文档归档区仍保留若干历史项目路径 `eco-concil-runtime/...`，属于项目路径引用，不影响 skill 命名规范。
+  - 旧历史文档曾保留若干项目路径 `eco-concil-runtime/...`；这些属于历史路径引用，不影响 skill 命名规范，也不再作为当前文档入口保留。
 
 - 是否影响后续计划：
   - 后续所有新增 skill 应直接使用层级前缀，不再加项目前缀；source queue / registry 测试会拦截 `eco-` skill id。
@@ -667,7 +667,7 @@ skills 侧重构完成至少应满足：
 - 已完成：
   - 完成 WP3 query evidence basis 加固：`query-public-signals / query-formal-signals / query-environment-signals / query-normalized-signal / query-raw-record` 的每条结果现在都返回 item-level `evidence_refs` 与 `evidence_basis`，包含 canonical object kind、signal id、artifact ref、source provenance、data quality、temporal/spatial scope、coverage limitations。
   - query skill 的 `board_handoff.suggested_next_skills` 已从默认 optional extraction/linkage helper 改为 `query-normalized-signal / query-raw-record / submit-finding-record / submit-evidence-bundle / post-discussion-message`，不再把 claim extraction、observation extraction、formal-public linkage 或 representation gap analysis 暗示为默认 investigator 下一步。
-  - 新增 `docs/openclaw-investigator-role-runbook.md`，明确 investigator 默认闭环为 `fetch / normalize -> query / lookup -> finding -> evidence bundle -> optional proposal`，并给出 query evidence basis fixture、finding/evidence bundle/proposal/review comment 命令链。
+  - investigator runbook 的必要约定已收敛进本文档，不再单独保留：默认闭环为 `fetch / normalize -> query / lookup -> finding -> evidence bundle -> optional proposal`，query 结果必须携带 item-level `evidence_refs` 与 `evidence_basis`，proposal 必须通过 `--response-to-id` / `--lineage-id` 锚定 finding 或 evidence bundle，challenger review 必须引用 evidence bundle 或具体证据 refs。
   - 补齐 `post-review-comment` kernel direct write 命令：接入 CLI、既有 access policy、ledger、artifact audit、`review-comment` canonical DB 表与 `query-council-objects` 查询面。
   - agent entry/operator surface 已新增 `query_review_comments_command` 与 `post_review_comment_command_template`，`submit_council_proposal_command_template` 也加入 `--response-to-id <finding_or_bundle_id>` 和 `--lineage-id <finding_or_bundle_id>`，使 proposal 默认锚定 finding/evidence bundle basis。
   - `open-challenge-ticket` 已支持 `--evidence-bundle-id`，challenge ticket 会把 `evidence-bundle:<id>` 写入 evidence refs，并在 lineage/source ids/raw payload 中保留 bundle id，满足 challenger 对 evidence bundle 的交叉引用约定。

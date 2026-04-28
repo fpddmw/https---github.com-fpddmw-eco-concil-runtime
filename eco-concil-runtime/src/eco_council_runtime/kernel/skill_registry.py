@@ -227,6 +227,123 @@ OPTIONAL_ANALYSIS_SKILLS = [
     "detect-cross-platform-diffusion",
 ]
 
+WP4_ALLOWED_HELPER_DECISION_SOURCES = [
+    "approved-helper-view",
+    "deprecated-legacy-helper",
+    "manual-or-moderator-defined",
+    "agent-submitted-finding",
+    "scenario",
+]
+
+WP4_OPTIONAL_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
+    "build-normalization-audit": {
+        "rule_id": "HEUR-NORMALIZATION-AUDIT-001",
+        "decision_source": "deprecated-legacy-helper",
+        "destination": "operator QA export or removal",
+        "audit_status": "legacy-isolated; default-frozen; approval-required; audit-pending",
+    },
+    "extract-claim-candidates": {
+        "rule_id": "HEUR-CLAIM-EXTRACT-001",
+        "destination": "discover-discourse-issues",
+    },
+    "cluster-claim-candidates": {
+        "rule_id": "HEUR-CLAIM-CLUSTER-001",
+        "destination": "discover-discourse-issues",
+    },
+    "derive-claim-scope": {
+        "rule_id": "HEUR-CLAIM-SCOPE-001",
+        "destination": "discover-discourse-issues",
+    },
+    "classify-claim-verifiability": {
+        "rule_id": "HEUR-VERIFY-001",
+        "destination": "suggest-evidence-lanes",
+    },
+    "route-verification-lane": {
+        "rule_id": "HEUR-ROUTE-001",
+        "destination": "suggest-evidence-lanes",
+    },
+    "extract-issue-candidates": {
+        "rule_id": "HEUR-ISSUE-EXTRACT-001",
+        "destination": "discover-discourse-issues or materialize-research-issue-surface",
+    },
+    "cluster-issue-candidates": {
+        "rule_id": "HEUR-ISSUE-CLUSTER-001",
+        "destination": "materialize-research-issue-surface",
+    },
+    "extract-stance-candidates": {
+        "rule_id": "HEUR-STANCE-001",
+        "destination": "project-research-issue-views",
+    },
+    "extract-concern-facets": {
+        "rule_id": "HEUR-CONCERN-001",
+        "destination": "project-research-issue-views",
+    },
+    "extract-actor-profiles": {
+        "rule_id": "HEUR-ACTOR-001",
+        "destination": "project-research-issue-views",
+    },
+    "extract-evidence-citation-types": {
+        "rule_id": "HEUR-CITATION-001",
+        "destination": "project-research-issue-views",
+    },
+    "materialize-controversy-map": {
+        "rule_id": "HEUR-MAP-001",
+        "destination": "export-research-issue-map",
+    },
+    "extract-observation-candidates": {
+        "rule_id": "HEUR-OBS-EXTRACT-001",
+        "destination": "aggregate-environment-evidence",
+    },
+    "merge-observation-candidates": {
+        "rule_id": "HEUR-OBS-MERGE-001",
+        "destination": "aggregate-environment-evidence",
+    },
+    "derive-observation-scope": {
+        "rule_id": "HEUR-OBS-SCOPE-001",
+        "destination": "aggregate-environment-evidence",
+    },
+    "link-claims-to-observations": {
+        "rule_id": "HEUR-LEGACY-LINK-001",
+        "decision_source": "deprecated-legacy-helper",
+        "destination": "review-fact-check-evidence-scope",
+        "audit_status": "legacy-isolated; default-frozen; approval-required; audit-pending",
+    },
+    "score-evidence-coverage": {
+        "rule_id": "HEUR-COVERAGE-001",
+        "decision_source": "deprecated-legacy-helper",
+        "destination": "review-evidence-sufficiency",
+        "audit_status": "legacy-isolated; default-frozen; approval-required; audit-pending",
+    },
+    "link-formal-comments-to-public-discourse": {
+        "rule_id": "HEUR-FORMAL-PUBLIC-001",
+        "destination": "compare-formal-public-footprints",
+    },
+    "identify-representation-gaps": {
+        "rule_id": "HEUR-REP-GAP-001",
+        "destination": "identify-representation-audit-cues",
+    },
+    "detect-cross-platform-diffusion": {
+        "rule_id": "HEUR-DIFFUSION-001",
+        "destination": "detect-temporal-cooccurrence-cues",
+    },
+    "plan-round-orchestration": {
+        "rule_id": "HEUR-AGENDA-001",
+        "destination": "approval-gated advisory helper",
+    },
+    "propose-next-actions": {
+        "rule_id": "HEUR-NEXT-ACTION-001",
+        "destination": "approval-gated advisory helper",
+    },
+    "open-falsification-probe": {
+        "rule_id": "HEUR-PROBE-001",
+        "destination": "challenger/moderator helper",
+    },
+    "summarize-round-readiness": {
+        "rule_id": "HEUR-READINESS-001",
+        "destination": "optional readiness opinion",
+    },
+}
+
 QUERY_SKILLS = [
     "query-board-delta",
     "query-public-signals",
@@ -641,6 +758,52 @@ POLICIES.update(
     }
 )
 
+
+def wp4_helper_metadata(skill_name: str) -> dict[str, Any]:
+    freeze_line = dict(WP4_OPTIONAL_HELPER_FREEZE_LINES.get(maybe_text(skill_name), {}))
+    if not freeze_line:
+        return {}
+    decision_source = maybe_text(freeze_line.get("decision_source")) or "approved-helper-view"
+    if decision_source not in WP4_ALLOWED_HELPER_DECISION_SOURCES:
+        raise ValueError(
+            f"Unsupported WP4 decision_source `{decision_source}` for {skill_name}."
+        )
+    return {
+        "decision_source": decision_source,
+        "rule_id": maybe_text(freeze_line.get("rule_id")),
+        "rule_version": maybe_text(freeze_line.get("rule_version"))
+        or "wp4-freeze-line-2026-04-28",
+        "taxonomy_version": maybe_text(freeze_line.get("taxonomy_version")),
+        "rubric_version": maybe_text(freeze_line.get("rubric_version")),
+        "approval_ref": maybe_text(freeze_line.get("approval_ref")),
+        "audit_ref": maybe_text(freeze_line.get("audit_ref")),
+        "rule_trace": unique_texts(
+            freeze_line.get("rule_trace", [])
+            if isinstance(freeze_line.get("rule_trace"), list)
+            else []
+        ),
+        "caveats": unique_texts(
+            freeze_line.get("caveats", [])
+            if isinstance(freeze_line.get("caveats"), list)
+            else [
+                "Helper output is advisory only until a versioned human audit approves its rule family.",
+                "Helper output must be cited through DB council objects before any report-basis use.",
+            ]
+        ),
+        "audit_status": maybe_text(freeze_line.get("audit_status"))
+        or "default-frozen; approval-required; audit-pending",
+        "helper_status": maybe_text(freeze_line.get("helper_status"))
+        or "approval-gated-helper-view",
+        "wp4_destination": maybe_text(freeze_line.get("destination")),
+    }
+
+
+for _skill_name, _policy_payload in POLICIES.items():
+    _metadata = wp4_helper_metadata(_skill_name)
+    if _metadata:
+        _policy_payload["wp4_helper_metadata"] = _metadata
+
+
 def available_skill_names(root: Path | None = None) -> list[str]:
     resolved_root = root or workspace_root()
     skills_root = resolved_root / "skills"
@@ -681,6 +844,9 @@ def resolve_skill_policy(skill_name: str, root: Path | None = None) -> dict[str,
         "write_scope": maybe_text(policy.get("write_scope")) or WRITE_SCOPE_READ_ONLY,
         "requires_operator_approval": bool(policy.get("requires_operator_approval")),
         "default_actor_role_hint": maybe_text(policy.get("default_actor_role_hint")),
+        "wp4_helper_metadata": dict(policy.get("wp4_helper_metadata", {}))
+        if isinstance(policy.get("wp4_helper_metadata"), dict)
+        else {},
     }
 
 
@@ -752,4 +918,5 @@ __all__ = [
     "skill_requires_write_actor_role",
     "skill_write_scope",
     "validate_skill_registry",
+    "wp4_helper_metadata",
 ]

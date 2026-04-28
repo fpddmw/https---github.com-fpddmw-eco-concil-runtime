@@ -21,6 +21,18 @@ OBJECT_KIND_VERIFIABILITY_ASSESSMENT = "verifiability-assessment"
 OBJECT_KIND_VERIFICATION_ROUTE = "verification-route"
 
 HEURISTIC_DECISION_SOURCE = "heuristic-fallback"
+WP4_DECISION_SOURCE_APPROVED_HELPER_VIEW = "approved-helper-view"
+WP4_DECISION_SOURCE_DEPRECATED_LEGACY_HELPER = "deprecated-legacy-helper"
+WP4_DECISION_SOURCE_MANUAL_OR_MODERATOR_DEFINED = "manual-or-moderator-defined"
+WP4_DECISION_SOURCE_AGENT_SUBMITTED_FINDING = "agent-submitted-finding"
+WP4_DECISION_SOURCE_SCENARIO = "scenario"
+WP4_ALLOWED_DECISION_SOURCES = {
+    WP4_DECISION_SOURCE_APPROVED_HELPER_VIEW,
+    WP4_DECISION_SOURCE_DEPRECATED_LEGACY_HELPER,
+    WP4_DECISION_SOURCE_MANUAL_OR_MODERATOR_DEFINED,
+    WP4_DECISION_SOURCE_AGENT_SUBMITTED_FINDING,
+    WP4_DECISION_SOURCE_SCENARIO,
+}
 LEGACY_PUBLIC_REFS_FIELD = "public_refs"
 
 
@@ -167,6 +179,42 @@ def normalized_provenance(
                 continue
             normalized[key_text] = raw_value
     return normalized
+
+
+def wp4_helper_metadata(
+    *,
+    skill_name: str,
+    rule_id: str,
+    destination: str,
+    decision_source: str = WP4_DECISION_SOURCE_APPROVED_HELPER_VIEW,
+    rule_version: str = "wp4-freeze-line-2026-04-28",
+    taxonomy_version: str = "",
+    rubric_version: str = "",
+    approval_ref: str = "",
+    audit_ref: str = "",
+    rule_trace: list[Any] | None = None,
+    caveats: list[Any] | None = None,
+    audit_status: str = "default-frozen; approval-required; audit-pending",
+    helper_status: str = "approval-gated-helper-view",
+) -> dict[str, Any]:
+    normalized_decision_source = maybe_text(decision_source)
+    if normalized_decision_source not in WP4_ALLOWED_DECISION_SOURCES:
+        raise ValueError(f"Unsupported WP4 decision_source: {normalized_decision_source}")
+    return {
+        "decision_source": normalized_decision_source,
+        "rule_id": maybe_text(rule_id),
+        "rule_version": maybe_text(rule_version),
+        "taxonomy_version": maybe_text(taxonomy_version),
+        "rubric_version": maybe_text(rubric_version),
+        "approval_ref": maybe_text(approval_ref),
+        "audit_ref": maybe_text(audit_ref),
+        "rule_trace": unique_texts(list(rule_trace or [])),
+        "caveats": unique_texts(list(caveats or [])),
+        "audit_status": maybe_text(audit_status),
+        "helper_status": maybe_text(helper_status),
+        "skill": maybe_text(skill_name),
+        "wp4_destination": maybe_text(destination),
+    }
 
 
 def build_heuristic_wrapper_provenance(

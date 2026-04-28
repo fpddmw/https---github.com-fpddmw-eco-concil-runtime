@@ -267,13 +267,19 @@ OpenClaw 当前更准确的定位是：
 
 ## 9. 文档分工
 
-从现在开始，`docs/` 根目录只保留三类 active 文档：
+从现在开始，`docs/` 只保留以下 active 文档；不再保留单独索引、历史 archive 或过程草稿。
 
 1. `openclaw-project-overview.md`
-   - 当前状态、问题与目标架构。
-2. `openclaw-next-phase-development-plan.md`
-   - 下一阶段的工作流、架构与验收计划。
-3. `openclaw-skill-refactor-checklist.md`
-   - 迁移、替换、降级与清债清单。
+   - 当前状态、核心问题与目标架构。
+2. `openclaw-refactor-overall-notes.md`
+   - 项目级硬约束、数据原则、规则审计原则和迁移顺序。
+3. `openclaw-runtime-kernel-agent-refactor-checklist.md`
+   - runtime kernel、agent 权限、阶段推进和控制面的重构/验收记录。
+4. `openclaw-skills-refactor-checklist-v2.md`
+   - skills 侧分批规划、WP0-WP3 已交付记录和后续总验收口径。
+5. `openclaw-skill-refactor-checklist.md`
+   - 彻底重构执行清单与历史 batch 状态。
+6. `openclaw-wp4-skills-refactor-workplan.md`
+   - WP4 启发式 helper 重构的唯一施工清单。
 
-历史路线、进度与里程碑包继续留在 `archive/`，但不再作为当前方向定义的主入口。
+规则/启发式 skill 的 freeze line 和后续 versioned audit records 不再单独成文，统一收敛到 `openclaw-wp4-skills-refactor-workplan.md`。
