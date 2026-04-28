@@ -13,6 +13,8 @@ from _workflow_support import (
     board_path,
     investigation_path,
     load_json,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     request_and_approve_transition,
     run_script,
     runtime_src_path,
@@ -158,24 +160,23 @@ def approve_open_round_transition(
     )
 
 
+def seed_board_issue_context(run_dir: Path, root: Path, *, round_id: str = ROUND_ID) -> dict[str, str]:
+    outputs = seed_analysis_chain(run_dir, root, RUN_ID, round_id, include_airnow=True)
+    return {
+        "evidence_ref": primary_wp4_evidence_ref(outputs),
+        "issue_id": primary_research_issue_id(outputs),
+    }
+
+
 class BoardWorkflowTests(unittest.TestCase):
     def test_board_skills_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            link_ref = outputs["link_evidence"]["artifact_refs"][0]["artifact_ref"]
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            context = seed_board_issue_context(run_dir, root)
+            link_ref = context["evidence_ref"]
+            coverage_ref = context["evidence_ref"]
+            issue_id = context["issue_id"]
 
             note_payload = run_script(
                 script_path("post-board-note"),
@@ -213,7 +214,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--owner-role",
                 "environmentalist",
                 "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--confidence",
                 "0.82",
             )
@@ -230,7 +231,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--challenge-statement",
                 "Evaluate whether public narratives overstate the severity relative to observation coverage.",
                 "--target-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--target-hypothesis-id",
                 hypothesis_payload["canonical_ids"][0],
                 "--priority",
@@ -274,18 +275,9 @@ class BoardWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            context = seed_board_issue_context(run_dir, root)
+            coverage_ref = context["evidence_ref"]
+            issue_id = context["issue_id"]
 
             hypothesis_payload = run_script(
                 script_path("update-hypothesis-status"),
@@ -304,7 +296,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--owner-role",
                 "environmentalist",
                 "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--confidence",
                 "0.82",
             )
@@ -321,7 +313,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--challenge-statement",
                 "Evaluate whether public narratives overstate the severity relative to observation coverage.",
                 "--target-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--target-hypothesis-id",
                 hypothesis_payload["canonical_ids"][0],
                 "--priority",
@@ -482,19 +474,9 @@ class BoardWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            claim_id = outputs["cluster_claims"]["canonical_ids"][0]
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            context = seed_board_issue_context(run_dir, root)
+            claim_id = context["issue_id"]
+            coverage_ref = context["evidence_ref"]
 
             proposal_bundle = store_council_proposal_records(
                 run_dir,
@@ -579,19 +561,9 @@ class BoardWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            claim_id = outputs["cluster_claims"]["canonical_ids"][0]
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            context = seed_board_issue_context(run_dir, root)
+            claim_id = context["issue_id"]
+            coverage_ref = context["evidence_ref"]
             hypothesis_payload = run_script(
                 script_path("update-hypothesis-status"),
                 "--run-dir",
@@ -698,19 +670,9 @@ class BoardWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            claim_id = outputs["cluster_claims"]["canonical_ids"][0]
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            context = seed_board_issue_context(run_dir, root)
+            claim_id = context["issue_id"]
+            coverage_ref = context["evidence_ref"]
             hypothesis_payload = run_script(
                 script_path("update-hypothesis-status"),
                 "--run-dir",
@@ -870,19 +832,9 @@ class BoardWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            claim_id = outputs["cluster_claims"]["canonical_ids"][0]
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            context = seed_board_issue_context(run_dir, root)
+            claim_id = context["issue_id"]
+            coverage_ref = context["evidence_ref"]
             hypothesis_payload = run_script(
                 script_path("update-hypothesis-status"),
                 "--run-dir",
@@ -1042,21 +994,13 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--mission-path",
                 str(mission_path),
             )
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+            context = seed_board_issue_context(run_dir, root)
+            coverage_ref = context["evidence_ref"]
+            issue_id = context["issue_id"]
 
             board_before = load_json(board_path(run_dir))
             seeded_hypothesis_id = board_before["rounds"][ROUND_ID]["hypotheses"][0]["hypothesis_id"]
 
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             challenge_payload = run_script(
                 script_path("open-challenge-ticket"),
                 "--run-dir",
@@ -1070,7 +1014,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--challenge-statement",
                 "Evaluate whether public narratives overstate the severity relative to observation coverage.",
                 "--target-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--target-hypothesis-id",
                 seeded_hypothesis_id,
                 "--priority",
@@ -1101,7 +1045,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--linked-artifact-ref",
                 coverage_ref,
                 "--related-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
             )
 
             next_actions = store_moderator_action_records(
@@ -1118,7 +1062,7 @@ class BoardWorkflowTests(unittest.TestCase):
                             "objective": "Broaden public evidence around smoke timing and intensity.",
                             "reason": "Current public evidence is still narrow in timing coverage.",
                             "brief_context": "Need more temporal corroboration before promotion.",
-                            "source_ids": [outputs["cluster_claims"]["canonical_ids"][0]],
+                            "source_ids": [issue_id],
                             "evidence_refs": [coverage_ref],
                             "target": {"hypothesis_id": seeded_hypothesis_id},
                         }
@@ -1328,18 +1272,9 @@ class BoardWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            context = seed_board_issue_context(run_dir, root)
+            coverage_ref = context["evidence_ref"]
+            issue_id = context["issue_id"]
 
             hypothesis_payload = run_script(
                 script_path("update-hypothesis-status"),
@@ -1358,7 +1293,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--owner-role",
                 "moderator",
                 "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--confidence",
                 "0.52",
             )
@@ -1375,7 +1310,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--challenge-statement",
                 "Re-test whether the strongest smoke narrative exceeds evidence coverage.",
                 "--target-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--target-hypothesis-id",
                 hypothesis_payload["canonical_ids"][0],
                 "--priority",

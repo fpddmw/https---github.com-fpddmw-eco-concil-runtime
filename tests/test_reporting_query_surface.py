@@ -10,6 +10,8 @@ from pathlib import Path
 from _workflow_support import (
     analytics_path,
     load_json,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     request_and_approve_transition,
     reporting_path,
     run_kernel,
@@ -17,6 +19,7 @@ from _workflow_support import (
     runtime_src_path,
     script_path,
     seed_analysis_chain,
+    submit_ready_council_support,
 )
 
 RUN_ID = "run-reporting-query-001"
@@ -46,34 +49,15 @@ from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
 
 def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    run_script(
-        script_path("derive-claim-scope"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
+    evidence_ref = primary_wp4_evidence_ref(outputs)
+    issue_id = primary_research_issue_id(outputs)
+    submit_ready_council_support(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        issue_id=issue_id,
+        evidence_ref=evidence_ref,
     )
-    run_script(
-        script_path("derive-observation-scope"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    coverage_payload = run_script(
-        script_path("score-evidence-coverage"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
     run_script(
         script_path("post-board-note"),
         "--run-dir",
@@ -89,7 +73,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         "--note-text",
         "Round is ready to move into role reports and final decision publish.",
         "--linked-artifact-ref",
-        coverage_ref,
+        evidence_ref,
     )
     run_script(
         script_path("update-hypothesis-status"),
@@ -108,7 +92,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         "--owner-role",
         "environmentalist",
         "--linked-claim-id",
-        outputs["cluster_claims"]["canonical_ids"][0],
+        issue_id,
         "--confidence",
         "0.93",
     )

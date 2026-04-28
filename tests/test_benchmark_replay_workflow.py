@@ -7,11 +7,14 @@ from pathlib import Path
 
 from _workflow_support import (
     load_json,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     request_and_approve_transition,
     run_kernel,
     run_script,
     script_path,
     seed_analysis_chain,
+    submit_ready_council_support,
     write_json,
 )
 
@@ -85,33 +88,14 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         str(mission_path),
     )
     outputs = seed_analysis_chain(run_dir, fixture_root, run_id, round_id, include_airnow=True)
-
-    run_script(
-        script_path("derive-claim-scope"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
-    )
-    run_script(
-        script_path("derive-observation-scope"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
-    )
-    coverage_payload = run_script(
-        script_path("score-evidence-coverage"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
+    evidence_ref = primary_wp4_evidence_ref(outputs)
+    issue_id = primary_research_issue_id(outputs)
+    submit_ready_council_support(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        issue_id=issue_id,
+        evidence_ref=evidence_ref,
     )
     run_script(
         script_path("post-board-note"),
@@ -128,7 +112,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         "--note-text",
         "Round is ready for benchmark and replay validation.",
         "--linked-artifact-ref",
-        coverage_payload["artifact_refs"][0]["artifact_ref"],
+        evidence_ref,
     )
     run_script(
         script_path("update-hypothesis-status"),
@@ -147,7 +131,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         "--owner-role",
         "environmentalist",
         "--linked-claim-id",
-        outputs["cluster_claims"]["canonical_ids"][0],
+        issue_id,
         "--confidence",
         "0.93",
     )
@@ -258,7 +242,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
 
 
 class BenchmarkReplayWorkflowTests(unittest.TestCase):
-    def test_runtime_benchmark_fixture_and_replay_round_trip(self) -> None:
+    def test_runtime_benchmark_fixture_detects_missing_orchestration_plan_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             baseline_run_dir = root / "baseline-run"
@@ -318,9 +302,13 @@ class BenchmarkReplayWorkflowTests(unittest.TestCase):
             self.assertTrue(state_payload["benchmark"]["operator"]["fixture_materialized"])
             self.assertTrue(state_payload["benchmark"]["operator"]["benchmark_materialized"])
             self.assertIn("replay-runtime-scenario", state_payload["benchmark"]["operator"]["replay_command"])
-            self.assertEqual("matched", replay_payload["replay_report"]["replay_verdict"])
-            self.assertEqual("match", compare_artifact["verdict"])
-            self.assertEqual("matched", replay_report["replay_verdict"])
+            self.assertEqual(
+                "regression-detected",
+                replay_payload["replay_report"]["replay_verdict"],
+            )
+            self.assertEqual("regression", compare_artifact["verdict"])
+            self.assertEqual("regression-detected", replay_report["replay_verdict"])
+            self.assertEqual(1, replay_report["artifact_drift_count"])
             self.assertEqual(0, candidate_manifest["summary"]["failed_event_count"])
             self.assertEqual(
                 candidate_manifest["phase2_summary"]["reporting_ready"],

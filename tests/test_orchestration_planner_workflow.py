@@ -8,6 +8,8 @@ from pathlib import Path
 from _workflow_support import (
     investigation_path,
     load_json,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     run_kernel,
     run_script,
     runtime_src_path,
@@ -36,10 +38,8 @@ ROUND_ID = "round-planner-001"
 
 def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    run_script(script_path("derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_payload = run_script(script_path("score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+    evidence_ref = primary_wp4_evidence_ref(outputs)
+    issue_id = primary_research_issue_id(outputs)
     run_script(
         script_path("post-board-note"),
         "--run-dir",
@@ -55,7 +55,7 @@ def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
         "--note-text",
         "Round is organized enough for planner-backed promotion.",
         "--linked-artifact-ref",
-        coverage_ref,
+        evidence_ref,
     )
     run_script(
         script_path("update-hypothesis-status"),
@@ -74,7 +74,7 @@ def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
         "--owner-role",
         "environmentalist",
         "--linked-claim-id",
-        outputs["cluster_claims"]["canonical_ids"][0],
+        issue_id,
         "--confidence",
         "0.91",
     )
@@ -82,10 +82,8 @@ def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
 
 def prepare_hold_board_state(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    run_script(script_path("derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_payload = run_script(script_path("score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+    evidence_ref = primary_wp4_evidence_ref(outputs)
+    issue_id = primary_research_issue_id(outputs)
     hypothesis_payload = run_script(
         script_path("update-hypothesis-status"),
         "--run-dir",
@@ -103,7 +101,7 @@ def prepare_hold_board_state(run_dir: Path, root: Path) -> None:
         "--owner-role",
         "moderator",
         "--linked-claim-id",
-        outputs["cluster_claims"]["canonical_ids"][0],
+        issue_id,
         "--confidence",
         "0.52",
     )
@@ -120,7 +118,7 @@ def prepare_hold_board_state(run_dir: Path, root: Path) -> None:
         "--challenge-statement",
         "Re-test whether the strongest narrative exceeds evidence coverage.",
         "--target-claim-id",
-        outputs["cluster_claims"]["canonical_ids"][0],
+        issue_id,
         "--target-hypothesis-id",
         hypothesis_payload["canonical_ids"][0],
         "--priority",
@@ -128,7 +126,7 @@ def prepare_hold_board_state(run_dir: Path, root: Path) -> None:
         "--owner-role",
         "challenger",
         "--linked-artifact-ref",
-        coverage_ref,
+        evidence_ref,
     )
 
 

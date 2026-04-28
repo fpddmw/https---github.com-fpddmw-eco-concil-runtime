@@ -8,6 +8,8 @@ from pathlib import Path
 from _workflow_support import (
     board_path,
     load_json,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     promotion_path,
     reporting_path,
     request_and_approve_transition,
@@ -15,6 +17,7 @@ from _workflow_support import (
     run_script,
     runtime_path,
     script_path,
+    submit_ready_council_support,
     write_json,
 )
 
@@ -333,16 +336,38 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
 
-            run_script(script_path("extract-claim-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            run_script(script_path("extract-observation-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--metric", "pm2_5")
-            cluster_payload = run_script(script_path("cluster-claim-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            run_script(script_path("merge-observation-candidates"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--metric", "pm2_5")
-            run_script(script_path("link-claims-to-observations"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            run_script(script_path("derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            run_script(script_path("derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            coverage_payload = run_script(script_path("score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            discourse_payload = run_script(script_path("discover-discourse-issues"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            environment_payload = run_script(script_path("aggregate-environment-evidence"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
+            run_script(
+                script_path("suggest-evidence-lanes"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--input-path",
+                discourse_payload["summary"]["output_path"],
+            )
+            research_issue_payload = run_script(
+                script_path("materialize-research-issue-surface"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--input-path",
+                discourse_payload["summary"]["output_path"],
+            )
+            coverage_ref = primary_wp4_evidence_ref(
+                {
+                    "environment_aggregation": environment_payload,
+                    "research_issue_surface": research_issue_payload,
+                    "discourse_issues": discourse_payload,
+                }
+            )
+            issue_id = primary_research_issue_id({"research_issue_surface": research_issue_payload})
             seeded_hypothesis_id = scaffold_payload["summary"]["seeded_hypothesis_ids"][0]
             run_script(
                 script_path("post-board-note"),
@@ -380,39 +405,16 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 "--owner-role",
                 "environmentalist",
                 "--linked-claim-id",
-                cluster_payload["canonical_ids"][0],
+                issue_id,
                 "--confidence",
                 "0.93",
             )
-            run_script(
-                script_path("submit-readiness-opinion"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--agent-role",
-                "moderator",
-                "--readiness-status",
-                "ready",
-                "--rationale",
-                "DB-backed public and environmental evidence are sufficient for promotion.",
-                "--sufficient-for-promotion",
-                "true",
-                "--basis-object-id",
-                cluster_payload["canonical_ids"][0],
-                "--evidence-ref",
-                coverage_ref,
-            )
-            run_script(
-                script_path("summarize-round-readiness"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
+            submit_ready_council_support(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                issue_id=issue_id,
+                evidence_ref=coverage_ref,
             )
 
             approve_promotion_transition(run_dir)

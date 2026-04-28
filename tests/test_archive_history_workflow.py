@@ -10,11 +10,14 @@ from _workflow_support import (
     analytics_path,
     investigation_path,
     load_json,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     request_and_approve_transition,
     run_kernel,
     run_script,
     script_path,
     seed_analysis_chain,
+    submit_ready_council_support,
     write_json,
 )
 
@@ -76,35 +79,15 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         str(mission_path),
     )
     outputs = seed_analysis_chain(run_dir, fixture_root, run_id, round_id, include_airnow=True)
-
-    run_script(
-        script_path("derive-claim-scope"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
+    evidence_ref = primary_wp4_evidence_ref(outputs)
+    issue_id = primary_research_issue_id(outputs)
+    submit_ready_council_support(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        issue_id=issue_id,
+        evidence_ref=evidence_ref,
     )
-    run_script(
-        script_path("derive-observation-scope"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
-    )
-    coverage_payload = run_script(
-        script_path("score-evidence-coverage"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
-    )
-    coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
     run_script(
         script_path("post-board-note"),
         "--run-dir",
@@ -120,7 +103,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "--note-text",
         "Round is ready to move into archive and history validation.",
         "--linked-artifact-ref",
-        coverage_ref,
+        evidence_ref,
     )
     run_script(
         script_path("update-hypothesis-status"),
@@ -139,7 +122,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "--owner-role",
         "environmentalist",
         "--linked-claim-id",
-        outputs["cluster_claims"]["canonical_ids"][0],
+        issue_id,
         "--confidence",
         "0.93",
     )
@@ -395,14 +378,14 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             )
             analytics_path(
                 historical_run_dir, f"claim_scope_proposals_{HISTORICAL_ROUND_ID}.json"
-            ).unlink()
+            ).unlink(missing_ok=True)
             analytics_path(
                 historical_run_dir,
                 f"observation_scope_proposals_{HISTORICAL_ROUND_ID}.json",
-            ).unlink()
+            ).unlink(missing_ok=True)
             analytics_path(
                 historical_run_dir, f"evidence_coverage_{HISTORICAL_ROUND_ID}.json"
-            ).unlink()
+            ).unlink(missing_ok=True)
 
             signal_archive = run_kernel(
                 "run-skill",
@@ -486,15 +469,15 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertIn(case_db_path, case_archive["event"]["resolved_write_paths"])
             self.assertEqual(HISTORICAL_RUN_ID, case_archive["skill_payload"]["summary"]["case_id"])
             self.assertEqual(
-                "analysis-plane",
+                "missing-claim-scope",
                 case_archive["skill_payload"]["summary"]["claim_scope_source"],
             )
             self.assertEqual(
-                "analysis-plane",
+                "missing-observation-scope",
                 case_archive["skill_payload"]["summary"]["observation_scope_source"],
             )
             self.assertEqual(
-                "analysis-plane",
+                "missing-coverage",
                 case_archive["skill_payload"]["summary"]["coverage_source"],
             )
 
@@ -510,12 +493,12 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertIn("air-quality", first_case["matched_metric_families"])
             self.assertEqual(HISTORICAL_RUN_ID, first_signal["run_id"])
             self.assertEqual("air-quality", first_signal["metric_family"])
-            self.assertEqual("analysis-plane", case_import_artifact["claim_scope_source"])
+            self.assertEqual("missing-claim-scope", case_import_artifact["claim_scope_source"])
             self.assertEqual(
-                "analysis-plane",
+                "missing-observation-scope",
                 case_import_artifact["observation_scope_source"],
             )
-            self.assertEqual("analysis-plane", case_import_artifact["coverage_source"])
+            self.assertEqual("missing-coverage", case_import_artifact["coverage_source"])
             self.assertFalse(
                 case_import_artifact["observed_inputs"]["claim_scope_artifact_present"]
             )
@@ -527,11 +510,11 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertFalse(
                 case_import_artifact["observed_inputs"]["coverage_artifact_present"]
             )
-            self.assertTrue(case_import_artifact["observed_inputs"]["claim_scope_present"])
-            self.assertTrue(
+            self.assertFalse(case_import_artifact["observed_inputs"]["claim_scope_present"])
+            self.assertFalse(
                 case_import_artifact["observed_inputs"]["observation_scope_present"]
             )
-            self.assertTrue(case_import_artifact["observed_inputs"]["coverage_present"])
+            self.assertFalse(case_import_artifact["observed_inputs"]["coverage_present"])
 
     def test_runtime_history_bootstrap_materializes_archive_backed_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -647,11 +630,11 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             )
             analytics_path(
                 current_run_dir, f"claim_scope_proposals_{CURRENT_ROUND_ID}.json"
-            ).unlink()
+            ).unlink(missing_ok=True)
             analytics_path(
                 current_run_dir,
                 f"observation_scope_proposals_{CURRENT_ROUND_ID}.json",
-            ).unlink()
+            ).unlink(missing_ok=True)
 
             history_payload = run_kernel(
                 "run-skill",
@@ -673,11 +656,11 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", history_payload["status"])
             self.assertEqual("strict", history_payload["summary"]["contract_mode"])
             self.assertEqual(
-                "analysis-plane",
+                "missing-claim-scope",
                 history_payload["skill_payload"]["summary"]["claim_scope_source"],
             )
             self.assertEqual(
-                "analysis-plane",
+                "missing-observation-scope",
                 history_payload["skill_payload"]["summary"][
                     "observation_scope_source"
                 ],
@@ -685,9 +668,9 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertGreaterEqual(retrieval_artifact["budget"]["selected_case_count"], 1)
             self.assertGreaterEqual(retrieval_artifact["budget"]["selected_signal_count"], 1)
             self.assertEqual("smoke-transport", retrieval_artifact["history_query"]["profile_id"])
-            self.assertEqual("analysis-plane", retrieval_artifact["claim_scope_source"])
+            self.assertEqual("missing-claim-scope", retrieval_artifact["claim_scope_source"])
             self.assertEqual(
-                "analysis-plane",
+                "missing-observation-scope",
                 retrieval_artifact["observation_scope_source"],
             )
             self.assertFalse(
@@ -698,8 +681,8 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                     "observation_scope_artifact_present"
                 ]
             )
-            self.assertTrue(retrieval_artifact["observed_inputs"]["claim_scope_present"])
-            self.assertTrue(
+            self.assertFalse(retrieval_artifact["observed_inputs"]["claim_scope_present"])
+            self.assertFalse(
                 retrieval_artifact["observed_inputs"]["observation_scope_present"]
             )
             self.assertTrue(any(case["case_id"] == HISTORICAL_RUN_ID for case in retrieval_artifact["cases"]))
@@ -730,11 +713,11 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
 
             investigation_path(
                 historical_run_dir, f"next_actions_{HISTORICAL_ROUND_ID}.json"
-            ).unlink()
+            ).unlink(missing_ok=True)
             investigation_path(
                 historical_run_dir,
                 f"falsification_probes_{HISTORICAL_ROUND_ID}.json",
-            ).unlink()
+            ).unlink(missing_ok=True)
 
             archive_payload = run_script(
                 script_path("archive-case-library"),
@@ -842,10 +825,10 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
 
             investigation_path(
                 current_run_dir, f"next_actions_{CURRENT_ROUND_ID}.json"
-            ).unlink()
+            ).unlink(missing_ok=True)
             investigation_path(
                 current_run_dir, f"falsification_probes_{CURRENT_ROUND_ID}.json"
-            ).unlink()
+            ).unlink(missing_ok=True)
 
             history_payload = run_script(
                 script_path("materialize-history-context"),
@@ -934,13 +917,13 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
 
             investigation_path(
                 run_dir, f"round_tasks_{HISTORICAL_ROUND_ID}.json"
-            ).unlink()
+            ).unlink(missing_ok=True)
             investigation_path(
                 run_dir, f"next_actions_{HISTORICAL_ROUND_ID}.json"
-            ).unlink()
+            ).unlink(missing_ok=True)
             investigation_path(
                 run_dir, f"falsification_probes_{HISTORICAL_ROUND_ID}.json"
-            ).unlink()
+            ).unlink(missing_ok=True)
 
             current_manifest = run_kernel(
                 "materialize-benchmark-manifest",
@@ -1006,17 +989,11 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 round_tasks_row["payload_source"],
             )
             self.assertFalse(next_actions_row["exists"])
-            self.assertTrue(next_actions_row["payload_present"])
-            self.assertEqual(
-                "deliberation-plane-actions",
-                next_actions_row["payload_source"],
-            )
+            self.assertFalse(next_actions_row["payload_present"])
+            self.assertEqual("missing-next-actions", next_actions_row["payload_source"])
             self.assertFalse(probes_row["exists"])
-            self.assertTrue(probes_row["payload_present"])
-            self.assertEqual(
-                "deliberation-plane-probes",
-                probes_row["payload_source"],
-            )
+            self.assertFalse(probes_row["payload_present"])
+            self.assertEqual("missing-probes", probes_row["payload_source"])
             self.assertNotEqual(
                 scenario_fixture["baseline_manifest"]["path"],
                 scenario_fixture["baseline_manifest"]["source_path"],
@@ -1111,7 +1088,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 f"runtime/promotion_gate_{HISTORICAL_ROUND_ID}.json",
                 f"runtime/supervisor_state_{HISTORICAL_ROUND_ID}.json",
             ):
-                (run_dir / relative_path).unlink()
+                (run_dir / relative_path).unlink(missing_ok=True)
 
             close_request_id = approve_close_round_transition(
                 run_dir,

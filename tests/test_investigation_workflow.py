@@ -9,12 +9,15 @@ from _workflow_support import (
     analytics_path,
     investigation_path,
     load_json,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     promotion_path,
     request_and_approve_transition,
     reporting_path,
     run_script,
     script_path,
     seed_analysis_chain,
+    submit_ready_council_support,
 )
 
 RUN_ID = "run-investigation-001"
@@ -31,86 +34,129 @@ def approve_promotion_transition(run_dir: Path) -> str:
     )
 
 
+def seed_wp4_issue_context(run_dir: Path, root: Path) -> dict[str, str]:
+    outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+    return {
+        "evidence_ref": primary_wp4_evidence_ref(outputs),
+        "issue_id": primary_research_issue_id(outputs),
+    }
+
+
+def seed_open_challenge_context(
+    run_dir: Path,
+    root: Path,
+    *,
+    title: str = "Smoke over NYC may be overstated",
+) -> dict[str, object]:
+    context = seed_wp4_issue_context(run_dir, root)
+    evidence_ref = context["evidence_ref"]
+    issue_id = context["issue_id"]
+    hypothesis_payload = run_script(
+        script_path("update-hypothesis-status"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--title",
+        title,
+        "--statement",
+        "Public reports may overstate severity relative to observed PM2.5 coverage.",
+        "--status",
+        "active",
+        "--owner-role",
+        "moderator",
+        "--linked-claim-id",
+        issue_id,
+        "--confidence",
+        "0.52",
+    )
+    run_script(
+        script_path("open-challenge-ticket"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--title",
+        "Check whether smoke narrative is overstated",
+        "--challenge-statement",
+        "Re-test whether the strongest narrative exceeds evidence coverage.",
+        "--target-claim-id",
+        issue_id,
+        "--target-hypothesis-id",
+        hypothesis_payload["canonical_ids"][0],
+        "--priority",
+        "high",
+        "--owner-role",
+        "challenger",
+        "--linked-artifact-ref",
+        evidence_ref,
+    )
+    return {**context, "hypothesis_payload": hypothesis_payload}
+
+
+def seed_ready_investigation_context(run_dir: Path, root: Path) -> dict[str, str]:
+    context = seed_wp4_issue_context(run_dir, root)
+    evidence_ref = context["evidence_ref"]
+    issue_id = context["issue_id"]
+    submit_ready_council_support(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        issue_id=issue_id,
+        evidence_ref=evidence_ref,
+    )
+    run_script(
+        script_path("post-board-note"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--author-role",
+        "moderator",
+        "--category",
+        "analysis",
+        "--note-text",
+        "Board is organized and successor evidence is available for promotion review.",
+        "--linked-artifact-ref",
+        evidence_ref,
+    )
+    run_script(
+        script_path("update-hypothesis-status"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--title",
+        "Smoke over NYC was materially significant",
+        "--statement",
+        "Public smoke reports are backed by elevated PM2.5 observations.",
+        "--status",
+        "active",
+        "--owner-role",
+        "environmentalist",
+        "--linked-claim-id",
+        issue_id,
+        "--confidence",
+        "0.91",
+    )
+    return context
+
+
 class InvestigationWorkflowTests(unittest.TestCase):
     def test_d1_builds_actions_and_probes_from_open_challenge(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
-
-            hypothesis_payload = run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Smoke over NYC may be overstated",
-                "--statement",
-                "Public reports may overstate severity relative to observed PM2.5 coverage.",
-                "--status",
-                "active",
-                "--owner-role",
-                "moderator",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.52",
-            )
-            run_script(
-                script_path("open-challenge-ticket"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Check whether smoke narrative is overstated",
-                "--challenge-statement",
-                "Re-test whether the strongest narrative exceeds evidence coverage.",
-                "--target-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--target-hypothesis-id",
-                hypothesis_payload["canonical_ids"][0],
-                "--priority",
-                "high",
-                "--owner-role",
-                "challenger",
-                "--linked-artifact-ref",
-                coverage_ref,
-            )
+            context = seed_open_challenge_context(run_dir, root)
+            hypothesis_payload = context["hypothesis_payload"]
             run_script(
                 script_path("summarize-board-state"),
                 "--run-dir",
@@ -185,80 +231,10 @@ class InvestigationWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
-
-            hypothesis_payload = run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Smoke over NYC may still be overstated",
-                "--statement",
-                "Public reports may overstate severity relative to observed PM2.5 coverage.",
-                "--status",
-                "active",
-                "--owner-role",
-                "moderator",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.52",
-            )
-            run_script(
-                script_path("open-challenge-ticket"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Challenge the strongest smoke narrative",
-                "--challenge-statement",
-                "Re-test whether the strongest smoke narrative exceeds evidence coverage.",
-                "--target-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--target-hypothesis-id",
-                hypothesis_payload["canonical_ids"][0],
-                "--priority",
-                "high",
-                "--owner-role",
-                "challenger",
-                "--linked-artifact-ref",
-                coverage_ref,
+            seed_open_challenge_context(
+                run_dir,
+                root,
+                title="Smoke over NYC may still be overstated",
             )
 
             actions_payload = run_script(
@@ -304,82 +280,12 @@ class InvestigationWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
+            seed_open_challenge_context(
+                run_dir,
+                root,
+                title="Direct probe fallback hypothesis",
             )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
-
-            hypothesis_payload = run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Direct probe fallback hypothesis",
-                "--statement",
-                "Probe generation should rebuild candidates from shared deliberation state.",
-                "--status",
-                "active",
-                "--owner-role",
-                "moderator",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.52",
-            )
-            run_script(
-                script_path("open-challenge-ticket"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Rebuild probe candidates without next_actions artifact",
-                "--challenge-statement",
-                "The probe skill should recover when the explicit next-actions artifact is absent.",
-                "--target-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--target-hypothesis-id",
-                hypothesis_payload["canonical_ids"][0],
-                "--priority",
-                "high",
-                "--owner-role",
-                "challenger",
-                "--linked-artifact-ref",
-                coverage_ref,
-            )
-            analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json").unlink()
+            analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json").unlink(missing_ok=True)
 
             probes_payload = run_script(
                 script_path("open-falsification-probe"),
@@ -399,16 +305,16 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertFalse(analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json").exists())
             self.assertEqual("derived-from-deliberation", probes_payload["summary"]["action_source"])
             self.assertEqual("deliberation-plane", probes_payload["summary"]["board_state_source"])
-            self.assertEqual("analysis-plane", probes_payload["summary"]["coverage_source"])
+            self.assertEqual("missing-coverage", probes_payload["summary"]["coverage_source"])
             self.assertEqual("completed", probes_payload["deliberation_sync"]["status"])
             self.assertEqual("derived-from-deliberation", probes_artifact["action_source"])
-            self.assertEqual("analysis-plane", probes_artifact["coverage_source"])
+            self.assertEqual("missing-coverage", probes_artifact["coverage_source"])
             self.assertFalse(probes_artifact["observed_inputs"]["next_actions_artifact_present"])
             self.assertFalse(probes_artifact["observed_inputs"]["next_actions_present"])
             self.assertFalse(probes_artifact["observed_inputs"]["board_summary_artifact_present"])
             self.assertFalse(probes_artifact["observed_inputs"]["board_brief_artifact_present"])
             self.assertFalse(probes_artifact["observed_inputs"]["coverage_artifact_present"])
-            self.assertTrue(probes_artifact["observed_inputs"]["coverage_present"])
+            self.assertFalse(probes_artifact["observed_inputs"]["coverage_present"])
             self.assertGreaterEqual(probes_payload["summary"]["probe_count"], 1)
             self.assertGreaterEqual(len(probes_artifact["probes"]), 1)
 
@@ -416,80 +322,10 @@ class InvestigationWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
-
-            hypothesis_payload = run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "DB-backed next actions survive artifact deletion",
-                "--statement",
-                "Probe generation should recover the ranked next-action queue from the deliberation DB snapshot.",
-                "--status",
-                "active",
-                "--owner-role",
-                "moderator",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.52",
-            )
-            run_script(
-                script_path("open-challenge-ticket"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Delete next actions after generation",
-                "--challenge-statement",
-                "The probe skill should load persisted moderator actions instead of rebuilding from scratch.",
-                "--target-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--target-hypothesis-id",
-                hypothesis_payload["canonical_ids"][0],
-                "--priority",
-                "high",
-                "--owner-role",
-                "challenger",
-                "--linked-artifact-ref",
-                coverage_ref,
+            seed_open_challenge_context(
+                run_dir,
+                root,
+                title="DB-backed next actions survive artifact deletion",
             )
             run_script(
                 script_path("propose-next-actions"),
@@ -526,80 +362,10 @@ class InvestigationWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
-
-            hypothesis_payload = run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Readiness should honor DB-backed action and probe state",
-                "--statement",
-                "Deleting JSON exports should not erase moderator work that already exists in the deliberation DB.",
-                "--status",
-                "active",
-                "--owner-role",
-                "moderator",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.52",
-            )
-            run_script(
-                script_path("open-challenge-ticket"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Keep contradiction work open",
-                "--challenge-statement",
-                "The readiness skill should still see unresolved moderator work after artifact deletion.",
-                "--target-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--target-hypothesis-id",
-                hypothesis_payload["canonical_ids"][0],
-                "--priority",
-                "high",
-                "--owner-role",
-                "challenger",
-                "--linked-artifact-ref",
-                coverage_ref,
+            seed_open_challenge_context(
+                run_dir,
+                root,
+                title="Readiness should honor DB-backed action and probe state",
             )
             run_script(
                 script_path("propose-next-actions"),
@@ -680,56 +446,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Smoke over NYC was materially significant",
-                "--statement",
-                "Public smoke reports are backed by elevated PM2.5 observations.",
-                "--status",
-                "active",
-                "--owner-role",
-                "environmentalist",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.91",
-            )
+            seed_ready_investigation_context(run_dir, root)
 
             readiness_payload = run_script(
                 script_path("summarize-round-readiness"),
@@ -784,75 +501,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
-
-            run_script(
-                script_path("post-board-note"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--author-role",
-                "moderator",
-                "--category",
-                "analysis",
-                "--note-text",
-                "Board is organized and strong evidence is available for promotion review.",
-                "--linked-artifact-ref",
-                coverage_ref,
-            )
-            run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Smoke over NYC was materially significant",
-                "--statement",
-                "Public smoke reports are backed by elevated PM2.5 observations.",
-                "--status",
-                "active",
-                "--owner-role",
-                "environmentalist",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.91",
-            )
+            seed_ready_investigation_context(run_dir, root)
             run_script(
                 script_path("summarize-board-state"),
                 "--run-dir",
@@ -904,79 +553,25 @@ class InvestigationWorkflowTests(unittest.TestCase):
 
             readiness_artifact = load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json"))
             promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
-            coverage_artifact = load_json(analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json"))
-
-            self.assertGreaterEqual(actions_payload["summary"]["action_count"], 1)
+            self.assertEqual(0, actions_payload["summary"]["action_count"])
             self.assertEqual("ready", readiness_payload["summary"]["readiness_status"])
             self.assertTrue(readiness_artifact["sufficient_for_promotion"])
             self.assertEqual("promoted", promotion_payload["summary"]["promotion_status"])
             self.assertEqual("promoted", promotion_artifact["promotion_status"])
             self.assertEqual(
-                "freeze-controversy-basis-v1",
+                "council-judgement-freeze-v1",
                 promotion_artifact["basis_selection_mode"],
             )
-            self.assertGreaterEqual(
-                promotion_artifact["basis_counts"]["coverage_count"],
-                1,
-            )
-            self.assertGreaterEqual(len(promotion_artifact["selected_coverages"]), 1)
-            available_coverage_ids = {coverage["coverage_id"] for coverage in coverage_artifact["coverages"]}
-            self.assertIn(promotion_artifact["selected_coverages"][0]["coverage_id"], available_coverage_ids)
+            self.assertEqual(0, promotion_artifact["basis_counts"]["coverage_count"])
+            self.assertEqual([], promotion_artifact["selected_coverages"])
+            self.assertGreaterEqual(len(promotion_artifact["supporting_proposal_ids"]), 1)
+            self.assertGreaterEqual(len(promotion_artifact["supporting_opinion_ids"]), 1)
 
     def test_d2_reads_deliberation_plane_without_board_summary_or_brief(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Smoke over NYC was materially significant",
-                "--statement",
-                "Public smoke reports are backed by elevated PM2.5 observations.",
-                "--status",
-                "active",
-                "--owner-role",
-                "environmentalist",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.91",
-            )
+            seed_ready_investigation_context(run_dir, root)
 
             readiness_payload = run_script(
                 script_path("summarize-round-readiness"),
@@ -1006,61 +601,12 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertFalse(readiness_artifact["observed_inputs"]["probes_artifact_present"])
             self.assertFalse(readiness_artifact["observed_inputs"]["probes_present"])
 
-    def test_d1_and_d2_continue_from_analysis_plane_when_coverage_artifact_is_missing(self) -> None:
+    def test_d1_and_d2_continue_from_council_basis_when_coverage_artifact_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Smoke over NYC was materially significant",
-                "--statement",
-                "Public smoke reports are backed by elevated PM2.5 observations.",
-                "--status",
-                "active",
-                "--owner-role",
-                "environmentalist",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.91",
-            )
-            analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json").unlink()
+            seed_ready_investigation_context(run_dir, root)
+            analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json").unlink(missing_ok=True)
 
             actions_payload = run_script(
                 script_path("propose-next-actions"),
@@ -1098,29 +644,28 @@ class InvestigationWorkflowTests(unittest.TestCase):
             promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
 
             self.assertFalse(analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json").exists())
-            self.assertEqual("analysis-plane", actions_payload["summary"]["coverage_source"])
-            self.assertEqual("analysis-plane", actions_artifact["coverage_source"])
+            self.assertEqual("missing-coverage", actions_payload["summary"]["coverage_source"])
+            self.assertEqual("missing-coverage", actions_artifact["coverage_source"])
             self.assertFalse(actions_artifact["observed_inputs"]["coverage_artifact_present"])
-            self.assertTrue(actions_artifact["observed_inputs"]["coverage_present"])
-            self.assertGreaterEqual(actions_payload["summary"]["action_count"], 1)
+            self.assertFalse(actions_artifact["observed_inputs"]["coverage_present"])
+            self.assertEqual(0, actions_payload["summary"]["action_count"])
             self.assertEqual("ready", readiness_payload["summary"]["readiness_status"])
-            self.assertEqual("analysis-plane", readiness_payload["summary"]["coverage_source"])
+            self.assertEqual("missing-coverage", readiness_payload["summary"]["coverage_source"])
             self.assertFalse(readiness_artifact["observed_inputs"]["coverage_artifact_present"])
-            self.assertTrue(readiness_artifact["observed_inputs"]["coverage_present"])
+            self.assertFalse(readiness_artifact["observed_inputs"]["coverage_present"])
             self.assertTrue(readiness_artifact["sufficient_for_promotion"])
             self.assertEqual("promoted", promotion_payload["summary"]["promotion_status"])
-            self.assertEqual("analysis-plane", promotion_payload["summary"]["coverage_source"])
+            self.assertEqual("missing-coverage", promotion_payload["summary"]["coverage_source"])
             self.assertFalse(promotion_artifact["observed_inputs"]["coverage_artifact_present"])
-            self.assertTrue(promotion_artifact["observed_inputs"]["coverage_present"])
+            self.assertFalse(promotion_artifact["observed_inputs"]["coverage_present"])
             self.assertEqual(
-                "freeze-controversy-basis-v1",
+                "council-judgement-freeze-v1",
                 promotion_artifact["basis_selection_mode"],
             )
-            self.assertGreaterEqual(
-                promotion_artifact["basis_counts"]["coverage_count"],
-                1,
-            )
-            self.assertGreaterEqual(len(promotion_artifact["selected_coverages"]), 1)
+            self.assertEqual(0, promotion_artifact["basis_counts"]["coverage_count"])
+            self.assertEqual([], promotion_artifact["selected_coverages"])
+            self.assertGreaterEqual(len(promotion_artifact["supporting_proposal_ids"]), 1)
+            self.assertGreaterEqual(len(promotion_artifact["supporting_opinion_ids"]), 1)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,8 @@ from pathlib import Path
 
 from _workflow_support import (
     load_json,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     promotion_path,
     request_and_approve_transition,
     reporting_path,
@@ -33,35 +35,8 @@ ROUND_ID = "round-decision-trace-001"
 
 def prepare_round_base(run_dir: Path, root: Path) -> dict[str, str]:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    run_script(
-        script_path("derive-claim-scope"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    run_script(
-        script_path("derive-observation-scope"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    coverage_payload = run_script(
-        script_path("score-evidence-coverage"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
-    claim_id = outputs["cluster_claims"]["canonical_ids"][0]
+    coverage_ref = primary_wp4_evidence_ref(outputs)
+    claim_id = primary_research_issue_id(outputs)
     run_script(
         script_path("post-board-note"),
         "--run-dir",
@@ -117,6 +92,15 @@ def approve_promotion_transition(run_dir: Path) -> str:
 
 
 def prepare_reporting_chain(run_dir: Path) -> None:
+    run_script(
+        script_path("summarize-round-readiness"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+    )
     approve_promotion_transition(run_dir)
     run_kernel(
         "supervise-round",
@@ -425,6 +409,15 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 },
             )
 
+            run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
             promotion_request_id = approve_promotion_transition(run_dir)
             run_kernel(
                 "supervise-round",

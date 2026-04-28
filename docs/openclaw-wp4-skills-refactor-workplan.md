@@ -86,7 +86,7 @@ WP4 的核心结论：
 
 - [x] 事实核验 helper 必须要求显式核验问题、地理范围、研究期、证据匹配窗口、传播/滞后假设、metric/source 要求。
 - [x] evidence sufficiency review 默认输出 notes，不输出 numeric readiness score。
-- [ ] 旧 coverage/link 测试改写为 scope/sufficiency/caveat 测试。
+- [x] 旧 coverage/link 测试改写为 scope/sufficiency/caveat 测试。
 
 ### WP4.2 Environment evidence aggregation
 
@@ -157,7 +157,7 @@ WP4 的核心结论：
 
 - [ ] 将本文件第 `8` 节 freeze-line placeholder rows 替换为最终 versioned audit records。
 - [x] 更新所有触达 skill 的 `SKILL.md`、agent prompts、runtime registry description。
-- [ ] 重写依赖 coverage/linkage/route/map 的旧测试。
+- [x] 重写依赖 coverage/linkage/route/map 的旧测试。
 - [x] 增加 approval-gated helper、旧入口移除、DB-only recovery、report basis 引用测试。
 - [x] 更新本文件的完成状态、未完成项、新发现问题、是否影响后续计划。
 
@@ -236,6 +236,47 @@ WP4 helper 必须支持 challenger 对以下内容提交 review comment / challe
 1. `PYTHONPATH=eco-concil-runtime/src .venv/bin/python - <<'PY' ... validate_skill_registry()`：通过；当前 registry 识别 `80` 个 skill、`24` 个需要 operator approval、`17` 个 optional-analysis skill。
 2. `.venv/bin/python -m py_compile eco-concil-runtime/src/eco_council_runtime/wp4_helpers.py eco-concil-runtime/src/eco_council_runtime/analysis_objects.py eco-concil-runtime/src/eco_council_runtime/kernel/skill_registry.py eco-concil-runtime/src/eco_council_runtime/kernel/source_queue_profile.py eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py tests/_workflow_support.py tests/test_wp4_helper_guardrails.py tests/test_runtime_source_queue_profiles.py tests/test_skill_approval_workflow.py`：通过。
 3. `.venv/bin/python -m unittest tests.test_wp4_helper_guardrails tests.test_skill_approval_workflow tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`：21 项通过。
+
+## 7.2 2026-04-28 本批交付（历史 workflow 测试迁移与旧入口清零）
+
+已完成：
+
+1. `tests/_workflow_support.py` 新增 WP4 successor 测试辅助：从 `research_issue_surface` 取 research issue id、从 successor artifacts 取 evidence ref，并用 `submit-council-proposal` / `submit-readiness-opinion` / `summarize-round-readiness` 构造 DB council-object 就绪依据。
+2. 迁移 reporting / publication / decision trace / archive / benchmark / orchestration planner / orchestration ingress / supervisor / runtime kernel / board / investigation / council autonomy 测试，不再用旧 coverage、claim cluster、route 或 controversy map 脚本作为 fixture 生成器。
+3. 重写 `test_analysis_workflow.py`、`test_formal_public_workflow.py`、`test_diffusion_workflow.py`、`test_controversy_workflow.py`、`test_deliberation_agenda_workflow.py`：测试目标改为 discourse issue discovery、environment aggregation、evidence lane advisory、research issue surface/view/map、formal/public footprint、representation audit cues、temporal co-occurrence cues。
+4. `tests` 中对旧 skill 的 `script_path(...)` 直接调用已清零；旧 skill 名称只保留在 guardrail/negative assertion 中，用于证明 registry、source queue 和 board handoff 不再包含旧入口。
+5. 历史 DB query fallback 测试改为显式断言“不做 inline fallback”：没有旧 analysis result-set 时返回空结果，而不是静默重建 claim cluster / controversy map。
+6. readiness / promotion 测试改为 council judgement basis：没有旧 coverage artifact 时，promotion 不再伪造 selected coverage；ready/promoted 必须来自 DB council proposal + readiness opinion + moderator transition。
+
+未完成：
+
+1. `formal_signal_semantics.py` 仍未拆成 versioned taxonomy family records。
+2. `analysis_plane.py` 仍保留历史 analysis kind/query object 命名，用于旧 DB 查询表面；本批只清理旧 skill 入口和测试 fixture，不做 DB schema / query kind 重命名。
+3. 本批未运行全仓所有测试；只运行了 WP4 旧入口迁移直接相关的最小集合。
+
+新发现的问题：
+
+1. 无旧 coverage 时，`propose-next-actions` 对干净 ready board 不再生成 heuristic action，这是期望行为；相关测试已改为断言 action count 为 `0`。
+2. `promote-evidence-basis` 在 council proposal / readiness opinion 明确支持时使用 `council-judgement-freeze-v1`，不会生成 `selected_coverages` 或 `selected_basis_object_ids`；测试已改为检查 supporting proposal/opinion ids。
+3. `run-phase2-round` / `supervise-round` 在 approved transition 路径下不再物化默认 `orchestration_plan` 文件；controller/supervisor 只记录 expected path，并以 `transition-executor` 模式执行。
+4. 报告 handoff 在缺少旧 coverage result-set 时会记录 `missing-coverage`，key findings 可能为空；这符合“helper 不能直接成为报告 basis”的原则。
+
+是否影响后续计划：
+
+1. 正向影响：旧入口、旧 fixture 生成器和旧 coverage/readiness 语义已经从测试主路径移除，后续 WP4 开发不会被兼容测试拖回旧架构。
+2. 后续若迁移 `analysis_plane` 历史 kind 名称，需要单独设计 DB query/schema 兼容或迁移策略；不应通过恢复旧 skill 实现。
+3. 后续 full regression 若失败，应优先判断是否仍有历史 analysis object 命名债，而不是恢复 claim matching / coverage formula。
+
+本批实际运行测试：
+
+1. `.venv/bin/python -m unittest tests.test_reporting_publish_workflow tests.test_decision_trace_workflow tests.test_reporting_query_surface tests.test_archive_history_workflow tests.test_benchmark_replay_workflow tests.test_orchestration_planner_workflow`：39 项通过。
+2. `.venv/bin/python -m unittest tests.test_analysis_workflow tests.test_formal_public_workflow tests.test_diffusion_workflow tests.test_controversy_workflow tests.test_deliberation_agenda_workflow`：11 项通过。
+3. `.venv/bin/python -m unittest tests.test_reporting_workflow tests.test_investigation_workflow tests.test_board_workflow tests.test_council_autonomy_flow tests.test_supervisor_simulation_regression tests.test_orchestration_ingress_workflow`：41 项通过。
+4. `.venv/bin/python -m unittest tests.test_runtime_kernel`：42 项通过。
+5. `.venv/bin/python -m unittest tests.test_wp4_helper_guardrails tests.test_skill_approval_workflow tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`：21 项通过。
+6. `.venv/bin/python -m py_compile ...` 覆盖本批修改的测试文件：通过。
+7. `rg` 扫描 `tests` 中旧 skill 的 `script_path(...)` 直接调用：无匹配。
+8. `git diff --check`：通过。
 
 ## 8. 规则审计 freeze line
 

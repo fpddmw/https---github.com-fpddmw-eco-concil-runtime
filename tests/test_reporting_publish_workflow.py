@@ -9,12 +9,15 @@ from _workflow_support import (
     analytics_path,
     load_json,
     promotion_path,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     reporting_path,
     request_and_approve_transition,
     run_kernel,
     run_script,
     script_path,
     seed_analysis_chain,
+    submit_ready_council_support,
     write_json,
 )
 
@@ -47,16 +50,21 @@ def execute_db(
 
 def prepare_ready_round(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    run_script(script_path("derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_payload = run_script(script_path("score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+    evidence_ref = primary_wp4_evidence_ref(outputs)
+    issue_id = primary_research_issue_id(outputs)
+    submit_ready_council_support(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        issue_id=issue_id,
+        evidence_ref=evidence_ref,
+    )
     run_script(
         script_path("post-board-note"),
         "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID,
         "--author-role", "moderator", "--category", "analysis",
         "--note-text", "Round is ready to move into role reports and final decision publish.",
-        "--linked-artifact-ref", coverage_ref,
+        "--linked-artifact-ref", evidence_ref,
     )
     run_script(
         script_path("update-hypothesis-status"),
@@ -64,8 +72,17 @@ def prepare_ready_round(run_dir: Path, root: Path) -> None:
         "--title", "Smoke over NYC was materially significant",
         "--statement", "Public smoke reports are backed by elevated PM2.5 observations.",
         "--status", "active", "--owner-role", "environmentalist",
-        "--linked-claim-id", outputs["cluster_claims"]["canonical_ids"][0],
+        "--linked-claim-id", issue_id,
         "--confidence", "0.93",
+    )
+    run_script(
+        script_path("summarize-board-state"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
     )
     approve_promotion_transition(run_dir)
     run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
@@ -75,17 +92,15 @@ def prepare_ready_round(run_dir: Path, root: Path) -> None:
 
 def prepare_hold_round(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    run_script(script_path("derive-claim-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    run_script(script_path("derive-observation-scope"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_payload = run_script(script_path("score-evidence-coverage"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-    coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+    evidence_ref = primary_wp4_evidence_ref(outputs)
+    issue_id = primary_research_issue_id(outputs)
     hypothesis_payload = run_script(
         script_path("update-hypothesis-status"),
         "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID,
         "--title", "Smoke over NYC may be overstated",
         "--statement", "Public reports may overstate severity relative to observed PM2.5 coverage.",
         "--status", "active", "--owner-role", "moderator",
-        "--linked-claim-id", outputs["cluster_claims"]["canonical_ids"][0],
+        "--linked-claim-id", issue_id,
         "--confidence", "0.52",
     )
     run_script(
@@ -93,9 +108,9 @@ def prepare_hold_round(run_dir: Path, root: Path) -> None:
         "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID,
         "--title", "Check whether smoke narrative is overstated",
         "--challenge-statement", "Re-test whether the strongest narrative exceeds evidence coverage.",
-        "--target-claim-id", outputs["cluster_claims"]["canonical_ids"][0],
+        "--target-claim-id", issue_id,
         "--target-hypothesis-id", hypothesis_payload["canonical_ids"][0],
-        "--priority", "high", "--owner-role", "challenger", "--linked-artifact-ref", coverage_ref,
+        "--priority", "high", "--owner-role", "challenger", "--linked-artifact-ref", evidence_ref,
     )
     approve_promotion_transition(run_dir)
     run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
@@ -186,8 +201,8 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("deliberation-plane-reporting-handoff", soc_draft["reporting_handoff_source"])
             self.assertEqual("deliberation-plane-council-decision-draft", soc_draft["decision_source"])
             self.assertEqual("missing-board-brief", soc_draft["board_brief_source"])
-            self.assertEqual("deliberation-plane", soc_draft["board_state_source"])
-            self.assertEqual("analysis-plane", soc_draft["coverage_source"])
+            self.assertEqual("missing-board", soc_draft["board_state_source"])
+            self.assertEqual("missing-coverage", soc_draft["coverage_source"])
             self.assertTrue(
                 soc_draft["observed_inputs"]["reporting_handoff_artifact_present"]
             )
@@ -476,8 +491,8 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("ready-for-release", publication_payload["summary"]["publication_status"])
             self.assertEqual("noop", publication_noop["summary"]["operation"])
             self.assertEqual("release", publication["publication_posture"])
-            self.assertEqual("deliberation-plane", publication["board_state_source"])
-            self.assertEqual("analysis-plane", publication["coverage_source"])
+            self.assertEqual("missing-board", publication["board_state_source"])
+            self.assertEqual("missing-coverage", publication["coverage_source"])
             self.assertEqual(
                 "deliberation-plane-reporting-handoff",
                 publication["reporting_handoff_source"],

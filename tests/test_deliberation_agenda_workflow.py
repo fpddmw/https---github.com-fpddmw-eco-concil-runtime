@@ -6,7 +6,6 @@ from pathlib import Path
 
 from _workflow_support import (
     analytics_path,
-    investigation_path,
     load_json,
     promotion_path,
     request_and_approve_transition,
@@ -84,9 +83,7 @@ def seed_public_only_trust_signal(run_dir: Path, root: Path) -> None:
                 "video": {
                     "id": "vid-trust-001",
                     "title": "Residents say their community voice was ignored",
-                    "description": (
-                        "Local residents say their community voice was ignored and public trust collapsed during the environmental decision."
-                    ),
+                    "description": "Local residents say their community voice was ignored and public trust collapsed during the environmental decision.",
                     "channel_title": "Neighborhood Watch",
                     "published_at": "2023-06-08T15:00:00Z",
                     "default_language": "en",
@@ -108,66 +105,53 @@ def seed_public_only_trust_signal(run_dir: Path, root: Path) -> None:
     )
 
 
-def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
-    seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    run_script(
-        script_path("derive-claim-scope"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
+def write_approved_taxonomy(root: Path) -> Path:
+    taxonomy_path = root / "approved_formal_public_taxonomy.json"
+    write_json(
+        taxonomy_path,
+        {
+            "version": "test-taxonomy-v1",
+            "labels": [
+                {"label": "air-quality-smoke", "terms": ["smoke", "air quality", "visibility"]},
+                {"label": "permit-process", "terms": ["permit", "hearing", "comment period"]},
+                {"label": "representation-trust", "terms": ["community voice", "public trust"]},
+            ],
+        },
     )
-    run_script(
-        script_path("derive-observation-scope"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    run_script(
-        script_path("score-evidence-coverage"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    run_script(
-        script_path("classify-claim-verifiability"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    run_script(
-        script_path("route-verification-lane"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    run_script(
-        script_path("materialize-controversy-map"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
+    return taxonomy_path
+
+
+def seed_successor_agenda_inputs(run_dir: Path, root: Path) -> dict[str, dict[str, object]]:
+    outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
     seed_regulationsgov_comments(run_dir, root)
     seed_public_only_trust_signal(run_dir, root)
-    run_script(
-        script_path("link-formal-comments-to-public-discourse"),
+    taxonomy_path = write_approved_taxonomy(root)
+    taxonomy = run_script(
+        script_path("apply-approved-formal-public-taxonomy"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--taxonomy-path",
+        str(taxonomy_path),
+        "--approval-ref",
+        "approval://taxonomy/test-taxonomy-v1",
+    )
+    footprints = run_script(
+        script_path("compare-formal-public-footprints"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--taxonomy-labels-path",
+        taxonomy["summary"]["output_path"],
+    )
+    representation_cues = run_script(
+        script_path("identify-representation-audit-cues"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -175,8 +159,8 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
         "--round-id",
         ROUND_ID,
     )
-    run_script(
-        script_path("identify-representation-gaps"),
+    temporal_cues = run_script(
+        script_path("detect-temporal-cooccurrence-cues"),
         "--run-dir",
         str(run_dir),
         "--run-id",
@@ -184,267 +168,58 @@ def seed_agenda_inputs(run_dir: Path, root: Path) -> None:
         "--round-id",
         ROUND_ID,
     )
-    run_script(
-        script_path("detect-cross-platform-diffusion"),
+    issue_map = run_script(
+        script_path("export-research-issue-map"),
         "--run-dir",
         str(run_dir),
         "--run-id",
         RUN_ID,
         "--round-id",
         ROUND_ID,
+        "--issue-surface-path",
+        outputs["research_issue_surface"]["summary"]["output_path"],
+        "--issue-views-path",
+        outputs["research_issue_views"]["summary"]["output_path"],
     )
-
-
-def seed_non_empirical_route_inputs(run_dir: Path, root: Path) -> None:
-    seed_public_only_trust_signal(run_dir, root)
-    run_script(
-        script_path("extract-claim-candidates"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    run_script(
-        script_path("cluster-claim-candidates"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    run_script(
-        script_path("derive-claim-scope"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    run_script(
-        script_path("classify-claim-verifiability"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    run_script(
-        script_path("route-verification-lane"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
-    run_script(
-        script_path("materialize-controversy-map"),
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        RUN_ID,
-        "--round-id",
-        ROUND_ID,
-    )
+    return {
+        "analysis": outputs,
+        "taxonomy": taxonomy,
+        "footprints": footprints,
+        "representation_cues": representation_cues,
+        "temporal_cues": temporal_cues,
+        "issue_map": issue_map,
+    }
 
 
 class DeliberationAgendaWorkflowTests(unittest.TestCase):
-    def test_next_actions_materializes_representation_and_diffusion_agenda(self) -> None:
+    def test_successor_helpers_materialize_audit_surfaces_not_agenda_commands(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            seed_agenda_inputs(run_dir, root)
+            outputs = seed_successor_agenda_inputs(run_dir, root)
 
-            payload = run_script(
-                script_path("propose-next-actions"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--max-actions",
-                "10",
-            )
-            artifact = load_json(
-                investigation_path(run_dir, f"next_actions_{ROUND_ID}.json")
-            )
+            self.assertEqual("completed", outputs["taxonomy"]["status"])
+            self.assertEqual("completed", outputs["footprints"]["status"])
+            self.assertEqual("completed", outputs["representation_cues"]["status"])
+            self.assertEqual("completed", outputs["temporal_cues"]["status"])
+            self.assertEqual("completed", outputs["issue_map"]["status"])
 
-            action_kinds = {
-                action["action_kind"]
-                for action in artifact["ranked_actions"]
-                if isinstance(action, dict)
-            }
+            footprint_artifact = load_json(analytics_path(run_dir, f"formal_public_footprints_{ROUND_ID}.json"))
+            representation_artifact = load_json(analytics_path(run_dir, f"representation_audit_cues_{ROUND_ID}.json"))
+            temporal_artifact = load_json(analytics_path(run_dir, f"temporal_cooccurrence_cues_{ROUND_ID}.json"))
+            map_artifact = load_json(analytics_path(run_dir, f"research_issue_map_{ROUND_ID}.json"))
 
-            self.assertEqual("completed", payload["status"])
-            self.assertEqual(
-                "controversy-agenda-materialization",
-                artifact["agenda_source"],
-            )
-            self.assertGreaterEqual(artifact["agenda_counts"]["issue_cluster_count"], 1)
-            self.assertGreaterEqual(
-                artifact["agenda_counts"]["representation_gap_count"],
-                1,
-            )
-            self.assertGreaterEqual(
-                artifact["agenda_counts"]["diffusion_focus_count"],
-                1,
-            )
-            self.assertIn("address-representation-gap", action_kinds)
-            self.assertIn("trace-cross-platform-diffusion", action_kinds)
-            self.assertGreaterEqual(
-                artifact["agenda_source_counts"].get("representation-gap", 0),
-                1,
-            )
-            self.assertGreaterEqual(
-                artifact["agenda_source_counts"].get("diffusion-edge", 0),
-                1,
-            )
+            self.assertNotIn("link_status", footprint_artifact["formal_public_footprints"])
+            self.assertNotIn("gap_type", representation_artifact["representation_audit_cues"][0])
+            self.assertNotIn("edge_type", temporal_artifact["temporal_cooccurrence_cues"][0])
+            self.assertEqual("navigation-export", map_artifact["research_issue_map"]["map_status"])
 
-    def test_readiness_uses_agenda_counts_as_blockers(self) -> None:
+    def test_readiness_and_promotion_do_not_use_helper_cues_as_default_gate(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            seed_agenda_inputs(run_dir, root)
+            seed_successor_agenda_inputs(run_dir, root)
 
-            run_script(
-                script_path("propose-next-actions"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--max-actions",
-                "10",
-            )
-            payload = run_script(
-                script_path("summarize-round-readiness"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            artifact = load_json(
-                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
-            )
-
-            self.assertEqual("completed", payload["status"])
-            self.assertEqual("needs-more-data", payload["summary"]["readiness_status"])
-            self.assertGreaterEqual(artifact["counts"]["issue_clusters"], 1)
-            self.assertGreaterEqual(
-                artifact["counts"]["representation_gap_actions"],
-                1,
-            )
-            self.assertGreaterEqual(
-                artifact["agenda_counts"]["formal_public_linkage_gap_count"],
-                1,
-            )
-            self.assertTrue(
-                any(
-                    "representation-gap actions remain unresolved" in reason
-                    for reason in artifact["gate_reasons"]
-                )
-            )
-
-    def test_promotion_basis_freezes_controversy_objects_for_agenda_blocked_round(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            run_dir = root / "run"
-            seed_agenda_inputs(run_dir, root)
-
-            run_script(
-                script_path("propose-next-actions"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--max-actions",
-                "10",
-            )
-            run_script(
-                script_path("summarize-round-readiness"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            promotion_request_id = approve_promotion_transition(run_dir)
-            payload = run_script(
-                script_path("promote-evidence-basis"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--transition-request-id",
-                promotion_request_id,
-            )
-            artifact = load_json(
-                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
-            )
-
-            self.assertEqual("completed", payload["status"])
-            self.assertEqual("withheld", artifact["promotion_status"])
-            self.assertEqual(
-                "freeze-controversy-basis-v1",
-                artifact["basis_selection_mode"],
-            )
-            self.assertGreaterEqual(
-                artifact["basis_counts"]["issue_cluster_count"],
-                1,
-            )
-            self.assertGreaterEqual(
-                artifact["basis_counts"]["formal_public_link_count"],
-                1,
-            )
-            self.assertGreaterEqual(
-                artifact["basis_counts"]["representation_gap_count"],
-                1,
-            )
-            self.assertGreaterEqual(
-                artifact["basis_counts"]["diffusion_edge_count"],
-                1,
-            )
-            self.assertTrue(
-                any(
-                    row.get("object_type") == "representation-gap"
-                    for row in artifact["frozen_basis"]["representation_gaps"]
-                )
-            )
-            self.assertGreaterEqual(len(artifact["selected_basis_object_ids"]), 1)
-
-    def test_non_empirical_round_can_promote_without_coverage_and_reporting_falls_back_to_structural_basis(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            run_dir = root / "run"
-            seed_non_empirical_route_inputs(run_dir, root)
-
-            run_script(
-                script_path("propose-next-actions"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--max-actions",
-                "10",
-            )
             readiness_payload = run_script(
                 script_path("summarize-round-readiness"),
                 "--run-dir",
@@ -454,9 +229,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            readiness_artifact = load_json(
-                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
-            )
+            readiness_artifact = load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json"))
             promotion_request_id = approve_promotion_transition(run_dir)
             promotion_payload = run_script(
                 script_path("promote-evidence-basis"),
@@ -469,65 +242,15 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 "--transition-request-id",
                 promotion_request_id,
             )
-            promotion_artifact = load_json(
-                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
-            )
-            run_script(
-                script_path("materialize-reporting-handoff"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            handoff_artifact = load_json(
-                reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json")
-            )
+            promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
 
             self.assertEqual("completed", readiness_payload["status"])
-            self.assertEqual("ready", readiness_payload["summary"]["readiness_status"])
-            self.assertEqual(0, readiness_artifact["counts"]["strong_coverages"])
-            self.assertEqual(0, readiness_artifact["counts"]["moderate_coverages"])
-            self.assertEqual(0, readiness_artifact["agenda_counts"]["observation_lane_issue_count"])
-            self.assertGreaterEqual(
-                readiness_artifact["counts"]["public_discourse_issues"]
-                + readiness_artifact["counts"]["stakeholder_deliberation_issues"]
-                + readiness_artifact["counts"]["formal_record_issues"],
-                1,
-            )
-
+            self.assertNotEqual("ready", readiness_payload["summary"]["readiness_status"])
+            self.assertFalse(readiness_artifact["sufficient_for_promotion"])
             self.assertEqual("completed", promotion_payload["status"])
-            self.assertEqual("promoted", promotion_artifact["promotion_status"])
+            self.assertEqual("withheld", promotion_artifact["promotion_status"])
             self.assertEqual(0, promotion_artifact["basis_counts"]["coverage_count"])
-            self.assertEqual(0, len(promotion_artifact["selected_coverages"]))
-            self.assertGreaterEqual(
-                promotion_artifact["basis_counts"]["verification_route_count"],
-                1,
-            )
-            self.assertTrue(
-                any(
-                    row.get("recommended_lane")
-                    in {
-                        "formal-comment-and-policy-record",
-                        "public-discourse-analysis",
-                        "stakeholder-deliberation-analysis",
-                    }
-                    for row in promotion_artifact["frozen_basis"]["verification_routes"]
-                )
-            )
-
-            self.assertGreaterEqual(len(handoff_artifact["key_findings"]), 1)
-            self.assertIn(
-                handoff_artifact["key_findings"][0].get("object_type"),
-                {
-                    "issue-cluster",
-                    "verification-route",
-                    "formal-public-link",
-                    "representation-gap",
-                    "diffusion-edge",
-                },
-            )
+            self.assertEqual([], promotion_artifact["selected_coverages"])
 
 
 if __name__ == "__main__":

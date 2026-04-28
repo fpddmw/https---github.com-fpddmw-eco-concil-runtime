@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import sqlite3
 import tempfile
 import unittest
@@ -10,17 +9,10 @@ from _workflow_support import (
     analytics_path,
     load_json,
     run_script,
-    runtime_src_path,
     script_path,
     seed_analysis_chain,
     write_json,
 )
-
-RUNTIME_SRC = runtime_src_path()
-if str(RUNTIME_SRC) not in sys.path:
-    sys.path.insert(0, str(RUNTIME_SRC))
-
-from eco_council_runtime.kernel.analysis_plane import query_analysis_result_items
 
 RUN_ID = "run-formal-public-001"
 ROUND_ID = "round-formal-public-001"
@@ -79,9 +71,7 @@ def seed_public_only_trust_signal(run_dir: Path, root: Path) -> None:
                 "video": {
                     "id": "vid-trust-001",
                     "title": "Residents say their community voice was ignored",
-                    "description": (
-                        "Local residents say their community voice was ignored and public trust collapsed during the environmental decision."
-                    ),
+                    "description": "Local residents say their community voice was ignored and public trust collapsed during the environmental decision.",
                     "channel_title": "Neighborhood Watch",
                     "published_at": "2023-06-08T15:00:00Z",
                     "default_language": "en",
@@ -103,45 +93,31 @@ def seed_public_only_trust_signal(run_dir: Path, root: Path) -> None:
     )
 
 
+def write_approved_taxonomy(root: Path) -> Path:
+    taxonomy_path = root / "approved_formal_public_taxonomy.json"
+    write_json(
+        taxonomy_path,
+        {
+            "version": "test-taxonomy-v1",
+            "labels": [
+                {"label": "air-quality-smoke", "terms": ["smoke", "air quality", "visibility"]},
+                {"label": "permit-process", "terms": ["permit", "hearing", "comment period"]},
+                {"label": "representation-trust", "terms": ["community voice", "public trust"]},
+            ],
+        },
+    )
+    return taxonomy_path
+
+
 class FormalPublicWorkflowTests(unittest.TestCase):
-    def test_formal_public_linkage_and_representation_gaps_materialize_issue_statuses(
-        self,
-    ) -> None:
+    def test_formal_public_successors_materialize_footprints_and_audit_cues(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("classify-claim-verifiability"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("route-verification-lane"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-
             seed_regulationsgov_comments(run_dir, root)
             seed_public_only_trust_signal(run_dir, root)
+            taxonomy_path = write_approved_taxonomy(root)
 
             with sqlite3.connect(analytics_path(run_dir, "signal_plane.sqlite")) as connection:
                 connection.row_factory = sqlite3.Row
@@ -154,26 +130,39 @@ class FormalPublicWorkflowTests(unittest.TestCase):
                     """,
                     (RUN_ID, ROUND_ID),
                 ).fetchall()
-            regulations_rows = [
-                row for row in rows if str(row["source_skill"]).startswith("fetch-regulationsgov-")
-            ]
-            youtube_rows = [
-                row for row in rows if str(row["source_skill"]) == "fetch-youtube-video-search"
-            ]
+            regulations_rows = [row for row in rows if str(row["source_skill"]).startswith("fetch-regulationsgov-")]
+            youtube_rows = [row for row in rows if str(row["source_skill"]) == "fetch-youtube-video-search"]
             self.assertGreaterEqual(len(regulations_rows), 2)
             self.assertEqual({"formal"}, {str(row["plane"]) for row in regulations_rows})
-            self.assertEqual(
-                {"formal-comment-signal"},
-                {str(row["canonical_object_kind"]) for row in regulations_rows},
-            )
+            self.assertEqual({"formal-comment-signal"}, {str(row["canonical_object_kind"]) for row in regulations_rows})
             self.assertEqual({"public"}, {str(row["plane"]) for row in youtube_rows})
-            self.assertEqual(
-                {"public-discourse-signal"},
-                {str(row["canonical_object_kind"]) for row in youtube_rows},
-            )
 
-            link_payload = run_script(
-                script_path("link-formal-comments-to-public-discourse"),
+            taxonomy_payload = run_script(
+                script_path("apply-approved-formal-public-taxonomy"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--taxonomy-path",
+                str(taxonomy_path),
+                "--approval-ref",
+                "approval://taxonomy/test-taxonomy-v1",
+            )
+            footprint_payload = run_script(
+                script_path("compare-formal-public-footprints"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--taxonomy-labels-path",
+                taxonomy_payload["summary"]["output_path"],
+            )
+            cue_payload = run_script(
+                script_path("identify-representation-audit-cues"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -181,118 +170,38 @@ class FormalPublicWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            gap_payload = run_script(
-                script_path("identify-representation-gaps"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
 
-            link_artifact = load_json(
-                analytics_path(run_dir, f"formal_public_links_{ROUND_ID}.json")
-            )
-            gap_artifact = load_json(
-                analytics_path(run_dir, f"representation_gaps_{ROUND_ID}.json")
-            )
+            taxonomy_artifact = load_json(analytics_path(run_dir, f"formal_public_taxonomy_labels_{ROUND_ID}.json"))
+            footprint_artifact = load_json(analytics_path(run_dir, f"formal_public_footprints_{ROUND_ID}.json"))
+            cue_artifact = load_json(analytics_path(run_dir, f"representation_audit_cues_{ROUND_ID}.json"))
 
-            self.assertEqual("completed", link_payload["status"])
-            self.assertEqual("completed", gap_payload["status"])
-            self.assertEqual("completed", link_payload["analysis_sync"]["status"])
-            self.assertEqual("completed", gap_payload["analysis_sync"]["status"])
-            self.assertGreaterEqual(link_artifact["link_count"], 3)
-            self.assertGreaterEqual(gap_artifact["gap_count"], 2)
+            self.assertEqual("completed", taxonomy_payload["status"])
+            self.assertEqual("completed", footprint_payload["status"])
+            self.assertEqual("completed", cue_payload["status"])
+            self.assertGreaterEqual(taxonomy_payload["summary"]["label_cue_count"], 3)
+            self.assertGreaterEqual(footprint_payload["summary"]["formal_signal_count"], 2)
+            self.assertGreaterEqual(footprint_payload["summary"]["public_signal_count"], 1)
+            self.assertGreaterEqual(cue_payload["summary"]["cue_count"], 1)
 
-            links_by_issue = {
-                link["issue_label"]: link for link in link_artifact["links"]
-            }
-            self.assertIn("air-quality-smoke", links_by_issue)
-            self.assertIn("permit-process", links_by_issue)
-            self.assertIn("representation-trust", links_by_issue)
+            first_label = taxonomy_artifact["taxonomy_labels"][0]
+            self.assertEqual("candidate-for-human-review", first_label["audit_status"])
+            self.assertEqual("approval://taxonomy/test-taxonomy-v1", first_label["taxonomy_approval_ref"])
+            self.assertEqual("approved-helper-view", first_label["wp4_helper_metadata"]["decision_source"])
 
-            smoke_link = links_by_issue["air-quality-smoke"]
-            permit_link = links_by_issue["permit-process"]
-            trust_link = links_by_issue["representation-trust"]
+            footprints = footprint_artifact["formal_public_footprints"]
+            self.assertIn("formal_record_summary", footprints)
+            self.assertIn("public_discourse_summary", footprints)
+            self.assertIn("overlap_terms", footprints)
+            self.assertNotIn("link_status", footprints)
+            self.assertNotIn("aligned", footprints)
 
-            self.assertEqual("aligned", smoke_link["link_status"])
-            self.assertGreaterEqual(smoke_link["formal_signal_count"], 1)
-            self.assertGreaterEqual(smoke_link["public_signal_count"], 1)
-            self.assertEqual("heuristic-fallback", smoke_link["decision_source"])
-            self.assertTrue(smoke_link["rationale"])
-            self.assertGreaterEqual(len(smoke_link["route_ids"]), 1)
-            self.assertGreaterEqual(len(smoke_link["lineage"]), 1)
-            self.assertIn("source_skill", smoke_link["provenance"])
-            self.assertEqual("formal-only", permit_link["link_status"])
-            self.assertGreaterEqual(permit_link["formal_signal_count"], 1)
-            self.assertEqual(0, permit_link["public_signal_count"])
-            self.assertEqual("public-only", trust_link["link_status"])
-            self.assertEqual(0, trust_link["formal_signal_count"])
-            self.assertGreaterEqual(trust_link["public_signal_count"], 1)
+            first_cue = cue_artifact["representation_audit_cues"][0]
+            self.assertEqual("requires-human-review", first_cue["audit_status"])
+            self.assertIn("review_prompt", first_cue)
+            self.assertNotIn("gap_type", first_cue)
+            self.assertNotIn("severity", first_cue)
 
-            gap_pairs = {
-                (gap["issue_label"], gap["gap_type"]) for gap in gap_artifact["gaps"]
-            }
-            self.assertIn(
-                ("permit-process", "public-underrepresentation"),
-                gap_pairs,
-            )
-            self.assertIn(
-                ("representation-trust", "formal-underrepresentation"),
-                gap_pairs,
-            )
-            permit_gap = next(
-                gap
-                for gap in gap_artifact["gaps"]
-                if gap["issue_label"] == "permit-process"
-                and gap["gap_type"] == "public-underrepresentation"
-            )
-            self.assertEqual("heuristic-fallback", permit_gap["decision_source"])
-            self.assertTrue(permit_gap["rationale"])
-            self.assertIsInstance(permit_gap["route_ids"], list)
-            self.assertGreaterEqual(len(permit_gap["lineage"]), 1)
-            self.assertIn("source_skill", permit_gap["provenance"])
-
-            analytics_path(run_dir, f"formal_public_links_{ROUND_ID}.json").unlink()
-            analytics_path(run_dir, f"representation_gaps_{ROUND_ID}.json").unlink()
-
-            link_query = query_analysis_result_items(
-                run_dir,
-                run_id=RUN_ID,
-                round_id=ROUND_ID,
-                analysis_kind="formal-public-link",
-                subject_id="air-quality-smoke",
-                latest_only=True,
-                include_result_sets=True,
-                include_contract=True,
-            )
-            self.assertEqual(1, link_query["summary"]["returned_item_count"])
-            self.assertFalse(link_query["items"][0]["artifact_present"])
-            self.assertEqual("heuristic-fallback", link_query["items"][0]["decision_source"])
-            self.assertGreaterEqual(len(link_query["items"][0]["item"]["route_ids"]), 1)
-            self.assertIn("source_skill", link_query["items"][0]["provenance"])
-
-            gap_query = query_analysis_result_items(
-                run_dir,
-                run_id=RUN_ID,
-                round_id=ROUND_ID,
-                analysis_kind="representation-gap",
-                subject_id="permit-process",
-                latest_only=True,
-            )
-            self.assertGreaterEqual(gap_query["summary"]["returned_item_count"], 1)
-            self.assertTrue(
-                any(
-                    item["item"]["gap_type"] == "public-underrepresentation"
-                    and not item["artifact_present"]
-                    for item in gap_query["items"]
-                )
-            )
-
-    def test_claim_extractor_ignores_formal_signal_rows_after_formal_plane_split(
-        self,
-    ) -> None:
+    def test_taxonomy_helper_requires_explicit_approved_taxonomy(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -300,7 +209,7 @@ class FormalPublicWorkflowTests(unittest.TestCase):
             seed_public_only_trust_signal(run_dir, root)
 
             payload = run_script(
-                script_path("extract-claim-candidates"),
+                script_path("apply-approved-formal-public-taxonomy"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -308,12 +217,12 @@ class FormalPublicWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            artifact = load_json(analytics_path(run_dir, f"claim_candidates_{ROUND_ID}.json"))
+            artifact = load_json(analytics_path(run_dir, f"formal_public_taxonomy_labels_{ROUND_ID}.json"))
 
-            self.assertEqual("completed", payload["status"])
-            self.assertEqual(1, artifact["candidate_count"])
-            self.assertEqual("representation-trust", artifact["candidates"][0]["issue_hint"])
-            self.assertEqual(1, len(artifact["candidates"][0]["source_signal_ids"]))
+            self.assertEqual("taxonomy-required", payload["status"])
+            self.assertEqual(0, payload["summary"]["label_cue_count"])
+            self.assertEqual([], artifact["taxonomy_labels"])
+            self.assertTrue(any(warning["code"] == "taxonomy-required" for warning in payload["warnings"]))
 
 
 if __name__ == "__main__":

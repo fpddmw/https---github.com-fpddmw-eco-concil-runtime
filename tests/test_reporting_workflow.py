@@ -7,6 +7,8 @@ from pathlib import Path
 
 from _workflow_support import (
     load_json,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     promotion_path,
     reporting_path,
     request_and_approve_skill_approval,
@@ -15,6 +17,7 @@ from _workflow_support import (
     run_script,
     script_path,
     seed_analysis_chain,
+    submit_ready_council_support,
 )
 
 RUN_ID = "run-reporting-001"
@@ -77,78 +80,82 @@ def prepare_optional_analysis_for_supervision(run_dir: Path) -> None:
     )
 
 
+def seed_ready_reporting_context(
+    run_dir: Path,
+    root: Path,
+    *,
+    note_text: str,
+    hypothesis_title: str = "Smoke over NYC was materially significant",
+    hypothesis_statement: str = "Public smoke reports are backed by elevated PM2.5 observations.",
+    hypothesis_status: str = "active",
+    owner_role: str = "environmentalist",
+    confidence: str = "0.93",
+) -> dict[str, object]:
+    outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
+    evidence_ref = primary_wp4_evidence_ref(outputs)
+    issue_id = primary_research_issue_id(outputs)
+    submit_ready_council_support(
+        run_dir,
+        run_id=RUN_ID,
+        round_id=ROUND_ID,
+        issue_id=issue_id,
+        evidence_ref=evidence_ref,
+    )
+    run_script(
+        script_path("post-board-note"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--author-role",
+        "moderator",
+        "--category",
+        "analysis",
+        "--note-text",
+        note_text,
+        "--linked-artifact-ref",
+        evidence_ref,
+    )
+    hypothesis_payload = run_script(
+        script_path("update-hypothesis-status"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--title",
+        hypothesis_title,
+        "--statement",
+        hypothesis_statement,
+        "--status",
+        hypothesis_status,
+        "--owner-role",
+        owner_role,
+        "--linked-claim-id",
+        issue_id,
+        "--confidence",
+        confidence,
+    )
+    return {
+        "outputs": outputs,
+        "evidence_ref": evidence_ref,
+        "issue_id": issue_id,
+        "hypothesis_payload": hypothesis_payload,
+    }
+
+
 class ReportingWorkflowTests(unittest.TestCase):
     def test_reporting_handoff_and_decision_finalize_promoted_round(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
-            run_script(
-                script_path("post-board-note"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--author-role",
-                "moderator",
-                "--category",
-                "analysis",
-                "--note-text",
-                "Round is ready to move into reporting and decision drafting.",
-                "--linked-artifact-ref",
-                coverage_ref,
-            )
-            run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Smoke over NYC was materially significant",
-                "--statement",
-                "Public smoke reports are backed by elevated PM2.5 observations.",
-                "--status",
-                "active",
-                "--owner-role",
-                "environmentalist",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.93",
+            seed_ready_reporting_context(
+                run_dir,
+                root,
+                note_text="Round is ready to move into reporting and decision drafting.",
             )
 
             prepare_optional_analysis_for_supervision(run_dir)
@@ -191,9 +198,9 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertTrue(handoff_artifact["reporting_ready"])
             self.assertEqual([], handoff_artifact["reporting_blockers"])
             self.assertEqual("promoted", handoff_artifact["promotion_status"])
-            self.assertGreaterEqual(len(handoff_artifact["key_findings"]), 1)
+            self.assertEqual([], handoff_artifact["key_findings"])
             self.assertEqual("deliberation-plane", promotion_artifact["board_state_source"])
-            self.assertEqual("analysis-plane", promotion_artifact["coverage_source"])
+            self.assertEqual("missing-coverage", promotion_artifact["coverage_source"])
             self.assertEqual(
                 "deliberation-plane-readiness",
                 promotion_artifact["readiness_source"],
@@ -219,7 +226,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 promotion_artifact["observed_inputs"]["next_actions_present"]
             )
             self.assertEqual("deliberation-plane", handoff_artifact["board_state_source"])
-            self.assertEqual("analysis-plane", handoff_artifact["coverage_source"])
+            self.assertEqual("missing-coverage", handoff_artifact["coverage_source"])
             self.assertEqual(
                 "deliberation-plane-promotion-basis",
                 handoff_artifact["promotion_source"],
@@ -239,7 +246,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", handoff_payload["deliberation_sync"]["status"])
             self.assertIn(
                 handoff_payload["analysis_sync"]["status"],
-                {"completed", "existing-result-set"},
+                {"completed", "existing-result-set", "missing-coverage"},
             )
             self.assertTrue(
                 handoff_artifact["observed_inputs"]["promotion_artifact_present"]
@@ -265,7 +272,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 decision_artifact["promotion_source"],
             )
             self.assertEqual("deliberation-plane", decision_artifact["board_state_source"])
-            self.assertEqual("analysis-plane", decision_artifact["coverage_source"])
+            self.assertEqual("missing-coverage", decision_artifact["coverage_source"])
             self.assertTrue(
                 decision_artifact["observed_inputs"][
                     "reporting_handoff_artifact_present"
@@ -280,73 +287,10 @@ class ReportingWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
-            run_script(
-                script_path("post-board-note"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--author-role",
-                "moderator",
-                "--category",
-                "analysis",
-                "--note-text",
-                "Round is ready to move into reporting even if promotion export is removed.",
-                "--linked-artifact-ref",
-                coverage_ref,
-            )
-            run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Smoke over NYC was materially significant",
-                "--statement",
-                "Public smoke reports are backed by elevated PM2.5 observations.",
-                "--status",
-                "active",
-                "--owner-role",
-                "environmentalist",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.93",
+            seed_ready_reporting_context(
+                run_dir,
+                root,
+                note_text="Round is ready to move into reporting even if promotion export is removed.",
             )
 
             prepare_optional_analysis_for_supervision(run_dir)
@@ -403,7 +347,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
 
             self.assertGreater(basis_count, 0)
-            self.assertGreater(item_count, 0)
+            self.assertEqual(0, item_count)
             self.assertEqual("reporting-ready", handoff_payload["summary"]["handoff_status"])
             self.assertTrue(handoff_artifact["reporting_ready"])
             self.assertEqual(
@@ -424,73 +368,10 @@ class ReportingWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
-            run_script(
-                script_path("post-board-note"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--author-role",
-                "moderator",
-                "--category",
-                "analysis",
-                "--note-text",
-                "Reporting handoff should recover supervisor state directly from the deliberation DB.",
-                "--linked-artifact-ref",
-                coverage_ref,
-            )
-            run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Smoke over NYC was materially significant",
-                "--statement",
-                "Public smoke reports are backed by elevated PM2.5 observations.",
-                "--status",
-                "active",
-                "--owner-role",
-                "environmentalist",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.93",
+            seed_ready_reporting_context(
+                run_dir,
+                root,
+                note_text="Reporting handoff should recover supervisor state directly from the deliberation DB.",
             )
 
             prepare_optional_analysis_for_supervision(run_dir)
@@ -554,73 +435,10 @@ class ReportingWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
-            run_script(
-                script_path("post-board-note"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--author-role",
-                "moderator",
-                "--category",
-                "analysis",
-                "--note-text",
-                "Decision drafting should recover from the deliberation-plane handoff record.",
-                "--linked-artifact-ref",
-                coverage_ref,
-            )
-            run_script(
-                script_path("update-hypothesis-status"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-                "--title",
-                "Smoke over NYC was materially significant",
-                "--statement",
-                "Public smoke reports are backed by elevated PM2.5 observations.",
-                "--status",
-                "active",
-                "--owner-role",
-                "environmentalist",
-                "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
-                "--confidence",
-                "0.93",
+            seed_ready_reporting_context(
+                run_dir,
+                root,
+                note_text="Decision drafting should recover from the deliberation-plane handoff record.",
             )
 
             prepare_optional_analysis_for_supervision(run_dir)
@@ -688,35 +506,25 @@ class ReportingWorkflowTests(unittest.TestCase):
             root = Path(tmpdir)
             run_dir = root / "run"
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
+            coverage_ref = primary_wp4_evidence_ref(outputs)
+            issue_id = primary_research_issue_id(outputs)
             run_script(
-                script_path("derive-claim-scope"),
+                script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--author-role",
+                "moderator",
+                "--category",
+                "analysis",
+                "--note-text",
+                "Round has DB-backed successor evidence but an open challenge should hold reporting.",
+                "--linked-artifact-ref",
+                coverage_ref,
             )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
             hypothesis_payload = run_script(
                 script_path("update-hypothesis-status"),
                 "--run-dir",
@@ -734,7 +542,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "--owner-role",
                 "moderator",
                 "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--confidence",
                 "0.52",
             )
@@ -751,7 +559,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "--challenge-statement",
                 "Re-test whether the strongest narrative exceeds evidence coverage.",
                 "--target-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--target-hypothesis-id",
                 hypothesis_payload["canonical_ids"][0],
                 "--priority",

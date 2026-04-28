@@ -14,6 +14,8 @@ from _workflow_support import (
     analytics_path,
     kernel_script_path,
     load_json,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     request_and_approve_skill_approval,
     request_and_approve_transition,
     run_kernel,
@@ -76,15 +78,8 @@ class RuntimeKernelTests(unittest.TestCase):
             root = Path(tmpdir)
             run_dir = root / "run"
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
+            evidence_ref = primary_wp4_evidence_ref(outputs)
+            issue_id = primary_research_issue_id(outputs)
             run_script(
                 script_path("post-board-note"),
                 "--run-dir",
@@ -98,7 +93,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "--note-text",
                 "Kernel test note.",
                 "--linked-artifact-ref",
-                coverage_payload["artifact_refs"][0]["artifact_ref"],
+                evidence_ref,
             )
             run_script(
                 script_path("update-hypothesis-status"),
@@ -117,7 +112,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "--owner-role",
                 "moderator",
                 "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--confidence",
                 "0.88",
             )
@@ -193,7 +188,7 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertTrue((runtime_dir / "receipts" / f"{second_run['summary']['receipt_id']}.json").exists())
             self.assertEqual(kernel_script_path().name, "eco_runtime_kernel.py")
 
-    def test_kernel_lists_analysis_result_sets_via_non_python_query_surface(
+    def test_kernel_lists_no_legacy_claim_cluster_result_sets_after_wp4_successors(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -216,29 +211,17 @@ class RuntimeKernelTests(unittest.TestCase):
             )
 
             self.assertEqual("analysis-plane-result-set-query-v1", payload["schema_version"])
-            self.assertEqual(1, payload["summary"]["matching_result_set_count"])
-            self.assertEqual(1, payload["summary"]["returned_result_set_count"])
-            self.assertEqual(1, len(payload["result_sets"]))
-            result_set = payload["result_sets"][0]
-            self.assertEqual("claim-cluster", result_set["analysis_kind"])
-            self.assertEqual("clusters", result_set["items_key"])
-            self.assertGreaterEqual(result_set["item_count"], 1)
-            self.assertTrue(result_set["artifact_present"])
-            parent_kinds = {
-                parent["analysis_kind"]
-                for parent in result_set["result_contract"]["parent_result_sets"]
-            }
-            self.assertSetEqual({"claim-candidate"}, parent_kinds)
+            self.assertEqual(0, payload["summary"]["matching_result_set_count"])
+            self.assertEqual(0, payload["summary"]["returned_result_set_count"])
+            self.assertEqual([], payload["result_sets"])
 
-    def test_kernel_queries_analysis_items_when_cluster_artifact_is_missing(
+    def test_kernel_queries_no_legacy_claim_cluster_items_after_wp4_successors(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-            cluster_id = outputs["cluster_claims"]["canonical_ids"][0]
-            analytics_path(run_dir, f"claim_candidate_clusters_{ROUND_ID}.json").unlink()
+            seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             payload = run_kernel(
                 "query-analysis-result-items",
@@ -252,75 +235,24 @@ class RuntimeKernelTests(unittest.TestCase):
                 "claim-cluster",
                 "--latest-only",
                 "--subject-id",
-                cluster_id,
+                "air-quality-smoke",
                 "--include-result-sets",
                 "--include-contract",
             )
 
             self.assertEqual("analysis-plane-item-query-v1", payload["schema_version"])
-            self.assertEqual(1, payload["summary"]["matching_result_set_count"])
-            self.assertEqual(1, payload["summary"]["returned_item_count"])
-            self.assertEqual(1, len(payload["items"]))
-            self.assertEqual(cluster_id, payload["items"][0]["subject_id"])
-            self.assertEqual("heuristic-fallback", payload["items"][0]["decision_source"])
-            self.assertIsInstance(payload["items"][0]["provenance"], dict)
-            self.assertIsInstance(payload["items"][0]["lineage"], list)
-            self.assertFalse(payload["items"][0]["artifact_present"])
-            self.assertEqual(1, len(payload["result_sets"]))
-            self.assertFalse(payload["result_sets"][0]["artifact_present"])
-            parent_kinds = {
-                parent["analysis_kind"]
-                for parent in payload["result_sets"][0]["result_contract"][
-                    "parent_result_sets"
-                ]
-            }
-            self.assertSetEqual({"claim-candidate"}, parent_kinds)
+            self.assertEqual(0, payload["summary"]["matching_result_set_count"])
+            self.assertEqual(0, payload["summary"]["returned_item_count"])
+            self.assertEqual([], payload["items"])
+            self.assertEqual([], payload["result_sets"])
 
-    def test_kernel_queries_controversy_map_items_when_artifact_is_missing(
+    def test_kernel_does_not_inline_legacy_controversy_map_fallback(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("classify-claim-verifiability"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("route-verification-lane"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("materialize-controversy-map"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            analytics_path(run_dir, f"controversy_map_{ROUND_ID}.json").unlink()
 
             payload = run_kernel(
                 "query-analysis-result-items",
@@ -340,82 +272,16 @@ class RuntimeKernelTests(unittest.TestCase):
             )
 
             self.assertEqual("analysis-plane-item-query-v1", payload["schema_version"])
-            self.assertEqual(1, payload["summary"]["matching_result_set_count"])
-            self.assertGreaterEqual(payload["summary"]["returned_item_count"], 1)
-            self.assertTrue(
-                any(item["decision_source"] == "heuristic-fallback" for item in payload["items"])
-            )
-            self.assertTrue(
-                all(isinstance(item["lineage"], list) for item in payload["items"])
-            )
-            self.assertTrue(
-                all(isinstance(item["provenance"], dict) for item in payload["items"])
-            )
-            self.assertTrue(all(not item["artifact_present"] for item in payload["items"]))
-            self.assertTrue(
-                any(float(item["item"]["confidence"]) > 0.0 for item in payload["items"])
-            )
-            parent_kinds = {
-                parent["analysis_kind"]
-                for parent in payload["result_sets"][0]["result_contract"][
-                    "parent_result_sets"
-                ]
-            }
-            self.assertSetEqual(
-                {
-                    "issue-cluster",
-                    "stance-group",
-                    "concern-facet",
-                    "actor-profile",
-                    "evidence-citation-type",
-                },
-                parent_kinds,
-            )
+            self.assertEqual(0, payload["summary"]["matching_result_set_count"])
+            self.assertEqual(0, payload["summary"]["returned_item_count"])
+            self.assertEqual([], payload["items"])
+            self.assertEqual([], payload["result_sets"])
 
-    def test_kernel_queries_issue_cluster_items_when_artifact_is_missing(self) -> None:
+    def test_kernel_does_not_inline_legacy_issue_cluster_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("classify-claim-verifiability"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("route-verification-lane"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("materialize-controversy-map"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            analytics_path(run_dir, f"issue_clusters_{ROUND_ID}.json").unlink()
-            analytics_path(run_dir, f"controversy_map_{ROUND_ID}.json").unlink()
 
             payload = run_kernel(
                 "query-analysis-result-items",
@@ -435,35 +301,10 @@ class RuntimeKernelTests(unittest.TestCase):
             )
 
             self.assertEqual("analysis-plane-item-query-v1", payload["schema_version"])
-            self.assertEqual(1, payload["summary"]["matching_result_set_count"])
-            self.assertGreaterEqual(payload["summary"]["returned_item_count"], 1)
-            self.assertTrue(
-                all(item["item"]["schema_version"] == "issue-cluster-v1" for item in payload["items"])
-            )
-            self.assertTrue(
-                all(not item["artifact_present"] for item in payload["items"])
-            )
-            self.assertTrue(
-                any(
-                    item["item"]["cluster_id"] == item["item"]["map_issue_id"]
-                    for item in payload["items"]
-                )
-            )
-            parent_kinds = {
-                parent["analysis_kind"]
-                for parent in payload["result_sets"][0]["result_contract"][
-                    "parent_result_sets"
-                ]
-            }
-            self.assertSetEqual(
-                {
-                    "claim-cluster",
-                    "claim-scope",
-                    "claim-verifiability",
-                    "verification-route",
-                },
-                parent_kinds,
-            )
+            self.assertEqual(0, payload["summary"]["matching_result_set_count"])
+            self.assertEqual(0, payload["summary"]["returned_item_count"])
+            self.assertEqual([], payload["items"])
+            self.assertEqual([], payload["result_sets"])
 
     def test_kernel_analysis_query_reports_invalid_analysis_kind(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

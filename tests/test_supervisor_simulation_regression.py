@@ -6,6 +6,8 @@ from pathlib import Path
 
 from _workflow_support import (
     load_json,
+    primary_research_issue_id,
+    primary_wp4_evidence_ref,
     promotion_path,
     request_and_approve_transition,
     run_kernel,
@@ -13,6 +15,7 @@ from _workflow_support import (
     runtime_path,
     script_path,
     seed_analysis_chain,
+    submit_ready_council_support,
 )
 
 RUN_ID = "run-phase2-001"
@@ -35,35 +38,15 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             root = Path(tmpdir)
             run_dir = root / "run"
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
+            coverage_ref = primary_wp4_evidence_ref(outputs)
+            issue_id = primary_research_issue_id(outputs)
+            submit_ready_council_support(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                issue_id=issue_id,
+                evidence_ref=coverage_ref,
             )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
 
             run_script(
                 script_path("post-board-note"),
@@ -99,7 +82,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 "--owner-role",
                 "environmentalist",
                 "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--confidence",
                 "0.91",
             )
@@ -123,25 +106,24 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             )
 
             gate_artifact = load_json(runtime_path(run_dir, f"promotion_gate_{ROUND_ID}.json"))
-            plan_artifact = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
+            plan_path = runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json")
             controller_artifact = load_json(runtime_path(run_dir, f"round_controller_{ROUND_ID}.json"))
             promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
 
             self.assertEqual("ready", phase2_payload["summary"]["readiness_status"])
             self.assertEqual("allow-promote", gate_artifact["gate_status"])
             self.assertTrue(gate_artifact["promote_allowed"])
-            self.assertEqual("planner-backed", controller_artifact["planning_mode"])
+            self.assertEqual("transition-executor", controller_artifact["planning_mode"])
             self.assertEqual("completed", controller_artifact["controller_status"])
             self.assertEqual("fresh-run", controller_artifact["resume_status"])
-            self.assertFalse(plan_artifact["probe_stage_included"])
-            self.assertEqual(str(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json").resolve()), controller_artifact["artifacts"]["orchestration_plan_path"])
+            self.assertFalse(plan_path.exists())
+            self.assertEqual(str(plan_path.resolve()), controller_artifact["artifacts"]["orchestration_plan_path"])
             self.assertNotIn("falsification-probes", [item.get("stage") for item in controller_artifact["steps"]])
             self.assertNotIn("board-summary", [item.get("stage") for item in controller_artifact["steps"]])
             self.assertNotIn("board-brief", [item.get("stage") for item in controller_artifact["steps"]])
             self.assertEqual("promoted", controller_artifact["promotion_status"])
             self.assertEqual("promoted", promotion_artifact["promotion_status"])
             self.assertEqual("promoted", state_payload["phase2"]["controller"]["promotion_status"])
-            self.assertEqual(plan_artifact["plan_id"], state_payload["phase2"]["plan"]["plan_id"])
             event_types = [item.get("event_type") for item in state_payload["ledger_tail"]]
             self.assertIn("promotion-gate", event_types)
             self.assertIn("round-controller", event_types)
@@ -151,35 +133,8 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             root = Path(tmpdir)
             run_dir = root / "run"
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-
-            run_script(
-                script_path("derive-claim-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            run_script(
-                script_path("derive-observation-scope"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_payload = run_script(
-                script_path("score-evidence-coverage"),
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                RUN_ID,
-                "--round-id",
-                ROUND_ID,
-            )
-            coverage_ref = coverage_payload["artifact_refs"][0]["artifact_ref"]
+            coverage_ref = primary_wp4_evidence_ref(outputs)
+            issue_id = primary_research_issue_id(outputs)
             hypothesis_payload = run_script(
                 script_path("update-hypothesis-status"),
                 "--run-dir",
@@ -197,7 +152,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 "--owner-role",
                 "moderator",
                 "--linked-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--confidence",
                 "0.52",
             )
@@ -214,7 +169,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 "--challenge-statement",
                 "Re-test whether the strongest narrative exceeds evidence coverage.",
                 "--target-claim-id",
-                outputs["cluster_claims"]["canonical_ids"][0],
+                issue_id,
                 "--target-hypothesis-id",
                 hypothesis_payload["canonical_ids"][0],
                 "--priority",
@@ -244,29 +199,27 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             )
 
             gate_artifact = load_json(runtime_path(run_dir, f"promotion_gate_{ROUND_ID}.json"))
-            plan_artifact = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
+            plan_path = runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json")
             controller_artifact = load_json(runtime_path(run_dir, f"round_controller_{ROUND_ID}.json"))
             supervisor_artifact = load_json(runtime_path(run_dir, f"supervisor_state_{ROUND_ID}.json"))
             promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
 
             self.assertEqual("hold-investigation-open", supervisor_payload["summary"]["supervisor_status"])
             self.assertEqual("freeze-withheld", gate_artifact["gate_status"])
-            self.assertTrue(plan_artifact["probe_stage_included"])
-            self.assertEqual("planner-backed", controller_artifact["planning_mode"])
-            self.assertIn("falsification-probes", [item.get("stage") for item in controller_artifact["steps"]])
+            self.assertFalse(plan_path.exists())
+            self.assertEqual("transition-executor", controller_artifact["planning_mode"])
+            self.assertNotIn("falsification-probes", [item.get("stage") for item in controller_artifact["steps"]])
             self.assertNotIn("board-summary", [item.get("stage") for item in controller_artifact["steps"]])
             self.assertNotIn("board-brief", [item.get("stage") for item in controller_artifact["steps"]])
             self.assertEqual("hold-investigation-open", supervisor_artifact["supervisor_status"])
             self.assertEqual("investigation-hold", supervisor_artifact["phase2_posture"])
             self.assertEqual("continue-investigation", supervisor_artifact["operator_action"])
             self.assertEqual("withheld", supervisor_artifact["promotion_status"])
-            self.assertEqual(str(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json").resolve()), supervisor_artifact["orchestration_plan_path"])
+            self.assertEqual(str(plan_path.resolve()), supervisor_artifact["orchestration_plan_path"])
             self.assertEqual("withheld", promotion_artifact["promotion_status"])
-            self.assertGreaterEqual(len(supervisor_artifact["top_actions"]), 1)
             self.assertIn("open-investigation-round", supervisor_artifact["recommended_next_skills"])
             self.assertEqual("open-investigation-round", supervisor_artifact["round_transition"]["skill_name"])
             self.assertEqual("round-phase2-002", supervisor_artifact["round_transition"]["suggested_round_id"])
-            self.assertIn("propose-next-actions", supervisor_artifact["recommended_next_skills"])
             self.assertEqual("hold-investigation-open", state_payload["phase2"]["supervisor"]["supervisor_status"])
             event_types = [item.get("event_type") for item in state_payload["ledger_tail"]]
             self.assertIn("supervisor", event_types)

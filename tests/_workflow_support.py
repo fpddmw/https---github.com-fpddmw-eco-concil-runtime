@@ -605,3 +605,132 @@ def seed_analysis_chain(
         outputs["research_issue_surface"]["summary"]["output_path"],
     )
     return outputs
+
+
+def primary_research_issue_id(outputs: dict[str, dict[str, Any]]) -> str:
+    candidates = (
+        outputs.get("research_issue_surface", {}).get("canonical_ids", [])
+        if isinstance(outputs.get("research_issue_surface"), dict)
+        else []
+    )
+    if isinstance(candidates, list) and candidates:
+        return str(candidates[0])
+    raise AssertionError("Expected seed_analysis_chain to produce a research issue id.")
+
+
+def primary_wp4_evidence_ref(outputs: dict[str, dict[str, Any]]) -> str:
+    for key in (
+        "environment_aggregation",
+        "research_issue_surface",
+        "discourse_issues",
+    ):
+        refs = (
+            outputs.get(key, {}).get("artifact_refs", [])
+            if isinstance(outputs.get(key), dict)
+            else []
+        )
+        if not isinstance(refs, list) or not refs:
+            continue
+        first = refs[0]
+        if isinstance(first, dict) and first.get("artifact_ref"):
+            return str(first["artifact_ref"])
+    raise AssertionError("Expected seed_analysis_chain to produce a WP4 evidence ref.")
+
+
+def submit_ready_council_support(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    issue_id: str,
+    evidence_ref: str,
+    agent_role: str = "moderator",
+) -> dict[str, dict[str, Any]]:
+    proposal = run_script(
+        script_path("submit-council-proposal"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--proposal-kind",
+        "promote-evidence-basis",
+        "--agent-role",
+        agent_role,
+        "--rationale",
+        "DB-backed WP4 successor evidence is sufficient for this test promotion.",
+        "--status",
+        "submitted",
+        "--confidence",
+        "0.93",
+        "--target-kind",
+        "research-issue",
+        "--target-id",
+        issue_id,
+        "--target-claim-id",
+        issue_id,
+        "--action-kind",
+        "promote-evidence-basis",
+        "--assigned-role",
+        "moderator",
+        "--objective",
+        "Promote the DB-backed evidence basis for reporting.",
+        "--summary",
+        "Promotion is supported by successor helper evidence and council review.",
+        "--evidence-ref",
+        evidence_ref,
+        "--lineage-id",
+        issue_id,
+        "--promotion-disposition",
+        "promote",
+        "--promote-allowed",
+        "true",
+        "--publication-readiness",
+        "ready",
+        "--handoff-status",
+        "ready",
+        "--moderator-status",
+        "ready",
+    )
+    readiness = run_script(
+        script_path("submit-readiness-opinion"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--agent-role",
+        agent_role,
+        "--readiness-status",
+        "ready-for-promotion",
+        "--rationale",
+        "DB-backed successor evidence and council proposal support promotion.",
+        "--opinion-status",
+        "submitted",
+        "--sufficient-for-promotion",
+        "true",
+        "--confidence",
+        "0.93",
+        "--basis-object-id",
+        issue_id,
+        "--evidence-ref",
+        evidence_ref,
+        "--lineage-id",
+        issue_id,
+    )
+    readiness_summary = run_script(
+        script_path("summarize-round-readiness"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+    )
+    return {
+        "proposal": proposal,
+        "readiness": readiness,
+        "readiness_summary": readiness_summary,
+    }
