@@ -47,7 +47,7 @@ from ..phase2_stage_profile import (
 from .deliberation_plane import (
     load_phase2_control_state,
     store_orchestration_plan_record,
-    store_promotion_freeze_record,
+    store_runtime_control_freeze_record,
 )
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill, utc_now_iso
 from .gate import GateHandler, execute_gate_step as execute_runtime_gate_step
@@ -60,7 +60,7 @@ from .paths import (
     ensure_runtime_dirs,
     mission_scaffold_path,
     orchestration_plan_path,
-    promotion_gate_path,
+    report_basis_gate_path,
 )
 from .registry import write_registry
 from .role_contracts import ROLE_MODERATOR
@@ -69,7 +69,7 @@ from .transition_requests import (
     REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_COMMITTED,
     REQUEST_STATUS_PENDING,
-    TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    TRANSITION_KIND_FREEZE_REPORT_BASIS,
     latest_transition_request,
 )
 
@@ -79,7 +79,7 @@ TRANSITION_EXECUTOR_AUTHORITY = "transition-executor"
 TRANSITION_EXECUTOR_PLAN_SOURCE = "approved-transition-request"
 TRANSITION_EXECUTOR_INSPECTION_SOURCE = "transition-request-inspection"
 SKILL_TRANSITION_KIND_REQUIREMENTS = {
-    "promote-evidence-basis": TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    "freeze-report-basis": TRANSITION_KIND_FREEZE_REPORT_BASIS,
 }
 
 
@@ -234,8 +234,9 @@ def phase2_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
         "probes_path": str((run_dir / "investigation" / f"falsification_probes_{round_id}.json").resolve()),
         "readiness_path": str((run_dir / "reporting" / f"round_readiness_{round_id}.json").resolve()),
         "orchestration_plan_path": str(orchestration_plan_path(run_dir, round_id).resolve()),
-        "promotion_gate_path": str(promotion_gate_path(run_dir, round_id).resolve()),
-        "promotion_basis_path": str((run_dir / "promotion" / f"promoted_evidence_basis_{round_id}.json").resolve()),
+        "report_basis_gate_path": str(report_basis_gate_path(run_dir, round_id).resolve()),
+        "report_basis_gate_path": str(report_basis_gate_path(run_dir, round_id).resolve()),
+        "report_basis_freeze_path": str((run_dir / "report_basis" / f"frozen_report_basis_{round_id}.json").resolve()),
         "controller_state_path": str(controller_state_path(run_dir, round_id).resolve()),
     }
 
@@ -305,45 +306,46 @@ def transition_executor_plan_payload(
         "execution_queue": [],
         "gate_steps": [
             {
-                "stage_name": "promotion-gate",
+                "stage_name": "report-basis-gate",
                 "stage_kind": "gate",
                 "phase_group": "gate",
                 "required_previous_stages": [],
                 "blocking": True,
                 "resume_policy": "skip-if-completed",
-                "operator_summary": "Validate DB-backed readiness and council inputs before promotion execution.",
-                "reason": "Execute the approved promote-evidence-basis transition request through the governed runtime gate.",
-                "gate_handler": "promotion-gate",
+                "operator_summary": "Validate DB-backed readiness and council inputs before freezing report_basis.",
+                "reason": "Execute the approved freeze-report-basis transition request through the governed runtime gate.",
+                "gate_handler": "report-basis-gate",
                 "readiness_stage_name": "round-readiness",
-                "expected_output_path": maybe_text(artifacts.get("promotion_gate_path")),
+                "expected_output_path": maybe_text(artifacts.get("report_basis_gate_path"))
+                or maybe_text(artifacts.get("report_basis_gate_path")),
             }
         ],
         "post_gate_steps": [
             {
-                "stage_name": "promotion-basis",
+                "stage_name": "report-basis-freeze",
                 "stage_kind": "skill",
-                "phase_group": "promotion",
-                "skill_name": "promote-evidence-basis",
-                "expected_skill_name": "promote-evidence-basis",
+                "phase_group": "report-basis",
+                "skill_name": "freeze-report-basis",
+                "expected_skill_name": "freeze-report-basis",
                 "skill_args": [],
                 "assigned_role_hint": "moderator",
-                "required_previous_stages": ["promotion-gate"],
+                "required_previous_stages": ["report-basis-gate"],
                 "blocking": True,
                 "resume_policy": "skip-if-completed",
-                "operator_summary": "Freeze the promoted or withheld evidence basis after the approved transition clears the runtime gate.",
-                "reason": "Commit the approved promote-evidence-basis transition request.",
-                "expected_output_path": maybe_text(artifacts.get("promotion_basis_path")),
+                "operator_summary": "Freeze the frozen or withheld evidence basis after the approved transition clears the runtime gate.",
+                "reason": "Commit the approved freeze-report-basis transition request.",
+                "expected_output_path": maybe_text(artifacts.get("report_basis_freeze_path")),
             }
         ],
         "stop_conditions": [
             {
-                "condition_id": "promotion-gate-withheld",
-                "trigger": "Promotion gate does not allow promotion after DB-backed readiness / council validation.",
+                "condition_id": "report-basis-gate-withheld",
+                "trigger": "Report-basis gate does not allow basis freeze after DB-backed readiness / council validation.",
                 "effect": "Freeze the basis as withheld and keep investigation open for moderator follow-up.",
             },
             {
-                "condition_id": "promotion-transition-approved",
-                "trigger": "Approved promote-evidence-basis transition request is present for the round.",
+                "condition_id": "report_basis-transition-approved",
+                "trigger": "Approved freeze-report-basis transition request is present for the round.",
                 "effect": "Controller executes gate plus basis freeze without re-planning next-actions or advisory queues.",
             },
         ],
@@ -384,7 +386,7 @@ def approved_transition_request_planning(
         run_dir,
         run_id=run_id,
         round_id=round_id,
-        transition_kind=TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+        transition_kind=TRANSITION_KIND_FREEZE_REPORT_BASIS,
     )
     if not isinstance(latest_request, dict):
         return {}, None
@@ -455,7 +457,7 @@ def persist_controller_state(
     controller_payload["artifacts"] = phase2_artifact_paths(run_dir, round_id)
     refreshed_payload = refresh_controller_payload(controller_payload)
     write_json(controller_state_path(run_dir, round_id), refreshed_payload)
-    store_promotion_freeze_record(
+    store_runtime_control_freeze_record(
         run_dir,
         run_id=maybe_text(refreshed_payload.get("run_id")),
         round_id=round_id,
@@ -565,10 +567,12 @@ def run_phase2_round_with_contract_mode(
         else {}
     ) or load_json_if_exists(controller_state_path(run_dir, round_id)) or {}
     existing_gate = (
-        phase2_control_state.get("promotion_gate", {})
-        if isinstance(phase2_control_state.get("promotion_gate"), dict)
+        phase2_control_state.get("report_basis_gate", {})
+        if isinstance(phase2_control_state.get("report_basis_gate"), dict)
+        else phase2_control_state.get("report_basis_gate", {})
+        if isinstance(phase2_control_state.get("report_basis_gate"), dict)
         else {}
-    ) or load_json_if_exists(Path(artifacts["promotion_gate_path"])) or {}
+    ) or load_json_if_exists(Path(artifacts["report_basis_gate_path"])) or load_json_if_exists(Path(artifacts["report_basis_gate_path"])) or {}
     existing_status = maybe_text(existing_controller.get("controller_status"))
     if not force_restart and existing_status == "completed":
         return controller_result_payload(existing_controller, existing_gate)
@@ -842,7 +846,7 @@ def run_phase2_round_with_contract_mode(
                 transition_planning,
                 source_name=TRANSITION_EXECUTOR_PLAN_SOURCE,
                 status="adopted",
-                message="Controller adopted the latest approved promote-evidence-basis transition request.",
+                message="Controller adopted the latest approved freeze-report-basis transition request.",
             )
         else:
             inspection_planning = inspection_only_planning(artifacts=artifacts)
@@ -853,7 +857,7 @@ def run_phase2_round_with_contract_mode(
             )
             controller_payload["readiness_status"] = "needs-more-data"
             controller_payload["gate_status"] = "not-evaluated"
-            controller_payload["promotion_status"] = "withheld"
+            controller_payload["report_basis_status"] = "withheld"
             controller_payload["recommended_next_skills"] = []
             controller_payload["controller_status"] = "completed"
             if isinstance(latest_transition, dict):
@@ -863,7 +867,7 @@ def run_phase2_round_with_contract_mode(
                     reason = "Await runtime-operator approval for the latest transition request."
                 elif latest_status:
                     reason = (
-                        f"Latest promote-evidence-basis request is `{latest_status}`; "
+                        f"Latest freeze-report-basis request is `{latest_status}`; "
                         "no default kernel execution path is available."
                     )
                 append_planning_attempt(
@@ -1189,15 +1193,32 @@ def run_phase2_round_with_contract_mode(
                         if isinstance(controller_payload.get("planning"), dict)
                         else "",
                         "gate_status": gate_payload.get("gate_status"),
+                        "report_basis_gate_status": gate_payload.get("report_basis_gate_status"),
                         "readiness_status": gate_payload.get("readiness_status"),
-                        "promote_allowed": bool(gate_payload.get("promote_allowed")),
+                        "report_basis_freeze_allowed": bool(
+                            gate_payload.get("report_basis_freeze_allowed")
+                        )
+                        or bool(gate_payload.get("report_basis_freeze_allowed")),
+                        "report_basis_freeze_allowed": bool(gate_payload.get("report_basis_freeze_allowed")),
                         "gate_path": gate_payload.get("output_path"),
                         "readiness_stage_name": readiness_stage_name,
                     },
                 )
                 controller_payload["steps"][step_pos] = gate_stage_summary(blueprint, gate_payload, gate_event_id, gate_started_at)
                 controller_payload["readiness_status"] = maybe_text(gate_updates.get("readiness_status")) or "blocked"
-                controller_payload["gate_status"] = maybe_text(gate_updates.get("gate_status")) or "freeze-withheld"
+                controller_payload["gate_status"] = maybe_text(gate_updates.get("gate_status")) or "report-basis-freeze-withheld"
+                controller_payload["report_basis_gate_status"] = maybe_text(
+                    gate_updates.get("report_basis_gate_status")
+                )
+                controller_payload["report_basis_status"] = maybe_text(
+                    gate_updates.get("report_basis_status")
+                ) or maybe_text(gate_updates.get("report_basis_status")) or "withheld"
+                controller_payload["report_basis_status"] = maybe_text(
+                    gate_updates.get("report_basis_status")
+                ) or controller_payload["report_basis_status"]
+                controller_payload["report_basis_freeze_allowed"] = bool(
+                    gate_updates.get("report_basis_freeze_allowed")
+                )
                 controller_payload["gate_reasons"] = (
                     gate_updates.get("gate_reasons", [])
                     if isinstance(gate_updates.get("gate_reasons"), list)
@@ -1245,10 +1266,10 @@ def run_phase2_round_with_contract_mode(
             if stage_name == "round-readiness":
                 readiness_summary = skill_result.get("skill_payload", {}) if isinstance(skill_result.get("skill_payload"), dict) else {}
                 controller_payload["readiness_status"] = maybe_text(readiness_summary.get("summary", {}).get("readiness_status"))
-            if stage_name == "promotion-basis":
-                promotion_payload = skill_result.get("skill_payload", {}) if isinstance(skill_result.get("skill_payload"), dict) else {}
-                promotion_summary = promotion_payload.get("summary", {}) if isinstance(promotion_payload.get("summary"), dict) else {}
-                controller_payload["promotion_status"] = maybe_text(promotion_summary.get("promotion_status")) or "withheld"
+            if stage_name == "report-basis-freeze":
+                report_basis_payload = skill_result.get("skill_payload", {}) if isinstance(skill_result.get("skill_payload"), dict) else {}
+                report_basis_summary = report_basis_payload.get("summary", {}) if isinstance(report_basis_payload.get("summary"), dict) else {}
+                controller_payload["report_basis_status"] = maybe_text(report_basis_summary.get("report_basis_status")) or "withheld"
             persist_controller_state(run_dir, round_id, controller_payload)
     except SkillExecutionError as exc:
         failed_stage = controller_payload.get("current_stage", "")
@@ -1334,24 +1355,34 @@ def run_phase2_round_with_contract_mode(
         round_id=round_id,
     )
     gate_payload = (
-        phase2_control_state.get("promotion_gate", {})
-        if isinstance(phase2_control_state.get("promotion_gate"), dict)
+        phase2_control_state.get("report_basis_gate", {})
+        if isinstance(phase2_control_state.get("report_basis_gate"), dict)
+        else phase2_control_state.get("report_basis_gate", {})
+        if isinstance(phase2_control_state.get("report_basis_gate"), dict)
         else {}
-    ) or load_json_if_exists(Path(artifacts["promotion_gate_path"])) or {}
+    ) or load_json_if_exists(Path(artifacts["report_basis_gate_path"])) or load_json_if_exists(Path(artifacts["report_basis_gate_path"])) or {}
     controller_payload["controller_status"] = "completed"
     controller_payload["planning_mode"] = normalized_controller_planning_mode(
         maybe_text(planning.get("planning_mode"))
         or maybe_text(controller_payload.get("planning_mode"))
     )
     controller_payload["readiness_status"] = maybe_text(gate_payload.get("readiness_status")) or maybe_text(controller_payload.get("readiness_status")) or "blocked"
-    controller_payload["gate_status"] = maybe_text(gate_payload.get("gate_status")) or maybe_text(controller_payload.get("gate_status")) or "freeze-withheld"
-    if maybe_text(controller_payload.get("promotion_status")) in {"", "not-evaluated"}:
-        promotion_basis_payload = (
-            phase2_control_state.get("promotion_basis", {})
-            if isinstance(phase2_control_state.get("promotion_basis"), dict)
+    controller_payload["gate_status"] = maybe_text(gate_payload.get("gate_status")) or maybe_text(controller_payload.get("gate_status")) or "report-basis-freeze-withheld"
+    if maybe_text(controller_payload.get("report_basis_status")) in {"", "not-evaluated"}:
+        report_basis_freeze_payload = (
+            phase2_control_state.get("report_basis_freeze", {})
+            if isinstance(phase2_control_state.get("report_basis_freeze"), dict)
             else {}
         )
-        controller_payload["promotion_status"] = maybe_text(promotion_basis_payload.get("promotion_status")) or "withheld"
+        controller_payload["report_basis_status"] = (
+            maybe_text(report_basis_freeze_payload.get("report_basis_status"))
+            or maybe_text(report_basis_freeze_payload.get("report_basis_status"))
+            or maybe_text(gate_payload.get("report_basis_status"))
+            or maybe_text(gate_payload.get("report_basis_status"))
+            or "withheld"
+        )
+    if maybe_text(controller_payload.get("report_basis_status")) in {"", "not-evaluated"}:
+        controller_payload["report_basis_status"] = controller_payload["report_basis_status"]
     completion_updates = controller_completion_builder(
         controller_payload=controller_payload,
         gate_payload=gate_payload,

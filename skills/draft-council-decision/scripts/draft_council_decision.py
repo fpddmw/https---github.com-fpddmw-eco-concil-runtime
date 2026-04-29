@@ -24,7 +24,7 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_council_decision_record,
 )
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
-    load_promotion_basis_wrapper,
+    load_report_basis_freeze_wrapper,
     load_reporting_handoff_wrapper,
 )
 from eco_council_runtime.reporting_status import (  # noqa: E402
@@ -184,7 +184,7 @@ def decision_memo_sections(
             "summary": (
                 f"{len(key_findings)} DB finding records are available for the decision memo."
                 if key_findings
-                else "No DB finding records have been promoted into the memo yet."
+                else "No DB finding records have been frozen into the memo yet."
             ),
             "evidence_refs": unique_texts(
                 [
@@ -214,13 +214,13 @@ def draft_council_decision_skill(
     run_id: str,
     round_id: str,
     reporting_handoff_path: str,
-    promotion_path: str,
+    report_basis_path: str,
     output_path: str,
     max_actions: int,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     handoff_file = resolve_path(run_dir_path, reporting_handoff_path, f"reporting/reporting_handoff_{round_id}.json")
-    promotion_file = resolve_path(run_dir_path, promotion_path, f"promotion/promoted_evidence_basis_{round_id}.json")
+    report_basis_file = resolve_path(run_dir_path, report_basis_path, f"report_basis/frozen_report_basis_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"reporting/council_decision_draft_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
@@ -255,55 +255,61 @@ def draft_council_decision_skill(
             "handoff_status": "investigation-open",
             "reporting_ready": False,
             "reporting_blockers": ["reporting-handoff-missing"],
-            "promotion_status": "withheld",
+            "report_basis_status": "withheld",
             "key_findings": [],
             "open_risks": [],
             "recommended_next_actions": [],
         }
     else:
         handoff = handoff_payload
-    promotion_context = load_promotion_basis_wrapper(
+    report_basis_context = load_report_basis_freeze_wrapper(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
-        promotion_path=promotion_path,
+        report_basis_path=report_basis_path,
     )
-    promotion_payload = (
-        promotion_context.get("payload")
-        if isinstance(promotion_context.get("payload"), dict)
+    report_basis_payload = (
+        report_basis_context.get("payload")
+        if isinstance(report_basis_context.get("payload"), dict)
         else None
     )
-    if not isinstance(promotion_payload, dict):
-        promotion_basis = {"selected_evidence_refs": [], "basis_id": ""}
+    if not isinstance(report_basis_payload, dict):
+        report_basis_freeze = {"selected_evidence_refs": [], "basis_id": ""}
     else:
-        promotion_basis = promotion_payload
+        report_basis_freeze = report_basis_payload
     contract_fields = reporting_contract_fields_from_payload(
         handoff_payload,
-        fallback_payload=promotion_payload,
+        fallback_payload=report_basis_payload,
         observed_inputs_overrides={
             "reporting_handoff_artifact_present": bool(
                 handoff_context.get("artifact_present")
             ),
             "reporting_handoff_present": bool(handoff_context.get("payload_present")),
-            "promotion_artifact_present": bool(
-                promotion_context.get("artifact_present")
+            "report_basis_artifact_present": bool(
+                report_basis_context.get("artifact_present")
             ),
-            "promotion_present": bool(promotion_context.get("payload_present")),
+            "report_basis_present": bool(report_basis_context.get("payload_present")),
+            "report_basis_artifact_present": bool(
+                report_basis_context.get("artifact_present")
+            ),
+            "report_basis_present": bool(report_basis_context.get("payload_present")),
         },
         field_overrides={
             "reporting_handoff_source": maybe_text(handoff_context.get("source"))
             or "missing-reporting-handoff",
-            "promotion_source": maybe_text(promotion_context.get("source"))
-            or "missing-promotion",
+            "report_basis_source": maybe_text(report_basis_context.get("source"))
+            or "missing-report-basis",
+            "report_basis_source": maybe_text(report_basis_context.get("source"))
+            or "missing-report-basis",
         },
     )
 
     gate_state = reporting_gate_state(
-        promotion_status=maybe_text(handoff.get("promotion_status"))
-        or maybe_text(promotion_basis.get("promotion_status"))
+        report_basis_status=maybe_text(handoff.get("report_basis_status"))
+        or maybe_text(report_basis_freeze.get("report_basis_status"))
         or "withheld",
         readiness_status=maybe_text(handoff.get("readiness_status"))
-        or maybe_text(promotion_basis.get("readiness_status"))
+        or maybe_text(report_basis_freeze.get("readiness_status"))
         or "blocked",
         supervisor_status=maybe_text(handoff.get("supervisor_status")) or "unavailable",
         require_supervisor=True,
@@ -312,7 +318,7 @@ def draft_council_decision_skill(
         handoff_status=handoff.get("handoff_status"),
     )
     handoff_status = maybe_text(gate_state.get("handoff_status")) or "investigation-open"
-    promotion_status = maybe_text(gate_state.get("promotion_status")) or "withheld"
+    report_basis_status = maybe_text(gate_state.get("report_basis_status")) or "withheld"
     reporting_ready = bool(gate_state.get("reporting_ready"))
     reporting_blockers = unique_texts(
         gate_state.get("reporting_blockers", [])
@@ -325,8 +331,8 @@ def draft_council_decision_skill(
     rejected_proposal_ids = unique_texts(
         handoff.get("rejected_proposal_ids", [])
         if isinstance(handoff.get("rejected_proposal_ids"), list)
-        else promotion_basis.get("rejected_proposal_ids", [])
-        if isinstance(promotion_basis.get("rejected_proposal_ids"), list)
+        else report_basis_freeze.get("rejected_proposal_ids", [])
+        if isinstance(report_basis_freeze.get("rejected_proposal_ids"), list)
         else []
     )
     moderator_status = "finalize" if reporting_ready else "continue"
@@ -343,8 +349,8 @@ def draft_council_decision_skill(
     selected_evidence_refs = unique_texts(
         handoff.get("selected_evidence_refs", [])
         if isinstance(handoff.get("selected_evidence_refs"), list)
-        else promotion_basis.get("selected_evidence_refs", [])
-        if isinstance(promotion_basis.get("selected_evidence_refs"), list)
+        else report_basis_freeze.get("selected_evidence_refs", [])
+        if isinstance(report_basis_freeze.get("selected_evidence_refs"), list)
         else []
     )
     memo_sections = decision_memo_sections(
@@ -382,55 +388,55 @@ def draft_council_decision_skill(
         "decision_packet": decision_packet,
         "memo_sections": memo_sections,
         **contract_fields,
-        "promoted_basis_id": maybe_text(handoff.get("promoted_basis_id"))
-        or maybe_text(promotion_basis.get("basis_id")),
+        "report_basis_id": maybe_text(handoff.get("report_basis_id"))
+        or maybe_text(report_basis_freeze.get("basis_id")),
         "basis_selection_mode": maybe_text(handoff.get("basis_selection_mode"))
-        or maybe_text(promotion_basis.get("basis_selection_mode")),
+        or maybe_text(report_basis_freeze.get("basis_selection_mode")),
         "selected_basis_object_ids": unique_texts(
             handoff.get("selected_basis_object_ids", [])
             if isinstance(handoff.get("selected_basis_object_ids"), list)
-            else promotion_basis.get("selected_basis_object_ids", [])
-            if isinstance(promotion_basis.get("selected_basis_object_ids"), list)
+            else report_basis_freeze.get("selected_basis_object_ids", [])
+            if isinstance(report_basis_freeze.get("selected_basis_object_ids"), list)
             else []
         ),
         "supporting_proposal_ids": unique_texts(
             handoff.get("supporting_proposal_ids", [])
             if isinstance(handoff.get("supporting_proposal_ids"), list)
-            else promotion_basis.get("supporting_proposal_ids", [])
-            if isinstance(promotion_basis.get("supporting_proposal_ids"), list)
+            else report_basis_freeze.get("supporting_proposal_ids", [])
+            if isinstance(report_basis_freeze.get("supporting_proposal_ids"), list)
             else []
         ),
         "rejected_proposal_ids": rejected_proposal_ids,
         "supporting_opinion_ids": unique_texts(
             handoff.get("supporting_opinion_ids", [])
             if isinstance(handoff.get("supporting_opinion_ids"), list)
-            else promotion_basis.get("supporting_opinion_ids", [])
-            if isinstance(promotion_basis.get("supporting_opinion_ids"), list)
+            else report_basis_freeze.get("supporting_opinion_ids", [])
+            if isinstance(report_basis_freeze.get("supporting_opinion_ids"), list)
             else []
         ),
         "rejected_opinion_ids": unique_texts(
             handoff.get("rejected_opinion_ids", [])
             if isinstance(handoff.get("rejected_opinion_ids"), list)
-            else promotion_basis.get("rejected_opinion_ids", [])
-            if isinstance(promotion_basis.get("rejected_opinion_ids"), list)
+            else report_basis_freeze.get("rejected_opinion_ids", [])
+            if isinstance(report_basis_freeze.get("rejected_opinion_ids"), list)
             else []
         ),
-        "promotion_resolution_mode": maybe_text(
-            handoff.get("promotion_resolution_mode")
+        "report_basis_resolution_mode": maybe_text(
+            handoff.get("report_basis_resolution_mode")
         )
-        or maybe_text(promotion_basis.get("promotion_resolution_mode")),
-        "promotion_resolution_reasons": (
-            handoff.get("promotion_resolution_reasons", [])
-            if isinstance(handoff.get("promotion_resolution_reasons"), list)
-            else promotion_basis.get("promotion_resolution_reasons", [])
-            if isinstance(promotion_basis.get("promotion_resolution_reasons"), list)
+        or maybe_text(report_basis_freeze.get("report_basis_resolution_mode")),
+        "report_basis_resolution_reasons": (
+            handoff.get("report_basis_resolution_reasons", [])
+            if isinstance(handoff.get("report_basis_resolution_reasons"), list)
+            else report_basis_freeze.get("report_basis_resolution_reasons", [])
+            if isinstance(report_basis_freeze.get("report_basis_resolution_reasons"), list)
             else []
         ),
         "council_input_counts": (
             handoff.get("council_input_counts", {})
             if isinstance(handoff.get("council_input_counts"), dict)
-            else promotion_basis.get("council_input_counts", {})
-            if isinstance(promotion_basis.get("council_input_counts"), dict)
+            else report_basis_freeze.get("council_input_counts", {})
+            if isinstance(report_basis_freeze.get("council_input_counts"), dict)
             else {}
         ),
         "decision_gating": {
@@ -451,7 +457,8 @@ def draft_council_decision_skill(
         "selected_evidence_refs": selected_evidence_refs,
         "audit_refs": {
             "reporting_handoff_path": str(handoff_file),
-            "promotion_path": str(promotion_file),
+            "report_basis_path": str(report_basis_file),
+            "report_basis_path": str(report_basis_file),
             "readiness_path": maybe_text(handoff.get("readiness_path")),
             "supervisor_state_path": maybe_text(handoff.get("supervisor_state_path")),
         },
@@ -479,7 +486,7 @@ def draft_council_decision_skill(
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
             "reporting_handoff_source": maybe_text(contract_fields.get("reporting_handoff_source")),
-            "promotion_source": maybe_text(contract_fields.get("promotion_source")),
+            "report_basis_source": maybe_text(contract_fields.get("report_basis_source")),
             "db_path": contract_fields["db_path"],
         },
         "receipt_id": "reporting-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, decision_id)[:20],
@@ -505,7 +512,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--reporting-handoff-path", default="")
-    parser.add_argument("--promotion-path", default="")
+    parser.add_argument("--report-basis-path", default="")
     parser.add_argument("--output-path", default="")
     parser.add_argument("--max-actions", type=int, default=4)
     parser.add_argument("--pretty", action="store_true")
@@ -519,7 +526,7 @@ def main() -> int:
         run_id=args.run_id,
         round_id=args.round_id,
         reporting_handoff_path=args.reporting_handoff_path,
-        promotion_path=args.promotion_path,
+        report_basis_path=args.report_basis_path,
         output_path=args.output_path,
         max_actions=args.max_actions,
     )

@@ -35,8 +35,8 @@ class DirectCouncilAdvisoryTests(unittest.TestCase):
                         {
                             "agent_role": "moderator",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
-                            "rationale": "The round is ready for promotion review.",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The round is ready for report-basis review.",
                             "decision_source": "agent-council",
                             "basis_object_ids": ["issue-001"],
                             "evidence_refs": ["evidence://issue-001"],
@@ -58,9 +58,9 @@ class DirectCouncilAdvisoryTests(unittest.TestCase):
             self.assertEqual("direct-council-advisory", payload["skill_payload"]["plan_source"])
             self.assertEqual("direct-council-advisory", plan["plan_source"])
             self.assertEqual(["round-readiness"], [item["stage_name"] for item in plan["execution_queue"]])
-            self.assertEqual(["promotion-gate"], [item["stage_name"] for item in plan["gate_steps"]])
+            self.assertEqual(["report-basis-gate"], [item["stage_name"] for item in plan["gate_steps"]])
             self.assertEqual(["round-readiness"], plan["gate_steps"][0]["required_previous_stages"])
-            self.assertEqual("promote-candidate", plan["downstream_posture"])
+            self.assertEqual("report-basis-candidate", plan["downstream_posture"])
             self.assertTrue(plan["observed_state"]["direct_council_queue"])
 
             runtime_path(run_dir, f"agent_advisory_plan_{ROUND_ID}.json").unlink()
@@ -85,7 +85,7 @@ class DirectCouncilAdvisoryTests(unittest.TestCase):
                             "action_kind": "gather-evidence",
                             "agent_role": "environmentalist",
                             "assigned_role": "environmentalist",
-                            "objective": "Collect one more physical evidence slice before final promotion review.",
+                            "objective": "Collect one more physical evidence slice before final report-basis review.",
                             "rationale": "The council wants another governed evidence pass, but not a probe-first loop.",
                             "target_kind": "claim",
                             "target_id": "claim-001",
@@ -110,7 +110,7 @@ class DirectCouncilAdvisoryTests(unittest.TestCase):
             self.assertEqual("completed", payload["status"])
             self.assertEqual("direct-council-advisory", plan["plan_source"])
             self.assertEqual(["round-readiness"], [item["stage_name"] for item in plan["execution_queue"]])
-            self.assertEqual(["promotion-gate"], [item["stage_name"] for item in plan["gate_steps"]])
+            self.assertEqual(["report-basis-gate"], [item["stage_name"] for item in plan["gate_steps"]])
             self.assertFalse(plan["probe_stage_included"])
             self.assertEqual("hold-investigation-open", plan["downstream_posture"])
             self.assertEqual(

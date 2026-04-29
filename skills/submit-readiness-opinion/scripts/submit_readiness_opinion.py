@@ -36,12 +36,12 @@ def pretty_json(data: Any, pretty: bool) -> str:
 def readiness_follow_up_skills(opinion: dict[str, Any]) -> list[str]:
     readiness_status = maybe_text(opinion.get("readiness_status"))
     suggestions = ["query-board-delta"]
-    if bool(opinion.get("sufficient_for_promotion")) or readiness_status in {
-        "promote",
+    if bool(opinion.get("sufficient_for_report_basis")) or readiness_status in {
+        "freeze-report-basis",
         "ready",
-        "ready-for-promotion",
+        "ready-for-report-basis",
     }:
-        suggestions.extend(["promote-evidence-basis", "materialize-reporting-handoff"])
+        suggestions.extend(["freeze-report-basis", "materialize-reporting-handoff"])
     else:
         suggestions.extend(
             [
@@ -65,7 +65,7 @@ def readiness_challenge_hints(opinion: dict[str, Any]) -> list[str]:
     readiness_status = maybe_text(opinion.get("readiness_status"))
     if readiness_status in {"blocked", "reject", "rejected"}:
         return [
-            "This opinion blocks promotion, so the council should surface the blocking proposal or contradiction path explicitly."
+            "This opinion blocks report-basis freeze, so the council should surface the blocking proposal or contradiction path explicitly."
         ]
     return []
 
@@ -80,7 +80,7 @@ def submit_readiness_opinion_skill(
     rationale: str,
     decision_source: str,
     opinion_status: str,
-    sufficient_for_promotion: str,
+    sufficient_for_report_basis: str,
     confidence: str,
     basis_object_ids: list[str],
     basis_object_ids_json: str,
@@ -102,7 +102,7 @@ def submit_readiness_opinion_skill(
         rationale=rationale,
         decision_source=decision_source,
         opinion_status=opinion_status,
-        sufficient_for_promotion=sufficient_for_promotion,
+        sufficient_for_report_basis=sufficient_for_report_basis,
         confidence=confidence,
         basis_object_ids=basis_object_ids,
         basis_object_ids_json=basis_object_ids_json,
@@ -196,7 +196,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rationale", required=True)
     parser.add_argument("--decision-source", default="agent-council")
     parser.add_argument("--opinion-status", default="submitted")
-    parser.add_argument("--sufficient-for-promotion", default="")
+    parser.add_argument("--sufficient-for-report-basis", default="")
     parser.add_argument("--confidence", default="")
     parser.add_argument("--basis-object-id", action="append", default=[])
     parser.add_argument("--basis-object-ids-json", default="")
@@ -223,7 +223,7 @@ def main() -> int:
         rationale=args.rationale,
         decision_source=args.decision_source,
         opinion_status=args.opinion_status,
-        sufficient_for_promotion=args.sufficient_for_promotion,
+        sufficient_for_report_basis=args.sufficient_for_report_basis,
         confidence=args.confidence,
         basis_object_ids=args.basis_object_id,
         basis_object_ids_json=args.basis_object_ids_json,

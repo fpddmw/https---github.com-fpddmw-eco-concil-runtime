@@ -36,7 +36,7 @@ OBJECT_KIND_NEXT_ACTION = "next-action"
 OBJECT_KIND_PROBE = "probe"
 OBJECT_KIND_READINESS_OPINION = "readiness-opinion"
 OBJECT_KIND_READINESS_ASSESSMENT = "readiness-assessment"
-OBJECT_KIND_PROMOTION_BASIS = "promotion-basis"
+OBJECT_KIND_REPORT_BASIS_FREEZE = "report-basis-freeze"
 OBJECT_KIND_DECISION_TRACE = "decision-trace"
 
 SCHEMA_SQL = """
@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS readiness_opinions (
     agent_role TEXT NOT NULL DEFAULT '',
     opinion_status TEXT NOT NULL DEFAULT '',
     readiness_status TEXT NOT NULL DEFAULT '',
-    sufficient_for_promotion INTEGER NOT NULL DEFAULT 0,
+    sufficient_for_report_basis INTEGER NOT NULL DEFAULT 0,
     confidence REAL,
     rationale TEXT NOT NULL DEFAULT '',
     decision_source TEXT NOT NULL DEFAULT '',
@@ -400,15 +400,15 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
         "status_column": "readiness_status",
         "decision_id_column": "",
     },
-    OBJECT_KIND_PROMOTION_BASIS: {
-        "table_name": "promotion_basis_records",
+    OBJECT_KIND_REPORT_BASIS_FREEZE: {
+        "table_name": "report_basis_freeze_records",
         "id_column": "basis_id",
         "timestamp_column": "generated_at_utc",
         "order_by": "generated_at_utc DESC, basis_id DESC",
         "agent_role_column": "",
-        "status_column": "promotion_status",
+        "status_column": "report_basis_status",
         "decision_id_column": "",
-        "item_loader": "promotion-basis-items",
+        "item_loader": "report-basis-freeze-items",
     },
     OBJECT_KIND_DECISION_TRACE: {
         "table_name": "decision_traces",
@@ -1087,8 +1087,8 @@ def normalized_readiness_opinion_payload(
     normalized["readiness_status"] = (
         maybe_text(normalized.get("readiness_status")) or "blocked"
     )
-    normalized["sufficient_for_promotion"] = bool(
-        normalized.get("sufficient_for_promotion")
+    normalized["sufficient_for_report_basis"] = bool(
+        normalized.get("sufficient_for_report_basis")
     )
     normalized["rationale"] = maybe_text(normalized.get("rationale"))
     normalized["decision_source"] = decision_source
@@ -1352,8 +1352,8 @@ def readiness_opinion_row_from_payload(
         "agent_role": maybe_text(opinion.get("agent_role")),
         "opinion_status": maybe_text(opinion.get("opinion_status")),
         "readiness_status": maybe_text(opinion.get("readiness_status")),
-        "sufficient_for_promotion": 1
-        if bool(opinion.get("sufficient_for_promotion"))
+        "sufficient_for_report_basis": 1
+        if bool(opinion.get("sufficient_for_report_basis"))
         else 0,
         "confidence": opinion.get("confidence"),
         "rationale": maybe_text(opinion.get("rationale")),
@@ -1524,13 +1524,13 @@ def write_readiness_opinion_row(
         """
         INSERT OR REPLACE INTO readiness_opinions (
             opinion_id, run_id, round_id, generated_at_utc, agent_role,
-            opinion_status, readiness_status, sufficient_for_promotion,
+            opinion_status, readiness_status, sufficient_for_report_basis,
             confidence, rationale, decision_source, basis_object_ids_json,
             evidence_refs_json, provenance_json, lineage_json, artifact_path,
             record_locator, raw_json
         ) VALUES (
             :opinion_id, :run_id, :round_id, :generated_at_utc, :agent_role,
-            :opinion_status, :readiness_status, :sufficient_for_promotion,
+            :opinion_status, :readiness_status, :sufficient_for_report_basis,
             :confidence, :rationale, :decision_source, :basis_object_ids_json,
             :evidence_refs_json, :provenance_json, :lineage_json, :artifact_path,
             :record_locator, :raw_json
@@ -2025,7 +2025,7 @@ def fetch_json_rows(
     return matching_count, results
 
 
-def load_promotion_basis_items_for_record(
+def load_report_basis_freeze_items_for_record(
     connection: sqlite3.Connection,
     *,
     run_id: str,
@@ -2035,7 +2035,7 @@ def load_promotion_basis_items_for_record(
     rows = connection.execute(
         """
         SELECT *
-        FROM promotion_basis_items
+        FROM report_basis_freeze_items
         WHERE run_id = ? AND round_id = ? AND basis_id = ?
         ORDER BY item_group, item_index, item_row_id
         """,
@@ -2228,9 +2228,9 @@ def query_council_objects(
             limit=safe_limit,
             offset=safe_offset,
         )
-        if include_items and maybe_text(config.get("item_loader")) == "promotion-basis-items":
+        if include_items and maybe_text(config.get("item_loader")) == "report-basis-freeze-items":
             for payload in objects:
-                payload["basis_items"] = load_promotion_basis_items_for_record(
+                payload["basis_items"] = load_report_basis_freeze_items_for_record(
                     connection,
                     run_id=maybe_text(payload.get("run_id")),
                     round_id=maybe_text(payload.get("round_id")),

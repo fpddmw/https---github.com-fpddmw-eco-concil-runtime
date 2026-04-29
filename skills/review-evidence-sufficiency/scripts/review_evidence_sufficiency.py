@@ -18,8 +18,8 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.analysis_objects import (  # noqa: E402
-    WP4_DECISION_SOURCE_APPROVED_HELPER_VIEW,
-    wp4_helper_metadata,
+    HELPER_DECISION_SOURCE_APPROVED_VIEW,
+    helper_governance_metadata,
 )
 from eco_council_runtime.council_objects import query_council_objects  # noqa: E402
 from eco_council_runtime.reporting_objects import query_reporting_objects  # noqa: E402
@@ -483,14 +483,14 @@ def review_evidence_sufficiency_skill(
     )
     safe_limit = max(1, min(200, int(limit or 100)))
     warnings: list[dict[str, str]] = []
-    metadata = wp4_helper_metadata(
+    metadata = helper_governance_metadata(
         skill_name=SKILL_NAME,
         rule_id="HEUR-SUFFICIENCY-REVIEW-001",
         destination="DB-backed evidence sufficiency notes and caveats",
-        decision_source=WP4_DECISION_SOURCE_APPROVED_HELPER_VIEW,
-        rubric_version=maybe_text(rubric_version) or "wp4-sufficiency-rubric-v0.1",
+        decision_source=HELPER_DECISION_SOURCE_APPROVED_VIEW,
+        rubric_version=maybe_text(rubric_version) or "evidence-sufficiency-rubric-v0.1",
         approval_ref="required:skill_approval_request",
-        audit_ref="docs/openclaw-wp4-skills-refactor-workplan.md#8",
+        audit_ref="docs/openclaw-optional-analysis-skills-refactor-workplan.md#8",
         rule_trace=["db-council-object-presence-review", "report-basis-citation-review"],
         caveats=[
             "This helper does not score readiness or prove claims.",
@@ -593,7 +593,7 @@ def review_evidence_sufficiency_skill(
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
         "target": {
             "target_kind": maybe_text(target_kind),
             "target_id": maybe_text(target_id),
@@ -629,7 +629,7 @@ def review_evidence_sufficiency_skill(
             if maybe_text(note.get("dimension")) == "uncertainty-and-scope"
         ],
         "report_usage_constraints": [
-            "This helper output is advisory and cannot be cited as report basis unless a DB council object or report basis explicitly references it.",
+            "This helper output is advisory and cannot be cited as report_basis unless a DB council object or report_basis explicitly references it.",
             "This helper does not decide phase transition, publication, or claim truth.",
         ],
         "lineage": reviewed_ids,
@@ -637,7 +637,7 @@ def review_evidence_sufficiency_skill(
         "evidence_refs": collect_refs([*findings, *bundles, *comments, *report_sections]),
     }
     wrapper = {
-        "schema_version": "wp4-evidence-sufficiency-review-v1",
+        "schema_version": "optional-analysis-evidence-sufficiency-review-v1",
         "skill": SKILL_NAME,
         "run_id": run_id,
         "round_id": round_id,
@@ -684,7 +684,7 @@ def review_evidence_sufficiency_skill(
         "receipt_id": "suffreview-receipt-"
         + stable_hash(SKILL_NAME, run_id, round_id, str(output_file))[:20],
         "batch_id": "suffreview-batch-"
-        + stable_hash(SKILL_NAME, run_id, round_id, "wp4")[:16],
+        + stable_hash(SKILL_NAME, run_id, round_id, "optional-analysis")[:16],
         "artifact_refs": [ref],
         "canonical_ids": [review["review_id"]],
         "warnings": warnings,
@@ -710,7 +710,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--target-kind", default="")
     parser.add_argument("--target-id", default="")
-    parser.add_argument("--rubric-version", default="wp4-sufficiency-rubric-v0.1")
+    parser.add_argument("--rubric-version", default="evidence-sufficiency-rubric-v0.1")
     parser.add_argument("--output-path", default="")
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--pretty", action="store_true")

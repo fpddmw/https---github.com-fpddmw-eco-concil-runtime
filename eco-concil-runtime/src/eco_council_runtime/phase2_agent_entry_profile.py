@@ -30,7 +30,7 @@ from .kernel.paths import agent_advisory_plan_path
 from .kernel.transition_requests import (
     TRANSITION_KIND_CLOSE_ROUND,
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
-    TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    TRANSITION_KIND_FREEZE_REPORT_BASIS,
 )
 from .phase2_direct_advisory import materialize_direct_council_advisory_plan
 from .phase2_planning_profile import planner_skill_args_for_source
@@ -63,7 +63,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         ],
         "analysis_kinds": [],
         "transition_kinds": [
-            TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+            TRANSITION_KIND_FREEZE_REPORT_BASIS,
             TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
             TRANSITION_KIND_CLOSE_ROUND,
         ],
@@ -643,7 +643,7 @@ def default_role_entry_points(
             if isinstance(definition.get("transition_kinds"), list)
             else []
         ):
-            if transition_kind == TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS:
+            if transition_kind == TRANSITION_KIND_FREEZE_REPORT_BASIS:
                 transition_commands.append(
                     kernel_command(
                         "request-phase-transition",
@@ -1000,7 +1000,7 @@ def default_agent_entry_operator_commands(
             skill_approval_request_id="<request_id>",
             skill_args=["<skill_specific_args>"],
         ),
-        "request_promotion_transition_command": kernel_command(
+        "request_report_basis_transition_command": kernel_command(
             "request-phase-transition",
             "--run-dir",
             str(run_dir),
@@ -1009,7 +1009,7 @@ def default_agent_entry_operator_commands(
             "--round-id",
             round_id,
             "--transition-kind",
-            TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+            TRANSITION_KIND_FREEZE_REPORT_BASIS,
             "--rationale",
             "<rationale>",
             actor_role=ROLE_MODERATOR,

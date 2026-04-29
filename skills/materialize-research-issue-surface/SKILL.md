@@ -1,13 +1,13 @@
 ---
 name: materialize-research-issue-surface
-description: WP4 optional helper for DB-backed research issue surfaces. It emits candidate issue records for human review, not controversy conclusions.
+description: Optional-analysis helper for DB-backed research issue surfaces. It emits candidate issue records for human review, not controversy conclusions.
 ---
 
 # Materialize Research Issue Surface
 
 ## Core Goal
 - Convert DB public/formal signals or approved hints into candidate research issue surfaces.
-- Preserve evidence refs, lineage, provenance, and WP4 metadata.
+- Preserve evidence refs, lineage, provenance, and optional-analysis governance metadata.
 - Keep issue records appendix/audit only until DB basis objects cite them.
 
 ## Read/Write Contract

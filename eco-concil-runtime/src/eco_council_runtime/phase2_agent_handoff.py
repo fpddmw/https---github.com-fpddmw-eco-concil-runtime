@@ -6,7 +6,7 @@ from typing import Callable
 from .kernel.transition_requests import (
     TRANSITION_KIND_CLOSE_ROUND,
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
-    TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    TRANSITION_KIND_FREEZE_REPORT_BASIS,
 )
 from .runtime_command_hints import kernel_command, run_skill_command
 
@@ -43,8 +43,8 @@ def default_phase2_hard_gate_commands(
             round_id,
             "--pretty",
         ),
-        "apply_promotion_gate": kernel_command(
-            "apply-promotion-gate",
+        "apply_report_basis_gate": kernel_command(
+            "apply-report-basis-gate",
             "--run-dir",
             str(run_dir),
             "--run-id",
@@ -79,7 +79,7 @@ def default_phase2_hard_gate_commands(
             "<rationale>",
             actor_role="moderator",
         ),
-        "request_promotion_transition": kernel_command(
+        "request_report_basis_transition": kernel_command(
             "request-phase-transition",
             "--run-dir",
             str(run_dir),
@@ -88,7 +88,7 @@ def default_phase2_hard_gate_commands(
             "--round-id",
             round_id,
             "--transition-kind",
-            TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+            TRANSITION_KIND_FREEZE_REPORT_BASIS,
             "--rationale",
             "<rationale>",
             actor_role="moderator",
@@ -252,9 +252,9 @@ def default_phase2_entry_chain(
             ),
         },
         {
-            "step_id": "request-promotion-transition",
+            "step_id": "request-report-basis-transition",
             "mode": "runtime-gate",
-            "objective": "When the moderator considers the round promotable, file an explicit promotion transition request before operator review.",
+            "objective": "When the moderator considers the round promotable, file an explicit report-basis transition request before operator review.",
             "command": kernel_command(
                 "request-phase-transition",
                 "--run-dir",
@@ -264,7 +264,7 @@ def default_phase2_entry_chain(
                 "--round-id",
                 round_id,
                 "--transition-kind",
-                TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+                TRANSITION_KIND_FREEZE_REPORT_BASIS,
                 "--rationale",
                 "<rationale>",
                 actor_role="moderator",

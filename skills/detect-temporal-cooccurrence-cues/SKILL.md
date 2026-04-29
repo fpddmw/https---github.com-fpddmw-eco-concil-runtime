@@ -1,6 +1,6 @@
 ---
 name: detect-temporal-cooccurrence-cues
-description: WP4 optional helper for temporal co-occurrence cues across source families. It never infers influence, causality, spread, or direction.
+description: Optional-analysis helper for temporal co-occurrence cues across source families. It never infers influence, causality, spread, or direction.
 ---
 
 # Detect Temporal Cooccurrence Cues

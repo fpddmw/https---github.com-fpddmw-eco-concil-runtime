@@ -10,7 +10,8 @@ from ..phase2_fallback_contracts import (  # noqa: F401
 
 EXPLICIT_REPORTING_INPUT_NAMES = (
     "readiness",
-    "promotion",
+    "report_basis",
+    "report_basis",
     "supervisor_state",
     "reporting_handoff",
     "decision",
@@ -26,7 +27,8 @@ MERGED_TEXT_FIELDS = (
     "readiness_source",
     "board_brief_source",
     "next_actions_source",
-    "promotion_source",
+    "report_basis_source",
+    "report_basis_source",
     "supervisor_state_source",
     "reporting_handoff_source",
     "decision_source",
@@ -45,6 +47,14 @@ def normalize_reporting_observed_inputs(
         source.update(observed_inputs)
     source.update(overrides)
     normalized = normalize_d1_observed_inputs(source)
+    if "report_basis_artifact_present" in source and "report_basis_artifact_present" not in source:
+        source["report_basis_artifact_present"] = source.get("report_basis_artifact_present")
+    if "report_basis_present" in source and "report_basis_present" not in source:
+        source["report_basis_present"] = source.get("report_basis_present")
+    if "report_basis_artifact_present" in source and "report_basis_artifact_present" not in source:
+        source["report_basis_artifact_present"] = source.get("report_basis_artifact_present")
+    if "report_basis_present" in source and "report_basis_present" not in source:
+        source["report_basis_present"] = source.get("report_basis_present")
     for input_name in EXPLICIT_REPORTING_INPUT_NAMES:
         artifact_key = f"{input_name}_artifact_present"
         present_key = f"{input_name}_present"
@@ -102,7 +112,7 @@ def reporting_contract_fields(
     readiness_source: Any = "",
     board_brief_source: Any = "",
     next_actions_source: Any = "",
-    promotion_source: Any = "",
+    report_basis_source: Any = "",
     supervisor_state_source: Any = "",
     reporting_handoff_source: Any = "",
     decision_source: Any = "",
@@ -119,11 +129,12 @@ def reporting_contract_fields(
         analysis_sync=analysis_sync,
         observed_inputs=observed_inputs,
     )
+    resolved_report_basis_source = maybe_text(report_basis_source)
     optional_sources = {
         "readiness_source": readiness_source,
         "board_brief_source": board_brief_source,
         "next_actions_source": next_actions_source,
-        "promotion_source": promotion_source,
+        "report_basis_source": resolved_report_basis_source,
         "supervisor_state_source": supervisor_state_source,
         "reporting_handoff_source": reporting_handoff_source,
         "decision_source": decision_source,
@@ -176,7 +187,7 @@ def reporting_contract_fields_from_payload(
         readiness_source=merged_fields.get("readiness_source"),
         board_brief_source=merged_fields.get("board_brief_source"),
         next_actions_source=merged_fields.get("next_actions_source"),
-        promotion_source=merged_fields.get("promotion_source"),
+        report_basis_source=merged_fields.get("report_basis_source"),
         supervisor_state_source=merged_fields.get("supervisor_state_source"),
         reporting_handoff_source=merged_fields.get("reporting_handoff_source"),
         decision_source=merged_fields.get("decision_source"),

@@ -19,7 +19,7 @@
 
 1. 议程排序
 2. readiness 判断
-3. promotion freeze 语义裁决
+3. report basis freeze 语义裁决
 4. direct council advisory 编排
 5. 默认 agent 入口链提示
 
@@ -67,7 +67,7 @@ runtime kernel 只保留以下职责：
 1. 自动生成调查议程
 2. 自动决定问题该走哪条语义路线
 3. 自动决定 round 是否足够 ready
-4. 自动决定 promotion 是否应被视为支持
+4. 自动决定 report basis 是否应被视为支持
 5. 自动规定 agent 的固定讨论顺序
 
 这些能力如果保留，只能作为：
@@ -98,7 +98,7 @@ runtime kernel 只保留以下职责：
 | `phase2_fallback_context.py` | 为启发式议程服务的共享上下文 | 抽离 | skill 内部库 |
 | `phase2_fallback_planning.py` | runtime 计划含隐式议程语义 | 抽离或删除 | skill 内部库 |
 | `phase2_action_semantics.py` | runtime 拥有过多 next-action 语义 | 收缩 | 仅保留最小字段校验，其余下沉到 skill |
-| `phase2_promotion_resolution.py` | kernel 决定 promotion support/veto 语义 | 拆分 | kernel 只做 prerequisites，语义判断变 moderator / report advisory |
+| `phase2_report_basis_resolution.py` | 解析 report-basis freeze support/veto judgement，并保留历史 `report_basis_*` 字段镜像 | 拆分 | kernel 只做 prerequisites，语义判断变 moderator / report advisory |
 | `phase2_planning_profile.py` | runtime 规定计划来源与行为 | 收缩 | 只保留 registry；策略抽离为 skill |
 | `phase2_stage_profile.py` | runtime 固化 phase-2 阶段顺序 | 收缩 | 仅保留 transition contract；阶段建议移入 moderator skill |
 | `phase2_agent_entry_profile.py` | runtime 预设 agent 推荐技能序列 | 重写 | 改成 role capability surface |
@@ -170,7 +170,7 @@ runtime kernel 只保留以下职责：
 2. kernel 检查前置条件与权限
 3. request 进入 `pending-operator-confirmation`
 4. operator 批准或拒绝
-5. 只有批准后才写入正式 round transition / close / promotion freeze
+5. 只有批准后才写入正式 round transition / close / report basis freeze
 
 ## 6.3 多 agent 讨论面
 
@@ -262,7 +262,7 @@ runtime kernel 只保留以下职责：
 ## 8.3 必须删除的旧耦合
 
 1. “agent 入口默认等于 proposal/readiness 提交”
-2. “controller 默认重跑 next-actions / readiness / promotion”
+2. “controller 默认重跑 next-actions / readiness / report basis”
 3. “core_queue_default 决定 agent 调查顺序”
 4. “phase2 planner 默认拥有议会阶段语义”
 
@@ -309,17 +309,17 @@ runtime kernel 只保留以下职责：
 - [x] 新增 `approve-phase-transition`
 - [x] 新增 `reject-phase-transition`
 - [x] 修改 `open-investigation-round`，只能消费已批准 transition request
-- [x] 修改 promotion / close round 流程，必须经过 operator approval
+- [x] 修改 report basis / close round 流程，必须经过 operator approval
 
 ### 2026-04-23 Session 收口
 
 - 已完成：
   - `kernel/transition_requests.py` 与 deliberation DB schema 已建立 `transition-request / transition-approval / transition-rejection` canonical 持久化链，`query-control-objects` 与 operator/runbook surface 也已对称暴露这三类 runtime object。
   - `request-phase-transition / approve-phase-transition / reject-phase-transition / close-round --transition-request-id` 已在 kernel CLI、access policy、operator hints、handoff surface 中贯通；`moderator` 只能发起 request，`runtime-operator` 才能 approve/reject/commit。
-  - `open-investigation-round / promote-evidence-basis / close-round` 现在都只能消费已批准 request；实际 side effect 成功后才把 request 状态写成 `committed`，不再把 `round_transitions` 当审批对象。
-  - `kernel/controller.py` 已补上 promotion-stage 治理前置：`promotion-basis` stage 会解析当前 round 该 kind 的最新 request，并只在状态为 `approved / committed` 时注入 `--transition-request-id` 执行；否则 controller 会以清晰的治理阻断失败收口，而不是回退到旧的“无审批直接 promote”语义。
-  - `phase2_direct_advisory.py` 与 `plan-round-orchestration` 的 stop-condition 文案已同步改成“moderator request + operator approval first”，避免 advisory/operator surface 继续暗示可直接 promote。
-  - 相关测试入口已全部切到新审批链：open-round / promote / close-round / supervise-round / run-phase2-round 相关 unittest 现在都会先创建并批准对应 request，再执行 runtime/skill 主链。
+  - `open-investigation-round / freeze-report-basis / close-round` 现在都只能消费已批准 request；实际 side effect 成功后才把 request 状态写成 `committed`，不再把 `round_transitions` 当审批对象。
+  - `kernel/controller.py` 已补上 report basis-stage 治理前置：`report-basis-freeze` stage 会解析当前 round 该 kind 的最新 request，并只在状态为 `approved / committed` 时注入 `--transition-request-id` 执行；否则 controller 会以清晰的治理阻断失败收口，而不是回退到旧的“无审批直接 freeze report basis”语义。
+  - `phase2_direct_advisory.py` 与 `plan-round-orchestration` 的 stop-condition 文案已同步改成“moderator request + operator approval first”，避免 advisory/operator surface 继续暗示可直接 freeze report basis。
+  - 相关测试入口已全部切到新审批链：open-round / freeze report basis / close-round / supervise-round / run-phase2-round 相关 unittest 现在都会先创建并批准对应 request，再执行 runtime/skill 主链。
   - 本次实际回归通过：
     - `tests.test_runtime_kernel`
     - `tests.test_board_workflow`
@@ -336,12 +336,12 @@ runtime kernel 只保留以下职责：
     - `tests.test_orchestration_ingress_workflow`
 
 - 未完成：
-  - 就本批明确定义的三条链路（`open-investigation-round / promote-evidence-basis / close-round`）而言，没有新的功能性遗留；更广义的 kernel phase ownership 收缩仍留在 `9.3`。
-  - controller 侧的 transition request 自动注入目前只对当前 batch 实际进入 controller 的 `promote-evidence-basis` 做了硬化；如果后续再把新的 state-transition skill 放回 controller 主链，需要继续沿同一治理模式扩展，而不是重回旧式裸 skill 调用。
+  - 就本批明确定义的三条链路（`open-investigation-round / freeze-report-basis / close-round`）而言，没有新的功能性遗留；更广义的 kernel phase ownership 收缩仍留在 `9.3`。
+  - controller 侧的 transition request 自动注入目前只对当前 batch 实际进入 controller 的 `freeze-report-basis` 做了硬化；如果后续再把新的 state-transition skill 放回 controller 主链，需要继续沿同一治理模式扩展，而不是重回旧式裸 skill 调用。
 
 - 新发现的问题：
   - 旧测试中仍有少量断言默认 `supervise-round` 不会把 `actor_role="runtime-operator"` 继续传给 controller；本次已作为 batch-1 复核的一部分修正，说明测试层面对新边界语义曾经落后于代码实现。
-  - 目前 planner/advisory 仍然会产出 `promotion-basis` stage，只是 runtime 不再允许它绕过审批直接执行；这再次说明 `phase2 planner / direct advisory` 的默认 phase ownership 仍需在 `9.3` 继续收缩。
+  - 目前 planner/advisory 仍然会产出 `report-basis-freeze` stage，只是 runtime 不再允许它绕过审批直接执行；这再次说明 `phase2 planner / direct advisory` 的默认 phase ownership 仍需在 `9.3` 继续收缩。
 
 - 是否影响后续计划：
   - 不阻塞 `9.3`。相反，`9.3` 现在可以建立在已经硬化的 `request -> approve/reject -> commit` 审批链之上，继续把 controller 从“默认 phase owner”收缩成“受治理的 transition executor + audit logger”。
@@ -357,14 +357,14 @@ runtime kernel 只保留以下职责：
 ### 本次收口回写
 
 - 已完成：
-  - `phase2_planning_profile.py` 的默认 planning source 已收缩为 `[]`；`kernel/controller.py` 默认路径不再采用 `runtime-planner / agent-advisory / direct-council-advisory`，而是只消费已批准的 `promote-evidence-basis` transition request，或在无批准请求时以 inspection-only/no-op 收口。
-  - `kernel/controller.py` 现已把默认 phase-2 语义改成 `transition-executor`：默认只执行 `promotion-gate -> promotion-basis` 这一条已审批 transition 链，不再默认生成 `next-actions / readiness / advisory` 议程；`kernel/supervisor.py` 也同步改成只有在 planning 真正包含 `next-actions` stage 时才消费该 surface。
+  - `phase2_planning_profile.py` 的默认 planning source 已收缩为 `[]`；`kernel/controller.py` 默认路径不再采用 `runtime-planner / agent-advisory / direct-council-advisory`，而是只消费已批准的 `freeze-report-basis` transition request，或在无批准请求时以 inspection-only/no-op 收口。
+  - `kernel/controller.py` 现已把默认 phase-2 语义改成 `transition-executor`：默认只执行 `report-basis-gate -> report-basis-freeze` 这一条已审批 transition 链，不再默认生成 `next-actions / readiness / advisory` 议程；`kernel/supervisor.py` 也同步改成只有在 planning 真正包含 `next-actions` stage 时才消费该 surface。
   - `phase2_agent_entry_profile.py` 与 `kernel/agent_entry.py` 已改为输出 canonical role capability surface、技能层级、transition request/approve/reject 命令模板；默认 recommended skills 与 advisory sources 均为空，agent entry 不再把调查者引导到默认 advisory plan 主链。
   - `kernel/source_queue_profile.py` 已停止向外导出 `core_queue_default`；对外改为 `phase2_behavior` 分类，避免 queue profile 继续暗示 phase-2 默认拥有权。`kernel/operations.py` 的 runbook 文案也已改成 transition/query 导向，而不是 advisory refresh 导向。
   - 已补充并通过本批最小相关回归 `14` 项：
     - `tests.test_agent_entry_gate`
     - `tests.test_runtime_source_queue_profiles`
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_executes_approved_promotion_request_without_planner_stage`
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_executes_approved_report_basis_request_without_planner_stage`
     - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_completes_without_default_plan_when_no_transition_request_exists`
     - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_ignores_optional_advisory_artifacts_on_default_path`
     - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_respects_injected_planning_sources`
@@ -375,7 +375,7 @@ runtime kernel 只保留以下职责：
   - 非默认的 injected planner/advisory 路径仍保留历史 plan metadata（例如 `recommended_skill_sequence`）；如果后续目标是进一步压缩兼容语义面，需要在后续批次继续清理这些 optional surface，而不是把它们重新接回默认链。
 
 - 新发现的问题：
-  - stage validation 之前会把显式声明的空 `required_previous_stages=[]` 误当成“未声明”，从而回退到 stage contract 的旧依赖，导致 `transition-executor` 的 `promotion-gate` 被重新绑回 `round-readiness`；本次已同时在 `phase2_controller_state.py` 与 `phase2_stage_profile.py` 修复。
+  - stage validation 之前会把显式声明的空 `required_previous_stages=[]` 误当成“未声明”，从而回退到 stage contract 的旧依赖，导致 `transition-executor` 的 `report-basis-gate` 被重新绑回 `round-readiness`；本次已同时在 `phase2_controller_state.py` 与 `phase2_stage_profile.py` 修复。
   - 旧 resume 回归仍默认假设 controller 首轮会自动走 runtime planner；本次已把该测试改为显式注入 planning source，避免测试层继续固化旧的 kernel default ownership。
 
 - 是否影响后续计划：
@@ -427,7 +427,7 @@ runtime kernel 只保留以下职责：
 5. 所有写技能都有显式 role allowlist。
 6. `environmentalist` 不能调用议会状态推进技能。
 7. agent 间讨论可以只依赖 DB-native finding / challenge / comment / evidence bundle。
-8. 删除 `next-actions / readiness / promotion` artifact 后，核心研究状态仍可从 DB 恢复。
+8. 删除 `next-actions / readiness / report basis` artifact 后，核心研究状态仍可从 DB 恢复。
 9. operator 能在 runbook 中看到每一次阶段推进请求、审批人、审批理由和证据 basis。
 
 ## 11. 2026-04-24 Session 验收复核（runtime/kernel）
@@ -444,7 +444,7 @@ runtime kernel 只保留以下职责：
     - `tests.test_runtime_kernel.RuntimeKernelTests.test_transition_request_approval_rejects_non_operator_role`
     - `tests.test_runtime_kernel.RuntimeKernelTests.test_transition_request_commit_rejects_non_operator_role`
   - 同步通过本批关联既有回归：
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_executes_approved_promotion_request_without_planner_stage`
+    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_executes_approved_report_basis_request_without_planner_stage`
     - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_completes_without_default_plan_when_no_transition_request_exists`
     - `tests.test_agent_entry_gate`（6 项）
 
@@ -465,7 +465,7 @@ runtime kernel 只保留以下职责：
 
 - 已完成：
   - 重新对照本清单第 `10` 节验收标准复核 runtime/kernel 主边界，重点核验 `controller / transition_requests / skill_approvals / governance / executor / access_policy / skill_registry / agent_entry / operations / reporting handoff`。
-  - 确认 `phase2_planning_profile.default_phase2_planning_sources()` 当前返回空列表；默认 controller 路径只采用已批准的 `promote-evidence-basis` transition request，或在无批准 request 时以 inspection-only/no-op 收口，不再默认 materialize planner / fallback agenda / direct council advisory。
+  - 确认 `phase2_planning_profile.default_phase2_planning_sources()` 当前返回空列表；默认 controller 路径只采用已批准的 `freeze-report-basis` transition request，或在无批准 request 时以 inspection-only/no-op 收口，不再默认 materialize planner / fallback agenda / direct council advisory。
   - 确认 88 个 skill 均有显式 `allowed_roles`；当前 32 个 skill 声明 `requires_operator_approval`。
   - 确认 optional-analysis 已新增持久化审批链：
     - `skill_approval_requests`
@@ -511,12 +511,12 @@ runtime kernel 只保留以下职责：
 
 - 未完成：
   - 兼容模块 `phase2_fallback_* / phase2_direct_advisory.py / plan-round-orchestration` 仍保留为可注入或 approval-gated surface，未物理删除。
-  - `promote-evidence-basis` 等历史 phase/promotion 命名仍未做 breaking schema/CLI rename。
+  - `freeze-report-basis` 等历史 phase/report basis 命名仍未做 breaking schema/CLI rename。
   - 本次未运行全仓 discover。
 
 - 新发现的问题：
   - runtime 硬边界已达标，但文档中旧“下一阶段/当前偏差”段落仍容易被误读为当前代码状态；后续应把历史基线与最新验收状态分层。
-  - `promote-evidence-basis` 内仍保留 legacy coverage helper 函数；默认 shared context 已 quarantine legacy analysis 且 reporting handoff 会忽略 legacy WP4 basis，但后续迁移时应物理清掉这段兼容语义。
+  - `freeze-report-basis` 内仍保留 legacy coverage helper 函数；默认 shared context 已 quarantine legacy analysis 且 reporting handoff 会忽略 legacy optional-analysis basis，但后续迁移时应物理清掉这段兼容语义。
 
 - 是否影响后续计划：
   - 不阻塞 runtime/kernel 权限重构验收。
@@ -526,3 +526,63 @@ runtime kernel 只保留以下职责：
   - `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`
   - 结果：`111` 项通过。
   - `git diff --check`：通过。
+
+## 14. 2026-04-29 runtime/control freeze 拆分回写
+
+- 已完成：
+  - `report-basis-freeze` 现在只表示 deliberation/report basis；runtime 聚合控制面改为 `runtime-control-freeze`。
+  - controller、gate handler、supervisor 的 control snapshot 聚合写入改为 `store_runtime_control_freeze_record(...)`。
+  - `query_runtime_control_freeze_command` 与 `query_report_basis_freeze_command` 分离，operator view 不再同名覆盖。
+  - transition request 常量改为 `TRANSITION_KIND_FREEZE_REPORT_BASIS`，旧 freeze report basis 命名不再作为默认 transition alias。
+
+- 未完成：
+  - `report-basis-gate` stage name、`report_basis_status` DB 字段和历史 artifact path 仍保留兼容；后续若改名需单独 schema/replay migration。
+
+- 新发现的问题：
+  - runtime control freeze 与 report basis 共用 object kind 会隐藏 canonical registry 覆盖问题；本批已用 contract test 和 full discover 固定。
+
+- 是否影响后续计划：
+  - 不阻塞；本批降低了 runtime kernel 被误读为报告 basis/调查结论来源的风险。
+
+## 2026-04-29 report-basis gate 命名收尾
+
+- 已完成：
+  - 默认 phase-2 gate stage / handler 改为 `report-basis-gate`；后续 report-basis-only 收尾已删除旧 handler/CLI alias。
+  - `apply-report-basis-gate`、`report_basis_gate_path`、`runtime/report_basis_gate_<round>.json` 已成为默认 operator/API/artifact surface。
+  - controller、supervisor、benchmark、show-run-state、state surfaces 已输出 `report_basis_status / report_basis_gate_status / report_basis_freeze_allowed`。
+  - `query-control-objects` 增加 `--report-basis-status`，并兼容映射到底层历史 DB column。
+
+- 未完成：
+  - 该条已被后续 report-basis-only 收尾覆盖；旧 promotion DB/CLI/path 兼容命名已删除。
+
+- 新发现的问题：
+  - full discover 首轮发现一个 decision trace 测试还读取旧 `report_basis_gate_*.json`，已改为 `report_basis_gate_*.json`。
+
+- 是否影响后续计划：
+  - 不阻塞；默认 runtime kernel gate 语义已从“report basis”转为“report basis freeze readiness”。
+  - legacy alias 删除已在后续 report-basis-only 收尾完成。
+
+- 本次实际运行：
+  - `.venv/bin/python -m unittest discover -s tests -v`：`235` 项通过。
+
+## 2026-04-29 report-basis-only 破坏性收尾
+
+- 已完成：
+  - 删除旧 report basis promotion 兼容入口：不再注册 `apply-promotion-gate`、不再保留旧 gate alias、runtime ledger 不再写 `legacy_event_type`。
+  - runtime/control DB column 与 query surface 统一为 `report_basis_status / report_basis_freeze_allowed / report_basis_gate_path`。
+  - 默认 report-basis freeze export 目录改为 `report_basis/`，不再使用旧 `promotion/` 路径。
+
+- 未完成：
+  - 无 runtime kernel 旧 promotion 兼容项残留。
+  - `legacy` 一词仍用于 optional-analysis 审计冻结与 role alias 说明，语义是治理标记，不是旧数据兼容。
+
+- 新发现的问题：
+  - 旧 `freeze-withheld` 状态值会让报告 gate 状态语义不够明确；已统一为 `report-basis-freeze-withheld`。
+
+- 是否影响后续计划：
+  - 不阻塞；后续无需再规划 promotion DB/replay 兼容迁移。
+
+- 本次实际运行：
+  - `.venv/bin/python -m compileall -q eco-concil-runtime/src skills tests`：通过。
+  - 目标回归 `84` 项通过。
+  - `.venv/bin/python -m unittest discover -s tests -v`：`235` 项通过，用时 `222.805s`。

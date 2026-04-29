@@ -219,14 +219,14 @@ OPTIONAL_ANALYSIS_SKILLS = [
     "review-evidence-sufficiency",
 ]
 
-WP4_ALLOWED_HELPER_DECISION_SOURCES = [
+OPTIONAL_HELPER_ALLOWED_DECISION_SOURCES = [
     "approved-helper-view",
     "manual-or-moderator-defined",
     "agent-submitted-finding",
     "scenario",
 ]
 
-WP4_OPTIONAL_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
+OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
     "build-normalization-audit": {
         "rule_id": "HEUR-NORMALIZATION-AUDIT-001",
         "decision_source": "approved-helper-view",
@@ -238,7 +238,7 @@ WP4_OPTIONAL_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
         "destination": "DB-backed environment evidence aggregation helper",
         "caveats": [
             "Aggregation is descriptive only and cannot be used for claim matching or readiness scoring.",
-            "Report use requires finding, evidence bundle, proposal, review comment, or report basis citation.",
+            "Report use requires finding, evidence bundle, proposal, review comment, or report_basis citation.",
         ],
     },
     "review-fact-check-evidence-scope": {
@@ -257,7 +257,7 @@ WP4_OPTIONAL_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
         "rule_id": "HEUR-EVIDENCE-LANE-001",
         "destination": "advisory evidence-lane tags",
         "caveats": [
-            "Lane tags cannot assign owners, drive the source queue, or promote phases.",
+            "Lane tags cannot assign owners, drive the source queue, or freeze-report-basis phases.",
             "Any investigation action must be carried by DB council objects.",
         ],
     },
@@ -314,7 +314,7 @@ WP4_OPTIONAL_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
         "rule_id": "HEUR-SUFFICIENCY-REVIEW-001",
         "destination": "DB-backed evidence sufficiency notes and caveats",
         "caveats": [
-            "This helper emits review notes only; it is not a phase gate or report basis by itself.",
+            "This helper emits review notes only; it is not a phase gate or report_basis by itself.",
             "Report use requires explicit citation through DB council or reporting basis objects.",
         ],
     },
@@ -621,15 +621,15 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
-        "promote-evidence-basis": _policy(
-            skill_name="promote-evidence-basis",
+        "freeze-report-basis": _policy(
+            skill_name="freeze-report-basis",
             skill_layer=SKILL_LAYER_STATE_TRANSITION,
             allowed_roles=[ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_STATE_TRANSITION],
             side_effect_scope=["artifact-write", "db-read", "db-write:deliberation"],
             db_write_planes=["deliberation"],
             input_object_kinds=["transition-request", "proposal", "readiness-assessment"],
-            output_object_kinds=["promotion-basis", "report-basis-freeze"],
+            output_object_kinds=["report-basis-freeze"],
             write_scope=WRITE_SCOPE_STATE_TRANSITION,
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
@@ -677,7 +677,7 @@ POLICIES.update(
             required_capabilities=[CAPABILITY_REPORT_DRAFT],
             side_effect_scope=["artifact-write", "db-read", "db-write:reporting"],
             db_write_planes=["reporting"],
-            input_object_kinds=["promotion-basis", "report-basis-freeze", "finding-record", "evidence-bundle", "proposal", "readiness-opinion"],
+            input_object_kinds=["report-basis-freeze", "runtime-control-freeze", "finding", "evidence-bundle", "proposal", "readiness-opinion"],
             output_object_kinds=["reporting-handoff"],
             write_scope=WRITE_SCOPE_REPORTING,
             requires_operator_approval=True,
@@ -690,7 +690,7 @@ POLICIES.update(
             required_capabilities=[CAPABILITY_REPORT_DRAFT],
             side_effect_scope=["artifact-write", "db-read", "db-write:reporting"],
             db_write_planes=["reporting"],
-            input_object_kinds=["reporting-handoff", "report-basis-freeze", "promotion-basis"],
+            input_object_kinds=["reporting-handoff", "report-basis-freeze"],
             output_object_kinds=["council-decision"],
             write_scope=WRITE_SCOPE_REPORTING,
             requires_operator_approval=True,
@@ -751,20 +751,20 @@ POLICIES.update(
 )
 
 
-def wp4_helper_metadata(skill_name: str) -> dict[str, Any]:
-    freeze_line = dict(WP4_OPTIONAL_HELPER_FREEZE_LINES.get(maybe_text(skill_name), {}))
+def helper_governance_metadata(skill_name: str) -> dict[str, Any]:
+    freeze_line = dict(OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES.get(maybe_text(skill_name), {}))
     if not freeze_line:
         return {}
     decision_source = maybe_text(freeze_line.get("decision_source")) or "approved-helper-view"
-    if decision_source not in WP4_ALLOWED_HELPER_DECISION_SOURCES:
+    if decision_source not in OPTIONAL_HELPER_ALLOWED_DECISION_SOURCES:
         raise ValueError(
-            f"Unsupported WP4 decision_source `{decision_source}` for {skill_name}."
+            f"Unsupported optional helper decision_source `{decision_source}` for {skill_name}."
         )
     return {
         "decision_source": decision_source,
         "rule_id": maybe_text(freeze_line.get("rule_id")),
         "rule_version": maybe_text(freeze_line.get("rule_version"))
-        or "wp4-freeze-line-2026-04-28",
+        or "optional-analysis-freeze-line-2026-04-28",
         "taxonomy_version": maybe_text(freeze_line.get("taxonomy_version")),
         "rubric_version": maybe_text(freeze_line.get("rubric_version")),
         "approval_ref": maybe_text(freeze_line.get("approval_ref")),
@@ -786,14 +786,14 @@ def wp4_helper_metadata(skill_name: str) -> dict[str, Any]:
         or "default-frozen; approval-required; audit-pending",
         "helper_status": maybe_text(freeze_line.get("helper_status"))
         or "approval-gated-helper-view",
-        "wp4_destination": maybe_text(freeze_line.get("destination")),
+        "helper_destination": maybe_text(freeze_line.get("destination")),
     }
 
 
 for _skill_name, _policy_payload in POLICIES.items():
-    _metadata = wp4_helper_metadata(_skill_name)
+    _metadata = helper_governance_metadata(_skill_name)
     if _metadata:
-        _policy_payload["wp4_helper_metadata"] = _metadata
+        _policy_payload["helper_governance"] = _metadata
 
 
 def available_skill_names(root: Path | None = None) -> list[str]:
@@ -836,8 +836,8 @@ def resolve_skill_policy(skill_name: str, root: Path | None = None) -> dict[str,
         "write_scope": maybe_text(policy.get("write_scope")) or WRITE_SCOPE_READ_ONLY,
         "requires_operator_approval": bool(policy.get("requires_operator_approval")),
         "default_actor_role_hint": maybe_text(policy.get("default_actor_role_hint")),
-        "wp4_helper_metadata": dict(policy.get("wp4_helper_metadata", {}))
-        if isinstance(policy.get("wp4_helper_metadata"), dict)
+        "helper_governance": dict(policy.get("helper_governance", {}))
+        if isinstance(policy.get("helper_governance"), dict)
         else {},
     }
 
@@ -910,5 +910,5 @@ __all__ = [
     "skill_requires_write_actor_role",
     "skill_write_scope",
     "validate_skill_registry",
-    "wp4_helper_metadata",
+    "helper_governance_metadata",
 ]

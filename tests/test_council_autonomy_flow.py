@@ -301,7 +301,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                         {
                             "agent_role": "moderator",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
+                            "sufficient_for_report_basis": True,
                             "rationale": "The controversy map is coherent enough to move forward.",
                             "decision_source": "agent-council",
                             "basis_object_ids": ["issue-001"],
@@ -312,7 +312,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                         {
                             "agent_role": "challenger",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
+                            "sufficient_for_report_basis": True,
                             "rationale": "No remaining contradiction justifies another round.",
                             "decision_source": "agent-council",
                             "basis_object_ids": ["issue-001"],
@@ -382,7 +382,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                         {
                             "agent_role": "moderator",
                             "readiness_status": "blocked",
-                            "sufficient_for_promotion": False,
+                            "sufficient_for_report_basis": False,
                             "rationale": "The current contradiction still needs a targeted challenge pass.",
                             "decision_source": "agent-council",
                             "basis_object_ids": ["issue-002"],
@@ -393,7 +393,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                         {
                             "agent_role": "challenger",
                             "readiness_status": "needs-more-data",
-                            "sufficient_for_promotion": False,
+                            "sufficient_for_report_basis": False,
                             "rationale": "The board should stay open, but the next step is challenge work rather than recomputing the fallback action agenda.",
                             "decision_source": "agent-council",
                             "basis_object_ids": ["issue-002"],

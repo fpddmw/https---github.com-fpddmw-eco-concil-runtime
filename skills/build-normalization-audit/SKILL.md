@@ -12,7 +12,7 @@ description: Build a board-facing normalization audit from previously extracted 
 
 ## Triggering Conditions
 - Need a compact readiness check after candidate extraction.
-- Need counts, distribution summaries, and gap hints before promotion.
+- Need counts, distribution summaries, and gap hints before report-basis freeze.
 - Need a shared audit artifact for moderator, challenger, or orchestrator workflows.
 
 ## Read/Write Contract

@@ -64,14 +64,14 @@
 ### 2.5 Batch 1 当前状态
 
 - `已完成` deliberation canonical contract registry、council object query surface、reporting DB 恢复链。
-- `已完成` `next-action / probe / readiness-assessment / promotion-basis` 主存储入口 canonical 化与 fallback source 显式标注。
+- `已完成` `next-action / probe / readiness-assessment / report-basis-freeze` 主存储入口 canonical 化与 fallback source 显式标注。
 - `已完成` `propose-next-actions` 对 `proposal` 的优先消费。
 - `已完成` `summarize-round-readiness` 对 `readiness-opinion` 的优先消费。
 - `已完成` phase-2 controller / post-round 的 DB-first 控制读取。
 
 ### 2.6 Batch 2 当前状态
 
-- `已完成` `promote-evidence-basis` 对 `proposal / readiness-opinion` 的 judgement 吸收，并产出 `supporting_* / rejected_* / council_input_counts`。
+- `已完成` `freeze-report-basis` 对 `proposal / readiness-opinion` 的 judgement 吸收，并产出 `supporting_* / rejected_* / council_input_counts`。
 - `已完成` `materialize-reporting-handoff / draft-council-decision / publish-council-decision / materialize-final-publication` 对 trace 链字段的显式透传。
 - `已完成` canonical `decision-trace` 写库、查询与 final publication 暴露。
 - `已完成` `tests/test_decision_trace_workflow.py`，覆盖 ready/hold 两类 decision trace 工作流。
@@ -96,17 +96,17 @@
 
 ### 2.9 Batch 5 当前状态
 
-- `已完成` 新增 `eco_council_runtime/phase2_promotion_resolution.py`，统一 promotion-stage council proposal / readiness opinion 的 resolution surface。
-- `已完成` `promote-evidence-basis` 已移除 skill 内部固定 promotion support kind 白名单；现在优先消费 proposal 内显式 `promotion_disposition / promote_allowed / publication_readiness / handoff_status / moderator_status` judgement，legacy kind 仅保留为 compatibility fallback。
-- `已完成` `promotion-gate` 现在会把 `rejected_proposal_ids / supporting_proposal_ids / promotion_resolution_mode / council_input_counts` 写入 gate snapshot，议会 veto 已进入 controller 可见面。
-- `已完成` `materialize-reporting-handoff / draft-council-decision / publish-council-decision` 已显式透传 `rejected_proposal_ids / promotion_resolution_mode / promotion_resolution_reasons / council_input_counts`。
+- `已完成` 新增 `eco_council_runtime/phase2_report_basis_resolution.py`，统一 report-basis freeze council proposal / readiness opinion 的 resolution surface，并保留历史 `report_basis_*` payload 字段作为 DB/replay 兼容镜像。
+- `已完成` `freeze-report-basis` 已移除 skill 内部固定 report basis support kind 白名单；现在优先消费 proposal 内显式 `report_basis_disposition / report_basis_freeze_allowed / publication_readiness / handoff_status / moderator_status` judgement，legacy kind 仅保留为 compatibility fallback。
+- `已完成` `report-basis-gate` 现在会把 `rejected_proposal_ids / supporting_proposal_ids / report_basis_resolution_mode / council_input_counts` 写入 gate snapshot，议会 veto 已进入 controller 可见面。
+- `已完成` `materialize-reporting-handoff / draft-council-decision / publish-council-decision` 已显式透传 `rejected_proposal_ids / report_basis_resolution_mode / report_basis_resolution_reasons / council_input_counts`。
 - `已完成` decision trace / final publication 现在可以把 veto proposal 作为 selected object 落库并对外导出，不再只能通过 readiness opinion 表达 withheld 路径。
 - `已完成` `tests/test_decision_trace_workflow.py` 已新增 explicit support proposal 与 explicit veto proposal 回归；当前相关大回归 `127` 项全部通过。
 
 ### 2.10 Batch 6 当前状态
 
 - `已完成` `council_objects.py` 已新增 append/upsert proposal/readiness 原语，agent 可以逐条提交 canonical council object，而不是依赖整轮 replace bundle。
-- `已完成` 新增 `submit-council-proposal / submit-readiness-opinion`，默认直接写 DB canonical `proposal / readiness-opinion`，并保留 `target / evidence_refs / response_to_ids / lineage / provenance / promotion_*` judgement 字段。
+- `已完成` 新增 `submit-council-proposal / submit-readiness-opinion`，默认直接写 DB canonical `proposal / readiness-opinion`，并保留 `target / evidence_refs / response_to_ids / lineage / provenance / report_basis_*` judgement 字段。
 - `已完成` `canonical_contracts.py` 已收紧 `proposal / readiness-opinion` 契约，`status / opinion_status / response_to_ids / basis_object_ids` 已进入强校验面。
 - `已完成` `phase2_agent_entry_profile.py / phase2_agent_handoff.py / kernel/agent_entry.py` 已把默认 agent write path 改为 submission skills，并显式暴露 proposal/readiness 的 query/template command。
 - `已完成` `phase2_direct_advisory.py / plan-round-orchestration / summarize-round-readiness / propose-next-actions / open-falsification-probe` 的 follow-up guidance 已开始从 `post-board-note` 转向结构化 submission。
@@ -114,29 +114,29 @@
 
 ### 2.11 Batch 7 当前状态
 
-- `已完成` `phase2_promotion_resolution.py` 已移除 legacy promotion support compatibility；旧 `proposal_kind / action_kind` 名称本身不再授予 promotion support 语义。
-- `已完成` legacy 输入现在会被显式标记为 `ignored-implicit-promotion-kind`，并写进 `proposal_resolution_records / proposal_resolution_mode_counts`，而不是静默兼容。
-- `已完成` `promote-evidence-basis` 会对这类旧输入发出 `ignored-implicit-promotion-kind` warning，promotion artifact 已能审计残留旧写法。
+- `已完成` `phase2_report_basis_resolution.py` 已移除 legacy implicit support compatibility；旧 `proposal_kind / action_kind` 名称本身不再授予 report-basis freeze support 语义。
+- `已完成` legacy 输入现在会被显式标记为 `ignored-implicit-report-basis-operation`，并写进 `proposal_resolution_records / proposal_resolution_mode_counts`，而不是静默兼容。
+- `已完成` `freeze-report-basis` 会对这类旧输入发出 `ignored-implicit-report-basis-operation` warning，report basis artifact 已能审计残留旧写法。
 - `已完成` `materialize-reporting-handoff / draft-council-decision / draft-expert-report / publish-expert-report / publish-council-decision` 的 hold-path `suggested_next_skills` 已从 `post-board-note` 转向 `submit-council-proposal / submit-readiness-opinion`。
-- `已完成` `promote-evidence-basis / summarize-round-readiness` 的 skill docs 与 agent prompts 已改写为“explicit DB judgement first”。
-- `已完成` 已新增 “legacy named promotion proposal is ignored” 与 reporting/publication hold-path guidance 回归；当前扩展后的大回归 `131` 项全部通过。
+- `已完成` `freeze-report-basis / summarize-round-readiness` 的 skill docs 与 agent prompts 已改写为“explicit DB judgement first”。
+- `已完成` 已新增 “legacy named report basis proposal is ignored” 与 reporting/publication hold-path guidance 回归；当前扩展后的大回归 `131` 项全部通过。
 
 ### 2.12 Batch 8 当前状态
 
-- `已完成` 新增 `phase2_action_semantics.py`，`readiness_blocker` 已成为 planner / readiness / promotion 共享语义，不再依赖 `prepare-promotion` 旧 action kind 特判。
-- `已完成` `phase2_fallback_policy.py` 的默认空 agenda cue 已改为 `open-council-readiness-review`，语义从“隐式 promotion cue”切成“显式 council readiness review cue”。
+- `已完成` 新增 `phase2_action_semantics.py`，`readiness_blocker` 已成为 planner / readiness / report basis 共享语义，不再依赖 `prepare-report-basis-freeze` 旧 action kind 特判。
+- `已完成` `phase2_fallback_policy.py` 的默认空 agenda cue 已改为 `open-council-readiness-review`，语义从“隐式 report basis cue”切成“显式 council readiness review cue”。
 - `已完成` 新增 `reporting_status.py`，`materialize-reporting-handoff / draft-council-decision / draft-expert-report / phase2_posture_profile` 现在共享 `reporting_ready / reporting_blockers / handoff_status` 判定层。
-- `已完成` promoted supervisor status 已统一到 `reporting-ready`，handoff hold 状态已统一到 `investigation-open`。
+- `已完成` frozen supervisor status 已统一到 `reporting-ready`，handoff hold 状态已统一到 `investigation-open`。
 - `已完成` `phase2_state_surfaces.py` 已新增 `load_supervisor_state_wrapper`；删掉 `runtime/supervisor_state_*.json` 后，reporting handoff 仍可从 deliberation DB 恢复 supervisor state。
 - `已完成` `deliberation_plane.py` 已把 `readiness_blocker / reporting_ready / reporting_blockers / decision_gating` 提升成表列并补迁移，不再只藏在 `raw_json`。
 
 ### 2.13 Batch 9 当前状态
 
 - `已完成` `phase2_state_surfaces.py` 已新增 `build_reporting_surface(...)`，supervisor / handoff / decision / report wrapper 现在共享同一套显式 reporting gate surface。
-- `已完成` `kernel/supervisor.py` 现在会把 `reporting_ready / reporting_blockers / reporting_handoff_status` 直接写入 supervisor snapshot / promotion freeze，不再只能靠后续 handoff 反推。
+- `已完成` `kernel/supervisor.py` 现在会把 `reporting_ready / reporting_blockers / reporting_handoff_status` 直接写入 supervisor snapshot / report basis freeze，不再只能靠后续 handoff 反推。
 - `已完成` `kernel/cli.py` 现已新增 `show-reporting-state`，`show-run-state` 也新增 top-level `reporting` section；operator 可直接查看 DB-first reporting surface。
 - `已完成` `query-council-objects` 已支持 `--readiness-blocker-only`；`moderator_actions.readiness_blocker` 现在可直接通过 query surface 过滤。
-- `已完成` `phase2 operator / post-round operator / benchmark operator` 现已显式暴露 `reporting_ready / reporting_blockers / reporting_handoff_status`，不再只透出 `promotion_status`。
+- `已完成` `phase2 operator / post-round operator / benchmark operator` 现已显式暴露 `reporting_ready / reporting_blockers / reporting_handoff_status`，不再只透出 `report_basis_status`。
 - `已完成` `post_round.py / benchmark.py` 已切到 shared reporting surface；`round_close / benchmark_manifest` 已显式写出 reporting gate 字段与 `reporting_surface_source`。
 
 ### 2.14 Batch 10 当前状态
@@ -158,10 +158,10 @@
 
 ### 2.16 Batch 12 当前状态
 
-- `已完成` `kernel/phase2_state_surfaces.py` 的 `next-actions / falsification-probes / round-readiness / promotion-basis / supervisor-state` wrapper 已全部改成 `DB-only`；artifact-only 文件会被显式标记为 `orphaned-...-artifact`，不再回流成 phase-2 payload。
-- `已完成` 新增 `eco_council_runtime/phase2_exports.py` 与 CLI `materialize-phase2-exports`，可从 DB 重建 `next_actions / falsification_probes / round_readiness / promoted_evidence_basis / supervisor_state` 五个 phase-2 导出物；`show-run-state` phase-2 operator 已补上对应 command template 与 query commands。
-- `已完成` `materialize-final-publication` 已切到 `load_supervisor_state_wrapper(...)`；publication 不再旁路直读 supervisor artifact，而是优先走 `promotion_freeze -> supervisor_snapshot`。
-- `已完成` `kernel/controller.py` 已删除一个残留的 `promotion_basis` artifact fallback；controller completion 现在不会再用旧 export 回填 `promotion_status`。
+- `已完成` `kernel/phase2_state_surfaces.py` 的 `next-actions / falsification-probes / round-readiness / report-basis-freeze / supervisor-state` wrapper 已全部改成 `DB-only`；artifact-only 文件会被显式标记为 `orphaned-...-artifact`，不再回流成 phase-2 payload。
+- `已完成` 新增 `eco_council_runtime/phase2_exports.py` 与 CLI `materialize-phase2-exports`，可从 DB 重建 `next_actions / falsification_probes / round_readiness / frozen_report_basis / supervisor_state` 五个 phase-2 导出物；`show-run-state` phase-2 operator 已补上对应 command template 与 query commands。
+- `已完成` `materialize-final-publication` 已切到 `load_supervisor_state_wrapper(...)`；publication 不再旁路直读 supervisor artifact，而是优先走 `report_basis_freeze -> supervisor_snapshot`。
+- `已完成` `kernel/controller.py` 已删除一个残留的 `report_basis_freeze` artifact fallback；controller completion 现在不会再用旧 export 回填 `report_basis_status`。
 - `已完成` `tests/test_phase2_state_surfaces.py / tests/test_runtime_kernel.py / tests/test_orchestration_planner_workflow.py / tests/test_board_workflow.py / tests/test_reporting_publish_workflow.py` 已补强 phase-2 orphaned-artifact、export rebuild、publication supervisor DB recovery 与 DB-canonical test seed；当前扩展后的大回归 `148` 项全部通过。
 
 ### 2.17 Batch 13 当前状态
@@ -179,9 +179,9 @@
 - `已完成` `phase2 operator / agent entry operator / 默认 role read path` 已全部接入 `query_formal_signals_command`；formal signal 不再只能靠底层表或历史 source whitelist 间接访问。
 - `已完成` `phase2_fallback_agenda.py / phase2_fallback_policy.py / phase2_fallback_context.py` 已把 empirical blocker 进一步改成 `route-gated`：只有显式 routed 到 `environmental-observation` 的问题才会被 coverage/support 继续卡住；纯 `formal / discourse / stakeholder` round 不再因为缺少另一侧 material 或 coverage 被硬阻塞。
 - `已完成` `summarize-round-readiness` 已切成 `lane-aware readiness`：主判断面现在是 `issue / route / linkage / representation / diffusion / council opinions`，coverage 退为 observation lane supporting posture。
-- `已完成` `promote-evidence-basis` 已切成 `lane-aware promotion freeze`：`verification_routes` 现在会冻结 empirical routes，自身成为 basis object；coverage 只在 `route-gated empirical lane` 或 `legacy no-structure fallback` 时进入 `selected_coverages`。
-- `已完成` `materialize-reporting-handoff` 已补上 structural-basis key findings fallback；纯 formal/public/discourse promoted round 即使没有 selected coverages，也能从 `issue_clusters / routes / links / gaps / edges` 生成 reporting handoff findings。
-- `已完成` 本轮新增/更新回归已覆盖 `formal signal query surface`、`agent entry/operator commands`、`phase2 operator surface`、`non-empirical ready+promote+reporting handoff`、`investigation/reporting/runtime kernel` 主链；本地验证通过：
+- `已完成` `freeze-report-basis` 已切成 `lane-aware report basis freeze`：`verification_routes` 现在会冻结 empirical routes，自身成为 basis object；coverage 只在 `route-gated empirical lane` 或 `legacy no-structure fallback` 时进入 `selected_coverages`。
+- `已完成` `materialize-reporting-handoff` 已补上 structural-basis key findings fallback；纯 formal/public/discourse frozen round 即使没有 selected coverages，也能从 `issue_clusters / routes / links / gaps / edges` 生成 reporting handoff findings。
+- `已完成` 本轮新增/更新回归已覆盖 `formal signal query surface`、`agent entry/operator commands`、`phase2 operator surface`、`non-empirical ready+freeze report basis+reporting handoff`、`investigation/reporting/runtime kernel` 主链；本地验证通过：
   - `tests/test_signal_plane_workflow.py`
   - `tests/test_agent_entry_gate.py`
   - `tests/test_phase2_state_surfaces.py`
@@ -256,7 +256,7 @@
   - 现在会同时派生并同步 `issue_clusters / stance_groups / concern_facets / actor_profiles / evidence_citation_types` 五组 typed artifact。
   - `controversy-map` 保留为 routing / readiness-facing 高层对象；议会 issue layer 改由 `issue-cluster` 充当 canonical DB surface。
 - `已完成` `load_d1_shared_context` 已切到 `issue-cluster-first`：
-  - board / agenda / promotion / reporting 共享上下文优先读取 `issue-cluster` DB row，而不是直接把 `controversy-map` wrapper 当作议会 issue object。
+  - board / agenda / report basis / reporting 共享上下文优先读取 `issue-cluster` DB row，而不是直接把 `controversy-map` wrapper 当作议会 issue object。
   - `stance_groups / concern_facets / actor_profiles / evidence_citation_types` 也已进入 shared context 暴露面。
 - `已完成` 修复 analysis plane 一处结构性 lineage bug：
   - `analysis_result_lineage.lineage_id` 之前未把 `result_set_id` 纳入签名，不同 analysis kind 的 query-basis / parent-artifact row 会互相覆盖。
@@ -301,22 +301,22 @@
 ### 2.23 Batch 19 当前状态
 
 - `已完成` 新增 runtime/control canonical object registry：
-  - `promotion-freeze`
+  - `runtime-control-freeze`
   - `controller-state`
   - `gate-state`
   - `supervisor-state`
-- `已完成` `promotion_freezes` 已补齐 `reporting_ready / reporting_handoff_status / reporting_blockers` 列；控制冻结面不再只靠 `raw_json` 承载 reporting gate 语义。
+- `已完成` `report_basis_freezes` 已补齐 `reporting_ready / reporting_handoff_status / reporting_blockers` 列；控制冻结面不再只靠 `raw_json` 承载 reporting gate 语义。
 - `已完成` deliberation DB 已新增 `controller_snapshots / gate_snapshots / supervisor_snapshots` 三张独立表：
-  - `controller / gate / supervisor` 不再只是 `promotion_freeze.raw_json` 里的嵌套 blob。
-  - `store_promotion_freeze_record(...)` 现在会同时写聚合 freeze row 与独立控制面 row。
+  - `controller / gate / supervisor` 不再只是 report-basis export 里的嵌套 blob。
+  - `store_runtime_control_freeze_record(...)` 现在写聚合 control freeze row 与独立控制面 row；`store_report_basis_freeze_record(...)` 只负责 deliberation report basis。
 - `已完成` 新增 `eco_council_runtime/control_objects.py` 与 CLI `query-control-objects`：
   - runtime control plane 现在拥有与 deliberation / reporting 对称的一等 query surface。
-  - 支持 `controller-status / gate-status / promotion-status / supervisor-status / planning-mode / stage-name / gate-handler / reporting-ready-only` 等过滤。
-- `已完成` `kernel/phase2_state_surfaces.py` 已新增 `load_controller_state_wrapper / load_promotion_gate_wrapper`，并把 `load_supervisor_state_wrapper` 升级为优先消费独立 control rows：
+  - 支持 `controller-status / gate-status / report basis-status / supervisor-status / planning-mode / stage-name / gate-handler / reporting-ready-only` 等过滤。
+- `已完成` `kernel/phase2_state_surfaces.py` 已新增 `load_controller_state_wrapper / load_report_basis_gate_wrapper`，并把 `load_supervisor_state_wrapper` 升级为优先消费独立 control rows：
   - `show-run-state` 不再把 `controller / gate / supervisor` 只当 artifact/freeze summary 读取。
-  - phase-2 operator 现已显式暴露 `query_controller_state_command / query_gate_state_command / query_supervisor_state_command / query_promotion_freeze_command`。
+  - phase-2 operator 现已显式暴露 `query_controller_state_command / query_gate_state_command / query_supervisor_state_command / query_runtime_control_freeze_command / query_report_basis_freeze_command`。
 - `已完成` control query surface 已补上 DB-authoritative 回归：
-  - `tests/test_control_query_surface.py` 会故意篡改 `controller_snapshots / gate_snapshots / supervisor_snapshots / promotion_freezes` 的 `raw_json`，并验证查询结果仍由 DB 列恢复。
+  - `tests/test_control_query_surface.py` 会故意篡改 `controller_snapshots / gate_snapshots / supervisor_snapshots / report_basis_freezes` 的 `raw_json`，并验证查询结果仍由 DB 列恢复。
   - `tests/test_runtime_kernel.py / tests/test_phase2_state_surfaces.py` 已同步补上 show-run-state operator command 与 control-row/orphaned-artifact 语义。
 - `已完成` 本轮本地验证通过：
   - `tests/test_control_query_surface.py`
@@ -439,12 +439,12 @@
 - `[x]` 建立 `probe`
 - `[x]` 建立 `readiness-opinion`
 - `[x]` 建立 `readiness-assessment`
-- `[x]` 建立 `promotion-basis`
+- `[x]` 建立 `report-basis-freeze`
 - `[x]` 建立 `decision-trace`
 
 ### 4.4 Runtime / control plane
 
-- `[x]` 建立 `promotion-freeze`
+- `[x]` 建立 `report-basis-freeze`
 - `[x]` 建立 `controller-state`
 - `[x]` 建立 `gate-state`
 - `[x]` 建立 `supervisor-state`
@@ -500,7 +500,7 @@
 - `[x]` `[重写]` `propose-next-actions`
 - `[x]` `[重写]` `open-falsification-probe`
 - `[x]` `[重写]` `summarize-round-readiness`
-- `[x]` `[重写]` `promote-evidence-basis`
+- `[x]` `[重写]` `freeze-report-basis`
 
 ### 7.2 重写 board skills
 
@@ -514,7 +514,7 @@
 - `[x]` `next-action` 可锚定 `issue / route / gap / actor / proposal`
 - `[x]` `probe` 可由 agent proposal 或 policy fallback 生成
 - `[x]` `readiness-assessment` 能表达多 agent 分歧
-- `[x]` `promotion-basis` 冻结的是 controversy judgement，而不是只冻结 coverages
+- `[x]` `report-basis-freeze` 冻结的是 controversy judgement，而不是只冻结 coverages
 - `[x]` `decision-trace` 记录采纳了哪个 proposal、拒绝了哪些 proposal、理由是什么
 - `[x]` `hypothesis / challenge / board-task` DB 行与 `raw_json` 已显式承载 `decision_source / evidence_refs / source_ids / provenance / lineage`
 
@@ -545,13 +545,13 @@
 - `[x]` `controller.py` 已把 `openclaw-agent` 轮次改成 `direct-council-advisory -> agent-advisory -> runtime-planner` 的三级回退链；`runtime planner` 不再是默认入口。
 - `[x]` phase-2 controller artifact 与 round-controller ledger 事件现在都会暴露 `plan_source`，controller 已能区分 `direct-council-advisory / agent-advisory / runtime-planner`。
 - `[x]` controller 在采纳 advisory/runtime plan 时现在会强绑定当前 `run_id / round_id / controller_authority` 再写入 deliberation plane；弱 advisory artifact 即使缺字段，也不能再绕开 DB plan contract。
-- `[x]` `controller.py` 不再强行注入固定 `promotion-gate` / post-gate 序列；plan 现在可以显式声明 `gate_steps / required_previous_stages / stage_kind / gate_handler`，controller 会按计划执行。
+- `[x]` `controller.py` 不再强行注入固定 `report-basis-gate` / post-gate 序列；plan 现在可以显式声明 `gate_steps / required_previous_stages / stage_kind / gate_handler`，controller 会按计划执行。
 - `[x]` `phase2_contract.py` 已从“controller 唯一真理表”退化成 known-stage default metadata / compatibility fallback；显式 plan 依赖可以覆盖内置依赖。
-- `[x]` `promotion-gate` 的执行分派、readiness 依赖解析与 controller 状态更新已迁入 `kernel/gate.py`；`controller.py` 现在只消费统一 `gate_result`，不再内嵌 `promotion-gate` 特判。
+- `[x]` `report-basis-gate` 的执行分派、readiness 依赖解析与 controller 状态更新已迁入 `kernel/gate.py`；`controller.py` 现在只消费统一 `gate_result`，不再内嵌 `report-basis-gate` 特判。
 - `[x]` `next_actions / probes / readiness` 的 DB/artifact read surface 已抽到 `kernel/phase2_state_surfaces.py`，`gate.py / supervisor.py / benchmark.py` 不再直接依赖 `investigation_planning.py`。
-- `[x]` `promotion_basis / reporting_handoff / council_decision / expert_report / final_publication` 的 DB/artifact read surface 也已并入 `kernel/phase2_state_surfaces.py`；reporting / publication 相关 skills 已切到新 surface，`investigation_planning.py` 只剩 compatibility re-export，不再持有这些实现。
-- `[x]` `gate.py` 已支持 handler registry / dispatch；controller 不再导入或硬编码 `promotion-gate` 实现，`promotion-gate` 也不再是唯一合法 gate handler。
-- `[x]` `promotion-gate` 默认实现已迁到 `eco_council_runtime/phase2_gate_handlers.py`；`kernel/gate.py` 现在只剩 gate dispatch/runtime，不再持有 promotion/readiness 领域逻辑。
+- `[x]` `report_basis_freeze / reporting_handoff / council_decision / expert_report / final_publication` 的 DB/artifact read surface 也已并入 `kernel/phase2_state_surfaces.py`；reporting / publication 相关 skills 已切到新 surface，`investigation_planning.py` 只剩 compatibility re-export，不再持有这些实现。
+- `[x]` `gate.py` 已支持 handler registry / dispatch；controller 不再导入或硬编码 `report-basis-gate` 实现，`report-basis-gate` 也不再是唯一合法 gate handler。
+- `[x]` `report-basis-gate` 默认实现已迁到 `eco_council_runtime/phase2_gate_handlers.py`；`kernel/gate.py` 现在只剩 gate dispatch/runtime，不再持有 report basis/readiness 领域逻辑。
 - `[x]` `controller.run_phase2_round_with_contract_mode(...)` 已改成显式接收 `gate_handlers`；默认 gate/profile 现在只能从组合根显式注入，controller 不再默认拥有该 profile。
 - `[x]` `phase2_fallback_planning.py` 已拆成 `phase2_fallback_common.py / phase2_fallback_contracts.py / phase2_fallback_agenda.py / phase2_fallback_context.py` 四个明确职责模块；原文件退成 compatibility facade，skills / reporting contracts / kernel compatibility layer 也开始直接依赖这些新边界。
 - `[x]` `phase2_fallback_agenda.py` 内的 score / pressure / probe / readiness-blocker 规则已继续抽成 `eco_council_runtime/phase2_fallback_policy.py`，fallback 动作现在会显式写出 `policy_profile / policy_source / policy_owner`。
@@ -567,7 +567,7 @@
 - `[x]` `phase2_agent_entry_profile.py` 已接管 agent-entry 默认 role definitions、recommended skills、operator commands/notes、next-round suggestion builder 与 advisory refresh source 顺序；`kernel/agent_entry.py / cli.py` 现在只消费 injected entry profile，不再内建默认议会入口教程或 advisory materialization 链。
 - `[x]` `phase2_posture_profile.py` 已接管 controller completion follow-up、supervisor classification / top-actions / round-transition / operator notes / failure notes；`kernel/controller.py / kernel/supervisor.py / cli.py` 现在只消费 injected posture profile。
 - `[x]` `phase2_round_profile.py` 已接管默认 `next_round_id` sequencing；`kernel/supervisor.py / kernel/agent_entry.py` 不再共享或持有内建轮次递增策略，round handoff policy 可以通过 posture / entry profile 双向覆写。
-- `[x]` `kernel/cli.py / post_round.py / benchmark.py` 已把 reporting/publication operator surface 从 `promotion_status` 主导切到 shared reporting surface；operator/query 现在可直接读取 `reporting_ready / blockers / readiness_blocker`。
+- `[x]` `kernel/cli.py / post_round.py / benchmark.py` 已把 reporting/publication operator surface 从 `report_basis_status` 主导切到 shared reporting surface；operator/query 现在可直接读取 `reporting_ready / blockers / readiness_blocker`。
 - `[x]` 新增 plan DB 回归，覆盖 phase-2 export rebuild、DB 列覆盖 stale `raw_json`、agent advisory plan identity binding 与 runtime kernel advisory 主链。
 - `[x]` 本地扩展大回归 `139` 项通过，覆盖 phase-2 / agent-entry / council / board / reporting / publication / post-round / benchmark 主链。
 
@@ -589,7 +589,7 @@
 ### 9.3 不再允许留在 kernel 的职责
 
 - `[ ]` readiness 主判断逻辑
-- `[ ]` promotion 主判断逻辑
+- `[ ]` report basis 主判断逻辑
 - `[ ]` controversy scoring formula
 - `[ ]` fixed phase policy
 - `[ ]` 默认议会编排假设
@@ -644,8 +644,8 @@
 
 - `[x]` canonical signal / analysis / deliberation / runtime control 对象已经定义并落库
 - `[x]` formal comments 已成为一等结构化输入
-- `[x]` `hypothesis / challenge / board-task / proposal / next-action / probe / readiness-opinion / readiness-assessment / promotion-basis / decision-trace` 已可 item-level 查询
-- `[x]` `promotion-freeze / controller-state / gate-state / supervisor-state` 已可 item-level 查询
+- `[x]` `hypothesis / challenge / board-task / proposal / next-action / probe / readiness-opinion / readiness-assessment / report-basis-freeze / decision-trace` 已可 item-level 查询
+- `[x]` `runtime-control-freeze / controller-state / gate-state / supervisor-state` 已可 item-level 查询；`report-basis-freeze` 保留在 deliberation query surface
 - `[x]` `reporting-handoff / council-decision / expert-report / final-publication` 已可 item-level 查询
 - `[x]` 删除 `board_summary / board_brief / next_actions / probes / readiness` artifact 后，round 仍可继续
 - `[x]` 主链默认输出已不再是 `claim-observation-link-coverage`
@@ -653,7 +653,7 @@
 - `[x]` agent proposal 已带 `rationale / confidence / evidence refs / provenance`
 - `[x]` heuristic 已降为 approval-gated helper / compatibility query surface，并带显式 trace、freeze line 或 governance metadata
 - `[x]` reporting / publication 默认从 DB canonical 对象物化
-- `[x]` kernel 已不再承载 readiness / promotion / controversy judgement 的主语义；阶段推进由 moderator request + operator approval 承接，runtime 保留审计/DB/replay 边界
+- `[x]` kernel 已不再承载 readiness / report basis / controversy judgement 的主语义；阶段推进由 moderator request + operator approval 承接，runtime 保留审计/DB/replay 边界
 - `[x]` 至少一个争议型政策 case、一个混合型争议 case、一个可核实事件 case 稳定通过新验收
 
 ## 15. 2026-04-29 最终验收硬化回写
@@ -662,9 +662,23 @@
 - `formal_signal_semantics.py` 已补 versioned taxonomy family records，taxonomy cue 只作为 candidate label，必须经 approval/audit 和 DB council/reporting basis 才能进入报告。
 - 默认 agent entry 已不再列出旧 analysis query commands；optional-analysis 只能通过 skill approval request / approval / consumption 链执行。
 - `open-investigation-round` fallback task 已从 `claim-candidates / observation-candidates` 改为 `public-discourse-evidence / environment-evidence`。
-- 仍保留非阻塞命名债：`promote-evidence-basis / promotion_status / promotion_path` 以及历史 canonical analysis contract 的 breaking rename。
+- 仍保留非阻塞命名债：`report_basis_status` DB column 与历史 canonical analysis contract 的 breaking rename。
 
-## 16. 2026-04-29 验收审阅回写
+## 16. 2026-04-29 report-basis gate 命名收尾
+
+- 已完成：
+  - `report-basis-gate` 成为默认 runtime gate stage / handler；planner、direct advisory、controller、supervisor、benchmark 和 state surfaces 已同步。
+  - skill/reporting 链已输出 `report_basis_status / report_basis_source / report_basis_path / report_basis_resolution_*`；旧 `report_basis_*` 只作为兼容双写。
+  - `apply-report-basis-gate` 与 `--report-basis-status` 已进入 operator surface。
+- 未完成：
+  - 该条已被第 18 节覆盖；旧 promotion schema/CLI/replay 命名已删除，当前 `report_basis_status` 是新架构字段。
+  - legacy optional-analysis query surface 仍未物理删除。
+- 新发现的问题：
+  - 旧 gate artifact 测试路径残留已修正为 `report_basis_gate_*`，loader 保留旧路径 fallback。
+- 是否影响后续计划：
+  - 不阻塞；默认 skill/refactor 主线已不再依赖 report basis gate 语义。
+
+## 17. 2026-04-29 验收审阅回写
 
 - 已完成：
   - 第 `14` 节硬完成检查表经代码和 targeted regression 复核后成立：DB canonical/query surface、agent proposal/finding basis、heuristic freeze、reporting DB rebuild、moderator/operator transition chain 均有测试覆盖。
@@ -688,3 +702,24 @@
   - `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`
   - 结果：`111` 项通过。
   - `git diff --check`：通过。
+
+## 18. 2026-04-29 report-basis-only 破坏性收尾
+
+- 已完成：
+  - 删除旧 promotion 兼容命名和入口，skill/reporting/runtime/test surface 只保留 `report_basis_*`。
+  - `submit-council-proposal` 改用 `--report-basis-disposition / --report-basis-freeze-allowed`；`submit-readiness-opinion` 改用 `--sufficient-for-report-basis`。
+  - report basis freeze export 默认路径改为 `report_basis/frozen_report_basis_<round_id>.json`。
+
+- 未完成：
+  - optional-analysis helper 的人工审计仍是 `audit-pending`；这不是旧架构兼容保留，而是启发式治理状态。
+
+- 新发现的问题：
+  - 旧 status 值 `freeze-withheld` 不足以表达 report-basis 语义；已统一成 `report-basis-freeze-withheld`。
+
+- 是否影响后续计划：
+  - 不阻塞；skill 主链已经不再需要旧 promotion 兼容迁移项。
+
+- 本次实际运行：
+  - `compileall` 通过。
+  - runtime/reporting/decision/submission/supervisor 目标回归 `84` 项通过。
+  - 全量 `unittest discover`：`235` 项通过，用时 `222.805s`。

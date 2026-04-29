@@ -1,6 +1,6 @@
 ---
 name: review-evidence-sufficiency
-description: WP4 optional DB-backed evidence sufficiency review helper. It emits notes and caveats from findings, evidence bundles, report section basis, and challenger review comments; it is not a readiness gate.
+description: Optional-analysis DB-backed evidence sufficiency review helper. It emits notes and caveats from findings, evidence bundles, report section basis, and challenger review comments; it is not a readiness gate.
 ---
 
 # Eco Review Evidence Sufficiency
@@ -49,7 +49,7 @@ description: WP4 optional DB-backed evidence sufficiency review helper. It emits
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-refactor-overall-notes.md`
-- `../../docs/openclaw-wp4-skills-refactor-workplan.md`
+- `../../docs/openclaw-optional-analysis-skills-refactor-workplan.md`
 
 ## Scripts
 - `scripts/review_evidence_sufficiency.py`

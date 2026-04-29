@@ -252,7 +252,7 @@ def coverage_policy(coverage: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def promotion_action_policy(coverage: dict[str, Any]) -> dict[str, Any]:
+def report_basis_action_policy(coverage: dict[str, Any]) -> dict[str, Any]:
     claim_id = maybe_text(coverage.get("claim_id"))
     return {
         "action_kind": "open-council-readiness-review",

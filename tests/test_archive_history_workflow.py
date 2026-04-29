@@ -132,8 +132,8 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         run_dir,
         run_id=run_id,
         round_id=round_id,
-        transition_kind="promote-evidence-basis",
-        rationale="Approve promotion for archive/history workflow setup.",
+        transition_kind="freeze-report-basis",
+        rationale="Approve report_basis for archive/history workflow setup.",
     )
     run_kernel(
         "supervise-round",
@@ -1087,7 +1087,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
 
             for relative_path in (
                 f"runtime/round_controller_{HISTORICAL_ROUND_ID}.json",
-                f"runtime/promotion_gate_{HISTORICAL_ROUND_ID}.json",
+                f"runtime/report_basis_gate_{HISTORICAL_ROUND_ID}.json",
                 f"runtime/supervisor_state_{HISTORICAL_ROUND_ID}.json",
             ):
                 (run_dir / relative_path).unlink(missing_ok=True)

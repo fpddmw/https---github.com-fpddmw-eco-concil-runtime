@@ -18,9 +18,10 @@ class Phase2GateHandlerTests(unittest.TestCase):
     def test_kernel_gate_registry_has_no_builtin_domain_handlers(self) -> None:
         self.assertEqual({}, gate_handler_registry())
 
-    def test_phase2_profile_owns_default_promotion_gate_handler(self) -> None:
+    def test_phase2_profile_owns_default_report_basis_gate_handler(self) -> None:
         registry = phase2_gate_handler_registry()
-        self.assertIs(registry["promotion-gate"], phase2_gate_handlers.apply_promotion_gate)
+        self.assertIs(registry["report-basis-gate"], phase2_gate_handlers.apply_report_basis_gate)
+        self.assertIs(registry["report-basis-gate"], phase2_gate_handlers.apply_report_basis_gate)
 
     def test_handler_module_no_longer_owns_phase2_default_registry(self) -> None:
         self.assertFalse(hasattr(phase2_gate_handlers, "phase2_gate_handler_registry"))

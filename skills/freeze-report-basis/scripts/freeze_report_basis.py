@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Promote round evidence into a compact basis artifact."""
+"""Freeze round evidence into a compact report-basis artifact."""
 
 from __future__ import annotations
 
@@ -11,17 +11,17 @@ from pathlib import Path
 import sys
 from typing import Any
 
-SKILL_NAME = "promote-evidence-basis"
+SKILL_NAME = "freeze-report-basis"
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.phase2_fallback_context import load_d1_shared_context  # noqa: E402
-from eco_council_runtime.phase2_promotion_resolution import (  # noqa: E402
+from eco_council_runtime.phase2_report_basis_resolution import (  # noqa: E402
     load_council_proposals,
     load_council_readiness_opinions,
-    resolve_promotion_council_inputs,
+    resolve_report_basis_council_inputs,
 )
 from eco_council_runtime.phase2_action_semantics import (  # noqa: E402
     action_is_readiness_blocker,
@@ -31,13 +31,13 @@ from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_round_readiness_wrapper,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
-    store_promotion_basis_record,
+    store_report_basis_freeze_record,
 )
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
 from eco_council_runtime.kernel.transition_requests import (  # noqa: E402
-    TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    TRANSITION_KIND_FREEZE_REPORT_BASIS,
     mark_transition_request_committed,
     request_payload_option,
     resolve_transition_request_for_execution,
@@ -470,7 +470,7 @@ def basis_object_ids(
     return unique_texts(ids)
 
 
-def promote_evidence_basis_skill(
+def freeze_report_basis_skill(
     run_dir: str,
     run_id: str,
     round_id: str,
@@ -487,7 +487,7 @@ def promote_evidence_basis_skill(
     transition_request = resolve_transition_request_for_execution(
         run_dir_path,
         request_id=transition_request_id,
-        transition_kind=TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+        transition_kind=TRANSITION_KIND_FREEZE_REPORT_BASIS,
         run_id=run_id,
         round_id=round_id,
     )
@@ -507,7 +507,7 @@ def promote_evidence_basis_skill(
     readiness_file = resolve_path(run_dir_path, readiness_path, f"reporting/round_readiness_{round_id}.json")
     board_brief_file = resolve_path(run_dir_path, board_brief_path, f"board/board_brief_{round_id}.md")
     next_actions_file = resolve_path(run_dir_path, next_actions_path, f"investigation/next_actions_{round_id}.json")
-    output_file = resolve_path(run_dir_path, output_path, f"promotion/promoted_evidence_basis_{round_id}.json")
+    output_file = resolve_path(run_dir_path, output_path, f"report_basis/frozen_report_basis_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
     readiness_context = load_round_readiness_wrapper(
@@ -703,7 +703,7 @@ def promote_evidence_basis_skill(
         run_id=run_id,
         round_id=round_id,
     )
-    promotion_resolution = resolve_promotion_council_inputs(
+    report_basis_resolution = resolve_report_basis_council_inputs(
         council_proposals,
         council_opinions,
         readiness_status=readiness_status,
@@ -711,62 +711,64 @@ def promote_evidence_basis_skill(
         round_id=round_id,
         selected_basis_object_ids=selected_basis_object_ids,
     )
-    promotion_status = (
-        maybe_text(promotion_resolution.get("promotion_status")) or "withheld"
+    report_basis_status = (
+        maybe_text(report_basis_resolution.get("report_basis_status")) or "withheld"
     )
-    promotion_resolution_reasons = (
-        promotion_resolution.get("promotion_resolution_reasons", [])
-        if isinstance(promotion_resolution.get("promotion_resolution_reasons"), list)
+    report_basis_resolution_reasons = (
+        report_basis_resolution.get("report_basis_resolution_reasons", [])
+        if isinstance(report_basis_resolution.get("report_basis_resolution_reasons"), list)
+        else report_basis_resolution.get("report_basis_resolution_reasons", [])
+        if isinstance(report_basis_resolution.get("report_basis_resolution_reasons"), list)
         else []
     )
-    if promotion_status == "withheld":
+    if report_basis_status == "withheld":
         warnings.append(
             {
-                "code": "promotion-withheld",
-                "message": maybe_text(promotion_resolution_reasons[0])
+                "code": "report-basis-withheld",
+                "message": maybe_text(report_basis_resolution_reasons[0])
                 or "Promotion was withheld because the round-readiness gate is not ready.",
             }
         )
     supporting_proposal_ids = unique_texts(
-        promotion_resolution.get("supporting_proposal_ids", [])
-        if isinstance(promotion_resolution.get("supporting_proposal_ids"), list)
+        report_basis_resolution.get("supporting_proposal_ids", [])
+        if isinstance(report_basis_resolution.get("supporting_proposal_ids"), list)
         else []
     )
     rejected_proposal_ids = unique_texts(
-        promotion_resolution.get("rejected_proposal_ids", [])
-        if isinstance(promotion_resolution.get("rejected_proposal_ids"), list)
+        report_basis_resolution.get("rejected_proposal_ids", [])
+        if isinstance(report_basis_resolution.get("rejected_proposal_ids"), list)
         else []
     )
     supporting_opinion_ids = unique_texts(
-        promotion_resolution.get("supporting_opinion_ids", [])
-        if isinstance(promotion_resolution.get("supporting_opinion_ids"), list)
+        report_basis_resolution.get("supporting_opinion_ids", [])
+        if isinstance(report_basis_resolution.get("supporting_opinion_ids"), list)
         else []
     )
     rejected_opinion_ids = unique_texts(
-        promotion_resolution.get("rejected_opinion_ids", [])
-        if isinstance(promotion_resolution.get("rejected_opinion_ids"), list)
+        report_basis_resolution.get("rejected_opinion_ids", [])
+        if isinstance(report_basis_resolution.get("rejected_opinion_ids"), list)
         else []
     )
     proposal_resolution_records = (
-        promotion_resolution.get("proposal_resolution_records", [])
-        if isinstance(promotion_resolution.get("proposal_resolution_records"), list)
+        report_basis_resolution.get("proposal_resolution_records", [])
+        if isinstance(report_basis_resolution.get("proposal_resolution_records"), list)
         else []
     )
-    ignored_implicit_promotion_proposals = [
+    ignored_implicit_report_basis_proposals = [
         record
         for record in proposal_resolution_records
         if isinstance(record, dict)
         and maybe_text(record.get("resolution_mode"))
-        == "ignored-implicit-promotion-kind"
+        == "ignored-implicit-report-basis-operation"
     ]
-    if ignored_implicit_promotion_proposals:
+    if ignored_implicit_report_basis_proposals:
         warnings.append(
             {
-                "code": "ignored-implicit-promotion-kind",
+                "code": "ignored-implicit-report-basis-operation",
                 "message": (
-                    f"{len(ignored_implicit_promotion_proposals)} council proposals "
-                    "used legacy promotion naming without explicit structured "
-                    "judgement fields and were ignored for promotion support."
+                    f"{len(ignored_implicit_report_basis_proposals)} council proposals "
+                    "used legacy transition naming without explicit structured "
+                    "judgement fields and were ignored for report-basis support."
                 ),
             }
         )
@@ -832,8 +834,8 @@ def promote_evidence_basis_skill(
                 "action_kind": "proposal-veto",
                 "priority": "high",
                 "reason": maybe_text(proposal.get("rationale"))
-                or "An open council proposal explicitly withholds promotion.",
-                "controversy_gap": "council-promotion-veto",
+                or "An open council proposal explicitly withholds report-basis freeze.",
+                "controversy_gap": "council-report_basis-veto",
                 "recommended_lane": "council-deliberation",
             }
             for proposal in rejected_proposals[:3]
@@ -844,7 +846,7 @@ def promote_evidence_basis_skill(
                 "action_kind": "readiness-opinion",
                 "priority": "high",
                 "reason": maybe_text(opinion.get("rationale"))
-                or "A council readiness opinion still blocks promotion.",
+                or "A council readiness opinion still blocks report-basis freeze.",
                 "controversy_gap": "council-readiness-disagreement",
                 "recommended_lane": "council-deliberation",
             }
@@ -853,12 +855,12 @@ def promote_evidence_basis_skill(
         + fallback_remaining_risks
     )[:4]
 
-    basis_id = "report-basis-" + stable_hash(run_id, round_id, promotion_status)[:12]
+    basis_id = "report-basis-" + stable_hash(run_id, round_id, report_basis_status)[:12]
     decision_source = maybe_text(readiness.get("decision_source")) or "policy-fallback"
-    if maybe_text(promotion_resolution.get("decision_source")):
-        decision_source = maybe_text(promotion_resolution.get("decision_source"))
+    if maybe_text(report_basis_resolution.get("decision_source")):
+        decision_source = maybe_text(report_basis_resolution.get("decision_source"))
     merged_gate_reasons = unique_texts(
-        promotion_resolution_reasons
+        report_basis_resolution_reasons
         + (
             readiness.get("gate_reasons", [])
             if isinstance(readiness.get("gate_reasons"), list)
@@ -886,7 +888,7 @@ def promote_evidence_basis_skill(
         "run_id": run_id,
         "round_id": round_id,
         "basis_id": basis_id,
-        "promotion_status": promotion_status,
+        "report_basis_status": report_basis_status,
         "transition_request_id": maybe_text(transition_request.get("request_id")),
         "readiness_status": readiness_status,
         "decision_source": decision_source,
@@ -901,10 +903,15 @@ def promote_evidence_basis_skill(
             else "freeze-controversy-basis-v1"
         ),
         "report_basis_selection_mode": "freeze-report-basis-v1",
-        "promotion_resolution_mode": maybe_text(
-            promotion_resolution.get("promotion_resolution_mode")
+        "report_basis_resolution_mode": maybe_text(
+            report_basis_resolution.get("report_basis_resolution_mode")
         ),
-        "promotion_resolution_reasons": promotion_resolution_reasons,
+        "report_basis_resolution_reasons": report_basis_resolution_reasons,
+        "report_basis_resolution_mode": maybe_text(
+            report_basis_resolution.get("report_basis_resolution_mode")
+        )
+        or maybe_text(report_basis_resolution.get("report_basis_resolution_mode")),
+        "report_basis_resolution_reasons": report_basis_resolution_reasons,
         "basis_counts": basis_counts,
         "selected_basis_object_ids": selected_basis_object_ids,
         "supporting_proposal_ids": supporting_proposal_ids,
@@ -913,13 +920,13 @@ def promote_evidence_basis_skill(
         "rejected_opinion_ids": rejected_opinion_ids,
         "proposal_resolution_records": proposal_resolution_records,
         "proposal_resolution_mode_counts": (
-            promotion_resolution.get("proposal_resolution_mode_counts", {})
-            if isinstance(promotion_resolution.get("proposal_resolution_mode_counts"), dict)
+            report_basis_resolution.get("proposal_resolution_mode_counts", {})
+            if isinstance(report_basis_resolution.get("proposal_resolution_mode_counts"), dict)
             else {}
         ),
         "council_input_counts": (
-            promotion_resolution.get("council_input_counts", {})
-            if isinstance(promotion_resolution.get("council_input_counts"), dict)
+            report_basis_resolution.get("council_input_counts", {})
+            if isinstance(report_basis_resolution.get("council_input_counts"), dict)
             else {}
         ),
         "frozen_basis": frozen_basis,
@@ -936,37 +943,41 @@ def promote_evidence_basis_skill(
             "next_actions_source": maybe_text(
                 contract_fields.get("next_actions_source")
             ),
-            "promotion_resolution_mode": maybe_text(
-                promotion_resolution.get("promotion_resolution_mode")
+            "report_basis_resolution_mode": maybe_text(
+                report_basis_resolution.get("report_basis_resolution_mode")
             ),
+            "report_basis_resolution_mode": maybe_text(
+                report_basis_resolution.get("report_basis_resolution_mode")
+            )
+            or maybe_text(report_basis_resolution.get("report_basis_resolution_mode")),
             "transition_request_id": maybe_text(
                 transition_request.get("request_id")
             ),
             "council_input_counts": (
-                promotion_resolution.get("council_input_counts", {})
-                if isinstance(promotion_resolution.get("council_input_counts"), dict)
+                report_basis_resolution.get("council_input_counts", {})
+                if isinstance(report_basis_resolution.get("council_input_counts"), dict)
                 else {}
             ),
         },
         "board_brief_excerpt": brief_text[:300],
         "gate_reasons": merged_gate_reasons,
         "remaining_risks": remaining_risks,
-        "promotion_notes": (
+        "report_basis_notes": (
             "Round is ready and a DB-backed report evidence basis has been frozen for downstream reporting."
-            if promotion_status == "promoted" and not selected_coverages
+            if report_basis_status == "frozen" and not selected_coverages
             else (
                 "Round is ready and a DB-backed report evidence basis plus route-gated empirical support has been frozen for downstream reporting."
-                if promotion_status == "promoted"
+                if report_basis_status == "frozen"
                 else (
-                    maybe_text(promotion_resolution_reasons[0])
-                    or "Round is not yet ready; the basis artifact freezes the current DB-backed report basis posture while promotion remains withheld."
+                    maybe_text(report_basis_resolution_reasons[0])
+                    or "Round is not yet ready; the basis artifact freezes the current DB-backed report-basis posture while report_basis remains withheld."
                 )
             )
         ),
     }
-    wrapper = store_promotion_basis_record(
+    wrapper = store_report_basis_freeze_record(
         run_dir_path,
-        promotion_payload=wrapper,
+        report_basis_payload=wrapper,
         artifact_path=str(output_file),
     )
     write_json_file(output_file, wrapper)
@@ -978,7 +989,7 @@ def promote_evidence_basis_skill(
         )
         or maybe_text(transition_request.get("latest_decision_by_role"))
         or "runtime-operator",
-        committed_object_kind="promotion-basis",
+        committed_object_kind="report-basis-freeze",
         committed_object_id=basis_id,
     )
 
@@ -993,7 +1004,7 @@ def promote_evidence_basis_skill(
             "basis_id": basis_id,
             "basis_object_kind": "report-basis-freeze",
             "transition_semantics": "freeze-report-basis",
-            "promotion_status": promotion_status,
+            "report_basis_status": report_basis_status,
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
             "readiness_source": maybe_text(contract_fields.get("readiness_source")),
@@ -1002,8 +1013,8 @@ def promote_evidence_basis_skill(
             "db_path": contract_fields["db_path"],
             "transition_request_id": maybe_text(transition_request.get("request_id")),
         },
-        "receipt_id": "promotion-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, basis_id)[:20],
-        "batch_id": "promotionbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
+        "receipt_id": "report-basis-freeze-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, basis_id)[:20],
+        "batch_id": "reportbasisfreeze-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [basis_id],
         "warnings": warnings,
@@ -1014,9 +1025,9 @@ def promote_evidence_basis_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": (
                 []
-                if promotion_status == "promoted"
+                if report_basis_status == "frozen"
                 else merged_gate_reasons[:3]
-                or ["Round readiness is not yet sufficient for promotion."]
+                or ["Round readiness is not yet sufficient for report-basis freeze."]
             ),
             "challenge_hints": [],
             "suggested_next_skills": [],
@@ -1043,7 +1054,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    payload = promote_evidence_basis_skill(
+    payload = freeze_report_basis_skill(
         run_dir=args.run_dir,
         run_id=args.run_id,
         round_id=args.round_id,

@@ -1,4 +1,4 @@
 interface:
   display_name: "Detect Temporal Cooccurrence Cues"
-  short_description: "WP4 temporal co-occurrence cues"
+  short_description: "Optional-analysis temporal co-occurrence cues"
   default_prompt: "Use $detect-temporal-cooccurrence-cues only after approval. Emit descriptive co-occurrence cues and timestamp limitations; do not infer influence, causality, spread, or direction."

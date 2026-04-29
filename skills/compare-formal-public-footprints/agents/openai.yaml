@@ -1,4 +1,4 @@
 interface:
   display_name: "Compare Formal Public Footprints"
-  short_description: "WP4 formal/public footprint comparison"
+  short_description: "Optional-analysis formal/public footprint comparison"
   default_prompt: "Use $compare-formal-public-footprints only after approval. Describe footprint overlap and caveats; do not score alignment, create paired links, or make representation findings."

@@ -107,8 +107,8 @@ def load_d1_shared_context(
         "coverage_count": 0,
         "analysis_sync": {
             "status": "missing-coverage",
-            "legacy_wp4_analysis_quarantined": True,
-            "legacy_wp4_analysis_policy": "do-not-consume-claim-observation-or-typed-heuristic-objects",
+            "legacy_optional_analysis_quarantined": True,
+            "legacy_optional_analysis_policy": "do-not-consume-claim-observation-or-typed-heuristic-objects",
         },
     }
     coverages: list[dict[str, Any]] = []
@@ -225,7 +225,7 @@ def load_d1_shared_context(
             "board_summary_present": isinstance(board_summary, dict),
             "board_brief_artifact_present": board_brief_file.exists(),
             "board_brief_present": bool(maybe_text(brief_text)),
-            "legacy_wp4_analysis_quarantined": True,
+            "legacy_optional_analysis_quarantined": True,
             "coverage_present": bool(coverages),
             "coverage_artifact_present": bool(
                 coverage_context.get("coverage_artifact_present")

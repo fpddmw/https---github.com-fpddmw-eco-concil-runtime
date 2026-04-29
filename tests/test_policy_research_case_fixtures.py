@@ -560,7 +560,7 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
         run_dir,
         run_id=run_id,
         round_id=round_id,
-        transition_kind="promote-evidence-basis",
+        transition_kind="freeze-report-basis",
         rationale="Moderator requests report-basis freeze for policy research case fixture.",
         evidence_refs=[environment_ref],
         basis_object_ids=[bundle_id, report_basis["finding_id"], report_basis["bundle_id"]],
@@ -633,7 +633,7 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
     ):
         reporting_path(run_dir, artifact_name).unlink()
     (run_dir / "runtime" / f"supervisor_state_{round_id}.json").unlink()
-    (run_dir / "promotion" / f"promoted_evidence_basis_{round_id}.json").unlink()
+    (run_dir / "report_basis" / f"frozen_report_basis_{round_id}.json").unlink()
 
     publication_payload = run_script(
         script_path("materialize-final-publication"),
@@ -736,8 +736,8 @@ class PolicyResearchCaseFixtureTests(unittest.TestCase):
                     self.assertEqual("release", publication["publication_posture"])
                     self.assertFalse(publication["observed_inputs"]["reporting_handoff_artifact_present"])
                     self.assertTrue(publication["observed_inputs"]["reporting_handoff_present"])
-                    self.assertFalse(publication["observed_inputs"]["promotion_artifact_present"])
-                    self.assertTrue(publication["observed_inputs"]["promotion_present"])
+                    self.assertFalse(publication["observed_inputs"]["report_basis_artifact_present"])
+                    self.assertTrue(publication["observed_inputs"]["report_basis_present"])
                     self.assertFalse(publication["observed_inputs"]["supervisor_state_artifact_present"])
                     self.assertTrue(publication["observed_inputs"]["supervisor_state_present"])
                     self.assertGreaterEqual(len(report["key_findings"]), 1)

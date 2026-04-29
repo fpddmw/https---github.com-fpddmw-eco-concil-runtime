@@ -14,7 +14,7 @@ description: Optional moderator advisory skill for proposing possible next actio
 ## Triggering Conditions
 - A moderator has identified a planning question that would benefit from optional ranking support.
 - The operator has approved this optional-analysis run for the specific round and actor role.
-- Need advisory candidates for future investigation, not a required queue before probes, readiness, promotion, or reporting.
+- Need advisory candidates for future investigation, not a required queue before probes, readiness, report basis, or reporting.
 
 ## Read/Write Contract
 - Syncs the round into the run-local deliberation plane and prefers that state for action ranking.

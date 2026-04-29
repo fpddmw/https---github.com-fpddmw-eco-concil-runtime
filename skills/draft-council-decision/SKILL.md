@@ -26,7 +26,7 @@ description: Draft a decision memo from reporting packets so the moderator can f
 - `round_id`
 - Optional:
   - `reporting_handoff_path`
-  - `promotion_path`
+  - `report_basis_path`
   - `output_path`
   - `max_actions`
 
@@ -41,7 +41,7 @@ description: Draft a decision memo from reporting packets so the moderator can f
 - `deliberation_sync`
 - `analysis_sync`
 - `board_handoff`
-- The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `promotion_source`, `db_path`, and `observed_inputs`, preserving upstream trace fields from the reporting chain.
+- The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `report_basis_source`, `db_path`, and `observed_inputs`, preserving upstream trace fields from the reporting chain.
 - The emitted decision draft includes `decision_packet` and `memo_sections` for decision-maker report assembly.
 
 ## References

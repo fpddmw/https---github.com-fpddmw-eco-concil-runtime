@@ -9,7 +9,7 @@ from .kernel.phase2_state_surfaces import (
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
     load_orchestration_plan_wrapper,
-    load_promotion_basis_wrapper,
+    load_report_basis_freeze_wrapper,
     load_round_readiness_wrapper,
     load_supervisor_state_wrapper,
 )
@@ -54,9 +54,9 @@ def export_specs(round_id: str) -> list[dict[str, Any]]:
             "identifier_fields": ("readiness_id", "round_id"),
         },
         {
-            "export_kind": "promotion-basis",
-            "output_relative": f"promotion/promoted_evidence_basis_{round_id}.json",
-            "loader": load_promotion_basis_wrapper,
+            "export_kind": "report-basis-freeze",
+            "output_relative": f"report_basis/frozen_report_basis_{round_id}.json",
+            "loader": load_report_basis_freeze_wrapper,
             "loader_kwargs": {},
             "identifier_fields": ("basis_id", "round_id"),
         },

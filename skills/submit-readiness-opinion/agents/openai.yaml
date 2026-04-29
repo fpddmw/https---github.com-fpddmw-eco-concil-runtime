@@ -1,4 +1,4 @@
 interface:
   display_name: "Eco Submit Readiness Opinion"
   short_description: "Write one structured readiness opinion into the deliberation DB"
-  default_prompt: "Use $submit-readiness-opinion to submit one structured readiness opinion directly into the deliberation DB. Always provide explicit agent_role, readiness_status, rationale, basis object ids when available, and sufficient_for_promotion when the council is making a promotion judgement."
+  default_prompt: "Use $submit-readiness-opinion to submit one structured readiness opinion directly into the deliberation DB. Always provide explicit agent_role, readiness_status, rationale, basis object ids when available, and sufficient_for_report_basis when the council is making a report basis judgement."

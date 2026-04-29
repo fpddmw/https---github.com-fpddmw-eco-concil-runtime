@@ -13,7 +13,7 @@ SUPERVISOR_HOLD_STATUS = "hold-investigation-open"
 LEGACY_REPORTING_READY_STATUS = "ready-for-reporting"
 LEGACY_REPORTING_HOLD_STATUS = "pending-more-investigation"
 REPORTING_BLOCKER_SUMMARY_MAP = {
-    "promotion-withheld": "Promotion is still withheld, so reporting cannot proceed.",
+    "report-basis-withheld": "Report basis freeze is still withheld, so reporting cannot proceed.",
     "readiness-missing": "No readiness assessment is available yet for reporting handoff.",
     "readiness-blocked": "The readiness assessment is explicitly blocked.",
     "readiness-needs-more-data": "The readiness assessment still needs more data.",
@@ -46,18 +46,18 @@ def normalize_reporting_handoff_status(value: Any) -> str:
 
 def reporting_blockers(
     *,
-    promotion_status: Any,
+    report_basis_status: Any,
     readiness_status: Any,
     supervisor_status: Any,
     require_supervisor: bool = False,
     extra_blockers: list[Any] | None = None,
 ) -> list[str]:
     blockers: list[str] = []
-    normalized_promotion_status = maybe_text(promotion_status) or "withheld"
+    normalized_report_basis_status = maybe_text(report_basis_status) or "withheld"
     normalized_readiness_status = maybe_text(readiness_status)
     normalized_supervisor_status = normalize_supervisor_status(supervisor_status)
-    if normalized_promotion_status != "promoted":
-        blockers.append("promotion-withheld")
+    if normalized_report_basis_status != "frozen":
+        blockers.append("report-basis-withheld")
     if not normalized_readiness_status:
         blockers.append("readiness-missing")
     elif normalized_readiness_status != "ready":
@@ -84,7 +84,7 @@ def reporting_blockers(
 
 def reporting_gate_state(
     *,
-    promotion_status: Any,
+    report_basis_status: Any,
     readiness_status: Any,
     supervisor_status: Any,
     require_supervisor: bool = False,
@@ -95,7 +95,7 @@ def reporting_gate_state(
     explicit_ready = maybe_bool(reporting_ready)
     normalized_handoff_status = normalize_reporting_handoff_status(handoff_status)
     blockers = reporting_blockers(
-        promotion_status=promotion_status,
+        report_basis_status=report_basis_status,
         readiness_status=readiness_status,
         supervisor_status=supervisor_status,
         require_supervisor=require_supervisor,
@@ -112,7 +112,7 @@ def reporting_gate_state(
         "reporting_ready": ready,
         "reporting_blockers": blockers,
         "handoff_status": status,
-        "promotion_status": maybe_text(promotion_status) or "withheld",
+        "report_basis_status": maybe_text(report_basis_status) or "withheld",
         "readiness_status": maybe_text(readiness_status) or "blocked",
         "supervisor_status": normalize_supervisor_status(supervisor_status)
         or ("unavailable" if require_supervisor else ""),

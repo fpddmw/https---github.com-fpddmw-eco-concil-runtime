@@ -31,7 +31,7 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_council_decision_wrapper,
     load_expert_report_wrapper,
-    load_promotion_basis_wrapper,
+    load_report_basis_freeze_wrapper,
     load_reporting_handoff_wrapper,
     load_supervisor_state_wrapper,
 )
@@ -327,7 +327,7 @@ def decision_maker_report(
         "policy_recommendations": policy_recommendations,
         "guardrails": [
             "Report conclusions must cite DB canonical evidence basis, finding, evidence bundle, proposal, or report section draft objects.",
-            "Heuristic helper cues remain appendix/audit material unless explicitly cited through report basis.",
+            "Heuristic helper cues remain appendix/audit material unless explicitly cited through report_basis.",
         ],
     }
 
@@ -340,7 +340,7 @@ def materialize_final_publication_skill(
     decision_path: str,
     sociologist_report_path: str,
     environmentalist_report_path: str,
-    promotion_path: str,
+    report_basis_path: str,
     supervisor_state_path: str,
     output_path: str,
     allow_overwrite: bool,
@@ -348,7 +348,7 @@ def materialize_final_publication_skill(
     run_dir_path = resolve_run_dir(run_dir)
     handoff_file = resolve_path(run_dir_path, reporting_handoff_path, f"reporting/reporting_handoff_{round_id}.json")
     decision_file = resolve_path(run_dir_path, decision_path, f"reporting/council_decision_{round_id}.json")
-    promotion_file = resolve_path(run_dir_path, promotion_path, f"promotion/promoted_evidence_basis_{round_id}.json")
+    report_basis_file = resolve_path(run_dir_path, report_basis_path, f"report_basis/frozen_report_basis_{round_id}.json")
     supervisor_file = resolve_path(run_dir_path, supervisor_state_path, f"runtime/supervisor_state_{round_id}.json")
     report_files = {
         "sociologist": resolve_path(run_dir_path, sociologist_report_path, f"reporting/expert_report_sociologist_{round_id}.json"),
@@ -436,44 +436,44 @@ def materialize_final_publication_skill(
         }
     decision = decision_payload
 
-    promotion_context = load_promotion_basis_wrapper(
+    report_basis_context = load_report_basis_freeze_wrapper(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
-        promotion_path=promotion_path,
+        report_basis_path=report_basis_path,
     )
-    promotion_payload = (
-        promotion_context.get("payload")
-        if isinstance(promotion_context.get("payload"), dict)
+    report_basis_payload = (
+        report_basis_context.get("payload")
+        if isinstance(report_basis_context.get("payload"), dict)
         else None
     )
-    if not isinstance(promotion_payload, dict):
+    if not isinstance(report_basis_payload, dict):
         missing_message = (
-            "No promotion basis DB record was found for "
-            f"{promotion_file}; artifact exists but is orphaned from the deliberation plane."
-            if bool(promotion_context.get("artifact_present"))
+            "No report-basis DB record was found for "
+            f"{report_basis_file}; artifact exists but is orphaned from the deliberation plane."
+            if bool(report_basis_context.get("artifact_present"))
             else (
-                "No promotion basis artifact or DB record was found at "
-                f"{promotion_file}."
+                "No report-basis artifact or DB record was found at "
+                f"{report_basis_file}."
             )
         )
         warnings.append(
             {
-                "code": "missing-promotion-basis",
+                "code": "missing-report-basis-freeze",
                 "message": missing_message,
             }
         )
         return {
             "status": "blocked",
             "summary": {"skill": SKILL_NAME, "run_id": run_id, "round_id": round_id, "operation": "blocked", "output_path": str(output_file)},
-            "receipt_id": "publication-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, "missing-promotion")[:20],
-            "batch_id": "publicationbatch-" + stable_hash(SKILL_NAME, run_id, round_id, "missing-promotion")[:16],
+            "receipt_id": "publication-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, "missing-report-basis")[:20],
+            "batch_id": "publicationbatch-" + stable_hash(SKILL_NAME, run_id, round_id, "missing-report-basis")[:16],
             "artifact_refs": [],
             "canonical_ids": [],
             "warnings": warnings,
-            "board_handoff": {"candidate_ids": [], "evidence_refs": [], "gap_hints": [warnings[0]["message"]], "challenge_hints": [], "suggested_next_skills": ["promote-evidence-basis"]},
+            "board_handoff": {"candidate_ids": [], "evidence_refs": [], "gap_hints": [warnings[0]["message"]], "challenge_hints": [], "suggested_next_skills": ["freeze-report-basis"]},
         }
-    promotion_basis = promotion_payload
+    report_basis_freeze = report_basis_payload
 
     supervisor_context = load_supervisor_state_wrapper(
         run_dir_path,
@@ -611,10 +611,14 @@ def materialize_final_publication_skill(
             "reporting_handoff_present": bool(handoff_context.get("payload_present")),
             "decision_artifact_present": bool(decision_context.get("artifact_present")),
             "decision_present": bool(decision_context.get("payload_present")),
-            "promotion_artifact_present": bool(
-                promotion_context.get("artifact_present")
+            "report_basis_artifact_present": bool(
+                report_basis_context.get("artifact_present")
             ),
-            "promotion_present": bool(promotion_context.get("payload_present")),
+            "report_basis_present": bool(report_basis_context.get("payload_present")),
+            "report_basis_artifact_present": bool(
+                report_basis_context.get("artifact_present")
+            ),
+            "report_basis_present": bool(report_basis_context.get("payload_present")),
             "supervisor_state_artifact_present": bool(
                 supervisor_context.get("artifact_present")
             ),
@@ -639,8 +643,10 @@ def materialize_final_publication_skill(
             or "missing-reporting-handoff",
             "decision_source": maybe_text(decision_context.get("source"))
             or "missing-canonical-decision",
-            "promotion_source": maybe_text(promotion_context.get("source"))
-            or "missing-promotion",
+            "report_basis_source": maybe_text(report_basis_context.get("source"))
+            or "missing-report-basis",
+            "report_basis_source": maybe_text(report_basis_context.get("source"))
+            or "missing-report-basis",
             "supervisor_state_source": maybe_text(supervisor_context.get("source"))
             or "missing-supervisor-state",
             "sociologist_report_source": maybe_text(
@@ -659,7 +665,7 @@ def materialize_final_publication_skill(
     )
     if not selected_evidence_refs:
         selected_evidence_refs = unique_texts(
-            decision.get("selected_evidence_refs", []) if isinstance(decision.get("selected_evidence_refs"), list) else promotion_basis.get("selected_evidence_refs", []) if isinstance(promotion_basis.get("selected_evidence_refs"), list) else []
+            decision.get("selected_evidence_refs", []) if isinstance(decision.get("selected_evidence_refs"), list) else report_basis_freeze.get("selected_evidence_refs", []) if isinstance(report_basis_freeze.get("selected_evidence_refs"), list) else []
         )
     selected_evidence_refs = unique_texts(
         selected_evidence_refs
@@ -746,7 +752,8 @@ def materialize_final_publication_skill(
             "audit_refs": {
                 "reporting_handoff_path": str(handoff_file),
                 "decision_path": str(decision_file),
-                "promotion_path": str(promotion_file),
+                "report_basis_path": str(report_basis_file),
+                "report_basis_path": str(report_basis_file),
                 "supervisor_state_path": str(supervisor_file),
                 "decision_trace_ids": unique_texts(
                     [trace.get("trace_id") for trace in decision_traces]
@@ -816,7 +823,7 @@ def materialize_final_publication_skill(
                 contract_fields.get("reporting_handoff_source")
             ),
             "decision_source": maybe_text(contract_fields.get("decision_source")),
-            "promotion_source": maybe_text(contract_fields.get("promotion_source")),
+            "report_basis_source": maybe_text(contract_fields.get("report_basis_source")),
             "supervisor_state_source": maybe_text(
                 contract_fields.get("supervisor_state_source")
             ),
@@ -854,7 +861,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--decision-path", default="")
     parser.add_argument("--sociologist-report-path", default="")
     parser.add_argument("--environmentalist-report-path", default="")
-    parser.add_argument("--promotion-path", default="")
+    parser.add_argument("--report-basis-path", default="")
     parser.add_argument("--supervisor-state-path", default="")
     parser.add_argument("--output-path", default="")
     parser.add_argument("--allow-overwrite", action="store_true")
@@ -872,7 +879,7 @@ def main() -> int:
         decision_path=args.decision_path,
         sociologist_report_path=args.sociologist_report_path,
         environmentalist_report_path=args.environmentalist_report_path,
-        promotion_path=args.promotion_path,
+        report_basis_path=args.report_basis_path,
         supervisor_state_path=args.supervisor_state_path,
         output_path=args.output_path,
         allow_overwrite=args.allow_overwrite,

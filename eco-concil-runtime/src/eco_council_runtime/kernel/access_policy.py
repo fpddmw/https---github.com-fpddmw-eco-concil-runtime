@@ -91,7 +91,7 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },
-    "apply-promotion-gate": {
+    "apply-report-basis-gate": {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },

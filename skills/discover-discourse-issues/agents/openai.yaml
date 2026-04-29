@@ -1,4 +1,4 @@
 interface:
   display_name: "Discover Discourse Issues"
-  short_description: "WP4 DB-backed discourse issue hints"
+  short_description: "Optional-analysis DB-backed discourse issue hints"
   default_prompt: "Use $discover-discourse-issues only after approval. Emit reversible public/formal issue hints with evidence refs; do not write claim candidates, report text, or phase decisions."

@@ -176,7 +176,7 @@ def load_open_probes(run_dir: Path, *, run_id: str, round_id: str) -> list[dict[
 
 def readiness_bucket(opinion: dict[str, Any]) -> str:
     readiness_value = maybe_text(opinion.get("readiness_status"))
-    if bool(opinion.get("sufficient_for_promotion")) or readiness_value in {"ready", "ready-for-promotion", "promote"}:
+    if bool(opinion.get("sufficient_for_report_basis")) or readiness_value in {"ready", "ready-for-report-basis", "freeze-report-basis"}:
         return "ready"
     if readiness_value in {"blocked", "reject", "rejected"}:
         return "blocked"
@@ -244,18 +244,18 @@ def gate_step_entry(
     *,
     required_previous_stages: list[str],
     readiness_stage_name: str,
-) -> dict[str, Any]:
+    ) -> dict[str, Any]:
     return {
-        "stage_name": "promotion-gate",
+        "stage_name": "report-basis-gate",
         "stage_kind": "gate",
         "phase_group": "gate",
         "required_previous_stages": required_previous_stages,
         "blocking": True,
         "resume_policy": "skip-if-completed",
-        "operator_summary": "Evaluate whether the current round can move into promotion and reporting.",
+        "operator_summary": "Evaluate whether the current DB-backed round basis can be frozen for reporting handoff.",
         "reason": reason,
         "expected_output_path": str(expected_output_path),
-        "gate_handler": "promotion-gate",
+        "gate_handler": "report-basis-gate",
         "readiness_stage_name": readiness_stage_name,
     }
 
@@ -287,14 +287,14 @@ def stop_conditions(include_probe: bool) -> list[dict[str, str]]:
             "effect": "Abort controller execution and surface the failing stage to runtime callers.",
         },
         {
-            "condition_id": "gate-allows-promotion",
-            "trigger": "Promotion gate returns allow-promote after round-readiness.",
-            "effect": "Run promote-evidence-basis only after moderator request plus operator approval, then hand off the round to downstream reporting.",
+            "condition_id": "gate-allows-report-basis-freeze",
+            "trigger": "Report-basis gate allows basis freeze after round-readiness.",
+            "effect": "Run freeze-report-basis only after moderator request plus operator approval, then hand off the round to downstream reporting.",
         },
         {
-            "condition_id": "gate-withholds-promotion",
-            "trigger": "Promotion gate returns freeze-withheld after round-readiness.",
-            "effect": "Run promote-evidence-basis only after moderator request plus operator approval, keep the basis auditable, and leave investigation open when withheld.",
+            "condition_id": "gate-withholds-report-basis-freeze",
+            "trigger": "Report-basis gate withholds basis freeze after round-readiness.",
+            "effect": "Run freeze-report-basis only after moderator request plus operator approval, keep the basis auditable, and leave investigation open when withheld.",
         },
     ]
     if include_probe:
@@ -339,8 +339,8 @@ def direct_council_advisory_payload(
     board_brief_file = (run_dir_path / "board" / f"board_brief_{round_id}.md").resolve()
     probes_file = (run_dir_path / "investigation" / f"falsification_probes_{round_id}.json").resolve()
     readiness_file = (run_dir_path / "reporting" / f"round_readiness_{round_id}.json").resolve()
-    promotion_gate_file = (run_dir_path / "runtime" / f"promotion_gate_{round_id}.json").resolve()
-    promotion_basis_file = (run_dir_path / "promotion" / f"promoted_evidence_basis_{round_id}.json").resolve()
+    report_basis_gate_file = (run_dir_path / "runtime" / f"report_basis_gate_{round_id}.json").resolve()
+    report_basis_freeze_file = (run_dir_path / "report_basis" / f"frozen_report_basis_{round_id}.json").resolve()
 
     round_snapshot = load_round_snapshot(
         run_dir_path,
@@ -379,7 +379,7 @@ def direct_council_advisory_payload(
         probe_reason_codes.append("open-probes")
     if probe_candidate_actions:
         probe_reason_codes.append("probe-candidate-actions")
-    posture = "promote-candidate" if readiness_status == "ready" else "hold-investigation-open"
+    posture = "report-basis-candidate" if readiness_status == "ready" else "hold-investigation-open"
     if readiness_status:
         posture_reason_codes = [f"council-readiness-{readiness_status}"]
     else:
@@ -421,8 +421,8 @@ def direct_council_advisory_payload(
     )
     gate_steps = [
         gate_step_entry(
-            "Evaluate whether the direct-council queue leaves the round promotable or still frozen after readiness review.",
-            promotion_gate_file,
+            "Evaluate whether the direct-council queue leaves the report_basis freezable or still withheld after readiness review.",
+            report_basis_gate_file,
             required_previous_stages=["round-readiness"],
             readiness_stage_name="round-readiness",
         )
@@ -444,14 +444,14 @@ def direct_council_advisory_payload(
     ]
     post_gate_steps = [
         step_entry(
-            "promotion-basis",
-            "promote-evidence-basis",
-            "Freeze a promoted or withheld evidence basis after gate evaluation so controller output always stays auditable.",
+            "report-basis-freeze",
+            "freeze-report-basis",
+            "Freeze a frozen or withheld evidence basis after gate evaluation so controller output always stays auditable.",
             "moderator",
-            promotion_basis_file,
-            required_previous_stages=["promotion-gate"],
-            phase_group="promotion",
-            operator_summary="Freeze the promoted or withheld evidence basis after gate evaluation.",
+            report_basis_freeze_file,
+            required_previous_stages=["report-basis-gate"],
+            phase_group="report-basis",
+            operator_summary="Freeze the approved or withheld report_basis after gate evaluation.",
         )
     ]
     fallback_path = (
@@ -462,7 +462,7 @@ def direct_council_advisory_payload(
                 "suggested_next_skills": ["materialize-reporting-handoff", "draft-council-decision"],
             }
         ]
-        if posture == "promote-candidate"
+        if posture == "report-basis-candidate"
         else [
             {
                 "when": "Gate freezes the round after readiness review.",
@@ -514,7 +514,7 @@ def direct_council_advisory_payload(
                 "open_probe_count": len(open_probes),
                 "probe_candidate_actions": len(probe_candidate_actions),
                 "pending_blocking_actions": len(blocking_proposal_actions),
-                "pending_non_promotion_actions": len(blocking_proposal_actions),
+                "pending_non_report_basis_actions": len(blocking_proposal_actions),
                 "board_open_challenges": int(snapshot.get("counts", {}).get("challenge_open") or 0)
                 if isinstance(snapshot.get("counts"), dict)
                 else 0,
@@ -623,7 +623,7 @@ def direct_council_advisory_payload(
         "board_handoff": {
             "candidate_ids": [plan_id, *list_items(readiness_summary.get("basis_object_ids"))],
             "evidence_refs": artifact_refs,
-            "gap_hints": [] if posture == "promote-candidate" else ["Current council state still points to investigation hold rather than clean promotion."],
+            "gap_hints": [] if posture == "report-basis-candidate" else ["Current council state still points to investigation hold rather than clean report_basis."],
             "challenge_hints": [f"{len(open_probes)} open probes remain visible to the direct advisory compiler."] if open_probes else [],
             "suggested_next_skills": unique_texts(
                 [step["skill_name"] for step in execution_queue]

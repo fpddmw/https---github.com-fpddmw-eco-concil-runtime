@@ -20,7 +20,7 @@ description: Query compact public-signal rows from the unified signal plane data
 - Read only.
 - Reads from `normalized_signals` in `runs/<run_id>/analytics/signal_plane.sqlite` with `plane = public`.
 - Does not write to the database.
-- Does not derive claims, routes, coverage scores, readiness, or promotion posture.
+- Does not derive claims, routes, coverage scores, readiness, or report basis posture.
 
 ## Required Input
 - `run_dir`

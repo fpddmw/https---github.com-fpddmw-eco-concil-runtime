@@ -137,10 +137,10 @@ def load_council_readiness_opinions(
 
 def readiness_bucket(opinion: dict[str, Any]) -> str:
     readiness_value = maybe_text(opinion.get("readiness_status"))
-    if bool(opinion.get("sufficient_for_promotion")) or readiness_value in {
+    if bool(opinion.get("sufficient_for_report_basis")) or readiness_value in {
         "ready",
-        "ready-for-promotion",
-        "promote",
+        "ready-for-report-basis",
+        "freeze-report-basis",
     }:
         return "ready"
     if readiness_value in {"blocked", "reject", "rejected"}:
@@ -165,12 +165,12 @@ def aggregate_council_readiness_opinions(
     if ready_opinions and not blocked_opinions and not needs_more_data_opinions:
         readiness_value = "ready"
         lead_reason = (
-            f"Council submitted {len(ready_opinions)} readiness opinions and all support promotion."
+            f"Council submitted {len(ready_opinions)} readiness opinions and all support report-basis freeze."
         )
     elif blocked_opinions and not ready_opinions:
         readiness_value = "blocked"
         lead_reason = (
-            f"Council submitted {len(opinions)} readiness opinions and none support promotion."
+            f"Council submitted {len(opinions)} readiness opinions and none support report-basis freeze."
         )
     else:
         readiness_value = "needs-more-data"
@@ -266,15 +266,15 @@ def readiness_status(
     elif observation_lane_issue_count > 0 and moderate_coverages > 0:
         reasons.append("Explicit observation-lane issues are covered at least moderately and no remaining structural blockers are visible.")
     elif observation_lane_issue_count > 0:
-        reasons.append("Explicit observation-lane issues no longer carry unresolved verification blockers and the current controversy basis is coherent enough for promotion review.")
+        reasons.append("Explicit observation-lane issues no longer carry unresolved verification blockers and the current controversy basis is coherent enough for report-basis review.")
     elif empirical_issue_count == 0 and (
         formal_record_issue_count > 0
         or public_discourse_issue_count > 0
         or stakeholder_deliberation_issue_count > 0
     ):
-        reasons.append("No route-gated empirical blockers remain and the current formal/public/discourse issue structure is coherent enough for promotion review.")
+        reasons.append("No route-gated empirical blockers remain and the current formal/public/discourse issue structure is coherent enough for report-basis review.")
     else:
-        reasons.append("No route-gated empirical blockers remain and the current issue / route / linkage structure is coherent enough for promotion review.")
+        reasons.append("No route-gated empirical blockers remain and the current issue / route / linkage structure is coherent enough for report-basis review.")
     return "ready", reasons
 
 
@@ -578,7 +578,7 @@ def summarize_round_readiness_skill(
         findings.append({"finding_id": "readiness-brief", "title": "Board brief context", "summary": brief_excerpt, "confidence": "low"})
 
     if status_value == "ready":
-        recommended_next_skills = ["promote-evidence-basis"]
+        recommended_next_skills = ["freeze-report-basis"]
     elif (
         council_opinions
         and normalized_council_execution_mode
@@ -644,7 +644,7 @@ def summarize_round_readiness_skill(
         or "missing-probes",
         "decision_source": decision_source,
         "readiness_status": status_value,
-        "sufficient_for_promotion": status_value == "ready",
+        "sufficient_for_report_basis": status_value == "ready",
         "evidence_refs": readiness_evidence_refs,
         "lineage": readiness_lineage,
         "provenance": {

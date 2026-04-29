@@ -22,7 +22,7 @@ from ..phase2_fallback_agenda import (  # noqa: F401
     controversy_context_counts,
     default_fallback_agenda_profile,
     fallback_agenda_source,
-    prepare_promotion_action,
+    prepare_report_basis_action,
     role_from_coverage,
     score_action,
 )
@@ -73,7 +73,7 @@ from .phase2_state_surfaces import (  # noqa: F401
     load_final_publication_wrapper,
     load_next_actions_wrapper,
     load_orchestration_plan_wrapper,
-    load_promotion_basis_wrapper,
+    load_report_basis_freeze_wrapper,
     load_reporting_handoff_wrapper,
     load_round_readiness_wrapper,
     load_supervisor_state_wrapper,

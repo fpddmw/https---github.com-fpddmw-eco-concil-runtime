@@ -1,6 +1,6 @@
 ---
 name: suggest-evidence-lanes
-description: WP4 optional helper for advisory evidence-lane tags. It does not route workflow, assign owners, or advance phases.
+description: Optional-analysis helper for advisory evidence-lane tags. It does not route workflow, assign owners, or advance phases.
 ---
 
 # Suggest Evidence Lanes

@@ -11,7 +11,7 @@ from .phase2_state_surfaces import (
     build_reporting_surface,
     load_council_decision_wrapper,
     load_final_publication_wrapper,
-    load_promotion_basis_wrapper,
+    load_report_basis_freeze_wrapper,
     load_reporting_handoff_wrapper,
     load_supervisor_state_wrapper,
 )
@@ -62,7 +62,7 @@ def round_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
         "signal_query_path": str((run_dir / "archive" / f"signal_corpus_query_{round_id}.json").resolve()),
         "history_retrieval_path": str((run_dir / "investigation" / f"history_retrieval_{round_id}.json").resolve()),
         "history_context_path": str((run_dir / "investigation" / f"history_context_{round_id}.md").resolve()),
-        "promotion_basis_path": str((run_dir / "promotion" / f"promoted_evidence_basis_{round_id}.json").resolve()),
+        "report_basis_freeze_path": str((run_dir / "report_basis" / f"frozen_report_basis_{round_id}.json").resolve()),
         "reporting_handoff_path": str((run_dir / "reporting" / f"reporting_handoff_{round_id}.json").resolve()),
         "council_decision_draft_path": str((run_dir / "reporting" / f"council_decision_draft_{round_id}.json").resolve()),
         "council_decision_path": str((run_dir / "reporting" / f"council_decision_{round_id}.json").resolve()),
@@ -157,15 +157,15 @@ def round_terminal_state(
         if isinstance(supervisor_context.get("payload"), dict)
         else {}
     )
-    promotion_context = load_promotion_basis_wrapper(
+    report_basis_context = load_report_basis_freeze_wrapper(
         run_dir,
         run_id=run_id,
         round_id=round_id,
-        promotion_path=artifacts["promotion_basis_path"],
+        report_basis_path=artifacts["report_basis_freeze_path"],
     )
-    promotion = (
-        promotion_context.get("payload")
-        if isinstance(promotion_context.get("payload"), dict)
+    report_basis = (
+        report_basis_context.get("payload")
+        if isinstance(report_basis_context.get("payload"), dict)
         else {}
     )
     handoff_context = load_reporting_handoff_wrapper(
@@ -226,11 +226,11 @@ def round_terminal_state(
         else {},
         final_publication_payload=final_publication,
     )
-    promotion_status = (
-        maybe_text(final_publication.get("promotion_status"))
-        or maybe_text(reporting_surface.get("promotion_status"))
-        or maybe_text(promotion.get("promotion_status"))
-        or maybe_text(supervisor.get("promotion_status"))
+    report_basis_status = (
+        maybe_text(final_publication.get("report_basis_status"))
+        or maybe_text(reporting_surface.get("report_basis_status"))
+        or maybe_text(report_basis.get("report_basis_status"))
+        or maybe_text(supervisor.get("report_basis_status"))
     )
     readiness_status = (
         maybe_text(reporting_surface.get("readiness_status"))
@@ -259,14 +259,14 @@ def round_terminal_state(
     return {
         "controller": controller,
         "supervisor": supervisor,
-        "promotion": promotion,
+        "report_basis": report_basis,
         "handoff": handoff,
         "decision": decision,
         "final_publication": final_publication,
         "controller_status": controller_status or "missing",
         "supervisor_status": supervisor_status or "missing",
         "readiness_status": readiness_status or "unknown",
-        "promotion_status": promotion_status or "unknown",
+        "report_basis_status": report_basis_status or "unknown",
         "reporting_ready": bool(reporting_surface.get("reporting_ready")),
         "reporting_blockers": (
             reporting_surface.get("reporting_blockers", [])
@@ -439,7 +439,7 @@ def round_close_event(
         "archive_status": payload.get("archive_status"),
         "close_posture": payload.get("close_posture"),
         "publication_status": payload.get("publication_status"),
-        "promotion_status": payload.get("promotion_status"),
+        "report_basis_status": payload.get("report_basis_status"),
         "reporting_ready": payload.get("reporting_ready"),
         "reporting_handoff_status": payload.get("reporting_handoff_status"),
         "reporting_blockers": payload.get("reporting_blockers", []),
@@ -589,7 +589,7 @@ def close_round_with_contract_mode(
         "controller_status": terminal_state["controller_status"],
         "supervisor_status": terminal_state["supervisor_status"],
         "readiness_status": terminal_state["readiness_status"],
-        "promotion_status": terminal_state["promotion_status"],
+        "report_basis_status": terminal_state["report_basis_status"],
         "reporting_ready": terminal_state["reporting_ready"],
         "reporting_blockers": terminal_state["reporting_blockers"],
         "reporting_handoff_status": terminal_state["reporting_handoff_status"],

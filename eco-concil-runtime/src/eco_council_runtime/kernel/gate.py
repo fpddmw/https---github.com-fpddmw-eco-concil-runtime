@@ -35,7 +35,13 @@ def gate_controller_updates(gate_payload: dict[str, Any]) -> dict[str, Any]:
         return dict(embedded_updates)
     return {
         "readiness_status": maybe_text(gate_payload.get("readiness_status")) or "blocked",
-        "gate_status": maybe_text(gate_payload.get("gate_status")) or "freeze-withheld",
+        "gate_status": maybe_text(gate_payload.get("gate_status")) or "report-basis-freeze-withheld",
+        "report_basis_gate_status": maybe_text(gate_payload.get("report_basis_gate_status")),
+        "report_basis_status": maybe_text(gate_payload.get("report_basis_status")),
+        "report_basis_freeze_allowed": bool(
+            gate_payload.get("report_basis_freeze_allowed")
+        )
+        or bool(gate_payload.get("report_basis_freeze_allowed")),
         "gate_reasons": gate_payload.get("gate_reasons", []) if isinstance(gate_payload.get("gate_reasons"), list) else [],
         "recommended_next_skills": (
             gate_payload.get("recommended_next_skills", [])
@@ -66,7 +72,7 @@ def execute_gate_step(
     stage_contracts: dict[str, Any] | None = None,
     gate_handlers: dict[str, GateHandler] | None = None,
 ) -> dict[str, Any]:
-    gate_handler = maybe_text(blueprint.get("gate_handler")) or maybe_text(blueprint.get("stage")) or "promotion-gate"
+    gate_handler = maybe_text(blueprint.get("gate_handler")) or maybe_text(blueprint.get("stage")) or "report-basis-gate"
     readiness_stage_name = resolve_readiness_stage_name(blueprint)
     contracts = stage_contracts if isinstance(stage_contracts, dict) else {}
     readiness_path_override = (

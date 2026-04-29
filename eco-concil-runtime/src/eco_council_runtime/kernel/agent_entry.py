@@ -404,7 +404,7 @@ def agent_entry_operator_view(
         "approve_skill_approval_command_template": maybe_text(entry_commands.get("approve_skill_approval_command_template")),
         "reject_skill_approval_command_template": maybe_text(entry_commands.get("reject_skill_approval_command_template")),
         "run_approved_optional_analysis_command_template": maybe_text(entry_commands.get("run_approved_optional_analysis_command_template")),
-        "request_promotion_transition_command": maybe_text(entry_commands.get("request_promotion_transition_command")),
+        "request_report_basis_transition_command": maybe_text(entry_commands.get("request_report_basis_transition_command")),
         "approve_transition_request_command_template": maybe_text(entry_commands.get("approve_transition_request_command_template")),
         "reject_transition_request_command_template": maybe_text(entry_commands.get("reject_transition_request_command_template")),
         "submit_council_proposal_command_template": maybe_text(entry_commands.get("submit_council_proposal_command_template")),

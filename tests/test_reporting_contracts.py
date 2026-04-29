@@ -21,7 +21,7 @@ class ReportingContractTests(unittest.TestCase):
             {
                 "readiness_artifact_present": True,
                 "readiness_present": False,
-                "promotion_present": True,
+                "report_basis_present": True,
                 "expert_report_draft_present": True,
                 "custom_flag": "kept",
             }
@@ -29,8 +29,8 @@ class ReportingContractTests(unittest.TestCase):
 
         self.assertTrue(normalized["readiness_artifact_present"])
         self.assertFalse(normalized["readiness_present"])
-        self.assertTrue(normalized["promotion_artifact_present"])
-        self.assertTrue(normalized["promotion_present"])
+        self.assertTrue(normalized["report_basis_artifact_present"])
+        self.assertTrue(normalized["report_basis_present"])
         self.assertTrue(normalized["expert_report_draft_artifact_present"])
         self.assertTrue(normalized["expert_report_draft_present"])
         self.assertEqual("kept", normalized["custom_flag"])
@@ -40,9 +40,9 @@ class ReportingContractTests(unittest.TestCase):
     def test_contract_fields_from_payload_merges_fallback_contract_and_overrides(self) -> None:
         fields = reporting_contract_fields_from_payload(
             {
-                "promotion_source": "promotion-artifact",
+                "report_basis_source": "report-basis-artifact",
                 "observed_inputs": {
-                    "promotion_present": True,
+                    "report_basis_present": True,
                 },
             },
             fallback_payload={
@@ -71,14 +71,14 @@ class ReportingContractTests(unittest.TestCase):
         self.assertEqual("/tmp/signal_plane.sqlite", fields["db_path"])
         self.assertEqual("completed", fields["deliberation_sync"]["status"])
         self.assertEqual("completed", fields["analysis_sync"]["status"])
-        self.assertEqual("promotion-artifact", fields["promotion_source"])
+        self.assertEqual("report-basis-artifact", fields["report_basis_source"])
         self.assertEqual("round-readiness-artifact", fields["readiness_source"])
         self.assertEqual(
             "reporting-handoff-artifact",
             fields["reporting_handoff_source"],
         )
-        self.assertTrue(fields["observed_inputs"]["promotion_artifact_present"])
-        self.assertTrue(fields["observed_inputs"]["promotion_present"])
+        self.assertTrue(fields["observed_inputs"]["report_basis_artifact_present"])
+        self.assertTrue(fields["observed_inputs"]["report_basis_present"])
         self.assertTrue(fields["observed_inputs"]["coverage_present"])
         self.assertTrue(fields["observed_inputs"]["readiness_artifact_present"])
         self.assertTrue(fields["observed_inputs"]["readiness_present"])

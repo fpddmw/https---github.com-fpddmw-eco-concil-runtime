@@ -188,7 +188,7 @@ def filtered_actions(role: str, recommendations: list[dict[str, Any]], report_st
         return [
             {
                 "assigned_role": role,
-                "objective": f"Finalize the {role} report around the promoted evidence basis.",
+                "objective": f"Finalize the {role} report around the frozen evidence basis.",
                 "reason": "The round is ready for publication and this role can now consolidate its narrative.",
             }
         ]
@@ -313,7 +313,8 @@ def draft_expert_report_skill(
             "handoff_status": "investigation-open",
             "reporting_ready": False,
             "reporting_blockers": ["reporting-handoff-missing"],
-            "promotion_status": "withheld",
+            "report_basis_status": "withheld",
+            "report_basis_status": "withheld",
             "key_findings": [],
             "open_risks": [],
             "recommended_next_actions": [],
@@ -363,8 +364,10 @@ def draft_expert_report_skill(
     )
 
     gate_state = reporting_gate_state(
-        promotion_status=maybe_text(handoff.get("promotion_status"))
-        or maybe_text(decision.get("promotion_status"))
+        report_basis_status=maybe_text(handoff.get("report_basis_status"))
+        or maybe_text(handoff.get("report_basis_status"))
+        or maybe_text(decision.get("report_basis_status"))
+        or maybe_text(decision.get("report_basis_status"))
         or "withheld",
         readiness_status=maybe_text(handoff.get("readiness_status")) or "blocked",
         supervisor_status=maybe_text(handoff.get("supervisor_status")) or "unavailable",
@@ -378,6 +381,7 @@ def draft_expert_report_skill(
         handoff_status=maybe_text(handoff.get("handoff_status")),
     )
     handoff_status = maybe_text(gate_state.get("handoff_status")) or "investigation-open"
+    report_basis_status = maybe_text(gate_state.get("report_basis_status")) or "withheld"
     reporting_ready = bool(gate_state.get("reporting_ready"))
     reporting_blockers = unique_texts(
         gate_state.get("reporting_blockers", [])
@@ -415,6 +419,7 @@ def draft_expert_report_skill(
         "agent_role": role,
         "status": report_status,
         "handoff_status": handoff_status,
+        "report_basis_status": report_basis_status,
         "reporting_ready": reporting_ready,
         "reporting_blockers": reporting_blockers,
         "publication_readiness": publication_readiness,

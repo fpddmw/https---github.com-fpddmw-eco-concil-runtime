@@ -341,7 +341,7 @@ FORMAL_PUBLIC_TAXONOMY_VERSION = "formal-public-taxonomy-freeze-2026-04-29"
 FORMAL_PUBLIC_TAXONOMY_AUDIT_STATUS = "default-frozen; approval-required; audit-pending"
 FORMAL_PUBLIC_TAXONOMY_APPROVAL_REF = "required:approved_taxonomy_record"
 FORMAL_PUBLIC_TAXONOMY_AUDIT_REF = (
-    "docs/openclaw-wp4-skills-refactor-workplan.md#8"
+    "docs/openclaw-optional-analysis-skills-refactor-workplan.md#8"
 )
 
 FORMAL_PUBLIC_TAXONOMY_FAMILY_RECORDS: tuple[dict[str, Any], ...] = (

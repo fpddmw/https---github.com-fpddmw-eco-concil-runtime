@@ -1,4 +1,4 @@
 interface:
   display_name: "Materialize Research Issue Surface"
-  short_description: "WP4 candidate research issue surfaces"
+  short_description: "Optional-analysis candidate research issue surfaces"
   default_prompt: "Use $materialize-research-issue-surface only after approval. Produce candidate issue surfaces with evidence refs; do not produce controversy conclusions or report prose."

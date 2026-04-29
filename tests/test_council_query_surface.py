@@ -21,7 +21,7 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     connect_db,
     store_falsification_probe_records,
     store_moderator_action_records,
-    store_promotion_basis_record,
+    store_report_basis_freeze_record,
     store_round_readiness_assessment,
 )
 
@@ -170,7 +170,7 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
             "run_id": RUN_ID,
             "round_id": ROUND_ID,
             "readiness_status": "needs-more-data",
-            "sufficient_for_promotion": False,
+            "sufficient_for_report_basis": False,
             "decision_source": "policy-fallback",
             "provenance": {"source": "unit-test"},
             "evidence_refs": [],
@@ -180,12 +180,12 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
             "controversy_gap_counts": {"representation-gap": 1},
         },
     )
-    store_promotion_basis_record(
+    store_report_basis_freeze_record(
         run_dir,
-        promotion_payload={
+        report_basis_payload={
             "run_id": RUN_ID,
             "round_id": ROUND_ID,
-            "promotion_status": "withheld",
+            "report_basis_status": "withheld",
             "readiness_status": "needs-more-data",
             "decision_source": "policy-fallback",
             "provenance": {"source": "unit-test"},
@@ -745,7 +745,7 @@ class CouncilQuerySurfaceTests(unittest.TestCase):
                 "--run-dir",
                 str(run_dir),
                 "--object-kind",
-                "promotion-basis",
+                "report-basis-freeze",
                 "--run-id",
                 RUN_ID,
                 "--round-id",
@@ -755,7 +755,7 @@ class CouncilQuerySurfaceTests(unittest.TestCase):
             self.assertEqual(1, basis_payload["summary"]["returned_object_count"])
             self.assertEqual(
                 "withheld",
-                basis_payload["objects"][0]["promotion_status"],
+                basis_payload["objects"][0]["report_basis_status"],
             )
             self.assertEqual(1, len(basis_payload["objects"][0]["basis_items"]))
 

@@ -26,7 +26,7 @@ from .kernel.skill_approvals import (
     OBJECT_KIND_SKILL_APPROVAL_REQUEST,
 )
 
-OBJECT_KIND_PROMOTION_FREEZE = "promotion-freeze"
+OBJECT_KIND_RUNTIME_CONTROL_FREEZE = "runtime-control-freeze"
 OBJECT_KIND_CONTROLLER_STATE = "controller-state"
 OBJECT_KIND_GATE_STATE = "gate-state"
 OBJECT_KIND_SUPERVISOR_STATE = "supervisor-state"
@@ -34,16 +34,16 @@ OBJECT_KIND_ORCHESTRATION_PLAN = "orchestration-plan"
 OBJECT_KIND_ORCHESTRATION_PLAN_STEP = "orchestration-plan-step"
 
 QUERY_CONFIGS: dict[str, dict[str, Any]] = {
-    OBJECT_KIND_PROMOTION_FREEZE: {
-        "table_name": "promotion_freezes",
+    OBJECT_KIND_RUNTIME_CONTROL_FREEZE: {
+        "table_name": "report_basis_freezes",
         "id_column": "freeze_id",
         "timestamp_column": "updated_at_utc",
         "order_by": "updated_at_utc DESC, freeze_id DESC",
-        "status_column": "promotion_status",
+        "status_column": "report_basis_status",
         "filter_columns": {
             "controller_status": "controller_status",
             "gate_status": "gate_status",
-            "promotion_status": "promotion_status",
+            "report_basis_status": "report_basis_status",
             "supervisor_status": "supervisor_status",
             "planning_mode": "planning_mode",
             "reporting_handoff_status": "reporting_handoff_status",
@@ -59,7 +59,7 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
         "filter_columns": {
             "controller_status": "controller_status",
             "gate_status": "gate_status",
-            "promotion_status": "promotion_status",
+            "report_basis_status": "report_basis_status",
             "planning_mode": "planning_mode",
             "current_stage": "current_stage",
             "failed_stage": "failed_stage",
@@ -90,7 +90,7 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
             "supervisor_status": "supervisor_status",
             "controller_status": "controller_status",
             "gate_status": "gate_status",
-            "promotion_status": "promotion_status",
+            "report_basis_status": "report_basis_status",
             "planning_mode": "planning_mode",
             "supervisor_substatus": "supervisor_substatus",
             "phase2_posture": "phase2_posture",
@@ -303,7 +303,7 @@ def query_control_objects(
     status: str = "",
     controller_status: str = "",
     gate_status: str = "",
-    promotion_status: str = "",
+    report_basis_status: str = "",
     supervisor_status: str = "",
     planning_mode: str = "",
     controller_authority: str = "",
@@ -373,7 +373,7 @@ def query_control_objects(
     filter_values = {
         "controller_status": maybe_text(controller_status),
         "gate_status": maybe_text(gate_status),
-        "promotion_status": maybe_text(promotion_status),
+        "report_basis_status": maybe_text(report_basis_status),
         "supervisor_status": maybe_text(supervisor_status),
         "planning_mode": maybe_text(planning_mode),
         "controller_authority": maybe_text(controller_authority),
@@ -462,7 +462,7 @@ def query_control_objects(
             "status": status_text,
             "controller_status": maybe_text(controller_status),
             "gate_status": maybe_text(gate_status),
-            "promotion_status": maybe_text(promotion_status),
+            "report_basis_status": maybe_text(report_basis_status),
             "supervisor_status": maybe_text(supervisor_status),
             "planning_mode": maybe_text(planning_mode),
             "readiness_status": maybe_text(readiness_status),
@@ -503,7 +503,7 @@ def query_control_objects(
 __all__ = [
     "OBJECT_KIND_CONTROLLER_STATE",
     "OBJECT_KIND_GATE_STATE",
-    "OBJECT_KIND_PROMOTION_FREEZE",
+    "OBJECT_KIND_RUNTIME_CONTROL_FREEZE",
     "OBJECT_KIND_SUPERVISOR_STATE",
     "OBJECT_KIND_TRANSITION_APPROVAL",
     "OBJECT_KIND_TRANSITION_REJECTION",

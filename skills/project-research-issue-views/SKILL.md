@@ -1,6 +1,6 @@
 ---
 name: project-research-issue-views
-description: WP4 optional helper for typed actor, concern, citation, and stance cues from DB-backed issue surfaces.
+description: Optional-analysis helper for typed actor, concern, citation, and stance cues from DB-backed issue surfaces.
 ---
 
 # Project Research Issue Views

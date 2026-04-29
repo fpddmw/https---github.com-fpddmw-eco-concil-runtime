@@ -18,7 +18,7 @@ def phase2_gate_handler_registry(
     gate_handlers: dict[str, GateHandler] | None = None,
 ) -> dict[str, GateHandler]:
     registry: dict[str, GateHandler] = {
-        "promotion-gate": phase2_gate_handlers.apply_promotion_gate,
+        "report-basis-gate": phase2_gate_handlers.apply_report_basis_gate,
     }
     if isinstance(gate_handlers, dict):
         for name, handler in gate_handlers.items():

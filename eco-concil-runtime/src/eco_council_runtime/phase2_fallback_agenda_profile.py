@@ -23,7 +23,7 @@ from .phase2_fallback_policy import (
     issue_cluster_policy,
     open_challenge_policy,
     open_task_policy,
-    promotion_action_policy,
+    report_basis_action_policy,
     representation_gap_policy,
     role_from_coverage,
     verification_route_policy,
@@ -192,22 +192,22 @@ def action_from_coverage(
     )
 
 
-def prepare_promotion_action(
+def prepare_report_basis_action(
     coverage: dict[str, Any],
     brief_context: str,
 ) -> dict[str, Any]:
     coverage_id = maybe_text(coverage.get("coverage_id"))
     claim_id = maybe_text(coverage.get("claim_id"))
-    policy = promotion_action_policy(coverage)
+    policy = report_basis_action_policy(coverage)
     return agenda_action(
-        action_id="action-" + stable_hash("d1-action", coverage_id, "promotion")[:12],
+        action_id="action-" + stable_hash("d1-action", coverage_id, "report_basis")[:12],
         source_ids=[coverage_id, claim_id],
         target={"coverage_id": coverage_id, "claim_id": claim_id},
         evidence_refs=coverage.get("evidence_refs", [])
         if isinstance(coverage.get("evidence_refs"), list)
         else [],
         brief_context=brief_context,
-        agenda_source="promotion-basis",
+        agenda_source="report-basis-freeze",
         issue_label=claim_id,
         **policy,
     )
@@ -641,7 +641,7 @@ def default_empty_agenda_actions(context: dict[str, Any]) -> list[dict[str, Any]
     strong_coverages = _strong_coverage_rows(context)
     if not strong_coverages:
         return []
-    return [prepare_promotion_action(strong_coverages[0], _brief_context(context))]
+    return [prepare_report_basis_action(strong_coverages[0], _brief_context(context))]
 
 
 def fallback_agenda_source(

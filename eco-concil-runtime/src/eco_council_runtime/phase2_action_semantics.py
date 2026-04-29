@@ -5,7 +5,7 @@ from typing import Any
 from .phase2_fallback_common import maybe_text
 
 LEGACY_NON_BLOCKING_ACTION_KINDS = {
-    "prepare-promotion",
+    "prepare-report-basis-freeze",
 }
 
 

@@ -56,8 +56,8 @@ def reporting_path(run_dir: Path, file_name: str) -> Path:
     return run_dir / "reporting" / file_name
 
 
-def promotion_path(run_dir: Path, file_name: str) -> Path:
-    return run_dir / "promotion" / file_name
+def report_basis_path(run_dir: Path, file_name: str) -> Path:
+    return run_dir / "report_basis" / file_name
 
 
 def runtime_path(run_dir: Path, file_name: str) -> Path:
@@ -656,11 +656,11 @@ def submit_ready_council_support(
         "--round-id",
         round_id,
         "--proposal-kind",
-        "promote-evidence-basis",
+        "freeze-report-basis",
         "--agent-role",
         agent_role,
         "--rationale",
-        "DB-backed successor evidence is sufficient for this test promotion.",
+        "DB-backed successor evidence is sufficient for this test report_basis.",
         "--status",
         "submitted",
         "--confidence",
@@ -672,7 +672,7 @@ def submit_ready_council_support(
         "--target-claim-id",
         issue_id,
         "--action-kind",
-        "promote-evidence-basis",
+        "freeze-report-basis",
         "--assigned-role",
         "moderator",
         "--objective",
@@ -683,9 +683,9 @@ def submit_ready_council_support(
         evidence_ref,
         "--lineage-id",
         issue_id,
-        "--promotion-disposition",
-        "promote",
-        "--promote-allowed",
+        "--report-basis-disposition",
+        "freeze-report-basis",
+        "--report-basis-freeze-allowed",
         "true",
         "--publication-readiness",
         "ready",
@@ -705,12 +705,12 @@ def submit_ready_council_support(
         "--agent-role",
         agent_role,
         "--readiness-status",
-        "ready-for-promotion",
+        "ready-for-report-basis",
         "--rationale",
-        "DB-backed successor evidence and council proposal support promotion.",
+        "DB-backed successor evidence and council proposal support report-basis freeze.",
         "--opinion-status",
         "submitted",
-        "--sufficient-for-promotion",
+        "--sufficient-for-report-basis",
         "true",
         "--confidence",
         "0.93",
@@ -845,7 +845,7 @@ def submit_report_basis_records(
         "--section-title",
         section_key.replace("-", " ").title(),
         "--section-text",
-        f"{case_label} report section cites the finding and evidence bundle as the report basis.",
+        f"{case_label} report section cites the finding and evidence bundle as the report_basis.",
         "--basis-object-id",
         finding_id,
         "--basis-object-id",

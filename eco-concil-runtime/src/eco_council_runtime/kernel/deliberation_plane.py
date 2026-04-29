@@ -409,18 +409,18 @@ ON skill_approval_consumptions(request_id, consumed_at_utc, consumption_id);
 CREATE INDEX IF NOT EXISTS idx_skill_approval_consumptions_round
 ON skill_approval_consumptions(run_id, round_id, consumed_at_utc, consumption_id);
 
-CREATE TABLE IF NOT EXISTS promotion_freezes (
+CREATE TABLE IF NOT EXISTS report_basis_freezes (
     freeze_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,
     round_id TEXT NOT NULL,
     updated_at_utc TEXT NOT NULL DEFAULT '',
     gate_status TEXT NOT NULL DEFAULT '',
     readiness_status TEXT NOT NULL DEFAULT '',
-    promotion_status TEXT NOT NULL DEFAULT '',
+    report_basis_status TEXT NOT NULL DEFAULT '',
     controller_status TEXT NOT NULL DEFAULT '',
     supervisor_status TEXT NOT NULL DEFAULT '',
     planning_mode TEXT NOT NULL DEFAULT '',
-    promote_allowed INTEGER NOT NULL DEFAULT 0,
+    report_basis_freeze_allowed INTEGER NOT NULL DEFAULT 0,
     gate_reasons_json TEXT NOT NULL DEFAULT '[]',
     recommended_next_skills_json TEXT NOT NULL DEFAULT '[]',
     reporting_ready INTEGER NOT NULL DEFAULT 0,
@@ -432,13 +432,13 @@ CREATE TABLE IF NOT EXISTS promotion_freezes (
     record_locator TEXT NOT NULL DEFAULT '$',
     raw_json TEXT NOT NULL DEFAULT '{}'
 );
-CREATE INDEX IF NOT EXISTS idx_promotion_freezes_round_updated
-ON promotion_freezes(run_id, round_id, updated_at_utc, freeze_id);
-CREATE INDEX IF NOT EXISTS idx_promotion_freezes_round_statuses
-ON promotion_freezes(
+CREATE INDEX IF NOT EXISTS idx_report_basis_freezes_round_updated
+ON report_basis_freezes(run_id, round_id, updated_at_utc, freeze_id);
+CREATE INDEX IF NOT EXISTS idx_report_basis_freezes_round_statuses
+ON report_basis_freezes(
     run_id,
     round_id,
-    promotion_status,
+    report_basis_status,
     gate_status,
     supervisor_status,
     freeze_id
@@ -457,7 +457,7 @@ CREATE TABLE IF NOT EXISTS controller_snapshots (
     resume_status TEXT NOT NULL DEFAULT '',
     readiness_status TEXT NOT NULL DEFAULT '',
     gate_status TEXT NOT NULL DEFAULT '',
-    promotion_status TEXT NOT NULL DEFAULT '',
+    report_basis_status TEXT NOT NULL DEFAULT '',
     resume_recommended INTEGER NOT NULL DEFAULT 0,
     restart_recommended INTEGER NOT NULL DEFAULT 0,
     resume_from_stage TEXT NOT NULL DEFAULT '',
@@ -499,9 +499,9 @@ CREATE TABLE IF NOT EXISTS gate_snapshots (
     gate_handler TEXT NOT NULL DEFAULT '',
     gate_status TEXT NOT NULL DEFAULT '',
     readiness_status TEXT NOT NULL DEFAULT '',
-    promote_allowed INTEGER NOT NULL DEFAULT 0,
+    report_basis_freeze_allowed INTEGER NOT NULL DEFAULT 0,
     decision_source TEXT NOT NULL DEFAULT '',
-    promotion_resolution_mode TEXT NOT NULL DEFAULT '',
+    report_basis_resolution_mode TEXT NOT NULL DEFAULT '',
     gate_reasons_json TEXT NOT NULL DEFAULT '[]',
     supporting_proposal_ids_json TEXT NOT NULL DEFAULT '[]',
     rejected_proposal_ids_json TEXT NOT NULL DEFAULT '[]',
@@ -543,7 +543,7 @@ CREATE TABLE IF NOT EXISTS supervisor_snapshots (
     planning_mode TEXT NOT NULL DEFAULT '',
     readiness_status TEXT NOT NULL DEFAULT '',
     gate_status TEXT NOT NULL DEFAULT '',
-    promotion_status TEXT NOT NULL DEFAULT '',
+    report_basis_status TEXT NOT NULL DEFAULT '',
     reporting_ready INTEGER NOT NULL DEFAULT 0,
     reporting_handoff_status TEXT NOT NULL DEFAULT '',
     resume_status TEXT NOT NULL DEFAULT '',
@@ -786,7 +786,7 @@ CREATE TABLE IF NOT EXISTS round_readiness_assessments (
     round_id TEXT NOT NULL,
     generated_at_utc TEXT NOT NULL DEFAULT '',
     readiness_status TEXT NOT NULL DEFAULT '',
-    sufficient_for_promotion INTEGER NOT NULL DEFAULT 0,
+    sufficient_for_report_basis INTEGER NOT NULL DEFAULT 0,
     board_state_source TEXT NOT NULL DEFAULT '',
     coverage_source TEXT NOT NULL DEFAULT '',
     next_actions_source TEXT NOT NULL DEFAULT '',
@@ -804,12 +804,12 @@ CREATE TABLE IF NOT EXISTS round_readiness_assessments (
 CREATE INDEX IF NOT EXISTS idx_round_readiness_assessments_round
 ON round_readiness_assessments(run_id, round_id, generated_at_utc, readiness_id);
 
-CREATE TABLE IF NOT EXISTS promotion_basis_records (
+CREATE TABLE IF NOT EXISTS report_basis_freeze_records (
     basis_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,
     round_id TEXT NOT NULL,
     generated_at_utc TEXT NOT NULL DEFAULT '',
-    promotion_status TEXT NOT NULL DEFAULT '',
+    report_basis_status TEXT NOT NULL DEFAULT '',
     readiness_status TEXT NOT NULL DEFAULT '',
     board_state_source TEXT NOT NULL DEFAULT '',
     coverage_source TEXT NOT NULL DEFAULT '',
@@ -826,10 +826,10 @@ CREATE TABLE IF NOT EXISTS promotion_basis_records (
     record_locator TEXT NOT NULL DEFAULT '$',
     raw_json TEXT NOT NULL DEFAULT '{}'
 );
-CREATE INDEX IF NOT EXISTS idx_promotion_basis_records_round
-ON promotion_basis_records(run_id, round_id, generated_at_utc, basis_id);
+CREATE INDEX IF NOT EXISTS idx_report_basis_freeze_records_round
+ON report_basis_freeze_records(run_id, round_id, generated_at_utc, basis_id);
 
-CREATE TABLE IF NOT EXISTS promotion_basis_items (
+CREATE TABLE IF NOT EXISTS report_basis_freeze_items (
     item_row_id TEXT PRIMARY KEY,
     basis_id TEXT NOT NULL,
     run_id TEXT NOT NULL,
@@ -849,8 +849,8 @@ CREATE TABLE IF NOT EXISTS promotion_basis_items (
     record_locator TEXT NOT NULL DEFAULT '',
     raw_json TEXT NOT NULL DEFAULT '{}'
 );
-CREATE INDEX IF NOT EXISTS idx_promotion_basis_items_round
-ON promotion_basis_items(run_id, round_id, item_group, object_type, object_id, item_row_id);
+CREATE INDEX IF NOT EXISTS idx_report_basis_freeze_items_round
+ON report_basis_freeze_items(run_id, round_id, item_group, object_type, object_id, item_row_id);
 
 CREATE TABLE IF NOT EXISTS reporting_handoffs (
     handoff_id TEXT PRIMARY KEY,
@@ -860,12 +860,12 @@ CREATE TABLE IF NOT EXISTS reporting_handoffs (
     handoff_status TEXT NOT NULL DEFAULT '',
     reporting_ready INTEGER NOT NULL DEFAULT 0,
     reporting_blockers_json TEXT NOT NULL DEFAULT '[]',
-    promotion_status TEXT NOT NULL DEFAULT '',
+    report_basis_status TEXT NOT NULL DEFAULT '',
     readiness_status TEXT NOT NULL DEFAULT '',
     supervisor_status TEXT NOT NULL DEFAULT '',
     board_state_source TEXT NOT NULL DEFAULT '',
     coverage_source TEXT NOT NULL DEFAULT '',
-    promotion_source TEXT NOT NULL DEFAULT '',
+    report_basis_source TEXT NOT NULL DEFAULT '',
     readiness_source TEXT NOT NULL DEFAULT '',
     board_brief_source TEXT NOT NULL DEFAULT '',
     supervisor_state_source TEXT NOT NULL DEFAULT '',
@@ -893,7 +893,7 @@ CREATE TABLE IF NOT EXISTS council_decision_records (
     board_state_source TEXT NOT NULL DEFAULT '',
     coverage_source TEXT NOT NULL DEFAULT '',
     reporting_handoff_source TEXT NOT NULL DEFAULT '',
-    promotion_source TEXT NOT NULL DEFAULT '',
+    report_basis_source TEXT NOT NULL DEFAULT '',
     decision_source TEXT NOT NULL DEFAULT '',
     sociologist_report_source TEXT NOT NULL DEFAULT '',
     environmentalist_report_source TEXT NOT NULL DEFAULT '',
@@ -972,7 +972,7 @@ CREATE TABLE IF NOT EXISTS final_publications (
     coverage_source TEXT NOT NULL DEFAULT '',
     reporting_handoff_source TEXT NOT NULL DEFAULT '',
     decision_source TEXT NOT NULL DEFAULT '',
-    promotion_source TEXT NOT NULL DEFAULT '',
+    report_basis_source TEXT NOT NULL DEFAULT '',
     supervisor_state_source TEXT NOT NULL DEFAULT '',
     sociologist_report_source TEXT NOT NULL DEFAULT '',
     environmentalist_report_source TEXT NOT NULL DEFAULT '',
@@ -1096,13 +1096,13 @@ BOOLEAN_ROW_COLUMNS = {
     "next_round_required",
     "probe_candidate",
     "probe_stage_included",
-    "promote_allowed",
+    "report_basis_freeze_allowed",
     "readiness_blocker",
     "required_for_controller",
     "restart_recommended",
     "resume_recommended",
     "reporting_ready",
-    "sufficient_for_promotion",
+    "sufficient_for_report_basis",
 }
 
 
@@ -1323,7 +1323,7 @@ def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
         ("reporting_handoff_status", "TEXT NOT NULL DEFAULT ''"),
         ("reporting_blockers_json", "TEXT NOT NULL DEFAULT '[]'"),
     ):
-        ensure_column(connection, "promotion_freezes", column_name, column_sql)
+        ensure_column(connection, "report_basis_freezes", column_name, column_sql)
     connection.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_board_events_round_sequence
@@ -1380,11 +1380,11 @@ def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
     )
     connection.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_promotion_freezes_round_statuses
-        ON promotion_freezes(
+        CREATE INDEX IF NOT EXISTS idx_report_basis_freezes_round_statuses
+        ON report_basis_freezes(
             run_id,
             round_id,
-            promotion_status,
+            report_basis_status,
             gate_status,
             supervisor_status,
             freeze_id
@@ -1715,20 +1715,20 @@ def write_round_transition_row(connection: sqlite3.Connection, row: dict[str, An
     )
 
 
-def write_promotion_freeze_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
+def write_report_basis_freeze_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
     connection.execute(
         """
-        INSERT OR REPLACE INTO promotion_freezes (
+        INSERT OR REPLACE INTO report_basis_freezes (
             freeze_id, run_id, round_id, updated_at_utc, gate_status, readiness_status,
-            promotion_status, controller_status, supervisor_status, planning_mode,
-            promote_allowed, gate_reasons_json, recommended_next_skills_json,
+            report_basis_status, controller_status, supervisor_status, planning_mode,
+            report_basis_freeze_allowed, gate_reasons_json, recommended_next_skills_json,
             reporting_ready, reporting_handoff_status, reporting_blockers_json,
             controller_artifact_path, gate_artifact_path, supervisor_artifact_path,
             record_locator, raw_json
         ) VALUES (
             :freeze_id, :run_id, :round_id, :updated_at_utc, :gate_status, :readiness_status,
-            :promotion_status, :controller_status, :supervisor_status, :planning_mode,
-            :promote_allowed, :gate_reasons_json, :recommended_next_skills_json,
+            :report_basis_status, :controller_status, :supervisor_status, :planning_mode,
+            :report_basis_freeze_allowed, :gate_reasons_json, :recommended_next_skills_json,
             :reporting_ready, :reporting_handoff_status, :reporting_blockers_json,
             :controller_artifact_path, :gate_artifact_path, :supervisor_artifact_path,
             :record_locator, :raw_json
@@ -1747,7 +1747,7 @@ def write_controller_snapshot_row(
         INSERT OR REPLACE INTO controller_snapshots (
             snapshot_id, controller_id, run_id, round_id, generated_at_utc,
             controller_status, planning_mode, current_stage, failed_stage,
-            resume_status, readiness_status, gate_status, promotion_status,
+            resume_status, readiness_status, gate_status, report_basis_status,
             resume_recommended, restart_recommended, resume_from_stage,
             completed_stage_names_json, pending_stage_names_json, gate_reasons_json,
             recommended_next_skills_json, execution_policy_json, progress_json,
@@ -1757,7 +1757,7 @@ def write_controller_snapshot_row(
         ) VALUES (
             :snapshot_id, :controller_id, :run_id, :round_id, :generated_at_utc,
             :controller_status, :planning_mode, :current_stage, :failed_stage,
-            :resume_status, :readiness_status, :gate_status, :promotion_status,
+            :resume_status, :readiness_status, :gate_status, :report_basis_status,
             :resume_recommended, :restart_recommended, :resume_from_stage,
             :completed_stage_names_json, :pending_stage_names_json, :gate_reasons_json,
             :recommended_next_skills_json, :execution_policy_json, :progress_json,
@@ -1778,16 +1778,16 @@ def write_gate_snapshot_row(
         """
         INSERT OR REPLACE INTO gate_snapshots (
             snapshot_id, gate_id, run_id, round_id, generated_at_utc,
-            stage_name, gate_handler, gate_status, readiness_status, promote_allowed,
-            decision_source, promotion_resolution_mode, gate_reasons_json,
+            stage_name, gate_handler, gate_status, readiness_status, report_basis_freeze_allowed,
+            decision_source, report_basis_resolution_mode, gate_reasons_json,
             supporting_proposal_ids_json, rejected_proposal_ids_json,
             supporting_opinion_ids_json, rejected_opinion_ids_json,
             council_input_counts_json, recommended_next_skills_json,
             warnings_json, readiness_path, output_path, record_locator, raw_json
         ) VALUES (
             :snapshot_id, :gate_id, :run_id, :round_id, :generated_at_utc,
-            :stage_name, :gate_handler, :gate_status, :readiness_status, :promote_allowed,
-            :decision_source, :promotion_resolution_mode, :gate_reasons_json,
+            :stage_name, :gate_handler, :gate_status, :readiness_status, :report_basis_freeze_allowed,
+            :decision_source, :report_basis_resolution_mode, :gate_reasons_json,
             :supporting_proposal_ids_json, :rejected_proposal_ids_json,
             :supporting_opinion_ids_json, :rejected_opinion_ids_json,
             :council_input_counts_json, :recommended_next_skills_json,
@@ -1808,7 +1808,7 @@ def write_supervisor_snapshot_row(
             snapshot_id, supervisor_id, run_id, round_id, generated_at_utc,
             supervisor_status, supervisor_substatus, phase2_posture, terminal_state,
             recovery_posture, operator_action, controller_status, planning_mode,
-            readiness_status, gate_status, promotion_status, reporting_ready,
+            readiness_status, gate_status, report_basis_status, reporting_ready,
             reporting_handoff_status, resume_status, current_stage, failed_stage,
             resume_recommended, restart_recommended, resume_from_stage,
             reporting_blockers_json, recommended_next_skills_json,
@@ -1819,7 +1819,7 @@ def write_supervisor_snapshot_row(
             :snapshot_id, :supervisor_id, :run_id, :round_id, :generated_at_utc,
             :supervisor_status, :supervisor_substatus, :phase2_posture, :terminal_state,
             :recovery_posture, :operator_action, :controller_status, :planning_mode,
-            :readiness_status, :gate_status, :promotion_status, :reporting_ready,
+            :readiness_status, :gate_status, :report_basis_status, :reporting_ready,
             :reporting_handoff_status, :resume_status, :current_stage, :failed_stage,
             :resume_recommended, :restart_recommended, :resume_from_stage,
             :reporting_blockers_json, :recommended_next_skills_json,
@@ -1997,13 +1997,13 @@ def write_round_readiness_assessment_row(
         """
         INSERT OR REPLACE INTO round_readiness_assessments (
             readiness_id, run_id, round_id, generated_at_utc, readiness_status,
-            sufficient_for_promotion, board_state_source, coverage_source,
+            sufficient_for_report_basis, board_state_source, coverage_source,
             next_actions_source, probes_source, agenda_counts_json, counts_json,
             controversy_gap_counts_json, probe_type_counts_json, gate_reasons_json,
             recommended_next_skills_json, artifact_path, record_locator, raw_json
         ) VALUES (
             :readiness_id, :run_id, :round_id, :generated_at_utc, :readiness_status,
-            :sufficient_for_promotion, :board_state_source, :coverage_source,
+            :sufficient_for_report_basis, :board_state_source, :coverage_source,
             :next_actions_source, :probes_source, :agenda_counts_json, :counts_json,
             :controversy_gap_counts_json, :probe_type_counts_json, :gate_reasons_json,
             :recommended_next_skills_json, :artifact_path, :record_locator, :raw_json
@@ -2013,21 +2013,21 @@ def write_round_readiness_assessment_row(
     )
 
 
-def write_promotion_basis_record_row(
+def write_report_basis_freeze_record_row(
     connection: sqlite3.Connection,
     row: dict[str, Any],
 ) -> None:
     connection.execute(
         """
-        INSERT OR REPLACE INTO promotion_basis_records (
-            basis_id, run_id, round_id, generated_at_utc, promotion_status,
+        INSERT OR REPLACE INTO report_basis_freeze_records (
+            basis_id, run_id, round_id, generated_at_utc, report_basis_status,
             readiness_status, board_state_source, coverage_source, readiness_source,
             next_actions_source, board_brief_source, basis_selection_mode,
             basis_counts_json, selected_basis_object_ids_json,
             selected_evidence_refs_json, gate_reasons_json, remaining_risks_json,
             artifact_path, record_locator, raw_json
         ) VALUES (
-            :basis_id, :run_id, :round_id, :generated_at_utc, :promotion_status,
+            :basis_id, :run_id, :round_id, :generated_at_utc, :report_basis_status,
             :readiness_status, :board_state_source, :coverage_source, :readiness_source,
             :next_actions_source, :board_brief_source, :basis_selection_mode,
             :basis_counts_json, :selected_basis_object_ids_json,
@@ -2039,13 +2039,13 @@ def write_promotion_basis_record_row(
     )
 
 
-def write_promotion_basis_item_row(
+def write_report_basis_freeze_item_row(
     connection: sqlite3.Connection,
     row: dict[str, Any],
 ) -> None:
     connection.execute(
         """
-        INSERT OR REPLACE INTO promotion_basis_items (
+        INSERT OR REPLACE INTO report_basis_freeze_items (
             item_row_id, basis_id, run_id, round_id, generated_at_utc, item_group,
             item_index, object_type, object_id, issue_label, claim_id,
             recommended_lane, route_status, readiness, evidence_refs_json,
@@ -2070,15 +2070,15 @@ def write_reporting_handoff_row(
         INSERT OR REPLACE INTO reporting_handoffs (
             handoff_id, run_id, round_id, generated_at_utc, handoff_status,
             reporting_ready, reporting_blockers_json,
-            promotion_status, readiness_status, supervisor_status,
-            board_state_source, coverage_source, promotion_source,
+            report_basis_status, readiness_status, supervisor_status,
+            board_state_source, coverage_source, report_basis_source,
             readiness_source, board_brief_source, supervisor_state_source,
             selected_evidence_refs_json, artifact_path, record_locator, raw_json
         ) VALUES (
             :handoff_id, :run_id, :round_id, :generated_at_utc, :handoff_status,
             :reporting_ready, :reporting_blockers_json,
-            :promotion_status, :readiness_status, :supervisor_status,
-            :board_state_source, :coverage_source, :promotion_source,
+            :report_basis_status, :readiness_status, :supervisor_status,
+            :board_state_source, :coverage_source, :report_basis_source,
             :readiness_source, :board_brief_source, :supervisor_state_source,
             :selected_evidence_refs_json, :artifact_path, :record_locator, :raw_json
         )
@@ -2098,7 +2098,7 @@ def write_council_decision_record_row(
             decision_stage, moderator_status, reporting_ready,
             publication_readiness, decision_gating_json,
             next_round_required, canonical_artifact, board_state_source,
-            coverage_source, reporting_handoff_source, promotion_source,
+            coverage_source, reporting_handoff_source, report_basis_source,
             decision_source, sociologist_report_source,
             environmentalist_report_source, selected_evidence_refs_json,
             published_report_refs_json, artifact_path, record_locator, raw_json
@@ -2107,7 +2107,7 @@ def write_council_decision_record_row(
             :decision_stage, :moderator_status, :reporting_ready,
             :publication_readiness, :decision_gating_json,
             :next_round_required, :canonical_artifact, :board_state_source,
-            :coverage_source, :reporting_handoff_source, :promotion_source,
+            :coverage_source, :reporting_handoff_source, :report_basis_source,
             :decision_source, :sociologist_report_source,
             :environmentalist_report_source, :selected_evidence_refs_json,
             :published_report_refs_json, :artifact_path, :record_locator, :raw_json
@@ -2155,7 +2155,7 @@ def write_final_publication_row(
             publication_id, run_id, round_id, generated_at_utc,
             publication_status, publication_posture, board_state_source,
             coverage_source, reporting_handoff_source, decision_source,
-            promotion_source, supervisor_state_source,
+            report_basis_source, supervisor_state_source,
             sociologist_report_source, environmentalist_report_source,
             selected_evidence_refs_json, published_report_refs_json,
             artifact_path, record_locator, raw_json
@@ -2163,7 +2163,7 @@ def write_final_publication_row(
             :publication_id, :run_id, :round_id, :generated_at_utc,
             :publication_status, :publication_posture, :board_state_source,
             :coverage_source, :reporting_handoff_source, :decision_source,
-            :promotion_source, :supervisor_state_source,
+            :report_basis_source, :supervisor_state_source,
             :sociologist_report_source, :environmentalist_report_source,
             :selected_evidence_refs_json, :published_report_refs_json,
             :artifact_path, :record_locator, :raw_json
@@ -2378,8 +2378,8 @@ def round_transition_row_from_payload(
     }
 
 
-def promotion_freeze_record_id(run_id: str, round_id: str) -> str:
-    return "freeze-" + stable_hash("promotion-freeze", run_id, round_id)[:12]
+def runtime_control_freeze_id(run_id: str, round_id: str) -> str:
+    return "control-freeze-" + stable_hash("runtime-control-freeze", run_id, round_id)[:12]
 
 
 def controller_snapshot_object_id(run_id: str, round_id: str) -> str:
@@ -2462,14 +2462,14 @@ def reporting_handoff_id(
     run_id: str,
     round_id: str,
     handoff_status: str,
-    promotion_status: str,
+    report_basis_status: str,
 ) -> str:
     return "reporting-handoff-" + stable_hash(
         "reporting-handoff",
         run_id,
         round_id,
         handoff_status,
-        promotion_status,
+        report_basis_status,
     )[:12]
 
 
@@ -2899,22 +2899,23 @@ PROMOTION_BASIS_ITEM_GROUPS = (
 )
 
 
-def normalized_promotion_basis_payload(
-    promotion_payload: dict[str, Any],
+def normalized_report_basis_freeze_payload(
+    report_basis_payload: dict[str, Any],
     *,
     run_id: str,
     round_id: str,
     source_skill: str = "",
     artifact_path: str = "",
 ) -> dict[str, Any]:
-    normalized = dict(promotion_payload)
+    normalized = dict(report_basis_payload)
     normalized["run_id"] = maybe_text(normalized.get("run_id")) or run_id
     normalized["round_id"] = maybe_text(normalized.get("round_id")) or round_id
     normalized["generated_at_utc"] = (
         maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
     )
-    normalized["promotion_status"] = (
-        maybe_text(normalized.get("promotion_status")) or "withheld"
+    normalized["report_basis_status"] = (
+        maybe_text(normalized.get("report_basis_status"))
+        or "withheld"
     )
     normalized["readiness_status"] = (
         maybe_text(normalized.get("readiness_status")) or "blocked"
@@ -2929,10 +2930,10 @@ def normalized_promotion_basis_payload(
         maybe_text(normalized.get("basis_id"))
         or "evidence-basis-"
         + stable_hash(
-            "promotion-basis",
+            "report-basis-freeze",
             normalized["run_id"],
             normalized["round_id"],
-            normalized["promotion_status"],
+            normalized["report_basis_status"],
         )[:12]
     )
     decision_source = (
@@ -2943,8 +2944,8 @@ def normalized_promotion_basis_payload(
         normalized.get("evidence_refs")
     ) or list_items(normalized.get("selected_evidence_refs"))
     item_object_ids = [
-        promotion_basis_item_object_id(item_group, item)
-        for item_group, _item_index, item in iter_promotion_basis_items(normalized)
+        report_basis_freeze_item_object_id(item_group, item)
+        for item_group, _item_index, item in iter_report_basis_freeze_items(normalized)
     ]
     normalized["lineage"] = merged_lineage(
         normalized.get("lineage"),
@@ -2967,7 +2968,7 @@ def normalized_promotion_basis_payload(
             "board_brief_source": maybe_text(normalized.get("board_brief_source")),
         },
     )
-    return validate_canonical_payload("promotion-basis", normalized)
+    return validate_canonical_payload("report-basis-freeze", normalized)
 
 
 REPORT_AGENT_ROLES = ("sociologist", "environmentalist")
@@ -3045,7 +3046,8 @@ def normalized_reporting_handoff_payload(
         maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
     )
     gate_state = reporting_gate_state(
-        promotion_status=maybe_text(normalized.get("promotion_status")) or "withheld",
+        report_basis_status=maybe_text(normalized.get("report_basis_status"))
+        or "withheld",
         readiness_status=maybe_text(normalized.get("readiness_status")) or "blocked",
         supervisor_status=maybe_text(normalized.get("supervisor_status")),
         require_supervisor=True,
@@ -3056,7 +3058,7 @@ def normalized_reporting_handoff_payload(
     normalized["handoff_status"] = (
         maybe_text(gate_state.get("handoff_status")) or "investigation-open"
     )
-    normalized["promotion_status"] = maybe_text(gate_state.get("promotion_status")) or "withheld"
+    normalized["report_basis_status"] = maybe_text(gate_state.get("report_basis_status")) or "withheld"
     normalized["readiness_status"] = maybe_text(gate_state.get("readiness_status")) or "blocked"
     normalized["supervisor_status"] = maybe_text(gate_state.get("supervisor_status"))
     normalized["reporting_ready"] = bool(gate_state.get("reporting_ready"))
@@ -3069,7 +3071,7 @@ def normalized_reporting_handoff_payload(
             normalized["run_id"],
             normalized["round_id"],
             normalized["handoff_status"],
-            normalized["promotion_status"],
+            normalized["report_basis_status"],
         )
     )
     ensure_list_fields(
@@ -3101,7 +3103,7 @@ def normalized_reporting_handoff_payload(
     )
     decision_source = (
         maybe_text(normalized.get("decision_source"))
-        or maybe_text(normalized.get("promotion_source"))
+        or maybe_text(normalized.get("report_basis_source"))
         or maybe_text(normalized.get("readiness_source"))
         or maybe_text(normalized.get("supervisor_state_source"))
         or maybe_text(normalized.get("skill"))
@@ -3112,7 +3114,7 @@ def normalized_reporting_handoff_payload(
         object_kind="reporting-handoff",
         decision_source=decision_source,
         lineage_sources=(
-            maybe_text(normalized.get("promoted_basis_id")),
+            maybe_text(normalized.get("report_basis_id")),
             normalized.get("selected_basis_object_ids"),
             normalized.get("supporting_proposal_ids"),
             normalized.get("rejected_proposal_ids"),
@@ -3127,12 +3129,12 @@ def normalized_reporting_handoff_payload(
         ),
         provenance_extra={
             "handoff_status": normalized["handoff_status"],
-            "promotion_status": normalized["promotion_status"],
+            "report_basis_status": normalized["report_basis_status"],
             "readiness_status": normalized["readiness_status"],
             "supervisor_status": normalized["supervisor_status"],
             "board_state_source": maybe_text(normalized.get("board_state_source")),
             "coverage_source": maybe_text(normalized.get("coverage_source")),
-            "promotion_source": maybe_text(normalized.get("promotion_source")),
+            "report_basis_source": maybe_text(normalized.get("report_basis_source")),
             "readiness_source": maybe_text(normalized.get("readiness_source")),
             "supervisor_state_source": maybe_text(
                 normalized.get("supervisor_state_source")
@@ -3217,7 +3219,7 @@ def normalized_council_decision_payload(
         "open_risks",
         "accepted_object_ids",
         "rejected_object_ids",
-        "promotion_resolution_reasons",
+        "report_basis_resolution_reasons",
         "memo_sections",
     )
     ensure_dict_fields(
@@ -3233,7 +3235,8 @@ def normalized_council_decision_payload(
     decision_source = (
         maybe_text(normalized.get("decision_source"))
         or maybe_text(normalized.get("reporting_handoff_source"))
-        or maybe_text(normalized.get("promotion_source"))
+        or maybe_text(normalized.get("report_basis_source"))
+        or maybe_text(normalized.get("report_basis_source"))
         or maybe_text(normalized.get("skill"))
         or "council-decision-generator"
     )
@@ -3242,7 +3245,7 @@ def normalized_council_decision_payload(
         object_kind="council-decision",
         decision_source=decision_source,
         lineage_sources=(
-            maybe_text(normalized.get("promoted_basis_id")),
+            maybe_text(normalized.get("report_basis_id")),
             normalized.get("selected_basis_object_ids"),
             normalized.get("supporting_proposal_ids"),
             normalized.get("rejected_proposal_ids"),
@@ -3261,7 +3264,7 @@ def normalized_council_decision_payload(
             "reporting_handoff_source": maybe_text(
                 normalized.get("reporting_handoff_source")
             ),
-            "promotion_source": maybe_text(normalized.get("promotion_source")),
+            "report_basis_source": maybe_text(normalized.get("report_basis_source")),
         },
     )
     return validate_canonical_payload("council-decision", normalized)
@@ -3457,7 +3460,8 @@ def normalized_final_publication_payload(
     decision_source = (
         maybe_text(normalized.get("decision_source"))
         or maybe_text(normalized.get("reporting_handoff_source"))
-        or maybe_text(normalized.get("promotion_source"))
+        or maybe_text(normalized.get("report_basis_source"))
+        or maybe_text(normalized.get("report_basis_source"))
         or maybe_text(normalized.get("skill"))
         or "final-publication-generator"
     )
@@ -3483,7 +3487,7 @@ def normalized_final_publication_payload(
             "reporting_handoff_source": maybe_text(
                 normalized.get("reporting_handoff_source")
             ),
-            "promotion_source": maybe_text(normalized.get("promotion_source")),
+            "report_basis_source": maybe_text(normalized.get("report_basis_source")),
             "supervisor_state_source": maybe_text(
                 normalized.get("supervisor_state_source")
             ),
@@ -3492,7 +3496,7 @@ def normalized_final_publication_payload(
     return validate_canonical_payload("final-publication", normalized)
 
 
-def promotion_basis_item_object_type(item_group: str, item: dict[str, Any]) -> str:
+def report_basis_freeze_item_object_type(item_group: str, item: dict[str, Any]) -> str:
     explicit = maybe_text(item.get("object_type"))
     if explicit:
         return explicit
@@ -3501,7 +3505,7 @@ def promotion_basis_item_object_type(item_group: str, item: dict[str, Any]) -> s
     return item_group.rstrip("s").replace("_", "-")
 
 
-def promotion_basis_item_object_id(item_group: str, item: dict[str, Any]) -> str:
+def report_basis_freeze_item_object_id(item_group: str, item: dict[str, Any]) -> str:
     for key in (
         "object_id",
         "coverage_id",
@@ -3520,7 +3524,7 @@ def promotion_basis_item_object_id(item_group: str, item: dict[str, Any]) -> str
         item_group
         + "-"
         + stable_hash(
-            "promotion-basis-item",
+            "report-basis-freeze-item",
             item_group,
             maybe_text(item.get("summary")),
             maybe_text(item.get("issue_label")),
@@ -3529,12 +3533,12 @@ def promotion_basis_item_object_id(item_group: str, item: dict[str, Any]) -> str
     )
 
 
-def iter_promotion_basis_items(
-    promotion_payload: dict[str, Any],
+def iter_report_basis_freeze_items(
+    report_basis_payload: dict[str, Any],
 ) -> list[tuple[str, int, dict[str, Any]]]:
     frozen_basis = (
-        promotion_payload.get("frozen_basis", {})
-        if isinstance(promotion_payload.get("frozen_basis"), dict)
+        report_basis_payload.get("frozen_basis", {})
+        if isinstance(report_basis_payload.get("frozen_basis"), dict)
         else {}
     )
     results: list[tuple[str, int, dict[str, Any]]] = []
@@ -3546,8 +3550,8 @@ def iter_promotion_basis_items(
         )
         if item_group == "coverages" and not rows:
             rows = (
-                promotion_payload.get("selected_coverages", [])
-                if isinstance(promotion_payload.get("selected_coverages"), list)
+                report_basis_payload.get("selected_coverages", [])
+                if isinstance(report_basis_payload.get("selected_coverages"), list)
                 else []
             )
         for index, item in enumerate(rows):
@@ -3556,14 +3560,14 @@ def iter_promotion_basis_items(
     return results
 
 
-def promotion_basis_item_row_id(
+def report_basis_freeze_item_row_id(
     basis_id: str,
     item_group: str,
     item_index: int,
     object_id: str,
 ) -> str:
-    return "promotion-item-" + stable_hash(
-        "promotion-basis-item-row",
+    return "report_basis-item-" + stable_hash(
+        "report-basis-freeze-item-row",
         basis_id,
         item_group,
         item_index,
@@ -3709,8 +3713,8 @@ def round_readiness_assessment_row_from_payload(
         "round_id": maybe_text(readiness_payload.get("round_id")),
         "generated_at_utc": maybe_text(readiness_payload.get("generated_at_utc")),
         "readiness_status": maybe_text(readiness_payload.get("readiness_status")),
-        "sufficient_for_promotion": 1
-        if bool(readiness_payload.get("sufficient_for_promotion"))
+        "sufficient_for_report_basis": 1
+        if bool(readiness_payload.get("sufficient_for_report_basis"))
         else 0,
         "board_state_source": maybe_text(readiness_payload.get("board_state_source")),
         "coverage_source": maybe_text(readiness_payload.get("coverage_source")),
@@ -3734,45 +3738,45 @@ def round_readiness_assessment_row_from_payload(
     }
 
 
-def promotion_basis_record_row_from_payload(
-    promotion_payload: dict[str, Any],
+def report_basis_freeze_record_row_from_payload(
+    report_basis_payload: dict[str, Any],
     *,
     artifact_path: str,
     record_locator: str = "$",
 ) -> dict[str, Any]:
     return {
-        "basis_id": maybe_text(promotion_payload.get("basis_id")),
-        "run_id": maybe_text(promotion_payload.get("run_id")),
-        "round_id": maybe_text(promotion_payload.get("round_id")),
-        "generated_at_utc": maybe_text(promotion_payload.get("generated_at_utc")),
-        "promotion_status": maybe_text(promotion_payload.get("promotion_status")),
-        "readiness_status": maybe_text(promotion_payload.get("readiness_status")),
-        "board_state_source": maybe_text(promotion_payload.get("board_state_source")),
-        "coverage_source": maybe_text(promotion_payload.get("coverage_source")),
-        "readiness_source": maybe_text(promotion_payload.get("readiness_source")),
-        "next_actions_source": maybe_text(promotion_payload.get("next_actions_source")),
-        "board_brief_source": maybe_text(promotion_payload.get("board_brief_source")),
+        "basis_id": maybe_text(report_basis_payload.get("basis_id")),
+        "run_id": maybe_text(report_basis_payload.get("run_id")),
+        "round_id": maybe_text(report_basis_payload.get("round_id")),
+        "generated_at_utc": maybe_text(report_basis_payload.get("generated_at_utc")),
+        "report_basis_status": maybe_text(report_basis_payload.get("report_basis_status")),
+        "readiness_status": maybe_text(report_basis_payload.get("readiness_status")),
+        "board_state_source": maybe_text(report_basis_payload.get("board_state_source")),
+        "coverage_source": maybe_text(report_basis_payload.get("coverage_source")),
+        "readiness_source": maybe_text(report_basis_payload.get("readiness_source")),
+        "next_actions_source": maybe_text(report_basis_payload.get("next_actions_source")),
+        "board_brief_source": maybe_text(report_basis_payload.get("board_brief_source")),
         "basis_selection_mode": maybe_text(
-            promotion_payload.get("basis_selection_mode")
+            report_basis_payload.get("basis_selection_mode")
         ),
-        "basis_counts_json": json_text(promotion_payload.get("basis_counts", {})),
+        "basis_counts_json": json_text(report_basis_payload.get("basis_counts", {})),
         "selected_basis_object_ids_json": json_text(
-            promotion_payload.get("selected_basis_object_ids", [])
+            report_basis_payload.get("selected_basis_object_ids", [])
         ),
         "selected_evidence_refs_json": json_text(
-            promotion_payload.get("selected_evidence_refs", [])
+            report_basis_payload.get("selected_evidence_refs", [])
         ),
-        "gate_reasons_json": json_text(promotion_payload.get("gate_reasons", [])),
+        "gate_reasons_json": json_text(report_basis_payload.get("gate_reasons", [])),
         "remaining_risks_json": json_text(
-            promotion_payload.get("remaining_risks", [])
+            report_basis_payload.get("remaining_risks", [])
         ),
         "artifact_path": maybe_text(artifact_path),
         "record_locator": maybe_text(record_locator) or "$",
-        "raw_json": json_text(promotion_payload),
+        "raw_json": json_text(report_basis_payload),
     }
 
 
-def promotion_basis_item_row_from_payload(
+def report_basis_freeze_item_row_from_payload(
     item: dict[str, Any],
     *,
     basis_id: str,
@@ -3784,12 +3788,12 @@ def promotion_basis_item_row_from_payload(
     artifact_path: str,
     record_locator: str,
 ) -> dict[str, Any]:
-    object_id = promotion_basis_item_object_id(item_group, item)
+    object_id = report_basis_freeze_item_object_id(item_group, item)
     claim_id = maybe_text(item.get("claim_id"))
     if not claim_id and isinstance(item.get("claim_ids"), list):
         claim_id = maybe_text((item.get("claim_ids") or [""])[0])
     return {
-        "item_row_id": promotion_basis_item_row_id(
+        "item_row_id": report_basis_freeze_item_row_id(
             basis_id,
             item_group,
             item_index,
@@ -3801,7 +3805,7 @@ def promotion_basis_item_row_from_payload(
         "generated_at_utc": maybe_text(generated_at_utc),
         "item_group": maybe_text(item_group),
         "item_index": coerce_int(item_index),
-        "object_type": promotion_basis_item_object_type(item_group, item),
+        "object_type": report_basis_freeze_item_object_type(item_group, item),
         "object_id": object_id,
         "issue_label": maybe_text(item.get("issue_label")),
         "claim_id": claim_id,
@@ -3835,12 +3839,12 @@ def reporting_handoff_row_from_payload(
         "reporting_blockers_json": json_text(
             handoff_payload.get("reporting_blockers", [])
         ),
-        "promotion_status": maybe_text(handoff_payload.get("promotion_status")),
+        "report_basis_status": maybe_text(handoff_payload.get("report_basis_status")),
         "readiness_status": maybe_text(handoff_payload.get("readiness_status")),
         "supervisor_status": maybe_text(handoff_payload.get("supervisor_status")),
         "board_state_source": maybe_text(handoff_payload.get("board_state_source")),
         "coverage_source": maybe_text(handoff_payload.get("coverage_source")),
-        "promotion_source": maybe_text(handoff_payload.get("promotion_source")),
+        "report_basis_source": maybe_text(handoff_payload.get("report_basis_source")),
         "readiness_source": maybe_text(handoff_payload.get("readiness_source")),
         "board_brief_source": maybe_text(handoff_payload.get("board_brief_source")),
         "supervisor_state_source": maybe_text(
@@ -3885,7 +3889,7 @@ def council_decision_record_row_from_payload(
         "reporting_handoff_source": maybe_text(
             decision_payload.get("reporting_handoff_source")
         ),
-        "promotion_source": maybe_text(decision_payload.get("promotion_source")),
+        "report_basis_source": maybe_text(decision_payload.get("report_basis_source")),
         "decision_source": maybe_text(decision_payload.get("decision_source")),
         "sociologist_report_source": maybe_text(
             decision_payload.get("sociologist_report_source")
@@ -3970,7 +3974,7 @@ def final_publication_row_from_payload(
             publication_payload.get("reporting_handoff_source")
         ),
         "decision_source": maybe_text(publication_payload.get("decision_source")),
-        "promotion_source": maybe_text(publication_payload.get("promotion_source")),
+        "report_basis_source": maybe_text(publication_payload.get("report_basis_source")),
         "supervisor_state_source": maybe_text(
             publication_payload.get("supervisor_state_source")
         ),
@@ -3992,7 +3996,7 @@ def final_publication_row_from_payload(
     }
 
 
-def promotion_freeze_row_from_payload(
+def runtime_control_freeze_row_from_payload(
     freeze_record: dict[str, Any],
     *,
     record_locator: str = "$",
@@ -4005,11 +4009,11 @@ def promotion_freeze_row_from_payload(
         "updated_at_utc": maybe_text(freeze_record.get("updated_at_utc")),
         "gate_status": maybe_text(freeze_record.get("gate_status")),
         "readiness_status": maybe_text(freeze_record.get("readiness_status")),
-        "promotion_status": maybe_text(freeze_record.get("promotion_status")),
+        "report_basis_status": maybe_text(freeze_record.get("report_basis_status")),
         "controller_status": maybe_text(freeze_record.get("controller_status")),
         "supervisor_status": maybe_text(freeze_record.get("supervisor_status")),
         "planning_mode": maybe_text(freeze_record.get("planning_mode")),
-        "promote_allowed": 1 if bool(freeze_record.get("promote_allowed")) else 0,
+        "report_basis_freeze_allowed": 1 if bool(freeze_record.get("report_basis_freeze_allowed")) else 0,
         "gate_reasons_json": json_text(freeze_record.get("gate_reasons", [])),
         "recommended_next_skills_json": json_text(freeze_record.get("recommended_next_skills", [])),
         "reporting_ready": 1 if bool(freeze_record.get("reporting_ready")) else 0,
@@ -4020,7 +4024,7 @@ def promotion_freeze_row_from_payload(
             freeze_record.get("reporting_blockers", [])
         ),
         "controller_artifact_path": maybe_text(artifacts.get("controller_state_path")),
-        "gate_artifact_path": maybe_text(artifacts.get("promotion_gate_path")),
+        "gate_artifact_path": maybe_text(artifacts.get("report_basis_gate_path")),
         "supervisor_artifact_path": maybe_text(artifacts.get("supervisor_state_path")),
         "record_locator": maybe_text(record_locator) or "$",
         "raw_json": json_text(freeze_record),
@@ -4067,8 +4071,8 @@ def normalized_controller_snapshot_payload(
     normalized["gate_status"] = (
         maybe_text(normalized.get("gate_status")) or "not-evaluated"
     )
-    normalized["promotion_status"] = (
-        maybe_text(normalized.get("promotion_status")) or "not-evaluated"
+    normalized["report_basis_status"] = (
+        maybe_text(normalized.get("report_basis_status")) or "not-evaluated"
     )
     normalized["resume_recommended"] = bool(
         maybe_bool(normalized.get("resume_recommended"))
@@ -4124,7 +4128,7 @@ def controller_snapshot_row_from_payload(
         "resume_status": maybe_text(normalized.get("resume_status")),
         "readiness_status": maybe_text(normalized.get("readiness_status")),
         "gate_status": maybe_text(normalized.get("gate_status")),
-        "promotion_status": maybe_text(normalized.get("promotion_status")),
+        "report_basis_status": maybe_text(normalized.get("report_basis_status")),
         "resume_recommended": 1 if bool(normalized.get("resume_recommended")) else 0,
         "restart_recommended": 1
         if bool(normalized.get("restart_recommended"))
@@ -4170,12 +4174,16 @@ def normalized_gate_snapshot_payload(
     normalized["stage_name"] = (
         maybe_text(normalized.get("stage_name"))
         or maybe_text(normalized.get("gate_handler"))
-        or "promotion-gate"
+        or "report-basis-gate"
     )
     normalized["gate_handler"] = (
         maybe_text(normalized.get("gate_handler"))
         or maybe_text(normalized.get("stage_name"))
-        or "promotion-gate"
+        or "report-basis-gate"
+    )
+    normalized["gate_semantics"] = (
+        maybe_text(normalized.get("gate_semantics"))
+        or normalized["stage_name"]
     )
     normalized["gate_id"] = maybe_text(
         normalized.get("gate_id")
@@ -4191,12 +4199,30 @@ def normalized_gate_snapshot_payload(
     normalized["readiness_status"] = (
         maybe_text(normalized.get("readiness_status")) or "pending"
     )
-    normalized["promote_allowed"] = bool(maybe_bool(normalized.get("promote_allowed")))
+    normalized["report_basis_freeze_allowed"] = bool(
+        maybe_bool(normalized.get("report_basis_freeze_allowed"))
+    )
+    normalized["report_basis_status"] = (
+        maybe_text(normalized.get("report_basis_status"))
+        or ("frozen" if normalized["report_basis_freeze_allowed"] else "withheld")
+    )
+    normalized["report_basis_gate_status"] = (
+        maybe_text(normalized.get("report_basis_gate_status"))
+        or (
+            "report-basis-freeze-allowed"
+            if normalized["report_basis_freeze_allowed"]
+            else "report-basis-freeze-withheld"
+        )
+    )
     normalized["decision_source"] = (
         maybe_text(normalized.get("decision_source")) or "policy-fallback"
     )
-    normalized["promotion_resolution_mode"] = maybe_text(
-        normalized.get("promotion_resolution_mode")
+    normalized["report_basis_resolution_mode"] = maybe_text(
+        normalized.get("report_basis_resolution_mode")
+    )
+    normalized["report_basis_resolution_mode"] = (
+        maybe_text(normalized.get("report_basis_resolution_mode"))
+        or normalized["report_basis_resolution_mode"]
     )
     normalized["gate_reasons"] = unique_texts(list_items(normalized.get("gate_reasons")))
     normalized["supporting_proposal_ids"] = unique_texts(
@@ -4245,10 +4271,10 @@ def gate_snapshot_row_from_payload(
         "gate_handler": maybe_text(normalized.get("gate_handler")),
         "gate_status": maybe_text(normalized.get("gate_status")),
         "readiness_status": maybe_text(normalized.get("readiness_status")),
-        "promote_allowed": 1 if bool(normalized.get("promote_allowed")) else 0,
+        "report_basis_freeze_allowed": 1 if bool(normalized.get("report_basis_freeze_allowed")) else 0,
         "decision_source": maybe_text(normalized.get("decision_source")),
-        "promotion_resolution_mode": maybe_text(
-            normalized.get("promotion_resolution_mode")
+        "report_basis_resolution_mode": maybe_text(
+            normalized.get("report_basis_resolution_mode")
         ),
         "gate_reasons_json": json_text(normalized.get("gate_reasons", [])),
         "supporting_proposal_ids_json": json_text(
@@ -4324,15 +4350,15 @@ def normalized_supervisor_snapshot_payload(
     normalized["gate_status"] = (
         maybe_text(normalized.get("gate_status")) or "not-evaluated"
     )
-    normalized["promotion_status"] = (
-        maybe_text(normalized.get("promotion_status")) or "not-evaluated"
+    normalized["report_basis_status"] = (
+        maybe_text(normalized.get("report_basis_status")) or "not-evaluated"
     )
     reporting_blockers = unique_texts(list_items(normalized.get("reporting_blockers")))
     reporting_ready = maybe_bool(normalized.get("reporting_ready"))
     if reporting_ready is None:
         reporting_ready = bool(
             reporting_gate_state(
-                promotion_status=normalized["promotion_status"],
+                report_basis_status=normalized["report_basis_status"],
                 readiness_status=normalized["readiness_status"],
                 supervisor_status=normalized["supervisor_status"],
                 require_supervisor=True,
@@ -4399,7 +4425,7 @@ def supervisor_snapshot_row_from_payload(
         "planning_mode": maybe_text(normalized.get("planning_mode")),
         "readiness_status": maybe_text(normalized.get("readiness_status")),
         "gate_status": maybe_text(normalized.get("gate_status")),
-        "promotion_status": maybe_text(normalized.get("promotion_status")),
+        "report_basis_status": maybe_text(normalized.get("report_basis_status")),
         "reporting_ready": 1 if bool(normalized.get("reporting_ready")) else 0,
         "reporting_handoff_status": maybe_text(
             normalized.get("reporting_handoff_status")
@@ -4911,7 +4937,7 @@ def round_task_snapshot_row_from_payload(
     }
 
 
-def fetch_promotion_freeze(
+def fetch_runtime_control_freeze(
     connection: sqlite3.Connection,
     *,
     run_id: str = "",
@@ -4932,7 +4958,7 @@ def fetch_promotion_freeze(
     row = connection.execute(
         f"""
         SELECT *
-        FROM promotion_freezes
+        FROM report_basis_freezes
         WHERE {' AND '.join(clauses)}
         ORDER BY updated_at_utc DESC, freeze_id DESC
         LIMIT 1
@@ -5220,7 +5246,7 @@ def build_falsification_probe_payload(
     return payload
 
 
-def resolved_promotion_freeze_artifacts(
+def resolved_runtime_control_freeze_artifacts(
     existing_record: dict[str, Any],
     *,
     controller_snapshot: dict[str, Any] | None = None,
@@ -5252,7 +5278,7 @@ def resolved_promotion_freeze_artifacts(
         else ""
     )
     supervisor_gate_path = (
-        maybe_text(supervisor_snapshot.get("promotion_gate_path"))
+        maybe_text(supervisor_snapshot.get("report_basis_gate_path"))
         if isinstance(supervisor_snapshot, dict)
         else ""
     )
@@ -5261,23 +5287,26 @@ def resolved_promotion_freeze_artifacts(
         if isinstance(supervisor_snapshot, dict)
         else ""
     )
+    report_basis_gate_artifact_path = (
+        maybe_text(explicit.get("report_basis_gate_path"))
+        or gate_output_path
+        or maybe_text(controller_artifacts.get("report_basis_gate_path"))
+        or supervisor_gate_path
+        or maybe_text(supervisor_inspection.get("gate_path"))
+        or maybe_text(existing_artifacts.get("report_basis_gate_path"))
+    )
     return {
         "controller_state_path": maybe_text(explicit.get("controller_state_path"))
         or maybe_text(controller_artifacts.get("controller_state_path"))
         or maybe_text(existing_artifacts.get("controller_state_path")),
-        "promotion_gate_path": maybe_text(explicit.get("promotion_gate_path"))
-        or gate_output_path
-        or maybe_text(controller_artifacts.get("promotion_gate_path"))
-        or supervisor_gate_path
-        or maybe_text(supervisor_inspection.get("gate_path"))
-        or maybe_text(existing_artifacts.get("promotion_gate_path")),
+        "report_basis_gate_path": report_basis_gate_artifact_path,
         "supervisor_state_path": maybe_text(explicit.get("supervisor_state_path"))
         or supervisor_path
         or maybe_text(existing_artifacts.get("supervisor_state_path")),
     }
 
 
-def merged_promotion_freeze_record(
+def merged_runtime_control_freeze_record(
     *,
     run_id: str,
     round_id: str,
@@ -5290,8 +5319,8 @@ def merged_promotion_freeze_record(
     record = dict(existing_record) if isinstance(existing_record, dict) else {}
     normalized_run_id = maybe_text(run_id) or maybe_text(record.get("run_id"))
     normalized_round_id = maybe_text(round_id) or maybe_text(record.get("round_id"))
-    record["schema_version"] = "deliberation-promotion-freeze-v1"
-    record["freeze_id"] = maybe_text(record.get("freeze_id")) or promotion_freeze_record_id(
+    record["schema_version"] = "runtime-control-freeze-v1"
+    record["freeze_id"] = maybe_text(record.get("freeze_id")) or runtime_control_freeze_id(
         normalized_run_id,
         normalized_round_id,
     )
@@ -5362,10 +5391,11 @@ def merged_promotion_freeze_record(
         or maybe_text(resolved_gate.get("readiness_status"))
         or maybe_text(record.get("readiness_status"))
     )
-    record["promotion_status"] = (
-        maybe_text(resolved_supervisor.get("promotion_status"))
-        or maybe_text(resolved_controller.get("promotion_status"))
-        or maybe_text(record.get("promotion_status"))
+    record["report_basis_status"] = (
+        maybe_text(resolved_supervisor.get("report_basis_status"))
+        or maybe_text(resolved_controller.get("report_basis_status"))
+        or maybe_text(resolved_gate.get("report_basis_status"))
+        or maybe_text(record.get("report_basis_status"))
     )
     record["controller_status"] = (
         maybe_text(resolved_controller.get("controller_status"))
@@ -5386,14 +5416,23 @@ def merged_promotion_freeze_record(
         or maybe_text(record.get("planning_mode"))
     )
     gate_present = isinstance(resolved_gate, dict) and bool(resolved_gate)
-    promote_allowed = (
-        bool(resolved_gate.get("promote_allowed"))
+    report_basis_freeze_allowed = (
+        bool(resolved_gate.get("report_basis_freeze_allowed"))
         if gate_present
-        else bool(record.get("promote_allowed"))
+        else bool(record.get("report_basis_freeze_allowed"))
     )
-    if record["gate_status"] == "allow-promote":
-        promote_allowed = True
-    record["promote_allowed"] = promote_allowed
+    if record["gate_status"] == "report-basis-freeze-allowed":
+        report_basis_freeze_allowed = True
+    record["report_basis_freeze_allowed"] = report_basis_freeze_allowed
+    record["report_basis_gate_status"] = (
+        maybe_text(resolved_gate.get("report_basis_gate_status"))
+        or maybe_text(record.get("report_basis_gate_status"))
+        or (
+            "report-basis-freeze-allowed"
+            if report_basis_freeze_allowed
+            else "report-basis-freeze-withheld"
+        )
+    )
     record["gate_reasons"] = unique_texts(
         (
             resolved_supervisor.get("gate_reasons", [])
@@ -5459,17 +5498,17 @@ def merged_promotion_freeze_record(
             else []
         )
     )
-    record["artifacts"] = resolved_promotion_freeze_artifacts(
+    record["artifacts"] = resolved_runtime_control_freeze_artifacts(
         record,
         controller_snapshot=resolved_controller,
         gate_snapshot=resolved_gate,
         supervisor_snapshot=resolved_supervisor,
         artifact_paths=artifact_paths,
     )
-    return validate_canonical_payload("promotion-freeze", record)
+    return validate_canonical_payload("runtime-control-freeze", record)
 
 
-def store_promotion_freeze_record(
+def store_runtime_control_freeze_record(
     run_dir: str | Path,
     *,
     run_id: str,
@@ -5484,12 +5523,12 @@ def store_promotion_freeze_record(
     connection, _db_file = connect_db(run_dir_path, db_path)
     try:
         with connection:
-            existing_record = fetch_promotion_freeze(
+            existing_record = fetch_runtime_control_freeze(
                 connection,
                 run_id=run_id,
                 round_id=round_id,
             )
-            freeze_record = merged_promotion_freeze_record(
+            freeze_record = merged_runtime_control_freeze_record(
                 run_id=run_id,
                 round_id=round_id,
                 existing_record=existing_record,
@@ -5498,9 +5537,9 @@ def store_promotion_freeze_record(
                 supervisor_snapshot=supervisor_snapshot,
                 artifact_paths=artifact_paths,
             )
-            write_promotion_freeze_row(
+            write_report_basis_freeze_row(
                 connection,
-                promotion_freeze_row_from_payload(freeze_record),
+                runtime_control_freeze_row_from_payload(freeze_record),
             )
             normalized_controller = (
                 freeze_record.get("controller_snapshot", {})
@@ -5586,7 +5625,7 @@ def fetch_round_readiness_assessment(
     )
 
 
-def fetch_promotion_basis_record(
+def fetch_report_basis_freeze_record(
     connection: sqlite3.Connection,
     *,
     run_id: str = "",
@@ -5594,7 +5633,7 @@ def fetch_promotion_basis_record(
 ) -> dict[str, Any] | None:
     return latest_raw_json_row(
         connection,
-        table_name="promotion_basis_records",
+        table_name="report_basis_freeze_records",
         id_column="basis_id",
         timestamp_column="generated_at_utc",
         run_id=run_id,
@@ -5602,7 +5641,7 @@ def fetch_promotion_basis_record(
     )
 
 
-def fetch_promotion_basis_items(
+def fetch_report_basis_freeze_items(
     connection: sqlite3.Connection,
     *,
     run_id: str = "",
@@ -5610,7 +5649,7 @@ def fetch_promotion_basis_items(
 ) -> list[dict[str, Any]]:
     return fetch_json_rows(
         connection,
-        table_name="promotion_basis_items",
+        table_name="report_basis_freeze_items",
         id_column="item_row_id",
         timestamp_column="generated_at_utc",
         run_id=run_id,
@@ -6002,29 +6041,29 @@ def load_round_readiness_assessment(
         connection.close()
 
 
-def store_promotion_basis_record(
+def store_report_basis_freeze_record(
     run_dir: str | Path,
     *,
-    promotion_payload: dict[str, Any],
+    report_basis_payload: dict[str, Any],
     artifact_path: str = "",
     db_path: str = "",
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
-    normalized_payload = normalized_promotion_basis_payload(
-        promotion_payload if isinstance(promotion_payload, dict) else {},
+    normalized_payload = normalized_report_basis_freeze_payload(
+        report_basis_payload if isinstance(report_basis_payload, dict) else {},
         run_id=maybe_text(
-            promotion_payload.get("run_id")
-            if isinstance(promotion_payload, dict)
+            report_basis_payload.get("run_id")
+            if isinstance(report_basis_payload, dict)
             else ""
         ),
         round_id=maybe_text(
-            promotion_payload.get("round_id")
-            if isinstance(promotion_payload, dict)
+            report_basis_payload.get("round_id")
+            if isinstance(report_basis_payload, dict)
             else ""
         ),
         source_skill=maybe_text(
-            promotion_payload.get("skill")
-            if isinstance(promotion_payload, dict)
+            report_basis_payload.get("skill")
+            if isinstance(report_basis_payload, dict)
             else ""
         ),
         artifact_path=artifact_path,
@@ -6033,29 +6072,29 @@ def store_promotion_basis_record(
     run_id = maybe_text(normalized_payload.get("run_id"))
     round_id = maybe_text(normalized_payload.get("round_id"))
     generated_at_utc = maybe_text(normalized_payload.get("generated_at_utc"))
-    item_rows = iter_promotion_basis_items(normalized_payload)
+    item_rows = iter_report_basis_freeze_items(normalized_payload)
     connection, _db_file = connect_db(run_dir_path, db_path)
     try:
         with connection:
             connection.execute(
-                "DELETE FROM promotion_basis_records WHERE run_id = ? AND round_id = ?",
+                "DELETE FROM report_basis_freeze_records WHERE run_id = ? AND round_id = ?",
                 (run_id, round_id),
             )
             connection.execute(
-                "DELETE FROM promotion_basis_items WHERE run_id = ? AND round_id = ?",
+                "DELETE FROM report_basis_freeze_items WHERE run_id = ? AND round_id = ?",
                 (run_id, round_id),
             )
-            write_promotion_basis_record_row(
+            write_report_basis_freeze_record_row(
                 connection,
-                promotion_basis_record_row_from_payload(
+                report_basis_freeze_record_row_from_payload(
                     normalized_payload,
                     artifact_path=artifact_path,
                 ),
             )
             for item_group, item_index, item in item_rows:
-                write_promotion_basis_item_row(
+                write_report_basis_freeze_item_row(
                     connection,
-                    promotion_basis_item_row_from_payload(
+                    report_basis_freeze_item_row_from_payload(
                         item,
                         basis_id=basis_id,
                         run_id=run_id,
@@ -6072,7 +6111,7 @@ def store_promotion_basis_record(
     return normalized_payload
 
 
-def load_promotion_basis_record(
+def load_report_basis_freeze_record(
     run_dir: str | Path,
     *,
     run_id: str = "",
@@ -6082,7 +6121,7 @@ def load_promotion_basis_record(
     run_dir_path = resolve_run_dir(run_dir)
     connection, _db_file = connect_db(run_dir_path, db_path)
     try:
-        return fetch_promotion_basis_record(
+        return fetch_report_basis_freeze_record(
             connection,
             run_id=run_id,
             round_id=round_id,
@@ -6091,7 +6130,7 @@ def load_promotion_basis_record(
         connection.close()
 
 
-def load_promotion_basis_items(
+def load_report_basis_freeze_items(
     run_dir: str | Path,
     *,
     run_id: str = "",
@@ -6101,7 +6140,7 @@ def load_promotion_basis_items(
     run_dir_path = resolve_run_dir(run_dir)
     connection, _db_file = connect_db(run_dir_path, db_path)
     try:
-        return fetch_promotion_basis_items(
+        return fetch_report_basis_freeze_items(
             connection,
             run_id=run_id,
             round_id=round_id,
@@ -6583,7 +6622,7 @@ def load_moderator_work_surface(
     }
 
 
-def load_promotion_freeze_record(
+def load_runtime_control_freeze_record(
     run_dir: str | Path,
     *,
     run_id: str = "",
@@ -6593,7 +6632,7 @@ def load_promotion_freeze_record(
     run_dir_path = resolve_run_dir(run_dir)
     connection, _db_file = connect_db(run_dir_path, db_path)
     try:
-        return fetch_promotion_freeze(
+        return fetch_runtime_control_freeze(
             connection,
             run_id=run_id,
             round_id=round_id,
@@ -6691,7 +6730,7 @@ def load_phase2_control_state(
     round_id: str = "",
     db_path: str = "",
 ) -> dict[str, Any]:
-    freeze_record = load_promotion_freeze_record(
+    runtime_control_freeze_record = load_runtime_control_freeze_record(
         run_dir,
         run_id=run_id,
         round_id=round_id,
@@ -6703,7 +6742,7 @@ def load_phase2_control_state(
         round_id=round_id,
         db_path=db_path,
     ) or {}
-    promotion_basis_record = load_promotion_basis_record(
+    report_basis_freeze_record = load_report_basis_freeze_record(
         run_dir,
         run_id=run_id,
         round_id=round_id,
@@ -6803,12 +6842,17 @@ def load_phase2_control_state(
         if orchestration_plan_record
         else []
     )
+    resolved_gate_record = gate_record or (
+        runtime_control_freeze_record.get("gate_snapshot", {})
+        if isinstance(runtime_control_freeze_record.get("gate_snapshot"), dict)
+        else {}
+    )
     return {
         "orchestration_plan": orchestration_plan_record,
         "orchestration_plan_steps": orchestration_plan_steps,
-        "promotion_freeze": freeze_record,
+        "runtime_control_freeze": runtime_control_freeze_record,
         "round_readiness": readiness_record,
-        "promotion_basis": promotion_basis_record,
+        "report_basis_freeze": report_basis_freeze_record,
         "reporting_handoff": reporting_handoff_record,
         "decision_draft": decision_draft_record,
         "decision": decision_record,
@@ -6817,20 +6861,16 @@ def load_phase2_control_state(
         "final_publication": final_publication_record,
         "controller": controller_record
         or (
-            freeze_record.get("controller_snapshot", {})
-            if isinstance(freeze_record.get("controller_snapshot"), dict)
+            runtime_control_freeze_record.get("controller_snapshot", {})
+            if isinstance(runtime_control_freeze_record.get("controller_snapshot"), dict)
             else {}
         ),
-        "promotion_gate": gate_record
-        or (
-            freeze_record.get("gate_snapshot", {})
-            if isinstance(freeze_record.get("gate_snapshot"), dict)
-            else {}
-        ),
+        "report_basis_gate": resolved_gate_record,
+        "report_basis_gate": resolved_gate_record,
         "supervisor": supervisor_record
         or (
-            freeze_record.get("supervisor_snapshot", {})
-            if isinstance(freeze_record.get("supervisor_snapshot"), dict)
+            runtime_control_freeze_record.get("supervisor_snapshot", {})
+            if isinstance(runtime_control_freeze_record.get("supervisor_snapshot"), dict)
             else {}
         ),
     }
@@ -7930,9 +7970,9 @@ __all__ = [
     "load_orchestration_plan_record",
     "load_orchestration_plan_steps",
     "load_phase2_control_state",
-    "load_promotion_basis_items",
-    "load_promotion_basis_record",
-    "load_promotion_freeze_record",
+    "load_report_basis_freeze_items",
+    "load_report_basis_freeze_record",
+    "load_runtime_control_freeze_record",
     "load_raw_board_record",
     "load_reporting_handoff_record",
     "load_round_readiness_assessment",
@@ -7950,8 +7990,8 @@ __all__ = [
     "store_moderator_action_records",
     "store_moderator_action_snapshot",
     "store_orchestration_plan_record",
-    "store_promotion_basis_record",
-    "store_promotion_freeze_record",
+    "store_report_basis_freeze_record",
+    "store_runtime_control_freeze_record",
     "store_reporting_handoff_record",
     "store_round_transition_record",
     "store_round_readiness_assessment",

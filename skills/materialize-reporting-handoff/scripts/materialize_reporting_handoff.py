@@ -25,7 +25,7 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_reporting_handoff_record,
 )
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
-    load_promotion_basis_wrapper,
+    load_report_basis_freeze_wrapper,
     load_round_readiness_wrapper,
     load_supervisor_state_wrapper,
 )
@@ -112,10 +112,10 @@ def excerpt_text(text: str, limit: int = 280) -> str:
     return normalized[: limit - 3].rstrip() + "..."
 
 
-def legacy_reporting_basis_count(promotion_basis: dict[str, Any]) -> int:
+def legacy_reporting_basis_count(report_basis_freeze: dict[str, Any]) -> int:
     frozen_basis = (
-        promotion_basis.get("frozen_basis", {})
-        if isinstance(promotion_basis.get("frozen_basis"), dict)
+        report_basis_freeze.get("frozen_basis", {})
+        if isinstance(report_basis_freeze.get("frozen_basis"), dict)
         else {}
     )
     count = 0
@@ -128,7 +128,7 @@ def legacy_reporting_basis_count(promotion_basis: dict[str, Any]) -> int:
         "representation_gaps",
         "diffusion_edges",
     ):
-        rows = promotion_basis.get(key, frozen_basis.get(key, []))
+        rows = report_basis_freeze.get(key, frozen_basis.get(key, []))
         if isinstance(rows, list):
             count += len(rows)
     return count
@@ -292,18 +292,18 @@ def build_key_findings_from_council_basis(
 
 def build_open_risks(
     *,
-    promotion_basis: dict[str, Any],
+    report_basis_freeze: dict[str, Any],
     supervisor_state: dict[str, Any],
     readiness: dict[str, Any],
 ) -> list[dict[str, str]]:
     results: list[dict[str, str]] = []
-    remaining_risks = promotion_basis.get("remaining_risks", []) if isinstance(promotion_basis.get("remaining_risks"), list) else []
+    remaining_risks = report_basis_freeze.get("remaining_risks", []) if isinstance(report_basis_freeze.get("remaining_risks"), list) else []
     for index, risk in enumerate(remaining_risks, start=1):
         if not isinstance(risk, dict):
             continue
         results.append(
             {
-                "risk_id": maybe_text(risk.get("action_id")) or f"promotion-risk-{index:03d}",
+                "risk_id": maybe_text(risk.get("action_id")) or f"report-basis-risk-{index:03d}",
                 "risk_type": maybe_text(risk.get("action_kind")) or "investigation",
                 "priority": maybe_text(risk.get("priority")) or "medium",
                 "summary": maybe_text(risk.get("reason")) or "Promotion basis still carries unresolved risk.",
@@ -436,7 +436,7 @@ def build_uncertainty_register(
                 "uncertainty_id": f"reporting-blocker-{index:03d}",
                 "uncertainty_type": "reporting-blocker",
                 "summary": summary,
-                "report_treatment": "Do not present as resolved evidence until moderator or report basis explicitly addresses it.",
+                "report_treatment": "Do not present as resolved evidence until moderator or report_basis explicitly addresses it.",
             }
         )
     if not any(row.get("object_kind") in {"finding-record", "evidence-bundle"} for row in evidence_index):
@@ -546,7 +546,7 @@ def build_packets(
     round_id: str,
     reporting_ready: bool,
     handoff_status: str,
-    promotion_status: str,
+    report_basis_status: str,
     readiness_status: str,
     supervisor_status: str,
     reporting_blockers: list[str],
@@ -583,7 +583,7 @@ def build_packets(
         recommended_next_actions=recommended_next_actions,
         uncertainty_register=uncertainty_register,
     )
-    packet_suffix = stable_hash(run_id, round_id, handoff_status, promotion_status)[:12]
+    packet_suffix = stable_hash(run_id, round_id, handoff_status, report_basis_status)[:12]
     evidence_packet = {
         "packet_id": f"evidence-packet-{packet_suffix}",
         "packet_kind": "decision-maker-report-evidence-packet",
@@ -597,7 +597,7 @@ def build_packets(
             for object_kind, rows in sorted(council_basis.items())
         },
         "caveats": [
-            "Helper and heuristic outputs are not direct report basis unless cited through DB council/reporting objects.",
+            "Helper and heuristic outputs are not direct report_basis unless cited through DB council/reporting objects.",
             "Frozen evidence refs identify citation candidates; report conclusions require finding, evidence bundle, proposal, or report section basis.",
         ],
     }
@@ -606,7 +606,7 @@ def build_packets(
         "packet_kind": "moderator-decision-memo-packet",
         "handoff_status": handoff_status,
         "reporting_ready": reporting_ready,
-        "promotion_status": promotion_status,
+        "report_basis_status": report_basis_status,
         "readiness_status": readiness_status,
         "supervisor_status": supervisor_status,
         "reporting_blockers": reporting_blockers,
@@ -645,7 +645,7 @@ def materialize_reporting_handoff_skill(
     run_dir: str,
     run_id: str,
     round_id: str,
-    promotion_path: str,
+    report_basis_path: str,
     readiness_path: str,
     board_brief_path: str,
     supervisor_state_path: str,
@@ -653,42 +653,47 @@ def materialize_reporting_handoff_skill(
     max_findings: int,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
-    promotion_file = resolve_path(run_dir_path, promotion_path, f"promotion/promoted_evidence_basis_{round_id}.json")
+    report_basis_file = resolve_path(run_dir_path, report_basis_path, f"report_basis/frozen_report_basis_{round_id}.json")
     readiness_file = resolve_path(run_dir_path, readiness_path, f"reporting/round_readiness_{round_id}.json")
     board_brief_file = resolve_path(run_dir_path, board_brief_path, f"board/board_brief_{round_id}.md")
     supervisor_file = resolve_path(run_dir_path, supervisor_state_path, f"runtime/supervisor_state_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"reporting/reporting_handoff_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
-    promotion_context = load_promotion_basis_wrapper(
+    report_basis_context = load_report_basis_freeze_wrapper(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
-        promotion_path=promotion_path,
+        report_basis_path=report_basis_path,
     )
-    promotion_payload = (
-        promotion_context.get("payload")
-        if isinstance(promotion_context.get("payload"), dict)
+    report_basis_payload = (
+        report_basis_context.get("payload")
+        if isinstance(report_basis_context.get("payload"), dict)
         else None
     )
-    if not isinstance(promotion_payload, dict):
+    if not isinstance(report_basis_payload, dict):
         warnings.append(
             {
-                "code": "missing-promotion-basis",
+                "code": "missing-report-basis-freeze",
                 "message": (
-                    "No promotion basis DB record was found for "
-                    f"{promotion_file}; artifact exists but is orphaned from the deliberation plane."
-                    if bool(promotion_context.get("artifact_present"))
+                    "No report-basis DB record was found for "
+                    f"{report_basis_file}; artifact exists but is orphaned from the deliberation plane."
+                    if bool(report_basis_context.get("artifact_present"))
                     else (
-                        "No promotion basis artifact or DB record was found "
-                        f"at {promotion_file}."
+                        "No report-basis artifact or DB record was found "
+                        f"at {report_basis_file}."
                     )
                 ),
             }
         )
-        promotion_basis = {"promotion_status": "withheld", "selected_coverages": [], "selected_evidence_refs": [], "remaining_risks": []}
+        report_basis_freeze = {
+            "report_basis_status": "withheld",
+            "selected_coverages": [],
+            "selected_evidence_refs": [],
+            "remaining_risks": [],
+        }
     else:
-        promotion_basis = promotion_payload
+        report_basis_freeze = report_basis_payload
     readiness_context = load_round_readiness_wrapper(
         run_dir_path,
         run_id=run_id,
@@ -749,13 +754,17 @@ def materialize_reporting_handoff_skill(
         supervisor_state = supervisor_state_payload
     board_brief_text = load_text_if_exists(board_brief_file)
     contract_fields = reporting_contract_fields_from_payload(
-        promotion_payload,
+        report_basis_payload,
         fallback_payload=readiness_payload,
         observed_inputs_overrides={
-            "promotion_artifact_present": bool(
-                promotion_context.get("artifact_present")
+            "report_basis_artifact_present": bool(
+                report_basis_context.get("artifact_present")
             ),
-            "promotion_present": bool(promotion_context.get("payload_present")),
+            "report_basis_present": bool(report_basis_context.get("payload_present")),
+            "report_basis_artifact_present": bool(
+                report_basis_context.get("artifact_present")
+            ),
+            "report_basis_present": bool(report_basis_context.get("payload_present")),
             "readiness_artifact_present": bool(
                 readiness_context.get("artifact_present")
             ),
@@ -766,8 +775,10 @@ def materialize_reporting_handoff_skill(
             "supervisor_state_present": bool(supervisor_context.get("payload_present")),
         },
         field_overrides={
-            "promotion_source": maybe_text(promotion_context.get("source"))
-            or "missing-promotion",
+            "report_basis_source": maybe_text(report_basis_context.get("source"))
+            or "missing-report-basis",
+            "report_basis_source": maybe_text(report_basis_context.get("source"))
+            or "missing-report-basis",
             "readiness_source": (
                 maybe_text(readiness_context.get("source"))
                 or "missing-readiness"
@@ -785,12 +796,12 @@ def materialize_reporting_handoff_skill(
     )
 
     gate_state = reporting_gate_state(
-        promotion_status=maybe_text(promotion_basis.get("promotion_status")) or "withheld",
+        report_basis_status=maybe_text(report_basis_freeze.get("report_basis_status")) or "withheld",
         readiness_status=maybe_text(readiness.get("readiness_status")) or "blocked",
         supervisor_status=maybe_text(supervisor_state.get("supervisor_status")) or "unavailable",
         require_supervisor=True,
     )
-    promotion_status = maybe_text(gate_state.get("promotion_status")) or "withheld"
+    report_basis_status = maybe_text(gate_state.get("report_basis_status")) or "withheld"
     readiness_status = maybe_text(gate_state.get("readiness_status")) or "blocked"
     supervisor_status = maybe_text(gate_state.get("supervisor_status")) or "unavailable"
     handoff_status = maybe_text(gate_state.get("handoff_status")) or "investigation-open"
@@ -808,56 +819,56 @@ def materialize_reporting_handoff_skill(
         round_id=round_id,
     )
     key_findings = build_key_findings_from_council_basis(council_basis, max_findings)
-    ignored_legacy_basis_count = legacy_reporting_basis_count(promotion_basis)
+    ignored_legacy_basis_count = legacy_reporting_basis_count(report_basis_freeze)
     if ignored_legacy_basis_count:
         warnings.append(
             {
-                "code": "legacy-wp4-reporting-basis-ignored",
+                "code": "legacy-optional-analysis-reporting-basis-ignored",
                 "message": (
                     "Ignored legacy claim/coverage, routing, linkage, gap, or diffusion "
                     f"basis rows ({ignored_legacy_basis_count}) while materializing reporting handoff."
                 ),
             }
         )
-    open_risks = build_open_risks(promotion_basis=promotion_basis, supervisor_state=supervisor_state, readiness=readiness)
+    open_risks = build_open_risks(report_basis_freeze=report_basis_freeze, supervisor_state=supervisor_state, readiness=readiness)
     next_actions = build_recommended_next_actions(
         supervisor_state,
         open_risks=open_risks,
         reporting_blocker_hints=reporting_blocker_hints,
     )
     selected_basis_object_ids = unique_texts(
-        promotion_basis.get("selected_basis_object_ids", [])
-        if isinstance(promotion_basis.get("selected_basis_object_ids"), list)
+        report_basis_freeze.get("selected_basis_object_ids", [])
+        if isinstance(report_basis_freeze.get("selected_basis_object_ids"), list)
         else []
     )
     supporting_proposal_ids = unique_texts(
-        promotion_basis.get("supporting_proposal_ids", [])
-        if isinstance(promotion_basis.get("supporting_proposal_ids"), list)
+        report_basis_freeze.get("supporting_proposal_ids", [])
+        if isinstance(report_basis_freeze.get("supporting_proposal_ids"), list)
         else []
     )
     rejected_proposal_ids = unique_texts(
-        promotion_basis.get("rejected_proposal_ids", [])
-        if isinstance(promotion_basis.get("rejected_proposal_ids"), list)
+        report_basis_freeze.get("rejected_proposal_ids", [])
+        if isinstance(report_basis_freeze.get("rejected_proposal_ids"), list)
         else []
     )
     supporting_opinion_ids = unique_texts(
-        promotion_basis.get("supporting_opinion_ids", [])
-        if isinstance(promotion_basis.get("supporting_opinion_ids"), list)
+        report_basis_freeze.get("supporting_opinion_ids", [])
+        if isinstance(report_basis_freeze.get("supporting_opinion_ids"), list)
         else []
     )
     rejected_opinion_ids = unique_texts(
-        promotion_basis.get("rejected_opinion_ids", [])
-        if isinstance(promotion_basis.get("rejected_opinion_ids"), list)
+        report_basis_freeze.get("rejected_opinion_ids", [])
+        if isinstance(report_basis_freeze.get("rejected_opinion_ids"), list)
         else []
     )
     council_input_counts = (
-        promotion_basis.get("council_input_counts", {})
-        if isinstance(promotion_basis.get("council_input_counts"), dict)
+        report_basis_freeze.get("council_input_counts", {})
+        if isinstance(report_basis_freeze.get("council_input_counts"), dict)
         else {}
     )
     selected_evidence_refs = unique_texts(
-        promotion_basis.get("selected_evidence_refs", [])
-        if isinstance(promotion_basis.get("selected_evidence_refs"), list)
+        report_basis_freeze.get("selected_evidence_refs", [])
+        if isinstance(report_basis_freeze.get("selected_evidence_refs"), list)
         else []
     )
     evidence_packet, decision_packet, report_packet = build_packets(
@@ -865,7 +876,7 @@ def materialize_reporting_handoff_skill(
         round_id=round_id,
         reporting_ready=reporting_ready,
         handoff_status=handoff_status,
-        promotion_status=promotion_status,
+        report_basis_status=report_basis_status,
         readiness_status=readiness_status,
         supervisor_status=supervisor_status,
         reporting_blockers=reporting_blockers,
@@ -883,7 +894,7 @@ def materialize_reporting_handoff_skill(
         reporting_blocker_hints=reporting_blocker_hints,
     )
     board_excerpt = excerpt_text(board_brief_text)
-    handoff_id = "reporting-handoff-" + stable_hash(run_id, round_id, handoff_status, promotion_status)[:12]
+    handoff_id = "reporting-handoff-" + stable_hash(run_id, round_id, handoff_status, report_basis_status)[:12]
 
     wrapper = {
         "schema_version": "e1.0",
@@ -895,27 +906,40 @@ def materialize_reporting_handoff_skill(
         "handoff_status": handoff_status,
         "reporting_ready": reporting_ready,
         "reporting_blockers": reporting_blockers,
-        "promotion_status": promotion_status,
+        "report_basis_status": report_basis_status,
+        "report_basis_path": str(report_basis_file),
         "readiness_status": readiness_status,
         "supervisor_status": supervisor_status,
-        "promotion_path": str(promotion_file),
         "readiness_path": str(readiness_file),
         "board_brief_path": str(board_brief_file),
         "supervisor_state_path": str(supervisor_file),
         **contract_fields,
-        "promoted_basis_id": maybe_text(promotion_basis.get("basis_id")),
-        "basis_selection_mode": maybe_text(promotion_basis.get("basis_selection_mode")),
+        "report_basis_id": maybe_text(report_basis_freeze.get("basis_id")),
+        "basis_selection_mode": maybe_text(report_basis_freeze.get("basis_selection_mode")),
         "selected_basis_object_ids": selected_basis_object_ids,
         "supporting_proposal_ids": supporting_proposal_ids,
         "rejected_proposal_ids": rejected_proposal_ids,
         "supporting_opinion_ids": supporting_opinion_ids,
         "rejected_opinion_ids": rejected_opinion_ids,
-        "promotion_resolution_mode": maybe_text(
-            promotion_basis.get("promotion_resolution_mode")
+        "report_basis_resolution_mode": maybe_text(
+            report_basis_freeze.get("report_basis_resolution_mode")
+        )
+        or maybe_text(report_basis_freeze.get("report_basis_resolution_mode")),
+        "report_basis_resolution_reasons": (
+            report_basis_freeze.get("report_basis_resolution_reasons", [])
+            if isinstance(report_basis_freeze.get("report_basis_resolution_reasons"), list)
+            else report_basis_freeze.get("report_basis_resolution_reasons", [])
+            if isinstance(report_basis_freeze.get("report_basis_resolution_reasons"), list)
+            else []
         ),
-        "promotion_resolution_reasons": (
-            promotion_basis.get("promotion_resolution_reasons", [])
-            if isinstance(promotion_basis.get("promotion_resolution_reasons"), list)
+        "report_basis_resolution_mode": maybe_text(
+            report_basis_freeze.get("report_basis_resolution_mode")
+        ),
+        "report_basis_resolution_reasons": (
+            report_basis_freeze.get("report_basis_resolution_reasons", [])
+            if isinstance(report_basis_freeze.get("report_basis_resolution_reasons"), list)
+            else report_basis_freeze.get("report_basis_resolution_reasons", [])
+            if isinstance(report_basis_freeze.get("report_basis_resolution_reasons"), list)
             else []
         ),
         "council_input_counts": council_input_counts,
@@ -961,7 +985,7 @@ def materialize_reporting_handoff_skill(
             "evidence_index_count": len(list_items(evidence_packet.get("evidence_index"))),
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
-            "promotion_source": maybe_text(contract_fields.get("promotion_source")),
+            "report_basis_source": maybe_text(contract_fields.get("report_basis_source")),
             "readiness_source": maybe_text(contract_fields.get("readiness_source")),
             "supervisor_state_source": maybe_text(contract_fields.get("supervisor_state_source")),
             "db_path": contract_fields["db_path"],
@@ -991,7 +1015,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
-    parser.add_argument("--promotion-path", default="")
+    parser.add_argument("--report-basis-path", default="")
     parser.add_argument("--readiness-path", default="")
     parser.add_argument("--board-brief-path", default="")
     parser.add_argument("--supervisor-state-path", default="")
@@ -1007,7 +1031,7 @@ def main() -> int:
         run_dir=args.run_dir,
         run_id=args.run_id,
         round_id=args.round_id,
-        promotion_path=args.promotion_path,
+        report_basis_path=args.report_basis_path,
         readiness_path=args.readiness_path,
         board_brief_path=args.board_brief_path,
         supervisor_state_path=args.supervisor_state_path,

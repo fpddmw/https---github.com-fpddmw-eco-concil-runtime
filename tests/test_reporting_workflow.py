@@ -9,7 +9,7 @@ from _workflow_support import (
     load_json,
     primary_research_issue_id,
     primary_successor_evidence_ref,
-    promotion_path,
+    report_basis_path,
     reporting_path,
     request_and_approve_skill_approval,
     request_and_approve_transition,
@@ -24,13 +24,13 @@ RUN_ID = "run-reporting-001"
 ROUND_ID = "round-reporting-001"
 
 
-def approve_promotion_transition(run_dir: Path) -> str:
+def approve_report_basis_transition(run_dir: Path) -> str:
     return request_and_approve_transition(
         run_dir,
         run_id=RUN_ID,
         round_id=ROUND_ID,
-        transition_kind="promote-evidence-basis",
-        rationale="Approve promotion for reporting workflow coverage.",
+        transition_kind="freeze-report-basis",
+        rationale="Approve report_basis for reporting workflow coverage.",
     )
 
 
@@ -150,7 +150,7 @@ def seed_ready_reporting_context(
 
 
 class ReportingWorkflowTests(unittest.TestCase):
-    def test_reporting_handoff_and_decision_finalize_promoted_round(self) -> None:
+    def test_reporting_handoff_and_decision_finalize_frozen_round(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -161,7 +161,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
 
             prepare_optional_analysis_for_supervision(run_dir)
-            approve_promotion_transition(run_dir)
+            approve_report_basis_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",
@@ -192,14 +192,14 @@ class ReportingWorkflowTests(unittest.TestCase):
 
             handoff_artifact = load_json(reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json"))
             decision_artifact = load_json(reporting_path(run_dir, f"council_decision_draft_{ROUND_ID}.json"))
-            promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
+            report_basis_artifact = load_json(report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json"))
 
             self.assertEqual("reporting-ready", handoff_payload["summary"]["handoff_status"])
             self.assertEqual("reporting-ready", handoff_artifact["handoff_status"])
             self.assertTrue(handoff_payload["summary"]["reporting_ready"])
             self.assertTrue(handoff_artifact["reporting_ready"])
             self.assertEqual([], handoff_artifact["reporting_blockers"])
-            self.assertEqual("promoted", handoff_artifact["promotion_status"])
+            self.assertEqual("frozen", handoff_artifact["report_basis_status"])
             self.assertEqual([], handoff_artifact["key_findings"])
             self.assertEqual(
                 "decision-maker-report-evidence-packet",
@@ -225,37 +225,37 @@ class ReportingWorkflowTests(unittest.TestCase):
                     for item in handoff_artifact["report_packet"]["recommended_sections"]
                 ],
             )
-            self.assertEqual("deliberation-plane", promotion_artifact["board_state_source"])
-            self.assertEqual("missing-coverage", promotion_artifact["coverage_source"])
+            self.assertEqual("deliberation-plane", report_basis_artifact["board_state_source"])
+            self.assertEqual("missing-coverage", report_basis_artifact["coverage_source"])
             self.assertEqual(
                 "deliberation-plane-readiness",
-                promotion_artifact["readiness_source"],
+                report_basis_artifact["readiness_source"],
             )
             self.assertEqual(
                 "missing-board-brief",
-                promotion_artifact["board_brief_source"],
+                report_basis_artifact["board_brief_source"],
             )
             self.assertFalse(
-                promotion_artifact["observed_inputs"]["board_brief_artifact_present"]
+                report_basis_artifact["observed_inputs"]["board_brief_artifact_present"]
             )
             self.assertFalse(
-                promotion_artifact["observed_inputs"]["board_brief_present"]
+                report_basis_artifact["observed_inputs"]["board_brief_present"]
             )
             self.assertTrue(
-                promotion_artifact["observed_inputs"]["readiness_artifact_present"]
+                report_basis_artifact["observed_inputs"]["readiness_artifact_present"]
             )
-            self.assertTrue(promotion_artifact["observed_inputs"]["readiness_present"])
+            self.assertTrue(report_basis_artifact["observed_inputs"]["readiness_present"])
             self.assertTrue(
-                promotion_artifact["observed_inputs"]["next_actions_artifact_present"]
+                report_basis_artifact["observed_inputs"]["next_actions_artifact_present"]
             )
             self.assertTrue(
-                promotion_artifact["observed_inputs"]["next_actions_present"]
+                report_basis_artifact["observed_inputs"]["next_actions_present"]
             )
             self.assertEqual("deliberation-plane", handoff_artifact["board_state_source"])
             self.assertEqual("missing-coverage", handoff_artifact["coverage_source"])
             self.assertEqual(
-                "deliberation-plane-promotion-basis",
-                handoff_artifact["promotion_source"],
+                "deliberation-plane-report-basis-freeze",
+                handoff_artifact["report_basis_source"],
             )
             self.assertEqual(
                 "deliberation-plane-readiness",
@@ -275,9 +275,9 @@ class ReportingWorkflowTests(unittest.TestCase):
                 {"completed", "existing-result-set", "missing-coverage"},
             )
             self.assertTrue(
-                handoff_artifact["observed_inputs"]["promotion_artifact_present"]
+                handoff_artifact["observed_inputs"]["report_basis_artifact_present"]
             )
-            self.assertTrue(handoff_artifact["observed_inputs"]["promotion_present"])
+            self.assertTrue(handoff_artifact["observed_inputs"]["report_basis_present"])
             self.assertTrue(
                 handoff_artifact["observed_inputs"][
                     "supervisor_state_artifact_present"
@@ -299,8 +299,8 @@ class ReportingWorkflowTests(unittest.TestCase):
                 decision_artifact["reporting_handoff_source"],
             )
             self.assertEqual(
-                "deliberation-plane-promotion-basis",
-                decision_artifact["promotion_source"],
+                "deliberation-plane-report-basis-freeze",
+                decision_artifact["report_basis_source"],
             )
             self.assertEqual("deliberation-plane", decision_artifact["board_state_source"])
             self.assertEqual("missing-coverage", decision_artifact["coverage_source"])
@@ -312,20 +312,20 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertTrue(
                 decision_artifact["observed_inputs"]["reporting_handoff_present"]
             )
-            self.assertEqual(promotion_artifact["basis_id"], handoff_artifact["promoted_basis_id"])
+            self.assertEqual(report_basis_artifact["basis_id"], handoff_artifact["report_basis_id"])
 
-    def test_reporting_handoff_and_decision_recover_from_db_when_promotion_artifact_is_missing(self) -> None:
+    def test_reporting_handoff_and_decision_recover_from_db_when_report_basis_artifact_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
             seed_ready_reporting_context(
                 run_dir,
                 root,
-                note_text="Round is ready to move into reporting even if promotion export is removed.",
+                note_text="Round is ready to move into reporting even if report-basis export is removed.",
             )
 
             prepare_optional_analysis_for_supervision(run_dir)
-            approve_promotion_transition(run_dir)
+            approve_report_basis_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",
@@ -335,17 +335,17 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json").unlink()
+            report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json").unlink()
             connection = sqlite3.connect(
                 (run_dir / "analytics" / "signal_plane.sqlite").resolve()
             )
             try:
                 basis_count = connection.execute(
-                    "SELECT COUNT(*) FROM promotion_basis_records WHERE run_id = ? AND round_id = ?",
+                    "SELECT COUNT(*) FROM report_basis_freeze_records WHERE run_id = ? AND round_id = ?",
                     (RUN_ID, ROUND_ID),
                 ).fetchone()[0]
                 item_count = connection.execute(
-                    "SELECT COUNT(*) FROM promotion_basis_items WHERE run_id = ? AND round_id = ?",
+                    "SELECT COUNT(*) FROM report_basis_freeze_items WHERE run_id = ? AND round_id = ?",
                     (RUN_ID, ROUND_ID),
                 ).fetchone()[0]
             finally:
@@ -382,17 +382,17 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertEqual("reporting-ready", handoff_payload["summary"]["handoff_status"])
             self.assertTrue(handoff_artifact["reporting_ready"])
             self.assertEqual(
-                "deliberation-plane-promotion-basis",
-                handoff_artifact["promotion_source"],
+                "deliberation-plane-report-basis-freeze",
+                handoff_artifact["report_basis_source"],
             )
             self.assertFalse(
-                handoff_artifact["observed_inputs"]["promotion_artifact_present"]
+                handoff_artifact["observed_inputs"]["report_basis_artifact_present"]
             )
-            self.assertTrue(handoff_artifact["observed_inputs"]["promotion_present"])
+            self.assertTrue(handoff_artifact["observed_inputs"]["report_basis_present"])
             self.assertEqual("finalize", decision_payload["summary"]["moderator_status"])
             self.assertEqual(
-                "deliberation-plane-promotion-basis",
-                decision_artifact["promotion_source"],
+                "deliberation-plane-report-basis-freeze",
+                decision_artifact["report_basis_source"],
             )
 
     def test_reporting_handoff_recovers_supervisor_state_from_db_when_artifact_is_missing(self) -> None:
@@ -406,7 +406,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
 
             prepare_optional_analysis_for_supervision(run_dir)
-            approve_promotion_transition(run_dir)
+            approve_report_basis_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",
@@ -473,7 +473,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
 
             prepare_optional_analysis_for_supervision(run_dir)
-            approve_promotion_transition(run_dir)
+            approve_report_basis_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",
@@ -604,7 +604,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
 
             prepare_optional_analysis_for_supervision(run_dir)
-            approve_promotion_transition(run_dir)
+            approve_report_basis_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",
@@ -638,8 +638,8 @@ class ReportingWorkflowTests(unittest.TestCase):
 
             self.assertEqual("investigation-open", handoff_payload["summary"]["handoff_status"])
             self.assertFalse(handoff_artifact["reporting_ready"])
-            self.assertIn("promotion-withheld", handoff_artifact["reporting_blockers"])
-            self.assertEqual("withheld", handoff_artifact["promotion_status"])
+            self.assertIn("report-basis-withheld", handoff_artifact["reporting_blockers"])
+            self.assertEqual("withheld", handoff_artifact["report_basis_status"])
             self.assertGreaterEqual(len(handoff_artifact["open_risks"]), 1)
             self.assertGreaterEqual(len(handoff_artifact["recommended_next_actions"]), 1)
             self.assertEqual("missing-board-brief", handoff_artifact["board_brief_source"])
@@ -666,7 +666,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertFalse(
                 decision_artifact["observed_inputs"]["board_brief_artifact_present"]
             )
-            self.assertIn("promotion-withheld", decision_artifact["decision_gating"]["reason_codes"])
+            self.assertIn("report-basis-withheld", decision_artifact["decision_gating"]["reason_codes"])
             self.assertIn(
                 "submit-council-proposal",
                 decision_payload["board_handoff"]["suggested_next_skills"],

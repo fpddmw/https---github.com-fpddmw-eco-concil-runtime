@@ -10,7 +10,7 @@ description: Execute one prepared fetch-plan through explicit queue-runner, norm
 - Run the `queue_runner` component: copy local imports or execute approved detached-fetch steps into the current run raw store.
 - Run the `normalizer_runner` component: invoke mapped normalizer skills or keep a raw-only receipt when no normalizer exists.
 - Run the `execution_receipt` component: write one auditable execution snapshot with step status, raw artifact refs, normalizer receipts, and warnings.
-- Do not choose claim extraction, observation extraction, coverage scoring, readiness, promotion, or any other analysis chain.
+- Do not choose claim extraction, observation extraction, coverage scoring, readiness, report basis, or any other analysis chain.
 
 ## Triggering Conditions
 - `prepare-round` already wrote `fetch_plan_<round_id>.json`.

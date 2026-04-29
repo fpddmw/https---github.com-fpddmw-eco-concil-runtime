@@ -1,4 +1,4 @@
 interface:
   display_name: "Suggest Evidence Lanes"
-  short_description: "WP4 advisory evidence-lane tags"
+  short_description: "Optional-analysis advisory evidence-lane tags"
   default_prompt: "Use $suggest-evidence-lanes only after approval. Treat outputs as advisory tags only; do not assign owners, drive source queues, or advance phases."

@@ -11,7 +11,7 @@ from _workflow_support import (
     load_json,
     primary_research_issue_id,
     primary_successor_evidence_ref,
-    promotion_path,
+    report_basis_path,
     request_and_approve_transition,
     reporting_path,
     run_script,
@@ -24,13 +24,13 @@ RUN_ID = "run-investigation-001"
 ROUND_ID = "round-investigation-001"
 
 
-def approve_promotion_transition(run_dir: Path) -> str:
+def approve_report_basis_transition(run_dir: Path) -> str:
     return request_and_approve_transition(
         run_dir,
         run_id=RUN_ID,
         round_id=ROUND_ID,
-        transition_kind="promote-evidence-basis",
-        rationale="Approve promotion for investigation workflow coverage.",
+        transition_kind="freeze-report-basis",
+        rationale="Approve report_basis for investigation workflow coverage.",
     )
 
 
@@ -124,7 +124,7 @@ def seed_ready_investigation_context(run_dir: Path, root: Path) -> dict[str, str
         "--category",
         "analysis",
         "--note-text",
-        "Board is organized and successor evidence is available for promotion review.",
+        "Board is organized and successor evidence is available for report-basis review.",
         "--linked-artifact-ref",
         evidence_ref,
     )
@@ -415,9 +415,9 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            promotion_request_id = approve_promotion_transition(run_dir)
-            promotion_payload = run_script(
-                script_path("promote-evidence-basis"),
+            report_basis_request_id = approve_report_basis_transition(run_dir)
+            report_basis_payload = run_script(
+                script_path("freeze-report-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -425,11 +425,11 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--transition-request-id",
-                promotion_request_id,
+                report_basis_request_id,
             )
 
             readiness_artifact = load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json"))
-            promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
+            report_basis_artifact = load_json(report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json"))
 
             self.assertEqual("needs-more-data", readiness_payload["summary"]["readiness_status"])
             self.assertFalse(readiness_artifact["observed_inputs"]["next_actions_artifact_present"])
@@ -441,12 +441,12 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertGreater(int(readiness_artifact["counts"]["open_probes"]), 0)
             self.assertIn("controversy_gap_counts", readiness_artifact)
             self.assertIn("probe_type_counts", readiness_artifact)
-            self.assertEqual("withheld", promotion_payload["summary"]["promotion_status"])
-            self.assertFalse(promotion_artifact["observed_inputs"]["next_actions_artifact_present"])
-            self.assertTrue(promotion_artifact["observed_inputs"]["next_actions_present"])
-            self.assertEqual("deliberation-plane-actions", promotion_artifact["next_actions_source"])
+            self.assertEqual("withheld", report_basis_payload["summary"]["report_basis_status"])
+            self.assertFalse(report_basis_artifact["observed_inputs"]["next_actions_artifact_present"])
+            self.assertTrue(report_basis_artifact["observed_inputs"]["next_actions_present"])
+            self.assertEqual("deliberation-plane-actions", report_basis_artifact["next_actions_source"])
 
-    def test_d2_promotion_reads_db_backed_readiness_when_artifact_is_missing(self) -> None:
+    def test_d2_report_basis_reads_db_backed_readiness_when_artifact_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -473,9 +473,9 @@ class InvestigationWorkflowTests(unittest.TestCase):
             finally:
                 connection.close()
 
-            promotion_request_id = approve_promotion_transition(run_dir)
-            promotion_payload = run_script(
-                script_path("promote-evidence-basis"),
+            report_basis_request_id = approve_report_basis_transition(run_dir)
+            report_basis_payload = run_script(
+                script_path("freeze-report-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -483,25 +483,25 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--transition-request-id",
-                promotion_request_id,
+                report_basis_request_id,
             )
-            promotion_artifact = load_json(
-                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
+            report_basis_artifact = load_json(
+                report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json")
             )
 
             self.assertEqual("ready", readiness_payload["summary"]["readiness_status"])
             self.assertGreater(readiness_count, 0)
-            self.assertEqual("promoted", promotion_payload["summary"]["promotion_status"])
+            self.assertEqual("frozen", report_basis_payload["summary"]["report_basis_status"])
             self.assertEqual(
                 "deliberation-plane-readiness",
-                promotion_artifact["readiness_source"],
+                report_basis_artifact["readiness_source"],
             )
             self.assertFalse(
-                promotion_artifact["observed_inputs"]["readiness_artifact_present"]
+                report_basis_artifact["observed_inputs"]["readiness_artifact_present"]
             )
-            self.assertTrue(promotion_artifact["observed_inputs"]["readiness_present"])
+            self.assertTrue(report_basis_artifact["observed_inputs"]["readiness_present"])
 
-    def test_d2_marks_ready_and_promotes_basis_when_board_is_clean(self) -> None:
+    def test_d2_marks_ready_and_freezes_report_basis_basis_when_board_is_clean(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -542,9 +542,9 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            promotion_request_id = approve_promotion_transition(run_dir)
-            promotion_payload = run_script(
-                script_path("promote-evidence-basis"),
+            report_basis_request_id = approve_report_basis_transition(run_dir)
+            report_basis_payload = run_script(
+                script_path("freeze-report-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -552,24 +552,24 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--transition-request-id",
-                promotion_request_id,
+                report_basis_request_id,
             )
 
             readiness_artifact = load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json"))
-            promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
+            report_basis_artifact = load_json(report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json"))
             self.assertEqual(0, actions_payload["summary"]["action_count"])
             self.assertEqual("ready", readiness_payload["summary"]["readiness_status"])
-            self.assertTrue(readiness_artifact["sufficient_for_promotion"])
-            self.assertEqual("promoted", promotion_payload["summary"]["promotion_status"])
-            self.assertEqual("promoted", promotion_artifact["promotion_status"])
+            self.assertTrue(readiness_artifact["sufficient_for_report_basis"])
+            self.assertEqual("frozen", report_basis_payload["summary"]["report_basis_status"])
+            self.assertEqual("frozen", report_basis_artifact["report_basis_status"])
             self.assertEqual(
                 "council-judgement-freeze-v1",
-                promotion_artifact["basis_selection_mode"],
+                report_basis_artifact["basis_selection_mode"],
             )
-            self.assertEqual(0, promotion_artifact["basis_counts"]["coverage_count"])
-            self.assertEqual([], promotion_artifact["selected_coverages"])
-            self.assertGreaterEqual(len(promotion_artifact["supporting_proposal_ids"]), 1)
-            self.assertGreaterEqual(len(promotion_artifact["supporting_opinion_ids"]), 1)
+            self.assertEqual(0, report_basis_artifact["basis_counts"]["coverage_count"])
+            self.assertEqual([], report_basis_artifact["selected_coverages"])
+            self.assertGreaterEqual(len(report_basis_artifact["supporting_proposal_ids"]), 1)
+            self.assertGreaterEqual(len(report_basis_artifact["supporting_opinion_ids"]), 1)
 
     def test_d2_reads_deliberation_plane_without_board_summary_or_brief(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -594,7 +594,7 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertEqual("ready", readiness_payload["summary"]["readiness_status"])
             self.assertEqual("deliberation-plane", readiness_payload["summary"]["board_state_source"])
             self.assertEqual("completed", readiness_payload["deliberation_sync"]["status"])
-            self.assertTrue(readiness_artifact["sufficient_for_promotion"])
+            self.assertTrue(readiness_artifact["sufficient_for_report_basis"])
             self.assertEqual("deliberation-plane", readiness_artifact["board_state_source"])
             self.assertFalse(readiness_artifact["observed_inputs"]["board_summary_artifact_present"])
             self.assertFalse(readiness_artifact["observed_inputs"]["board_summary_present"])
@@ -630,9 +630,9 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            promotion_request_id = approve_promotion_transition(run_dir)
-            promotion_payload = run_script(
-                script_path("promote-evidence-basis"),
+            report_basis_request_id = approve_report_basis_transition(run_dir)
+            report_basis_payload = run_script(
+                script_path("freeze-report-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -640,12 +640,12 @@ class InvestigationWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--transition-request-id",
-                promotion_request_id,
+                report_basis_request_id,
             )
 
             actions_artifact = load_json(investigation_path(run_dir, f"next_actions_{ROUND_ID}.json"))
             readiness_artifact = load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json"))
-            promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
+            report_basis_artifact = load_json(report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json"))
 
             self.assertFalse(analytics_path(run_dir, f"evidence_coverage_{ROUND_ID}.json").exists())
             self.assertEqual("missing-coverage", actions_payload["summary"]["coverage_source"])
@@ -657,19 +657,19 @@ class InvestigationWorkflowTests(unittest.TestCase):
             self.assertEqual("missing-coverage", readiness_payload["summary"]["coverage_source"])
             self.assertFalse(readiness_artifact["observed_inputs"]["coverage_artifact_present"])
             self.assertFalse(readiness_artifact["observed_inputs"]["coverage_present"])
-            self.assertTrue(readiness_artifact["sufficient_for_promotion"])
-            self.assertEqual("promoted", promotion_payload["summary"]["promotion_status"])
-            self.assertEqual("missing-coverage", promotion_payload["summary"]["coverage_source"])
-            self.assertFalse(promotion_artifact["observed_inputs"]["coverage_artifact_present"])
-            self.assertFalse(promotion_artifact["observed_inputs"]["coverage_present"])
+            self.assertTrue(readiness_artifact["sufficient_for_report_basis"])
+            self.assertEqual("frozen", report_basis_payload["summary"]["report_basis_status"])
+            self.assertEqual("missing-coverage", report_basis_payload["summary"]["coverage_source"])
+            self.assertFalse(report_basis_artifact["observed_inputs"]["coverage_artifact_present"])
+            self.assertFalse(report_basis_artifact["observed_inputs"]["coverage_present"])
             self.assertEqual(
                 "council-judgement-freeze-v1",
-                promotion_artifact["basis_selection_mode"],
+                report_basis_artifact["basis_selection_mode"],
             )
-            self.assertEqual(0, promotion_artifact["basis_counts"]["coverage_count"])
-            self.assertEqual([], promotion_artifact["selected_coverages"])
-            self.assertGreaterEqual(len(promotion_artifact["supporting_proposal_ids"]), 1)
-            self.assertGreaterEqual(len(promotion_artifact["supporting_opinion_ids"]), 1)
+            self.assertEqual(0, report_basis_artifact["basis_counts"]["coverage_count"])
+            self.assertEqual([], report_basis_artifact["selected_coverages"])
+            self.assertGreaterEqual(len(report_basis_artifact["supporting_proposal_ids"]), 1)
+            self.assertGreaterEqual(len(report_basis_artifact["supporting_opinion_ids"]), 1)
 
 
 if __name__ == "__main__":

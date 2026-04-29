@@ -1,4 +1,4 @@
 interface:
   display_name: "Submit Council Proposal"
   short_description: "Write one structured council proposal into the deliberation DB"
-  default_prompt: "Use $submit-council-proposal only after the supporting finding or evidence bundle exists. Always provide explicit proposal_kind, agent_role, rationale, confidence, target anchors, at least one evidence_ref, response_to_id or lineage_id pointing to the finding/bundle basis, provenance_json, and any promotion judgement fields instead of hiding them in board notes."
+  default_prompt: "Use $submit-council-proposal only after the supporting finding or evidence bundle exists. Always provide explicit proposal_kind, agent_role, rationale, confidence, target anchors, at least one evidence_ref, response_to_id or lineage_id pointing to the finding/bundle basis, provenance_json, and any report basis judgement fields instead of hiding them in board notes."

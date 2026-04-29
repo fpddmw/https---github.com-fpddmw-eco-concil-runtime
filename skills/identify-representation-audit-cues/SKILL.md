@@ -1,6 +1,6 @@
 ---
 name: identify-representation-audit-cues
-description: WP4 optional helper for representation audit cues. It emits human-review prompts, not representation gap findings or severity scores.
+description: Optional-analysis helper for representation audit cues. It emits human-review prompts, not representation gap findings or severity scores.
 ---
 
 # Identify Representation Audit Cues

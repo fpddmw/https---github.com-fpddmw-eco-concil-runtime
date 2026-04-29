@@ -27,17 +27,15 @@ DECISION_STATUS_APPROVED = "approved"
 DECISION_STATUS_REJECTED = "rejected"
 
 TRANSITION_KIND_OPEN_INVESTIGATION_ROUND = "open-investigation-round"
-TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS = "promote-evidence-basis"
+TRANSITION_KIND_FREEZE_REPORT_BASIS = "freeze-report-basis"
 TRANSITION_KIND_CLOSE_ROUND = "close-round"
 
 TRANSITION_KIND_ALIASES = {
     "open-round": TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
     "open-investigation-round": TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
     "open-follow-up-round": TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
-    "promote": TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
-    "promotion": TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
-    "freeze-report-basis": TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
-    "promote-evidence-basis": TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    "freeze-report-basis": TRANSITION_KIND_FREEZE_REPORT_BASIS,
+    "report-basis-freeze": TRANSITION_KIND_FREEZE_REPORT_BASIS,
     "close": TRANSITION_KIND_CLOSE_ROUND,
     "close-round": TRANSITION_KIND_CLOSE_ROUND,
 }
@@ -48,10 +46,10 @@ TRANSITION_KIND_SPECS: dict[str, dict[str, str]] = {
         "requested_action": "open-follow-up-round",
         "requested_command_name": "open-investigation-round",
     },
-    TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS: {
+    TRANSITION_KIND_FREEZE_REPORT_BASIS: {
         "requested_surface": "skill",
         "requested_action": "freeze-report-basis",
-        "requested_command_name": "promote-evidence-basis",
+        "requested_command_name": "freeze-report-basis",
     },
     TRANSITION_KIND_CLOSE_ROUND: {
         "requested_surface": "kernel-command",
@@ -1157,7 +1155,7 @@ __all__ = [
     "ROLE_RUNTIME_OPERATOR",
     "TRANSITION_KIND_CLOSE_ROUND",
     "TRANSITION_KIND_OPEN_INVESTIGATION_ROUND",
-    "TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS",
+    "TRANSITION_KIND_FREEZE_REPORT_BASIS",
     "approve_transition_request",
     "latest_transition_request",
     "load_transition_request",

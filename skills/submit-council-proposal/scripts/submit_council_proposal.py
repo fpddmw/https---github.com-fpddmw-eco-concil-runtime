@@ -26,7 +26,7 @@ from eco_council_runtime.council_submission_support import (  # noqa: E402
     write_json_file,
 )
 from eco_council_runtime.kernel.deliberation_plane import stable_hash  # noqa: E402
-from eco_council_runtime.phase2_promotion_resolution import proposal_explicit_signals  # noqa: E402
+from eco_council_runtime.phase2_report_basis_resolution import proposal_explicit_signals  # noqa: E402
 from eco_council_runtime.phase2_proposal_actions import proposal_drives_phase2_action_queue  # noqa: E402
 
 OPEN_CHALLENGE_KINDS = {
@@ -80,7 +80,7 @@ def proposal_follow_up_skills(proposal: dict[str, Any]) -> list[str]:
         suggestions.extend(
             [
                 "submit-readiness-opinion",
-                "promote-evidence-basis",
+                "freeze-report-basis",
             ]
         )
     if target_kind in {"hypothesis", "hypothesis-card"} or operation_kinds.intersection(HYPOTHESIS_KINDS):
@@ -102,7 +102,7 @@ def proposal_gap_hints(proposal: dict[str, Any]) -> list[str]:
             "Proposal confidence is below 0.5; expect challenge or readiness follow-up before downstream execution."
         )
     if proposal_explicit_signals(proposal) and not maybe_text(proposal.get("publication_readiness")):
-        hints.append("Promotion-oriented proposal should normally state publication_readiness explicitly for downstream promotion review.")
+        hints.append("Promotion-oriented proposal should normally state publication_readiness explicitly for downstream report-basis review.")
     return hints[:3]
 
 
@@ -116,7 +116,7 @@ def proposal_challenge_hints(proposal: dict[str, Any]) -> list[str]:
     ]
     if reject_signals:
         hints.append(
-            "This proposal carries an explicit withholding signal and can veto promotion until the council resolves it."
+            "This proposal carries an explicit withholding signal and can veto report_basis until the council resolves it."
         )
     if bool(proposal.get("probe_candidate")):
         hints.append(
@@ -155,8 +155,8 @@ def submit_council_proposal_skill(
     lineage_json: str,
     provenance_json: str,
     extra_json: str,
-    promotion_disposition: str,
-    promote_allowed: str,
+    report_basis_disposition: str,
+    report_basis_freeze_allowed: str,
     publication_readiness: str,
     handoff_status: str,
     moderator_status: str,
@@ -193,8 +193,8 @@ def submit_council_proposal_skill(
         provenance_json=provenance_json,
         extra_json=extra_json,
         source_skill=SKILL_NAME,
-        promotion_disposition=promotion_disposition,
-        promote_allowed=promote_allowed,
+        report_basis_disposition=report_basis_disposition,
+        report_basis_freeze_allowed=report_basis_freeze_allowed,
         publication_readiness=publication_readiness,
         handoff_status=handoff_status,
         moderator_status=moderator_status,
@@ -305,8 +305,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lineage-json", default="")
     parser.add_argument("--provenance-json", default="")
     parser.add_argument("--extra-json", default="")
-    parser.add_argument("--promotion-disposition", default="")
-    parser.add_argument("--promote-allowed", default="")
+    parser.add_argument("--report-basis-disposition", default="")
+    parser.add_argument("--report-basis-freeze-allowed", default="")
     parser.add_argument("--publication-readiness", default="")
     parser.add_argument("--handoff-status", default="")
     parser.add_argument("--moderator-status", default="")
@@ -347,8 +347,8 @@ def main() -> int:
         lineage_json=args.lineage_json,
         provenance_json=args.provenance_json,
         extra_json=args.extra_json,
-        promotion_disposition=args.promotion_disposition,
-        promote_allowed=args.promote_allowed,
+        report_basis_disposition=args.report_basis_disposition,
+        report_basis_freeze_allowed=args.report_basis_freeze_allowed,
         publication_readiness=args.publication_readiness,
         handoff_status=args.handoff_status,
         moderator_status=args.moderator_status,

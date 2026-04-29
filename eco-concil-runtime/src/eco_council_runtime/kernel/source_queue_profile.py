@@ -108,7 +108,7 @@ STATE_TRANSITION_PROFILES = {
             "follow-up round."
         ),
     },
-    "promote-evidence-basis": {
+    "freeze-report-basis": {
         "stage": "transition",
         "queue_role": "evidence-basis-freeze",
         "default_invocation": "approved-transition-request",
@@ -245,7 +245,7 @@ def source_queue_profile(skill_name: str) -> dict[str, object]:
             default_invocation=str(data["default_invocation"]),
             notes=str(data["notes"]),
             requires_explicit_approval=skill_name
-            in {"open-investigation-round", "promote-evidence-basis"},
+            in {"open-investigation-round", "freeze-report-basis"},
         )
 
     if skill_name in OPTIONAL_ANALYSIS_SKILLS:

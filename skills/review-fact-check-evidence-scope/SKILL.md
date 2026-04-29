@@ -1,6 +1,6 @@
 ---
 name: review-fact-check-evidence-scope
-description: WP4 optional helper for explicit fact-check evidence scope review. It requires question, place, period, window, lag, metric, and source requirements and emits scope caveats only.
+description: Optional-analysis helper for explicit fact-check evidence scope review. It requires question, place, period, window, lag, metric, and source requirements and emits scope caveats only.
 ---
 
 # Review Fact Check Evidence Scope
@@ -27,7 +27,7 @@ description: WP4 optional helper for explicit fact-check evidence scope review. 
 - `source_requirements`
 
 ## References
-- `../../docs/openclaw-wp4-skills-refactor-workplan.md`
+- `../../docs/openclaw-optional-analysis-skills-refactor-workplan.md`
 
 ## Scripts
 - `scripts/review_fact_check_evidence_scope.py`

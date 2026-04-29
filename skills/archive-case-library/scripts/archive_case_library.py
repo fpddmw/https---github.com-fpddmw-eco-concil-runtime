@@ -29,7 +29,7 @@ from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_final_publication_wrapper,
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
-    load_promotion_basis_wrapper,
+    load_report_basis_freeze_wrapper,
     load_reporting_handoff_wrapper,
     load_round_readiness_wrapper,
 )
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS cases (
     region_label TEXT NOT NULL DEFAULT '',
     profile_id TEXT NOT NULL DEFAULT '',
     publication_status TEXT NOT NULL DEFAULT '',
-    promotion_status TEXT NOT NULL DEFAULT '',
+    report_basis_status TEXT NOT NULL DEFAULT '',
     readiness_status TEXT NOT NULL DEFAULT '',
     last_round_id TEXT NOT NULL DEFAULT '',
     round_count INTEGER NOT NULL DEFAULT 0,
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS case_rounds (
     case_id TEXT NOT NULL,
     round_id TEXT NOT NULL,
     readiness_status TEXT NOT NULL DEFAULT '',
-    promotion_status TEXT NOT NULL DEFAULT '',
+    report_basis_status TEXT NOT NULL DEFAULT '',
     open_challenge_count INTEGER NOT NULL DEFAULT 0,
     open_task_count INTEGER NOT NULL DEFAULT 0,
     open_probe_count INTEGER NOT NULL DEFAULT 0,
@@ -284,7 +284,7 @@ def infer_profile_id(topic: str, objective: str, claim_types: list[str], metric_
     return "general-investigation"
 
 
-def infer_gap_types(metric_families: list[str], source_skills: list[str], readiness_status: str, promotion_status: str) -> list[str]:
+def infer_gap_types(metric_families: list[str], source_skills: list[str], readiness_status: str, report_basis_status: str) -> list[str]:
     gaps: list[str] = []
     if "air-quality" in metric_families:
         gaps.append("station-air-quality")
@@ -296,8 +296,8 @@ def infer_gap_types(metric_families: list[str], source_skills: list[str], readin
         gaps.append("fire-detection")
     if maybe_text(readiness_status) != "ready":
         gaps.append("gate-blocking")
-    if maybe_text(promotion_status) != "promoted":
-        gaps.append("promotion-withheld")
+    if maybe_text(report_basis_status) != "frozen":
+        gaps.append("report-basis-withheld")
     return unique_texts(gaps)
 
 
@@ -528,7 +528,7 @@ def build_excerpts(
     board_brief_excerpt: str,
     handoff: dict[str, Any],
     role_reports: list[dict[str, Any]],
-    promotion: dict[str, Any],
+    report_basis: dict[str, Any],
     coverage_lookup: dict[str, dict[str, Any]],
     board_state: dict[str, Any],
     metric_families: list[str],
@@ -581,7 +581,7 @@ def build_excerpts(
             text=maybe_text(report.get("summary")),
             claim_types=infer_claim_types(report.get("summary")),
         )
-    for coverage in promotion.get("selected_coverages", []) if isinstance(promotion.get("selected_coverages"), list) else []:
+    for coverage in report_basis.get("selected_coverages", []) if isinstance(report_basis.get("selected_coverages"), list) else []:
         if not isinstance(coverage, dict):
             continue
         coverage_id = maybe_text(coverage.get("coverage_id"))
@@ -595,7 +595,7 @@ def build_excerpts(
         )
         append_excerpt(
             artifact_kind="evidence-card",
-            label="promoted evidence coverage",
+            label="frozen evidence coverage",
             text=text,
             claim_types=claim_types_by_id.get(claim_id, []),
         )
@@ -674,14 +674,14 @@ def archive_case_library_skill(
         if isinstance(readiness_wrapper.get("payload"), dict)
         else {}
     )
-    promotion_wrapper = load_promotion_basis_wrapper(
+    report_basis_wrapper = load_report_basis_freeze_wrapper(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
     )
-    promotion = (
-        promotion_wrapper.get("payload")
-        if isinstance(promotion_wrapper.get("payload"), dict)
+    report_basis = (
+        report_basis_wrapper.get("payload")
+        if isinstance(report_basis_wrapper.get("payload"), dict)
         else {}
     )
     handoff_wrapper = load_reporting_handoff_wrapper(
@@ -769,13 +769,13 @@ def archive_case_library_skill(
     )
     source_skills = unique_texts([row["source_skill"] for row in signal_rows])
     readiness_status = maybe_text(readiness.get("readiness_status")) or "blocked"
-    promotion_status = maybe_text(promotion.get("promotion_status")) or "withheld"
-    gap_types = infer_gap_types(metric_families, source_skills, readiness_status, promotion_status)
+    report_basis_status = maybe_text(report_basis.get("report_basis_status")) or "withheld"
+    gap_types = infer_gap_types(metric_families, source_skills, readiness_status, report_basis_status)
     region_label = choose_region_label(mission, [scope for scope in claim_scopes if isinstance(scope, dict)], [scope for scope in observation_scopes if isinstance(scope, dict)])
     profile_id = infer_profile_id(topic, objective, claim_types, metric_families, gap_types)
     alternatives = alternative_hypotheses(board_state)
     questions = open_questions(next_actions, probes, readiness)
-    final_decision_summary = maybe_text(final_publication.get("publication_summary")) or maybe_text(decision.get("decision_summary")) or maybe_text(promotion.get("promotion_notes"))
+    final_decision_summary = maybe_text(final_publication.get("publication_summary")) or maybe_text(decision.get("decision_summary")) or maybe_text(report_basis.get("report_basis_notes"))
     board_brief_excerpt = maybe_text(board_brief_text)[:320]
     history_summary_text = maybe_text(
         " ".join(
@@ -790,7 +790,7 @@ def archive_case_library_skill(
         (final_publication.get("selected_evidence_refs", []) if isinstance(final_publication.get("selected_evidence_refs"), list) else [])
         + (decision.get("selected_evidence_refs", []) if isinstance(decision.get("selected_evidence_refs"), list) else [])
         + (handoff.get("selected_evidence_refs", []) if isinstance(handoff.get("selected_evidence_refs"), list) else [])
-        + (promotion.get("selected_evidence_refs", []) if isinstance(promotion.get("selected_evidence_refs"), list) else [])
+        + (report_basis.get("selected_evidence_refs", []) if isinstance(report_basis.get("selected_evidence_refs"), list) else [])
     )
     claim_types_by_id = claim_type_lookup([scope for scope in claim_scopes if isinstance(scope, dict)])
     excerpts = build_excerpts(
@@ -801,7 +801,7 @@ def archive_case_library_skill(
         board_brief_excerpt=board_brief_excerpt,
         handoff=handoff if isinstance(handoff, dict) else {},
         role_reports=[item for item in role_reports if isinstance(item, dict)],
-        promotion=promotion if isinstance(promotion, dict) else {},
+        report_basis=report_basis if isinstance(report_basis, dict) else {},
         coverage_lookup=coverage_map(coverage_wrapper if isinstance(coverage_wrapper, dict) else {}),
         board_state=board_state,
         metric_families=metric_families,
@@ -854,7 +854,7 @@ def archive_case_library_skill(
             """
             INSERT INTO cases (
                 case_id, run_id, run_dir, topic, objective, region_label, profile_id,
-                publication_status, promotion_status, readiness_status, last_round_id, round_count,
+                publication_status, report_basis_status, readiness_status, last_round_id, round_count,
                 final_decision_summary, board_brief_excerpt, history_summary_text,
                 claim_types_json, metric_families_json, gap_types_json, source_skills_json,
                 alternative_hypotheses_json, open_questions_json, selected_evidence_refs_json,
@@ -870,7 +870,7 @@ def archive_case_library_skill(
                 region_label,
                 profile_id,
                 publication_status,
-                promotion_status,
+                report_basis_status,
                 readiness_status,
                 round_id,
                 1,
@@ -906,7 +906,7 @@ def archive_case_library_skill(
         connection.execute(
             """
             INSERT INTO case_rounds (
-                case_id, round_id, readiness_status, promotion_status, open_challenge_count,
+                case_id, round_id, readiness_status, report_basis_status, open_challenge_count,
                 open_task_count, open_probe_count, active_hypothesis_count, strong_coverage_count,
                 moderate_coverage_count, gate_reasons_json, key_findings_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -915,7 +915,7 @@ def archive_case_library_skill(
                 case_id,
                 round_id,
                 readiness_status,
-                promotion_status,
+                report_basis_status,
                 int(board_state["counts"].get("open_challenges") or 0),
                 int(board_state["counts"].get("open_tasks") or 0),
                 len([item for item in probes.get("probes", []) if isinstance(item, dict)]) if isinstance(probes.get("probes"), list) else 0,
@@ -991,7 +991,7 @@ def archive_case_library_skill(
         "region_label": region_label,
         "replaced_existing": existing,
         "publication_status": publication_status,
-        "promotion_status": promotion_status,
+        "report_basis_status": report_basis_status,
         "readiness_status": readiness_status,
         "claim_types": claim_types,
         "metric_families": metric_families,

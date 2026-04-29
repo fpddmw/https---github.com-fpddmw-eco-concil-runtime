@@ -758,12 +758,12 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
         id_field="readiness_id",
         required_text_fields=("decision_source", "readiness_status"),
     ),
-    "promotion-basis": _contract(
-        "promotion-basis",
+    "report-basis-freeze": _contract(
+        "report-basis-freeze",
         plane=PLANE_DELIBERATION,
-        schema_version="promotion-basis-v1",
+        schema_version="report-basis-freeze-v1",
         id_field="basis_id",
-        required_text_fields=("decision_source", "promotion_status", "readiness_status"),
+        required_text_fields=("decision_source", "report_basis_status", "readiness_status"),
     ),
     "decision-trace": _contract(
         "decision-trace",
@@ -954,16 +954,16 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
         required_list_fields=("lineage",),
         required_dict_fields=("provenance",),
     ),
-    "promotion-freeze": _contract(
-        "promotion-freeze",
+    "runtime-control-freeze": _contract(
+        "runtime-control-freeze",
         plane=PLANE_RUNTIME,
-        schema_version="deliberation-promotion-freeze-v1",
+        schema_version="runtime-control-freeze-v1",
         id_field="freeze_id",
         required_text_fields=(
             "updated_at_utc",
             "gate_status",
             "readiness_status",
-            "promotion_status",
+            "report_basis_status",
             "planning_mode",
             "reporting_handoff_status",
         ),
@@ -986,7 +986,7 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "planning_mode",
             "readiness_status",
             "gate_status",
-            "promotion_status",
+            "report_basis_status",
         ),
         required_list_fields=(
             "completed_stage_names",
@@ -1050,7 +1050,7 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "planning_mode",
             "readiness_status",
             "gate_status",
-            "promotion_status",
+            "report_basis_status",
             "reporting_handoff_status",
             "supervisor_path",
         ),
@@ -1153,7 +1153,7 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
         required_text_fields=(
             "decision_source",
             "handoff_status",
-            "promotion_status",
+            "report_basis_status",
             "readiness_status",
             "supervisor_status",
         ),

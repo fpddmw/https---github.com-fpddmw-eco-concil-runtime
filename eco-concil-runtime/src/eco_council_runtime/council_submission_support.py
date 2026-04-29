@@ -178,8 +178,8 @@ def council_proposal_payload(
     provenance_json: str,
     extra_json: str,
     source_skill: str,
-    promotion_disposition: str,
-    promote_allowed: Any,
+    report_basis_disposition: str,
+    report_basis_freeze_allowed: Any,
     publication_readiness: str,
     handoff_status: str,
     moderator_status: str,
@@ -263,11 +263,11 @@ def council_proposal_payload(
     if maybe_text(target_task_id):
         payload["target_task_id"] = maybe_text(target_task_id)
 
-    if maybe_text(promotion_disposition):
-        payload["promotion_disposition"] = maybe_text(promotion_disposition)
-    promote_allowed_value = maybe_bool(promote_allowed)
-    if promote_allowed_value is not None:
-        payload["promote_allowed"] = promote_allowed_value
+    if maybe_text(report_basis_disposition):
+        payload["report_basis_disposition"] = maybe_text(report_basis_disposition)
+    report_basis_freeze_allowed_value = maybe_bool(report_basis_freeze_allowed)
+    if report_basis_freeze_allowed_value is not None:
+        payload["report_basis_freeze_allowed"] = report_basis_freeze_allowed_value
     if maybe_text(publication_readiness):
         payload["publication_readiness"] = maybe_text(publication_readiness)
     if maybe_text(handoff_status):
@@ -287,7 +287,7 @@ def readiness_opinion_payload(
     rationale: str,
     decision_source: str,
     opinion_status: str,
-    sufficient_for_promotion: Any,
+    sufficient_for_report_basis: Any,
     confidence: Any,
     basis_object_ids: list[str],
     basis_object_ids_json: str,
@@ -314,9 +314,9 @@ def readiness_opinion_payload(
         or "submitted"
     )
 
-    sufficient_value = maybe_bool(sufficient_for_promotion)
+    sufficient_value = maybe_bool(sufficient_for_report_basis)
     if sufficient_value is not None:
-        payload["sufficient_for_promotion"] = sufficient_value
+        payload["sufficient_for_report_basis"] = sufficient_value
 
     confidence_value = maybe_number(confidence)
     if confidence_value is not None:

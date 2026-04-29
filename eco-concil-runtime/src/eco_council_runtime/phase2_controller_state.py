@@ -439,8 +439,11 @@ def gate_stage_summary(blueprint: dict[str, Any], gate_payload: dict[str, Any], 
         "artifact_refs": [],
         "canonical_ids": [],
         "gate_status": maybe_text(gate_payload.get("gate_status")),
+        "report_basis_gate_status": maybe_text(gate_payload.get("report_basis_gate_status")),
         "readiness_status": maybe_text(gate_payload.get("readiness_status")),
-        "promote_allowed": bool(gate_payload.get("promote_allowed")),
+        "report_basis_freeze_allowed": bool(
+            gate_payload.get("report_basis_freeze_allowed")
+        ),
     }
 
 
@@ -469,7 +472,7 @@ def base_controller_payload(
         "planning_mode": "planner-pending",
         "readiness_status": "pending",
         "gate_status": "not-evaluated",
-        "promotion_status": "not-evaluated",
+        "report_basis_status": "not-evaluated",
         "recommended_next_skills": [],
         "gate_reasons": [],
         "planning": {},
@@ -499,7 +502,7 @@ def controller_result_payload(controller_payload: dict[str, Any], gate_payload: 
             else "",
             "readiness_status": controller_payload.get("readiness_status"),
             "gate_status": controller_payload.get("gate_status"),
-            "promotion_status": controller_payload.get("promotion_status"),
+            "report_basis_status": controller_payload.get("report_basis_status"),
             "resume_status": controller_payload.get("resume_status"),
         },
         "controller": controller_payload,
@@ -540,7 +543,7 @@ def round_controller_event(
         else 0,
         "readiness_status": controller_payload.get("readiness_status"),
         "gate_status": controller_payload.get("gate_status"),
-        "promotion_status": controller_payload.get("promotion_status"),
+        "report_basis_status": controller_payload.get("report_basis_status"),
         "resume_status": controller_payload.get("resume_status"),
         "failed_stage": controller_payload.get("failed_stage", ""),
         "controller_path": controller_payload.get("artifacts", {}).get("controller_state_path", "")

@@ -66,25 +66,25 @@ DEFAULT_PHASE2_STAGE_DEFINITIONS: dict[str, dict[str, Any]] = {
         "resume_policy": "skip-if-completed",
         "operator_summary": "Freeze one readiness posture before gate evaluation.",
     },
-    "promotion-gate": {
+    "report-basis-gate": {
         "phase_group": "gate",
         "stage_kind": "gate",
         "expected_skill_name": "",
-        "artifact_key": "promotion_gate_path",
+        "artifact_key": "report_basis_gate_path",
         "required_previous_stages": ["round-readiness"],
         "blocking": True,
         "resume_policy": "skip-if-completed",
-        "operator_summary": "Evaluate whether the current round can move into promotion and reporting.",
+        "operator_summary": "Evaluate whether the current DB-backed round basis can be frozen for reporting handoff.",
     },
-    "promotion-basis": {
-        "phase_group": "promotion",
+    "report-basis-freeze": {
+        "phase_group": "report-basis",
         "stage_kind": "skill",
-        "expected_skill_name": "promote-evidence-basis",
-        "artifact_key": "promotion_basis_path",
-        "required_previous_stages": ["promotion-gate"],
+        "expected_skill_name": "freeze-report-basis",
+        "artifact_key": "report_basis_freeze_path",
+        "required_previous_stages": ["report-basis-gate"],
         "blocking": True,
         "resume_policy": "skip-if-completed",
-        "operator_summary": "Freeze the promoted or withheld evidence basis after gate evaluation.",
+        "operator_summary": "Freeze the approved or withheld report_basis after gate evaluation.",
     },
 }
 
@@ -106,15 +106,15 @@ def resolve_stage_definitions(
 def default_gate_steps() -> list[dict[str, Any]]:
     return [
         {
-            "stage_name": "promotion-gate",
+            "stage_name": "report-basis-gate",
             "stage_kind": "gate",
             "phase_group": "gate",
             "required_previous_stages": ["round-readiness"],
             "blocking": True,
             "resume_policy": "skip-if-completed",
-            "operator_summary": "Evaluate whether the current round can move into promotion and reporting.",
-            "reason": "Fallback runtime promotion gate evaluation.",
-            "gate_handler": "promotion-gate",
+            "operator_summary": "Evaluate whether the current DB-backed round basis can be frozen for reporting handoff.",
+            "reason": "Fallback runtime report-basis gate evaluation.",
+            "gate_handler": "report-basis-gate",
             "readiness_stage_name": "round-readiness",
         }
     ]
@@ -123,18 +123,18 @@ def default_gate_steps() -> list[dict[str, Any]]:
 def default_post_gate_steps() -> list[dict[str, Any]]:
     return [
         {
-            "stage_name": "promotion-basis",
+            "stage_name": "report-basis-freeze",
             "stage_kind": "skill",
-            "phase_group": "promotion",
-            "skill_name": "promote-evidence-basis",
-            "expected_skill_name": "promote-evidence-basis",
+            "phase_group": "report-basis",
+            "skill_name": "freeze-report-basis",
+            "expected_skill_name": "freeze-report-basis",
             "skill_args": [],
             "assigned_role_hint": "moderator",
-            "required_previous_stages": ["promotion-gate"],
+            "required_previous_stages": ["report-basis-gate"],
             "blocking": True,
             "resume_policy": "skip-if-completed",
-            "operator_summary": "Freeze the promoted or withheld evidence basis after gate evaluation.",
-            "reason": "Fallback post-gate promotion basis write.",
+            "operator_summary": "Freeze the approved or withheld report_basis after gate evaluation.",
+            "reason": "Fallback post-gate report-basis freeze.",
         }
     ]
 
@@ -145,7 +145,8 @@ def lookup_stage_contract(
     stage_definitions: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     normalized_name = maybe_text(stage_name)
-    definition = resolve_stage_definitions(stage_definitions).get(normalized_name)
+    definitions = resolve_stage_definitions(stage_definitions)
+    definition = definitions.get(normalized_name)
     if definition is None:
         return None
     return {"stage_name": normalized_name, **definition}

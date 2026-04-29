@@ -1111,7 +1111,7 @@ class BoardWorkflowTests(unittest.TestCase):
                             "priority": "high",
                             "objective": "Broaden public evidence around smoke timing and intensity.",
                             "reason": "Current public evidence is still narrow in timing coverage.",
-                            "brief_context": "Need more temporal corroboration before promotion.",
+                            "brief_context": "Need more temporal corroboration before report-basis freeze.",
                             "source_ids": [issue_id],
                             "evidence_refs": [coverage_ref],
                             "target": {"hypothesis_id": seeded_hypothesis_id},

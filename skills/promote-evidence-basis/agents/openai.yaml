@@ -1,4 +1,0 @@
-interface:
-  display_name: "Promote Evidence Basis"
-  short_description: "Freeze an approved DB-backed report evidence basis"
-  default_prompt: "Use $promote-evidence-basis only after a moderator transition request has operator approval. Treat the skill as freeze-report-basis compatibility surface: preserve DB-backed evidence refs, proposals, readiness opinions, and basis ids; do not create research conclusions or default investigation advice."

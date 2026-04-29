@@ -186,7 +186,7 @@ class FormalPublicWorkflowTests(unittest.TestCase):
             first_label = taxonomy_artifact["taxonomy_labels"][0]
             self.assertEqual("candidate-for-human-review", first_label["audit_status"])
             self.assertEqual("approval://taxonomy/test-taxonomy-v1", first_label["taxonomy_approval_ref"])
-            self.assertEqual("approved-helper-view", first_label["wp4_helper_metadata"]["decision_source"])
+            self.assertEqual("approved-helper-view", first_label["helper_governance"]["decision_source"])
 
             footprints = footprint_artifact["formal_public_footprints"]
             self.assertIn("formal_record_summary", footprints)

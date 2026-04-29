@@ -1,6 +1,6 @@
 ---
 name: apply-approved-formal-public-taxonomy
-description: WP4 optional helper that applies an explicit approved mission-scoped taxonomy to public/formal DB signals and emits candidate labels for audit.
+description: Optional-analysis helper that applies an explicit approved mission-scoped taxonomy to public/formal DB signals and emits candidate labels for audit.
 ---
 
 # Apply Approved Formal Public Taxonomy

@@ -37,7 +37,7 @@ ANALYSIS_KIND_GOVERNANCE_OVERRIDES: dict[str, dict[str, str]] = {
     ANALYSIS_KIND_EVIDENCE_COVERAGE: {
         "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
         "successor_skill": "review-evidence-sufficiency",
-        "freeze_reason": "old coverage/readiness scoring is frozen and cannot act as a phase gate or report basis",
+        "freeze_reason": "old coverage/readiness scoring is frozen and cannot act as a phase gate or report_basis",
     },
     ANALYSIS_KIND_CLAIM_OBSERVATION_LINK: {
         "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
@@ -896,7 +896,7 @@ def analysis_kind_governance(analysis_kind: str) -> dict[str, Any]:
     if not freeze_reason:
         freeze_reason = (
             "analysis result is an approval-gated helper surface and cannot act as "
-            "a default investigation conclusion, phase gate, or report basis"
+            "a default investigation conclusion, phase gate, or report_basis"
         )
     return {
         "analysis_kind": kind,

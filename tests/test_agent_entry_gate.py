@@ -258,7 +258,7 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             self.assertTrue(any(item["step_id"] == "submit-council-proposal" for item in payload["agent_entry"]["entry_chain"]))
             self.assertTrue(any(item["step_id"] == "submit-readiness-opinion" for item in payload["agent_entry"]["entry_chain"]))
-            self.assertTrue(any(item["step_id"] == "request-promotion-transition" for item in payload["agent_entry"]["entry_chain"]))
+            self.assertTrue(any(item["step_id"] == "request-report-basis-transition" for item in payload["agent_entry"]["entry_chain"]))
             self.assertTrue(any(item["step_id"] == "approve-transition-request" for item in payload["agent_entry"]["entry_chain"]))
             self.assertTrue(any(item["step_id"] == "return-to-runtime-gate" for item in payload["agent_entry"]["entry_chain"]))
             self.assertEqual("runtime-agent-entry-gate-v1", gate_artifact["schema_version"])
@@ -359,7 +359,7 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             self.assertIn(
                 "request-phase-transition",
-                state_payload["agent_entry"]["operator"]["request_promotion_transition_command"],
+                state_payload["agent_entry"]["operator"]["request_report_basis_transition_command"],
             )
             self.assertIn(
                 "approve-phase-transition",
@@ -418,8 +418,8 @@ class AgentEntryGateTests(unittest.TestCase):
                         {
                             "agent_role": "moderator",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
-                            "rationale": "The council has already converged on promotion readiness.",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The council has already converged on report-basis readiness.",
                             "decision_source": "agent-council",
                             "basis_object_ids": ["issue-001"],
                             "evidence_refs": ["evidence://issue-001"],
@@ -478,7 +478,7 @@ class AgentEntryGateTests(unittest.TestCase):
                 return {
                     "show_run_state": "custom-show-state",
                     "supervise_round": "custom-supervise-round",
-                    "apply_promotion_gate": "custom-apply-gate",
+                    "apply_report_basis_gate": "custom-apply-gate",
                     "close_round": "custom-close-round",
                     "open_next_round": "custom-open-next-round",
                 }
@@ -675,7 +675,7 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("post-review-comment", operator["post_review_comment_command_template"])
             self.assertIn("submit-evidence-bundle", operator["submit_evidence_bundle_command_template"])
             self.assertIn("submit-report-section-draft", operator["submit_report_section_draft_command_template"])
-            self.assertIn("request-phase-transition", operator["request_promotion_transition_command"])
+            self.assertIn("request-phase-transition", operator["request_report_basis_transition_command"])
 
     def test_operator_runbook_includes_agent_entry_section_for_round(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -7,43 +7,44 @@ from .council_objects import query_council_objects
 from .phase2_fallback_common import maybe_text, unique_texts
 from .phase2_proposal_actions import proposal_target
 
-PROMOTION_PROPOSAL_DISPOSITION_SUPPORT = "support"
-PROMOTION_PROPOSAL_DISPOSITION_REJECT = "reject"
-PROMOTION_PROPOSAL_DISPOSITION_NEUTRAL = "neutral"
-PROMOTION_TARGET_KINDS = {
+REPORT_BASIS_PROPOSAL_DISPOSITION_SUPPORT = "support"
+REPORT_BASIS_PROPOSAL_DISPOSITION_REJECT = "reject"
+REPORT_BASIS_PROPOSAL_DISPOSITION_NEUTRAL = "neutral"
+REPORT_BASIS_TARGET_KINDS = {
     "round",
-    "promotion-basis",
+    "report-basis-gate",
+    "report-basis-freeze",
     "readiness-assessment",
-    "promotion-gate",
     "reporting-handoff",
     "council-decision",
 }
-IGNORED_IMPLICIT_PROMOTION_OPERATION_KINDS = {
-    "prepare-promotion",
-    "promote-evidence-basis",
+IGNORED_IMPLICIT_REPORT_BASIS_OPERATION_KINDS = {
+    "prepare-report-basis-freeze",
+    "freeze-report-basis",
     "finalize-round",
     "ready-for-reporting",
     "publish-council-decision",
 }
-SUPPORT_PROMOTION_DISPOSITION_VALUES = {
+SUPPORT_REPORT_BASIS_DISPOSITION_VALUES = {
     "allow",
-    "allow-promote",
+    "report-basis-freeze-allowed",
+    "allow-report-basis-freeze",
     "advance",
     "finalize",
-    "promote",
-    "promoted",
+    "frozen",
     "publish",
     "ready",
     "reporting-ready",
     "ready-for-reporting",
     "support",
 }
-REJECT_PROMOTION_DISPOSITION_VALUES = {
+REJECT_REPORT_BASIS_DISPOSITION_VALUES = {
     "block",
     "blocked",
     "continue",
     "continue-investigation",
-    "freeze-withheld",
+    "report-basis-freeze-withheld",
+    "report-basis-freeze-withheld",
     "hold",
     "investigation-open",
     "oppose",
@@ -126,10 +127,9 @@ def load_council_readiness_opinions(
 
 def readiness_bucket(opinion: dict[str, Any]) -> str:
     readiness_value = maybe_text(opinion.get("readiness_status"))
-    if bool(opinion.get("sufficient_for_promotion")) or readiness_value in {
+    if bool(opinion.get("sufficient_for_report_basis")) or readiness_value in {
         "ready",
-        "ready-for-promotion",
-        "promote",
+        "ready-for-report-basis",
     }:
         return "ready"
     if readiness_value in {"blocked", "reject", "rejected"}:
@@ -154,23 +154,23 @@ def proposal_explicit_signals(
 ) -> list[dict[str, str]]:
     signals: list[dict[str, str]] = []
 
-    promote_allowed = maybe_bool(proposal.get("promote_allowed"))
-    if promote_allowed is not None:
+    report_basis_freeze_allowed = maybe_bool(proposal.get("report_basis_freeze_allowed"))
+    if report_basis_freeze_allowed is not None:
         signals.append(
             {
-                "field": "promote_allowed",
-                "value": "true" if promote_allowed else "false",
+                "field": "report_basis_freeze_allowed",
+                "value": "true" if report_basis_freeze_allowed else "false",
                 "disposition": (
-                    PROMOTION_PROPOSAL_DISPOSITION_SUPPORT
-                    if promote_allowed
-                    else PROMOTION_PROPOSAL_DISPOSITION_REJECT
+                    REPORT_BASIS_PROPOSAL_DISPOSITION_SUPPORT
+                    if report_basis_freeze_allowed
+                    else REPORT_BASIS_PROPOSAL_DISPOSITION_REJECT
                 ),
             }
         )
 
     for field_name in (
-        "promotion_disposition",
-        "promotion_status",
+        "report_basis_disposition",
+        "report_basis_status",
         "publication_readiness",
         "handoff_status",
         "moderator_status",
@@ -178,20 +178,20 @@ def proposal_explicit_signals(
         value = maybe_text(proposal.get(field_name)).lower()
         if not value:
             continue
-        if value in SUPPORT_PROMOTION_DISPOSITION_VALUES:
+        if value in SUPPORT_REPORT_BASIS_DISPOSITION_VALUES:
             signals.append(
                 {
                     "field": field_name,
                     "value": value,
-                    "disposition": PROMOTION_PROPOSAL_DISPOSITION_SUPPORT,
+                    "disposition": REPORT_BASIS_PROPOSAL_DISPOSITION_SUPPORT,
                 }
             )
-        elif value in REJECT_PROMOTION_DISPOSITION_VALUES:
+        elif value in REJECT_REPORT_BASIS_DISPOSITION_VALUES:
             signals.append(
                 {
                     "field": field_name,
                     "value": value,
-                    "disposition": PROMOTION_PROPOSAL_DISPOSITION_REJECT,
+                    "disposition": REPORT_BASIS_PROPOSAL_DISPOSITION_REJECT,
                 }
             )
     return signals
@@ -219,10 +219,10 @@ def proposal_relevance_reasons(
     response_to_ids = set(unique_texts(list_items(proposal.get("response_to_ids"))))
     lineage = set(unique_texts(list_items(proposal.get("lineage"))))
     reasons: list[str] = []
-    if target_kind in PROMOTION_TARGET_KINDS:
-        reasons.append("promotion-target-kind")
+    if target_kind in REPORT_BASIS_TARGET_KINDS:
+        reasons.append("report-basis-target-kind")
     if target_id and target_id in {maybe_text(round_id), maybe_text(basis_id)}:
-        reasons.append("promotion-target-id")
+        reasons.append("report-basis-target-id")
     if target_id and target_id in selected_basis:
         reasons.append("selected-basis-target")
     if selected_basis.intersection(response_to_ids):
@@ -230,11 +230,11 @@ def proposal_relevance_reasons(
     if selected_basis.intersection(lineage):
         reasons.append("basis-lineage-link")
     if proposal_explicit_signals(proposal):
-        reasons.append("explicit-promotion-signal")
+        reasons.append("explicit-report-basis-signal")
     return unique_texts(reasons)
 
 
-def resolve_promotion_proposal(
+def resolve_report_basis_proposal(
     proposal: dict[str, Any],
     *,
     round_id: str,
@@ -261,33 +261,33 @@ def resolve_promotion_proposal(
     support_signals = [
         signal
         for signal in explicit_signals
-        if signal.get("disposition") == PROMOTION_PROPOSAL_DISPOSITION_SUPPORT
+        if signal.get("disposition") == REPORT_BASIS_PROPOSAL_DISPOSITION_SUPPORT
     ]
     reject_signals = [
         signal
         for signal in explicit_signals
-        if signal.get("disposition") == PROMOTION_PROPOSAL_DISPOSITION_REJECT
+        if signal.get("disposition") == REPORT_BASIS_PROPOSAL_DISPOSITION_REJECT
     ]
 
-    disposition = PROMOTION_PROPOSAL_DISPOSITION_NEUTRAL
-    resolution_mode = "not-promotion-relevant"
+    disposition = REPORT_BASIS_PROPOSAL_DISPOSITION_NEUTRAL
+    resolution_mode = "not-report-basis-relevant"
     if support_signals and reject_signals:
         resolution_mode = "explicit-signal-conflict"
     elif support_signals:
-        disposition = PROMOTION_PROPOSAL_DISPOSITION_SUPPORT
+        disposition = REPORT_BASIS_PROPOSAL_DISPOSITION_SUPPORT
         resolution_mode = f"explicit:{maybe_text(support_signals[0].get('field'))}"
     elif reject_signals:
-        disposition = PROMOTION_PROPOSAL_DISPOSITION_REJECT
+        disposition = REPORT_BASIS_PROPOSAL_DISPOSITION_REJECT
         resolution_mode = f"explicit:{maybe_text(reject_signals[0].get('field'))}"
-    elif action_kind_set.intersection(IGNORED_IMPLICIT_PROMOTION_OPERATION_KINDS):
-        resolution_mode = "ignored-implicit-promotion-kind"
+    elif action_kind_set.intersection(IGNORED_IMPLICIT_REPORT_BASIS_OPERATION_KINDS):
+        resolution_mode = "ignored-implicit-report-basis-operation"
         relevance_reasons = unique_texts(
-            [*relevance_reasons, "implicit-promotion-kind-without-explicit-signal"]
+            [*relevance_reasons, "implicit-report-basis-operation-without-explicit-signal"]
         )
     elif relevance_reasons:
-        resolution_mode = "promotion-neutral"
+        resolution_mode = "report-basis-neutral"
 
-    is_relevant = disposition != PROMOTION_PROPOSAL_DISPOSITION_NEUTRAL or bool(
+    is_relevant = disposition != REPORT_BASIS_PROPOSAL_DISPOSITION_NEUTRAL or bool(
         relevance_reasons
     )
     return {
@@ -304,7 +304,7 @@ def resolve_promotion_proposal(
     }
 
 
-def resolve_promotion_council_inputs(
+def resolve_report_basis_council_inputs(
     proposals: list[dict[str, Any]] | None,
     opinions: list[dict[str, Any]] | None,
     *,
@@ -315,7 +315,7 @@ def resolve_promotion_council_inputs(
     selected_basis_object_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     proposal_resolutions = [
-        resolve_promotion_proposal(
+        resolve_report_basis_proposal(
             proposal,
             round_id=round_id,
             basis_id=basis_id,
@@ -334,7 +334,7 @@ def resolve_promotion_council_inputs(
             resolution.get("proposal_id")
             for resolution in relevant_proposal_resolutions
             if resolution.get("disposition")
-            == PROMOTION_PROPOSAL_DISPOSITION_SUPPORT
+            == REPORT_BASIS_PROPOSAL_DISPOSITION_SUPPORT
         ]
     )
     rejected_proposal_ids = unique_texts(
@@ -342,7 +342,7 @@ def resolve_promotion_council_inputs(
             resolution.get("proposal_id")
             for resolution in relevant_proposal_resolutions
             if resolution.get("disposition")
-            == PROMOTION_PROPOSAL_DISPOSITION_REJECT
+            == REPORT_BASIS_PROPOSAL_DISPOSITION_REJECT
         ]
     )
     neutral_proposal_ids = unique_texts(
@@ -350,7 +350,7 @@ def resolve_promotion_council_inputs(
             resolution.get("proposal_id")
             for resolution in relevant_proposal_resolutions
             if resolution.get("disposition")
-            == PROMOTION_PROPOSAL_DISPOSITION_NEUTRAL
+            == REPORT_BASIS_PROPOSAL_DISPOSITION_NEUTRAL
         ]
     )
 
@@ -370,17 +370,23 @@ def resolve_promotion_council_inputs(
         if isinstance(opinion, dict) and readiness_bucket(opinion) == "needs-more-data"
     ]
 
-    gate_allows_promotion = maybe_text(readiness_status) == "ready" or bool(
+    gate_allows_report_basis_freeze = maybe_text(readiness_status) == "ready" or bool(
         allow_non_ready
     )
     council_veto_active = bool(rejected_proposal_ids)
-    promotion_status = (
-        "promoted" if gate_allows_promotion and not council_veto_active else "withheld"
+    report_basis_status = (
+        "frozen"
+        if gate_allows_report_basis_freeze and not council_veto_active
+        else "withheld"
     )
-    promote_allowed = promotion_status == "promoted"
-    gate_status = "allow-promote" if promote_allowed else "freeze-withheld"
+    report_basis_freeze_allowed = report_basis_status == "frozen"
+    gate_status = (
+        "report-basis-freeze-allowed"
+        if report_basis_freeze_allowed
+        else "report-basis-freeze-withheld"
+    )
 
-    if promote_allowed:
+    if report_basis_freeze_allowed:
         supporting_opinion_ids = unique_texts(
             [opinion.get("opinion_id") for opinion in ready_opinions]
         )
@@ -402,62 +408,62 @@ def resolve_promotion_council_inputs(
         )
 
     if rejected_proposal_ids and supporting_proposal_ids:
-        promotion_resolution_mode = "council-conflict-veto"
-        promotion_resolution_reasons = [
+        report_basis_resolution_mode = "council-conflict-veto"
+        report_basis_resolution_reasons = [
             (
                 f"Council proposals are split across {len(supporting_proposal_ids)} "
                 f"supporting and {len(rejected_proposal_ids)} withholding positions, "
-                "so promotion stays withheld."
+                "so report-basis freeze stays withheld."
             )
         ]
     elif rejected_proposal_ids:
-        promotion_resolution_mode = "council-veto"
-        promotion_resolution_reasons = [
+        report_basis_resolution_mode = "council-veto"
+        report_basis_resolution_reasons = [
             (
                 f"{len(rejected_proposal_ids)} council proposals explicitly withhold "
-                "promotion."
+                "report-basis freeze."
             )
         ]
-    elif supporting_proposal_ids and promote_allowed:
-        promotion_resolution_mode = "gate-passed-with-council-support"
-        promotion_resolution_reasons = [
+    elif supporting_proposal_ids and report_basis_freeze_allowed:
+        report_basis_resolution_mode = "gate-passed-with-council-support"
+        report_basis_resolution_reasons = [
             (
                 f"{len(supporting_proposal_ids)} council proposals explicitly support "
-                "promotion and the current gate allows it."
+                "report-basis freeze and the current gate allows it."
             )
         ]
     elif supporting_proposal_ids:
         if allow_non_ready and maybe_text(readiness_status) != "ready":
-            promotion_resolution_mode = "allow-non-ready-with-council-support"
-            promotion_resolution_reasons = [
+            report_basis_resolution_mode = "allow-non-ready-with-council-support"
+            report_basis_resolution_reasons = [
                 (
-                    f"{len(supporting_proposal_ids)} council proposals support promotion "
-                    "and the operator override keeps promotion enabled despite a non-ready "
+                    f"{len(supporting_proposal_ids)} council proposals support report-basis freeze "
+                    "and the operator override keeps report-basis freeze enabled despite a non-ready "
                     "readiness assessment."
                 )
             ]
         else:
-            promotion_resolution_mode = "council-support-blocked-by-gate"
-            promotion_resolution_reasons = [
+            report_basis_resolution_mode = "council-support-blocked-by-gate"
+            report_basis_resolution_reasons = [
                 (
-                    f"{len(supporting_proposal_ids)} council proposals support promotion, "
+                    f"{len(supporting_proposal_ids)} council proposals support report-basis freeze, "
                     f"but the readiness gate remains {maybe_text(readiness_status) or 'blocked'}."
                 )
             ]
     elif opinions:
-        promotion_resolution_mode = "readiness-opinion-gate"
-        promotion_resolution_reasons = [
+        report_basis_resolution_mode = "readiness-opinion-gate"
+        report_basis_resolution_reasons = [
             (
-                "Promotion follows the current readiness-opinion aggregate "
+                "Report-basis freeze follows the current readiness-opinion aggregate "
                 f"({maybe_text(readiness_status) or 'blocked'})."
             )
         ]
     else:
-        promotion_resolution_mode = "fallback-readiness-gate"
-        promotion_resolution_reasons = [
+        report_basis_resolution_mode = "fallback-readiness-gate"
+        report_basis_resolution_reasons = [
             (
-                "Promotion falls back to the current readiness gate because no "
-                "promotion-relevant council proposals were resolved."
+                "Report-basis freeze falls back to the current readiness gate because no "
+                "report-basis-relevant council proposals were resolved."
             )
         ]
 
@@ -483,8 +489,13 @@ def resolve_promotion_council_inputs(
     }
 
     return {
-        "promotion_status": promotion_status,
-        "promote_allowed": promote_allowed,
+        "report_basis_status": report_basis_status,
+        "report_basis_freeze_allowed": report_basis_freeze_allowed,
+        "report_basis_gate_status": (
+            "report-basis-freeze-allowed"
+            if report_basis_freeze_allowed
+            else "report-basis-freeze-withheld"
+        ),
         "gate_status": gate_status,
         "decision_source": (
             "agent-council"
@@ -492,8 +503,8 @@ def resolve_promotion_council_inputs(
             or [opinion for opinion in (opinions or []) if isinstance(opinion, dict)]
             else "policy-fallback"
         ),
-        "promotion_resolution_mode": promotion_resolution_mode,
-        "promotion_resolution_reasons": promotion_resolution_reasons,
+        "report_basis_resolution_mode": report_basis_resolution_mode,
+        "report_basis_resolution_reasons": report_basis_resolution_reasons,
         "supporting_proposal_ids": supporting_proposal_ids,
         "rejected_proposal_ids": rejected_proposal_ids,
         "neutral_proposal_ids": neutral_proposal_ids,
@@ -506,13 +517,13 @@ def resolve_promotion_council_inputs(
 
 
 __all__ = [
-    "PROMOTION_PROPOSAL_DISPOSITION_NEUTRAL",
-    "PROMOTION_PROPOSAL_DISPOSITION_REJECT",
-    "PROMOTION_PROPOSAL_DISPOSITION_SUPPORT",
+    "REPORT_BASIS_PROPOSAL_DISPOSITION_NEUTRAL",
+    "REPORT_BASIS_PROPOSAL_DISPOSITION_REJECT",
+    "REPORT_BASIS_PROPOSAL_DISPOSITION_SUPPORT",
     "load_council_proposals",
     "load_council_readiness_opinions",
     "proposal_operation_kinds",
     "readiness_bucket",
-    "resolve_promotion_council_inputs",
-    "resolve_promotion_proposal",
+    "resolve_report_basis_council_inputs",
+    "resolve_report_basis_proposal",
 ]

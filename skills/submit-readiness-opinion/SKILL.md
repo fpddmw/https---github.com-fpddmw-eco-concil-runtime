@@ -1,6 +1,6 @@
 ---
 name: submit-readiness-opinion
-description: Submit one structured readiness opinion directly into the deliberation DB, preserve basis object ids, evidence refs, provenance, and explicit readiness posture, and emit a queryable opinion artifact for downstream promotion review.
+description: Submit one structured readiness opinion directly into the deliberation DB, preserve basis object ids, evidence refs, provenance, and explicit readiness posture, and emit a queryable opinion artifact for downstream report-basis review.
 ---
 
 # Eco Submit Readiness Opinion
@@ -8,7 +8,7 @@ description: Submit one structured readiness opinion directly into the deliberat
 ## Core Goal
 - Submit one structured readiness judgement as a canonical `readiness-opinion` object.
 - Preserve basis object ids, evidence refs, lineage, provenance, and explicit readiness posture.
-- Make the opinion immediately queryable from the deliberation DB for readiness aggregation and promotion review.
+- Make the opinion immediately queryable from the deliberation DB for readiness aggregation and report-basis review.
 
 ## Triggering Conditions
 - Need to record that a round is ready, blocked, or still needs more data.
@@ -31,7 +31,7 @@ description: Submit one structured readiness opinion directly into the deliberat
   - `opinion_id`
   - `decision_source`
   - `opinion_status`
-  - `sufficient_for_promotion`
+  - `sufficient_for_report_basis`
   - `confidence`
   - `basis_object_id`
   - `evidence_ref`

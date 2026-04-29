@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the WP4 research issue surface helper."""
+"""Run the Optional-analysis research issue surface helper."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.wp4_helpers import pretty_json, run_materialize_research_issue_surface  # noqa: E402
+from eco_council_runtime.optional_analysis_helpers import pretty_json, run_materialize_research_issue_surface  # noqa: E402
 
 
 def main() -> int:

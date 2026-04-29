@@ -7,7 +7,7 @@ from pathlib import Path
 from _workflow_support import (
     analytics_path,
     load_json,
-    promotion_path,
+    report_basis_path,
     request_and_approve_transition,
     reporting_path,
     run_script,
@@ -20,13 +20,13 @@ RUN_ID = "run-deliberation-agenda-001"
 ROUND_ID = "round-deliberation-agenda-001"
 
 
-def approve_promotion_transition(run_dir: Path) -> str:
+def approve_report_basis_transition(run_dir: Path) -> str:
     return request_and_approve_transition(
         run_dir,
         run_id=RUN_ID,
         round_id=ROUND_ID,
-        transition_kind="promote-evidence-basis",
-        rationale="Approve promotion for deliberation agenda workflow coverage.",
+        transition_kind="freeze-report-basis",
+        rationale="Approve report_basis for deliberation agenda workflow coverage.",
     )
 
 
@@ -214,7 +214,7 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
             self.assertNotIn("edge_type", temporal_artifact["temporal_cooccurrence_cues"][0])
             self.assertEqual("navigation-export", map_artifact["research_issue_map"]["map_status"])
 
-    def test_readiness_and_promotion_do_not_use_helper_cues_as_default_gate(self) -> None:
+    def test_readiness_and_report_basis_do_not_use_helper_cues_as_default_gate(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -230,9 +230,9 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 ROUND_ID,
             )
             readiness_artifact = load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json"))
-            promotion_request_id = approve_promotion_transition(run_dir)
-            promotion_payload = run_script(
-                script_path("promote-evidence-basis"),
+            report_basis_request_id = approve_report_basis_transition(run_dir)
+            report_basis_payload = run_script(
+                script_path("freeze-report-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -240,17 +240,17 @@ class DeliberationAgendaWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--transition-request-id",
-                promotion_request_id,
+                report_basis_request_id,
             )
-            promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
+            report_basis_artifact = load_json(report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json"))
 
             self.assertEqual("completed", readiness_payload["status"])
             self.assertNotEqual("ready", readiness_payload["summary"]["readiness_status"])
-            self.assertFalse(readiness_artifact["sufficient_for_promotion"])
-            self.assertEqual("completed", promotion_payload["status"])
-            self.assertEqual("withheld", promotion_artifact["promotion_status"])
-            self.assertEqual(0, promotion_artifact["basis_counts"]["coverage_count"])
-            self.assertEqual([], promotion_artifact["selected_coverages"])
+            self.assertFalse(readiness_artifact["sufficient_for_report_basis"])
+            self.assertEqual("completed", report_basis_payload["status"])
+            self.assertEqual("withheld", report_basis_artifact["report_basis_status"])
+            self.assertEqual(0, report_basis_artifact["basis_counts"]["coverage_count"])
+            self.assertEqual([], report_basis_artifact["selected_coverages"])
 
 
 if __name__ == "__main__":

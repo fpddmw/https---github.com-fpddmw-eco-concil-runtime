@@ -9,7 +9,7 @@ from _workflow_support import (
     load_json,
     primary_research_issue_id,
     primary_successor_evidence_ref,
-    promotion_path,
+    report_basis_path,
     request_and_approve_transition,
     reporting_path,
     run_kernel,
@@ -83,13 +83,13 @@ def prepare_round_base(run_dir: Path, root: Path) -> dict[str, str]:
     }
 
 
-def approve_promotion_transition(run_dir: Path) -> str:
+def approve_report_basis_transition(run_dir: Path) -> str:
     return request_and_approve_transition(
         run_dir,
         run_id=RUN_ID,
         round_id=ROUND_ID,
-        transition_kind="promote-evidence-basis",
-        rationale="Approve promotion for decision-trace workflow coverage.",
+        transition_kind="freeze-report-basis",
+        rationale="Approve report_basis for decision-trace workflow coverage.",
     )
 
 
@@ -103,7 +103,7 @@ def prepare_reporting_chain(run_dir: Path) -> None:
         "--round-id",
         ROUND_ID,
     )
-    approve_promotion_transition(run_dir)
+    approve_report_basis_transition(run_dir)
     run_kernel(
         "supervise-round",
         "--run-dir",
@@ -174,7 +174,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                         {
                             "agent_role": "moderator",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
+                            "sufficient_for_report_basis": True,
                             "rationale": "The controversy map is coherent enough to freeze the basis and publish.",
                             "decision_source": "agent-council",
                             "basis_object_ids": [seeded["claim_id"]],
@@ -185,7 +185,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                         {
                             "agent_role": "challenger",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
+                            "sufficient_for_report_basis": True,
                             "rationale": "No unresolved contradiction justifies another round.",
                             "decision_source": "agent-council",
                             "basis_object_ids": [seeded["claim_id"]],
@@ -201,36 +201,36 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
             }
 
             prepare_reporting_chain(run_dir)
-            promotion = load_json(
-                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
+            report_basis = load_json(
+                report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json")
             )
 
-            self.assertEqual("agent-council", promotion["decision_source"])
+            self.assertEqual("agent-council", report_basis["decision_source"])
             self.assertEqual(
                 "council-judgement-freeze-v1",
-                promotion["basis_selection_mode"],
+                report_basis["basis_selection_mode"],
             )
             self.assertEqual(
                 "gate-passed-with-council-support",
-                promotion["promotion_resolution_mode"],
+                report_basis["report_basis_resolution_mode"],
             )
-            self.assertEqual([proposal_id], promotion["supporting_proposal_ids"])
-            self.assertEqual([], promotion["rejected_proposal_ids"])
-            self.assertEqual(ready_opinion_ids, set(promotion["supporting_opinion_ids"]))
-            self.assertEqual([], promotion["rejected_opinion_ids"])
-            self.assertEqual(1, promotion["council_input_counts"]["proposal_count"])
+            self.assertEqual([proposal_id], report_basis["supporting_proposal_ids"])
+            self.assertEqual([], report_basis["rejected_proposal_ids"])
+            self.assertEqual(ready_opinion_ids, set(report_basis["supporting_opinion_ids"]))
+            self.assertEqual([], report_basis["rejected_opinion_ids"])
+            self.assertEqual(1, report_basis["council_input_counts"]["proposal_count"])
             self.assertEqual(
                 "explicit:publication_readiness",
-                promotion["proposal_resolution_records"][0]["resolution_mode"],
+                report_basis["proposal_resolution_records"][0]["resolution_mode"],
             )
             self.assertEqual(
                 1,
-                promotion["council_input_counts"]["supporting_proposal_count"],
+                report_basis["council_input_counts"]["supporting_proposal_count"],
             )
-            self.assertEqual(2, promotion["council_input_counts"]["opinion_count"])
+            self.assertEqual(2, report_basis["council_input_counts"]["opinion_count"])
             self.assertEqual(
                 2,
-                promotion["council_input_counts"]["supporting_opinion_count"],
+                report_basis["council_input_counts"]["supporting_opinion_count"],
             )
 
             run_script(
@@ -360,7 +360,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 ready_opinion_ids,
             )
 
-    def test_legacy_named_promotion_proposal_is_ignored_without_explicit_judgement(
+    def test_legacy_named_report_basis_proposal_is_ignored_without_explicit_judgement(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -376,11 +376,11 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                     "proposals": [
                         {
                             "proposal_kind": "ready-for-reporting",
-                            "action_kind": "prepare-promotion",
+                            "action_kind": "prepare-report-basis-freeze",
                             "agent_role": "moderator",
                             "target_kind": "round",
                             "target_id": ROUND_ID,
-                            "rationale": "Legacy proposal naming should no longer imply promotion support by itself.",
+                            "rationale": "Legacy proposal naming should no longer imply report-basis support by itself.",
                             "decision_source": "agent-council",
                             "confidence": 0.61,
                             "provenance": {"source": "unit-test"},
@@ -399,8 +399,8 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                         {
                             "agent_role": "moderator",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
-                            "rationale": "The round is ready, but promotion support should come from explicit judgement fields.",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The round is ready, but report-basis support should come from explicit judgement fields.",
                             "decision_source": "agent-council",
                             "basis_object_ids": [seeded["claim_id"]],
                             "provenance": {"source": "unit-test"},
@@ -420,7 +420,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            promotion_request_id = approve_promotion_transition(run_dir)
+            report_basis_request_id = approve_report_basis_transition(run_dir)
             run_kernel(
                 "supervise-round",
                 "--run-dir",
@@ -430,8 +430,8 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            promotion_payload = run_script(
-                script_path("promote-evidence-basis"),
+            report_basis_payload = run_script(
+                script_path("freeze-report-basis"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -439,43 +439,43 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--transition-request-id",
-                promotion_request_id,
+                report_basis_request_id,
             )
-            promotion = load_json(
-                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
+            report_basis = load_json(
+                report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json")
             )
 
-            self.assertEqual("completed", promotion_payload["status"])
-            self.assertEqual("promoted", promotion["promotion_status"])
-            self.assertEqual("readiness-opinion-gate", promotion["promotion_resolution_mode"])
-            self.assertEqual([], promotion["supporting_proposal_ids"])
-            self.assertEqual([], promotion["rejected_proposal_ids"])
+            self.assertEqual("completed", report_basis_payload["status"])
+            self.assertEqual("frozen", report_basis["report_basis_status"])
+            self.assertEqual("readiness-opinion-gate", report_basis["report_basis_resolution_mode"])
+            self.assertEqual([], report_basis["supporting_proposal_ids"])
+            self.assertEqual([], report_basis["rejected_proposal_ids"])
             self.assertEqual(
-                "ignored-implicit-promotion-kind",
-                promotion["proposal_resolution_records"][0]["resolution_mode"],
+                "ignored-implicit-report-basis-operation",
+                report_basis["proposal_resolution_records"][0]["resolution_mode"],
             )
             self.assertEqual(
                 "neutral",
-                promotion["proposal_resolution_records"][0]["disposition"],
+                report_basis["proposal_resolution_records"][0]["disposition"],
             )
             self.assertIn(
-                "implicit-promotion-kind-without-explicit-signal",
-                promotion["proposal_resolution_records"][0]["relevance_reasons"],
+                "implicit-report-basis-operation-without-explicit-signal",
+                report_basis["proposal_resolution_records"][0]["relevance_reasons"],
             )
             self.assertEqual(
                 1,
-                promotion["proposal_resolution_mode_counts"][
-                    "ignored-implicit-promotion-kind"
+                report_basis["proposal_resolution_mode_counts"][
+                    "ignored-implicit-report-basis-operation"
                 ],
             )
             self.assertEqual(
                 1,
-                promotion["council_input_counts"]["neutral_proposal_count"],
+                report_basis["council_input_counts"]["neutral_proposal_count"],
             )
             self.assertTrue(
                 any(
-                    warning["code"] == "ignored-implicit-promotion-kind"
-                    for warning in promotion_payload["warnings"]
+                    warning["code"] == "ignored-implicit-report-basis-operation"
+                    for warning in report_basis_payload["warnings"]
                 )
             )
 
@@ -498,7 +498,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                             "agent_role": "challenger",
                             "target_kind": "round",
                             "target_id": ROUND_ID,
-                            "promotion_disposition": "hold",
+                            "report_basis_disposition": "hold",
                             "rationale": "A contradiction still needs explicit council review before publication can proceed.",
                             "decision_source": "agent-council",
                             "confidence": 0.88,
@@ -519,7 +519,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                         {
                             "agent_role": "moderator",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
+                            "sufficient_for_report_basis": True,
                             "rationale": "The evidence basis would otherwise be ready for reporting.",
                             "decision_source": "agent-council",
                             "basis_object_ids": [seeded["claim_id"]],
@@ -530,7 +530,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                         {
                             "agent_role": "environmentalist",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
+                            "sufficient_for_report_basis": True,
                             "rationale": "No empirical blocker remains at the evidence layer.",
                             "decision_source": "agent-council",
                             "basis_object_ids": [seeded["claim_id"]],
@@ -546,24 +546,24 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
             }
 
             prepare_reporting_chain(run_dir)
-            gate = load_json(runtime_path(run_dir, f"promotion_gate_{ROUND_ID}.json"))
-            promotion = load_json(
-                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
+            gate = load_json(runtime_path(run_dir, f"report_basis_gate_{ROUND_ID}.json"))
+            report_basis = load_json(
+                report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json")
             )
 
-            self.assertEqual("freeze-withheld", gate["gate_status"])
-            self.assertEqual("council-veto", gate["promotion_resolution_mode"])
+            self.assertEqual("report-basis-freeze-withheld", gate["gate_status"])
+            self.assertEqual("council-veto", gate["report_basis_resolution_mode"])
             self.assertEqual([proposal_id], gate["rejected_proposal_ids"])
             self.assertEqual("agent-council", gate["decision_source"])
-            self.assertEqual("withheld", promotion["promotion_status"])
-            self.assertEqual("agent-council", promotion["decision_source"])
-            self.assertEqual([], promotion["supporting_proposal_ids"])
-            self.assertEqual([proposal_id], promotion["rejected_proposal_ids"])
-            self.assertEqual([], promotion["supporting_opinion_ids"])
-            self.assertEqual(ready_opinion_ids, set(promotion["rejected_opinion_ids"]))
+            self.assertEqual("withheld", report_basis["report_basis_status"])
+            self.assertEqual("agent-council", report_basis["decision_source"])
+            self.assertEqual([], report_basis["supporting_proposal_ids"])
+            self.assertEqual([proposal_id], report_basis["rejected_proposal_ids"])
+            self.assertEqual([], report_basis["supporting_opinion_ids"])
+            self.assertEqual(ready_opinion_ids, set(report_basis["rejected_opinion_ids"]))
             self.assertEqual(
                 1,
-                promotion["council_input_counts"]["rejected_proposal_count"],
+                report_basis["council_input_counts"]["rejected_proposal_count"],
             )
 
             decision_publish = run_script(
@@ -651,7 +651,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                         {
                             "agent_role": "moderator",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
+                            "sufficient_for_report_basis": True,
                             "rationale": "The round could move forward from a release perspective.",
                             "decision_source": "agent-council",
                             "basis_object_ids": [seeded["claim_id"]],
@@ -662,7 +662,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                         {
                             "agent_role": "challenger",
                             "readiness_status": "needs-more-data",
-                            "sufficient_for_promotion": False,
+                            "sufficient_for_report_basis": False,
                             "rationale": "The round should stay open until the strongest contradiction is re-checked.",
                             "decision_source": "agent-council",
                             "basis_object_ids": [seeded["claim_id"]],
@@ -685,23 +685,23 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
             }
 
             prepare_reporting_chain(run_dir)
-            promotion = load_json(
-                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
+            report_basis = load_json(
+                report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json")
             )
 
-            self.assertEqual("withheld", promotion["promotion_status"])
-            self.assertEqual("agent-council", promotion["decision_source"])
-            self.assertEqual([], promotion["supporting_proposal_ids"])
-            self.assertEqual(hold_opinion_ids, set(promotion["supporting_opinion_ids"]))
-            self.assertEqual(ready_opinion_ids, set(promotion["rejected_opinion_ids"]))
-            self.assertEqual(2, promotion["council_input_counts"]["opinion_count"])
+            self.assertEqual("withheld", report_basis["report_basis_status"])
+            self.assertEqual("agent-council", report_basis["decision_source"])
+            self.assertEqual([], report_basis["supporting_proposal_ids"])
+            self.assertEqual(hold_opinion_ids, set(report_basis["supporting_opinion_ids"]))
+            self.assertEqual(ready_opinion_ids, set(report_basis["rejected_opinion_ids"]))
+            self.assertEqual(2, report_basis["council_input_counts"]["opinion_count"])
             self.assertEqual(
                 1,
-                promotion["council_input_counts"]["supporting_opinion_count"],
+                report_basis["council_input_counts"]["supporting_opinion_count"],
             )
             self.assertEqual(
                 1,
-                promotion["council_input_counts"]["rejected_opinion_count"],
+                report_basis["council_input_counts"]["rejected_opinion_count"],
             )
 
             decision_publish = run_script(

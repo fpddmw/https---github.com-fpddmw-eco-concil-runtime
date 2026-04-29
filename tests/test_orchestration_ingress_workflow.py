@@ -10,7 +10,7 @@ from _workflow_support import (
     load_json,
     primary_research_issue_id,
     primary_successor_evidence_ref,
-    promotion_path,
+    report_basis_path,
     reporting_path,
     request_and_approve_transition,
     run_kernel,
@@ -25,13 +25,13 @@ RUN_ID = "run-ingress-001"
 ROUND_ID = "round-001"
 
 
-def approve_promotion_transition(run_dir: Path) -> str:
+def approve_report_basis_transition(run_dir: Path) -> str:
     return request_and_approve_transition(
         run_dir,
         run_id=RUN_ID,
         round_id=ROUND_ID,
-        transition_kind="promote-evidence-basis",
-        rationale="Approve promotion for orchestration ingress workflow coverage.",
+        transition_kind="freeze-report-basis",
+        rationale="Approve report_basis for orchestration ingress workflow coverage.",
     )
 
 
@@ -419,7 +419,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 evidence_ref=coverage_ref,
             )
 
-            approve_promotion_transition(run_dir)
+            approve_report_basis_transition(run_dir)
             run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             handoff_payload = run_script(script_path("materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             decision_payload = run_script(script_path("draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
@@ -427,7 +427,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             import_artifact = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
             handoff_artifact = load_json(reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json"))
             decision_artifact = load_json(reporting_path(run_dir, f"council_decision_draft_{ROUND_ID}.json"))
-            promotion_artifact = load_json(promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"))
+            report_basis_artifact = load_json(report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json"))
 
             self.assertEqual(4, import_payload["summary"]["normalized_step_count"])
             self.assertEqual(4, import_artifact["completed_count"])
@@ -435,8 +435,8 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             self.assertEqual("reporting-ready", handoff_payload["summary"]["handoff_status"])
             self.assertEqual("reporting-ready", handoff_artifact["handoff_status"])
             self.assertTrue(handoff_artifact["reporting_ready"])
-            self.assertEqual("promoted", handoff_artifact["promotion_status"])
-            self.assertEqual("promoted", promotion_artifact["promotion_status"])
+            self.assertEqual("frozen", handoff_artifact["report_basis_status"])
+            self.assertEqual("frozen", report_basis_artifact["report_basis_status"])
             self.assertEqual("finalize", decision_payload["summary"]["moderator_status"])
             self.assertEqual("ready", decision_artifact["publication_readiness"])
 

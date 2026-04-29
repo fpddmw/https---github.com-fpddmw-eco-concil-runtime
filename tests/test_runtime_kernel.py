@@ -52,13 +52,13 @@ def default_phase2_posture_profile_config() -> dict[str, object]:
     return default_phase2_posture_profile()
 
 
-def approve_promotion_transition(run_dir: Path) -> str:
+def approve_report_basis_transition(run_dir: Path) -> str:
     return request_and_approve_transition(
         run_dir,
         run_id=RUN_ID,
         round_id=ROUND_ID,
-        transition_kind="promote-evidence-basis",
-        rationale="Approve promotion for runtime-kernel phase-2 coverage.",
+        transition_kind="freeze-report-basis",
+        rationale="Approve report_basis for runtime-kernel phase-2 coverage.",
     )
 
 
@@ -342,7 +342,7 @@ class RuntimeKernelTests(unittest.TestCase):
             handoff_entry = next(item for item in registry["skills"] if item["skill_name"] == "materialize-reporting-handoff")
             self.assertEqual("runtime-registry-v3", registry["schema_version"])
             self.assertEqual(registry["skill_count"], registry["skill_access_summary"]["skill_count"])
-            self.assertIn("run_dir/promotion/promoted_evidence_basis_<round_id>.json", handoff_entry["declared_contract"]["reads"])
+            self.assertIn("run_dir/report_basis/frozen_report_basis_<round_id>.json", handoff_entry["declared_contract"]["reads"])
             self.assertEqual("Eco Materialize Reporting Handoff", handoff_entry["agent"]["display_name"])
             self.assertEqual("materialize-reporting-handoff", handoff_entry["skill_access"]["skill_name"])
             self.assertIn("report-editor", handoff_entry["skill_access"]["allowed_roles"])
@@ -408,7 +408,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
-                    transition_kind="promote-evidence-basis",
+                    transition_kind="freeze-report-basis",
                     requested_by_role="environmental-investigator",
                     rationale="Only moderator should be able to request transitions.",
                 )
@@ -434,9 +434,9 @@ class RuntimeKernelTests(unittest.TestCase):
                 run_dir,
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
-                transition_kind="promote-evidence-basis",
+                transition_kind="freeze-report-basis",
                 requested_by_role="moderator",
-                rationale="Moderator requests promotion transition.",
+                rationale="Moderator requests report-basis transition.",
             )
 
             with self.assertRaises(ValueError) as raised:
@@ -472,9 +472,9 @@ class RuntimeKernelTests(unittest.TestCase):
                 run_dir,
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
-                transition_kind="promote-evidence-basis",
+                transition_kind="freeze-report-basis",
                 requested_by_role="moderator",
-                rationale="Moderator requests promotion transition.",
+                rationale="Moderator requests report-basis transition.",
             )
             approve_transition_request(
                 run_dir,
@@ -488,7 +488,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_dir,
                     request_id=request["request_id"],
                     committed_by_role="moderator",
-                    committed_object_kind="promotion-basis",
+                    committed_object_kind="report-basis-freeze",
                     committed_object_id=ROUND_ID,
                 )
 
@@ -998,10 +998,10 @@ class RuntimeKernelTests(unittest.TestCase):
                 "event": {"status": "completed"},
                 "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"}},
             }
-            promotion_result = {
-                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+            report_basis_result = {
+                "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
-                "skill_payload": {"summary": {"promotion_status": "promoted"}, "artifact_refs": [], "canonical_ids": []},
+                "skill_payload": {"summary": {"report_basis_status": "frozen"}, "artifact_refs": [], "canonical_ids": []},
             }
             planning = {
                 "plan_id": "plan-001",
@@ -1046,7 +1046,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     },
                 ],
                 "post_gate_steps": [
-                    {"stage_name": "promotion-basis", "skill_name": "promote-evidence-basis", "skill_args": [], "assigned_role_hint": "moderator", "reason": "test"}
+                    {"stage_name": "report-basis-freeze", "skill_name": "freeze-report-basis", "skill_args": [], "assigned_role_hint": "moderator", "reason": "test"}
                 ],
                 "stop_conditions": [],
                 "fallback_path": [],
@@ -1054,14 +1054,14 @@ class RuntimeKernelTests(unittest.TestCase):
             }
             gate_payload = {
                 "generated_at_utc": "2024-01-01T00:00:00Z",
-                "gate_status": "promote-ready",
+                "gate_status": "report-basis-ready",
                 "readiness_status": "ready",
-                "promote_allowed": True,
-                "output_path": str(root / "promotion_gate.json"),
+                "report_basis_freeze_allowed": True,
+                "output_path": str(root / "report_basis_gate.json"),
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
-            promotion_request_id = approve_promotion_transition(run_dir)
+            report_basis_request_id = approve_report_basis_transition(run_dir)
             runtime_only_sources = [
                 phase2_planning_source(
                     "runtime-planner-only",
@@ -1076,10 +1076,10 @@ class RuntimeKernelTests(unittest.TestCase):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
-                    side_effect=[planner_result, board_summary_result, board_brief_result, next_actions_result, readiness_result, promotion_result],
+                    side_effect=[planner_result, board_summary_result, board_brief_result, next_actions_result, readiness_result, report_basis_result],
                 ) as run_skill_mock,
             ):
                 payload = run_phase2_round_with_contract_mode(
@@ -1109,7 +1109,7 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("fresh-run", payload["controller"]["resume_status"])
             self.assertEqual("summarize-board-state", payload["controller"]["stage_contracts"]["board-summary"]["expected_skill_name"])
             self.assertEqual(
-                ["--transition-request-id", promotion_request_id],
+                ["--transition-request-id", report_basis_request_id],
                 run_skill_mock.call_args_list[-1].kwargs["skill_args"],
             )
 
@@ -1136,13 +1136,13 @@ class RuntimeKernelTests(unittest.TestCase):
                     "summary": {"output_path": str(root / "custom_readiness.json"), "readiness_status": "ready"},
                 },
             }
-            promotion_result = {
-                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+            report_basis_result = {
+                "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
                 "skill_payload": {
                     "artifact_refs": [],
                     "canonical_ids": [],
-                    "summary": {"output_path": str(root / "custom_basis.json"), "promotion_status": "promoted"},
+                    "summary": {"output_path": str(root / "custom_basis.json"), "report_basis_status": "frozen"},
                 },
             }
             planning = {
@@ -1172,7 +1172,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 ],
                 "gate_steps": [
                     {
-                        "stage_name": "final-promotion-review",
+                        "stage_name": "final-report-basis-review",
                         "stage_kind": "gate",
                         "phase_group": "gate",
                         "required_previous_stages": ["round-readiness"],
@@ -1181,23 +1181,23 @@ class RuntimeKernelTests(unittest.TestCase):
                         "operator_summary": "Custom gate step declared by plan payload.",
                         "reason": "test",
                         "expected_output_path": str(root / "custom_gate.json"),
-                        "gate_handler": "promotion-gate",
+                        "gate_handler": "report-basis-gate",
                         "readiness_stage_name": "round-readiness",
                     }
                 ],
                 "post_gate_steps": [
                     {
-                        "stage_name": "promotion-basis",
+                        "stage_name": "report-basis-freeze",
                         "stage_kind": "skill",
-                        "phase_group": "promotion",
-                        "skill_name": "promote-evidence-basis",
-                        "expected_skill_name": "promote-evidence-basis",
+                        "phase_group": "report-basis",
+                        "skill_name": "freeze-report-basis",
+                        "expected_skill_name": "freeze-report-basis",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
-                        "required_previous_stages": ["final-promotion-review"],
+                        "required_previous_stages": ["final-report-basis-review"],
                         "blocking": True,
                         "resume_policy": "skip-if-completed",
-                        "operator_summary": "Custom promotion basis stage declared by plan payload.",
+                        "operator_summary": "Custom report_basis stage declared by plan payload.",
                         "reason": "test",
                         "expected_output_path": str(root / "custom_basis.json"),
                     }
@@ -1208,14 +1208,14 @@ class RuntimeKernelTests(unittest.TestCase):
             }
             gate_payload = {
                 "generated_at_utc": "2024-01-01T00:00:00Z",
-                "gate_status": "allow-promote",
+                "gate_status": "report-basis-freeze-allowed",
                 "readiness_status": "ready",
-                "promote_allowed": True,
+                "report_basis_freeze_allowed": True,
                 "output_path": str(root / "custom_gate.json"),
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
-            promotion_request_id = approve_promotion_transition(run_dir)
+            report_basis_request_id = approve_report_basis_transition(run_dir)
             runtime_only_sources = [
                 phase2_planning_source(
                     "runtime-planner-only",
@@ -1231,12 +1231,12 @@ class RuntimeKernelTests(unittest.TestCase):
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
                 mock.patch(
-                    "eco_council_runtime.phase2_gate_handlers.apply_promotion_gate",
+                    "eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate",
                     return_value=gate_payload,
                 ) as gate_mock,
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
-                    side_effect=[planner_result, readiness_result, promotion_result],
+                    side_effect=[planner_result, readiness_result, report_basis_result],
                 ),
             ):
                 payload = run_phase2_round_with_contract_mode(
@@ -1258,12 +1258,12 @@ class RuntimeKernelTests(unittest.TestCase):
                 gate_mock.call_args.kwargs["output_path_override"],
             )
             self.assertEqual(
-                ["orchestration-planner", "round-readiness", "final-promotion-review", "promotion-basis"],
+                ["orchestration-planner", "round-readiness", "final-report-basis-review", "report-basis-freeze"],
                 payload["controller"]["planning"]["stage_sequence"],
             )
             self.assertEqual(
                 str(root / "custom_gate.json"),
-                payload["controller"]["stage_contracts"]["final-promotion-review"]["expected_output_path"],
+                payload["controller"]["stage_contracts"]["final-report-basis-review"]["expected_output_path"],
             )
             self.assertEqual(
                 str(root / "custom_gate.json"),
@@ -1271,11 +1271,11 @@ class RuntimeKernelTests(unittest.TestCase):
             )
             self.assertEqual(1, payload["controller"]["planning"]["gate_step_count"])
             self.assertEqual(
-                ["--transition-request-id", promotion_request_id],
+                ["--transition-request-id", report_basis_request_id],
                 payload["controller"]["steps"][3]["skill_args"],
             )
 
-    def test_controller_blocks_promotion_stage_without_approved_transition_request(
+    def test_controller_blocks_report_basis_stage_without_approved_transition_request(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1327,17 +1327,17 @@ class RuntimeKernelTests(unittest.TestCase):
                         "skill_name": "summarize-round-readiness",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
-                        "reason": "Refresh readiness before promotion.",
+                        "reason": "Refresh readiness before report-basis freeze.",
                         "expected_output_path": str(root / "readiness.json"),
                     }
                 ],
                 "post_gate_steps": [
                     {
-                        "stage_name": "promotion-basis",
-                        "skill_name": "promote-evidence-basis",
+                        "stage_name": "report-basis-freeze",
+                        "skill_name": "freeze-report-basis",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
-                        "reason": "Freeze promotion basis after gate review.",
+                        "reason": "Freeze report_basis after gate review.",
                     }
                 ],
                 "stop_conditions": [],
@@ -1346,10 +1346,10 @@ class RuntimeKernelTests(unittest.TestCase):
             }
             gate_payload = {
                 "generated_at_utc": "2024-01-01T00:00:00Z",
-                "gate_status": "allow-promote",
+                "gate_status": "report-basis-freeze-allowed",
                 "readiness_status": "ready",
-                "promote_allowed": True,
-                "output_path": str(root / "promotion_gate.json"),
+                "report_basis_freeze_allowed": True,
+                "output_path": str(root / "report_basis_gate.json"),
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
@@ -1371,7 +1371,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     return_value=planning,
                 ),
                 mock.patch(
-                    "eco_council_runtime.phase2_gate_handlers.apply_promotion_gate",
+                    "eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate",
                     return_value=gate_payload,
                 ),
                 mock.patch(
@@ -1399,7 +1399,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 ],
             )
             self.assertIn(
-                "promote-evidence-basis",
+                "freeze-report-basis",
                 raised.exception.payload["message"],
             )
 
@@ -1456,7 +1456,7 @@ class RuntimeKernelTests(unittest.TestCase):
             result["controller_updates"]["recommended_next_skills"],
         )
 
-    def test_controller_executes_approved_promotion_request_without_planner_stage(
+    def test_controller_executes_approved_report_basis_request_without_planner_stage(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1466,32 +1466,32 @@ class RuntimeKernelTests(unittest.TestCase):
 
             from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
 
-            promotion_result = {
-                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+            report_basis_result = {
+                "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
                 "skill_payload": {
                     "artifact_refs": [],
                     "canonical_ids": [],
-                    "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"},
+                    "summary": {"output_path": str(root / "basis.json"), "report_basis_status": "frozen"},
                 },
             }
             gate_payload = {
                 "generated_at_utc": "2024-01-01T00:00:00Z",
-                "gate_status": "allow-promote",
+                "gate_status": "report-basis-freeze-allowed",
                 "readiness_status": "ready",
-                "promote_allowed": True,
-                "output_path": str(root / "promotion_gate.json"),
+                "report_basis_freeze_allowed": True,
+                "output_path": str(root / "report_basis_gate.json"),
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
-            promotion_request_id = approve_promotion_transition(run_dir)
+            report_basis_request_id = approve_report_basis_transition(run_dir)
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
-                    return_value=promotion_result,
+                    return_value=report_basis_result,
                 ) as run_skill_mock,
             ):
                 payload = run_phase2_round_with_contract_mode(
@@ -1504,7 +1504,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 )
 
             self.assertEqual(
-                ["promote-evidence-basis"],
+                ["freeze-report-basis"],
                 [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
             )
             self.assertEqual("transition-executor", payload["controller"]["planning_mode"])
@@ -1512,12 +1512,12 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("transition-executor", payload["controller"]["planning"]["controller_authority"])
             self.assertEqual("approved-transition-request", payload["controller"]["planning"]["plan_source"])
             self.assertEqual(
-                ["promotion-gate", "promotion-basis"],
+                ["report-basis-gate", "report-basis-freeze"],
                 payload["controller"]["completed_stage_names"],
             )
-            self.assertEqual("promotion-gate", payload["controller"]["steps"][0]["stage"])
+            self.assertEqual("report-basis-gate", payload["controller"]["steps"][0]["stage"])
             self.assertEqual(
-                ["--transition-request-id", promotion_request_id],
+                ["--transition-request-id", report_basis_request_id],
                 run_skill_mock.call_args_list[-1].kwargs["skill_args"],
             )
             self.assertEqual(
@@ -1562,7 +1562,7 @@ class RuntimeKernelTests(unittest.TestCase):
             )
             self.assertEqual([], payload["controller"]["completed_stage_names"])
             self.assertEqual("needs-more-data", payload["controller"]["readiness_status"])
-            self.assertEqual("withheld", payload["controller"]["promotion_status"])
+            self.assertEqual("withheld", payload["controller"]["report_basis_status"])
             self.assertEqual([], payload["controller"]["planning_attempts"])
 
     def test_controller_ignores_optional_advisory_artifacts_on_default_path(
@@ -1604,32 +1604,32 @@ class RuntimeKernelTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            promotion_result = {
-                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+            report_basis_result = {
+                "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
                 "skill_payload": {
                     "artifact_refs": [],
                     "canonical_ids": [],
-                    "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"},
+                    "summary": {"output_path": str(root / "basis.json"), "report_basis_status": "frozen"},
                 },
             }
             gate_payload = {
                 "generated_at_utc": "2024-01-01T00:00:00Z",
-                "gate_status": "allow-promote",
+                "gate_status": "report-basis-freeze-allowed",
                 "readiness_status": "ready",
-                "promote_allowed": True,
-                "output_path": str(root / "promotion_gate.json"),
+                "report_basis_freeze_allowed": True,
+                "output_path": str(root / "report_basis_gate.json"),
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
-            promotion_request_id = approve_promotion_transition(run_dir)
+            report_basis_request_id = approve_report_basis_transition(run_dir)
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
-                    return_value=promotion_result,
+                    return_value=report_basis_result,
                 ) as run_skill_mock,
             ):
                 payload = run_phase2_round_with_contract_mode(
@@ -1642,7 +1642,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 )
 
             self.assertEqual(
-                ["promote-evidence-basis"],
+                ["freeze-report-basis"],
                 [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
             )
             self.assertEqual("approved-transition-request", payload["summary"]["plan_source"])
@@ -1696,10 +1696,10 @@ class RuntimeKernelTests(unittest.TestCase):
                     "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"},
                 },
             }
-            promotion_result = {
-                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+            report_basis_result = {
+                "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
-                "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"}},
+                "skill_payload": {"artifact_refs": [], "canonical_ids": [], "summary": {"output_path": str(root / "basis.json"), "report_basis_status": "frozen"}},
             }
             planning = {
                 "plan_id": "plan-resume-001",
@@ -1716,7 +1716,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     {"stage_name": "round-readiness", "skill_name": "summarize-round-readiness", "skill_args": [], "assigned_role_hint": "moderator", "reason": "refresh readiness"},
                 ],
                 "post_gate_steps": [
-                    {"stage_name": "promotion-basis", "skill_name": "promote-evidence-basis", "skill_args": [], "assigned_role_hint": "moderator", "reason": "freeze promotion basis"}
+                    {"stage_name": "report-basis-freeze", "skill_name": "freeze-report-basis", "skill_args": [], "assigned_role_hint": "moderator", "reason": "freeze-report-basis"}
                 ],
                 "stop_conditions": [],
                 "fallback_path": [],
@@ -1724,10 +1724,10 @@ class RuntimeKernelTests(unittest.TestCase):
             }
             gate_payload = {
                 "generated_at_utc": "2024-01-01T00:00:00Z",
-                "gate_status": "allow-promote",
+                "gate_status": "report-basis-freeze-allowed",
                 "readiness_status": "ready",
-                "promote_allowed": True,
-                "output_path": str(root / "promotion_gate.json"),
+                "report_basis_freeze_allowed": True,
+                "output_path": str(root / "report_basis_gate.json"),
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
@@ -1740,7 +1740,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     "failure": {"error_code": "skill-exit-nonzero", "retryable": True},
                 },
             )
-            promotion_request_id = approve_promotion_transition(run_dir)
+            report_basis_request_id = approve_report_basis_transition(run_dir)
             runtime_only_sources = [
                 phase2_planning_source(
                     "runtime-planner-only",
@@ -1755,7 +1755,7 @@ class RuntimeKernelTests(unittest.TestCase):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[planner_result, board_summary_result, board_brief_failure],
@@ -1796,10 +1796,10 @@ class RuntimeKernelTests(unittest.TestCase):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle") as planning_bundle_mock,
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
-                    side_effect=[board_brief_result, next_actions_result, readiness_result, promotion_result],
+                    side_effect=[board_brief_result, next_actions_result, readiness_result, report_basis_result],
                 ) as run_skill_mock,
             ):
                 payload = run_phase2_round_with_contract_mode(
@@ -1814,15 +1814,15 @@ class RuntimeKernelTests(unittest.TestCase):
 
             planning_bundle_mock.assert_not_called()
             self.assertEqual(
-                ["materialize-board-brief", "propose-next-actions", "summarize-round-readiness", "promote-evidence-basis"],
+                ["materialize-board-brief", "propose-next-actions", "summarize-round-readiness", "freeze-report-basis"],
                 [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
             )
             self.assertEqual("completed", payload["controller"]["controller_status"])
             self.assertEqual("resumed", payload["controller"]["resume_status"])
-            self.assertEqual("promoted", payload["controller"]["promotion_status"])
+            self.assertEqual("frozen", payload["controller"]["report_basis_status"])
             self.assertFalse(payload["controller"]["resume_recommended"])
             self.assertEqual(
-                ["--transition-request-id", promotion_request_id],
+                ["--transition-request-id", report_basis_request_id],
                 run_skill_mock.call_args_list[-1].kwargs["skill_args"],
             )
 
@@ -1857,8 +1857,8 @@ class RuntimeKernelTests(unittest.TestCase):
                         ],
                         "post_gate_steps": [
                             {
-                                "stage_name": "promotion-basis",
-                                "skill_name": "promote-evidence-basis",
+                                "stage_name": "report-basis-freeze",
+                                "skill_name": "freeze-report-basis",
                                 "skill_args": [],
                                 "assigned_role_hint": "moderator",
                                 "reason": "Ignore this advisory post-gate path.",
@@ -1898,8 +1898,8 @@ class RuntimeKernelTests(unittest.TestCase):
                 ],
                 "post_gate_steps": [
                     {
-                        "stage_name": "promotion-basis",
-                        "skill_name": "promote-evidence-basis",
+                        "stage_name": "report-basis-freeze",
+                        "skill_name": "freeze-report-basis",
                         "skill_args": [],
                         "assigned_role_hint": "moderator",
                         "reason": "Freeze the runtime-only planner result.",
@@ -1917,21 +1917,21 @@ class RuntimeKernelTests(unittest.TestCase):
                     "summary": {"output_path": str(root / "readiness.json"), "readiness_status": "ready"},
                 },
             }
-            promotion_result = {
-                "summary": {"skill_name": "promote-evidence-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+            report_basis_result = {
+                "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
                 "skill_payload": {
                     "artifact_refs": [],
                     "canonical_ids": [],
-                    "summary": {"output_path": str(root / "basis.json"), "promotion_status": "promoted"},
+                    "summary": {"output_path": str(root / "basis.json"), "report_basis_status": "frozen"},
                 },
             }
             gate_payload = {
                 "generated_at_utc": "2024-01-01T00:00:00Z",
-                "gate_status": "allow-promote",
+                "gate_status": "report-basis-freeze-allowed",
                 "readiness_status": "ready",
-                "promote_allowed": True,
-                "output_path": str(root / "promotion_gate.json"),
+                "report_basis_freeze_allowed": True,
+                "output_path": str(root / "report_basis_gate.json"),
                 "gate_reasons": [],
                 "recommended_next_skills": [],
             }
@@ -1945,15 +1945,15 @@ class RuntimeKernelTests(unittest.TestCase):
                     failed_message="Injected runtime planner path failed.",
                 )
             ]
-            promotion_request_id = approve_promotion_transition(run_dir)
+            report_basis_request_id = approve_report_basis_transition(run_dir)
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_promotion_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
-                    side_effect=[planner_result, readiness_result, promotion_result],
+                    side_effect=[planner_result, readiness_result, report_basis_result],
                 ) as run_skill_mock,
             ):
                 payload = run_phase2_round_with_contract_mode(
@@ -1967,12 +1967,12 @@ class RuntimeKernelTests(unittest.TestCase):
                 )
 
             self.assertEqual(
-                ["plan-round-orchestration", "summarize-round-readiness", "promote-evidence-basis"],
+                ["plan-round-orchestration", "summarize-round-readiness", "freeze-report-basis"],
                 [call.kwargs["skill_name"] for call in run_skill_mock.call_args_list],
             )
             self.assertEqual([], run_skill_mock.call_args_list[0].kwargs["skill_args"])
             self.assertEqual(
-                ["--transition-request-id", promotion_request_id],
+                ["--transition-request-id", report_basis_request_id],
                 run_skill_mock.call_args_list[-1].kwargs["skill_args"],
             )
             self.assertEqual("runtime-planner", payload["controller"]["planning"]["plan_source"])
@@ -1990,10 +1990,10 @@ class RuntimeKernelTests(unittest.TestCase):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.deliberation_plane import store_promotion_freeze_record
+            from eco_council_runtime.kernel.deliberation_plane import store_runtime_control_freeze_record
 
             controller_path = run_dir / "runtime" / f"round_controller_{ROUND_ID}.json"
-            gate_path = run_dir / "runtime" / f"promotion_gate_{ROUND_ID}.json"
+            gate_path = run_dir / "runtime" / f"report_basis_gate_{ROUND_ID}.json"
             supervisor_path = run_dir / "runtime" / f"supervisor_state_{ROUND_ID}.json"
             controller_snapshot = {
                 "schema_version": "runtime-controller-v3",
@@ -2003,12 +2003,12 @@ class RuntimeKernelTests(unittest.TestCase):
                 "controller_status": "completed",
                 "planning_mode": "planner-backed",
                 "readiness_status": "ready",
-                "gate_status": "allow-promote",
-                "promotion_status": "promoted",
+                "gate_status": "report-basis-freeze-allowed",
+                "report_basis_status": "frozen",
                 "resume_status": "fresh-run",
                 "current_stage": "",
                 "failed_stage": "",
-                "completed_stage_names": ["orchestration-planner", "next-actions", "round-readiness", "promotion-gate", "promotion-basis"],
+                "completed_stage_names": ["orchestration-planner", "next-actions", "round-readiness", "report-basis-gate", "report-basis-freeze"],
                 "pending_stage_names": [],
                 "resume_recommended": False,
                 "restart_recommended": False,
@@ -2019,7 +2019,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "steps": [],
                 "artifacts": {
                     "controller_state_path": str(controller_path.resolve()),
-                    "promotion_gate_path": str(gate_path.resolve()),
+                    "report_basis_gate_path": str(gate_path.resolve()),
                     "orchestration_plan_path": str((run_dir / "runtime" / f"orchestration_plan_{ROUND_ID}.json").resolve()),
                 },
             }
@@ -2030,8 +2030,8 @@ class RuntimeKernelTests(unittest.TestCase):
                 "round_id": ROUND_ID,
                 "readiness_path": str((run_dir / "reporting" / f"round_readiness_{ROUND_ID}.json").resolve()),
                 "readiness_status": "ready",
-                "promote_allowed": True,
-                "gate_status": "allow-promote",
+                "report_basis_freeze_allowed": True,
+                "gate_status": "report-basis-freeze-allowed",
                 "gate_reasons": [],
                 "recommended_next_skills": [],
                 "output_path": str(gate_path.resolve()),
@@ -2043,7 +2043,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "round_id": ROUND_ID,
                 "supervisor_path": str(supervisor_path.resolve()),
                 "supervisor_status": "reporting-ready",
-                "supervisor_substatus": "promotion-complete",
+                "supervisor_substatus": "report-basis-complete",
                 "phase2_posture": "reporting-ready",
                 "terminal_state": "reporting-ready",
                 "recovery_posture": "terminal",
@@ -2056,23 +2056,23 @@ class RuntimeKernelTests(unittest.TestCase):
                 "restart_recommended": False,
                 "resume_from_stage": "",
                 "readiness_status": "ready",
-                "gate_status": "allow-promote",
-                "promotion_status": "promoted",
+                "gate_status": "report-basis-freeze-allowed",
+                "report_basis_status": "frozen",
                 "planning_mode": "planner-backed",
-                "promotion_gate_path": str(gate_path.resolve()),
+                "report_basis_gate_path": str(gate_path.resolve()),
                 "controller_path": str(controller_path.resolve()),
                 "recommended_next_skills": ["materialize-reporting-handoff"],
                 "round_transition": {},
-                "operator_notes": ["Round promotion succeeded and the evidence basis is now ready for downstream reporting."],
+                "operator_notes": ["Report basis freeze succeeded and the evidence basis is now ready for downstream reporting."],
                 "inspection_paths": {
                     "controller_path": str(controller_path.resolve()),
                     "plan_path": str((run_dir / "runtime" / f"orchestration_plan_{ROUND_ID}.json").resolve()),
                     "gate_path": str(gate_path.resolve()),
-                    "promotion_basis_path": str((run_dir / "promotion" / f"promoted_evidence_basis_{ROUND_ID}.json").resolve()),
+                    "report_basis_freeze_path": str((run_dir / "report_basis" / f"frozen_report_basis_{ROUND_ID}.json").resolve()),
                 },
             }
 
-            store_promotion_freeze_record(
+            store_runtime_control_freeze_record(
                 run_dir,
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
@@ -2081,7 +2081,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 supervisor_snapshot=supervisor_snapshot,
                 artifact_paths={
                     "controller_state_path": str(controller_path.resolve()),
-                    "promotion_gate_path": str(gate_path.resolve()),
+                    "report_basis_gate_path": str(gate_path.resolve()),
                     "supervisor_state_path": str(supervisor_path.resolve()),
                 },
             )
@@ -2098,8 +2098,8 @@ class RuntimeKernelTests(unittest.TestCase):
 
             self.assertEqual("completed", state_payload["phase2"]["operator"]["controller_status"])
             self.assertEqual("reporting-ready", state_payload["phase2"]["operator"]["supervisor_status"])
-            self.assertEqual("allow-promote", state_payload["phase2"]["operator"]["gate_status"])
-            self.assertEqual("promoted", state_payload["phase2"]["operator"]["promotion_status"])
+            self.assertEqual("report-basis-freeze-allowed", state_payload["phase2"]["operator"]["gate_status"])
+            self.assertEqual("frozen", state_payload["phase2"]["operator"]["report_basis_status"])
             self.assertTrue(state_payload["phase2"]["operator"]["reporting_ready"])
             self.assertEqual(
                 "reporting-ready",
@@ -2122,8 +2122,12 @@ class RuntimeKernelTests(unittest.TestCase):
                 state_payload["phase2"]["operator"]["query_supervisor_state_command"],
             )
             self.assertIn(
-                "--object-kind promotion-freeze",
-                state_payload["phase2"]["operator"]["query_promotion_freeze_command"],
+                "--object-kind runtime-control-freeze",
+                state_payload["phase2"]["operator"]["query_runtime_control_freeze_command"],
+            )
+            self.assertIn(
+                "--object-kind report-basis-freeze",
+                state_payload["phase2"]["operator"]["query_report_basis_freeze_command"],
             )
             self.assertIn(
                 "--readiness-blocker-only",
@@ -2156,16 +2160,16 @@ class RuntimeKernelTests(unittest.TestCase):
                     "restart_recommended": False,
                     "recovery": {"resume_from_stage": ""},
                     "readiness_status": "ready",
-                    "gate_status": "promote-ready",
-                    "promotion_status": "promoted",
+                    "gate_status": "report-basis-ready",
+                    "report_basis_status": "frozen",
                     "recommended_next_skills": ["materialize-reporting-handoff"],
                     "gate_reasons": [],
                     "artifacts": {
                         "next_actions_path": "",
                         "orchestration_plan_path": str(root / "plan.json"),
                         "controller_state_path": str(root / "controller.json"),
-                        "promotion_gate_path": str(root / "gate.json"),
-                        "promotion_basis_path": str(root / "basis.json"),
+                        "report_basis_gate_path": str(root / "gate.json"),
+                        "report_basis_freeze_path": str(root / "basis.json"),
                     },
                 }
             }
@@ -2275,16 +2279,16 @@ class RuntimeKernelTests(unittest.TestCase):
                     "restart_recommended": False,
                     "recovery": {"resume_from_stage": ""},
                     "readiness_status": "blocked",
-                    "gate_status": "freeze-withheld",
-                    "promotion_status": "withheld",
+                    "gate_status": "report-basis-freeze-withheld",
+                    "report_basis_status": "withheld",
                     "recommended_next_skills": ["kernel-default-follow-up"],
                     "gate_reasons": ["This should be ignored by the injected operator notes builder."],
                     "artifacts": {
                         "next_actions_path": "",
                         "orchestration_plan_path": str(root / "plan.json"),
                         "controller_state_path": str(root / "controller.json"),
-                        "promotion_gate_path": str(root / "gate.json"),
-                        "promotion_basis_path": str(root / "basis.json"),
+                        "report_basis_gate_path": str(root / "gate.json"),
+                        "report_basis_freeze_path": str(root / "basis.json"),
                     },
                 }
             }
@@ -2368,12 +2372,12 @@ class RuntimeKernelTests(unittest.TestCase):
                         "recovery": {"resume_from_stage": "board-brief"},
                         "readiness_status": "pending",
                         "gate_status": "not-evaluated",
-                        "promotion_status": "not-evaluated",
+                        "report_basis_status": "not-evaluated",
                         "recommended_next_skills": ["materialize-board-brief"],
                         "artifacts": {
                             "orchestration_plan_path": str(root / "plan.json"),
                             "controller_state_path": str(root / "controller.json"),
-                            "promotion_gate_path": str(root / "gate.json"),
+                            "report_basis_gate_path": str(root / "gate.json"),
                         },
                     },
                 },
@@ -2407,7 +2411,7 @@ class RuntimeKernelTests(unittest.TestCase):
 
             from eco_council_runtime.kernel.executor import SkillExecutionError
             from eco_council_runtime.kernel.deliberation_plane import (
-                store_promotion_freeze_record,
+                store_runtime_control_freeze_record,
             )
             from eco_council_runtime.kernel.post_round import close_round_with_contract_mode
 
@@ -2419,7 +2423,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "round_id": ROUND_ID,
                 "supervisor_status": "reporting-ready",
                 "readiness_status": "ready",
-                "promotion_status": "promoted",
+                "report_basis_status": "frozen",
                 "reporting_ready": True,
                 "reporting_blockers": [],
                 "reporting_handoff_status": "reporting-ready",
@@ -2429,7 +2433,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 json.dumps(supervisor_snapshot, ensure_ascii=True),
                 encoding="utf-8",
             )
-            store_promotion_freeze_record(
+            store_runtime_control_freeze_record(
                 run_dir,
                 run_id=RUN_ID,
                 round_id=ROUND_ID,

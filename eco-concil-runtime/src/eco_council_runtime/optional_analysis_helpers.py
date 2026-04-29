@@ -9,14 +9,14 @@ from pathlib import Path
 from typing import Any
 
 from .analysis_objects import (
-    WP4_DECISION_SOURCE_APPROVED_HELPER_VIEW,
-    wp4_helper_metadata,
+    HELPER_DECISION_SOURCE_APPROVED_VIEW,
+    helper_governance_metadata,
 )
 from .council_objects import query_council_objects
 from .kernel.signal_plane_normalizer import ensure_signal_plane_schema
 
 
-WP4_RULE_IDS: dict[str, str] = {
+OPTIONAL_ANALYSIS_RULE_IDS: dict[str, str] = {
     "aggregate-environment-evidence": "HEUR-ENV-AGGREGATE-001",
     "review-fact-check-evidence-scope": "HEUR-FACT-SCOPE-001",
     "discover-discourse-issues": "HEUR-DISCOURSE-DISCOVERY-001",
@@ -132,7 +132,7 @@ def artifact_ref(path: Path, locator: str = "$") -> dict[str, str]:
 def helper_metadata(
     *,
     skill_name: str,
-    decision_source: str = WP4_DECISION_SOURCE_APPROVED_HELPER_VIEW,
+    decision_source: str = HELPER_DECISION_SOURCE_APPROVED_VIEW,
     rule_id: str = "",
     destination: str = "",
     taxonomy_version: str = "",
@@ -142,15 +142,15 @@ def helper_metadata(
     caveats: list[Any] | None = None,
     helper_status: str = "approval-gated-helper-view",
 ) -> dict[str, Any]:
-    return wp4_helper_metadata(
+    return helper_governance_metadata(
         skill_name=skill_name,
-        rule_id=maybe_text(rule_id) or WP4_RULE_IDS.get(skill_name, ""),
+        rule_id=maybe_text(rule_id) or OPTIONAL_ANALYSIS_RULE_IDS.get(skill_name, ""),
         destination=destination or skill_name,
         decision_source=decision_source,
         taxonomy_version=taxonomy_version,
         rubric_version=rubric_version,
         approval_ref=approval_ref,
-        audit_ref="docs/openclaw-wp4-skills-refactor-workplan.md#8",
+        audit_ref="docs/openclaw-optional-analysis-skills-refactor-workplan.md#8",
         rule_trace=list(rule_trace or []),
         caveats=list(caveats or []),
         audit_status="default-frozen; approval-required; audit-pending",
@@ -374,7 +374,7 @@ def run_aggregate_environment_evidence(
         "aggregation_id": aggregation_id,
         "run_id": run_id,
         "round_id": round_id,
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
         "aggregation_method": maybe_text(aggregation_method),
         "statistics_summary": {
             "signal_count": len(signals),
@@ -414,7 +414,7 @@ def run_aggregate_environment_evidence(
         },
     }
     payload = {
-        "schema_version": "wp4-environment-evidence-aggregation-v1",
+        "schema_version": "optional-analysis-environment-evidence-aggregation-v1",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
@@ -523,7 +523,7 @@ def run_review_fact_check_evidence_scope(
         "review_id": review_id,
         "run_id": run_id,
         "round_id": round_id,
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
         "scope": scope,
         "scope_status": "missing-required-scope" if missing_fields else "reviewed-with-caveats",
         "missing_required_fields": missing_fields,
@@ -557,7 +557,7 @@ def run_review_fact_check_evidence_scope(
         }
     ] if missing_fields else []
     payload = {
-        "schema_version": "wp4-fact-check-evidence-scope-review-v1",
+        "schema_version": "optional-analysis-fact-check-evidence-scope-review-v1",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
@@ -661,13 +661,13 @@ def run_discover_discourse_issues(
                 }
             )
     payload = {
-        "schema_version": "wp4-discourse-issue-discovery-v1",
+        "schema_version": "optional-analysis-discourse-issue-discovery-v1",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
         "status": "completed",
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
         "discourse_issue_hints": hints,
         "observed_inputs": {"db_path": db_path, "public_signal_count": len(public_signals), "formal_signal_count": len(formal_signals)},
         "warnings": [] if hints else [{"code": "no-discourse-signals", "message": "No public or formal discourse signals were available."}],
@@ -720,18 +720,18 @@ def explicit_approval_ref(value: Any) -> str:
     return text
 
 
-def approved_wp4_helper_input_payload(
+def approved_helper_input_payload(
     payload: Any,
     *,
     allowed_skills: set[str] | None = None,
 ) -> tuple[bool, str]:
     if not isinstance(payload, dict):
         return False, "input-artifact-is-not-object"
-    metadata = dict_items(payload.get("wp4_helper_metadata"))
+    metadata = dict_items(payload.get("helper_governance"))
     source_skill = maybe_text(metadata.get("skill") or payload.get("skill"))
     if allowed_skills is not None and source_skill not in allowed_skills:
         return False, "input-artifact-skill-not-allowed"
-    if maybe_text(metadata.get("decision_source")) != WP4_DECISION_SOURCE_APPROVED_HELPER_VIEW:
+    if maybe_text(metadata.get("decision_source")) != HELPER_DECISION_SOURCE_APPROVED_VIEW:
         return False, "input-artifact-missing-approved-helper-view"
     if not maybe_text(metadata.get("rule_id")).startswith("HEUR-"):
         return False, "input-artifact-missing-rule-id"
@@ -747,7 +747,7 @@ def unapproved_input_warning(input_path: str, reason: str) -> dict[str, str]:
         "code": "unapproved-input-artifact",
         "message": (
             f"Ignored input artifact {maybe_text(input_path) or '<empty>'}: "
-            f"{reason}. Use DB-backed signals or an approved WP4 helper artifact."
+            f"{reason}. Use DB-backed signals or an approved optional-analysis helper artifact."
         ),
     }
 
@@ -813,13 +813,13 @@ def run_suggest_evidence_lanes(
             }
         )
     payload = {
-        "schema_version": "wp4-evidence-lane-suggestions-v1",
+        "schema_version": "optional-analysis-evidence-lane-suggestions-v1",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
         "status": "completed",
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
         "suggestions": suggestions,
         "warnings": input_warnings + ([] if suggestions else [{"code": "no-approved-inputs", "message": "No discovery hints or finding records were available."}]),
     }
@@ -880,7 +880,7 @@ def load_issue_hints_from_path(
     payload = load_json_file(input_path, None)
     if not isinstance(payload, dict):
         return [], [unapproved_input_warning(input_path, "input-artifact-missing-or-invalid")]
-    approved, reason = approved_wp4_helper_input_payload(payload, allowed_skills=allowed_skills)
+    approved, reason = approved_helper_input_payload(payload, allowed_skills=allowed_skills)
     if not approved:
         return [], [unapproved_input_warning(input_path, reason)]
     for field_name in (
@@ -966,17 +966,17 @@ def run_materialize_research_issue_surface(
             "evidence_refs": refs_from_signals(members),
             "lineage": lineage_from_signals(members),
             "provenance": {"source_skill": skill_name, "decision_source": metadata["decision_source"], "db_path": db_path},
-            "wp4_helper_metadata": metadata,
+            "helper_governance": metadata,
         }
         issues.append(issue)
     payload = {
-        "schema_version": "wp4-research-issue-surface-v1",
+        "schema_version": "optional-analysis-research-issue-surface-v1",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
         "status": "completed",
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
         "research_issues": issues,
         "observed_inputs": {
             "db_path": db_path,
@@ -1083,17 +1083,17 @@ def run_project_research_issue_views(
                 "evidence_refs": refs_from_signals(members) or list_items(issue.get("evidence_refs")),
                 "lineage": unique_texts([maybe_text(issue.get("issue_id")), *lineage_from_signals(members), *list_items(issue.get("lineage"))]),
                 "provenance": {"source_skill": skill_name, "decision_source": metadata["decision_source"], "db_path": db_path},
-                "wp4_helper_metadata": metadata,
+                "helper_governance": metadata,
             }
         )
     payload = {
-        "schema_version": "wp4-research-issue-views-v1",
+        "schema_version": "optional-analysis-research-issue-views-v1",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
         "status": "completed",
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
         "issue_views": views,
         "observed_inputs": {"db_path": db_path, "issue_count": len(issues), "signal_count": len(signals), "input_artifact_warning_count": len(input_warnings)},
         "warnings": input_warnings + ([] if views else [{"code": "no-issue-view-inputs", "message": "No issue surface or DB discourse signals were available."}]),
@@ -1207,10 +1207,10 @@ def run_export_research_issue_map(
         "nodes": nodes,
         "edges": edges,
         "map_status": "navigation-export",
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
     }
     payload = {
-        "schema_version": "wp4-research-issue-map-v1",
+        "schema_version": "optional-analysis-research-issue-map-v1",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
@@ -1311,7 +1311,7 @@ def run_apply_approved_formal_public_taxonomy(
                     "evidence_refs": list_items(signal.get("evidence_refs")),
                     "lineage": [maybe_text(signal.get("signal_id"))],
                     "provenance": {"source_skill": skill_name, "decision_source": metadata["decision_source"], "db_path": db_path},
-                    "wp4_helper_metadata": metadata,
+                    "helper_governance": metadata,
                 }
             )
     warnings = []
@@ -1325,13 +1325,13 @@ def run_apply_approved_formal_public_taxonomy(
     elif not label_cues:
         warnings.append({"code": "no-taxonomy-cues", "message": "No DB public/formal signals matched the approved taxonomy terms."})
     payload = {
-        "schema_version": "wp4-formal-public-taxonomy-labels-v1",
+        "schema_version": "optional-analysis-formal-public-taxonomy-labels-v1",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
         "status": status,
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
         "taxonomy_labels": label_cues,
         "observed_inputs": {"db_path": db_path, "taxonomy_path": maybe_text(taxonomy_path), "label_count": len(labels), "signal_count": len(signals)},
         "warnings": warnings,
@@ -1400,11 +1400,11 @@ def run_compare_formal_public_footprints(
         "evidence_refs": refs_from_signals([*formal_signals, *public_signals]),
         "lineage": lineage_from_signals([*formal_signals, *public_signals]),
         "provenance": {"source_skill": skill_name, "decision_source": metadata["decision_source"], "db_path": db_path},
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
     }
     warnings = [] if public_signals and formal_signals else [{"code": "missing-source-family", "message": "Both public and formal DB signals are needed for a complete footprint comparison."}]
     payload = {
-        "schema_version": "wp4-formal-public-footprints-v1",
+        "schema_version": "optional-analysis-formal-public-footprints-v1",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
@@ -1464,7 +1464,7 @@ def run_identify_representation_audit_cues(
                 "evidence_refs": refs_from_signals([*public_signals, *formal_signals]),
                 "lineage": lineage_from_signals([*public_signals, *formal_signals]),
                 "provenance": {"source_skill": skill_name, "decision_source": metadata["decision_source"], "db_path": db_path},
-                "wp4_helper_metadata": metadata,
+                "helper_governance": metadata,
             }
         )
     public_authors = unique_texts([signal.get("author_name") or signal.get("channel_name") for signal in public_signals])
@@ -1484,17 +1484,17 @@ def run_identify_representation_audit_cues(
             "evidence_refs": refs_from_signals([*public_signals, *formal_signals]),
             "lineage": lineage_from_signals([*public_signals, *formal_signals]),
             "provenance": {"source_skill": skill_name, "decision_source": metadata["decision_source"], "db_path": db_path},
-            "wp4_helper_metadata": metadata,
+            "helper_governance": metadata,
         }
     )
     payload = {
-        "schema_version": "wp4-representation-audit-cues-v1",
+        "schema_version": "optional-analysis-representation-audit-cues-v1",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
         "status": "completed",
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
         "representation_audit_cues": cues,
         "warnings": [] if public_signals and formal_signals else [{"code": "missing-source-family", "message": "Representation audit cues need human review because at least one source family is absent."}],
     }
@@ -1560,7 +1560,7 @@ def run_detect_temporal_cooccurrence_cues(
                 "evidence_refs": refs_from_signals(members),
                 "lineage": lineage_from_signals(members),
                 "provenance": {"source_skill": skill_name, "decision_source": metadata["decision_source"], "db_path": db_path},
-                "wp4_helper_metadata": metadata,
+                "helper_governance": metadata,
             }
         )
     status = "completed" if cues else "insufficient-temporal-basis"
@@ -1570,13 +1570,13 @@ def run_detect_temporal_cooccurrence_cues(
     if not cues:
         warnings.append({"code": "insufficient-temporal-basis", "message": "No multi-plane same-day co-occurrence cues could be produced from DB signal timestamps."})
     payload = {
-        "schema_version": "wp4-temporal-cooccurrence-cues-v1",
+        "schema_version": "optional-analysis-temporal-cooccurrence-cues-v1",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
         "generated_at_utc": utc_now_iso(),
         "status": status,
-        "wp4_helper_metadata": metadata,
+        "helper_governance": metadata,
         "temporal_cooccurrence_cues": cues,
         "temporal_basis": {
             "bucket_count": len(buckets),

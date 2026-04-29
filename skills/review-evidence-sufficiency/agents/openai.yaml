@@ -1,4 +1,4 @@
 interface:
   display_name: "Eco Review Evidence Sufficiency"
-  short_description: "WP4 DB-backed sufficiency notes helper"
+  short_description: "Optional-analysis DB-backed sufficiency notes helper"
   default_prompt: "Use $review-evidence-sufficiency only after a skill approval request is approved. Review DB-backed findings, evidence bundles, report section basis, and challenger comments; emit notes and caveats, not readiness scores or report conclusions."

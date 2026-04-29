@@ -28,7 +28,8 @@ from .paths import (
     ensure_runtime_dirs,
     history_bootstrap_state_path,
     orchestration_plan_path,
-    promotion_gate_path,
+    report_basis_gate_path,
+    report_basis_gate_path,
     replay_report_path,
     round_close_state_path,
     scenario_baseline_manifest_path,
@@ -59,7 +60,7 @@ OUTPUT_ARTIFACT_SPECS: tuple[tuple[str, str], ...] = (
     ("next_actions", "investigation/next_actions_{round_id}.json"),
     ("falsification_probes", "investigation/falsification_probes_{round_id}.json"),
     ("round_readiness", "reporting/round_readiness_{round_id}.json"),
-    ("promotion_basis", "promotion/promoted_evidence_basis_{round_id}.json"),
+    ("report_basis_freeze", "report_basis/frozen_report_basis_{round_id}.json"),
     ("reporting_handoff", "reporting/reporting_handoff_{round_id}.json"),
     ("council_decision_draft", "reporting/council_decision_draft_{round_id}.json"),
     ("council_decision", "reporting/council_decision_{round_id}.json"),
@@ -101,7 +102,7 @@ RUN_ARTIFACT_ROOTS = (
     "archive",
     "board",
     "investigation",
-    "promotion",
+    "report_basis",
     "reporting",
     "runtime",
     "receipts",
@@ -493,7 +494,7 @@ def summarized_step_rows(
                 "duration_seconds": duration_seconds(step.get("started_at_utc"), step.get("completed_at_utc")),
                 "gate_status": maybe_text(step.get("gate_status")),
                 "readiness_status": maybe_text(step.get("readiness_status")),
-                "promote_allowed": bool(step.get("promote_allowed")),
+                "report_basis_freeze_allowed": bool(step.get("report_basis_freeze_allowed")),
             }
         )
     return rows
@@ -511,7 +512,7 @@ def comparison_step_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "artifact_hash": maybe_text(row.get("artifact_hash")),
                 "gate_status": maybe_text(row.get("gate_status")),
                 "readiness_status": maybe_text(row.get("readiness_status")),
-                "promote_allowed": bool(row.get("promote_allowed")),
+                "report_basis_freeze_allowed": bool(row.get("report_basis_freeze_allowed")),
             }
         )
     return comparison_rows
@@ -536,10 +537,12 @@ def phase2_state_snapshot(
         else {}
     )
     gate = (
-        control_state.get("promotion_gate", {})
-        if isinstance(control_state.get("promotion_gate"), dict)
+        control_state.get("report_basis_gate", {})
+        if isinstance(control_state.get("report_basis_gate"), dict)
+        else control_state.get("report_basis_gate", {})
+        if isinstance(control_state.get("report_basis_gate"), dict)
         else {}
-    ) or load_json_if_exists(promotion_gate_path(run_dir, round_id)) or {}
+    ) or load_json_if_exists(report_basis_gate_path(run_dir, round_id)) or load_json_if_exists(report_basis_gate_path(run_dir, round_id)) or {}
     controller = (
         control_state.get("controller", {})
         if isinstance(control_state.get("controller"), dict)
@@ -603,7 +606,7 @@ def phase2_state_snapshot(
         "terminal_state": maybe_text(supervisor.get("terminal_state")),
         "readiness_status": maybe_text(supervisor.get("readiness_status")) or maybe_text(controller.get("readiness_status")) or maybe_text(gate.get("readiness_status")) or "unknown",
         "gate_status": maybe_text(supervisor.get("gate_status")) or maybe_text(controller.get("gate_status")) or maybe_text(gate.get("gate_status")) or "unknown",
-        "promotion_status": maybe_text(supervisor.get("promotion_status")) or maybe_text(controller.get("promotion_status")) or "unknown",
+        "report_basis_status": maybe_text(supervisor.get("report_basis_status")) or maybe_text(controller.get("report_basis_status")) or "unknown",
         "reporting_ready": bool(reporting_surface.get("reporting_ready")),
         "reporting_blockers": (
             reporting_surface.get("reporting_blockers", [])
@@ -643,7 +646,7 @@ def phase2_state_snapshot(
         "terminal_state": summary["terminal_state"],
         "readiness_status": summary["readiness_status"],
         "gate_status": summary["gate_status"],
-        "promotion_status": summary["promotion_status"],
+        "report_basis_status": summary["report_basis_status"],
         "reporting_ready": summary["reporting_ready"],
         "reporting_blockers": summary["reporting_blockers"],
         "reporting_handoff_status": summary["reporting_handoff_status"],

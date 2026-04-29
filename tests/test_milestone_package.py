@@ -164,30 +164,63 @@ class MilestonePackageTests(unittest.TestCase):
                 (output_dir / "03-risk-register.md").read_text(encoding="utf-8"),
             )
 
-    def test_repo_package_render_tracks_a4_completion(self) -> None:
-        rendered = render_milestone_package_from_paths(
-            master_plan_path=WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-master-plan.md",
-            progress_log_path=WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-progress-log.md",
-            dashboard_path=WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-dashboard.md",
-            package_date="2026-04-06",
-            output_dir=WORKSPACE_ROOT / "docs" / "archive" / "repo-render-check",
-        )
+    def test_package_render_tracks_completed_plan_without_archive_docs(self) -> None:
+        master_plan_text = """
+# Plan
 
-        self.assertEqual("A4", rendered.manifest["latest_delivery"]["stage_id"])
+### 5.1 Route A: Runtime / Governance Stabilization
+
+| 阶段 | 名称 | 目标 | 当前状态 | 退出标准 |
+| --- | --- | --- | --- | --- |
+| `A1` | Runtime Baseline | stabilize | `completed` | stable |
+| `A2` | Agent Entry Gate | operator entry | `completed` | visible |
+
+## 7. 推荐的未来数次开发顺序
+
+| 顺序 | 阶段 | 路线 | 为什么先做 | 预期独立交付 |
+| --- | --- | --- | --- | --- |
+"""
+        progress_log_text = """
+# Log
+
+## 2026-04-01 A1: Runtime Baseline
+
+Status: completed
+
+Objective:
+- Stabilize runtime.
+
+## 2026-04-06 A2: Agent Entry Gate
+
+Status: completed
+
+Objective:
+- Expose the agent entry gate.
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            master_plan_path = root / "plan.md"
+            progress_log_path = root / "log.md"
+            dashboard_path = root / "dashboard.md"
+            output_dir = root / "package"
+            master_plan_path.write_text(master_plan_text.strip() + "\n", encoding="utf-8")
+            progress_log_path.write_text(progress_log_text.strip() + "\n", encoding="utf-8")
+            dashboard_path.write_text("# Dashboard\n", encoding="utf-8")
+
+            rendered = render_milestone_package_from_paths(
+                master_plan_path=master_plan_path,
+                progress_log_path=progress_log_path,
+                dashboard_path=dashboard_path,
+                package_date="2026-04-06",
+                output_dir=output_dir,
+            )
+
+        self.assertEqual("A2", rendered.manifest["latest_delivery"]["stage_id"])
         self.assertEqual("", rendered.manifest["next_stage"]["stage_id"])
         self.assertEqual("completed", rendered.manifest["latest_delivery"]["status"])
-        self.assertTrue(
-            any(
-                Path(item).name == "2026-04-06-milestone-package"
-                for item in rendered.manifest["supplementary_report_dirs"]
-            )
-        )
+        self.assertIn("Immediate recommended stage: none", rendered.files["04-next-steps.md"])
         self.assertIn(
-            "Immediate recommended stage: none",
-            rendered.files["04-next-steps.md"],
-        )
-        self.assertIn(
-            "| `A` Runtime / Governance Stabilization | `6 / 6` | none | `A4` Agent Entry Gate |",
+            "| `A` Runtime / Governance Stabilization | `2 / 2` | none | `A2` Agent Entry Gate |",
             rendered.files["01-executive-summary.md"],
         )
 

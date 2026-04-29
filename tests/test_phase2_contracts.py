@@ -23,8 +23,8 @@ class Phase2ContractTests(unittest.TestCase):
             [
                 "orchestration-planner",
                 "round-readiness",
-                "promotion-gate",
-                "promotion-basis",
+                "report-basis-gate",
+                "report-basis-freeze",
             ]
         )
 
@@ -33,9 +33,9 @@ class Phase2ContractTests(unittest.TestCase):
             validate_stage_sequence(
                 [
                     "orchestration-planner",
-                    "promotion-gate",
+                    "report-basis-gate",
                     "round-readiness",
-                    "promotion-basis",
+                    "report-basis-freeze",
                 ]
             )
 
@@ -48,12 +48,12 @@ class Phase2ContractTests(unittest.TestCase):
                     "required_previous_stages": ["orchestration-planner"],
                 },
                 {
-                    "stage": "promotion-gate",
+                    "stage": "report-basis-gate",
                     "required_previous_stages": ["custom-readiness-review"],
                 },
                 {
-                    "stage": "promotion-basis",
-                    "required_previous_stages": ["promotion-gate"],
+                    "stage": "report-basis-freeze",
+                    "required_previous_stages": ["report-basis-gate"],
                 },
             ]
         )

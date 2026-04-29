@@ -65,7 +65,7 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 "{\"source\":\"unit-test\",\"author\":\"moderator\"}",
                 "--publication-readiness",
                 "ready",
-                "--promote-allowed",
+                "--report-basis-freeze-allowed",
                 "true",
             )
             second_payload = run_script(
@@ -88,9 +88,9 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 "round",
                 "--target-id",
                 ROUND_ID,
-                "--promotion-disposition",
+                "--report-basis-disposition",
                 "hold",
-                "--promote-allowed",
+                "--report-basis-freeze-allowed",
                 "false",
                 "--evidence-ref",
                 "evidence://contradiction-001",
@@ -137,13 +137,13 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
             self.assertEqual(["evidence://issue-001"], first_proposal["evidence_refs"])
             self.assertEqual("issue-cluster", first_proposal["target"]["object_kind"])
             self.assertEqual("issue-001", first_proposal["target"]["object_id"])
-            self.assertTrue(first_proposal["promote_allowed"])
+            self.assertTrue(first_proposal["report_basis_freeze_allowed"])
             self.assertEqual("ready", first_proposal["publication_readiness"])
 
             self.assertEqual("challenger", second_proposal["agent_role"])
             self.assertEqual(0.93, second_proposal["confidence"])
-            self.assertEqual("hold", second_proposal["promotion_disposition"])
-            self.assertFalse(second_proposal["promote_allowed"])
+            self.assertEqual("hold", second_proposal["report_basis_disposition"])
+            self.assertFalse(second_proposal["report_basis_freeze_allowed"])
             self.assertEqual(ROUND_ID, second_proposal["target_id"])
             self.assertEqual("round", second_proposal["target"]["object_kind"])
 
@@ -174,7 +174,7 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
                 "ready",
                 "--rationale",
                 "The current basis is coherent enough to move forward.",
-                "--sufficient-for-promotion",
+                "--sufficient-for-report-basis",
                 "true",
                 "--basis-object-id",
                 "issue-001",
@@ -238,7 +238,7 @@ class CouncilSubmissionWorkflowTests(unittest.TestCase):
 
             self.assertEqual("moderator", ready_opinion["agent_role"])
             self.assertEqual("ready", ready_opinion["readiness_status"])
-            self.assertTrue(ready_opinion["sufficient_for_promotion"])
+            self.assertTrue(ready_opinion["sufficient_for_report_basis"])
             self.assertEqual(["issue-001"], ready_opinion["basis_object_ids"])
 
             self.assertEqual("challenger", blocked_opinion["agent_role"])

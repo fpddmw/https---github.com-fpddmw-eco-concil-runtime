@@ -1,6 +1,6 @@
 ---
 name: aggregate-environment-evidence
-description: WP4 optional helper for DB-backed environment signal aggregation. It summarizes source, metric, spatial, and temporal coverage without claim matching or readiness scoring.
+description: Optional-analysis helper for DB-backed environment signal aggregation. It summarizes source, metric, spatial, and temporal coverage without claim matching or readiness scoring.
 ---
 
 # Aggregate Environment Evidence
@@ -8,7 +8,7 @@ description: WP4 optional helper for DB-backed environment signal aggregation. I
 ## Core Goal
 - Read normalized environment signals from the signal-plane DB.
 - Produce descriptive source, metric, spatial, and temporal aggregation.
-- Preserve source signal ids, artifact refs, record locators, lineage, provenance, and WP4 helper metadata.
+- Preserve source signal ids, artifact refs, record locators, lineage, provenance, and optional-analysis helper governance.
 - Avoid claim matching, readiness scores, phase gates, or workflow suggestions.
 
 ## Triggering Conditions
@@ -30,7 +30,7 @@ description: WP4 optional helper for DB-backed environment signal aggregation. I
 - `limit`
 
 ## References
-- `../../docs/openclaw-wp4-skills-refactor-workplan.md`
+- `../../docs/openclaw-optional-analysis-skills-refactor-workplan.md`
 
 ## Scripts
 - `scripts/aggregate_environment_evidence.py`

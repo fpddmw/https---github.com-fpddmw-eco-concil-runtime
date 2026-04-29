@@ -53,7 +53,7 @@ def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
         "--category",
         "analysis",
         "--note-text",
-        "Round is organized enough for planner-backed promotion.",
+        "Round is organized enough for planner-backed report_basis.",
         "--linked-artifact-ref",
         evidence_ref,
     )
@@ -191,8 +191,8 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                         {
                             "agent_role": "moderator",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
-                            "rationale": "The active controversy has converged enough for promotion review.",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The active controversy has converged enough for report-basis review.",
                             "decision_source": "agent-council",
                             "basis_object_ids": ["issue-001"],
                             "provenance": {"source": "unit-test"},
@@ -202,7 +202,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                         {
                             "agent_role": "challenger",
                             "readiness_status": "ready",
-                            "sufficient_for_promotion": True,
+                            "sufficient_for_report_basis": True,
                             "rationale": "No remaining contradiction justifies another investigation round.",
                             "decision_source": "agent-council",
                             "basis_object_ids": ["issue-001"],
@@ -231,8 +231,8 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual(["round-readiness"], stage_names)
-            self.assertEqual(["promotion-gate"], gate_stage_names)
-            self.assertEqual("promote-candidate", plan["downstream_posture"])
+            self.assertEqual(["report-basis-gate"], gate_stage_names)
+            self.assertEqual("report-basis-candidate", plan["downstream_posture"])
             self.assertTrue(plan["observed_state"]["direct_council_queue"])
             self.assertTrue(plan["observed_state"]["next_actions_stage_skipped"])
             self.assertEqual(2, plan["observed_state"]["council_readiness_opinion_count"])
@@ -260,7 +260,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                             "action_kind": "resolve-challenge",
                             "agent_role": "challenger",
                             "assigned_role": "challenger",
-                            "objective": "Stress-test the contradiction around ticket-001 before any promotion move.",
+                            "objective": "Stress-test the contradiction around ticket-001 before any report-basis move.",
                             "rationale": "The council wants contradiction pressure applied before readiness is reconsidered.",
                             "target_kind": "challenge-ticket",
                             "target_id": "ticket-001",
@@ -296,7 +296,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual(["falsification-probes", "round-readiness"], stage_names)
-            self.assertEqual(["promotion-gate"], gate_stage_names)
+            self.assertEqual(["report-basis-gate"], gate_stage_names)
             self.assertTrue(plan["probe_stage_included"])
             self.assertEqual("hold-investigation-open", plan["downstream_posture"])
             self.assertTrue(plan["observed_state"]["direct_council_queue"])
@@ -329,7 +329,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                             "action_kind": "resolve-challenge",
                             "agent_role": "challenger",
                             "assigned_role": "challenger",
-                            "objective": "Stress-test the contradiction around ticket-runtime-001 before any promotion move.",
+                            "objective": "Stress-test the contradiction around ticket-runtime-001 before any report-basis move.",
                             "rationale": "Runtime planner should execute this proposal directly instead of recomputing fallback next actions.",
                             "target_kind": "challenge-ticket",
                             "target_id": "ticket-runtime-001",
@@ -401,13 +401,13 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", payload["status"])
             self.assertEqual("planner-backed-phase2", plan["planning_mode"])
             self.assertFalse(plan["probe_stage_included"])
-            self.assertEqual("promote-candidate", plan["downstream_posture"])
+            self.assertEqual("report-basis-candidate", plan["downstream_posture"])
             self.assertEqual(["next-actions", "round-readiness"], stage_names)
-            self.assertEqual(["promotion-gate"], gate_stage_names)
+            self.assertEqual(["report-basis-gate"], gate_stage_names)
             self.assertEqual(["board-summary", "board-brief"], derived_export_stage_names)
             self.assertTrue(plan["observed_state"]["board_exports_are_derived"])
             self.assertEqual(2, payload["summary"]["derived_export_count"])
-            self.assertEqual("promote-evidence-basis", plan["post_gate_steps"][0]["skill_name"])
+            self.assertEqual("freeze-report-basis", plan["post_gate_steps"][0]["skill_name"])
 
     def test_planner_uses_agenda_diffusion_signal_to_keep_probe_stage(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -87,7 +87,7 @@ from .paths import (
     ledger_path,
     manifest_path,
     operator_runbook_path,
-    promotion_gate_path,
+    report_basis_gate_path,
     replay_report_path,
     registry_path,
     resolve_run_dir,
@@ -103,7 +103,7 @@ from .phase2_state_surfaces import (
     load_expert_report_wrapper,
     load_final_publication_wrapper,
     load_orchestration_plan_wrapper,
-    load_promotion_gate_wrapper,
+    load_report_basis_gate_wrapper,
     load_reporting_handoff_wrapper,
     load_supervisor_state_wrapper,
 )
@@ -128,7 +128,7 @@ from .transition_requests import (
     REQUEST_STATUS_REJECTED,
     TRANSITION_KIND_CLOSE_ROUND,
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
-    TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+    TRANSITION_KIND_FREEZE_REPORT_BASIS,
     approve_transition_request,
     latest_transition_request,
     load_transition_requests,
@@ -447,7 +447,7 @@ def transition_request_state(
             "<rationale>",
             actor_role="moderator",
         ),
-        "request_promotion_command_template": kernel_command(
+        "request_report_basis_command_template": kernel_command(
             "request-phase-transition",
             "--run-dir",
             str(run_dir),
@@ -456,7 +456,7 @@ def transition_request_state(
             "--round-id",
             round_id,
             "--transition-kind",
-            TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+            TRANSITION_KIND_FREEZE_REPORT_BASIS,
             "--rationale",
             "<rationale>",
             actor_role="moderator",
@@ -503,7 +503,13 @@ def phase2_operator_view(
     reporting_surface: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     plan = phase2_state.get("plan", {}) if isinstance(phase2_state.get("plan"), dict) else {}
-    gate = phase2_state.get("promotion_gate", {}) if isinstance(phase2_state.get("promotion_gate"), dict) else {}
+    gate = (
+        phase2_state.get("report_basis_gate", {})
+        if isinstance(phase2_state.get("report_basis_gate"), dict)
+        else phase2_state.get("report_basis_gate", {})
+        if isinstance(phase2_state.get("report_basis_gate"), dict)
+        else {}
+    )
     controller = phase2_state.get("controller", {}) if isinstance(phase2_state.get("controller"), dict) else {}
     supervisor = phase2_state.get("supervisor", {}) if isinstance(phase2_state.get("supervisor"), dict) else {}
     reporting = reporting_surface if isinstance(reporting_surface, dict) else {}
@@ -586,12 +592,12 @@ def phase2_operator_view(
         if round_id and run_id
         else None
     )
-    approved_promotion_request = (
+    approved_report_basis_request = (
         latest_transition_request(
             run_dir,
             run_id=run_id,
             round_id=round_id,
-            transition_kind=TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+            transition_kind=TRANSITION_KIND_FREEZE_REPORT_BASIS,
             request_status=REQUEST_STATUS_APPROVED,
         )
         if round_id and run_id
@@ -621,7 +627,9 @@ def phase2_operator_view(
         "terminal_state": maybe_text(supervisor.get("terminal_state")),
         "readiness_status": maybe_text(controller.get("readiness_status")) or maybe_text(supervisor.get("readiness_status")),
         "gate_status": maybe_text(controller.get("gate_status")) or maybe_text(gate.get("gate_status")),
-        "promotion_status": maybe_text(controller.get("promotion_status")) or maybe_text(supervisor.get("promotion_status")),
+        "report_basis_status": maybe_text(controller.get("report_basis_status"))
+        or maybe_text(supervisor.get("report_basis_status"))
+        or maybe_text(gate.get("report_basis_status")),
         "reporting_ready": bool(reporting.get("reporting_ready")),
         "reporting_blockers": reporting.get("reporting_blockers", [])
         if isinstance(reporting.get("reporting_blockers"), list)
@@ -660,8 +668,8 @@ def phase2_operator_view(
             if round_id and run_id
             else ""
         ),
-        "query_promotion_freeze_command": (
-            f"query-control-objects --run-dir {run_dir} --object-kind promotion-freeze --run-id {run_id} --round-id {round_id}"
+        "query_runtime_control_freeze_command": (
+            f"query-control-objects --run-dir {run_dir} --object-kind runtime-control-freeze --run-id {run_id} --round-id {round_id}"
             if round_id and run_id
             else ""
         ),
@@ -706,8 +714,8 @@ def phase2_operator_view(
             if round_id and run_id
             else ""
         ),
-        "query_promotion_basis_command": (
-            f"query-council-objects --run-dir {run_dir} --object-kind promotion-basis --run-id {run_id} --round-id {round_id}"
+        "query_report_basis_freeze_command": (
+            f"query-council-objects --run-dir {run_dir} --object-kind report-basis-freeze --run-id {run_id} --round-id {round_id}"
             if round_id and run_id
             else ""
         ),
@@ -726,7 +734,7 @@ def phase2_operator_view(
             if round_id and run_id
             else ""
         ),
-        "request_promotion_transition_command": (
+        "request_report_basis_transition_command": (
             kernel_command(
                 "request-phase-transition",
                 "--run-dir",
@@ -736,7 +744,7 @@ def phase2_operator_view(
                 "--round-id",
                 round_id,
                 "--transition-kind",
-                TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+                TRANSITION_KIND_FREEZE_REPORT_BASIS,
                 "--rationale",
                 "<rationale>",
                 actor_role="moderator",
@@ -770,20 +778,20 @@ def phase2_operator_view(
             if round_id and run_id
             else ""
         ),
-        "promote_evidence_basis_command": (
+        "freeze_report_basis_command": (
             run_skill_command(
                 run_dir=run_dir,
                 run_id=run_id,
                 round_id=round_id,
-                skill_name="promote-evidence-basis",
+                skill_name="freeze-report-basis",
                 actor_role="moderator",
                 contract_mode="warn",
                 skill_args=[
                     "--transition-request-id",
-                    maybe_text(approved_promotion_request.get("request_id")),
+                    maybe_text(approved_report_basis_request.get("request_id")),
                 ],
             )
-            if round_id and run_id and isinstance(approved_promotion_request, dict)
+            if round_id and run_id and isinstance(approved_report_basis_request, dict)
             else ""
         ),
         "request_open_round_command": (
@@ -841,9 +849,11 @@ def phase2_operator_view(
             "controller_path": maybe_text(controller.get("artifacts", {}).get("controller_state_path"))
             if isinstance(controller.get("artifacts"), dict)
             else maybe_text(supervisor.get("controller_path")),
-            "gate_path": maybe_text(controller.get("artifacts", {}).get("promotion_gate_path"))
+            "gate_path": maybe_text(controller.get("artifacts", {}).get("report_basis_gate_path"))
+            or maybe_text(controller.get("artifacts", {}).get("report_basis_gate_path"))
             if isinstance(controller.get("artifacts"), dict)
-            else maybe_text(supervisor.get("promotion_gate_path")),
+            else maybe_text(supervisor.get("report_basis_gate_path"))
+            or maybe_text(supervisor.get("report_basis_gate_path")),
             "supervisor_path": (
                 maybe_text(supervisor.get("supervisor_path"))
                 or str(supervisor_state_path(run_dir, round_id).resolve())
@@ -1443,12 +1453,12 @@ def show_run_state(
                 controller_state_path(run_dir, selected_round_id).resolve()
             ),
         )
-        gate_context = load_promotion_gate_wrapper(
+        gate_context = load_report_basis_gate_wrapper(
             run_dir,
             run_id=resolved_run_id,
             round_id=selected_round_id,
-            promotion_gate_path=str(
-                promotion_gate_path(run_dir, selected_round_id).resolve()
+            report_basis_gate_path=str(
+                report_basis_gate_path(run_dir, selected_round_id).resolve()
             ),
         )
         supervisor_context = load_supervisor_state_wrapper(
@@ -1482,7 +1492,10 @@ def show_run_state(
                 if isinstance(control_state.get("orchestration_plan_steps"), list)
                 else []
             ),
-            "promotion_gate": gate_context.get("payload", {})
+            "report_basis_gate": gate_context.get("payload", {})
+            if isinstance(gate_context.get("payload"), dict)
+            else {},
+            "report_basis_gate": gate_context.get("payload", {})
             if isinstance(gate_context.get("payload"), dict)
             else {},
             "controller": controller_context.get("payload", {})
@@ -1491,13 +1504,14 @@ def show_run_state(
             "supervisor": supervisor_context.get("payload", {})
             if isinstance(supervisor_context.get("payload"), dict)
             else {},
-            "promotion_freeze": control_state.get("promotion_freeze", {})
-            if isinstance(control_state.get("promotion_freeze"), dict)
+            "report_basis_freeze": control_state.get("report_basis_freeze", {})
+            if isinstance(control_state.get("report_basis_freeze"), dict)
             else {},
             "control_contexts": {
                 "plan": plan_context,
                 "controller": controller_context,
-                "promotion_gate": gate_context,
+                "report_basis_gate": gate_context,
+                "report_basis_gate": gate_context,
                 "supervisor": supervisor_context,
             },
         }
@@ -1664,7 +1678,8 @@ def add_control_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--status", default="")
     command.add_argument("--controller-status", default="")
     command.add_argument("--gate-status", default="")
-    command.add_argument("--promotion-status", default="")
+    command.add_argument("--report-basis-status", default="")
+    command.add_argument("--report_basis-status", default="")
     command.add_argument("--supervisor-status", default="")
     command.add_argument("--planning-mode", default="")
     command.add_argument("--controller-authority", default="")
@@ -1749,7 +1764,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         choices=[
             TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
-            TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+            TRANSITION_KIND_FREEZE_REPORT_BASIS,
             TRANSITION_KIND_CLOSE_ROUND,
         ],
     )
@@ -1937,14 +1952,14 @@ def build_parser() -> argparse.ArgumentParser:
     submit_section_cmd.add_argument("--provenance-json", default="{}")
     submit_section_cmd.add_argument("--pretty", action="store_true")
 
-    gate_cmd = sub.add_parser("apply-promotion-gate", help="Evaluate round readiness and write a promote-or-freeze gate artifact.")
+    gate_cmd = sub.add_parser("apply-report-basis-gate", help="Evaluate round readiness and write a report-basis gate artifact.")
     gate_cmd.add_argument("--run-dir", required=True)
     gate_cmd.add_argument("--run-id", required=True)
     gate_cmd.add_argument("--round-id", required=True)
     add_actor_role_arg(gate_cmd)
     gate_cmd.add_argument("--pretty", action="store_true")
 
-    phase2_cmd = sub.add_parser("run-phase2-round", help="Run the board -> D1 -> D2 -> promotion phase-2 chain in one command.")
+    phase2_cmd = sub.add_parser("run-phase2-round", help="Run the approved phase-2 report-basis chain in one command.")
     phase2_cmd.add_argument("--run-dir", required=True)
     phase2_cmd.add_argument("--run-id", required=True)
     phase2_cmd.add_argument("--round-id", required=True)
@@ -2107,7 +2122,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     phase2_export_cmd = sub.add_parser(
         "materialize-phase2-exports",
-        help="Rebuild phase-2 investigation/promotion/runtime exports from canonical DB state.",
+        help="Rebuild phase-2 investigation/report_basis/runtime exports from canonical DB state.",
     )
     phase2_export_cmd.add_argument("--run-dir", required=True)
     phase2_export_cmd.add_argument("--run-id", required=True)
@@ -3094,9 +3109,10 @@ def main(
             print(pretty_json(payload_out, args.pretty))
             return 0
 
-    if args.command == "apply-promotion-gate":
+    if args.command == "apply-report-basis-gate":
         init_run(run_dir, args.run_id)
-        if not gate_handlers or "promotion-gate" not in gate_handlers:
+        gate_handler_name = "report-basis-gate"
+        if not gate_handlers or gate_handler_name not in gate_handlers:
             failure = {
                 "status": "failed",
                 "summary": {"run_id": args.run_id, "round_id": args.round_id},
@@ -3104,7 +3120,7 @@ def main(
             }
             print(pretty_json(failure, args.pretty))
             return 1
-        payload = gate_handlers["promotion-gate"](
+        payload = gate_handlers[gate_handler_name](
             run_dir,
             run_id=args.run_id,
             round_id=args.round_id,
@@ -3113,16 +3129,17 @@ def main(
             run_dir,
             {
                 "schema_version": "runtime-event-v2",
-                "event_id": new_runtime_event_id("runtimeevt", args.run_id, args.round_id, "promotion-gate", payload.get("generated_at_utc")),
-                "event_type": "promotion-gate",
+                "event_id": new_runtime_event_id("runtimeevt", args.run_id, args.round_id, "report-basis-gate", payload.get("generated_at_utc")),
+                "event_type": "report-basis-gate",
                 "run_id": args.run_id,
                 "round_id": args.round_id,
                 "started_at_utc": payload.get("generated_at_utc"),
                 "completed_at_utc": payload.get("generated_at_utc"),
                 "status": "completed",
                 "gate_status": payload.get("gate_status"),
+                "report_basis_gate_status": payload.get("report_basis_gate_status"),
                 "readiness_status": payload.get("readiness_status"),
-                "promote_allowed": bool(payload.get("promote_allowed")),
+                "report_basis_freeze_allowed": bool(payload.get("report_basis_freeze_allowed")),
                 "gate_path": payload.get("output_path"),
             },
         )
@@ -3609,7 +3626,7 @@ def main(
                 status=args.status,
                 controller_status=args.controller_status,
                 gate_status=args.gate_status,
-                promotion_status=args.promotion_status,
+                report_basis_status=args.report_basis_status,
                 supervisor_status=args.supervisor_status,
                 planning_mode=args.planning_mode,
                 controller_authority=args.controller_authority,

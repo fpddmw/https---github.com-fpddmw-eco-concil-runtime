@@ -39,8 +39,8 @@ def registry_path(run_dir: Path) -> Path:
     return runtime_dir(run_dir) / "skill_registry.json"
 
 
-def promotion_gate_path(run_dir: Path, round_id: str) -> Path:
-    return runtime_dir(run_dir) / f"promotion_gate_{round_id}.json"
+def report_basis_gate_path(run_dir: Path, round_id: str) -> Path:
+    return runtime_dir(run_dir) / f"report_basis_gate_{round_id}.json"
 
 
 def orchestration_plan_path(run_dir: Path, round_id: str) -> Path:

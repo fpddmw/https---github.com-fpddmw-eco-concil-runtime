@@ -1,6 +1,6 @@
 ---
 name: discover-discourse-issues
-description: WP4 optional helper for DB-backed public/formal discourse issue hints. It emits reversible issue hints, not claim candidates or report conclusions.
+description: Optional-analysis helper for DB-backed public/formal discourse issue hints. It emits reversible issue hints, not claim candidates or report conclusions.
 ---
 
 # Discover Discourse Issues

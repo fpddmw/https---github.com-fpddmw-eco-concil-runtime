@@ -303,7 +303,7 @@ def load_council_readiness_opinions(
 
 def readiness_bucket(opinion: dict[str, Any]) -> str:
     readiness_value = maybe_text(opinion.get("readiness_status"))
-    if bool(opinion.get("sufficient_for_promotion")) or readiness_value in {"ready", "ready-for-promotion", "promote"}:
+    if bool(opinion.get("sufficient_for_report_basis")) or readiness_value in {"ready", "ready-for-report-basis", "freeze-report-basis"}:
         return "ready"
     if readiness_value in {"blocked", "reject", "rejected"}:
         return "blocked"
@@ -455,7 +455,7 @@ def planning_signal_counts(
         "open_probe_count": count_open_probes(probes),
         "probe_candidate_actions": probe_candidate_actions,
         "pending_blocking_actions": len(blocking_actions),
-        "pending_non_promotion_actions": len(blocking_actions),
+        "pending_non_report_basis_actions": len(blocking_actions),
         "issue_cluster_count": safe_int(agenda_counts.get("issue_cluster_count")),
         "routing_actions": routing_actions,
         "empirical_gap_actions": empirical_gap_actions,
@@ -536,7 +536,7 @@ def downstream_posture(
 ) -> tuple[str, list[str]]:
     readiness_status = maybe_text(signal_counts.get("readiness_status"))
     if readiness_status == "ready":
-        return "promote-candidate", ["ready-readiness-artifact"]
+        return "report-basis-candidate", ["ready-readiness-artifact"]
     if readiness_status in {"blocked", "needs-more-data"}:
         return "hold-investigation-open", [
             f"readiness-{readiness_status}",
@@ -558,10 +558,10 @@ def downstream_posture(
             "issue_cluster_count",
             0,
         ) == 0:
-            reason_codes.append("no-active-issue-to-promote")
+            reason_codes.append("no-active-issue-to-freeze-report-basis")
     if reason_codes:
         return "hold-investigation-open", reason_codes
-    return "promote-candidate", ["no-visible-blockers"]
+    return "report-basis-candidate", ["no-visible-blockers"]
 
 
 def step_entry(
@@ -598,18 +598,18 @@ def gate_step_entry(
     *,
     required_previous_stages: list[str],
     readiness_stage_name: str,
-) -> dict[str, Any]:
+    ) -> dict[str, Any]:
     return {
-        "stage_name": "promotion-gate",
+        "stage_name": "report-basis-gate",
         "stage_kind": "gate",
         "phase_group": "gate",
         "required_previous_stages": required_previous_stages,
         "blocking": True,
         "resume_policy": "skip-if-completed",
-        "operator_summary": "Evaluate whether the current round can move into promotion and reporting.",
+        "operator_summary": "Evaluate whether the current DB-backed round basis can be frozen for reporting handoff.",
         "reason": reason,
         "expected_output_path": str(expected_output_path),
-        "gate_handler": "promotion-gate",
+        "gate_handler": "report-basis-gate",
         "readiness_stage_name": readiness_stage_name,
     }
 
@@ -641,14 +641,14 @@ def stop_conditions(include_probe: bool) -> list[dict[str, str]]:
             "effect": "Abort controller execution and surface the failing stage to runtime callers.",
         },
         {
-            "condition_id": "gate-allows-promotion",
-            "trigger": "Promotion gate returns allow-promote after round-readiness.",
-            "effect": "Run promote-evidence-basis only after moderator request plus operator approval, then hand off the round to downstream reporting.",
+            "condition_id": "gate-allows-report-basis-freeze",
+            "trigger": "Report-basis gate allows basis freeze after round-readiness.",
+            "effect": "Run freeze-report-basis only after moderator request plus operator approval, then hand off the round to downstream reporting.",
         },
         {
-            "condition_id": "gate-withholds-promotion",
-            "trigger": "Promotion gate returns freeze-withheld after round-readiness.",
-            "effect": "Run promote-evidence-basis only after moderator request plus operator approval, keep the basis auditable, and leave investigation open when withheld.",
+            "condition_id": "gate-withholds-report-basis-freeze",
+            "trigger": "Report-basis gate withholds basis freeze after round-readiness.",
+            "effect": "Run freeze-report-basis only after moderator request plus operator approval, keep the basis auditable, and leave investigation open when withheld.",
         },
     ]
     if include_probe:
@@ -722,7 +722,7 @@ def fallback_path(
                 "suggested_next_skills": unique_texts(suggested_next_skills),
             }
         )
-    if posture == "promote-candidate":
+    if posture == "report-basis-candidate":
         fallback_rows.append(
             {
                 "when": "Promotion succeeds and the basis is frozen.",
@@ -785,8 +785,8 @@ def plan_round_orchestration_skill(
     probes_file = resolve_path(run_dir_path, probes_path, f"investigation/falsification_probes_{round_id}.json")
     readiness_file = resolve_path(run_dir_path, readiness_path, f"reporting/round_readiness_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"runtime/orchestration_plan_{round_id}.json")
-    promotion_gate_file = (run_dir_path / "runtime" / f"promotion_gate_{round_id}.json").resolve()
-    promotion_basis_file = (run_dir_path / "promotion" / f"promoted_evidence_basis_{round_id}.json").resolve()
+    report_basis_gate_file = (run_dir_path / "runtime" / f"report_basis_gate_{round_id}.json").resolve()
+    report_basis_freeze_file = (run_dir_path / "report_basis" / f"frozen_report_basis_{round_id}.json").resolve()
 
     warnings: list[dict[str, Any]] = []
     round_snapshot = load_round_snapshot(
@@ -966,8 +966,8 @@ def plan_round_orchestration_skill(
     )
     gate_steps = [
         gate_step_entry(
-            "Evaluate whether the current round can move into promotion and reporting after readiness review.",
-            promotion_gate_file,
+            "Evaluate whether the current report_basis can be frozen for reporting after readiness review.",
+            report_basis_gate_file,
             required_previous_stages=["round-readiness"],
             readiness_stage_name="round-readiness",
         )
@@ -990,14 +990,14 @@ def plan_round_orchestration_skill(
 
     post_gate_steps = [
         step_entry(
-            "promotion-basis",
-            "promote-evidence-basis",
-            "Freeze a promoted or withheld evidence basis after gate evaluation so controller output always stays auditable.",
+            "report-basis-freeze",
+            "freeze-report-basis",
+            "Freeze an approved or withheld report_basis after gate evaluation so controller output always stays auditable.",
             "moderator",
-            promotion_basis_file,
-            required_previous_stages=["promotion-gate"],
-            phase_group="promotion",
-            operator_summary="Freeze the promoted or withheld evidence basis after gate evaluation.",
+            report_basis_freeze_file,
+            required_previous_stages=["report-basis-gate"],
+            phase_group="report-basis",
+            operator_summary="Freeze the approved or withheld report_basis after gate evaluation.",
         )
     ]
 
@@ -1039,7 +1039,7 @@ def plan_round_orchestration_skill(
         "signal_counts": {
             "open_probe_count": signal_counts.get("open_probe_count", 0),
             "probe_candidate_actions": signal_counts.get("probe_candidate_actions", 0),
-            "pending_non_promotion_actions": signal_counts.get("pending_non_promotion_actions", 0),
+            "pending_non_report_basis_actions": signal_counts.get("pending_non_report_basis_actions", 0),
             "issue_cluster_count": signal_counts.get("issue_cluster_count", 0),
             "routing_actions": signal_counts.get("routing_actions", 0),
             "empirical_gap_actions": signal_counts.get("empirical_gap_actions", 0),
@@ -1167,8 +1167,8 @@ def plan_round_orchestration_skill(
     gap_hints: list[str] = []
     if not isinstance(board, dict):
         gap_hints.append("No board artifact exists yet, so planner output assumes controller will rebuild board-facing artifacts from scratch.")
-    if posture != "promote-candidate":
-        gap_hints.append("Current board posture still points to investigation hold rather than clean promotion.")
+    if posture != "report-basis-candidate":
+        gap_hints.append("Current board posture still points to investigation hold rather than clean report_basis.")
     challenge_hints: list[str] = []
     if int(counts.get("challenge_open") or 0) > 0:
         challenge_hints.append(f"{int(counts.get('challenge_open') or 0)} open challenge tickets are still visible to the planner.")

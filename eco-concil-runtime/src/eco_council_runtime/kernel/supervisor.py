@@ -9,7 +9,7 @@ from ..phase2_posture_profile import (
 )
 from ..reporting_status import reporting_gate_state
 from ..runtime_command_hints import kernel_command
-from .deliberation_plane import store_promotion_freeze_record
+from .deliberation_plane import store_runtime_control_freeze_record
 from .executor import SkillExecutionError
 from .controller import run_phase2_round_with_contract_mode
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
@@ -157,7 +157,8 @@ def supervise_round_with_contract_mode(
         artifacts = controller.get("artifacts", {}) if isinstance(controller.get("artifacts"), dict) else {}
         classification = classification_builder(controller or {"controller_status": "failed"})
         reporting_state = reporting_gate_state(
-            promotion_status=maybe_text(controller.get("promotion_status"))
+            report_basis_status=maybe_text(controller.get("report_basis_status"))
+            or maybe_text(controller.get("report_basis_status"))
             or "not-evaluated",
             readiness_status=maybe_text(controller.get("readiness_status"))
             or "pending",
@@ -188,7 +189,10 @@ def supervise_round_with_contract_mode(
             else "",
             "readiness_status": maybe_text(controller.get("readiness_status")) or "pending",
             "gate_status": maybe_text(controller.get("gate_status")) or "not-evaluated",
-            "promotion_status": maybe_text(controller.get("promotion_status")) or "not-evaluated",
+            "report_basis_status": maybe_text(controller.get("report_basis_status"))
+            or maybe_text(controller.get("report_basis_status"))
+            or "not-evaluated",
+            "report_basis_status": maybe_text(controller.get("report_basis_status")) or "not-evaluated",
             "reporting_ready": bool(reporting_state.get("reporting_ready")),
             "reporting_blockers": (
                 reporting_state.get("reporting_blockers", [])
@@ -202,8 +206,10 @@ def supervise_round_with_contract_mode(
             "planning_mode": maybe_text(controller.get("planning_mode")) or "planner-backed",
             "orchestration_plan_path": artifacts.get("orchestration_plan_path", ""),
             "controller_path": artifacts.get("controller_state_path", ""),
-            "promotion_gate_path": artifacts.get("promotion_gate_path", ""),
-            "promotion_basis_path": artifacts.get("promotion_basis_path", ""),
+            "report_basis_gate_path": artifacts.get("report_basis_gate_path", "")
+            or artifacts.get("report_basis_gate_path", ""),
+            "report_basis_gate_path": artifacts.get("report_basis_gate_path", ""),
+            "report_basis_freeze_path": artifacts.get("report_basis_freeze_path", ""),
             "recommended_next_skills": controller.get("recommended_next_skills", []),
             "round_transition": {},
             "top_actions": [],
@@ -214,20 +220,23 @@ def supervise_round_with_contract_mode(
             "inspection_paths": {
                 "controller_path": artifacts.get("controller_state_path", ""),
                 "plan_path": artifacts.get("orchestration_plan_path", ""),
-                "gate_path": artifacts.get("promotion_gate_path", ""),
+                "gate_path": artifacts.get("report_basis_gate_path", "")
+                or artifacts.get("report_basis_gate_path", ""),
             },
         }
         output_file = supervisor_state_path(run_dir, round_id)
         payload["supervisor_path"] = str(output_file)
         write_json(output_file, payload)
-        store_promotion_freeze_record(
+        store_runtime_control_freeze_record(
             run_dir,
             run_id=run_id,
             round_id=round_id,
             supervisor_snapshot=payload,
             artifact_paths={
                 "controller_state_path": artifacts.get("controller_state_path", ""),
-                "promotion_gate_path": artifacts.get("promotion_gate_path", ""),
+                "report_basis_gate_path": artifacts.get("report_basis_gate_path", "")
+                or artifacts.get("report_basis_gate_path", ""),
+                "report_basis_gate_path": artifacts.get("report_basis_gate_path", ""),
                 "supervisor_state_path": str(output_file),
             },
         )
@@ -248,7 +257,7 @@ def supervise_round_with_contract_mode(
                 "supervisor_status": payload["supervisor_status"],
                 "readiness_status": payload["readiness_status"],
                 "gate_status": payload["gate_status"],
-                "promotion_status": payload["promotion_status"],
+                "report_basis_status": payload["report_basis_status"],
                 "reporting_ready": payload["reporting_ready"],
                 "reporting_blockers": payload["reporting_blockers"],
                 "supervisor_path": str(output_file),
@@ -262,7 +271,7 @@ def supervise_round_with_contract_mode(
             "supervisor_status": payload["supervisor_status"],
             "planning_mode": payload["planning_mode"],
             "supervisor_path": str(output_file),
-            "promotion_status": payload["promotion_status"],
+            "report_basis_status": payload["report_basis_status"],
             "reporting_ready": payload["reporting_ready"],
         }
         raise SkillExecutionError(failure_payload.get("message", str(exc)), failure_payload)
@@ -287,11 +296,15 @@ def supervise_round_with_contract_mode(
     next_actions = next_actions or {}
     top_action_rows = top_actions_builder(next_actions)
     gate_reasons = controller.get("gate_reasons", []) if isinstance(controller.get("gate_reasons"), list) else []
-    promotion_status = maybe_text(controller.get("promotion_status")) or "withheld"
-    gate_status = maybe_text(controller.get("gate_status")) or "freeze-withheld"
+    report_basis_status = (
+        maybe_text(controller.get("report_basis_status"))
+        or maybe_text(controller.get("report_basis_status"))
+        or "withheld"
+    )
+    gate_status = maybe_text(controller.get("gate_status")) or "report-basis-freeze-withheld"
     classification = classification_builder(controller)
     reporting_state = reporting_gate_state(
-        promotion_status=promotion_status,
+        report_basis_status=report_basis_status,
         readiness_status=maybe_text(controller.get("readiness_status")) or "blocked",
         supervisor_status=classification["supervisor_status"],
         require_supervisor=True,
@@ -315,7 +328,7 @@ def supervise_round_with_contract_mode(
         round_transition=round_transition,
     )
     resolved_operator_notes = operator_notes_builder(
-        promotion_status=promotion_status,
+        report_basis_status=report_basis_status,
         gate_status=gate_status,
         gate_reasons=gate_reasons,
         top_action_rows=top_action_rows,
@@ -353,7 +366,7 @@ def supervise_round_with_contract_mode(
         else "",
         "readiness_status": maybe_text(controller.get("readiness_status")) or "blocked",
         "gate_status": gate_status,
-        "promotion_status": promotion_status,
+        "report_basis_status": report_basis_status,
         "reporting_ready": bool(reporting_state.get("reporting_ready")),
         "reporting_blockers": (
             reporting_state.get("reporting_blockers", [])
@@ -365,8 +378,10 @@ def supervise_round_with_contract_mode(
         "planning_mode": maybe_text(controller.get("planning_mode")) or maybe_text(controller.get("planning", {}).get("planning_mode") if isinstance(controller.get("planning"), dict) else "") or "planner-backed",
         "orchestration_plan_path": artifacts.get("orchestration_plan_path", ""),
         "controller_path": artifacts.get("controller_state_path", ""),
-        "promotion_gate_path": artifacts.get("promotion_gate_path", ""),
-        "promotion_basis_path": artifacts.get("promotion_basis_path", ""),
+        "report_basis_gate_path": artifacts.get("report_basis_gate_path", "")
+        or artifacts.get("report_basis_gate_path", ""),
+        "report_basis_gate_path": artifacts.get("report_basis_gate_path", ""),
+        "report_basis_freeze_path": artifacts.get("report_basis_freeze_path", ""),
         "recommended_next_skills": recommended_next_skills,
         "round_transition": round_transition,
         "top_actions": top_action_rows,
@@ -377,21 +392,24 @@ def supervise_round_with_contract_mode(
         "inspection_paths": {
             "controller_path": artifacts.get("controller_state_path", ""),
             "plan_path": artifacts.get("orchestration_plan_path", ""),
-            "gate_path": artifacts.get("promotion_gate_path", ""),
-            "promotion_basis_path": artifacts.get("promotion_basis_path", ""),
+            "gate_path": artifacts.get("report_basis_gate_path", "")
+            or artifacts.get("report_basis_gate_path", ""),
+            "report_basis_freeze_path": artifacts.get("report_basis_freeze_path", ""),
         },
     }
     output_file = supervisor_state_path(run_dir, round_id)
     payload["supervisor_path"] = str(output_file)
     write_json(output_file, payload)
-    store_promotion_freeze_record(
+    store_runtime_control_freeze_record(
         run_dir,
         run_id=run_id,
         round_id=round_id,
         supervisor_snapshot=payload,
         artifact_paths={
             "controller_state_path": artifacts.get("controller_state_path", ""),
-            "promotion_gate_path": artifacts.get("promotion_gate_path", ""),
+            "report_basis_gate_path": artifacts.get("report_basis_gate_path", "")
+            or artifacts.get("report_basis_gate_path", ""),
+            "report_basis_gate_path": artifacts.get("report_basis_gate_path", ""),
             "supervisor_state_path": str(output_file),
         },
     )
@@ -414,7 +432,7 @@ def supervise_round_with_contract_mode(
             "supervisor_status": payload["supervisor_status"],
             "readiness_status": payload["readiness_status"],
             "gate_status": gate_status,
-            "promotion_status": promotion_status,
+            "report_basis_status": report_basis_status,
             "reporting_ready": payload["reporting_ready"],
             "reporting_blockers": payload["reporting_blockers"],
             "supervisor_path": str(output_file),
@@ -428,7 +446,7 @@ def supervise_round_with_contract_mode(
             "supervisor_status": payload["supervisor_status"],
             "planning_mode": payload["planning_mode"],
             "supervisor_path": str(output_file),
-            "promotion_status": promotion_status,
+            "report_basis_status": report_basis_status,
             "reporting_ready": payload["reporting_ready"],
         },
         "supervisor": payload,

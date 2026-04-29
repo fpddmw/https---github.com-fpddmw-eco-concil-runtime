@@ -8,7 +8,7 @@ from pathlib import Path
 from _workflow_support import (
     analytics_path,
     load_json,
-    promotion_path,
+    report_basis_path,
     primary_research_issue_id,
     primary_successor_evidence_ref,
     reporting_path,
@@ -25,13 +25,13 @@ RUN_ID = "run-reporting-publish-001"
 ROUND_ID = "round-reporting-publish-001"
 
 
-def approve_promotion_transition(run_dir: Path) -> str:
+def approve_report_basis_transition(run_dir: Path) -> str:
     return request_and_approve_transition(
         run_dir,
         run_id=RUN_ID,
         round_id=ROUND_ID,
-        transition_kind="promote-evidence-basis",
-        rationale="Approve promotion for reporting publish workflow coverage.",
+        transition_kind="freeze-report-basis",
+        rationale="Approve report_basis for reporting publish workflow coverage.",
     )
 
 
@@ -85,7 +85,7 @@ def prepare_ready_round(run_dir: Path, root: Path) -> None:
         "--round-id",
         ROUND_ID,
     )
-    approve_promotion_transition(run_dir)
+    approve_report_basis_transition(run_dir)
     run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     run_script(script_path("materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     run_script(script_path("draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
@@ -114,7 +114,7 @@ def prepare_hold_round(run_dir: Path, root: Path) -> None:
         "--target-hypothesis-id", hypothesis_payload["canonical_ids"][0],
         "--priority", "high", "--owner-role", "challenger", "--linked-artifact-ref", evidence_ref,
     )
-    approve_promotion_transition(run_dir)
+    approve_report_basis_transition(run_dir)
     run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     run_script(script_path("materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     run_script(script_path("draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
@@ -222,8 +222,8 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 decision["reporting_handoff_source"],
             )
             self.assertEqual(
-                "deliberation-plane-promotion-basis",
-                decision["promotion_source"],
+                "deliberation-plane-report-basis-freeze",
+                decision["report_basis_source"],
             )
             self.assertEqual(
                 "deliberation-plane-expert-report",
@@ -513,8 +513,8 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             )
             self.assertEqual("deliberation-plane-council-decision", publication["decision_source"])
             self.assertEqual(
-                "deliberation-plane-promotion-basis",
-                publication["promotion_source"],
+                "deliberation-plane-report-basis-freeze",
+                publication["report_basis_source"],
             )
             self.assertEqual(
                 "deliberation-plane-supervisor",
@@ -544,7 +544,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertIn("role-reports", publication["published_sections"])
             self.assertEqual(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json").resolve().as_posix(), Path(publication["audit_refs"]["decision_path"]).resolve().as_posix())
 
-    def test_final_publication_recovers_from_db_when_promotion_artifact_is_missing(self) -> None:
+    def test_final_publication_recovers_from_db_when_report_basis_artifact_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -555,7 +555,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
             run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
             run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
-            promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json").unlink()
+            report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json").unlink()
 
             publication_payload = run_script(
                 script_path("materialize-final-publication"),
@@ -570,13 +570,13 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
 
             self.assertEqual("completed", publication_payload["status"])
             self.assertEqual(
-                "deliberation-plane-promotion-basis",
-                publication["promotion_source"],
+                "deliberation-plane-report-basis-freeze",
+                publication["report_basis_source"],
             )
             self.assertFalse(
-                publication["observed_inputs"]["promotion_artifact_present"]
+                publication["observed_inputs"]["report_basis_artifact_present"]
             )
-            self.assertTrue(publication["observed_inputs"]["promotion_present"])
+            self.assertTrue(publication["observed_inputs"]["report_basis_present"])
 
     def test_final_publication_recovers_supervisor_state_from_db_when_artifact_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

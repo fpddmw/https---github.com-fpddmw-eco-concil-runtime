@@ -85,7 +85,7 @@
 18. `propose-next-actions`
 19. `open-falsification-probe`
 20. `summarize-round-readiness`
-21. `promote-evidence-basis`
+21. `freeze-report-basis`
 
 ### 3.2 最需要拆分的非原子 skill
 
@@ -95,7 +95,7 @@
 4. `plan-round-orchestration`
 5. `propose-next-actions`
 6. `summarize-round-readiness`
-7. `promote-evidence-basis`
+7. `freeze-report-basis`
 8. `materialize-reporting-handoff`
 9. `draft-council-decision`
 10. `materialize-final-publication`
@@ -203,7 +203,7 @@
 | `propose-next-actions` | 降级为可选 | 强 / 是（强制） | 非原子 | 可保留为 moderator advisory，不再是默认 phase owner。 |
 | `open-falsification-probe` | 保留并修改 | 强 / 是（强制） | 半原子 | 保留为 challenger tool；从 controller mandatory stage 移出。 |
 | `summarize-round-readiness` | 降级为可选 | 强 / 是（强制） | 非原子 | 可保留为 moderator aid，但 readiness 正式推进应靠 moderator request + operator approval。 |
-| `promote-evidence-basis` | 保留并修改 | 强 / 是（强制） | 非原子 | 保留为 `freeze-report-basis` 类 skill，但不再自动主导 promotion 语义。 |
+| `freeze-report-basis` | 保留并修改 | 强 / 是（强制） | 非原子 | 保留为 `freeze-report-basis` 类 skill，但不再自动主导 report basis 语义。 |
 
 ## 4.5 Query / History / Reporting Skills（16）
 
@@ -299,7 +299,7 @@
 
 1. fetch / normalize / query 技能大多保留。
 2. 当前中层 claim-route-coverage-controversy 链必须整体降级为 optional。
-3. 当前 phase-2 orchestrator / readiness / promotion 主链必须退出默认控制权。
+3. 当前 phase-2 orchestrator / readiness / report basis 主链必须退出默认控制权。
 4. reporting 技能要从“议会结论封装”升级为“研究报告生产线”。
 5. 需要新增一整层政策研究、替代方案比较、风险与不确定性、格式规范技能。
 
@@ -316,7 +316,7 @@
 5. artifact 只作为 export / handoff；抓取数据、跨轮状态、报告证据 basis 必须能从 DB 恢复。
 6. 任何 simulation / scenario skill 必须显式标记假设、参数来源与输出类型，不得混作事实证据。
 
-### 7.2 WP0：基线盘点与冻结线
+### 7.2 baseline-freeze track：基线盘点与冻结线
 
 目标：在动代码前冻结现状，避免旧 claim-route-coverage 主链继续扩散。
 
@@ -339,16 +339,16 @@
 2. 所有 optional-analysis 执行都需要持久化 approval request。
 3. 文档和 operator surface 不再暗示未审计规则可默认执行。
 
-### 7.3 WP1：默认链去启发式与 source queue 语义清理
+### 7.3 default-chain cleanup track：默认链去启发式与 source queue 语义清理
 
 目标：让 runtime / source queue / agent entry 只暴露能力面，不再暗示固定调查路线。
 
 任务：
 
-1. 清理 `source_queue_profile.py` 中仍容易被误读为默认主链的 `planned-step / core_queue_default / downstream_hints` 文案，尤其是 claim、route、coverage、readiness、promotion 相关项。
+1. 清理 `source_queue_profile.py` 中仍容易被误读为默认主链的 `planned-step / core_queue_default / downstream_hints` 文案，尤其是 claim、route、coverage、readiness、report basis 相关项。
 2. 确认 `phase2_agent_entry_profile.py` 的 recommended skills 默认保持空或 capability-only。
 3. 将 `plan-round-orchestration / propose-next-actions / summarize-round-readiness` 明确降为 moderator 可选 advisory，且必须有审批记录。
-4. 更新相关 `SKILL.md`，删除 `board-ready`、默认 promotion、默认 coverage gate 等旧表达。
+4. 更新相关 `SKILL.md`，删除 `board-ready`、默认 report basis、默认 coverage gate 等旧表达。
 
 交付物：
 
@@ -362,7 +362,7 @@
 2. controller 不因 source queue profile 自动生成议程。
 3. 未审批 optional-analysis 仍被 preflight 阻断。
 
-### 7.4 WP2：fetch / normalize 原子化与 DB 落库加固
+### 7.4 fetch/normalize hardening track：fetch / normalize 原子化与 DB 落库加固
 
 目标：保留数据采集能力，但让 fetch 和 normalize 不承担研究判断。
 
@@ -385,7 +385,7 @@
 2. normalize 只写 normalized signals / index，不写 board judgement。
 3. 删除中间 export 后，raw / normalized 状态仍可从 DB 查询和重建。
 
-### 7.5 WP3：query 与 investigator 提交闭环
+### 7.5 query/investigator-submission track：query 与 investigator 提交闭环
 
 目标：让 investigator 能独立完成调查闭环，而不是只读现成状态再交 proposal。
 
@@ -408,7 +408,7 @@
 2. proposal / readiness opinion 不是唯一跨 agent 讨论对象。
 3. finding / evidence bundle 可被 moderator 和 report-editor item-level 查询。
 
-### 7.6 WP4：启发式 analysis skill 审计与降级
+### 7.6 optional-analysis helper governance：启发式 analysis skill 审计与降级
 
 目标：保留有用的派生分析，但禁止它们默认决定研究方向。
 
@@ -432,14 +432,14 @@
 2. 每个启发式输出都能追溯到规则版本和审批记录。
 3. 报告 evidence basis 不默认依赖 claim-observation matching。
 
-### 7.7 WP5：board / council / transition skill 收边界
+### 7.7 board/council boundary track：board / council / transition skill 收边界
 
 目标：让 moderator 成为唯一阶段推进者，board skill 只写结构化调查状态。
 
 任务：
 
-1. 将 `open-investigation-round / promote-evidence-basis / close-round` 继续绑定 transition request 与 operator approval。
-2. 将 `promote-evidence-basis` 改名或改义为 `freeze-report-basis` 类技能，强调冻结 DB evidence basis 而不是裁决研究结论。
+1. 将 `open-investigation-round / freeze-report-basis / close-round` 继续绑定 transition request 与 operator approval。
+2. 将 `freeze-report-basis` 改名或改义为 `freeze-report-basis` 类技能，强调冻结 DB evidence basis 而不是裁决研究结论。
 3. 将 `update-hypothesis-status` 改成 evidence-backed finding / hypothesis update，不接受无 evidence refs 的状态变更。
 4. 将 `post-board-note` 明确降为 human-readable note，不承载 canonical judgement。
 
@@ -455,7 +455,7 @@
 2. operator approval 才能 commit transition。
 3. runtime 不生成默认调查结论。
 
-### 7.8 WP6：reporting 重建为决策者报告生产线
+### 7.8 decision-maker reporting pipeline track：reporting 重建为决策者报告生产线
 
 目标：把 reporting 从“议会状态封装”升级为政策研究报告生产线。
 
@@ -479,7 +479,7 @@
 2. 删除 reporting export 后可从 DB 重建。
 3. 报告不退化为“某条 claim 是否被打脸”。
 
-### 7.9 WP7：场景 fixture、回归与最终交付
+### 7.9 policy-research fixture/regression track：场景 fixture、回归与最终交付
 
 目标：用真实工作流证明新 skills 侧架构可用。
 
@@ -542,40 +542,40 @@ skills 侧重构完成至少应满足：
 
 - 新发现的问题：
   - 多个 `SKILL.md` 当时仍引用已不存在的旧规划入口；后续批次已改为清理旧引用，不再补单独规划文档。
-  - `source_queue_profile.py` 对外虽已不导出 `core_queue_default`，内部仍大量使用 `planned-step / core_queue_default / downstream_hints` 描述 claim、route、coverage、readiness、promotion 链，存在被误读为默认调查链的风险。
-  - 部分 skill 文档仍使用 `board-ready`、`claim-observation`、`coverage readiness`、`promotion-stage artifact` 等旧目标表达，需要先做文档级语义清理，再做代码拆分。
-  - reporting handoff 文档仍强调读取 promotion/readiness/supervisor artifact；代码侧已具备 DB wrapper 和 orphaned artifact 识别，文档需要同步为 DB-first/export-only 口径。
+  - `source_queue_profile.py` 对外虽已不导出 `core_queue_default`，内部仍大量使用 `planned-step / core_queue_default / downstream_hints` 描述 claim、route、coverage、readiness、report basis 链，存在被误读为默认调查链的风险。
+  - 部分 skill 文档仍使用 `board-ready`、`claim-observation`、`coverage readiness`、`report basis-stage artifact` 等旧目标表达，需要先做文档级语义清理，再做代码拆分。
+  - reporting handoff 文档仍强调读取 report basis/readiness/supervisor artifact；代码侧已具备 DB wrapper 和 orphaned artifact 识别，文档需要同步为 DB-first/export-only 口径。
 
 - 是否影响后续计划：
-  - 不阻塞 skills 侧重构；这些发现应作为 WP0/WP1 的首批输入。
+  - 不阻塞 skills 侧重构；这些发现应作为 baseline and default-chain cleanup tracks 的首批输入。
   - 下一步建议优先清理默认链语义与 skill 文档，再进入 fetch/normalize 拆分和 optional-analysis 审计，避免在旧文案基础上继续实现新功能。
 
 ## 10. 2026-04-27 Skills Batch 1 代码交付回写
 
 - 已完成：
-  - 完成 WP0/WP1 第一批代码落地：`source_queue_profile.py` 已从旧 `planned-step / core_queue_default / downstream_hints` 语义改成 capability / advisory / transition surface；所有 profile 的 `downstream_hints` 现在为空，`default_chain_eligible=false`，optional-analysis 统一标记为 `approval-gated-runtime-surface`。
+  - 完成 baseline and default-chain cleanup tracks 第一批代码落地：`source_queue_profile.py` 已从旧 `planned-step / core_queue_default / downstream_hints` 语义改成 capability / advisory / transition surface；所有 profile 的 `downstream_hints` 现在为空，`default_chain_eligible=false`，optional-analysis 统一标记为 `approval-gated-runtime-surface`。
   - `plan-round-orchestration / propose-next-actions / summarize-round-readiness / link-claims-to-observations / score-evidence-coverage` 等高风险 heuristic 不再通过 source queue 暗示默认主链，只能作为审批后的 optional advisory / legacy helper。
   - agent-entry operator surface 已补齐 skill approval 查询、请求、批准、拒绝、消费和 approved optional-analysis run command template。
   - 修复 approved optional-analysis command template：`--skill-approval-request-id` 现在由 `skill_command_hint / run_skill_command` 插入到 `--` 之前，避免被误传给 skill 脚本。
   - 更新代表性高风险 `SKILL.md` 与 agent prompt：orchestration、next actions、readiness、reporting handoff、claim extraction、claim-observation link、coverage scoring 均改成 DB-backed / optional / approval-required 口径，并移除当前文档中发现的旧规划入口引用。
-  - 已形成第一版 heuristic 规则审计 freeze line；当前状态均为 `default-frozen / approval-required / audit-pending`，未标记任何规则为审计通过。后续规则审计记录统一收敛到 `docs/openclaw-wp4-skills-refactor-workplan.md`。
+  - 已形成第一版 heuristic 规则审计 freeze line；当前状态均为 `default-frozen / approval-required / audit-pending`，未标记任何规则为审计通过。后续规则审计记录统一收敛到 `docs/openclaw-optional-analysis-skills-refactor-workplan.md`。
   - registry 复核结果：当前 `skills/` 目录与 registry 均为 `88` 个 skill；`32` 个 skill 声明 `requires_operator_approval`；source queue summary 覆盖 `88/88`。
 
 - 未完成：
   - 尚未逐个审完全部 `SKILL.md` 与脚本实际读写；本批只处理第一批默认链风险最高的 source queue、agent entry surface 和代表性文档。
   - 规则审计台账仍是 freeze-line 初版；尚未补每条规则的完整样例、偏差量化和人工审计结论。
-  - `fetch-openaq`、`normalize-fetch-execution`、formal normalizer 拆分仍属于 WP2，未在本批实施。
-  - reporting 生产线重构仍属于 WP6；本批只把 reporting handoff 文档改成 DB-first/export-only 口径。
+  - `fetch-openaq`、`normalize-fetch-execution`、formal normalizer 拆分仍属于 fetch/normalize hardening track，未在本批实施。
+  - reporting 生产线重构仍属于 decision-maker reporting pipeline track；本批只把 reporting handoff 文档改成 DB-first/export-only 口径。
 
 - 新发现的问题：
   - operator runbook 之前的 approved optional-analysis 示例把 `--skill-approval-request-id` 追加在 skill args 之后，实际会被 `--` 分隔后误传给 skill 脚本；本批已修复并补回归。
   - `source_queue_profile.py` 原本对外不导出 `core_queue_default`，但 profile 输出仍通过 `planned-step` 和非空 `downstream_hints` 保留链式暗示；本批已清空输出并加回归。
-  - 仓库中仍有其他 normalizer / query / archive 文档残留 `board-ready`、旧 coverage/promotion 表述；这些不再位于默认入口，但需要在 WP2-WP4 继续清理。
+  - 仓库中仍有其他 normalizer / query / archive 文档残留 `board-ready`、旧 coverage/report basis 表述；这些不再位于默认入口，但需要在 fetch/normalize through optional-analysis governance tracks 继续清理。
 
 - 是否影响后续计划：
-  - 不阻塞后续计划；WP2 可以在“默认链已冻结、optional-analysis 已审批化、operator surface 可见审批链”的基础上继续推进 fetch/normalize 原子化。
+  - 不阻塞后续计划；fetch/normalize hardening track 可以在“默认链已冻结、optional-analysis 已审批化、operator surface 可见审批链”的基础上继续推进 fetch/normalize 原子化。
   - 后续任何新增 source queue 或 agent-entry surface 都必须保持 `default_chain_eligible=false`，并且不得重新暴露 claim-route-coverage 链式 `downstream_hints`。
-  - 后续规则审计若要把某 heuristic 从 `audit-pending` 改成可用，必须更新 `docs/openclaw-wp4-skills-refactor-workplan.md` 中的 freeze line / audit records，并保留审批/消费记录。
+  - 后续规则审计若要把某 heuristic 从 `audit-pending` 改成可用，必须更新 `docs/openclaw-optional-analysis-skills-refactor-workplan.md` 中的 freeze line / audit records，并保留审批/消费记录。
 
 - 测试：
   - 已运行：`.venv/bin/python -m unittest tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate tests.test_skill_approval_workflow`
@@ -584,7 +584,7 @@ skills 侧重构完成至少应满足：
 ## 11. 2026-04-27 Skills Batch 2 代码交付回写
 
 - 已完成：
-  - 启动 WP2 的 formal normalizer 收缩：`normalize-regulationsgov-comments-public-signals` 与 `normalize-regulationsgov-comment-detail-public-signals` 已移除 `build_formal_signal_semantics()` 调用，不再在 normalizer 内派生 `submitter_type / issue_labels / stance_hint / concern_facets / evidence_citation_types / route_hint`。
+  - 启动 fetch/normalize hardening track 的 formal normalizer 收缩：`normalize-regulationsgov-comments-public-signals` 与 `normalize-regulationsgov-comment-detail-public-signals` 已移除 `build_formal_signal_semantics()` 调用，不再在 normalizer 内派生 `submitter_type / issue_labels / stance_hint / concern_facets / evidence_citation_types / route_hint`。
   - 两个 Regulations.gov normalizer 现在只做 provider-field mapping：保留 `docket_id / agency_id / comment_on_id / submitter_name / provider dates / validation / artifact_sha256 / source_provenance`，并写入 `decision_source=provider-field-normalization`、`normalization_scope=provider-fields-only`、`typed_metadata_status=not-derived-by-normalizer`。
   - formal normalized rows 增加 source/data-quality flags，例如 `formal-record`、`provider-field-normalized`、`comment-detail`、`missing-docket-id`、`missing-agency-id`、`missing-comment-text`、`missing-submitter-name`。
   - `query-formal-signals` 文档与 agent prompt 已改成 provider fields + optional typed metadata 口径；query skill 不推导缺失 typed metadata。
@@ -598,38 +598,38 @@ skills 侧重构完成至少应满足：
   - 其他 fetch / normalize skill 的 source provenance、quality flags、coverage limitation 字段尚未逐一补齐。
 
 - 新发现的问题：
-  - `query-formal-signals` 历史文档暗示 formal normalizer 默认提供 typed formal metadata；这与 WP2 新边界冲突，本批已修正文档与测试预期。
+  - `query-formal-signals` 历史文档暗示 formal normalizer 默认提供 typed formal metadata；这与 fetch/normalize hardening track 新边界冲突，本批已修正文档与测试预期。
   - `normalized_signal_index` 仍保留 typed metadata field 名称作为通用索引能力；本批没有删除这些字段，因为后续 optional parser / analysis skill 仍可能写入并查询这些字段。关键变化是 normalizer 不再写这些 typed 字段。
 
 - 是否影响后续计划：
-  - 不阻塞后续 WP2；下一步可继续处理 `fetch-openaq` 拆分或 `normalize-fetch-execution` 职责拆分。
-  - 对后续 parser/analysis 的约束是：如果要重新产生 submitter type、issue、stance、concern、citation、route，必须作为 optional-analysis 或独立 parser 输出，并进入 `docs/openclaw-wp4-skills-refactor-workplan.md` 的规则审计与 approval consumption 链。
+  - 不阻塞后续 fetch/normalize hardening track；下一步可继续处理 `fetch-openaq` 拆分或 `normalize-fetch-execution` 职责拆分。
+  - 对后续 parser/analysis 的约束是：如果要重新产生 submitter type、issue、stance、concern、citation、route，必须作为 optional-analysis 或独立 parser 输出，并进入 `docs/openclaw-optional-analysis-skills-refactor-workplan.md` 的规则审计与 approval consumption 链。
 
 - 测试：
   - 已运行：`.venv/bin/python -m unittest tests.test_signal_plane_workflow tests.test_formal_public_workflow`
   - 结果：`8` 项通过。
 
-## 12. 2026-04-27 Skills Batch 3 / WP2 代码交付回写
+## 12. 2026-04-27 Skills Batch 3 / fetch/normalize hardening track 代码交付回写
 
 - 已完成：
   - 完成 `fetch-openaq` 原子化：保留兼容 `fetch` 路由，同时新增明确的 `fetch-metadata`、`fetch-measurements`、`fetch-archive-backfill` 三个子命令；三者均输出 `fetch_contract`，包含 `source_provenance / data_quality / temporal_scope / spatial_scope / coverage_limitations / research_judgement=none`。
-  - 完成 `normalize-fetch-execution` 职责拆分：代码路径已拆为 `queue_runner`、`normalizer_runner`、`execution_receipt` 三个组件；执行 snapshot 和 skill 返回值均暴露 `execution_components`，每个 raw queue status 都带 `fetch_contract`，不再暗示 claim extraction、observation extraction、coverage scoring、readiness 或 promotion 链。
+  - 完成 `normalize-fetch-execution` 职责拆分：代码路径已拆为 `queue_runner`、`normalizer_runner`、`execution_receipt` 三个组件；执行 snapshot 和 skill 返回值均暴露 `execution_components`，每个 raw queue status 都带 `fetch_contract`，不再暗示 claim extraction、observation extraction、coverage scoring、readiness 或 report basis 链。
   - 完成 normalized signal 元数据加固：`signal_plane_normalizer.enrich_signal_metadata_fields()` 会在写库前补齐最小 `source_provenance / data_quality / temporal_scope / spatial_scope / coverage_limitations`，并显式标记 `research_judgement=none`。
   - 已把 OpenAQ normalizer 改为读取新 `fetch_contract` envelope，保留 provider/station/metric/timestamp/coordinate 原始证据，不推导 exposure、readiness、policy conclusion。
   - 已清理 normalize 类 `SKILL.md` 与 agent prompt 中的 `board-ready`、默认 claim extraction、默认 observation extraction 表述；normalize handoff 的 suggested skills 仅保留 query surface。
   - 已补回归：OpenAQ 三个子命令的 raw fetch contract、import execution component boundary、queue raw fetch contract、删除 `import_execution` export 与 raw artifact 后仍可通过 DB query / raw lookup 恢复 normalized/raw record。
 
 - 未完成：
-  - WP2 代码项本批已收口；未新增 formal-only optional parser skill，因为 WP2 的要求是把 issue/stance/concern/route typing 从 normalizer 移出，后续若新增 parser 应归入 WP4 审计与 approval 链。
-  - 全仓库 query / reporting / archive 文档中仍可能有旧 coverage/promotion 词汇；这些属于 WP3-WP6 的后续清理面，不再属于 fetch/normalize 原子化主项。
+  - fetch/normalize hardening track 代码项本批已收口；未新增 formal-only optional parser skill，因为 fetch/normalize hardening track 的要求是把 issue/stance/concern/route typing 从 normalizer 移出，后续若新增 parser 应归入 optional-analysis helper governance 审计与 approval 链。
+  - 全仓库 query / reporting / archive 文档中仍可能有旧 coverage/report basis 词汇；这些属于 query through reporting tracks 的后续清理面，不再属于 fetch/normalize 原子化主项。
 
 - 新发现的问题：
-  - 部分 query skill 的 `board_handoff.suggested_next_skills` 仍可能包含 optional extraction helper；它不影响 WP2 的 fetch/normalize 边界，但 WP3/WP4 需要继续改成 investigator evidence-bundle/finding 闭环或 approval-gated optional-analysis 口径。
-  - 若未来要让 standalone normalizer 的 metadata 字段进入 `normalized_signal_index`，需要统一改它们的 local `insert_signals()` 去调用 shared `replace_signal_index_rows()`；当前 WP2 只要求 DB row 内保留 provenance/quality/limitation，不依赖这些字段做 indexed query。
+  - 部分 query skill 的 `board_handoff.suggested_next_skills` 仍可能包含 optional extraction helper；它不影响 fetch/normalize hardening track 的 fetch/normalize 边界，但 query/investigator-submission and optional-analysis governance tracks 需要继续改成 investigator evidence-bundle/finding 闭环或 approval-gated optional-analysis 口径。
+  - 若未来要让 standalone normalizer 的 metadata 字段进入 `normalized_signal_index`，需要统一改它们的 local `insert_signals()` 去调用 shared `replace_signal_index_rows()`；当前 fetch/normalize hardening track 只要求 DB row 内保留 provenance/quality/limitation，不依赖这些字段做 indexed query。
 
 - 是否影响后续计划：
-  - 不阻塞 WP3；investigator 后续可直接从 DB query surfaces 读取带 provenance/quality/limitation 的 signal rows，再提交 finding / evidence bundle。
-  - WP4 需要继续审计任何重新引入 typed formal parser、claim/observation extraction 或 evidence sufficiency scoring 的规则版本，不能把本批 query-only handoff 重新扩成默认启发式主链。
+  - 不阻塞 query/investigator-submission track；investigator 后续可直接从 DB query surfaces 读取带 provenance/quality/limitation 的 signal rows，再提交 finding / evidence bundle。
+  - optional-analysis helper governance 需要继续审计任何重新引入 typed formal parser、claim/observation extraction 或 evidence sufficiency scoring 的规则版本，不能把本批 query-only handoff 重新扩成默认启发式主链。
 
 - 测试：
   - 已运行：`.venv/bin/python -m unittest tests.test_source_queue_rebuild tests.test_migrated_source_runtime_integration tests.test_signal_plane_workflow`
@@ -643,18 +643,18 @@ skills 侧重构完成至少应满足：
   - 取消全部 skill 的 `eco-` 项目前缀；当前 `88` 个 skill 目录、frontmatter `name`、agent prompt、runtime registry/source queue contract、测试 fixture 均改为无项目前缀命名。
   - 按作用层级统一前缀：抓取层使用 `fetch-*`，归一化层使用 `normalize-*`，查询层使用 `query-*`；OpenAQ 内部子命令同步改为 `fetch-metadata / fetch-measurements / fetch-archive-backfill`。
   - 主脚本文件统一为 `<skill_name.replace("-", "_")>.py`，registry 新增校验测试，避免再次出现目录名、frontmatter、script path 不一致。
-  - ingress 回归改为先提交 readiness opinion 并 materialize readiness，再批准 promotion transition；没有恢复缺少 readiness 的默认推进语义。
+  - ingress 回归改为先提交 readiness opinion 并 materialize readiness，再批准 report-basis transition；没有恢复缺少 readiness 的默认推进语义。
 
 - 未完成：
   - 未重命名 runtime 包名、仓库目录、数据库文件名中的 `eco`，这些不是 skill id，本批不处理。
 
 - 新发现的问题：
-  - 旧 ingress 测试仍隐含“无 readiness 也可 promoted”的兼容假设；本批已按当前治理规则修正测试流程。
+  - 旧 ingress 测试仍隐含“无 readiness 也可 frozen”的兼容假设；本批已按当前治理规则修正测试流程。
   - 旧历史文档曾保留若干项目路径 `eco-concil-runtime/...`；这些属于历史路径引用，不影响 skill 命名规范，也不再作为当前文档入口保留。
 
 - 是否影响后续计划：
   - 后续所有新增 skill 应直接使用层级前缀，不再加项目前缀；source queue / registry 测试会拦截 `eco-` skill id。
-  - 对 WP3/WP4 无阻塞；只要求后续文档和计划沿用新命名。
+  - 对 query/investigator-submission and optional-analysis governance tracks 无阻塞；只要求后续文档和计划沿用新命名。
 
 - 测试：
   - 已运行：`.venv/bin/python -m py_compile $(find skills -path '*/scripts/*.py' -maxdepth 3 | sort)`
@@ -662,10 +662,10 @@ skills 侧重构完成至少应满足：
   - 已运行：`.venv/bin/python -m unittest tests.test_runtime_source_queue_profiles tests.test_source_queue_rebuild tests.test_migrated_source_runtime_integration tests.test_source_queue_governance tests.test_source_queue_family_memory tests.test_orchestration_ingress_workflow tests.test_agent_entry_gate tests.test_signal_plane_workflow tests.test_formal_public_workflow`
   - 结果：`43` 项通过。
 
-## 14. 2026-04-27 Skills Batch 4 / WP3 代码交付回写
+## 14. 2026-04-27 Skills Batch 4 / query/investigator-submission track 代码交付回写
 
 - 已完成：
-  - 完成 WP3 query evidence basis 加固：`query-public-signals / query-formal-signals / query-environment-signals / query-normalized-signal / query-raw-record` 的每条结果现在都返回 item-level `evidence_refs` 与 `evidence_basis`，包含 canonical object kind、signal id、artifact ref、source provenance、data quality、temporal/spatial scope、coverage limitations。
+  - 完成 query/investigator-submission track query evidence basis 加固：`query-public-signals / query-formal-signals / query-environment-signals / query-normalized-signal / query-raw-record` 的每条结果现在都返回 item-level `evidence_refs` 与 `evidence_basis`，包含 canonical object kind、signal id、artifact ref、source provenance、data quality、temporal/spatial scope、coverage limitations。
   - query skill 的 `board_handoff.suggested_next_skills` 已从默认 optional extraction/linkage helper 改为 `query-normalized-signal / query-raw-record / submit-finding-record / submit-evidence-bundle / post-discussion-message`，不再把 claim extraction、observation extraction、formal-public linkage 或 representation gap analysis 暗示为默认 investigator 下一步。
   - investigator runbook 的必要约定已收敛进本文档，不再单独保留：默认闭环为 `fetch / normalize -> query / lookup -> finding -> evidence bundle -> optional proposal`，query 结果必须携带 item-level `evidence_refs` 与 `evidence_basis`，proposal 必须通过 `--response-to-id` / `--lineage-id` 锚定 finding 或 evidence bundle，challenger review 必须引用 evidence bundle 或具体证据 refs。
   - 补齐 `post-review-comment` kernel direct write 命令：接入 CLI、既有 access policy、ledger、artifact audit、`review-comment` canonical DB 表与 `query-council-objects` 查询面。
@@ -675,8 +675,8 @@ skills 侧重构完成至少应满足：
   - 新增最小闭环回归：从 DB query 结果提交 finding、evidence bundle、proposal、review comment、challenge ticket，并验证 moderator/report-editor 可通过 `query-council-objects` item-level 查询这些对象。
 
 - 未完成：
-  - WP3 范围内没有新的功能性遗留；proposal/readiness opinion 仍保留为有效 deliberation 对象，但已不是 investigator 默认调查记录。
-  - 仍未清理全仓库所有 reporting/archive 文档中的旧 coverage/promotion 表述；这些属于 WP4-WP6 的后续清理面。
+  - query/investigator-submission track 范围内没有新的功能性遗留；proposal/readiness opinion 仍保留为有效 deliberation 对象，但已不是 investigator 默认调查记录。
+  - 仍未清理全仓库所有 reporting/archive 文档中的旧 coverage/report basis 表述；这些属于 optional-analysis through reporting tracks 的后续清理面。
   - `post-review-comment` 当前是 kernel direct command，不是独立 skill 目录；本批选择复用已存在的 canonical `review-comment` 表与 kernel direct write 模式，未新增第 89 个 skill。
 
 - 新发现的问题：
@@ -685,40 +685,40 @@ skills 侧重构完成至少应满足：
   - `open-challenge-ticket` 之前只能通过 `linked_artifact_ref` 表达证据交叉引用，不能显式锚定 evidence bundle；本批已增加 bundle id 引用。
 
 - 是否影响后续计划：
-  - 不阻塞 WP4。相反，WP4 可以建立在“默认 investigator loop 不调用 optional heuristic、所有 optional-analysis 仍需 approval、finding/evidence bundle 已成为一等调查记录”的前提上继续做规则审计与降级。
+  - 不阻塞 optional-analysis helper governance。相反，optional-analysis helper governance 可以建立在“默认 investigator loop 不调用 optional heuristic、所有 optional-analysis 仍需 approval、finding/evidence bundle 已成为一等调查记录”的前提上继续做规则审计与降级。
   - 后续新增 query surface 必须继续返回 item-level `evidence_refs` 与 `evidence_basis`；新增 proposal/challenge/review 路径也应优先引用 finding/evidence bundle，而不是绕过调查记录直接写 judgement。
 
 - 测试：
   - 已运行：`.venv/bin/python -m unittest tests.test_signal_plane_workflow tests.test_council_submission_workflow tests.test_agent_entry_gate`
   - 结果：`18` 项通过。
 
-## 15. 2026-04-29 Skills Batch 5 / WP5 代码交付回写
+## 15. 2026-04-29 Skills Batch 5 / board/council boundary track 代码交付回写
 
 - 已完成：
   - `update-hypothesis-status` 已改成 evidence-backed board mutation：本次调用、已存在 hypothesis 或已接受 proposal 必须提供至少一个 evidence ref；无 evidence ref 时返回 `status=blocked`，不写 canonical hypothesis。
   - `post-board-note` 已降为 human-readable board note：输出显式标记 `canonical_judgement=false`，`board_handoff.suggested_next_skills` 清空，不再把 note 暗示成 finding、readiness opinion 或 report basis。
   - `materialize-board-brief` 已降为 human-readable export：删除自动 `Immediate Next Moves` 生成，改为只展示 open board item counts，并清空 handoff next-skill 建议。
-  - `promote-evidence-basis` 保留兼容 skill id，但语义已明确为 `freeze-report-basis`：输出新增 `basis_object_kind=report-basis-freeze`、`transition_semantics=freeze-report-basis`、`report_basis_selection_mode=freeze-report-basis-v1`，并清空 promotion handoff 的默认下一步建议。
-  - `skill_registry.py` 已同步 WP5 边界：`update-hypothesis-status` 输入面包含 finding / evidence-bundle / proposal，`promote-evidence-basis` 输出面包含 `report-basis-freeze`。
+  - `freeze-report-basis` 保留兼容 skill id，但语义已明确为 `freeze-report-basis`：输出新增 `basis_object_kind=report-basis-freeze`、`transition_semantics=freeze-report-basis`、`report_basis_selection_mode=freeze-report-basis-v1`，并清空 report basis handoff 的默认下一步建议。
+  - `skill_registry.py` 已同步 board/council boundary track 边界：`update-hypothesis-status` 输入面包含 finding / evidence-bundle / proposal，`freeze-report-basis` 输出面包含 `report-basis-freeze`。
   - 所有直接调用 `update-hypothesis-status` 的 workflow 测试夹具已显式传入 evidence ref；新增无 evidence ref 被阻断的 board mutation 回归。
 
 - 未完成：
-  - `promote-evidence-basis` 的 skill id、transition kind、DB 表名仍保留历史 `promotion` 命名，以避免本批扩大为 schema/CLI 迁移；本批完成的是语义收缩和输出标记。
-  - publish/finalize 仍未统一纳入独立 publish transition kind；这仍属于 WP6/reporting 审批模型范围。
+  - `freeze-report-basis` 的 skill id、transition kind、DB 表名仍保留历史 `report basis` 命名，以避免本批扩大为 schema/CLI 迁移；本批完成的是语义收缩和输出标记。
+  - publish/finalize 仍未统一纳入独立 publish transition kind；这仍属于 decision-maker reporting pipeline 审批模型范围。
   - `post-board-note` 仍写入 deliberation board note 表和 JSON export；它只是明确不再承载 canonical judgement。
 
 - 新发现的问题：
   - benchmark replay 中 artifact drift 数量会随 board brief/report-basis 输出语义变化增加；测试已改为断言关键 `orchestration_plan` drift 存在，而不是固定 drift 数量为 `1`。
   - 历史测试中很多 hypothesis 更新只传 `linked_claim_id`，没有 evidence ref；这些 fixture 反映旧“board judgement 可裸写”的习惯，本批已全部改为显式 evidence-backed。
-  - `promote-evidence-basis` 仍有兼容字段 `promotion_status / selected_coverages / basis_selection_mode`，后续若要彻底改名为 `freeze-report-basis`，需要单独迁移 reporting、benchmark、runtime state surface 和历史 artifact export。
+  - `freeze-report-basis` 仍有兼容字段 `report_basis_status / selected_coverages / basis_selection_mode`，后续若要彻底改名为 `freeze-report-basis`，需要单独迁移 reporting、benchmark、runtime state surface 和历史 artifact export。
 
 - 是否影响后续计划：
-  - 不阻塞 WP6；相反，reporting 可以在 `report-basis-freeze` 语义上继续拆分 evidence packet / decision packet / report packet。
+  - 不阻塞 decision-maker reporting pipeline track；相反，reporting 可以在 `report-basis-freeze` 语义上继续拆分 evidence packet / decision packet / report packet。
   - 后续新增 board mutation 必须延续本批约束：有 canonical judgement 的写入必须引用 finding / evidence bundle / proposal / evidence ref；human-readable export 不得携带默认 next-action 或 phase advice。
-  - 若后续要重命名 `promote-evidence-basis`，应作为 breaking schema/CLI migration 单独推进，不应在 reporting 重构中隐式完成。
+  - 若后续要重命名 `freeze-report-basis`，应作为 breaking schema/CLI migration 单独推进，不应在 reporting 重构中隐式完成。
 
 - 测试：
-  - 已运行：`.venv/bin/python -m py_compile skills/update-hypothesis-status/scripts/update_hypothesis_status.py skills/post-board-note/scripts/post_board_note.py skills/materialize-board-brief/scripts/materialize_board_brief.py skills/promote-evidence-basis/scripts/promote_evidence_basis.py eco-concil-runtime/src/eco_council_runtime/kernel/skill_registry.py`
+  - 已运行：`.venv/bin/python -m py_compile skills/update-hypothesis-status/scripts/update_hypothesis_status.py skills/post-board-note/scripts/post_board_note.py skills/materialize-board-brief/scripts/materialize_board_brief.py skills/freeze-report-basis/scripts/freeze_report_basis.py eco-concil-runtime/src/eco_council_runtime/kernel/skill_registry.py`
   - 结果：通过。
   - 已运行：`.venv/bin/python -m unittest tests.test_board_workflow tests.test_investigation_workflow tests.test_runtime_kernel`
   - 结果：`66` 项通过。
@@ -731,7 +731,7 @@ skills 侧重构完成至少应满足：
   - 已运行：`git diff --check`
   - 结果：通过。
 
-## 16. 2026-04-29 Skills Batch 6 / WP6 代码交付回写
+## 16. 2026-04-29 Skills Batch 6 / decision-maker reporting pipeline track 代码交付回写
 
 - 已完成：
   - `materialize-reporting-handoff` 已从单一 handoff 封装改为显式 packet 化输出：`evidence_packet / decision_packet / report_packet`，并在 canonical reporting handoff raw JSON 中保留 `evidence_index / uncertainty_register / residual_disputes / policy_recommendations`。
@@ -739,11 +739,11 @@ skills 侧重构完成至少应满足：
   - `draft-expert-report` 已改为章节化 role report drafter：读取 handoff `report_packet` 与 DB `report-section-draft` rows，输出 `report_sections / section_draft_refs / evidence_index / uncertainty_register / residual_disputes / policy_recommendations`。
   - `materialize-final-publication` 已改为 decision-maker report assembler：输出 `decision_maker_report`，并显式包含证据索引、引用索引、风险与不确定性、剩余争议、建议措施和 audit refs。
   - reporting skills 的 `board_handoff.suggested_next_skills` 已移除 `propose-next-actions / open-falsification-probe / post-board-note` 这类旧默认建议；hold path 只提示 DB council/reporting basis 写入面，例如 finding、evidence bundle、proposal、readiness opinion。
-  - `canonical_contracts.py / deliberation_plane.py / skill_registry.py` 已同步 WP6 字段与 reporting 输入面；publish/finalize 继续通过 `requires_operator_approval=True` 的 skill approval 链执行，不新增本批 schema 级 publish transition。
+  - `canonical_contracts.py / deliberation_plane.py / skill_registry.py` 已同步 decision-maker reporting pipeline track 字段与 reporting 输入面；publish/finalize 继续通过 `requires_operator_approval=True` 的 skill approval 链执行，不新增本批 schema 级 publish transition。
   - 触达 reporting skills 的 `SKILL.md` 与 agent prompt 已同步为 DB evidence basis、packet、decision-maker report、operator approval 口径。
 
 - 未完成：
-  - 未把 `promote-evidence-basis`、`promotion_status`、`promotion_path` 等历史命名做 schema/CLI 级改名；本批仍沿用既有 DB 表和 wrapper，只在 reporting 输出中明确 `report-basis-freeze` 与 packet 语义。
+  - 未把 `freeze-report-basis`、`report_basis_status`、`report_basis_path` 等历史命名做 schema/CLI 级改名；本批仍沿用既有 DB 表和 wrapper，只在 reporting 输出中明确 `report-basis-freeze` 与 packet 语义。
   - 未新增独立 `materialize-evidence-packet / materialize-decision-packet / materialize-report-packet` 三个 skill；本批选择在现有 `materialize-reporting-handoff` 内形成等价清晰职责，避免扩大 skill id 与 registry 迁移。
   - 未重写 `sociologist / environmentalist` 旧 role id；本批只把 role report 章节内容改成 public-discourse/community-impact 与 environmental-evidence/risk 口径。
 
@@ -753,8 +753,8 @@ skills 侧重构完成至少应满足：
   - reporting 仍需保留 `coverage_source=missing-coverage` 等兼容 trace 字段，原因是 reporting contract 还复用历史 D1 trace shape；本批未做 trace contract 改名迁移。
 
 - 是否影响后续计划：
-  - 不阻塞 WP7。相反，WP7 可以直接用 `evidence_packet -> decision_packet -> report_packet -> decision_maker_report` 做端到端 case fixture。
-  - 后续若要彻底消除 promotion 命名债，应单独做 breaking DB/schema/query migration，不应在 report assembler 中隐式改名。
+  - 不阻塞 policy-research fixture/regression track。相反，policy-research fixture/regression track 可以直接用 `evidence_packet -> decision_packet -> report_packet -> decision_maker_report` 做端到端 case fixture。
+  - 后续若要彻底消除 report basis 命名债，应单独做 breaking DB/schema/query migration，不应在 report assembler 中隐式改名。
   - 后续 case fixture 应补 DB-backed `finding-record / evidence-bundle / report-section-draft`，让 final report 的 key findings 和 recommendations 来自明确 report basis。
 
 - 测试：
@@ -767,22 +767,22 @@ skills 侧重构完成至少应满足：
   - 已运行：`.venv/bin/python -m unittest tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`
   - 结果：`10` 项通过。
 
-## 17. 2026-04-29 Skills Batch 7 / WP7 代码交付回写
+## 17. 2026-04-29 Skills Batch 7 / policy-research fixture/regression track 代码交付回写
 
 - 已完成：
   - 新增 `tests/test_policy_research_case_fixtures.py`，落地三类 policy research case fixture：政策争议 case、舆情/正式记录混合 case、可核实经验事件 case。
   - 三类 fixture 均走本地 fetch/import queue、normalize、query、finding、evidence bundle、challenger review/challenge、moderator transition request、operator approval、reporting handoff、decision draft、role report、decision publish、final publication 路径。
-  - 新增 `submit_report_basis_records(...)` 测试辅助，让 policy research fixture 明确补 `finding-record / evidence-bundle / report-section-draft`，final report 的 key findings 和 evidence index 来自 DB canonical objects，而不是 WP4 helper cue。
+  - 新增 `submit_report_basis_records(...)` 测试辅助，让 policy research fixture 明确补 `finding-record / evidence-bundle / report-section-draft`，final report 的 key findings 和 evidence index 来自 DB canonical objects，而不是 optional-analysis helper cue。
   - 修复 `materialize-reporting-handoff` 对 finding basis 的读取：handoff 现在用 canonical query kind `finding` 读取 DB rows，并在 reporting evidence index 中继续以 `finding-record` basis role 暴露，避免 ready round 有 finding 但 `key_findings` 为空。
   - Policy research fixture 中 `summarize-round-readiness` 不再由测试 helper 隐式调用，而是走 `request-skill-approval -> approve-skill-approval -> run-skill --skill-approval-request-id`，并断言 consumption control object 存在。
   - `tests/test_skill_approval_workflow.py` 已补“已消费 skill approval request 不可复用”的回归；optional-analysis 审批链覆盖 request、approval、consumption、reuse block。
   - `scaffold-mission-run` 生成的 source task 文案已去掉 `claim-candidates / observation-candidates / corroborate-or-contradict` 表述，改成 investigator query、finding、evidence-bundle 口径。
-  - Policy research case 在删除 `reporting_handoff / council_decision / expert_report / promotion_basis / supervisor_state` 导出物后，仍能从 DB 恢复并生成 `decision-maker-environmental-policy-report`。
+  - Policy research case 在删除 `reporting_handoff / council_decision / expert_report / report_basis_freeze / supervisor_state` 导出物后，仍能从 DB 恢复并生成 `decision-maker-environmental-policy-report`。
 
 - 未完成：
   - `formal_signal_semantics.py` 仍未物理拆成 versioned taxonomy family records；本批没有推进 taxonomy schema 迁移。
-  - `analysis_plane.py` 的历史 analysis kind / query object 命名仍未迁移；本批只修 report basis query alias 与 WP7 e2e fixture。
-  - 本批没有把 `promote-evidence-basis / promotion_status` 等历史命名做 breaking CLI/schema 改名。
+  - `analysis_plane.py` 的历史 analysis kind / query object 命名仍未迁移；本批只修 report basis query alias 与 policy-research fixture/regression track e2e fixture。
+  - 本批没有把 `freeze-report-basis / report_basis_status` 等历史命名做 breaking CLI/schema 改名。
   - 没有运行全仓所有测试；只运行 policy research case fixture、reporting、approval、source queue、agent entry 的直接相关最小集合。
 
 - 新发现的问题：
@@ -793,7 +793,7 @@ skills 侧重构完成至少应满足：
 
 - 是否影响后续计划：
   - 不阻塞整批重构交付；policy research fixture 已提供最终 targeted regression 与三类 case fixture，可作为整批交付验收入口。
-  - 后续整批交付前仍应单列残留风险：taxonomy family records、analysis kind 命名迁移、promotion 命名债、以及 full regression 未覆盖面。
+  - 后续整批交付前仍应单列残留风险：taxonomy family records、analysis kind 命名迁移、report basis 命名债、以及 full regression 未覆盖面。
   - 若后续新增 case fixture，应沿用本批模式：helper cue 只能作为 audit/appendix，报告正文 finding 必须由 DB `finding / evidence-bundle / report-section-draft / proposal / readiness` basis 承接。
 
 - 测试：
@@ -810,19 +810,19 @@ skills 侧重构完成至少应满足：
   - 已运行：`git diff --check`
   - 结果：通过。
 
-## 18. 2026-04-29 Skills Batch 8 / WP8 最终验收硬化回写
+## 18. 2026-04-29 Skills Batch 8 / final acceptance hardening track 最终验收硬化回写
 
 - 已完成：
   - `analysis_plane.py` 已为 analysis kind 增加 `analysis_kind_governance` 元数据；高风险旧对象如 `evidence-coverage / claim-observation-link / observation-candidate / merged-observation / formal-public-link / representation-gap / diffusion-edge` 被显式标记为 `legacy-frozen-compatibility-query-only`。
   - analysis query surface 在零结果时也会返回请求 kind 的治理元数据，明确 `default_chain_eligible=false`、`phase_gate_eligible=false`、`report_basis_eligible=false`、`requires_explicit_approval=true`，并列出报告使用必须经由 DB `finding-record / evidence-bundle / proposal / review-comment / report-section-draft`。
   - `formal_signal_semantics.py` 已补 versioned taxonomy family records：issue、concern、citation、stance、submitter type、route hint 均带 `formal-public-taxonomy-freeze-2026-04-29`、approval/audit refs、candidate-only 语义和不可作为 phase/report basis 的标记。
-  - `skill_registry.py` 已把 `apply-approved-formal-public-taxonomy` 的 WP4 helper metadata 同步到同一 taxonomy freeze version。
+  - `skill_registry.py` 已把 `apply-approved-formal-public-taxonomy` 的 optional-analysis helper governance 同步到同一 taxonomy freeze version。
   - 默认 agent entry 的 role capability surface 已移除旧 analysis query commands；agent 默认入口保留 DB query、finding/evidence-bundle/proposal/readiness 写入面，以及 optional-analysis approval/run templates，不再把 frozen analysis kind 暴露为默认角色工作入口。
   - `open-investigation-round` fallback task 已从 `claim-candidates / observation-candidates` 输出改为 `public-discourse-evidence / environment-evidence`，并会把历史 source task 中的旧 output kind 自动改写为新 evidence 口径。
   - 新增 final guardrail 回归：覆盖 legacy analysis kind 治理元数据、formal/public taxonomy family freeze line、agent entry 无默认 analysis commands、open-round fallback 无旧 output kind。
 
 - 未完成：
-  - 未做 `promote-evidence-basis / promotion_status / promotion_path` 的 breaking CLI/schema/DB rename；该项继续作为非阻塞命名债保留。
+  - 该历史项已被第 24 节覆盖；旧 promotion CLI/schema/DB 命名已删除，当前 `report_basis_*` 是新架构字段。
   - 未删除 `build-normalization-audit` 中用于读取历史 claim/observation candidate result set 的兼容参数；该 skill 仍是 operator QA optional-analysis，需审批后执行，不进入默认主链。
   - 未物理删除 `analysis_objects.py / canonical_contracts.py` 中旧 canonical object contract；本批将其冻结为兼容查询/审计面，而不是在最终验收前做破坏性 schema 删除。
   - 未运行全仓所有测试；已运行最终验收直接相关的 targeted regression。
@@ -858,20 +858,20 @@ skills 侧重构完成至少应满足：
 ## 19. 2026-04-29 验收审阅回写
 
 - 已完成：
-  - 复核 WP5-WP8 最新代码后，skills 侧硬验收通过：默认 investigator loop 不调用 WP4 helper；query 结果可形成 item-level evidence basis；finding/evidence bundle/report-section-draft 是报告正文 basis；helper cue 默认只能作为 approval-gated advisory/audit surface。
+  - 复核 board/reporting/case-fixture/final-acceptance tracks 最新代码后，skills 侧硬验收通过：默认 investigator loop 不调用 optional-analysis helper；query 结果可形成 item-level evidence basis；finding/evidence bundle/report-section-draft 是报告正文 basis；helper cue 默认只能作为 approval-gated advisory/audit surface。
   - `materialize-reporting-handoff` 已确认通过 DB canonical kind `finding` 恢复 finding basis，并在 evidence index 中以 `finding-record` 暴露。
   - 三类 policy research case fixture 已证明 `fetch/import -> normalize -> query -> finding -> evidence bundle -> review/challenge -> transition approval -> decision-maker report` 路径可运行。
   - agent entry 默认 capability surface 已不再暴露 legacy analysis query commands。
 
 - 未完成：
-  - 未做历史 skill id / analysis kind / promotion trace 字段的 breaking rename。
+  - 未做历史 skill id / analysis kind / report basis trace 字段的 breaking rename。
   - `build-normalization-audit` 等 operator QA 兼容参数仍存在，但属于 approval-gated optional-analysis。
   - freeze line 仍是 `audit-pending`，不是完整人工审计记录。
   - 未运行全仓 discover。
 
 - 新发现的问题：
   - 旧 checklist/workplan 中仍有未勾选的“物理删除/彻底改名/完整审计”类条目；这些不影响默认链验收，但应从“硬功能缺口”改列为后续迁移债。
-  - `promote-evidence-basis` 的兼容命名和内部 legacy helper 函数容易造成误读；当前测试表明它不再作为 runtime 研究判断来源，但后续应单独清理。
+  - `freeze-report-basis` 的兼容命名和内部 legacy helper 函数容易造成误读；当前测试表明它不再作为 runtime 研究判断来源，但后续应单独清理。
 
 - 是否影响后续计划：
   - 不阻塞本轮 skills 重构验收。
@@ -887,14 +887,14 @@ skills 侧重构完成至少应满足：
 - 已完成：
   - 将旧编号命名的 optional-analysis guardrail 测试模块改为 `tests/test_optional_analysis_guardrails.py`。
   - 将旧编号命名的 case fixture 测试模块改为 `tests/test_policy_research_case_fixtures.py`。
-  - 清理测试函数、测试类、共享 helper 和 fixture provenance 中的 `wp7/wp8/wp4 successor` 阶段编号命名，改为 `optional-analysis / policy-research / successor-helper / research-issue` 等功能命名。
-  - 同步本文档和 WP4 workplan 中的测试模块路径与精确测试函数名。
+  - 清理测试函数、测试类、共享 helper 和 fixture provenance 中的 `policy-research/final-acceptance/optional-analysis successor` 阶段编号命名，改为 `optional-analysis / policy-research / successor-helper / research-issue` 等功能命名。
+  - 同步本文档和 optional-analysis helper governance workplan 中的测试模块路径与精确测试函数名。
 
 - 未完成：
-  - 未改 `wp4_helper_metadata`、`WP4_ALLOWED_HELPER_DECISION_SOURCES`、`wp4-freeze-line-2026-04-28` 等 runtime contract 字段/常量；这些属于被测 API，不在本批测试命名清理范围内。
+  - 本节原先未覆盖 runtime contract breaking rename；该项已在第 21 节收口。
 
 - 新发现的问题：
-  - 历史文档中的 work package 标题仍使用 `WP*`，这是计划分段名；测试代码已不再用该类编号命名测试行为。
+  - 旧测试 helper 名称会把阶段编号误当成行为语义；测试代码已不再用该类编号命名测试行为。
 
 - 是否影响后续计划：
   - 不影响既有功能；后续新增测试应以行为/能力命名，不再用 work package 编号命名模块、类、函数或 fixture。
@@ -904,3 +904,106 @@ skills 侧重构完成至少应满足：
   - `.venv/bin/python -m unittest tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_lists_no_legacy_claim_cluster_result_sets_after_successor_helpers tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_no_legacy_claim_cluster_items_after_successor_helpers tests.test_analysis_workflow.AnalysisWorkflowTests.test_successor_analysis_chain_materializes_db_backed_surfaces tests.test_investigation_workflow -v`：`22` 项通过。
   - import smoke：`16` 个受影响测试模块可正常 import。
   - `git diff --check`：通过。
+
+## 21. 2026-04-29 runtime / skill / docs 命名同步回写
+
+- 已完成：
+  - `eco_council_runtime.optional_analysis_helpers` 取代旧 helper 模块名，skill wrapper import 已全部同步。
+  - runtime contract 字段改为 `helper_governance / helper_destination`，registry 常量、freeze line、schema version、warning code 和 tests 断言均已同步为功能命名。
+  - optional-analysis skill 描述、agent short description 和本文档引用已移除阶段编号命名。
+  - 旧 workplan 文件已重命名为 `docs/openclaw-optional-analysis-skills-refactor-workplan.md`。
+
+- 未完成：
+  - 未运行全仓 discover；本批只准备运行直接相关 targeted regression。
+  - 旧 analysis kind / report basis CLI/schema 的业务命名迁移仍是后续 breaking migration。
+
+- 新发现的问题：
+  - runtime API 若继续保留编号字段，会和测试/skill 文档的新功能命名不一致；本批已作为 breaking rename 处理。
+  - 外部旧 artifact consumer 需要迁移到 `helper_governance`。
+
+- 是否影响后续计划：
+  - 不阻塞当前验收；后续计划应把剩余命名债限定在 analysis kind 与 report basis contract 迁移，不再把 helper governance 归为未改项。
+
+- 本次实际运行：
+  - `.venv/bin/python -m py_compile eco-concil-runtime/src/eco_council_runtime/analysis_objects.py eco-concil-runtime/src/eco_council_runtime/optional_analysis_helpers.py eco-concil-runtime/src/eco_council_runtime/kernel/skill_registry.py eco-concil-runtime/src/eco_council_runtime/phase2_fallback_context.py eco-concil-runtime/src/eco_council_runtime/formal_signal_semantics.py skills/aggregate-environment-evidence/scripts/aggregate_environment_evidence.py skills/review-fact-check-evidence-scope/scripts/review_fact_check_evidence_scope.py skills/discover-discourse-issues/scripts/discover_discourse_issues.py skills/suggest-evidence-lanes/scripts/suggest_evidence_lanes.py skills/materialize-research-issue-surface/scripts/materialize_research_issue_surface.py skills/project-research-issue-views/scripts/project_research_issue_views.py skills/export-research-issue-map/scripts/export_research_issue_map.py skills/apply-approved-formal-public-taxonomy/scripts/apply_approved_formal_public_taxonomy.py skills/compare-formal-public-footprints/scripts/compare_formal_public_footprints.py skills/identify-representation-audit-cues/scripts/identify_representation_audit_cues.py skills/detect-temporal-cooccurrence-cues/scripts/detect_temporal_cooccurrence_cues.py skills/review-evidence-sufficiency/scripts/review_evidence_sufficiency.py skills/materialize-reporting-handoff/scripts/materialize_reporting_handoff.py tests/test_optional_analysis_guardrails.py tests/test_analysis_workflow.py tests/test_formal_public_workflow.py tests/test_policy_research_case_fixtures.py tests/test_skill_approval_workflow.py`：通过。
+  - `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow tests.test_analysis_workflow tests.test_formal_public_workflow -v`：`117` 项通过。
+  - `rg` 扫描 阶段编号样式、旧 helper module 和旧 metadata 字段：无残留命中。
+  - `git diff --check`：通过。
+
+## 22. 2026-04-29 残留风险一次性收尾验收回写
+
+- 已完成：
+  - 公开 skill 目录从 `freeze report basis-evidence-basis` 收敛为 `freeze-report-basis`，执行脚本同步为 `freeze_report_basis.py`；transition constant 同步为 `TRANSITION_KIND_FREEZE_REPORT_BASIS`。
+  - 将 report basis 与 runtime control 聚合面拆开：deliberation plane 保留 `report-basis-freeze`，runtime/control plane 改为 `runtime-control-freeze`，避免 canonical registry / query surface 撞名。
+  - `deliberation_plane.py` 中 runtime control 聚合入口已改为 `store_runtime_control_freeze_record / load_runtime_control_freeze_record`；`store_report_basis_freeze_record / load_report_basis_freeze_record` 只负责 DB-backed report basis。
+  - council resolution 入口从 `phase2_report_basis_resolution.py` 改为 `phase2_report_basis_resolution.py`，并新增 `report_basis_resolution_* / report_basis_status` 镜像字段；历史 `report_basis_*` 字段保留为 DB/replay/reporting 兼容字段。
+  - `skill_registry.py` 已去除 `report-basis-freeze` 重复 object kind，并把 reporting handoff 输入面显式区分为 `report-basis-freeze / runtime-control-freeze / finding / evidence-bundle / proposal / readiness-opinion`。
+  - 修复全量 discover 前置问题：canonical contract expected set 同步 runtime/deliberation/reporting 新对象；progress dashboard 与 milestone package 测试不再依赖缺失的 archive doc。
+
+- 未完成：
+  - 未做 `report_basis_status / report_basis_gate_path / report-basis-gate` 等历史 DB/CLI/stage 字段的破坏性改名；这些仍作为兼容字段存在，但已不再代表 runtime 默认调查结论。
+  - 未物理删除 frozen legacy analysis kind；它们继续作为 query-only/audit-only 兼容面，并受 optional-analysis approval/freeze metadata 约束。
+
+- 新发现的问题：
+  - `report-basis-freeze` 曾同时代表 report evidence basis 与 runtime control freeze，导致 canonical registry 键覆盖和 `deliberation_plane.py` 同名函数覆盖风险；本批已拆成 `report-basis-freeze` 与 `runtime-control-freeze`。
+  - 旧 `phase2_report_basis_resolution` 模块名会把 council judgement 误读为 kernel report basis decision；本批已改成 report-basis resolution 入口。
+  - 根目录请求中提到的旧独立 skills workplan 文件当前工作区不存在；对应内容已在 `docs/openclaw-optional-analysis-skills-refactor-workplan.md` 继续维护。
+
+- 是否影响后续计划：
+  - 不阻塞当前重构验收；默认链仍是 fetch/import -> normalize -> query -> DB finding/evidence/proposal/review -> moderator transition -> reporting。
+  - 后续若要彻底清除 `report_basis_*` 字段，应作为单独 breaking DB/CLI/replay migration，而不是在 runtime kernel 或 reporting skill 中隐式改名。
+
+- 本次实际运行：
+  - `.venv/bin/python -m py_compile ...`：核心 runtime、query、transition、skill 与测试模块通过。
+  - `.venv/bin/python -m unittest tests.test_canonical_contracts tests.test_control_query_surface tests.test_phase2_state_surfaces -v`：`13` 项通过。
+  - `.venv/bin/python -m unittest tests.test_decision_trace_workflow tests.test_investigation_workflow tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_phase2_gate_handlers -v`：`33` 项通过。
+  - `.venv/bin/python -m unittest discover -s tests -v`：`235` 项通过，用时 `420.703s`。
+
+## 23. 2026-04-29 report-basis gate 命名债收尾回写
+
+- 已完成：
+  - 默认 phase-2 gate stage / handler 从 `report-basis-gate` 切到 `report-basis-gate`；planner、direct advisory、transition executor、controller、supervisor、benchmark 与 state surfaces 同步使用新 stage。
+  - 新增 `apply-report-basis-gate` CLI 与 `report_basis_gate_path` 默认 artifact；后续第 24 节已删除旧 promotion 兼容入口。
+  - runtime/control/reporting payload 增加 `report_basis_status / report_basis_gate_status / report_basis_freeze_allowed / report_basis_source / report_basis_path / report_basis_resolution_*` 镜像字段，旧 `report_basis_*` 字段继续双写以支持既有 DB/replay。
+  - `query-control-objects` 支持 `--report-basis-status`，并映射到底层兼容 DB column。
+
+- 未完成：
+  - 该项已被第 24 节覆盖：旧 promotion DB/schema/replay 命名已删除，当前 `report_basis_status` 是新架构字段。
+  - 未物理删除 frozen legacy analysis/query 兼容面；该项仍需独立 DB replay / migration 计划。
+
+- 新发现的问题：
+  - 旧路径测试残留已同步为新路径；后续第 24 节已删除旧 loader fallback。
+  - 一个中途编辑错误曾把 gate alias 变量插入 `empty_round_state()`；已修正并用 full discover 验证。
+
+- 是否影响后续计划：
+  - 不阻塞后续计划；默认语义已从 report basis gate 收敛到 report-basis freeze gate。
+  - 后续如要清除 `report_basis_*`，应作为 explicit DB/schema/replay breaking migration，而不是业务逻辑重构的一部分。
+
+- 本次实际运行：
+  - `.venv/bin/python -m py_compile ...`：本批 runtime、gate、control/reporting surface 与相关 skill 脚本通过。
+  - `.venv/bin/python -m unittest tests.test_phase2_gate_handlers tests.test_phase2_contracts tests.test_direct_council_advisory tests.test_orchestration_planner_workflow tests.test_control_query_surface tests.test_phase2_state_surfaces tests.test_runtime_kernel tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_supervisor_simulation_regression -v`：`84` 项通过。
+  - `.venv/bin/python -m unittest tests.test_decision_trace_workflow -v`：`4` 项通过。
+  - `.venv/bin/python -m unittest discover -s tests -v`：`235` 项通过，用时 `216.605s`。
+
+## 24. 2026-04-29 report-basis-only 破坏性收尾回写
+
+- 已完成：
+  - 按“数据库无历史价值、以最新架构为准”的原则，移除 `promotion-gate / apply-promotion-gate / promotion_gate_* / promotion_status / promote_allowed / promotion_path` 等旧兼容入口和字段。
+  - 默认 report basis artifact 改为 `run_dir/report_basis/frozen_report_basis_<round_id>.json`；runtime gate artifact 只使用 `runtime/report_basis_gate_<round>.json`。
+  - DB schema、control query、council submission、readiness opinion、reporting handoff、decision/publication、archive/history context 与测试夹具同步到 `report_basis_*` 命名。
+  - report-basis gate 的 withheld 状态统一为 `report-basis-freeze-withheld`，ready 状态使用 `frozen`。
+
+- 未完成：
+  - optional-analysis 中仍有 `legacy` 审计/冻结术语；这些属于“旧 heuristic 标记为不可默认进入主链”的治理口径，不再作为旧 concil 数据兼容层处理。
+
+- 新发现的问题：
+  - 批量改名会误伤 Python 变量名中的自然语言片段；已通过全仓 `compileall` 和目标回归修正。
+  - 旧测试断言仍期待 `freeze-withheld`；已同步为 `report-basis-freeze-withheld`。
+
+- 是否影响后续计划：
+  - 不阻塞。report-basis 主链已按新架构收口，不再保留旧 promotion 兼容语义。
+
+- 本次实际运行：
+  - `.venv/bin/python -m compileall -q eco-concil-runtime/src skills tests`：通过。
+  - `.venv/bin/python -m unittest tests.test_phase2_gate_handlers tests.test_phase2_contracts tests.test_runtime_kernel tests.test_control_query_surface tests.test_phase2_state_surfaces tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_decision_trace_workflow tests.test_council_submission_workflow tests.test_supervisor_simulation_regression -v`：`84` 项通过，用时 `81.445s`。
+  - `.venv/bin/python -m unittest discover -s tests -v`：`235` 项通过，用时 `222.805s`。

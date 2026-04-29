@@ -1,4 +1,4 @@
 interface:
   display_name: "Export Research Issue Map"
-  short_description: "WP4 research issue navigation export"
+  short_description: "Optional-analysis research issue navigation export"
   default_prompt: "Use $export-research-issue-map only after approval. Export traceability nodes and edges for navigation; do not create controversy conclusions or phase decisions."

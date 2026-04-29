@@ -14,7 +14,7 @@ description: Submit one structured council proposal directly into the deliberati
 ## Triggering Conditions
 - Need to express a council judgement after the supporting finding or evidence bundle has already been recorded.
 - Need a proposal that downstream skills can consume directly from the DB.
-- Need to attach explicit promotion, publication, or handoff posture to one proposal.
+- Need to attach explicit report basis, publication, or handoff posture to one proposal.
 
 ## Read/Write Contract
 - Reads only its direct inputs.
@@ -48,8 +48,8 @@ description: Submit one structured council proposal directly into the deliberati
   - `response_to_id`
   - `lineage_id`
   - `extra_json`
-  - `promotion_disposition`
-  - `promote_allowed`
+  - `report_basis_disposition`
+  - `report_basis_freeze_allowed`
   - `publication_readiness`
   - `handoff_status`
   - `moderator_status`

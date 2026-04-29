@@ -17,8 +17,8 @@ description: Materialize DB-backed reporting packets from frozen evidence basis 
 - Need a clear packet boundary between evidence citation, decision posture, and final report structure.
 
 ## Read/Write Contract
-- Reads promotion-basis, readiness, board, and supervisor state through DB-first wrappers.
-- Reads `run_dir/promotion/promoted_evidence_basis_<round_id>.json`, `run_dir/reporting/round_readiness_<round_id>.json`, `run_dir/board/board_brief_<round_id>.md`, and `run_dir/runtime/supervisor_state_<round_id>.json` only as compatible exports when needed.
+- Reads report-basis-freeze, readiness, board, and supervisor state through DB-first wrappers.
+- Reads `run_dir/report_basis/frozen_report_basis_<round_id>.json`, `run_dir/reporting/round_readiness_<round_id>.json`, `run_dir/board/board_brief_<round_id>.md`, and `run_dir/runtime/supervisor_state_<round_id>.json` only as compatible exports when needed.
 - Writes canonical reporting handoff rows and `run_dir/reporting/reporting_handoff_<round_id>.json` as a rebuildable export.
 - Helper or heuristic cues remain audit material unless a DB finding, evidence bundle, proposal, readiness opinion, report section draft, or report basis explicitly cites them.
 
@@ -27,7 +27,7 @@ description: Materialize DB-backed reporting packets from frozen evidence basis 
 - `run_id`
 - `round_id`
 - Optional:
-  - `promotion_path`
+  - `report_basis_path`
   - `readiness_path`
   - `board_brief_path`
   - `supervisor_state_path`
@@ -45,7 +45,7 @@ description: Materialize DB-backed reporting packets from frozen evidence basis 
 - `deliberation_sync`
 - `analysis_sync`
 - `board_handoff`
-- The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `promotion_source`, `readiness_source`, `board_brief_source`, `supervisor_state_source`, `db_path`, and `observed_inputs`, including explicit artifact-versus-materialized flags for each upstream input.
+- The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `report_basis_source`, `readiness_source`, `board_brief_source`, `supervisor_state_source`, `db_path`, and `observed_inputs`, including explicit artifact-versus-materialized flags for each upstream input.
 - The emitted handoff includes `evidence_packet`, `decision_packet`, `report_packet`, `evidence_index`, `uncertainty_register`, `residual_disputes`, and `policy_recommendations`.
 
 ## References

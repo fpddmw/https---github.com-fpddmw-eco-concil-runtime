@@ -3,15 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .phase2_promotion_resolution import (
+from .phase2_report_basis_resolution import (
     load_council_proposals,
     load_council_readiness_opinions,
-    resolve_promotion_council_inputs,
+    resolve_report_basis_council_inputs,
 )
-from .kernel.deliberation_plane import store_promotion_freeze_record
+from .kernel.deliberation_plane import store_runtime_control_freeze_record
 from .kernel.manifest import write_json
-from .kernel.paths import promotion_gate_path
+from .kernel.paths import report_basis_gate_path
 from .kernel.phase2_state_surfaces import load_round_readiness_wrapper
+
+REPORT_BASIS_GATE_STAGE_NAME = "report-basis-gate"
 
 
 def maybe_text(value: Any) -> str:
@@ -48,7 +50,7 @@ def resolve_path(run_dir: Path, override: str, default_path: Path) -> Path:
     return candidate.resolve()
 
 
-def apply_promotion_gate(
+def apply_report_basis_gate(
     run_dir: Path,
     *,
     run_id: str,
@@ -64,7 +66,7 @@ def apply_promotion_gate(
     output_file = resolve_path(
         run_dir,
         output_path_override,
-        promotion_gate_path(run_dir, round_id),
+        report_basis_gate_path(run_dir, round_id),
     )
 
     readiness_context = load_round_readiness_wrapper(
@@ -110,27 +112,37 @@ def apply_promotion_gate(
         run_id=run_id,
         round_id=round_id,
     )
-    promotion_resolution = resolve_promotion_council_inputs(
+    report_basis_resolution = resolve_report_basis_council_inputs(
         council_proposals,
         council_opinions,
         readiness_status=readiness_status,
         allow_non_ready=False,
         round_id=round_id,
     )
-    promote_allowed = bool(promotion_resolution.get("promote_allowed"))
-    gate_status = maybe_text(promotion_resolution.get("gate_status")) or (
-        "allow-promote" if promote_allowed else "freeze-withheld"
+    report_basis_freeze_allowed = bool(
+        report_basis_resolution.get("report_basis_freeze_allowed")
     )
-    promotion_resolution_reasons = (
-        promotion_resolution.get("promotion_resolution_reasons", [])
-        if isinstance(promotion_resolution.get("promotion_resolution_reasons"), list)
+    report_basis_status = "frozen" if report_basis_freeze_allowed else "withheld"
+    gate_status = maybe_text(report_basis_resolution.get("gate_status")) or (
+        "report-basis-freeze-allowed"
+        if report_basis_freeze_allowed
+        else "report-basis-freeze-withheld"
+    )
+    report_basis_gate_status = (
+        "report-basis-freeze-allowed"
+        if report_basis_freeze_allowed
+        else "report-basis-freeze-withheld"
+    )
+    report_basis_resolution_reasons = (
+        report_basis_resolution.get("report_basis_resolution_reasons", [])
+        if isinstance(report_basis_resolution.get("report_basis_resolution_reasons"), list)
         else []
     )
     gate_reasons = unique_texts(
         [
             *[
                 maybe_text(item)
-                for item in promotion_resolution_reasons
+                for item in report_basis_resolution_reasons
                 if maybe_text(item)
             ],
             *[maybe_text(item) for item in gate_reasons if maybe_text(item)],
@@ -142,44 +154,47 @@ def apply_promotion_gate(
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
-        "stage_name": "promotion-gate",
-        "gate_handler": "promotion-gate",
+        "stage_name": REPORT_BASIS_GATE_STAGE_NAME,
+        "gate_handler": REPORT_BASIS_GATE_STAGE_NAME,
+        "gate_semantics": REPORT_BASIS_GATE_STAGE_NAME,
         "readiness_path": str(readiness_file),
         "readiness_status": readiness_status,
-        "promote_allowed": promote_allowed,
+        "report_basis_freeze_allowed": report_basis_freeze_allowed,
+        "report_basis_status": report_basis_status,
+        "report_basis_gate_status": report_basis_gate_status,
         "gate_status": gate_status,
-        "decision_source": maybe_text(promotion_resolution.get("decision_source"))
+        "decision_source": maybe_text(report_basis_resolution.get("decision_source"))
         or maybe_text(readiness.get("decision_source"))
         or "policy-fallback",
-        "promotion_resolution_mode": maybe_text(
-            promotion_resolution.get("promotion_resolution_mode")
+        "report_basis_resolution_mode": maybe_text(
+            report_basis_resolution.get("report_basis_resolution_mode")
         ),
         "gate_reasons": [
             maybe_text(item) for item in gate_reasons if maybe_text(item)
         ],
         "supporting_proposal_ids": (
-            promotion_resolution.get("supporting_proposal_ids", [])
-            if isinstance(promotion_resolution.get("supporting_proposal_ids"), list)
+            report_basis_resolution.get("supporting_proposal_ids", [])
+            if isinstance(report_basis_resolution.get("supporting_proposal_ids"), list)
             else []
         ),
         "rejected_proposal_ids": (
-            promotion_resolution.get("rejected_proposal_ids", [])
-            if isinstance(promotion_resolution.get("rejected_proposal_ids"), list)
+            report_basis_resolution.get("rejected_proposal_ids", [])
+            if isinstance(report_basis_resolution.get("rejected_proposal_ids"), list)
             else []
         ),
         "supporting_opinion_ids": (
-            promotion_resolution.get("supporting_opinion_ids", [])
-            if isinstance(promotion_resolution.get("supporting_opinion_ids"), list)
+            report_basis_resolution.get("supporting_opinion_ids", [])
+            if isinstance(report_basis_resolution.get("supporting_opinion_ids"), list)
             else []
         ),
         "rejected_opinion_ids": (
-            promotion_resolution.get("rejected_opinion_ids", [])
-            if isinstance(promotion_resolution.get("rejected_opinion_ids"), list)
+            report_basis_resolution.get("rejected_opinion_ids", [])
+            if isinstance(report_basis_resolution.get("rejected_opinion_ids"), list)
             else []
         ),
         "council_input_counts": (
-            promotion_resolution.get("council_input_counts", {})
-            if isinstance(promotion_resolution.get("council_input_counts"), dict)
+            report_basis_resolution.get("council_input_counts", {})
+            if isinstance(report_basis_resolution.get("council_input_counts"), dict)
             else {}
         ),
         "recommended_next_skills": [
@@ -191,11 +206,13 @@ def apply_promotion_gate(
     }
     write_json(output_file, payload)
     payload["output_path"] = str(output_file)
-    store_promotion_freeze_record(
+    store_runtime_control_freeze_record(
         run_dir,
         run_id=run_id,
         round_id=round_id,
         gate_snapshot=payload,
-        artifact_paths={"promotion_gate_path": str(output_file)},
+        artifact_paths={
+            "report_basis_gate_path": str(output_file),
+        },
     )
     return payload

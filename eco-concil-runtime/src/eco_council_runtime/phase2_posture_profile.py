@@ -49,8 +49,12 @@ def default_controller_completion_updates(
     planning: dict[str, Any],
 ) -> dict[str, Any]:
     del planning
-    promotion_status = maybe_text(controller_payload.get("promotion_status")) or "withheld"
-    if promotion_status == "promoted":
+    report_basis_status = (
+        maybe_text(controller_payload.get("report_basis_status"))
+        or maybe_text(controller_payload.get("report_basis_status"))
+        or "withheld"
+    )
+    if report_basis_status == "frozen":
         return {
             "recommended_next_skills": [
                 "materialize-reporting-handoff",
@@ -69,8 +73,12 @@ def default_controller_completion_updates(
 def default_supervisor_classification(controller: dict[str, Any]) -> dict[str, str]:
     controller_status = maybe_text(controller.get("controller_status")) or "completed"
     readiness_status = maybe_text(controller.get("readiness_status")) or "blocked"
-    gate_status = maybe_text(controller.get("gate_status")) or "freeze-withheld"
-    promotion_status = maybe_text(controller.get("promotion_status")) or "withheld"
+    gate_status = maybe_text(controller.get("gate_status")) or "report-basis-freeze-withheld"
+    report_basis_status = (
+        maybe_text(controller.get("report_basis_status"))
+        or maybe_text(controller.get("report_basis_status"))
+        or "withheld"
+    )
     if controller_status == "failed":
         return {
             "supervisor_status": "controller-failed",
@@ -80,21 +88,21 @@ def default_supervisor_classification(controller: dict[str, Any]) -> dict[str, s
             "recovery_posture": "resume-controller",
             "operator_action": "resume-phase2",
         }
-    if promotion_status == "promoted":
+    if report_basis_status == "frozen":
         return {
             "supervisor_status": SUPERVISOR_REPORTING_READY_STATUS,
-            "supervisor_substatus": "promotion-complete",
+            "supervisor_substatus": "report-basis-complete",
             "phase2_posture": "reporting-ready",
             "terminal_state": "reporting-ready",
             "recovery_posture": "terminal",
             "operator_action": "handoff-reporting",
         }
-    substatus = "promotion-withheld"
+    substatus = "report-basis-withheld"
     if readiness_status == "blocked":
-        substatus = "blocked-before-promotion"
+        substatus = "blocked-before-report_basis"
     elif readiness_status == "needs-more-data":
         substatus = "investigation-open"
-    elif gate_status == "freeze-withheld":
+    elif gate_status == "report-basis-freeze-withheld":
         substatus = "gate-withheld"
     return {
         "supervisor_status": "hold-investigation-open",
@@ -209,7 +217,7 @@ def default_supervisor_recommended_next_skills(
 
 def default_supervisor_operator_notes(
     *,
-    promotion_status: str,
+    report_basis_status: str,
     gate_status: str,
     gate_reasons: list[Any],
     top_action_rows: list[dict[str, str]],
@@ -233,8 +241,8 @@ def default_supervisor_operator_notes(
         notes = [f"Reporting remains held at {hold_anchor}."]
         notes.extend(blockers)
         notes.extend(maybe_text(reason) for reason in gate_reasons if maybe_text(reason))
-        if promotion_status == "withheld" and "promotion-withheld" not in blockers:
-            notes.append("Promotion is still withheld in the current controller snapshot.")
+        if report_basis_status == "withheld" and "report-basis-withheld" not in blockers:
+            notes.append("Report-basis freeze is still withheld in the current controller snapshot.")
         if top_action_rows:
             top_action_kind = top_action_rows[0].get("action_kind") or "unspecified"
             notes.append(f"Highest-priority follow-up remains {top_action_kind}.")

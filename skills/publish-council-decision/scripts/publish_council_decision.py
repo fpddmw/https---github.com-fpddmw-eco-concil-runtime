@@ -20,10 +20,10 @@ from eco_council_runtime.council_objects import store_decision_trace_records  # 
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
-from eco_council_runtime.phase2_promotion_resolution import (  # noqa: E402
+from eco_council_runtime.phase2_report_basis_resolution import (  # noqa: E402
     load_council_proposals,
     load_council_readiness_opinions,
-    resolve_promotion_council_inputs,
+    resolve_report_basis_council_inputs,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     normalized_council_decision_payload,
@@ -32,7 +32,7 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_council_decision_wrapper,
     load_expert_report_wrapper,
-    load_promotion_basis_wrapper,
+    load_report_basis_freeze_wrapper,
 )
 
 
@@ -128,7 +128,7 @@ def deterministic_trace_id(
 def selected_trace_object(
     *,
     publication_readiness: str,
-    promoted_basis_id: str,
+    report_basis_id: str,
     supporting_proposal_ids: list[str],
     rejected_proposal_ids: list[str],
     supporting_opinion_ids: list[str],
@@ -142,9 +142,9 @@ def selected_trace_object(
         return "readiness-opinion", supporting_opinion_ids[0]
     if supporting_proposal_ids:
         return "proposal", supporting_proposal_ids[0]
-    if promoted_basis_id:
-        return "promotion-basis", promoted_basis_id
-    return "promotion-basis", ""
+    if report_basis_id:
+        return "report-basis-freeze", report_basis_id
+    return "report-basis-freeze", ""
 
 
 def publish_council_decision_skill(
@@ -163,10 +163,10 @@ def publish_council_decision_skill(
     sociologist_file = resolve_path(run_dir_path, sociologist_report_path, f"reporting/expert_report_sociologist_{round_id}.json")
     environmentalist_file = resolve_path(run_dir_path, environmentalist_report_path, f"reporting/expert_report_environmentalist_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"reporting/council_decision_{round_id}.json")
-    promotion_file = resolve_path(
+    report_basis_file = resolve_path(
         run_dir_path,
         "",
-        f"promotion/promoted_evidence_basis_{round_id}.json",
+        f"report_basis/frozen_report_basis_{round_id}.json",
     )
 
     warnings: list[dict[str, Any]] = []
@@ -224,14 +224,14 @@ def publish_council_decision_skill(
         }
 
     publication_readiness = maybe_text(draft_payload.get("publication_readiness")) or "hold"
-    promotion_context = load_promotion_basis_wrapper(
+    report_basis_context = load_report_basis_freeze_wrapper(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
     )
-    promotion_payload = (
-        promotion_context.get("payload")
-        if isinstance(promotion_context.get("payload"), dict)
+    report_basis_payload = (
+        report_basis_context.get("payload")
+        if isinstance(report_basis_context.get("payload"), dict)
         else None
     )
     report_refs: list[str] = []
@@ -340,16 +340,16 @@ def publish_council_decision_skill(
     draft_rejected_opinion_ids = unique_texts(
         list_items(draft_payload.get("rejected_opinion_ids"))
     )
-    promoted_basis_id = maybe_text(draft_payload.get("promoted_basis_id")) or (
-        maybe_text(promotion_payload.get("basis_id"))
-        if isinstance(promotion_payload, dict)
+    report_basis_id = maybe_text(draft_payload.get("report_basis_id")) or (
+        maybe_text(report_basis_payload.get("basis_id"))
+        if isinstance(report_basis_payload, dict)
         else ""
     )
     selected_basis_object_ids = unique_texts(
         list_items(draft_payload.get("selected_basis_object_ids"))
         + list_items(
-            promotion_payload.get("selected_basis_object_ids")
-            if isinstance(promotion_payload, dict)
+            report_basis_payload.get("selected_basis_object_ids")
+            if isinstance(report_basis_payload, dict)
             else []
         )
     )
@@ -363,35 +363,39 @@ def publish_council_decision_skill(
         run_id=run_id,
         round_id=round_id,
     )
-    fallback_promotion_resolution = resolve_promotion_council_inputs(
+    fallback_report_basis_resolution = resolve_report_basis_council_inputs(
         all_proposals,
         all_opinions,
         readiness_status=(
             maybe_text(draft_payload.get("readiness_status"))
-            or maybe_text(promotion_payload.get("readiness_status"))
+            or maybe_text(report_basis_payload.get("readiness_status"))
             or ("ready" if publication_readiness == "ready" else "needs-more-data")
         ),
         allow_non_ready=bool(
-            isinstance(promotion_payload, dict)
-            and maybe_text(promotion_payload.get("promotion_status")) == "promoted"
-            and maybe_text(promotion_payload.get("readiness_status")) != "ready"
+            isinstance(report_basis_payload, dict)
+            and (
+                maybe_text(report_basis_payload.get("report_basis_status"))
+                or maybe_text(report_basis_payload.get("report_basis_status"))
+            )
+            == "frozen"
+            and maybe_text(report_basis_payload.get("readiness_status")) != "ready"
         ),
         round_id=round_id,
-        basis_id=promoted_basis_id,
+        basis_id=report_basis_id,
         selected_basis_object_ids=selected_basis_object_ids,
     )
     supporting_proposal_ids = (
         draft_supporting_proposal_ids
         or unique_texts(
-            promotion_payload.get("supporting_proposal_ids", [])
-            if isinstance(promotion_payload, dict)
-            and isinstance(promotion_payload.get("supporting_proposal_ids"), list)
+            report_basis_payload.get("supporting_proposal_ids", [])
+            if isinstance(report_basis_payload, dict)
+            and isinstance(report_basis_payload.get("supporting_proposal_ids"), list)
             else []
         )
         or unique_texts(
-            fallback_promotion_resolution.get("supporting_proposal_ids", [])
+            fallback_report_basis_resolution.get("supporting_proposal_ids", [])
             if isinstance(
-                fallback_promotion_resolution.get("supporting_proposal_ids"), list
+                fallback_report_basis_resolution.get("supporting_proposal_ids"), list
             )
             else []
         )
@@ -399,15 +403,15 @@ def publish_council_decision_skill(
     rejected_proposal_ids = (
         draft_rejected_proposal_ids
         or unique_texts(
-            promotion_payload.get("rejected_proposal_ids", [])
-            if isinstance(promotion_payload, dict)
-            and isinstance(promotion_payload.get("rejected_proposal_ids"), list)
+            report_basis_payload.get("rejected_proposal_ids", [])
+            if isinstance(report_basis_payload, dict)
+            and isinstance(report_basis_payload.get("rejected_proposal_ids"), list)
             else []
         )
         or unique_texts(
-            fallback_promotion_resolution.get("rejected_proposal_ids", [])
+            fallback_report_basis_resolution.get("rejected_proposal_ids", [])
             if isinstance(
-                fallback_promotion_resolution.get("rejected_proposal_ids"), list
+                fallback_report_basis_resolution.get("rejected_proposal_ids"), list
             )
             else []
         )
@@ -415,15 +419,15 @@ def publish_council_decision_skill(
     supporting_opinion_ids = (
         draft_supporting_opinion_ids
         or unique_texts(
-            promotion_payload.get("supporting_opinion_ids", [])
-            if isinstance(promotion_payload, dict)
-            and isinstance(promotion_payload.get("supporting_opinion_ids"), list)
+            report_basis_payload.get("supporting_opinion_ids", [])
+            if isinstance(report_basis_payload, dict)
+            and isinstance(report_basis_payload.get("supporting_opinion_ids"), list)
             else []
         )
         or unique_texts(
-            fallback_promotion_resolution.get("supporting_opinion_ids", [])
+            fallback_report_basis_resolution.get("supporting_opinion_ids", [])
             if isinstance(
-                fallback_promotion_resolution.get("supporting_opinion_ids"), list
+                fallback_report_basis_resolution.get("supporting_opinion_ids"), list
             )
             else []
         )
@@ -431,29 +435,29 @@ def publish_council_decision_skill(
     rejected_opinion_ids = (
         draft_rejected_opinion_ids
         or unique_texts(
-            promotion_payload.get("rejected_opinion_ids", [])
-            if isinstance(promotion_payload, dict)
-            and isinstance(promotion_payload.get("rejected_opinion_ids"), list)
+            report_basis_payload.get("rejected_opinion_ids", [])
+            if isinstance(report_basis_payload, dict)
+            and isinstance(report_basis_payload.get("rejected_opinion_ids"), list)
             else []
         )
         or unique_texts(
-            fallback_promotion_resolution.get("rejected_opinion_ids", [])
+            fallback_report_basis_resolution.get("rejected_opinion_ids", [])
             if isinstance(
-                fallback_promotion_resolution.get("rejected_opinion_ids"), list
+                fallback_report_basis_resolution.get("rejected_opinion_ids"), list
             )
             else []
         )
     )
     selected_object_kind, selected_object_id = selected_trace_object(
         publication_readiness=publication_readiness,
-        promoted_basis_id=promoted_basis_id,
+        report_basis_id=report_basis_id,
         supporting_proposal_ids=supporting_proposal_ids,
         rejected_proposal_ids=rejected_proposal_ids,
         supporting_opinion_ids=supporting_opinion_ids,
         rejected_opinion_ids=rejected_opinion_ids,
     )
     accepted_object_ids = unique_texts(
-        [promoted_basis_id, *selected_basis_object_ids]
+        [report_basis_id, *selected_basis_object_ids]
         + supporting_proposal_ids
         + supporting_opinion_ids
     )
@@ -488,6 +492,39 @@ def publish_council_decision_skill(
             break
     decision_id = maybe_text(draft_payload.get("decision_id"))
     trace_id = deterministic_trace_id(run_id, round_id, decision_id, 0)
+    report_basis_resolution_mode = (
+        maybe_text(draft_payload.get("report_basis_resolution_mode"))
+        or maybe_text(draft_payload.get("report_basis_resolution_mode"))
+        or maybe_text(
+            report_basis_payload.get("report_basis_resolution_mode")
+            if isinstance(report_basis_payload, dict)
+            else ""
+        )
+        or maybe_text(
+            report_basis_payload.get("report_basis_resolution_mode")
+            if isinstance(report_basis_payload, dict)
+            else ""
+        )
+        or maybe_text(fallback_report_basis_resolution.get("report_basis_resolution_mode"))
+        or maybe_text(fallback_report_basis_resolution.get("report_basis_resolution_mode"))
+    )
+    report_basis_resolution_reasons = (
+        draft_payload.get("report_basis_resolution_reasons", [])
+        if isinstance(draft_payload.get("report_basis_resolution_reasons"), list)
+        else draft_payload.get("report_basis_resolution_reasons", [])
+        if isinstance(draft_payload.get("report_basis_resolution_reasons"), list)
+        else report_basis_payload.get("report_basis_resolution_reasons", [])
+        if isinstance(report_basis_payload, dict)
+        and isinstance(report_basis_payload.get("report_basis_resolution_reasons"), list)
+        else report_basis_payload.get("report_basis_resolution_reasons", [])
+        if isinstance(report_basis_payload, dict)
+        and isinstance(report_basis_payload.get("report_basis_resolution_reasons"), list)
+        else fallback_report_basis_resolution.get("report_basis_resolution_reasons", [])
+        if isinstance(fallback_report_basis_resolution.get("report_basis_resolution_reasons"), list)
+        else fallback_report_basis_resolution.get("report_basis_resolution_reasons", [])
+        if isinstance(fallback_report_basis_resolution.get("report_basis_resolution_reasons"), list)
+        else []
+    )
     canonical_payload = normalized_council_decision_payload(
         {
             **draft_payload,
@@ -497,51 +534,25 @@ def publish_council_decision_skill(
             "decision_stage": "canonical",
             "canonical_artifact": "council-decision",
             "published_report_refs": unique_texts(report_refs),
-            "promoted_basis_id": promoted_basis_id,
+            "report_basis_id": report_basis_id,
             "selected_basis_object_ids": selected_basis_object_ids,
             "supporting_proposal_ids": supporting_proposal_ids,
             "rejected_proposal_ids": rejected_proposal_ids,
             "supporting_opinion_ids": supporting_opinion_ids,
             "rejected_opinion_ids": rejected_opinion_ids,
-            "promotion_resolution_mode": maybe_text(
-                draft_payload.get("promotion_resolution_mode")
-            )
-            or maybe_text(
-                promotion_payload.get("promotion_resolution_mode")
-                if isinstance(promotion_payload, dict)
-                else ""
-            )
-            or maybe_text(
-                fallback_promotion_resolution.get("promotion_resolution_mode")
-            ),
-            "promotion_resolution_reasons": (
-                draft_payload.get("promotion_resolution_reasons", [])
-                if isinstance(draft_payload.get("promotion_resolution_reasons"), list)
-                else promotion_payload.get("promotion_resolution_reasons", [])
-                if isinstance(promotion_payload, dict)
-                and isinstance(
-                    promotion_payload.get("promotion_resolution_reasons"), list
-                )
-                else fallback_promotion_resolution.get(
-                    "promotion_resolution_reasons", []
-                )
-                if isinstance(
-                    fallback_promotion_resolution.get(
-                        "promotion_resolution_reasons"
-                    ),
-                    list,
-                )
-                else []
-            ),
+            "report_basis_resolution_mode": report_basis_resolution_mode,
+            "report_basis_resolution_reasons": report_basis_resolution_reasons,
+            "report_basis_resolution_mode": report_basis_resolution_mode,
+            "report_basis_resolution_reasons": report_basis_resolution_reasons,
             "council_input_counts": (
                 draft_payload.get("council_input_counts", {})
                 if isinstance(draft_payload.get("council_input_counts"), dict)
-                else promotion_payload.get("council_input_counts", {})
-                if isinstance(promotion_payload, dict)
-                and isinstance(promotion_payload.get("council_input_counts"), dict)
-                else fallback_promotion_resolution.get("council_input_counts", {})
+                else report_basis_payload.get("council_input_counts", {})
+                if isinstance(report_basis_payload, dict)
+                and isinstance(report_basis_payload.get("council_input_counts"), dict)
+                else fallback_report_basis_resolution.get("council_input_counts", {})
                 if isinstance(
-                    fallback_promotion_resolution.get("council_input_counts"), dict
+                    fallback_report_basis_resolution.get("council_input_counts"), dict
                 )
                 else {}
             ),
@@ -604,7 +615,7 @@ def publish_council_decision_skill(
                     ]
                 ),
                 "lineage": unique_texts(
-                    [decision_id, promoted_basis_id, *selected_basis_object_ids]
+                    [decision_id, report_basis_id, *selected_basis_object_ids]
                     + accepted_object_ids
                     + rejected_object_ids
                 ),
@@ -613,10 +624,10 @@ def publish_council_decision_skill(
                     "decision_source": maybe_text(canonical_payload.get("decision_source"))
                     or "deliberation-plane-council-decision-draft",
                     "publication_readiness": publication_readiness,
-                    "promotion_source": maybe_text(contract_fields.get("promotion_source"))
-                    or "missing-promotion",
-                    "promoted_basis_id": promoted_basis_id,
-                    "promotion_basis_path": str(promotion_file),
+                    "report_basis_source": maybe_text(contract_fields.get("report_basis_source"))
+                    or "missing-report-basis",
+                    "report_basis_id": report_basis_id,
+                    "report_basis_freeze_path": str(report_basis_file),
                     "supporting_proposal_count": len(supporting_proposal_ids),
                     "rejected_proposal_count": len(rejected_proposal_ids),
                     "supporting_opinion_count": len(supporting_opinion_ids),
@@ -656,8 +667,8 @@ def publish_council_decision_skill(
             "reporting_handoff_source": maybe_text(
                 contract_fields.get("reporting_handoff_source")
             ),
-            "promotion_source": maybe_text(contract_fields.get("promotion_source")),
-            "promotion_basis_path": str(promotion_file),
+            "report_basis_source": maybe_text(contract_fields.get("report_basis_source")),
+            "report_basis_freeze_path": str(report_basis_file),
             "decision_source": maybe_text(contract_fields.get("decision_source")),
             "decision_trace_id": trace_id,
             "sociologist_report_source": maybe_text(

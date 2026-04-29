@@ -11,7 +11,7 @@ from _workflow_support import (
     analytics_path,
     investigation_path,
     load_json,
-    promotion_path,
+    report_basis_path,
     reporting_path,
     run_kernel,
     runtime_path,
@@ -30,8 +30,8 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_moderator_action_records,
     store_moderator_action_snapshot,
     store_orchestration_plan_record,
-    store_promotion_basis_record,
-    store_promotion_freeze_record,
+    store_report_basis_freeze_record,
+    store_runtime_control_freeze_record,
     store_round_readiness_assessment,
 )
 
@@ -40,7 +40,7 @@ WRAPPER_NAMES = (
     "load_next_actions_wrapper",
     "load_falsification_probe_wrapper",
     "load_round_readiness_wrapper",
-    "load_promotion_basis_wrapper",
+    "load_report_basis_freeze_wrapper",
     "load_supervisor_state_wrapper",
     "load_reporting_handoff_wrapper",
     "load_council_decision_wrapper",
@@ -143,7 +143,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
             "round_id": ROUND_ID,
             "generated_at_utc": "2024-01-01T00:10:00Z",
             "readiness_status": "needs-more-data",
-            "sufficient_for_promotion": False,
+            "sufficient_for_report_basis": False,
             "decision_source": "agent-council",
             "provenance": {"source": "unit-test"},
             "evidence_refs": ["artifact:coverage-001"],
@@ -155,13 +155,13 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
             "readiness_source": "deliberation-plane-readiness",
         },
     )
-    promotion = store_promotion_basis_record(
+    report_basis = store_report_basis_freeze_record(
         run_dir,
-        promotion_payload={
+        report_basis_payload={
             "run_id": RUN_ID,
             "round_id": ROUND_ID,
             "generated_at_utc": "2024-01-01T00:12:00Z",
-            "promotion_status": "withheld",
+            "report_basis_status": "withheld",
             "readiness_status": "needs-more-data",
             "decision_source": "agent-council",
             "provenance": {"source": "unit-test"},
@@ -178,7 +178,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
                     }
                 ]
             },
-            "promotion_source": "deliberation-plane-promotion-basis",
+            "report_basis_source": "deliberation-plane-report-basis-freeze",
         },
     )
     plan_artifact_path = runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json").resolve()
@@ -255,7 +255,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
                 "required_previous_stages": ["falsification-probes"],
                 "blocking": True,
                 "resume_policy": "skip-if-completed",
-                "operator_summary": "Summarize whether the round can promote.",
+                "operator_summary": "Summarize whether the round can freeze-report-basis.",
                 "reason": "Readiness depends on the open contradiction probe.",
                 "expected_output_path": str(
                     reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json").resolve()
@@ -264,18 +264,18 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
         ],
         "gate_steps": [
             {
-                "stage_name": "promotion-gate",
+                "stage_name": "report-basis-gate",
                 "stage_kind": "gate",
                 "phase_group": "gate",
                 "required_previous_stages": ["round-readiness"],
                 "blocking": True,
                 "resume_policy": "skip-if-completed",
-                "operator_summary": "Evaluate whether the current round can promote.",
+                "operator_summary": "Evaluate whether the current round can freeze-report-basis.",
                 "reason": "Gate the round after readiness review.",
                 "expected_output_path": str(
-                    runtime_path(run_dir, f"promotion_gate_{ROUND_ID}.json").resolve()
+                    runtime_path(run_dir, f"report_basis_gate_{ROUND_ID}.json").resolve()
                 ),
-                "gate_handler": "promotion-gate",
+                "gate_handler": "report-basis-gate",
                 "readiness_stage_name": "round-readiness",
             }
         ],
@@ -301,20 +301,20 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
         ],
         "post_gate_steps": [
             {
-                "stage_name": "promotion-basis",
+                "stage_name": "report-basis-freeze",
                 "stage_kind": "skill",
-                "phase_group": "promotion",
-                "skill_name": "promote-evidence-basis",
-                "expected_skill_name": "promote-evidence-basis",
+                "phase_group": "report-basis",
+                "skill_name": "freeze-report-basis",
+                "expected_skill_name": "freeze-report-basis",
                 "assigned_role_hint": "moderator",
-                "required_previous_stages": ["promotion-gate"],
+                "required_previous_stages": ["report-basis-gate"],
                 "blocking": True,
                 "resume_policy": "skip-if-completed",
-                "operator_summary": "Freeze the promoted or withheld evidence basis.",
+                "operator_summary": "Freeze the frozen or withheld evidence basis.",
                 "reason": "Persist the evidence basis after gate evaluation.",
                 "expected_output_path": str(
-                    promotion_path(
-                        run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"
+                    report_basis_path(
+                        run_dir, f"frozen_report_basis_{ROUND_ID}.json"
                     ).resolve()
                 ),
             }
@@ -328,7 +328,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
         ],
         "fallback_path": [
             {
-                "when": "Gate withholds promotion after readiness review.",
+                "when": "Gate withholds report-basis freeze after readiness review.",
                 "reason": "The contradiction probe remains open.",
                 "suggested_next_skills": ["open-falsification-probe"],
             }
@@ -360,8 +360,8 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
         "restart_recommended": False,
         "resume_from_stage": "",
         "readiness_status": "needs-more-data",
-        "gate_status": "freeze-withheld",
-        "promotion_status": "withheld",
+        "gate_status": "report-basis-freeze-withheld",
+        "report_basis_status": "withheld",
         "reporting_ready": False,
         "reporting_blockers": ["An open contradiction probe remains."],
         "reporting_handoff_status": "investigation-open",
@@ -371,7 +371,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
             runtime_path(run_dir, f"supervisor_state_{ROUND_ID}.json").resolve()
         ),
     }
-    store_promotion_freeze_record(
+    store_runtime_control_freeze_record(
         run_dir,
         run_id=RUN_ID,
         round_id=ROUND_ID,
@@ -395,7 +395,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
         "probes": probes,
         "probes_export": probes_export,
         "readiness": readiness,
-        "promotion": promotion,
+        "report_basis": report_basis,
         "supervisor_export": supervisor_export,
     }
 
@@ -438,8 +438,8 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 payloads["readiness"],
             )
             write_json(
-                promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json"),
-                payloads["promotion"],
+                report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json"),
+                payloads["report_basis"],
             )
             write_json(
                 runtime_path(run_dir, f"supervisor_state_{ROUND_ID}.json"),
@@ -454,12 +454,12 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 "DELETE FROM falsification_probes WHERE run_id = ? AND round_id = ?",
                 "DELETE FROM falsification_probe_snapshots WHERE run_id = ? AND round_id = ?",
                 "DELETE FROM round_readiness_assessments WHERE run_id = ? AND round_id = ?",
-                "DELETE FROM promotion_basis_items WHERE run_id = ? AND round_id = ?",
-                "DELETE FROM promotion_basis_records WHERE run_id = ? AND round_id = ?",
+                "DELETE FROM report_basis_freeze_items WHERE run_id = ? AND round_id = ?",
+                "DELETE FROM report_basis_freeze_records WHERE run_id = ? AND round_id = ?",
                 "DELETE FROM controller_snapshots WHERE run_id = ? AND round_id = ?",
                 "DELETE FROM gate_snapshots WHERE run_id = ? AND round_id = ?",
                 "DELETE FROM supervisor_snapshots WHERE run_id = ? AND round_id = ?",
-                "DELETE FROM promotion_freezes WHERE run_id = ? AND round_id = ?",
+                "DELETE FROM report_basis_freezes WHERE run_id = ? AND round_id = ?",
             ):
                 execute_db(db_path, query, (RUN_ID, ROUND_ID))
 
@@ -484,7 +484,7 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 ),
-                "promotion": phase2_state_surfaces.load_promotion_basis_wrapper(
+                "report_basis": phase2_state_surfaces.load_report_basis_freeze_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -527,12 +527,12 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 contexts["readiness"]["source"],
             )
 
-            self.assertIsNone(contexts["promotion"]["payload"])
-            self.assertTrue(contexts["promotion"]["artifact_present"])
-            self.assertFalse(contexts["promotion"]["payload_present"])
+            self.assertIsNone(contexts["report_basis"]["payload"])
+            self.assertTrue(contexts["report_basis"]["artifact_present"])
+            self.assertFalse(contexts["report_basis"]["payload_present"])
             self.assertEqual(
-                "orphaned-promotion-basis-artifact",
-                contexts["promotion"]["source"],
+                "orphaned-report-basis-freeze-artifact",
+                contexts["report_basis"]["source"],
             )
 
             self.assertIsNone(contexts["supervisor"]["payload"])
@@ -604,13 +604,13 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")),
             )
             self.assertDictEqual(
-                phase2_state_surfaces.load_promotion_basis_wrapper(
+                phase2_state_surfaces.load_report_basis_freeze_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 )["payload"],
                 load_json(
-                    promotion_path(run_dir, f"promoted_evidence_basis_{ROUND_ID}.json")
+                    report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json")
                 ),
             )
 
@@ -622,8 +622,8 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 supervisor_export["supervisor_status"],
             )
             self.assertEqual(
-                expected["supervisor_export"]["promotion_status"],
-                supervisor_export["promotion_status"],
+                expected["supervisor_export"]["report_basis_status"],
+                supervisor_export["report_basis_status"],
             )
             self.assertEqual(
                 expected["supervisor_export"]["reporting_handoff_status"],
@@ -685,8 +685,12 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 operator["query_readiness_assessments_command"],
             )
             self.assertIn(
-                "--object-kind promotion-basis",
-                operator["query_promotion_basis_command"],
+                "--object-kind runtime-control-freeze",
+                operator["query_runtime_control_freeze_command"],
+            )
+            self.assertIn(
+                "--object-kind report-basis-freeze",
+                operator["query_report_basis_freeze_command"],
             )
 
 

@@ -45,7 +45,7 @@ description: Publish a canonical council decision from the current decision draf
 - `deliberation_sync`
 - `analysis_sync`
 - `board_handoff`
-- The emitted canonical decision preserves normalized reporting-chain trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `promotion_source`, `decision_source`, `sociologist_report_source`, `environmentalist_report_source`, `db_path`, and `observed_inputs`.
+- The emitted canonical decision preserves normalized reporting-chain trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `report_basis_source`, `decision_source`, `sociologist_report_source`, `environmentalist_report_source`, `db_path`, and `observed_inputs`.
 - The canonical decision preserves `decision_packet`, memo sections, report refs, evidence refs, and decision trace ids for final report assembly.
 
 ## References

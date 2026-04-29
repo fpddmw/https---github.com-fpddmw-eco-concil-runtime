@@ -178,8 +178,8 @@ class AnalysisWorkflowTests(unittest.TestCase):
             self.assertEqual("approved-helper-view", review_payload["summary"]["decision_source"])
             self.assertEqual("review-evidence-sufficiency", review_payload["summary"]["skill"])
             self.assertNotIn("readiness_score", review_payload["review"])
-            self.assertNotIn("promote_allowed", review_payload["review"])
-            self.assertEqual("approval-gated-helper-view", review_artifact["review"]["wp4_helper_metadata"]["helper_status"])
+            self.assertNotIn("report_basis_freeze_allowed", review_payload["review"])
+            self.assertEqual("approval-gated-helper-view", review_artifact["review"]["helper_governance"]["helper_status"])
 
 
 if __name__ == "__main__":

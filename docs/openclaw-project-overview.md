@@ -42,9 +42,9 @@ OpenClaw 当前更准确的定位是：
 5. `reporting plane`
    - 已建立独立 reporting canonical plane、独立 query surface，并把 reporting artifact 降级为 DB-backed export；`materialize-reporting-exports` 已可从 SQLite 重建 handoff / decision / expert report / final publication 全套导出物。
 6. `runtime / control plane`
-   - `promotion-freeze / controller-state / gate-state / supervisor-state` 已进入 runtime canonical contract registry。
+   - `runtime-control-freeze / controller-state / gate-state / supervisor-state` 已进入 runtime canonical contract registry；报告证据 basis 则保留在 deliberation plane 的 `report-basis-freeze`。
    - deliberation DB 已新增 `controller_snapshots / gate_snapshots / supervisor_snapshots` 独立表，`query-control-objects` 也已提供对称的一等 query surface。
-   - `show-run-state` 与 phase-2 state wrapper 现在会优先消费这些 control rows，而不是只读 `promotion_freeze.raw_json` 或 runtime artifact。
+   - `show-run-state` 与 phase-2 state wrapper 现在会优先消费这些 control rows，而不是只读 runtime-control freeze 的 `raw_json` 或 runtime artifact。
 7. `agent entry / phase-2 orchestration`
    - `openclaw-agent` 轮次进入 phase-2 时，controller 与 agent entry 已能优先采用 `direct-council-advisory` plan，并把 `plan_source / planning_attempts` 写入 controller 状态；当 DB 中已有直接 `proposal / readiness-opinion / probe` 时，advisory queue 已能直接由这些对象编译，不再强制重跑 planner skill。与此同时，`next_actions / probes / readiness` 的 DB/artifact read surface 已从 `investigation_planning.py` 抽到独立模块，phase-2 主链对启发式规划模块的直连已经开始断开。
 
@@ -71,8 +71,8 @@ OpenClaw 当前更准确的定位是：
 1. SQLite 已经是 signal、analysis、board 状态查询与恢复的主工作面。
 2. result-set / lineage 与 deliberation state 已经形成稳定的 DB 写入面。
 3. reporting / publication 现在已经可以从 DB canonical objects 重新物化；artifact-only 文件也会被显式视为 orphaned export，而不是隐式恢复源。
-4. `next_actions / probes / readiness / promotion_basis / supervisor_state` 现在也都能从 DB canonical rows/snapshots 重建；phase-2 artifact 已降级为 export-only。
-5. `controller / gate / supervisor / promotion_freeze` 现在也拥有独立 runtime canonical rows 与 query surface；控制面不再只是 `promotion_freeze.raw_json` 的嵌套 snapshot。
+4. `next_actions / probes / readiness / report_basis_freeze / supervisor_state` 现在也都能从 DB canonical rows/snapshots 重建；phase-2 artifact 已降级为 export-only。
+5. `controller / gate / supervisor / runtime_control_freeze` 现在也拥有独立 runtime canonical rows 与 query surface；控制面不再只是 report-basis export 的嵌套 snapshot。
 
 尚未完全成立的部分：
 
@@ -94,8 +94,8 @@ OpenClaw 当前更准确的定位是：
 
 1. 议会流程的核心推进仍主要依赖 runtime 预定义阶段与 skill 链。
 2. agent 的写入能力主要表现为执行预设 command/skill，而不是基于共享状态自主形成可对抗的 deliberation proposal。
-3. promotion、publication、archive 仍完全在 agent 外环。
-4. 虽然 `openclaw-agent` 轮次已能由 DB 中的 council objects 直接编译 advisory queue，而且 controller 已不再强行插入默认 `promotion-gate` / post-gate 阶段、也不再内嵌 `promotion-gate` 特判，但 phase-2 仍围绕 readiness/promotion 语义和既有 gate handler 展开，agent 还不能真正自定义更宽的 phase-2 语义空间。
+3. report basis、publication、archive 仍完全在 agent 外环。
+4. 虽然 `openclaw-agent` 轮次已能由 DB 中的 council objects 直接编译 advisory queue，而且 controller 已不再强行插入默认 `report-basis-gate` / post-gate 阶段、也不再内嵌 `report-basis-gate` 特判，但 phase-2 仍围绕 readiness/report basis 语义和既有 gate handler 展开，agent 还不能真正自定义更宽的 phase-2 语义空间。
 
 这意味着当前系统适合“治理内协作”，不适合被称为“高自主议会”。
 
@@ -209,9 +209,9 @@ OpenClaw 当前更准确的定位是：
    - `next-action`
    - `probe`
    - `readiness-assessment`
-   - `promotion-basis`
+   - `report-basis-freeze`
 4. `runtime / control plane`
-   - `promotion-freeze`
+   - `runtime-control-freeze`
    - `controller-state`
    - `gate-state`
    - `supervisor-state`
@@ -276,29 +276,35 @@ OpenClaw 当前更准确的定位是：
 3. `openclaw-runtime-kernel-agent-refactor-checklist.md`
    - runtime kernel、agent 权限、阶段推进和控制面的重构/验收记录。
 4. `openclaw-skills-refactor-checklist-v2.md`
-   - skills 侧分批规划、WP0-WP3 已交付记录和后续总验收口径。
+   - skills 侧分批规划、baseline through query/investigator-submission tracks 已交付记录和后续总验收口径。
 5. `openclaw-skill-refactor-checklist.md`
    - 彻底重构执行清单与历史 batch 状态。
-6. `openclaw-wp4-skills-refactor-workplan.md`
-   - WP4 启发式 helper 重构的唯一施工清单。
+6. `openclaw-optional-analysis-skills-refactor-workplan.md`
+   - optional-analysis helper governance 启发式 helper 重构的唯一施工清单。
 
-规则/启发式 skill 的 freeze line 和后续 versioned audit records 不再单独成文，统一收敛到 `openclaw-wp4-skills-refactor-workplan.md`。
+规则/启发式 skill 的 freeze line 和后续 versioned audit records 不再单独成文，统一收敛到 `openclaw-optional-analysis-skills-refactor-workplan.md`。
 
 ## 10. 2026-04-29 验收结论
 
 已完成：
 
-1. 按当前代码与 targeted regression 复核，规划内硬目标已经达到可验收状态：runtime kernel 默认路径不再承担调查结论、议程生成或 promotion 主判断；阶段推进由 `moderator` transition request 与 `runtime-operator` approval/commit 链承接。
+1. 按当前代码与 targeted regression 复核，规划内硬目标已经达到可验收状态：runtime kernel 默认路径不再承担调查结论、议程生成或 report basis 主判断；阶段推进由 `moderator` transition request 与 `runtime-operator` approval/commit 链承接。
 2. investigator 默认入口已收敛为 `fetch / normalize / query -> finding / evidence-bundle -> optional proposal/readiness`，旧 analysis query helper 不再作为默认 role capability 暴露。
-3. WP4 helper、formal/public taxonomy cue、legacy analysis kind 已具备冻结/审批/审计元数据；报告正文 basis 由 DB `finding / evidence-bundle / proposal / review-comment / report-section-draft / readiness` 等对象承接。
+3. optional-analysis helper、formal/public taxonomy cue、legacy analysis kind 已具备冻结/审批/审计元数据；报告正文 basis 由 DB `finding / evidence-bundle / proposal / review-comment / report-section-draft / readiness` 等对象承接。
 4. reporting/publication 可在删除关键导出物后从 DB canonical rows 重建；三类 policy research case fixture 已覆盖政策争议、formal/public 混合争议和可核实经验事件。
 
 未完成：
 
-1. 仍未做 `promote-evidence-basis / promotion_status / promotion_path` 的 breaking CLI/schema/DB rename。
+1. 默认 gate/CLI/artifact 已切到 `report-basis-gate / apply-report-basis-gate / report_basis_gate_path`；report-basis-only 收尾已删除旧 promotion DB/CLI/path 兼容命名。
 2. 旧 analysis kind 与旧 canonical contract 未物理删除；当前处理方式是冻结为 compatibility query / replay surface。
-3. WP4 freeze line 仍是 `audit-pending` 台账，不等于所有规则已经完成人工审计。
-4. 本次验收未运行全仓 discover，只运行了与 runtime、WP4/WP7/WP8、approval、reporting、board 直接相关的 targeted regression。
+3. optional-analysis freeze line 仍是 `audit-pending` 台账，不等于所有规则已经完成人工审计。
+4. 早前验收曾只运行 targeted regression；本次补充验收已重新运行全仓 discover。
+
+2026-04-29 补充验收：
+
+1. `report-basis-gate` 已成为默认 stage/handler/operator/artifact 命名；旧 gate alias 已在 report-basis-only 收尾中删除。
+2. reporting 与 runtime surfaces 已输出 `report_basis_*` 镜像字段，并保留 `report_basis_*` 兼容双写。
+3. 已重新运行 `.venv/bin/python -m unittest discover -s tests -v`，`235` 项通过，用时 `216.605s`。
 
 新发现的问题：
 
@@ -309,3 +315,15 @@ OpenClaw 当前更准确的定位是：
 
 1. 不影响当前重构验收通过。
 2. 后续计划应聚焦命名/兼容迁移、完整人工审计与全仓回归，而不是继续扩大 runtime kernel 或恢复 claim matching 主链。
+
+2026-04-29 report-basis-only 补充验收：
+
+1. 旧 promotion 兼容层已按最新架构删除；代码和测试中不再保留 `promotion-gate / promotion_status / promote_allowed / promotion_path / promotion/` 默认路径。
+2. DB schema、runtime control、reporting、publication 与 archive/history context 已统一到 `report_basis_*`。
+3. 已运行 `.venv/bin/python -m compileall -q eco-concil-runtime/src skills tests`，通过。
+4. 已运行目标回归 `84` 项，通过，用时 `81.445s`。
+5. 已运行 `.venv/bin/python -m unittest discover -s tests -v`，`235` 项通过，用时 `222.805s`。
+
+剩余风险：
+
+1. optional-analysis 的 legacy/audit-only 词汇仍存在，但它们表示冻结治理和人工审计状态，不再承担旧架构兼容目标。

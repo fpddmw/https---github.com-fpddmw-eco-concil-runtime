@@ -22,7 +22,7 @@ description: Build retrieval-ready history context for the current round by quer
 - Reads `run_dir/reporting/round_readiness_<round_id>.json` by default when present.
 - Reads `run_dir/investigation/next_actions_<round_id>.json` by default when present.
 - Reads `run_dir/investigation/falsification_probes_<round_id>.json` by default when present.
-- Reads `run_dir/promotion/promoted_evidence_basis_<round_id>.json` by default when present.
+- Reads `run_dir/report_basis/frozen_report_basis_<round_id>.json` by default when present.
 - Reads shared claim/observation scope result sets from `run_dir/analytics/signal_plane.sqlite` first when available.
 - Reads `run_dir/analytics/claim_scope_proposals_<round_id>.json` and `run_dir/analytics/observation_scope_proposals_<round_id>.json` as compatible artifact paths when present.
 - Reads `run_dir/analytics/signal_plane.sqlite` by default when present.

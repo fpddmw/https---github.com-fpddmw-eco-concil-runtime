@@ -1,6 +1,6 @@
 ---
 name: archive-case-library
-description: Archive one run's canonical board, reporting, and promotion artifacts into a compact case library SQLite store for future historical retrieval.
+description: Archive one run's canonical board, reporting, and report basis artifacts into a compact case library SQLite store for future historical retrieval.
 ---
 
 # Eco Archive Case Library
@@ -11,7 +11,7 @@ description: Archive one run's canonical board, reporting, and promotion artifac
 - Emit one auditable archive import snapshot for later history retrieval.
 
 ## Triggering Conditions
-- The run already produced board, promotion, or reporting artifacts.
+- The run already produced board, report basis, or reporting artifacts.
 - Need cross-run case reuse instead of only within-run evidence review.
 - Need later history-context assembly to retrieve prior analogous cases.
 
@@ -25,7 +25,7 @@ description: Archive one run's canonical board, reporting, and promotion artifac
 - Reads `run_dir/investigation/next_actions_<round_id>.json` by default when present.
 - Reads `run_dir/investigation/falsification_probes_<round_id>.json` by default when present.
 - Reads `run_dir/reporting/round_readiness_<round_id>.json` by default when present.
-- Reads `run_dir/promotion/promoted_evidence_basis_<round_id>.json` by default when present.
+- Reads `run_dir/report_basis/frozen_report_basis_<round_id>.json` by default when present.
 - Reads `run_dir/reporting/reporting_handoff_<round_id>.json` by default when present.
 - Reads `run_dir/reporting/council_decision_<round_id>.json` by default when present.
 - Reads `run_dir/reporting/council_decision_draft_<round_id>.json` by default when present.

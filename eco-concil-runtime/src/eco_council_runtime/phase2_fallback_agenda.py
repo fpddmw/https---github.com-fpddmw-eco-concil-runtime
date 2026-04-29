@@ -17,7 +17,7 @@ from .phase2_fallback_agenda_profile import (
     build_fallback_agenda_context,
     default_fallback_agenda_profile,
     fallback_agenda_source,
-    prepare_promotion_action,
+    prepare_report_basis_action,
 )
 from .phase2_fallback_common import (
     excerpt_text,

@@ -141,7 +141,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         run_dir,
         run_id=run_id,
         round_id=round_id,
-        transition_kind="promote-evidence-basis",
+        transition_kind="freeze-report-basis",
     )
     run_kernel(
         "supervise-round",

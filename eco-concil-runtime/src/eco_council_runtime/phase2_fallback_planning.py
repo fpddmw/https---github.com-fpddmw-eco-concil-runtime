@@ -22,7 +22,7 @@ from .phase2_fallback_agenda import (  # noqa: F401
     controversy_context_counts,
     default_fallback_agenda_profile,
     fallback_agenda_source,
-    prepare_promotion_action,
+    prepare_report_basis_action,
     role_from_coverage,
     score_action,
 )

@@ -1,6 +1,6 @@
 ---
 name: export-research-issue-map
-description: WP4 optional export helper for research issue navigation maps. It emits traceability nodes and edges, not a controversy conclusion graph.
+description: Optional-analysis export helper for research issue navigation maps. It emits traceability nodes and edges, not a controversy conclusion graph.
 ---
 
 # Export Research Issue Map

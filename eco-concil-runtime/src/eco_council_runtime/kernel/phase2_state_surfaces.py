@@ -18,8 +18,8 @@ from .deliberation_plane import (
     load_moderator_action_snapshot,
     load_orchestration_plan_record,
     load_orchestration_plan_steps,
-    load_promotion_freeze_record,
-    load_promotion_basis_record,
+    load_report_basis_freeze_record,
+    load_runtime_control_freeze_record,
     load_reporting_handoff_record,
     load_round_readiness_assessment,
     load_supervisor_snapshot_record,
@@ -57,7 +57,7 @@ def extra_reporting_blockers(payload: dict[str, Any]) -> list[Any]:
 def enrich_supervisor_reporting_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload)
     gate_state = reporting_gate_state(
-        promotion_status=normalized.get("promotion_status"),
+        report_basis_status=normalized.get("report_basis_status"),
         readiness_status=normalized.get("readiness_status"),
         supervisor_status=normalized.get("supervisor_status"),
         require_supervisor=True,
@@ -65,7 +65,7 @@ def enrich_supervisor_reporting_payload(payload: dict[str, Any]) -> dict[str, An
         reporting_blockers_value=extra_reporting_blockers(normalized),
         handoff_status=normalized.get("reporting_handoff_status"),
     )
-    normalized["promotion_status"] = maybe_text(gate_state.get("promotion_status"))
+    normalized["report_basis_status"] = maybe_text(gate_state.get("report_basis_status"))
     normalized["readiness_status"] = maybe_text(gate_state.get("readiness_status"))
     normalized["supervisor_status"] = maybe_text(gate_state.get("supervisor_status"))
     normalized["reporting_ready"] = bool(gate_state.get("reporting_ready"))
@@ -80,22 +80,22 @@ def enrich_supervisor_reporting_payload(payload: dict[str, Any]) -> dict[str, An
 def enrich_reporting_record_payload(
     payload: dict[str, Any],
     *,
-    default_promotion_status: Any = "",
+    default_report_basis_status: Any = "",
     default_readiness_status: Any = "",
     default_supervisor_status: Any = "",
     require_supervisor: bool = True,
 ) -> dict[str, Any]:
     normalized = dict(payload)
-    explicit_promotion_status = maybe_text(normalized.get("promotion_status"))
+    explicit_report_basis_status = maybe_text(normalized.get("report_basis_status"))
     explicit_readiness_status = maybe_text(normalized.get("readiness_status"))
     explicit_supervisor_status = maybe_text(normalized.get("supervisor_status"))
     explicit_handoff_status = maybe_text(normalized.get("handoff_status"))
     explicit_blockers = extra_reporting_blockers(normalized)
     if (
-        not explicit_promotion_status
+        not explicit_report_basis_status
         and not explicit_readiness_status
         and not explicit_supervisor_status
-        and not maybe_text(default_promotion_status)
+        and not maybe_text(default_report_basis_status)
         and not maybe_text(default_readiness_status)
         and not maybe_text(default_supervisor_status)
     ):
@@ -105,7 +105,7 @@ def enrich_reporting_record_payload(
             normalized["reporting_blockers"] = []
         return normalized
     gate_state = reporting_gate_state(
-        promotion_status=explicit_promotion_status or maybe_text(default_promotion_status),
+        report_basis_status=explicit_report_basis_status or maybe_text(default_report_basis_status),
         readiness_status=explicit_readiness_status or maybe_text(default_readiness_status),
         supervisor_status=explicit_supervisor_status or maybe_text(default_supervisor_status),
         require_supervisor=require_supervisor,
@@ -113,7 +113,7 @@ def enrich_reporting_record_payload(
         reporting_blockers_value=explicit_blockers,
         handoff_status=explicit_handoff_status,
     )
-    normalized["promotion_status"] = maybe_text(gate_state.get("promotion_status"))
+    normalized["report_basis_status"] = maybe_text(gate_state.get("report_basis_status"))
     normalized["readiness_status"] = maybe_text(gate_state.get("readiness_status"))
     normalized["supervisor_status"] = maybe_text(gate_state.get("supervisor_status"))
     normalized["reporting_ready"] = bool(gate_state.get("reporting_ready"))
@@ -139,7 +139,7 @@ def build_reporting_surface(
     handoff = (
         enrich_reporting_record_payload(
             handoff_payload,
-            default_promotion_status=supervisor.get("promotion_status"),
+            default_report_basis_status=supervisor.get("report_basis_status"),
             default_readiness_status=supervisor.get("readiness_status"),
             default_supervisor_status=supervisor.get("supervisor_status"),
             require_supervisor=True,
@@ -150,8 +150,8 @@ def build_reporting_surface(
     decision_draft = (
         enrich_reporting_record_payload(
             decision_draft_payload,
-            default_promotion_status=handoff.get("promotion_status")
-            or supervisor.get("promotion_status"),
+            default_report_basis_status=handoff.get("report_basis_status")
+            or supervisor.get("report_basis_status"),
             default_readiness_status=handoff.get("readiness_status")
             or supervisor.get("readiness_status"),
             default_supervisor_status=handoff.get("supervisor_status")
@@ -164,8 +164,8 @@ def build_reporting_surface(
     decision = (
         enrich_reporting_record_payload(
             decision_payload,
-            default_promotion_status=handoff.get("promotion_status")
-            or supervisor.get("promotion_status"),
+            default_report_basis_status=handoff.get("report_basis_status")
+            or supervisor.get("report_basis_status"),
             default_readiness_status=handoff.get("readiness_status")
             or supervisor.get("readiness_status"),
             default_supervisor_status=handoff.get("supervisor_status")
@@ -206,7 +206,7 @@ def build_reporting_surface(
         "reporting_blockers": list_items(anchor_payload.get("reporting_blockers")),
         "handoff_status": maybe_text(anchor_payload.get("handoff_status"))
         or maybe_text(anchor_payload.get("reporting_handoff_status")),
-        "promotion_status": maybe_text(anchor_payload.get("promotion_status")),
+        "report_basis_status": maybe_text(anchor_payload.get("report_basis_status")),
         "readiness_status": maybe_text(anchor_payload.get("readiness_status")),
         "supervisor_status": maybe_text(anchor_payload.get("supervisor_status")),
         "publication_readiness": maybe_text(
@@ -374,46 +374,46 @@ def load_round_readiness_wrapper(
     }
 
 
-def load_promotion_basis_wrapper(
+def load_report_basis_freeze_wrapper(
     run_dir: str | Path,
     *,
     run_id: str,
     round_id: str,
-    promotion_path: str = "",
+    report_basis_path: str = "",
 ) -> dict[str, Any]:
     run_dir_path = Path(run_dir).expanduser().resolve()
-    promotion_file = resolve_path(
+    report_basis_file = resolve_path(
         run_dir_path,
-        promotion_path,
-        f"promotion/promoted_evidence_basis_{round_id}.json",
+        report_basis_path,
+        f"report_basis/frozen_report_basis_{round_id}.json",
     )
-    promotion_payload = load_promotion_basis_record(
+    report_basis_payload = load_report_basis_freeze_record(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
     )
-    if isinstance(promotion_payload, dict):
-        payload = dict(promotion_payload)
-        payload["promotion_source"] = (
-            maybe_text(payload.get("promotion_source"))
-            or "deliberation-plane-promotion-basis"
+    if isinstance(report_basis_payload, dict):
+        payload = dict(report_basis_payload)
+        payload["report_basis_source"] = (
+            maybe_text(payload.get("report_basis_source"))
+            or "deliberation-plane-report-basis-freeze"
         )
         return {
             "payload": payload,
-            "source": "deliberation-plane-promotion-basis",
-            "artifact_path": str(promotion_file),
-            "artifact_present": promotion_file.exists(),
+            "source": "deliberation-plane-report-basis-freeze",
+            "artifact_path": str(report_basis_file),
+            "artifact_present": report_basis_file.exists(),
             "payload_present": True,
         }
-    if promotion_file.exists():
+    if report_basis_file.exists():
         return orphaned_artifact_wrapper(
-            promotion_file,
-            source="orphaned-promotion-basis-artifact",
+            report_basis_file,
+            source="orphaned-report-basis-freeze-artifact",
         )
     return {
         "payload": None,
-        "source": "missing-promotion",
-        "artifact_path": str(promotion_file),
+        "source": "missing-report_basis",
+        "artifact_path": str(report_basis_file),
         "artifact_present": False,
         "payload_present": False,
     }
@@ -505,7 +505,7 @@ def load_controller_state_wrapper(
             "artifact_present": controller_file.exists(),
             "payload_present": True,
         }
-    freeze_payload = load_promotion_freeze_record(
+    freeze_payload = load_runtime_control_freeze_record(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
@@ -519,7 +519,7 @@ def load_controller_state_wrapper(
         if controller_snapshot:
             return {
                 "payload": controller_snapshot,
-                "source": "deliberation-plane-promotion-freeze",
+                "source": "deliberation-plane-report-basis-freeze",
                 "artifact_path": str(controller_file),
                 "artifact_present": controller_file.exists(),
                 "payload_present": True,
@@ -544,8 +544,8 @@ def load_controller_state_wrapper(
                         freeze_payload.get("readiness_status")
                     ),
                     "gate_status": maybe_text(freeze_payload.get("gate_status")),
-                    "promotion_status": maybe_text(
-                        freeze_payload.get("promotion_status")
+                    "report_basis_status": maybe_text(
+                        freeze_payload.get("report_basis_status")
                     ),
                     "resume_status": "",
                     "current_stage": "",
@@ -577,7 +577,7 @@ def load_controller_state_wrapper(
                     "artifacts": artifacts,
                     "failure": {},
                 },
-                "source": "deliberation-plane-promotion-freeze-summary",
+                "source": "deliberation-plane-report-basis-freeze-summary",
                 "artifact_path": str(controller_file),
                 "artifact_present": controller_file.exists(),
                 "payload_present": True,
@@ -596,19 +596,20 @@ def load_controller_state_wrapper(
     }
 
 
-def load_promotion_gate_wrapper(
+def load_report_basis_gate_wrapper(
     run_dir: str | Path,
     *,
     run_id: str,
     round_id: str,
-    promotion_gate_path: str = "",
+    report_basis_gate_path: str = "",
 ) -> dict[str, Any]:
     run_dir_path = Path(run_dir).expanduser().resolve()
     gate_file = resolve_path(
         run_dir_path,
-        promotion_gate_path,
-        f"runtime/promotion_gate_{round_id}.json",
+        report_basis_gate_path,
+        f"runtime/report_basis_gate_{round_id}.json",
     )
+    artifact_file = gate_file
     gate_payload = load_gate_snapshot_record(
         run_dir_path,
         run_id=run_id,
@@ -618,11 +619,11 @@ def load_promotion_gate_wrapper(
         return {
             "payload": gate_payload,
             "source": "deliberation-plane-gate",
-            "artifact_path": str(gate_file),
-            "artifact_present": gate_file.exists(),
+            "artifact_path": str(artifact_file),
+            "artifact_present": artifact_file.exists(),
             "payload_present": True,
         }
-    freeze_payload = load_promotion_freeze_record(
+    freeze_payload = load_runtime_control_freeze_record(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
@@ -636,9 +637,9 @@ def load_promotion_gate_wrapper(
         if gate_snapshot:
             return {
                 "payload": gate_snapshot,
-                "source": "deliberation-plane-promotion-freeze",
-                "artifact_path": str(gate_file),
-                "artifact_present": gate_file.exists(),
+                "source": "deliberation-plane-report-basis-freeze",
+                "artifact_path": str(artifact_file),
+                "artifact_present": artifact_file.exists(),
                 "payload_present": True,
             }
         if maybe_text(freeze_payload.get("gate_status")):
@@ -648,15 +649,24 @@ def load_promotion_gate_wrapper(
                     "round_id": maybe_text(freeze_payload.get("round_id"))
                     or round_id,
                     "generated_at_utc": maybe_text(freeze_payload.get("updated_at_utc")),
-                    "stage_name": "promotion-gate",
-                    "gate_handler": "promotion-gate",
+                    "stage_name": "report-basis-gate",
+                    "gate_handler": "report-basis-gate",
+                    "gate_semantics": "report-basis-gate",
                     "gate_status": maybe_text(freeze_payload.get("gate_status")),
+                    "report_basis_gate_status": maybe_text(
+                        freeze_payload.get("report_basis_gate_status")
+                    ),
                     "readiness_status": maybe_text(
                         freeze_payload.get("readiness_status")
                     ),
-                    "promote_allowed": bool(freeze_payload.get("promote_allowed")),
+                    "report_basis_freeze_allowed": bool(
+                        freeze_payload.get("report_basis_freeze_allowed")
+                    ),
+                    "report_basis_status": maybe_text(
+                        freeze_payload.get("report_basis_status")
+                    ),
                     "decision_source": "",
-                    "promotion_resolution_mode": "",
+                    "report_basis_resolution_mode": "",
                     "gate_reasons": (
                         freeze_payload.get("gate_reasons", [])
                         if isinstance(freeze_payload.get("gate_reasons"), list)
@@ -676,22 +686,22 @@ def load_promotion_gate_wrapper(
                     ),
                     "warnings": [],
                     "readiness_path": "",
-                    "output_path": str(gate_file),
+                    "output_path": str(artifact_file),
                 },
-                "source": "deliberation-plane-promotion-freeze-summary",
-                "artifact_path": str(gate_file),
-                "artifact_present": gate_file.exists(),
+                "source": "deliberation-plane-report-basis-freeze-summary",
+                "artifact_path": str(artifact_file),
+                "artifact_present": artifact_file.exists(),
                 "payload_present": True,
             }
-    if gate_file.exists():
+    if artifact_file.exists():
         return orphaned_artifact_wrapper(
-            gate_file,
-            source="orphaned-promotion-gate-artifact",
+            artifact_file,
+            source="orphaned-report-basis-gate-artifact",
         )
     return {
         "payload": None,
-        "source": "missing-promotion-gate",
-        "artifact_path": str(gate_file),
+        "source": "missing-report-basis-gate",
+        "artifact_path": str(artifact_file),
         "artifact_present": False,
         "payload_present": False,
     }
@@ -724,7 +734,7 @@ def load_supervisor_state_wrapper(
             "artifact_present": supervisor_file.exists(),
             "payload_present": True,
         }
-    freeze_payload = load_promotion_freeze_record(
+    freeze_payload = load_runtime_control_freeze_record(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
@@ -760,8 +770,8 @@ def load_supervisor_state_wrapper(
                         freeze_payload.get("readiness_status")
                     ),
                     "gate_status": maybe_text(freeze_payload.get("gate_status")),
-                    "promotion_status": maybe_text(
-                        freeze_payload.get("promotion_status")
+                    "report_basis_status": maybe_text(
+                        freeze_payload.get("report_basis_status")
                     ),
                     "planning_mode": maybe_text(
                         freeze_payload.get("planning_mode")
@@ -778,7 +788,7 @@ def load_supervisor_state_wrapper(
             )
             return {
                 "payload": payload,
-                "source": "deliberation-plane-promotion-freeze",
+                "source": "deliberation-plane-report-basis-freeze",
                 "artifact_path": str(supervisor_file),
                 "artifact_present": supervisor_file.exists(),
                 "payload_present": True,
@@ -1024,8 +1034,8 @@ __all__ = [
     "load_falsification_probe_wrapper",
     "load_next_actions_wrapper",
     "load_orchestration_plan_wrapper",
-    "load_promotion_basis_wrapper",
-    "load_promotion_gate_wrapper",
+    "load_report_basis_freeze_wrapper",
+    "load_report_basis_gate_wrapper",
     "load_reporting_handoff_wrapper",
     "load_round_readiness_wrapper",
     "load_supervisor_state_wrapper",

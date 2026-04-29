@@ -1,6 +1,6 @@
 ---
 name: compare-formal-public-footprints
-description: WP4 optional helper for comparing formal-record and public-discourse footprints. It describes overlap and absence cues without alignment scoring.
+description: Optional-analysis helper for comparing formal-record and public-discourse footprints. It describes overlap and absence cues without alignment scoring.
 ---
 
 # Compare Formal Public Footprints

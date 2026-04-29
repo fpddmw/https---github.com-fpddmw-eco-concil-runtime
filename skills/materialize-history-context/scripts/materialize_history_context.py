@@ -27,7 +27,7 @@ from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
 from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
-    load_promotion_basis_wrapper,
+    load_report_basis_freeze_wrapper,
     load_round_readiness_wrapper,
 )
 
@@ -283,14 +283,14 @@ def build_history_query(
         if isinstance(probes_wrapper.get("payload"), dict)
         else {}
     )
-    promotion_wrapper = load_promotion_basis_wrapper(
+    report_basis_wrapper = load_report_basis_freeze_wrapper(
         run_dir,
         run_id=run_id,
         round_id=round_id,
     )
-    promotion = (
-        promotion_wrapper.get("payload")
-        if isinstance(promotion_wrapper.get("payload"), dict)
+    report_basis = (
+        report_basis_wrapper.get("payload")
+        if isinstance(report_basis_wrapper.get("payload"), dict)
         else {}
     )
     analysis_warnings: list[dict[str, str]] = []
@@ -379,7 +379,7 @@ def build_history_query(
         + (["meteorology-background"] if "meteorology" in metric_families else [])
         + (["precipitation-hydrology"] if "hydrology" in metric_families else [])
         + ["gate-blocking" for _ in [1] if maybe_text(readiness.get("readiness_status")) != "ready"]
-        + ["promotion-withheld" for _ in [1] if maybe_text(promotion.get("promotion_status")) != "promoted"]
+        + ["report-basis-withheld" for _ in [1] if maybe_text(report_basis.get("report_basis_status")) != "frozen"]
     )
     alternatives = unique_texts(
         [maybe_text(item.get("title") or item.get("challenge_statement")) for item in open_challenges[:4] if isinstance(item, dict)]

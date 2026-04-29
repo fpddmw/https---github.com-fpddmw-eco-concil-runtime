@@ -744,7 +744,7 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
         REQUEST_STATUS_REJECTED,
         TRANSITION_KIND_CLOSE_ROUND,
         TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
-        TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
+        TRANSITION_KIND_FREEZE_REPORT_BASIS,
         load_transition_requests,
     )
 
@@ -826,7 +826,7 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
                 f"- Query transition requests: `{kernel_command('query-control-objects', '--run-dir', str(run_dir), '--object-kind', 'transition-request', '--run-id', run_id, '--round-id', round_id)}`",
                 f"- Query approvals: `{kernel_command('query-control-objects', '--run-dir', str(run_dir), '--object-kind', 'transition-approval', '--run-id', run_id, '--round-id', round_id)}`",
                 f"- Query rejections: `{kernel_command('query-control-objects', '--run-dir', str(run_dir), '--object-kind', 'transition-rejection', '--run-id', run_id, '--round-id', round_id)}`",
-                f"- Moderator request promotion: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS, '--rationale', '<rationale>', actor_role='moderator')}`",
+                f"- Moderator request report-basis freeze: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_FREEZE_REPORT_BASIS, '--rationale', '<rationale>', actor_role='moderator')}`",
                 f"- Moderator request close-round: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_CLOSE_ROUND, '--rationale', '<rationale>', actor_role='moderator')}`",
                 f"- Moderator request follow-up round: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_OPEN_INVESTIGATION_ROUND, '--target-round-id', '<target_round_id>', '--source-round-id', round_id, '--rationale', '<rationale>', actor_role='moderator')}`",
                 f"- Operator approve request: `{kernel_command('approve-phase-transition', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--approval-reason', '<approval_reason>', actor_role='runtime-operator')}`",

@@ -114,7 +114,7 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
     def test_optional_analysis_registry_entries_have_freeze_metadata(self) -> None:
         from eco_council_runtime.kernel.skill_registry import (
             SKILL_LAYER_OPTIONAL_ANALYSIS,
-            WP4_ALLOWED_HELPER_DECISION_SOURCES,
+            OPTIONAL_HELPER_ALLOWED_DECISION_SOURCES,
             skill_registry_snapshot,
         )
 
@@ -129,18 +129,18 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
         for skill in optional_skills:
             with self.subTest(skill=skill["skill_name"]):
                 self.assertTrue(skill["requires_operator_approval"])
-                metadata = skill.get("wp4_helper_metadata", {})
+                metadata = skill.get("helper_governance", {})
                 self.assertTrue(metadata.get("rule_id"))
                 self.assertEqual(
-                    "wp4-freeze-line-2026-04-28",
+                    "optional-analysis-freeze-line-2026-04-28",
                     metadata.get("rule_version"),
                 )
                 self.assertIn(
                     metadata.get("decision_source"),
-                    WP4_ALLOWED_HELPER_DECISION_SOURCES,
+                    OPTIONAL_HELPER_ALLOWED_DECISION_SOURCES,
                 )
                 self.assertIn("approval-required", metadata.get("audit_status", ""))
-                self.assertTrue(metadata.get("wp4_destination"))
+                self.assertTrue(metadata.get("helper_destination"))
 
     def test_analysis_kind_governance_freezes_legacy_report_basis_paths(self) -> None:
         from eco_council_runtime.kernel.analysis_plane import (
@@ -231,7 +231,7 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
         self.assertGreaterEqual(len(semantics["taxonomy_family_records"]), 6)
 
         taxonomy_policy = resolve_skill_policy("apply-approved-formal-public-taxonomy")
-        helper_metadata = taxonomy_policy["wp4_helper_metadata"]
+        helper_metadata = taxonomy_policy["helper_governance"]
         self.assertEqual(
             FORMAL_PUBLIC_TAXONOMY_VERSION,
             helper_metadata["taxonomy_version"],

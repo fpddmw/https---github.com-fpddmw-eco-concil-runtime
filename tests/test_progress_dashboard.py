@@ -17,58 +17,53 @@ from eco_council_runtime.kernel.progress_dashboard import render_dashboard_from_
 
 class ProgressDashboardTests(unittest.TestCase):
     def test_repo_dashboard_renders_current_control_view(self) -> None:
-        model, markdown_text = render_dashboard_from_paths(
-            master_plan_path=WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-master-plan.md",
-            progress_log_path=WORKSPACE_ROOT / "docs" / "archive" / "openclaw-db-first-progress-log.md",
-        )
+        master_plan_text = """
+# Plan
 
-        self.assertGreaterEqual(len(model.stage_definitions), 10)
+### 5.1 Route A: Runtime / Governance Stabilization
+
+| 阶段 | 名称 | 目标 | 当前状态 | 退出标准 |
+| --- | --- | --- | --- | --- |
+| `A1` | Runtime Baseline | stabilize | `completed` | stable |
+| `A2` | Agent Entry Gate | operator entry | `completed` | visible |
+
+## 7. 推荐的未来数次开发顺序
+
+| 顺序 | 阶段 | 路线 | 为什么先做 | 预期独立交付 |
+| --- | --- | --- | --- | --- |
+"""
+        progress_log_text = """
+# Log
+
+## 2026-04-01 A1: Runtime Baseline
+
+Status: completed
+
+## 2026-04-06 A2: Agent Entry Gate
+
+Status: completed
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            master_path = root / "plan.md"
+            progress_path = root / "log.md"
+            master_path.write_text(master_plan_text.strip() + "\n", encoding="utf-8")
+            progress_path.write_text(progress_log_text.strip() + "\n", encoding="utf-8")
+
+            model, markdown_text = render_dashboard_from_paths(
+                master_plan_path=master_path,
+                progress_log_path=progress_path,
+            )
+
+        self.assertEqual(2, len(model.stage_definitions))
         self.assertIn(
-            "| Current active stages | none<br>Last completed delivery: 2026-04-06 `A4` Agent Entry Gate |",
+            "| Current active stages | none<br>Last completed delivery: 2026-04-06 `A2` Agent Entry Gate |",
             markdown_text,
         )
-        self.assertIn(
-            "| Next recommended stage | none |",
-            markdown_text,
-        )
+        self.assertIn("| Next recommended stage | none |", markdown_text)
         self.assertIn("| Blocked stages | none |", markdown_text)
-        self.assertIn(
-            "2026-04-06 `A4` Agent Entry Gate", markdown_text
-        )
-        self.assertIn(
-            "| 2026-04-06 | `C2.1` | `completed` | Candidate / Cluster Result Migration |",
-            markdown_text,
-        )
-        self.assertIn(
-            "| 2026-04-06 | `A3` | `completed` | Governance Regression Hardening |",
-            markdown_text,
-        )
-        self.assertIn("2026-04-06 `A4` Agent Entry Gate", markdown_text)
-        self.assertIn(
-            "| `D` Program Control / Documentation | `4 / 4` | none | none | none | 2026-04-06 `D4` Milestone / Demo Packaging |",
-            markdown_text,
-        )
-        self.assertIn("| `A3` | `A` | `completed` | Governance Regression Hardening | 2026-04-06 | 1 |", markdown_text)
-        self.assertIn(
-            "| `A` Runtime / Governance Stabilization | `6 / 6` | none | none | none | 2026-04-06 `A4` Agent Entry Gate |",
-            markdown_text,
-        )
-        self.assertIn("| `A4` | `A` | `completed` | Agent Entry Gate | 2026-04-06 | 1 |", markdown_text)
-        self.assertIn("| Completed stage count | `25 / 25` |", markdown_text)
+        self.assertIn("| Completed stage count | `2 / 2` |", markdown_text)
         self.assertIn("| Planned stage count | `0` |", markdown_text)
-        self.assertIn(
-            "| `C2.2` | `C` | `completed` | Non-Python Query Surface | 2026-04-06 | 1 |",
-            markdown_text,
-        )
-        self.assertIn(
-            "| `C2.1` | `C` | `completed` | Candidate / Cluster Result Migration | 2026-04-06 | 1 |",
-            markdown_text,
-        )
-        self.assertIn("| `D3` | `D` | `completed` | Progress Dashboard Conventions | 2026-04-04 | 1 |", markdown_text)
-        self.assertIn("| `D4` | `D` | `completed` | Milestone / Demo Packaging | 2026-04-06 | 1 |", markdown_text)
-        self.assertIn("| `B2` | `B` | `completed` | Board Write-Path Migration | 2026-04-03 | 2 |", markdown_text)
-        self.assertIn("| `B3` | `B` | `completed` | Moderator Control Consolidation | 2026-04-06 | 5 |", markdown_text)
-        self.assertIn("| `C1` | `C` | `completed` | Coverage Analysis Query Surface | 2026-04-02 | 1 |", markdown_text)
 
     def test_dashboard_surfaces_active_and_blocked_stages(self) -> None:
         master_plan_text = """
