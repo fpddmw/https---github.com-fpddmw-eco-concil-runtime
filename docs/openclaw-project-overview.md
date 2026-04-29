@@ -283,3 +283,29 @@ OpenClaw 当前更准确的定位是：
    - WP4 启发式 helper 重构的唯一施工清单。
 
 规则/启发式 skill 的 freeze line 和后续 versioned audit records 不再单独成文，统一收敛到 `openclaw-wp4-skills-refactor-workplan.md`。
+
+## 10. 2026-04-29 验收结论
+
+已完成：
+
+1. 按当前代码与 targeted regression 复核，规划内硬目标已经达到可验收状态：runtime kernel 默认路径不再承担调查结论、议程生成或 promotion 主判断；阶段推进由 `moderator` transition request 与 `runtime-operator` approval/commit 链承接。
+2. investigator 默认入口已收敛为 `fetch / normalize / query -> finding / evidence-bundle -> optional proposal/readiness`，旧 analysis query helper 不再作为默认 role capability 暴露。
+3. WP4 helper、formal/public taxonomy cue、legacy analysis kind 已具备冻结/审批/审计元数据；报告正文 basis 由 DB `finding / evidence-bundle / proposal / review-comment / report-section-draft / readiness` 等对象承接。
+4. reporting/publication 可在删除关键导出物后从 DB canonical rows 重建；三类 policy research case fixture 已覆盖政策争议、formal/public 混合争议和可核实经验事件。
+
+未完成：
+
+1. 仍未做 `promote-evidence-basis / promotion_status / promotion_path` 的 breaking CLI/schema/DB rename。
+2. 旧 analysis kind 与旧 canonical contract 未物理删除；当前处理方式是冻结为 compatibility query / replay surface。
+3. WP4 freeze line 仍是 `audit-pending` 台账，不等于所有规则已经完成人工审计。
+4. 本次验收未运行全仓 discover，只运行了与 runtime、WP4/WP7/WP8、approval、reporting、board 直接相关的 targeted regression。
+
+新发现的问题：
+
+1. 本文件前文仍保留较多“下一阶段目标/当前问题”的历史表述；阅读时应以本节和各 checklist 的最新验收回写为准。
+2. 旧 workplan/checklist 中仍有未勾选的物理删除、彻底改名、完整审计类条目；这些不是默认主链阻塞，但应在后续 breaking migration 中单列。
+
+是否影响后续计划：
+
+1. 不影响当前重构验收通过。
+2. 后续计划应聚焦命名/兼容迁移、完整人工审计与全仓回归，而不是继续扩大 runtime kernel 或恢复 claim matching 主链。

@@ -337,6 +337,58 @@ SUBMITTER_TYPE_RULES: dict[str, tuple[str, ...]] = {
     "individual": ("citizen", "resident", "individual", "concerned citizen"),
 }
 
+FORMAL_PUBLIC_TAXONOMY_VERSION = "formal-public-taxonomy-freeze-2026-04-29"
+FORMAL_PUBLIC_TAXONOMY_AUDIT_STATUS = "default-frozen; approval-required; audit-pending"
+FORMAL_PUBLIC_TAXONOMY_APPROVAL_REF = "required:approved_taxonomy_record"
+FORMAL_PUBLIC_TAXONOMY_AUDIT_REF = (
+    "docs/openclaw-wp4-skills-refactor-workplan.md#8"
+)
+
+FORMAL_PUBLIC_TAXONOMY_FAMILY_RECORDS: tuple[dict[str, Any], ...] = (
+    {
+        "taxonomy_family_id": "formal-public-issue-labels",
+        "rule_id": "TAX-FORMAL-PUBLIC-ISSUE-001",
+        "field_name": "issue_labels",
+        "label_count": len(ISSUE_RULES),
+        "output_semantics": "candidate issue labels",
+    },
+    {
+        "taxonomy_family_id": "formal-public-concern-facets",
+        "rule_id": "TAX-FORMAL-PUBLIC-CONCERN-001",
+        "field_name": "concern_facets",
+        "label_count": len(CONCERN_RULES),
+        "output_semantics": "candidate concern facets",
+    },
+    {
+        "taxonomy_family_id": "formal-public-citation-types",
+        "rule_id": "TAX-FORMAL-PUBLIC-CITATION-001",
+        "field_name": "evidence_citation_types",
+        "label_count": len(CITATION_RULES),
+        "output_semantics": "candidate citation type cues",
+    },
+    {
+        "taxonomy_family_id": "formal-public-stance-hints",
+        "rule_id": "TAX-FORMAL-PUBLIC-STANCE-001",
+        "field_name": "stance_hint",
+        "label_count": len(STANCE_RULES),
+        "output_semantics": "candidate stance cue",
+    },
+    {
+        "taxonomy_family_id": "formal-public-submitter-types",
+        "rule_id": "TAX-FORMAL-PUBLIC-SUBMITTER-001",
+        "field_name": "submitter_type",
+        "label_count": len(SUBMITTER_TYPE_RULES),
+        "output_semantics": "candidate submitter type cue",
+    },
+    {
+        "taxonomy_family_id": "formal-public-route-hints",
+        "rule_id": "TAX-FORMAL-PUBLIC-ROUTE-001",
+        "field_name": "route_hint",
+        "label_count": 4,
+        "output_semantics": "candidate review lane cue",
+    },
+)
+
 
 def maybe_text(value: Any) -> str:
     if value is None:
@@ -354,6 +406,39 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def taxonomy_family_records() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for record in FORMAL_PUBLIC_TAXONOMY_FAMILY_RECORDS:
+        family = dict(record)
+        family["taxonomy_version"] = FORMAL_PUBLIC_TAXONOMY_VERSION
+        family["audit_status"] = FORMAL_PUBLIC_TAXONOMY_AUDIT_STATUS
+        family["approval_ref"] = FORMAL_PUBLIC_TAXONOMY_APPROVAL_REF
+        family["audit_ref"] = FORMAL_PUBLIC_TAXONOMY_AUDIT_REF
+        family["default_chain_eligible"] = False
+        family["report_basis_eligible"] = False
+        family["phase_gate_eligible"] = False
+        records.append(family)
+    return records
+
+
+def formal_signal_semantics_taxonomy_metadata() -> dict[str, Any]:
+    return {
+        "taxonomy_version": FORMAL_PUBLIC_TAXONOMY_VERSION,
+        "audit_status": FORMAL_PUBLIC_TAXONOMY_AUDIT_STATUS,
+        "approval_ref": FORMAL_PUBLIC_TAXONOMY_APPROVAL_REF,
+        "audit_ref": FORMAL_PUBLIC_TAXONOMY_AUDIT_REF,
+        "default_chain_eligible": False,
+        "report_basis_eligible": False,
+        "phase_gate_eligible": False,
+        "families": taxonomy_family_records(),
+        "caveats": [
+            "Formal/public taxonomy cues are candidate labels only.",
+            "No global taxonomy may enter the default investigation chain without a mission-scoped approved taxonomy record.",
+            "Report use requires DB finding, evidence bundle, proposal, review comment, or report section basis.",
+        ],
+    }
 
 
 def semantic_tokens(text: str) -> list[str]:
@@ -621,10 +706,19 @@ def build_formal_signal_semantics(
     )
     stance_matches = _top_rule_matches(folded, STANCE_RULES, limit=3)
     route_hint = route_hint_from_semantics(issue_labels, concern_facets)
+    taxonomy_metadata = formal_signal_semantics_taxonomy_metadata()
 
     return {
         "decision_source": "heuristic-fallback",
         "typing_method": "formal-signal-semantics-v1",
+        "typing_status": "candidate-labels-only",
+        "taxonomy_version": taxonomy_metadata["taxonomy_version"],
+        "taxonomy_status": taxonomy_metadata["audit_status"],
+        "taxonomy_approval_ref": taxonomy_metadata["approval_ref"],
+        "taxonomy_audit_ref": taxonomy_metadata["audit_ref"],
+        "taxonomy_family_records": taxonomy_metadata["families"],
+        "report_basis_eligible": False,
+        "phase_gate_eligible": False,
         "submitter_name": submitter_name,
         "submitter_type": submitter_type_from_attributes(
             attribute_payload,
@@ -648,6 +742,7 @@ def build_formal_signal_semantics(
             "evidence_citation_types": citation_matches,
             "stance_hints": stance_matches,
         },
+        "caveats": taxonomy_metadata["caveats"],
     }
 
 
@@ -655,11 +750,13 @@ __all__ = [
     "build_formal_signal_semantics",
     "default_lane_for_issue",
     "evidence_citation_types_from_text",
+    "formal_signal_semantics_taxonomy_metadata",
     "issue_labels_from_text",
     "issue_terms_for_labels",
     "maybe_text",
     "route_hint_from_semantics",
     "route_status_for_lane",
     "semantic_tokens",
+    "taxonomy_family_records",
     "unique_texts",
 ]

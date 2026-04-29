@@ -9,7 +9,7 @@ from _workflow_support import (
     board_path,
     load_json,
     primary_research_issue_id,
-    primary_wp4_evidence_ref,
+    primary_successor_evidence_ref,
     promotion_path,
     reporting_path,
     request_and_approve_transition,
@@ -360,7 +360,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 "--input-path",
                 discourse_payload["summary"]["output_path"],
             )
-            coverage_ref = primary_wp4_evidence_ref(
+            coverage_ref = primary_successor_evidence_ref(
                 {
                     "environment_aggregation": environment_payload,
                     "research_issue_surface": research_issue_payload,

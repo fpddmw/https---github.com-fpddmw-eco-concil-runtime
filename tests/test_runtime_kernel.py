@@ -15,7 +15,7 @@ from _workflow_support import (
     kernel_script_path,
     load_json,
     primary_research_issue_id,
-    primary_wp4_evidence_ref,
+    primary_successor_evidence_ref,
     request_and_approve_skill_approval,
     request_and_approve_transition,
     run_kernel,
@@ -78,7 +78,7 @@ class RuntimeKernelTests(unittest.TestCase):
             root = Path(tmpdir)
             run_dir = root / "run"
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-            evidence_ref = primary_wp4_evidence_ref(outputs)
+            evidence_ref = primary_successor_evidence_ref(outputs)
             issue_id = primary_research_issue_id(outputs)
             run_script(
                 script_path("post-board-note"),
@@ -190,7 +190,7 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertTrue((runtime_dir / "receipts" / f"{second_run['summary']['receipt_id']}.json").exists())
             self.assertEqual(kernel_script_path().name, "eco_runtime_kernel.py")
 
-    def test_kernel_lists_no_legacy_claim_cluster_result_sets_after_wp4_successors(
+    def test_kernel_lists_no_legacy_claim_cluster_result_sets_after_successor_helpers(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -217,7 +217,7 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(0, payload["summary"]["returned_result_set_count"])
             self.assertEqual([], payload["result_sets"])
 
-    def test_kernel_queries_no_legacy_claim_cluster_items_after_wp4_successors(
+    def test_kernel_queries_no_legacy_claim_cluster_items_after_successor_helpers(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -8,7 +8,7 @@ from pathlib import Path
 from _workflow_support import (
     load_json,
     primary_research_issue_id,
-    primary_wp4_evidence_ref,
+    primary_successor_evidence_ref,
     promotion_path,
     reporting_path,
     request_and_approve_skill_approval,
@@ -92,7 +92,7 @@ def seed_ready_reporting_context(
     confidence: str = "0.93",
 ) -> dict[str, object]:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    evidence_ref = primary_wp4_evidence_ref(outputs)
+    evidence_ref = primary_successor_evidence_ref(outputs)
     issue_id = primary_research_issue_id(outputs)
     submit_ready_council_support(
         run_dir,
@@ -537,7 +537,7 @@ class ReportingWorkflowTests(unittest.TestCase):
             root = Path(tmpdir)
             run_dir = root / "run"
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-            coverage_ref = primary_wp4_evidence_ref(outputs)
+            coverage_ref = primary_successor_evidence_ref(outputs)
             issue_id = primary_research_issue_id(outputs)
             run_script(
                 script_path("post-board-note"),

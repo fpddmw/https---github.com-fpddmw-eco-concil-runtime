@@ -636,9 +636,9 @@
 - `[x]` 新增 reporting canonical query-surface tests
 - `[x]` 新增 kernel boundary tests
 - `[x]` 新增 optional verification lane tests
-- `[ ]` 准备争议型政策 case
-- `[ ]` 准备混合型争议 case
-- `[ ]` 准备可核实事件 case
+- `[x]` 准备争议型政策 case
+- `[x]` 准备混合型争议 case
+- `[x]` 准备可核实事件 case
 
 ## 14. 硬完成检查表
 
@@ -651,7 +651,40 @@
 - `[x]` 主链默认输出已不再是 `claim-observation-link-coverage`
 - `[x]` observation matching 只在明确可核实时触发
 - `[x]` agent proposal 已带 `rationale / confidence / evidence refs / provenance`
-- `[ ]` heuristic 已降为 fallback，并带显式 trace
+- `[x]` heuristic 已降为 approval-gated helper / compatibility query surface，并带显式 trace、freeze line 或 governance metadata
 - `[x]` reporting / publication 默认从 DB canonical 对象物化
-- `[ ]` kernel 已不再承载 readiness / promotion / controversy judgement 的主语义
-- `[ ]` 至少一个争议型政策 case、一个混合型争议 case、一个可核实事件 case 稳定通过新验收
+- `[x]` kernel 已不再承载 readiness / promotion / controversy judgement 的主语义；阶段推进由 moderator request + operator approval 承接，runtime 保留审计/DB/replay 边界
+- `[x]` 至少一个争议型政策 case、一个混合型争议 case、一个可核实事件 case 稳定通过新验收
+
+## 15. 2026-04-29 最终验收硬化回写
+
+- `analysis_plane.py` 已为 legacy / legacy-named analysis kind 输出 governance metadata，明确不可作为默认链、phase gate 或 report basis。
+- `formal_signal_semantics.py` 已补 versioned taxonomy family records，taxonomy cue 只作为 candidate label，必须经 approval/audit 和 DB council/reporting basis 才能进入报告。
+- 默认 agent entry 已不再列出旧 analysis query commands；optional-analysis 只能通过 skill approval request / approval / consumption 链执行。
+- `open-investigation-round` fallback task 已从 `claim-candidates / observation-candidates` 改为 `public-discourse-evidence / environment-evidence`。
+- 仍保留非阻塞命名债：`promote-evidence-basis / promotion_status / promotion_path` 以及历史 canonical analysis contract 的 breaking rename。
+
+## 16. 2026-04-29 验收审阅回写
+
+- 已完成：
+  - 第 `14` 节硬完成检查表经代码和 targeted regression 复核后成立：DB canonical/query surface、agent proposal/finding basis、heuristic freeze、reporting DB rebuild、moderator/operator transition chain 均有测试覆盖。
+  - 第 `12`、`13` 节仍有历史未勾选项，但当前默认链已不再依赖 summary artifact、coverage-first judgement 或 kernel domain policy；这些未勾选项应按后续兼容/命名/物理删除债处理。
+  - Policy research 三类 case fixture 已补齐争议型政策、混合型争议、可核实事件的端到端验收入口。
+
+- 未完成：
+  - 旧 envelope / old canonical analysis contract 尚未物理删除。
+  - 旧 coverage-first 测试文本和变量名仍有残留；语义上已被 DB basis / helper freeze 取代。
+  - 未运行全仓 discover。
+
+- 新发现的问题：
+  - 本文件中部分早期 work package checkbox 与第 `14` 节硬完成检查表存在状态粒度差异；后续维护时应把“硬验收项”和“破坏性清理项”拆开，避免误读为核心功能仍未完成。
+  - `formal_signal_semantics.py` 当前是 freeze metadata + family records，不是完整 taxonomy 审计批准。
+
+- 是否影响后续计划：
+  - 不阻塞当前重构完成判断。
+  - 后续计划应只把未勾选历史项作为 breaking cleanup 和审计任务，不应恢复旧 claim/coverage 主链。
+
+- 本次验收实际运行：
+  - `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`
+  - 结果：`111` 项通过。
+  - `git diff --check`：通过。

@@ -8,7 +8,7 @@ from pathlib import Path
 from _workflow_support import (
     load_json,
     primary_research_issue_id,
-    primary_wp4_evidence_ref,
+    primary_successor_evidence_ref,
     promotion_path,
     request_and_approve_transition,
     reporting_path,
@@ -35,7 +35,7 @@ ROUND_ID = "round-decision-trace-001"
 
 def prepare_round_base(run_dir: Path, root: Path) -> dict[str, str]:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    coverage_ref = primary_wp4_evidence_ref(outputs)
+    coverage_ref = primary_successor_evidence_ref(outputs)
     claim_id = primary_research_issue_id(outputs)
     run_script(
         script_path("post-board-note"),

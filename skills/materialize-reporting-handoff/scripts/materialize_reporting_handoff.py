@@ -157,22 +157,22 @@ def query_round_council_objects(
 
 
 def load_reporting_basis_objects(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, list[dict[str, Any]]]:
-    object_kinds = (
-        "finding-record",
-        "evidence-bundle",
-        "proposal",
-        "readiness-opinion",
-        "challenge",
-        "review-comment",
-    )
+    query_kinds_by_basis_kind = {
+        "finding-record": "finding",
+        "evidence-bundle": "evidence-bundle",
+        "proposal": "proposal",
+        "readiness-opinion": "readiness-opinion",
+        "challenge": "challenge",
+        "review-comment": "review-comment",
+    }
     return {
-        object_kind: query_round_council_objects(
+        basis_kind: query_round_council_objects(
             run_dir,
             run_id=run_id,
             round_id=round_id,
-            object_kind=object_kind,
+            object_kind=query_kind,
         )
-        for object_kind in object_kinds
+        for basis_kind, query_kind in query_kinds_by_basis_kind.items()
     }
 
 

@@ -10,7 +10,7 @@ from _workflow_support import (
     investigation_path,
     load_json,
     primary_research_issue_id,
-    primary_wp4_evidence_ref,
+    primary_successor_evidence_ref,
     promotion_path,
     request_and_approve_transition,
     reporting_path,
@@ -34,10 +34,10 @@ def approve_promotion_transition(run_dir: Path) -> str:
     )
 
 
-def seed_wp4_issue_context(run_dir: Path, root: Path) -> dict[str, str]:
+def seed_research_issue_context(run_dir: Path, root: Path) -> dict[str, str]:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
     return {
-        "evidence_ref": primary_wp4_evidence_ref(outputs),
+        "evidence_ref": primary_successor_evidence_ref(outputs),
         "issue_id": primary_research_issue_id(outputs),
     }
 
@@ -48,7 +48,7 @@ def seed_open_challenge_context(
     *,
     title: str = "Smoke over NYC may be overstated",
 ) -> dict[str, object]:
-    context = seed_wp4_issue_context(run_dir, root)
+    context = seed_research_issue_context(run_dir, root)
     evidence_ref = context["evidence_ref"]
     issue_id = context["issue_id"]
     hypothesis_payload = run_script(
@@ -101,7 +101,7 @@ def seed_open_challenge_context(
 
 
 def seed_ready_investigation_context(run_dir: Path, root: Path) -> dict[str, str]:
-    context = seed_wp4_issue_context(run_dir, root)
+    context = seed_research_issue_context(run_dir, root)
     evidence_ref = context["evidence_ref"]
     issue_id = context["issue_id"]
     submit_ready_council_support(

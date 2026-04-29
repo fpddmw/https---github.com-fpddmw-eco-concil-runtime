@@ -303,6 +303,34 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 consumption_query["objects"][0]["execution_receipt_id"],
             )
 
+            reused = run_kernel_process(
+                "preflight-skill",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                OPTIONAL_SKILL,
+                "--actor-role",
+                "moderator",
+                "--contract-mode",
+                "warn",
+                "--skill-approval-request-id",
+                request_id,
+                auto_actor_role=False,
+            )
+            self.assertEqual(1, reused.returncode)
+            reused_payload = json.loads(reused.stdout)
+            self.assertEqual("blocked", reused_payload["status"])
+            self.assertTrue(
+                any(
+                    "already consumed" in item.get("message", "")
+                    for item in reused_payload["preflight"]["issues"]
+                )
+            )
+
     def test_skill_approval_approve_rejects_non_operator_role(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"

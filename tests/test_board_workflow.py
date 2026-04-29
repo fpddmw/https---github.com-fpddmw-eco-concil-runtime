@@ -14,7 +14,7 @@ from _workflow_support import (
     investigation_path,
     load_json,
     primary_research_issue_id,
-    primary_wp4_evidence_ref,
+    primary_successor_evidence_ref,
     request_and_approve_transition,
     run_script,
     runtime_src_path,
@@ -163,7 +163,7 @@ def approve_open_round_transition(
 def seed_board_issue_context(run_dir: Path, root: Path, *, round_id: str = ROUND_ID) -> dict[str, str]:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, round_id, include_airnow=True)
     return {
-        "evidence_ref": primary_wp4_evidence_ref(outputs),
+        "evidence_ref": primary_successor_evidence_ref(outputs),
         "issue_id": primary_research_issue_id(outputs),
     }
 
@@ -1287,6 +1287,11 @@ class BoardWorkflowTests(unittest.TestCase):
                 for task in round2_tasks
                 if isinstance(task, dict)
             }
+            role_to_outputs = {
+                task["assigned_role"]: task["expected_output_kinds"]
+                for task in round2_tasks
+                if isinstance(task, dict)
+            }
 
             self.assertEqual(
                 ["fetch-regulationsgov-comments"],
@@ -1295,6 +1300,14 @@ class BoardWorkflowTests(unittest.TestCase):
             self.assertEqual(
                 ["fetch-open-meteo-flood"],
                 role_to_sources["environmentalist"],
+            )
+            self.assertEqual(
+                ["normalized-public-signals", "public-discourse-evidence"],
+                role_to_outputs["sociologist"],
+            )
+            self.assertEqual(
+                ["normalized-environment-signals", "environment-evidence"],
+                role_to_outputs["environmentalist"],
             )
             self.assertEqual(
                 "deliberation-plane-round-tasks",

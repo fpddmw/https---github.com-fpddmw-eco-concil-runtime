@@ -279,6 +279,7 @@ WP4_OPTIONAL_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
     },
     "apply-approved-formal-public-taxonomy": {
         "rule_id": "HEUR-TAXONOMY-APPLY-001",
+        "taxonomy_version": "formal-public-taxonomy-freeze-2026-04-29",
         "destination": "approved formal/public taxonomy label cues",
         "caveats": [
             "No default taxonomy may be applied without an approved mission-scoped taxonomy reference.",

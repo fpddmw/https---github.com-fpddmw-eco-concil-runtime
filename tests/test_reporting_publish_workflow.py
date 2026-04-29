@@ -10,7 +10,7 @@ from _workflow_support import (
     load_json,
     promotion_path,
     primary_research_issue_id,
-    primary_wp4_evidence_ref,
+    primary_successor_evidence_ref,
     reporting_path,
     request_and_approve_transition,
     run_kernel,
@@ -50,7 +50,7 @@ def execute_db(
 
 def prepare_ready_round(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    evidence_ref = primary_wp4_evidence_ref(outputs)
+    evidence_ref = primary_successor_evidence_ref(outputs)
     issue_id = primary_research_issue_id(outputs)
     submit_ready_council_support(
         run_dir,
@@ -93,7 +93,7 @@ def prepare_ready_round(run_dir: Path, root: Path) -> None:
 
 def prepare_hold_round(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    evidence_ref = primary_wp4_evidence_ref(outputs)
+    evidence_ref = primary_successor_evidence_ref(outputs)
     issue_id = primary_research_issue_id(outputs)
     hypothesis_payload = run_script(
         script_path("update-hypothesis-status"),

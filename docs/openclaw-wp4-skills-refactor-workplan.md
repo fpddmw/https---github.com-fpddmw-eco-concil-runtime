@@ -234,8 +234,8 @@ WP4 helper 必须支持 challenger 对以下内容提交 review comment / challe
 本批实际运行测试：
 
 1. `PYTHONPATH=eco-concil-runtime/src .venv/bin/python - <<'PY' ... validate_skill_registry()`：通过；当前 registry 识别 `80` 个 skill、`24` 个需要 operator approval、`17` 个 optional-analysis skill。
-2. `.venv/bin/python -m py_compile eco-concil-runtime/src/eco_council_runtime/wp4_helpers.py eco-concil-runtime/src/eco_council_runtime/analysis_objects.py eco-concil-runtime/src/eco_council_runtime/kernel/skill_registry.py eco-concil-runtime/src/eco_council_runtime/kernel/source_queue_profile.py eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py tests/_workflow_support.py tests/test_wp4_helper_guardrails.py tests/test_runtime_source_queue_profiles.py tests/test_skill_approval_workflow.py`：通过。
-3. `.venv/bin/python -m unittest tests.test_wp4_helper_guardrails tests.test_skill_approval_workflow tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`：21 项通过。
+2. `.venv/bin/python -m py_compile eco-concil-runtime/src/eco_council_runtime/wp4_helpers.py eco-concil-runtime/src/eco_council_runtime/analysis_objects.py eco-concil-runtime/src/eco_council_runtime/kernel/skill_registry.py eco-concil-runtime/src/eco_council_runtime/kernel/source_queue_profile.py eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py tests/_workflow_support.py tests/test_optional_analysis_guardrails.py tests/test_runtime_source_queue_profiles.py tests/test_skill_approval_workflow.py`：通过。
+3. `.venv/bin/python -m unittest tests.test_optional_analysis_guardrails tests.test_skill_approval_workflow tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`：21 项通过。
 
 ## 7.2 2026-04-28 本批交付（历史 workflow 测试迁移与旧入口清零）
 
@@ -273,7 +273,7 @@ WP4 helper 必须支持 challenger 对以下内容提交 review comment / challe
 2. `.venv/bin/python -m unittest tests.test_analysis_workflow tests.test_formal_public_workflow tests.test_diffusion_workflow tests.test_controversy_workflow tests.test_deliberation_agenda_workflow`：11 项通过。
 3. `.venv/bin/python -m unittest tests.test_reporting_workflow tests.test_investigation_workflow tests.test_board_workflow tests.test_council_autonomy_flow tests.test_supervisor_simulation_regression tests.test_orchestration_ingress_workflow`：41 项通过。
 4. `.venv/bin/python -m unittest tests.test_runtime_kernel`：42 项通过。
-5. `.venv/bin/python -m unittest tests.test_wp4_helper_guardrails tests.test_skill_approval_workflow tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`：21 项通过。
+5. `.venv/bin/python -m unittest tests.test_optional_analysis_guardrails tests.test_skill_approval_workflow tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`：21 项通过。
 6. `.venv/bin/python -m py_compile ...` 覆盖本批修改的测试文件：通过。
 7. `rg` 扫描 `tests` 中旧 skill 的 `script_path(...)` 直接调用：无匹配。
 8. `git diff --check`：通过。
@@ -308,8 +308,8 @@ WP4 helper 必须支持 challenger 对以下内容提交 review comment / challe
 
 本批实际运行测试：
 
-1. `.venv/bin/python -m unittest tests.test_reporting_workflow tests.test_wp4_helper_guardrails tests.test_formal_public_workflow tests.test_analysis_workflow tests.test_controversy_workflow`：20 项通过。
-2. `.venv/bin/python -m py_compile eco-concil-runtime/src/eco_council_runtime/phase2_fallback_context.py eco-concil-runtime/src/eco_council_runtime/wp4_helpers.py skills/materialize-reporting-handoff/scripts/materialize_reporting_handoff.py tests/test_wp4_helper_guardrails.py tests/test_formal_public_workflow.py`：通过。
+1. `.venv/bin/python -m unittest tests.test_reporting_workflow tests.test_optional_analysis_guardrails tests.test_formal_public_workflow tests.test_analysis_workflow tests.test_controversy_workflow`：20 项通过。
+2. `.venv/bin/python -m py_compile eco-concil-runtime/src/eco_council_runtime/phase2_fallback_context.py eco-concil-runtime/src/eco_council_runtime/wp4_helpers.py skills/materialize-reporting-handoff/scripts/materialize_reporting_handoff.py tests/test_optional_analysis_guardrails.py tests/test_formal_public_workflow.py`：通过。
 3. `git diff --check`：通过。
 
 ## 7.4 2026-04-29 WP6 reporting packet 化对 WP4 护栏的跟进
@@ -333,13 +333,159 @@ WP4 helper 必须支持 challenger 对以下内容提交 review comment / challe
 是否影响后续计划：
 
 1. 不阻塞 WP4 后续；它把 reporting 再入口中的 helper 直通风险进一步压低。
-2. WP7 case fixture 应优先补 finding / evidence bundle / report-section-draft，而不是恢复旧 helper basis。
+2. Policy research case fixture 应优先补 finding / evidence bundle / report-section-draft，而不是恢复旧 helper basis。
 
 本批实际运行测试：
 
 1. `.venv/bin/python -m unittest tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface`：21 项通过。
 2. `.venv/bin/python -m py_compile ...reporting 相关脚本与 canonical normalizer`：通过。
 3. `.venv/bin/python -m unittest tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`：10 项通过。
+
+## 7.5 2026-04-29 Policy research case fixture、回归与交付收口
+
+已完成：
+
+1. 新增 `tests/test_policy_research_case_fixtures.py`，覆盖政策争议、正式记录/舆情混合、可核实经验事件三类 case fixture。
+2. 三类 fixture 均走 `fetch/import -> normalize -> query -> finding -> evidence bundle -> review/challenge -> transition request/approval -> report` 路径；其中 fetch 使用本地 detached fetch runner，避免引入外部网络依赖。
+3. 新增 `submit_report_basis_records(...)` 测试辅助，显式提交 `finding-record / evidence-bundle / report-section-draft`，使 reporting handoff 与 final publication 的 key findings 来自 DB canonical report basis。
+4. 修复 `materialize-reporting-handoff` 的 DB report basis 读取：内部以 canonical query kind `finding` 读取 finding rows，再在 evidence index 中以 `finding-record` report-basis role 暴露。
+5. Policy research fixture 中 `summarize-round-readiness` 只通过 `request-skill-approval -> approve-skill-approval -> run-skill --skill-approval-request-id` 执行，并断言 consumption control object 存在。
+6. 删除 reporting / promotion / supervisor 导出物后，policy research final publication 仍能从 DB 恢复 handoff、decision、role reports、promotion basis 和 supervisor state。
+7. 补充 skill approval 不可复用回归：已消费的 optional-analysis approval request 会被 preflight 阻断，不能重复执行。
+8. `scaffold-mission-run` source task 文案已从 claim/observation matching 口径改为 investigator query、finding、evidence-bundle 口径，避免 operator/agent runbook 继续暗示旧主链。
+
+未完成：
+
+1. `formal_signal_semantics.py` 仍未拆成 versioned taxonomy family records。
+2. `analysis_plane.py` 历史 analysis kind / query object 命名仍未迁移。
+3. `promote-evidence-basis / promotion_status` 等历史命名仍保留，尚未做 breaking CLI/schema 改名。
+4. 本批未运行全仓所有测试；仅运行 policy research case fixture 和直接相关 reporting / approval / source queue / agent entry 最小集合。
+
+新发现的问题：
+
+1. `materialize-reporting-handoff` 此前查询 `finding-record`，但 council query surface 的 canonical kind 是 `finding`；这会造成 DB finding 不能进入 `key_findings`。本批已修复。
+2. `scaffold-mission-run` 虽已不支配 phase-2 默认判断，但 task 文案仍会影响 operator/agent 理解；旧 claim/observation 文案应视为架构风险而不是普通措辞问题。
+3. Policy research fixture 证明 final report finding 可以完全由 DB basis 承接；后续不需要、也不应恢复旧 coverage/helper basis 直通。
+4. reporting-ready 判定仍需要 approved readiness summary；该 summary 必须保持为显式审批、一次性消费的 optional-analysis，而不是恢复默认主链。
+
+是否影响后续计划：
+
+1. 不阻塞后续整批交付；policy research targeted case fixture 已可作为最终验收入口。
+2. 整批交付前应把 taxonomy family records、analysis kind 命名迁移、promotion 命名债、full regression 未跑完列为残留风险。
+3. 后续新增 case 应沿用本批模式：helper cue 默认只进 audit/appendix，报告正文必须引用 DB `finding / evidence-bundle / report-section-draft / proposal / readiness` basis。
+
+本批实际运行测试：
+
+1. `.venv/bin/python -m py_compile tests/_workflow_support.py tests/test_policy_research_case_fixtures.py tests/test_skill_approval_workflow.py skills/materialize-reporting-handoff/scripts/materialize_reporting_handoff.py skills/scaffold-mission-run/scripts/scaffold_mission_run.py`：通过。
+2. `.venv/bin/python -m unittest tests.test_policy_research_case_fixtures -v`：1 项通过，覆盖 3 个 subTest case。
+3. `.venv/bin/python -m unittest tests.test_skill_approval_workflow tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate -v`：15 项通过。
+4. `.venv/bin/python -m unittest tests.test_source_queue_rebuild -v`：8 项通过。
+5. `.venv/bin/python -m unittest tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface -v`：21 项通过。
+6. `git diff --check`：通过。
+
+## 7.6 2026-04-29 WP8 最终验收硬化与残留项收口
+
+已完成：
+
+1. `analysis_plane.py` 已为所有 analysis kind 输出 `analysis_kind_governance`；高风险旧对象 `evidence-coverage / claim-observation-link / observation-candidate / merged-observation / formal-public-link / representation-gap / diffusion-edge` 被标记为 `legacy-frozen-compatibility-query-only`。
+2. analysis query surface 即使没有返回 result set，也会暴露该 analysis kind 的治理元数据：不可进入默认链、不可作为 phase gate、不可作为 report basis、执行来源必须是 approval-gated helper。
+3. `formal_signal_semantics.py` 已补 versioned taxonomy family records，覆盖 issue、concern、citation、stance、submitter type、route hint；所有 family 均带 `formal-public-taxonomy-freeze-2026-04-29`、approval/audit refs、candidate-only 与非 report/phase basis 标记。
+4. `apply-approved-formal-public-taxonomy` 的 registry helper metadata 已同步 taxonomy freeze version，便于 operator 审计和后续迁移。
+5. 默认 agent entry 已移除旧 analysis query commands；角色入口只保留 DB query、DB council/reporting write surface，以及 optional-analysis approval/run 模板。
+6. `open-investigation-round` fallback task 已去掉 `claim-candidates / observation-candidates` 输出，并将历史 source task 中的旧 output kind 映射为 `public-discourse-evidence / environment-evidence`。
+7. 新增 final guardrail 回归，覆盖 analysis kind freeze、taxonomy family records、agent entry 默认入口、open-round fallback 文案与输出。
+
+未完成：
+
+1. `promote-evidence-basis / promotion_status / promotion_path` 等历史命名仍未做 breaking rename；继续作为非阻塞命名债。
+2. `build-normalization-audit` 仍保留读取历史 claim/observation candidate result set 的兼容参数；它只属于 runtime-operator QA optional-analysis，仍需 approval，不进入默认主链。
+3. 旧 canonical analysis contract 未物理删除；本批选择冻结 query/governance 语义，保留历史 replay/query 能力。
+4. 未运行全仓所有测试；本批运行最终验收直接相关 targeted regression。
+
+新发现的问题：
+
+1. `open-investigation-round` fallback 仍会在缺少 source task artifact 时重建旧 output kind；这会污染后续 operator/agent runbook，本批已修复。
+2. default agent entry 中列出旧 analysis kind 查询命令，会把 approval-gated helper surface 暗示为默认角色入口；本批已清空默认 analysis commands。
+3. 对 analysis kind 的彻底重命名不是小补丁：它牵涉 DB replay、kernel query、benchmark artifact 与历史报告 trace，后续应单独做 breaking migration。
+
+是否影响后续计划：
+
+1. 不阻塞整批重构验收；policy research fixture 中列为阻塞风险的 taxonomy family records 与 analysis kind 边界已转成可测试的冻结/审计面。
+2. 后续交付文档应把剩余项列为 schema/CLI/历史兼容迁移债，而不是默认主链或报告证据风险。
+3. 若后续新增 helper 或 taxonomy family，必须继承本批字段：version、approval/audit refs、candidate-only、非 phase/report basis、DB council/reporting basis 才能进入报告正文。
+
+本批实际运行测试：
+
+1. `.venv/bin/python -m py_compile eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py eco-concil-runtime/src/eco_council_runtime/formal_signal_semantics.py eco-concil-runtime/src/eco_council_runtime/kernel/skill_registry.py eco-concil-runtime/src/eco_council_runtime/phase2_agent_entry_profile.py skills/open-investigation-round/scripts/open_investigation_round.py skills/scaffold-mission-run/scripts/scaffold_mission_run.py skills/materialize-reporting-handoff/scripts/materialize_reporting_handoff.py tests/test_optional_analysis_guardrails.py tests/test_agent_entry_gate.py tests/test_board_workflow.py tests/test_policy_research_case_fixtures.py tests/test_skill_approval_workflow.py`：通过。
+2. `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails -v`：19 项通过。
+3. `.venv/bin/python -m unittest tests.test_board_workflow.BoardWorkflowTests.test_open_investigation_round_preserves_prior_round_and_carries_state_from_db tests.test_board_workflow.BoardWorkflowTests.test_open_investigation_round_fallback_uses_shared_source_role_catalog tests.test_board_workflow.BoardWorkflowTests.test_open_investigation_round_reads_db_backed_actions_when_export_is_missing -v`：3 项通过。
+4. `.venv/bin/python -m unittest tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_lists_no_legacy_claim_cluster_result_sets_after_successor_helpers tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_no_legacy_claim_cluster_items_after_successor_helpers tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_does_not_inline_legacy_controversy_map_fallback tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_does_not_inline_legacy_issue_cluster_fallback tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_analysis_query_reports_invalid_analysis_kind -v`：5 项通过。
+5. `.venv/bin/python -m unittest tests.test_policy_research_case_fixtures -v`：1 项通过，覆盖 3 个 subTest case。
+6. `.venv/bin/python -m unittest tests.test_skill_approval_workflow tests.test_source_queue_rebuild -v`：13 项通过。
+7. `.venv/bin/python -m unittest tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface -v`：21 项通过。
+8. `git diff --check`：通过。
+
+## 7.7 2026-04-29 验收审阅回写
+
+已完成：
+
+1. WP4 默认链退出目标通过验收：旧 claim/observation/link/coverage skill 不再是 registry active path，successor helper 均按 approval-gated optional-analysis 处理。
+2. legacy analysis kind query surface 已带 `analysis_kind_governance`，明确 `default_chain_eligible=false / phase_gate_eligible=false / report_basis_eligible=false`。
+3. formal/public taxonomy cue 已带 versioned family records、approval/audit refs、candidate-only、非 phase/report basis 标记。
+4. 默认 agent entry 不再暴露旧 analysis query commands；open-round fallback 与 scaffold task 输出已改为 `public-discourse-evidence / environment-evidence`。
+5. reporting handoff/final publication 已验证 helper/legacy cue 不直通报告正文；报告 finding 来自 DB `finding / evidence-bundle / report-section-draft` 等 basis。
+
+未完成：
+
+1. 第 `8` 节 freeze line 仍为 `audit-pending`，尚未替换为完整人工审计批准记录。
+2. `build-normalization-audit` 仍保留历史 claim/observation candidate 兼容参数，但它是 operator QA optional-analysis，需要审批。
+3. 旧 analysis contract 未物理删除；当前冻结为 compatibility query/replay surface。
+4. 未运行全仓 discover。
+
+新发现的问题：
+
+1. 第 `4` 节仍有若干未勾选项，主要属于完整审计、物理拆分和破坏性迁移，不应再被理解为默认链阻塞。
+2. `promote-evidence-basis` 仍保留 legacy coverage helper 函数；当前 shared context 已 quarantine legacy WP4 analysis，reporting handoff 也忽略 legacy WP4 basis，但后续 breaking cleanup 应物理移除。
+
+是否影响后续计划：
+
+1. 不阻塞 WP4 hard acceptance；WP4 默认链、报告 basis 和 agent entry 风险已经收口。
+2. 后续应继续推进完整审计记录、schema/CLI rename、legacy contract 删除和全仓回归。
+
+本次验收实际运行测试：
+
+1. `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`：`111` 项通过。
+2. `git diff --check`：通过。
+
+## 7.8 2026-04-29 测试命名清理
+
+已完成：
+
+1. 测试模块从 work-package 编号命名改为功能命名：
+   - `tests/test_optional_analysis_guardrails.py`
+   - `tests/test_policy_research_case_fixtures.py`
+2. 测试类、测试函数、共享 helper、fixture source/provenance 已改成 `optional-analysis / policy-research / successor-helper / research-issue` 等语义命名。
+3. 文档中的测试模块路径和精确测试函数名已同步更新。
+
+未完成：
+
+1. 未改 runtime contract 中的 `wp4_helper_metadata` 等字段；这些字段属于当前 API 兼容面。
+
+新发现的问题：
+
+1. 旧测试 helper 名称会把 work package 编号误当成行为语义；后续新增测试应避免此类命名。
+
+是否影响后续计划：
+
+1. 不阻塞 WP4 hard acceptance。
+2. 后续若推进 runtime contract breaking rename，再单独处理 `wp4_helper_metadata` 这类 API 字段。
+
+本批实际运行测试：
+
+1. `.venv/bin/python -m py_compile tests/_workflow_support.py tests/test_optional_analysis_guardrails.py tests/test_policy_research_case_fixtures.py tests/test_analysis_workflow.py tests/test_runtime_kernel.py tests/test_investigation_workflow.py tests/test_board_workflow.py tests/test_reporting_workflow.py tests/test_reporting_publish_workflow.py tests/test_reporting_query_surface.py tests/test_decision_trace_workflow.py tests/test_archive_history_workflow.py tests/test_benchmark_replay_workflow.py tests/test_council_autonomy_flow.py tests/test_orchestration_ingress_workflow.py tests/test_orchestration_planner_workflow.py tests/test_supervisor_simulation_regression.py`：通过。
+2. `.venv/bin/python -m unittest tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_lists_no_legacy_claim_cluster_result_sets_after_successor_helpers tests.test_runtime_kernel.RuntimeKernelTests.test_kernel_queries_no_legacy_claim_cluster_items_after_successor_helpers tests.test_analysis_workflow.AnalysisWorkflowTests.test_successor_analysis_chain_materializes_db_backed_surfaces tests.test_investigation_workflow -v`：`22` 项通过。
+3. import smoke：`16` 个受影响测试模块可正常 import。
+4. `git diff --check`：通过。
 
 ## 8. 规则审计 freeze line
 

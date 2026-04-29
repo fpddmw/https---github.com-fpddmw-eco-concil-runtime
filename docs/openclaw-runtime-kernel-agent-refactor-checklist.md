@@ -500,3 +500,29 @@ runtime kernel 只保留以下职责：
 - 是否影响后续计划：
   - 不阻塞后续计划；本轮对第 `10.1 / 10.3 / 10.4 / 10.5 / 10.7 / 10.9` 验收项形成进一步确认。
   - 对后续的约束是：任何新增默认执行路径都必须继续满足 `moderator request -> runtime-operator approve/reject -> governed execution/commit`；任何 optional-analysis 运行都必须留下可查询的 request / approval / consumption 记录，不能退回到 `warn` 模式软放行。
+
+## 13. 2026-04-29 最终验收审阅回写
+
+- 已完成：
+  - 复核 `controller / transition_requests / skill_approvals / agent_entry / analysis_plane / open-investigation-round / reporting handoff` 后，确认 runtime kernel 当前默认路径符合第 `10` 节硬验收：无 approved transition request 时不执行默认 phase-2 planner；有 approved request 时作为 transition executor 执行并审计。
+  - `moderator` 是唯一 transition request 发起角色，`runtime-operator` 是审批/commit 角色；相关数据层与 CLI 层均有测试覆盖。
+  - 默认 agent entry 已移除 analysis helper commands，保留 DB query、finding/evidence-bundle/proposal/readiness 写入面与 optional-analysis 审批模板。
+  - optional-analysis approval 已覆盖 request、approval、consumption 与 consumed request reuse block。
+
+- 未完成：
+  - 兼容模块 `phase2_fallback_* / phase2_direct_advisory.py / plan-round-orchestration` 仍保留为可注入或 approval-gated surface，未物理删除。
+  - `promote-evidence-basis` 等历史 phase/promotion 命名仍未做 breaking schema/CLI rename。
+  - 本次未运行全仓 discover。
+
+- 新发现的问题：
+  - runtime 硬边界已达标，但文档中旧“下一阶段/当前偏差”段落仍容易被误读为当前代码状态；后续应把历史基线与最新验收状态分层。
+  - `promote-evidence-basis` 内仍保留 legacy coverage helper 函数；默认 shared context 已 quarantine legacy analysis 且 reporting handoff 会忽略 legacy WP4 basis，但后续迁移时应物理清掉这段兼容语义。
+
+- 是否影响后续计划：
+  - 不阻塞 runtime/kernel 权限重构验收。
+  - 后续只应推进兼容清理、命名迁移和全仓回归，不应扩大 kernel domain policy。
+
+- 本次验收实际运行：
+  - `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`
+  - 结果：`111` 项通过。
+  - `git diff --check`：通过。

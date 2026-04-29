@@ -19,7 +19,7 @@ ROUND_ID = "round-analysis-001"
 
 
 class AnalysisWorkflowTests(unittest.TestCase):
-    def test_wp4_successor_analysis_chain_materializes_db_backed_surfaces(self) -> None:
+    def test_successor_analysis_chain_materializes_db_backed_surfaces(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"

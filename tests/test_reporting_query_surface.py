@@ -11,7 +11,7 @@ from _workflow_support import (
     analytics_path,
     load_json,
     primary_research_issue_id,
-    primary_wp4_evidence_ref,
+    primary_successor_evidence_ref,
     request_and_approve_transition,
     reporting_path,
     run_kernel,
@@ -49,7 +49,7 @@ from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
 
 def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    evidence_ref = primary_wp4_evidence_ref(outputs)
+    evidence_ref = primary_successor_evidence_ref(outputs)
     issue_id = primary_research_issue_id(outputs)
     submit_ready_council_support(
         run_dir,

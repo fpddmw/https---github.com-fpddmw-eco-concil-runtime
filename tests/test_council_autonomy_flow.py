@@ -9,7 +9,7 @@ from _workflow_support import (
     investigation_path,
     load_json,
     primary_research_issue_id,
-    primary_wp4_evidence_ref,
+    primary_successor_evidence_ref,
     reporting_path,
     run_kernel,
     run_script,
@@ -194,7 +194,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             root = Path(tmpdir)
             run_dir = root / "run"
             outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-            coverage_ref = primary_wp4_evidence_ref(outputs)
+            coverage_ref = primary_successor_evidence_ref(outputs)
             issue_id = primary_research_issue_id(outputs)
             run_script(
                 script_path("post-board-note"),

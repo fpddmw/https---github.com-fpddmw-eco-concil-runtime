@@ -61,13 +61,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "claim-board-task",
             "post-board-note",
         ],
-        "analysis_kinds": [
-            "issue-cluster",
-            "formal-public-link",
-            "representation-gap",
-            "diffusion-edge",
-            "controversy-map",
-        ],
+        "analysis_kinds": [],
         "transition_kinds": [
             TRANSITION_KIND_PROMOTE_EVIDENCE_BASIS,
             TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
@@ -87,11 +81,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "submit-readiness-opinion",
             "post-board-note",
         ],
-        "analysis_kinds": [
-            "issue-cluster",
-            "verifiability-assessment",
-            "verification-route",
-        ],
+        "analysis_kinds": [],
     },
     {
         "role": ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
@@ -106,12 +96,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "submit-readiness-opinion",
             "post-board-note",
         ],
-        "analysis_kinds": [
-            "issue-cluster",
-            "representation-gap",
-            "diffusion-edge",
-            "formal-public-link",
-        ],
+        "analysis_kinds": [],
     },
     {
         "role": ROLE_FORMAL_RECORD_INVESTIGATOR,
@@ -126,11 +111,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "submit-readiness-opinion",
             "post-board-note",
         ],
-        "analysis_kinds": [
-            "issue-cluster",
-            "formal-public-link",
-            "representation-gap",
-        ],
+        "analysis_kinds": [],
     },
     {
         "role": ROLE_CHALLENGER,
@@ -148,12 +129,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "open-falsification-probe",
             "close-challenge-ticket",
         ],
-        "analysis_kinds": [
-            "issue-cluster",
-            "representation-gap",
-            "diffusion-edge",
-            "verifiability-assessment",
-        ],
+        "analysis_kinds": [],
     },
     {
         "role": ROLE_REPORT_EDITOR,
@@ -172,7 +148,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "publish-council-decision",
             "materialize-final-publication",
         ],
-        "analysis_kinds": ["issue-cluster", "formal-public-link", "controversy-map"],
+        "analysis_kinds": [],
     },
 ]
 

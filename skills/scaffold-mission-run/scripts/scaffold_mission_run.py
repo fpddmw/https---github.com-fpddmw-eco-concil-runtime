@@ -205,8 +205,8 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
                 "round_id": round_id,
                 "assigned_role": "sociologist",
                 "status": "planned",
-                "objective": "Import and normalize public-discussion artifacts that can surface claim narratives for the current mission.",
-                "expected_output_kinds": ["normalized-public-signals", "claim-candidates"],
+                "objective": "Import and normalize public-discussion artifacts for investigator query, finding, and evidence-bundle submission.",
+                "expected_output_kinds": ["normalized-public-signals", "public-discourse-evidence"],
                 "inputs": {
                     "mission_window": window,
                     "mission_geometry": geometry,
@@ -215,7 +215,7 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
                         {
                             "requirement_id": f"req-sociologist-{round_id}-public-import",
                             "requirement_type": "public-signal-import",
-                            "summary": "Normalize public-discussion artifacts so downstream claim extraction can work from the canonical signal plane.",
+                            "summary": "Normalize public-discussion artifacts so investigators can query item-level evidence and submit DB-backed findings.",
                             "priority": "high",
                         }
                     ],
@@ -231,8 +231,8 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
                 "round_id": round_id,
                 "assigned_role": "environmentalist",
                 "status": "planned",
-                "objective": "Import and normalize physical-observation artifacts that can corroborate or contradict current mission hypotheses.",
-                "expected_output_kinds": ["normalized-environment-signals", "observation-candidates"],
+                "objective": "Import and normalize environmental observation artifacts for investigator query, quality review, and evidence-bundle submission.",
+                "expected_output_kinds": ["normalized-environment-signals", "environment-evidence"],
                 "inputs": {
                     "mission_window": window,
                     "mission_geometry": geometry,
@@ -241,7 +241,7 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
                         {
                             "requirement_id": f"req-environmentalist-{round_id}-environment-import",
                             "requirement_type": "environment-signal-import",
-                            "summary": "Normalize physical-observation artifacts so downstream observation extraction and evidence coverage can operate from the signal plane.",
+                            "summary": "Normalize environmental artifacts so investigators can cite provider, time, location, quality, and limitation fields from the signal plane.",
                             "priority": "high",
                         }
                     ],

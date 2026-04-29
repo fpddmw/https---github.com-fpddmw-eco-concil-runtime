@@ -29,6 +29,78 @@ ANALYSIS_KIND_MERGED_OBSERVATION = "merged-observation"
 ANALYSIS_KIND_CLAIM_CANDIDATE = "claim-candidate"
 ANALYSIS_KIND_OBSERVATION_CANDIDATE = "observation-candidate"
 
+ANALYSIS_GOVERNANCE_APPROVAL_GATED_HELPER = "approval-gated-helper-view"
+ANALYSIS_GOVERNANCE_LEGACY_FROZEN = "legacy-frozen-compatibility-query-only"
+ANALYSIS_GOVERNANCE_LEGACY_NAMED_HELPER = "legacy-named-approval-gated-helper-view"
+
+ANALYSIS_KIND_GOVERNANCE_OVERRIDES: dict[str, dict[str, str]] = {
+    ANALYSIS_KIND_EVIDENCE_COVERAGE: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
+        "successor_skill": "review-evidence-sufficiency",
+        "freeze_reason": "old coverage/readiness scoring is frozen and cannot act as a phase gate or report basis",
+    },
+    ANALYSIS_KIND_CLAIM_OBSERVATION_LINK: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
+        "successor_skill": "review-fact-check-evidence-scope",
+        "freeze_reason": "old claim-observation support/contradiction matching is frozen",
+    },
+    ANALYSIS_KIND_OBSERVATION_SCOPE: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
+        "successor_skill": "aggregate-environment-evidence",
+        "freeze_reason": "old observation matching scope is replaced by descriptive environmental evidence coverage",
+    },
+    ANALYSIS_KIND_OBSERVATION_CANDIDATE: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
+        "successor_skill": "aggregate-environment-evidence",
+        "freeze_reason": "old observation candidate extraction is replaced by descriptive environmental evidence aggregation",
+    },
+    ANALYSIS_KIND_MERGED_OBSERVATION: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
+        "successor_skill": "aggregate-environment-evidence",
+        "freeze_reason": "old merged observation candidates are replaced by aggregation records with caveats",
+    },
+    ANALYSIS_KIND_FORMAL_PUBLIC_LINK: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
+        "successor_skill": "compare-formal-public-footprints",
+        "freeze_reason": "old formal/public alignment links are replaced by footprint comparison cues",
+    },
+    ANALYSIS_KIND_REPRESENTATION_GAP: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
+        "successor_skill": "identify-representation-audit-cues",
+        "freeze_reason": "old representation gap scoring is replaced by audit cues for human review",
+    },
+    ANALYSIS_KIND_DIFFUSION_EDGE: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
+        "successor_skill": "detect-temporal-cooccurrence-cues",
+        "freeze_reason": "old diffusion edges are replaced by descriptive temporal co-occurrence cues",
+    },
+    ANALYSIS_KIND_CLAIM_CANDIDATE: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_NAMED_HELPER,
+        "successor_skill": "discover-discourse-issues",
+        "freeze_reason": "claim-named compatibility records are discourse hints only, not factual claims",
+    },
+    ANALYSIS_KIND_CLAIM_CLUSTER: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_NAMED_HELPER,
+        "successor_skill": "discover-discourse-issues",
+        "freeze_reason": "claim-cluster compatibility records are reversible discourse groupings only",
+    },
+    ANALYSIS_KIND_CLAIM_SCOPE: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_NAMED_HELPER,
+        "successor_skill": "discover-discourse-issues",
+        "freeze_reason": "claim-scope compatibility records are mentioned-scope metadata only",
+    },
+    ANALYSIS_KIND_CLAIM_VERIFIABILITY: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_NAMED_HELPER,
+        "successor_skill": "suggest-evidence-lanes",
+        "freeze_reason": "verifiability compatibility records are advisory lane cues only",
+    },
+    ANALYSIS_KIND_VERIFICATION_ROUTE: {
+        "governance_status": ANALYSIS_GOVERNANCE_LEGACY_NAMED_HELPER,
+        "successor_skill": "suggest-evidence-lanes",
+        "freeze_reason": "route compatibility records cannot assign owners or drive the source queue",
+    },
+}
+
 ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
     ANALYSIS_KIND_ISSUE_CLUSTER: {
         "artifact_label": "issue-cluster",
@@ -807,6 +879,43 @@ def analysis_config(analysis_kind: str) -> dict[str, Any]:
     if config is None:
         raise ValueError(f"Unsupported analysis kind: {analysis_kind}")
     return config
+
+
+def analysis_kind_governance(analysis_kind: str) -> dict[str, Any]:
+    kind = maybe_text(analysis_kind)
+    config = analysis_config(kind)
+    override = ANALYSIS_KIND_GOVERNANCE_OVERRIDES.get(kind, {})
+    governance_status = (
+        maybe_text(override.get("governance_status"))
+        or ANALYSIS_GOVERNANCE_APPROVAL_GATED_HELPER
+    )
+    successor_skill = maybe_text(override.get("successor_skill")) or maybe_text(
+        config.get("default_source_skill")
+    )
+    freeze_reason = maybe_text(override.get("freeze_reason"))
+    if not freeze_reason:
+        freeze_reason = (
+            "analysis result is an approval-gated helper surface and cannot act as "
+            "a default investigation conclusion, phase gate, or report basis"
+        )
+    return {
+        "analysis_kind": kind,
+        "governance_status": governance_status,
+        "default_chain_eligible": False,
+        "phase_gate_eligible": False,
+        "report_basis_eligible": False,
+        "requires_explicit_approval": True,
+        "successor_skill": successor_skill,
+        "source_skill": maybe_text(config.get("default_source_skill")),
+        "report_use_requires": [
+            "finding-record",
+            "evidence-bundle",
+            "proposal",
+            "review-comment",
+            "report-section-draft",
+        ],
+        "freeze_reason": freeze_reason,
+    }
 
 
 def _config_list(config: dict[str, Any], field_name: str) -> list[str]:
@@ -1600,6 +1709,7 @@ def _serialize_result_set_row(
         "round_id": maybe_text(row["round_id"]),
         "analysis_kind": analysis_kind,
         "artifact_label": maybe_text(config.get("artifact_label")) or analysis_kind,
+        "analysis_kind_governance": analysis_kind_governance(analysis_kind),
         "items_key": maybe_text(config.get("items_key")) or "items",
         "count_key": maybe_text(config.get("count_key")) or "item_count",
         "source_skill": maybe_text(row["source_skill"]),
@@ -1646,6 +1756,9 @@ def _serialize_result_item_row(row: sqlite3.Row) -> dict[str, Any]:
         "run_id": maybe_text(row["run_id"]),
         "round_id": maybe_text(row["round_id"]),
         "analysis_kind": maybe_text(row["analysis_kind"]),
+        "analysis_kind_governance": analysis_kind_governance(
+            maybe_text(row["analysis_kind"])
+        ),
         "source_skill": maybe_text(row["source_skill"]),
         "item_index": int(row["item_index"] or 0),
         "subject_id": maybe_text(row["subject_id"]),
@@ -1720,6 +1833,11 @@ def query_analysis_result_sets(
         "artifact_path": maybe_text(artifact_path),
         "latest_only": bool(latest_only),
     }
+    requested_analysis_kind_governance = (
+        analysis_kind_governance(maybe_text(analysis_kind))
+        if maybe_text(analysis_kind)
+        else {}
+    )
     warnings: list[dict[str, str]] = []
     if maybe_text(result_set_id) and not matching_rows:
         warnings.append(
@@ -1744,6 +1862,7 @@ def query_analysis_result_sets(
             ),
         },
         "filters": filters,
+        "analysis_kind_governance": requested_analysis_kind_governance,
         "paging": {
             "offset": safe_offset,
             "limit": safe_limit,
@@ -1833,6 +1952,11 @@ def query_analysis_result_items(
         "readiness": maybe_text(readiness),
         "latest_only": bool(latest_only),
     }
+    requested_analysis_kind_governance = (
+        analysis_kind_governance(maybe_text(analysis_kind))
+        if maybe_text(analysis_kind)
+        else {}
+    )
     warnings: list[dict[str, str]] = []
     if maybe_text(result_set_id) and not result_set_rows:
         warnings.append(
@@ -1851,6 +1975,7 @@ def query_analysis_result_items(
             "returned_item_count": len(items),
         },
         "filters": filters,
+        "analysis_kind_governance": requested_analysis_kind_governance,
         "paging": {
             "offset": safe_offset,
             "limit": safe_limit,
@@ -1916,6 +2041,7 @@ def sync_analysis_result_set(
         return {
             "status": f"missing-{artifact_label}",
             "analysis_kind": analysis_kind,
+            "analysis_kind_governance": analysis_kind_governance(analysis_kind),
             "run_id": maybe_text(expected_run_id),
             "round_id": maybe_text(round_id),
             "artifact_path": str(analysis_file),
@@ -2140,6 +2266,7 @@ def sync_analysis_result_set(
     return {
         "status": "completed",
         "analysis_kind": analysis_kind,
+        "analysis_kind_governance": analysis_kind_governance(analysis_kind),
         "run_id": payload_run_id,
         "round_id": payload_round_id,
         "artifact_path": str(analysis_file),

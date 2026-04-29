@@ -232,6 +232,13 @@ class AgentEntryGateTests(unittest.TestCase):
                 )
             )
             self.assertTrue(
+                all(
+                    entry.get("analysis_commands") == []
+                    for entry in payload["agent_entry"]["capability_surface"]
+                    if isinstance(entry, dict)
+                )
+            )
+            self.assertTrue(
                 any(
                     "submit-council-proposal" in command
                     for entry in payload["agent_entry"]["capability_surface"]

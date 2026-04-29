@@ -8,7 +8,7 @@ from pathlib import Path
 from _workflow_support import (
     load_json,
     primary_research_issue_id,
-    primary_wp4_evidence_ref,
+    primary_successor_evidence_ref,
     request_and_approve_transition,
     run_kernel,
     run_script,
@@ -88,7 +88,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         str(mission_path),
     )
     outputs = seed_analysis_chain(run_dir, fixture_root, run_id, round_id, include_airnow=True)
-    evidence_ref = primary_wp4_evidence_ref(outputs)
+    evidence_ref = primary_successor_evidence_ref(outputs)
     issue_id = primary_research_issue_id(outputs)
     submit_ready_council_support(
         run_dir,

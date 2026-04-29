@@ -618,7 +618,7 @@ def primary_research_issue_id(outputs: dict[str, dict[str, Any]]) -> str:
     raise AssertionError("Expected seed_analysis_chain to produce a research issue id.")
 
 
-def primary_wp4_evidence_ref(outputs: dict[str, dict[str, Any]]) -> str:
+def primary_successor_evidence_ref(outputs: dict[str, dict[str, Any]]) -> str:
     for key in (
         "environment_aggregation",
         "research_issue_surface",
@@ -634,7 +634,7 @@ def primary_wp4_evidence_ref(outputs: dict[str, dict[str, Any]]) -> str:
         first = refs[0]
         if isinstance(first, dict) and first.get("artifact_ref"):
             return str(first["artifact_ref"])
-    raise AssertionError("Expected seed_analysis_chain to produce a WP4 evidence ref.")
+    raise AssertionError("Expected seed_analysis_chain to produce a successor evidence ref.")
 
 
 def submit_ready_council_support(
@@ -645,6 +645,7 @@ def submit_ready_council_support(
     issue_id: str,
     evidence_ref: str,
     agent_role: str = "moderator",
+    materialize_readiness_summary: bool = True,
 ) -> dict[str, dict[str, Any]]:
     proposal = run_script(
         script_path("submit-council-proposal"),
@@ -659,7 +660,7 @@ def submit_ready_council_support(
         "--agent-role",
         agent_role,
         "--rationale",
-        "DB-backed WP4 successor evidence is sufficient for this test promotion.",
+        "DB-backed successor evidence is sufficient for this test promotion.",
         "--status",
         "submitted",
         "--confidence",
@@ -720,17 +721,149 @@ def submit_ready_council_support(
         "--lineage-id",
         issue_id,
     )
-    readiness_summary = run_script(
-        script_path("summarize-round-readiness"),
+    result = {
+        "proposal": proposal,
+        "readiness": readiness,
+    }
+    if materialize_readiness_summary:
+        result["readiness_summary"] = run_script(
+            script_path("summarize-round-readiness"),
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+        )
+    return result
+
+
+def submit_report_basis_records(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    target_id: str,
+    evidence_ref: str,
+    case_label: str = "Policy research case fixture",
+    agent_role: str = "environmental-investigator",
+    finding_kind: str = "policy-research-finding",
+    section_key: str = "key-findings",
+) -> dict[str, str]:
+    finding_payload = run_kernel(
+        "submit-finding-record",
         "--run-dir",
         str(run_dir),
         "--run-id",
         run_id,
         "--round-id",
         round_id,
+        "--actor-role",
+        agent_role,
+        "--agent-role",
+        agent_role,
+        "--finding-kind",
+        finding_kind,
+        "--title",
+        f"{case_label} finding",
+        "--summary",
+        f"{case_label} has DB-backed evidence that can be cited in the decision-maker report.",
+        "--rationale",
+        "The finding is anchored to a normalized query result or approved evidence basis, not to a helper conclusion.",
+        "--confidence",
+        "0.84",
+        "--target-kind",
+        "research-issue",
+        "--target-id",
+        target_id,
+        "--basis-object-id",
+        target_id,
+        "--evidence-ref",
+        evidence_ref,
+        "--provenance-json",
+        json.dumps(
+            {"source": "policy-research-fixture", "case_label": case_label},
+            sort_keys=True,
+        ),
+    )
+    finding_id = finding_payload["canonical_ids"][0]
+    bundle_payload = run_kernel(
+        "submit-evidence-bundle",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--actor-role",
+        agent_role,
+        "--agent-role",
+        agent_role,
+        "--bundle-kind",
+        "report-evidence-bundle",
+        "--title",
+        f"{case_label} evidence bundle",
+        "--summary",
+        "Bundle links the investigator finding to the evidence ref that reporting may cite.",
+        "--rationale",
+        "Report basis is carried through a DB evidence bundle before proposal and publication.",
+        "--confidence",
+        "0.86",
+        "--target-kind",
+        "finding",
+        "--target-id",
+        finding_id,
+        "--basis-object-id",
+        target_id,
+        "--finding-id",
+        finding_id,
+        "--evidence-ref",
+        evidence_ref,
+        "--provenance-json",
+        json.dumps(
+            {"source": "policy-research-fixture", "case_label": case_label},
+            sort_keys=True,
+        ),
+    )
+    bundle_id = bundle_payload["canonical_ids"][0]
+    section_payload = run_kernel(
+        "submit-report-section-draft",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--actor-role",
+        "report-editor",
+        "--agent-role",
+        "report-editor",
+        "--report-id",
+        round_id,
+        "--section-key",
+        section_key,
+        "--section-title",
+        section_key.replace("-", " ").title(),
+        "--section-text",
+        f"{case_label} report section cites the finding and evidence bundle as the report basis.",
+        "--basis-object-id",
+        finding_id,
+        "--basis-object-id",
+        bundle_id,
+        "--bundle-id",
+        bundle_id,
+        "--finding-id",
+        finding_id,
+        "--evidence-ref",
+        evidence_ref,
+        "--provenance-json",
+        json.dumps(
+            {"source": "policy-research-fixture", "case_label": case_label},
+            sort_keys=True,
+        ),
     )
     return {
-        "proposal": proposal,
-        "readiness": readiness,
-        "readiness_summary": readiness_summary,
+        "finding_id": finding_id,
+        "bundle_id": bundle_id,
+        "section_id": section_payload["canonical_ids"][0],
     }

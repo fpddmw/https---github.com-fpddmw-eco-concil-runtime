@@ -9,7 +9,7 @@ from _workflow_support import (
     investigation_path,
     load_json,
     primary_research_issue_id,
-    primary_wp4_evidence_ref,
+    primary_successor_evidence_ref,
     run_kernel,
     run_script,
     runtime_src_path,
@@ -38,7 +38,7 @@ ROUND_ID = "round-planner-001"
 
 def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    evidence_ref = primary_wp4_evidence_ref(outputs)
+    evidence_ref = primary_successor_evidence_ref(outputs)
     issue_id = primary_research_issue_id(outputs)
     run_script(
         script_path("post-board-note"),
@@ -84,7 +84,7 @@ def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
 
 def prepare_hold_board_state(run_dir: Path, root: Path) -> None:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
-    evidence_ref = primary_wp4_evidence_ref(outputs)
+    evidence_ref = primary_successor_evidence_ref(outputs)
     issue_id = primary_research_issue_id(outputs)
     hypothesis_payload = run_script(
         script_path("update-hypothesis-status"),

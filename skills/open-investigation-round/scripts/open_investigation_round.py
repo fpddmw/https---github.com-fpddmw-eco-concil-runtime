@@ -71,6 +71,20 @@ def unique_texts(values: list[Any]) -> list[str]:
     return results
 
 
+def expected_output_kinds_for_role(role: str, existing: list[Any] | None = None) -> list[str]:
+    replacements = {
+        "claim-candidates": "public-discourse-evidence",
+        "observation-candidates": "environment-evidence",
+    }
+    values = [replacements.get(maybe_text(value), maybe_text(value)) for value in existing or []]
+    defaults = (
+        ["normalized-public-signals", "public-discourse-evidence"]
+        if maybe_text(role) == "sociologist"
+        else ["normalized-environment-signals", "environment-evidence"]
+    )
+    return unique_texts(values or defaults)
+
+
 def pretty_json(data: Any, pretty: bool) -> str:
     if pretty:
         return json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True)
@@ -385,6 +399,12 @@ def build_followup_round_tasks(
             cloned["status"] = "planned"
             cloned["source_round_id"] = source_round_id
             cloned["source_task_id"] = maybe_text(source_task.get("task_id"))
+            cloned["expected_output_kinds"] = expected_output_kinds_for_role(
+                role,
+                cloned.get("expected_output_kinds")
+                if isinstance(cloned.get("expected_output_kinds"), list)
+                else [],
+            )
             inputs = cloned.get("inputs") if isinstance(cloned.get("inputs"), dict) else {}
             requirements = [item for item in inputs.get("evidence_requirements", []) if isinstance(item, dict)] if isinstance(inputs.get("evidence_requirements"), list) else []
             requirements.extend(
@@ -416,7 +436,7 @@ def build_followup_round_tasks(
     fallback_tasks: list[dict[str, Any]] = []
     for role in SOURCE_SELECTION_ROLES:
         role_source_skills = role_source_skills_from_mission(mission, role)
-        expected_output_kinds = ["normalized-public-signals", "claim-candidates"] if role == "sociologist" else ["normalized-environment-signals", "observation-candidates"]
+        expected_output_kinds = expected_output_kinds_for_role(role)
         fallback_tasks.append(
             {
                 "task_id": f"task-{role}-{round_id}-01",
@@ -426,9 +446,9 @@ def build_followup_round_tasks(
                 "status": "planned",
                 "source_round_id": source_round_id,
                 "objective": (
-                    "Continue public-discussion evidence collection for the follow-up round."
+                    "Continue public-discussion evidence collection for investigator query, finding, and evidence-bundle submission."
                     if role == "sociologist"
-                    else "Continue physical-observation evidence collection for the follow-up round."
+                    else "Continue environmental evidence collection for investigator query, quality review, and evidence-bundle submission."
                 ),
                 "expected_output_kinds": expected_output_kinds,
                 "inputs": {

@@ -13,8 +13,8 @@ RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-RUN_ID = "run-wp4-helper-guardrails"
-ROUND_ID = "round-wp4-helper-guardrails"
+RUN_ID = "run-optional-analysis-guardrails"
+ROUND_ID = "round-optional-analysis-guardrails"
 REMOVED_LEGACY_SKILLS = [
     "extract-observation-candidates",
     "merge-observation-candidates",
@@ -110,8 +110,8 @@ def insert_signal(
         connection.commit()
 
 
-class WP4HelperGuardrailTests(unittest.TestCase):
-    def test_optional_analysis_registry_entries_have_wp4_freeze_metadata(self) -> None:
+class OptionalAnalysisGuardrailTests(unittest.TestCase):
+    def test_optional_analysis_registry_entries_have_freeze_metadata(self) -> None:
         from eco_council_runtime.kernel.skill_registry import (
             SKILL_LAYER_OPTIONAL_ANALYSIS,
             WP4_ALLOWED_HELPER_DECISION_SOURCES,
@@ -141,6 +141,102 @@ class WP4HelperGuardrailTests(unittest.TestCase):
                 )
                 self.assertIn("approval-required", metadata.get("audit_status", ""))
                 self.assertTrue(metadata.get("wp4_destination"))
+
+    def test_analysis_kind_governance_freezes_legacy_report_basis_paths(self) -> None:
+        from eco_council_runtime.kernel.analysis_plane import (
+            ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
+            analysis_kind_governance,
+            query_analysis_result_sets,
+        )
+
+        legacy_kinds = {
+            "evidence-coverage": "review-evidence-sufficiency",
+            "claim-observation-link": "review-fact-check-evidence-scope",
+            "observation-candidate": "aggregate-environment-evidence",
+            "merged-observation": "aggregate-environment-evidence",
+            "formal-public-link": "compare-formal-public-footprints",
+            "representation-gap": "identify-representation-audit-cues",
+            "diffusion-edge": "detect-temporal-cooccurrence-cues",
+        }
+        for analysis_kind, successor_skill in legacy_kinds.items():
+            with self.subTest(analysis_kind=analysis_kind):
+                governance = analysis_kind_governance(analysis_kind)
+                self.assertEqual(
+                    ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
+                    governance["governance_status"],
+                )
+                self.assertEqual(successor_skill, governance["successor_skill"])
+                self.assertFalse(governance["default_chain_eligible"])
+                self.assertFalse(governance["phase_gate_eligible"])
+                self.assertFalse(governance["report_basis_eligible"])
+                self.assertTrue(governance["requires_explicit_approval"])
+                self.assertIn("finding-record", governance["report_use_requires"])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            payload = query_analysis_result_sets(
+                Path(tmpdir) / "run",
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                analysis_kind="evidence-coverage",
+                latest_only=True,
+            )
+            governance = payload["analysis_kind_governance"]
+            self.assertEqual(
+                ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
+                governance["governance_status"],
+            )
+            self.assertFalse(governance["report_basis_eligible"])
+            self.assertEqual(0, payload["summary"]["matching_result_set_count"])
+
+    def test_formal_signal_taxonomy_records_are_frozen_and_candidate_only(self) -> None:
+        from eco_council_runtime.formal_signal_semantics import (
+            FORMAL_PUBLIC_TAXONOMY_AUDIT_STATUS,
+            FORMAL_PUBLIC_TAXONOMY_VERSION,
+            build_formal_signal_semantics,
+            formal_signal_semantics_taxonomy_metadata,
+        )
+        from eco_council_runtime.kernel.skill_registry import resolve_skill_policy
+
+        metadata = formal_signal_semantics_taxonomy_metadata()
+        self.assertEqual(FORMAL_PUBLIC_TAXONOMY_VERSION, metadata["taxonomy_version"])
+        self.assertEqual(FORMAL_PUBLIC_TAXONOMY_AUDIT_STATUS, metadata["audit_status"])
+        self.assertFalse(metadata["default_chain_eligible"])
+        self.assertFalse(metadata["phase_gate_eligible"])
+        self.assertFalse(metadata["report_basis_eligible"])
+        family_ids = {
+            family["taxonomy_family_id"]
+            for family in metadata["families"]
+        }
+        self.assertIn("formal-public-issue-labels", family_ids)
+        self.assertIn("formal-public-route-hints", family_ids)
+        self.assertTrue(
+            all(
+                family["audit_status"] == FORMAL_PUBLIC_TAXONOMY_AUDIT_STATUS
+                for family in metadata["families"]
+            )
+        )
+
+        semantics = build_formal_signal_semantics(
+            title="Permit comment requests health study",
+            body_text="The agency should extend the comment period and review asthma evidence.",
+            author_name="Fixture Community Coalition",
+            attributes={"submitterType": "community"},
+        )
+        self.assertEqual("heuristic-fallback", semantics["decision_source"])
+        self.assertEqual("candidate-labels-only", semantics["typing_status"])
+        self.assertEqual(FORMAL_PUBLIC_TAXONOMY_VERSION, semantics["taxonomy_version"])
+        self.assertEqual(FORMAL_PUBLIC_TAXONOMY_AUDIT_STATUS, semantics["taxonomy_status"])
+        self.assertFalse(semantics["report_basis_eligible"])
+        self.assertFalse(semantics["phase_gate_eligible"])
+        self.assertGreaterEqual(len(semantics["taxonomy_family_records"]), 6)
+
+        taxonomy_policy = resolve_skill_policy("apply-approved-formal-public-taxonomy")
+        helper_metadata = taxonomy_policy["wp4_helper_metadata"]
+        self.assertEqual(
+            FORMAL_PUBLIC_TAXONOMY_VERSION,
+            helper_metadata["taxonomy_version"],
+        )
+        self.assertIn("approval-required", helper_metadata["audit_status"])
 
     def test_removed_skill_entries_are_not_registered_or_executable(self) -> None:
         from eco_council_runtime.kernel.skill_registry import skill_registry_snapshot
