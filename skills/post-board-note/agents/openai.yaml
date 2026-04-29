@@ -1,4 +1,4 @@
 interface:
-  display_name: "Eco Post Board Note"
-  short_description: "Append a compact note to the local board artifact"
-  default_prompt: "Use $post-board-note to append a compact investigation note to the current round's board state, preserve linked evidence refs, and emit an auditable board event for downstream review."
+  display_name: "Post Board Note"
+  short_description: "Append a human-readable board note"
+  default_prompt: "Use $post-board-note only for human-readable board notes. Do not treat the note as a canonical finding, hypothesis judgement, readiness opinion, or report basis; use finding/evidence-bundle/proposal commands for those records."

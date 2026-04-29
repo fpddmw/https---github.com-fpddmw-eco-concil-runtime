@@ -231,6 +231,8 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 "moderator",
                 "--linked-claim-id",
                 issue_id,
+                "--linked-artifact-ref",
+                coverage_ref,
                 "--confidence",
                 "0.58",
             )

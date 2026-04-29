@@ -3084,6 +3084,10 @@ def normalized_reporting_handoff_payload(
         "recommended_next_actions",
         "key_findings",
         "open_risks",
+        "evidence_index",
+        "uncertainty_register",
+        "residual_disputes",
+        "policy_recommendations",
     )
     ensure_dict_fields(
         normalized,
@@ -3091,6 +3095,9 @@ def normalized_reporting_handoff_payload(
         "analysis_sync",
         "deliberation_sync",
         "council_input_counts",
+        "evidence_packet",
+        "decision_packet",
+        "report_packet",
     )
     decision_source = (
         maybe_text(normalized.get("decision_source"))
@@ -3112,8 +3119,12 @@ def normalized_reporting_handoff_payload(
             normalized.get("supporting_opinion_ids"),
             normalized.get("rejected_opinion_ids"),
             nested_text_ids(normalized.get("key_findings"), "claim_id", "coverage_id"),
+            nested_text_ids(normalized.get("evidence_index"), "evidence_id", "object_id"),
         ),
-        nested_evidence_sources=(normalized.get("key_findings"),),
+        nested_evidence_sources=(
+            normalized.get("key_findings"),
+            normalized.get("evidence_index"),
+        ),
         provenance_extra={
             "handoff_status": normalized["handoff_status"],
             "promotion_status": normalized["promotion_status"],
@@ -3207,6 +3218,7 @@ def normalized_council_decision_payload(
         "accepted_object_ids",
         "rejected_object_ids",
         "promotion_resolution_reasons",
+        "memo_sections",
     )
     ensure_dict_fields(
         normalized,
@@ -3216,6 +3228,7 @@ def normalized_council_decision_payload(
         "decision_gating",
         "council_input_counts",
         "audit_refs",
+        "decision_packet",
     )
     decision_source = (
         maybe_text(normalized.get("decision_source"))
@@ -3237,6 +3250,7 @@ def normalized_council_decision_payload(
             normalized.get("rejected_opinion_ids"),
             normalized.get("decision_trace_ids"),
             nested_text_ids(normalized.get("key_findings"), "claim_id", "coverage_id"),
+            nested_text_ids(normalized.get("memo_sections"), "section_id"),
         ),
         nested_evidence_sources=(normalized.get("key_findings"),),
         provenance_extra={
@@ -3327,6 +3341,7 @@ def normalized_expert_report_payload(
         "open_questions",
         "recommended_next_actions",
         "report_sections",
+        "section_draft_refs",
     )
     ensure_dict_fields(
         normalized,
@@ -3334,6 +3349,7 @@ def normalized_expert_report_payload(
         "analysis_sync",
         "deliberation_sync",
         "audit_refs",
+        "report_packet",
     )
     decision_source = (
         maybe_text(normalized.get("decision_source"))
@@ -3349,6 +3365,7 @@ def normalized_expert_report_payload(
         lineage_sources=(
             maybe_text(normalized.get("decision_id")),
             nested_text_ids(normalized.get("findings"), "claim_id", "coverage_id"),
+            nested_text_ids(normalized.get("section_draft_refs"), "section_id"),
         ),
         nested_evidence_sources=(normalized.get("findings"),),
         provenance_extra={
@@ -3422,6 +3439,10 @@ def normalized_final_publication_payload(
         "recommended_next_actions",
         "selected_evidence_refs",
         "operator_review_hints",
+        "evidence_index",
+        "uncertainty_register",
+        "residual_disputes",
+        "policy_recommendations",
     )
     ensure_dict_fields(
         normalized,
@@ -3430,6 +3451,7 @@ def normalized_final_publication_payload(
         "deliberation_sync",
         "decision",
         "audit_refs",
+        "decision_maker_report",
     )
     decision_payload = dict_items(normalized.get("decision"))
     decision_source = (
@@ -3448,10 +3470,12 @@ def normalized_final_publication_payload(
             normalized.get("decision_trace_ids"),
             nested_text_ids(normalized.get("role_reports"), "report_id"),
             nested_text_ids(normalized.get("key_findings"), "claim_id", "coverage_id"),
+            nested_text_ids(normalized.get("evidence_index"), "evidence_id", "object_id"),
         ),
         nested_evidence_sources=(
             normalized.get("key_findings"),
             normalized.get("decision_traces"),
+            normalized.get("evidence_index"),
         ),
         provenance_extra={
             "publication_status": normalized["publication_status"],

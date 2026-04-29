@@ -1,4 +1,4 @@
 interface:
   display_name: "Eco Draft Expert Report"
-  short_description: "Draft a role-specific expert report from the reporting handoff"
-  default_prompt: "Use $draft-expert-report to draft one role-specific expert report from the current reporting handoff and decision draft."
+  short_description: "Draft a chapterized role report"
+  default_prompt: "Use $draft-expert-report to draft one chapterized role report from the current reporting handoff report packet, decision memo, and available report section drafts."

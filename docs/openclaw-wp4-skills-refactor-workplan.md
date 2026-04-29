@@ -222,7 +222,7 @@ WP4 helper 必须支持 challenger 对以下内容提交 review comment / challe
 新发现的问题：
 
 1. 多个历史 workflow 测试仍直接调用已删除旧脚本；全量测试在完成测试迁移前会按预期暴露缺失入口。
-2. phase-2 fallback/context 模块仍会读取历史 analysis result kind 名称；它们不再指向旧 skill，但后续若要彻底消除 claim/route/coverage 命名债，需要另立 DB schema/query migration。
+2. `analysis_plane.py` 与部分 DB query 表面仍保留历史 analysis result kind 名称；它们不再指向旧 skill，但后续若要彻底消除 claim/route/coverage 命名债，需要另立 DB schema/query migration。
 3. 旧测试 fixture 曾把 skill 链当作中间产物生成器；按 WP4 原则，后续 fixture 应从 normalized DB signals、finding/evidence bundle/proposal/report basis 等 DB objects 构造输入。
 
 是否影响后续计划：
@@ -277,6 +277,69 @@ WP4 helper 必须支持 challenger 对以下内容提交 review comment / challe
 6. `.venv/bin/python -m py_compile ...` 覆盖本批修改的测试文件：通过。
 7. `rg` 扫描 `tests` 中旧 skill 的 `script_path(...)` 直接调用：无匹配。
 8. `git diff --check`：通过。
+
+## 7.3 2026-04-28 针对性检阅修正（旧语义再入口收口）
+
+已完成：
+
+1. `phase2_fallback_context.py` 不再读取或消费 legacy coverage、claim-verifiability、verification-route、formal-public-link、representation-gap、diffusion-edge、controversy-map、typed issue analysis contexts；兼容字段保留为空，并在 `analysis_sync / observed_inputs` 标记 `legacy_wp4_analysis_quarantined`。
+2. `materialize-reporting-handoff` 不再把旧 `selected_coverages`、coverage score、claim readiness、verification route、formal/public link、representation gap、diffusion edge 转成 `key_findings`；若历史 promotion basis 中仍有这些行，只记录 `legacy-wp4-reporting-basis-ignored` warning。
+3. `suggest-evidence-lanes`、`materialize-research-issue-surface`、`project-research-issue-views`、`export-research-issue-map` 的 `input_path` 只接受带 WP4 helper metadata 的 approved-helper-view artifact；裸 JSON 或不带规则元数据的 artifact 会被忽略并写入 `unapproved-input-artifact` warning。
+4. `apply-approved-formal-public-taxonomy` 现在要求显式 `approval_ref`、`approval_ref` 字段或 `approved_taxonomy_ref`；只有 taxonomy 文件但没有具体审批引用时，状态为 `taxonomy-approval-required`，不输出 taxonomy labels。
+5. 新增 guardrail 测试：未批准 issue hint artifact 在无 DB basis 时不能生成 research issue surface / views；taxonomy 文件缺审批引用时不能输出标签。
+
+未完成：
+
+1. `analysis_plane.py` 的历史 analysis kind / query object 命名仍未迁移；本批只阻断 phase-2 fallback 与 reporting handoff 消费旧对象。
+2. `formal_signal_semantics.py` 仍未拆为 versioned taxonomy family records。
+3. 当前 artifact gate 验证的是 WP4 helper metadata 与 approval-gated 声明，不等价于完整 DB council object 承接；后续应把真实 skill approval request、finding/evidence bundle/report basis 引用写入 helper artifact 或统一从 DB 读取。
+
+新发现的问题：
+
+1. reporting workflow 仍读取 `analysis_sync.status` 兼容字段；本批以 `missing-coverage` 保留状态兼容，但不恢复 legacy coverage 读取。
+2. 已有 successor helper 测试链会通过 helper artifact 串联 surface/views/map；该链必须带 WP4 metadata，后续若推进 DB-only，应改为通过 DB council object 或 approved research issue surface record 传递。
+3. 报告 `key_findings` 现在不会由旧 helper basis 生成；后续需要通过明确的 finding / evidence bundle / report basis 设计提供正文 finding，而不是恢复 coverage finding。
+
+是否影响后续计划：
+
+1. 不阻塞后续 WP4；相反，它把旧 claim/coverage/linkage 语义从 phase-2 与 reporting 再入口中隔离出来。
+2. 后续优先级不变：taxonomy family records、analysis kind 命名迁移、helper artifact 到 DB council object 承接、report basis 显式引用链。
+3. 若后续测试需要报告正文 finding，应补 DB-backed report basis fixture，不应重新依赖 `coverage_score` 或 `support_links / contradiction_links`。
+
+本批实际运行测试：
+
+1. `.venv/bin/python -m unittest tests.test_reporting_workflow tests.test_wp4_helper_guardrails tests.test_formal_public_workflow tests.test_analysis_workflow tests.test_controversy_workflow`：20 项通过。
+2. `.venv/bin/python -m py_compile eco-concil-runtime/src/eco_council_runtime/phase2_fallback_context.py eco-concil-runtime/src/eco_council_runtime/wp4_helpers.py skills/materialize-reporting-handoff/scripts/materialize_reporting_handoff.py tests/test_wp4_helper_guardrails.py tests/test_formal_public_workflow.py`：通过。
+3. `git diff --check`：通过。
+
+## 7.4 2026-04-29 WP6 reporting packet 化对 WP4 护栏的跟进
+
+已完成：
+
+1. `materialize-reporting-handoff` 现在输出 `evidence_packet / decision_packet / report_packet`，并把旧 helper cue 与 DB report basis 分开；helper cue 不能直接成为 final report finding。
+2. `materialize-final-publication` 现在输出 `decision_maker_report / evidence_index / uncertainty_register / residual_disputes / policy_recommendations`，将 citation index 与 uncertainty 明确放入报告结构。
+3. reporting skill 的 handoff suggested skills 已移除 `propose-next-actions / open-falsification-probe / post-board-note` 作为报告链默认后续动作，hold path 改为 finding / evidence bundle / proposal / readiness opinion 等 DB basis 写入面。
+
+未完成：
+
+1. reporting contract 仍保留 `coverage_source` 等历史 trace 字段；本批没有做 DB/query contract 改名迁移。
+2. ready-round fixture 仍可能缺少 `finding-record / evidence-bundle / report-section-draft`，因此 `key_findings` 为空时只能输出 report-basis gap。
+
+新发现的问题：
+
+1. 如果不补 DB-backed report basis fixture，final publication 虽能生成结构化决策者报告，但正文 finding 与 recommendations 会保持保守，不能用旧 coverage/helper 结果填充。
+2. WP4 helper artifact 到 DB council/reporting object 的承接仍是后续重点，尤其是 report section draft 与 evidence bundle 的显式引用链。
+
+是否影响后续计划：
+
+1. 不阻塞 WP4 后续；它把 reporting 再入口中的 helper 直通风险进一步压低。
+2. WP7 case fixture 应优先补 finding / evidence bundle / report-section-draft，而不是恢复旧 helper basis。
+
+本批实际运行测试：
+
+1. `.venv/bin/python -m unittest tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface`：21 项通过。
+2. `.venv/bin/python -m py_compile ...reporting 相关脚本与 canonical normalizer`：通过。
+3. `.venv/bin/python -m unittest tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`：10 项通过。
 
 ## 8. 规则审计 freeze line
 

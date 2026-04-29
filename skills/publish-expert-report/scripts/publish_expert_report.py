@@ -240,7 +240,7 @@ def publish_expert_report_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [],
             "challenge_hints": [],
-            "suggested_next_skills": ["publish-council-decision"] if maybe_text(draft_payload.get("status")) == "ready-to-publish" else ["submit-council-proposal", "submit-readiness-opinion", "propose-next-actions"],
+            "suggested_next_skills": ["publish-council-decision"] if maybe_text(draft_payload.get("status")) == "ready-to-publish" else ["submit-finding-record", "submit-evidence-bundle", "submit-council-proposal", "submit-readiness-opinion"],
         },
     }
 

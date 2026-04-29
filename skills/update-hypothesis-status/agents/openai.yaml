@@ -1,4 +1,4 @@
 interface:
-  display_name: "Eco Update Hypothesis Status"
-  short_description: "Create or update a hypothesis card on the local board"
-  default_prompt: "Use $update-hypothesis-status to create or update a hypothesis card on the current round's board state, preserve linked claim ids and confidence, and emit an auditable board event for downstream review."
+  display_name: "Update Hypothesis Status"
+  short_description: "Create or update an evidence-backed hypothesis card"
+  default_prompt: "Use $update-hypothesis-status only when a finding, evidence bundle, proposal, or source evidence ref supports the hypothesis status change. Always pass an evidence_ref or linked_artifact_ref; do not use board notes as canonical judgement."

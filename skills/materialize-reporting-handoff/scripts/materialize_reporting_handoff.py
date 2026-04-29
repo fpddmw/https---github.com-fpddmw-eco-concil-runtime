@@ -20,6 +20,7 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
+from eco_council_runtime.council_objects import query_council_objects  # noqa: E402
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_reporting_handoff_record,
 )
@@ -44,15 +45,6 @@ def maybe_text(value: Any) -> str:
     return normalize_space(value)
 
 
-def maybe_number(value: Any) -> float | None:
-    if value in (None, ""):
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def unique_texts(values: list[Any]) -> list[str]:
     seen: set[str] = set()
     results: list[str] = []
@@ -63,6 +55,14 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
+def dict_items(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -112,109 +112,182 @@ def excerpt_text(text: str, limit: int = 280) -> str:
     return normalized[: limit - 3].rstrip() + "..."
 
 
-def build_coverage_key_findings(selected_coverages: list[dict[str, Any]], max_findings: int) -> list[dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-    for index, coverage in enumerate(selected_coverages[: max(1, max_findings)], start=1):
-        if not isinstance(coverage, dict):
-            continue
-        claim_id = maybe_text(coverage.get("claim_id"))
-        coverage_id = maybe_text(coverage.get("coverage_id"))
-        readiness = maybe_text(coverage.get("readiness")) or "unknown"
-        coverage_score = maybe_number(coverage.get("coverage_score")) or 0.0
-        support_count = int(coverage.get("support_link_count") or 0)
-        contradiction_count = int(coverage.get("contradiction_link_count") or 0)
-        summary = (
-            f"Claim {claim_id or coverage_id or index} is {readiness} with coverage_score={coverage_score:.2f}, "
-            f"support_links={support_count}, contradiction_links={contradiction_count}."
-        )
-        findings.append(
-            {
-                "finding_id": f"reporting-finding-{index:03d}",
-                "title": f"Evidence basis for {claim_id or coverage_id or 'round target'}",
-                "summary": summary,
-                "coverage_id": coverage_id,
-                "claim_id": claim_id,
-                "readiness": readiness,
-                "coverage_score": coverage_score,
-                "evidence_refs": unique_texts(coverage.get("evidence_refs", []) if isinstance(coverage.get("evidence_refs"), list) else []),
-            }
-        )
-    return findings
-
-
-def build_structural_basis_findings(
-    promotion_basis: dict[str, Any],
-    max_findings: int,
-) -> list[dict[str, Any]]:
+def legacy_reporting_basis_count(promotion_basis: dict[str, Any]) -> int:
     frozen_basis = (
         promotion_basis.get("frozen_basis", {})
         if isinstance(promotion_basis.get("frozen_basis"), dict)
         else {}
     )
-    results: list[dict[str, Any]] = []
+    count = 0
     for key in (
-        "issue_clusters",
+        "selected_coverages",
+        "coverages",
+        "empirical_support_coverages",
         "verification_routes",
         "formal_public_links",
         "representation_gaps",
         "diffusion_edges",
     ):
-        rows = frozen_basis.get(key, [])
-        if not isinstance(rows, list):
-            continue
-        for row in rows:
-            if not isinstance(row, dict):
+        rows = promotion_basis.get(key, frozen_basis.get(key, []))
+        if isinstance(rows, list):
+            count += len(rows)
+    return count
+
+
+def query_round_council_objects(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    object_kind: str,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    try:
+        payload = query_council_objects(
+            run_dir,
+            object_kind=object_kind,
+            run_id=run_id,
+            round_id=round_id,
+            limit=limit,
+        )
+    except Exception:
+        return []
+    rows = payload.get("objects", []) if isinstance(payload.get("objects"), list) else []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def load_reporting_basis_objects(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, list[dict[str, Any]]]:
+    object_kinds = (
+        "finding-record",
+        "evidence-bundle",
+        "proposal",
+        "readiness-opinion",
+        "challenge",
+        "review-comment",
+    )
+    return {
+        object_kind: query_round_council_objects(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind=object_kind,
+        )
+        for object_kind in object_kinds
+    }
+
+
+def object_id_for(object_kind: str, row: dict[str, Any]) -> str:
+    for field_name in (
+        "finding_id",
+        "bundle_id",
+        "proposal_id",
+        "opinion_id",
+        "challenge_id",
+        "comment_id",
+        "ticket_id",
+        "id",
+    ):
+        value = maybe_text(row.get(field_name))
+        if value:
+            return value
+    return object_kind + "-" + stable_hash(object_kind, row.get("summary"), row.get("title"))[:12]
+
+
+def object_summary(row: dict[str, Any]) -> str:
+    for field_name in ("summary", "title", "rationale", "opinion_text", "challenge_statement", "comment_text"):
+        value = maybe_text(row.get(field_name))
+        if value:
+            return value
+    return "DB council object without a compact summary."
+
+
+def evidence_refs_for(row: dict[str, Any]) -> list[str]:
+    return unique_texts(list_items(row.get("evidence_refs")))
+
+
+def build_evidence_index(
+    *,
+    selected_evidence_refs: list[str],
+    council_basis: dict[str, list[dict[str, Any]]],
+    max_items: int = 40,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for index, evidence_ref in enumerate(selected_evidence_refs, start=1):
+        rows.append(
+            {
+                "evidence_id": f"frozen-evidence-ref-{index:03d}",
+                "object_kind": "evidence-ref",
+                "object_id": evidence_ref,
+                "summary": "Frozen DB report-basis evidence reference.",
+                "evidence_refs": [evidence_ref],
+                "basis_role": "frozen-report-basis",
+                "source_plane": "deliberation",
+                "report_use": "citation-index",
+            }
+        )
+    for object_kind in ("finding-record", "evidence-bundle", "proposal", "readiness-opinion", "challenge", "review-comment"):
+        for row in council_basis.get(object_kind, []):
+            object_id = object_id_for(object_kind, row)
+            refs = evidence_refs_for(row)
+            if object_kind in {"finding-record", "evidence-bundle"} and not refs:
                 continue
-            object_type = maybe_text(row.get("object_type")) or key.rstrip("s")
-            object_id = maybe_text(row.get("object_id"))
-            issue_label = maybe_text(row.get("issue_label")) or object_id or "round target"
-            summary = maybe_text(row.get("summary"))
-            recommended_lane = maybe_text(row.get("recommended_lane"))
-            status_hint = (
-                maybe_text(row.get("route_status"))
-                or maybe_text(row.get("link_status"))
-                or maybe_text(row.get("gap_type"))
-                or maybe_text(row.get("edge_type"))
-            )
-            if not summary:
-                summary = (
-                    f"{object_type} {object_id or issue_label} remains part of the frozen controversy basis."
-                )
-            if recommended_lane:
-                summary = f"{summary} lane={recommended_lane}."
-            if status_hint:
-                summary = f"{summary} status={status_hint}."
-            results.append(
+            rows.append(
                 {
-                    "finding_id": f"reporting-finding-{len(results) + 1:03d}",
-                    "title": f"{object_type} for {issue_label}",
-                    "summary": summary,
-                    "object_type": object_type,
+                    "evidence_id": f"{object_kind}:{object_id}",
+                    "object_kind": object_kind,
                     "object_id": object_id,
-                    "issue_label": issue_label,
-                    "recommended_lane": recommended_lane,
-                    "evidence_refs": unique_texts(
-                        row.get("evidence_refs", [])
-                        if isinstance(row.get("evidence_refs"), list)
-                        else []
+                    "summary": object_summary(row),
+                    "evidence_refs": refs,
+                    "basis_object_ids": unique_texts(list_items(row.get("basis_object_ids"))),
+                    "source_signal_ids": unique_texts(list_items(row.get("source_signal_ids"))),
+                    "basis_role": (
+                        "investigator-evidence"
+                        if object_kind in {"finding-record", "evidence-bundle"}
+                        else "council-context"
+                    ),
+                    "source_plane": "deliberation",
+                    "report_use": (
+                        "report-basis-candidate"
+                        if object_kind in {"finding-record", "evidence-bundle"}
+                        else "audit-context"
                     ),
                 }
             )
-            if len(results) >= max(1, max_findings):
-                return results
-    return results
+    deduped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        key = "|".join(
+            [
+                maybe_text(row.get("object_kind")),
+                maybe_text(row.get("object_id")),
+                ",".join(evidence_refs_for(row)),
+            ]
+        )
+        if key and key not in deduped:
+            deduped[key] = row
+    return list(deduped.values())[:max_items]
 
 
-def build_key_findings(promotion_basis: dict[str, Any], max_findings: int) -> list[dict[str, Any]]:
-    selected_coverages = (
-        promotion_basis.get("selected_coverages", [])
-        if isinstance(promotion_basis.get("selected_coverages"), list)
-        else []
-    )
-    coverage_findings = build_coverage_key_findings(selected_coverages, max_findings)
-    if coverage_findings:
-        return coverage_findings
-    return build_structural_basis_findings(promotion_basis, max_findings)
+def build_key_findings_from_council_basis(
+    council_basis: dict[str, list[dict[str, Any]]],
+    max_findings: int,
+) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    for index, row in enumerate(council_basis.get("finding-record", [])[: max(0, max_findings)], start=1):
+        refs = evidence_refs_for(row)
+        if not refs:
+            continue
+        findings.append(
+            {
+                "finding_id": object_id_for("finding-record", row),
+                "title": maybe_text(row.get("title")) or f"Finding {index}",
+                "summary": object_summary(row),
+                "finding_kind": maybe_text(row.get("finding_kind")) or "finding",
+                "agent_role": maybe_text(row.get("agent_role")),
+                "evidence_refs": refs,
+                "basis_object_ids": unique_texts(list_items(row.get("basis_object_ids"))),
+            }
+        )
+    return findings
 
 
 def build_open_risks(
@@ -333,6 +406,239 @@ def recommended_sections(reporting_ready: bool) -> list[str]:
     if reporting_ready:
         return ["executive-summary", "role-reports", "evidence-basis", "residual-risks", "audit-trace"]
     return ["gating-status", "open-risks", "next-round-plan", "audit-trace"]
+
+
+def build_uncertainty_register(
+    *,
+    open_risks: list[dict[str, str]],
+    reporting_blocker_hints: list[str],
+    evidence_index: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    register: list[dict[str, Any]] = []
+    for index, risk in enumerate(open_risks, start=1):
+        summary = maybe_text(risk.get("summary")) if isinstance(risk, dict) else ""
+        if not summary:
+            continue
+        register.append(
+            {
+                "uncertainty_id": f"open-risk-{index:03d}",
+                "uncertainty_type": maybe_text(risk.get("risk_type")) or "open-risk",
+                "summary": summary,
+                "report_treatment": "Carry as unresolved risk or scope a follow-up evidence request.",
+            }
+        )
+    for index, hint in enumerate(reporting_blocker_hints, start=1):
+        summary = maybe_text(hint)
+        if not summary:
+            continue
+        register.append(
+            {
+                "uncertainty_id": f"reporting-blocker-{index:03d}",
+                "uncertainty_type": "reporting-blocker",
+                "summary": summary,
+                "report_treatment": "Do not present as resolved evidence until moderator or report basis explicitly addresses it.",
+            }
+        )
+    if not any(row.get("object_kind") in {"finding-record", "evidence-bundle"} for row in evidence_index):
+        register.append(
+            {
+                "uncertainty_id": "missing-investigator-basis-001",
+                "uncertainty_type": "report-basis-gap",
+                "summary": "No DB finding-record or evidence-bundle is available for direct report citation.",
+                "report_treatment": "Use frozen evidence refs only as citation index until an investigator or report editor cites them through DB basis objects.",
+            }
+        )
+    return register[:8]
+
+
+def build_residual_disputes(
+    *,
+    reporting_blockers: list[str],
+    rejected_proposal_ids: list[str],
+    rejected_opinion_ids: list[str],
+    open_risks: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    disputes: list[dict[str, Any]] = []
+    for index, blocker in enumerate(reporting_blockers, start=1):
+        summaries = reporting_blocker_summaries([blocker])
+        disputes.append(
+            {
+                "dispute_id": f"reporting-blocker-{index:03d}",
+                "object_kind": "reporting-blocker",
+                "object_id": blocker,
+                "summary": summaries[0] if summaries else blocker,
+                "status": "open",
+            }
+        )
+    for proposal_id in rejected_proposal_ids:
+        disputes.append(
+            {
+                "dispute_id": f"proposal-veto:{proposal_id}",
+                "object_kind": "proposal",
+                "object_id": proposal_id,
+                "summary": "Council proposal is rejected or vetoed for current publication posture.",
+                "status": "unresolved",
+            }
+        )
+    for opinion_id in rejected_opinion_ids:
+        disputes.append(
+            {
+                "dispute_id": f"readiness-veto:{opinion_id}",
+                "object_kind": "readiness-opinion",
+                "object_id": opinion_id,
+                "summary": "Readiness opinion blocks or qualifies final publication.",
+                "status": "unresolved",
+            }
+        )
+    for risk in open_risks:
+        summary = maybe_text(risk.get("summary")) if isinstance(risk, dict) else ""
+        if summary:
+            disputes.append(
+                {
+                    "dispute_id": maybe_text(risk.get("risk_id")) or "open-risk",
+                    "object_kind": maybe_text(risk.get("risk_type")) or "risk",
+                    "object_id": maybe_text(risk.get("risk_id")),
+                    "summary": summary,
+                    "status": "open",
+                }
+            )
+    return disputes[:8]
+
+
+def build_policy_recommendations(
+    *,
+    reporting_ready: bool,
+    recommended_next_actions: list[dict[str, str]],
+    uncertainty_register: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if reporting_ready:
+        return [
+            {
+                "recommendation_id": "reporting-action-001",
+                "recommendation_type": "reporting",
+                "summary": "Draft the decision-maker report from frozen DB evidence basis and submitted report section drafts.",
+                "basis": "report-basis-freeze",
+            },
+            {
+                "recommendation_id": "reporting-action-002",
+                "recommendation_type": "audit",
+                "summary": "Carry uncertainty register and residual disputes into the final report rather than turning them into settled conclusions.",
+                "basis": "uncertainty-register" if uncertainty_register else "reporting-gate",
+            },
+        ]
+    recommendations: list[dict[str, Any]] = []
+    for index, action in enumerate(recommended_next_actions, start=1):
+        recommendations.append(
+            {
+                "recommendation_id": f"next-round-action-{index:03d}",
+                "recommendation_type": "follow-up-investigation",
+                "summary": maybe_text(action.get("objective")),
+                "assigned_role": maybe_text(action.get("assigned_role")),
+                "basis": maybe_text(action.get("reason")),
+            }
+        )
+    return [item for item in recommendations if maybe_text(item.get("summary"))][:6]
+
+
+def build_packets(
+    *,
+    run_id: str,
+    round_id: str,
+    reporting_ready: bool,
+    handoff_status: str,
+    promotion_status: str,
+    readiness_status: str,
+    supervisor_status: str,
+    reporting_blockers: list[str],
+    selected_basis_object_ids: list[str],
+    selected_evidence_refs: list[str],
+    supporting_proposal_ids: list[str],
+    rejected_proposal_ids: list[str],
+    supporting_opinion_ids: list[str],
+    rejected_opinion_ids: list[str],
+    council_input_counts: dict[str, Any],
+    key_findings: list[dict[str, Any]],
+    open_risks: list[dict[str, str]],
+    recommended_next_actions: list[dict[str, str]],
+    council_basis: dict[str, list[dict[str, Any]]],
+    reporting_blocker_hints: list[str],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    evidence_index = build_evidence_index(
+        selected_evidence_refs=selected_evidence_refs,
+        council_basis=council_basis,
+    )
+    uncertainty_register = build_uncertainty_register(
+        open_risks=open_risks,
+        reporting_blocker_hints=reporting_blocker_hints,
+        evidence_index=evidence_index,
+    )
+    residual_disputes = build_residual_disputes(
+        reporting_blockers=reporting_blockers,
+        rejected_proposal_ids=rejected_proposal_ids,
+        rejected_opinion_ids=rejected_opinion_ids,
+        open_risks=open_risks,
+    )
+    policy_recommendations = build_policy_recommendations(
+        reporting_ready=reporting_ready,
+        recommended_next_actions=recommended_next_actions,
+        uncertainty_register=uncertainty_register,
+    )
+    packet_suffix = stable_hash(run_id, round_id, handoff_status, promotion_status)[:12]
+    evidence_packet = {
+        "packet_id": f"evidence-packet-{packet_suffix}",
+        "packet_kind": "decision-maker-report-evidence-packet",
+        "source": "db-canonical-report-basis",
+        "selected_basis_object_ids": selected_basis_object_ids,
+        "selected_evidence_refs": selected_evidence_refs,
+        "evidence_index": evidence_index,
+        "key_findings": key_findings,
+        "basis_object_counts": {
+            object_kind: len(rows)
+            for object_kind, rows in sorted(council_basis.items())
+        },
+        "caveats": [
+            "Helper and heuristic outputs are not direct report basis unless cited through DB council/reporting objects.",
+            "Frozen evidence refs identify citation candidates; report conclusions require finding, evidence bundle, proposal, or report section basis.",
+        ],
+    }
+    decision_packet = {
+        "packet_id": f"decision-packet-{packet_suffix}",
+        "packet_kind": "moderator-decision-memo-packet",
+        "handoff_status": handoff_status,
+        "reporting_ready": reporting_ready,
+        "promotion_status": promotion_status,
+        "readiness_status": readiness_status,
+        "supervisor_status": supervisor_status,
+        "reporting_blockers": reporting_blockers,
+        "supporting_proposal_ids": supporting_proposal_ids,
+        "rejected_proposal_ids": rejected_proposal_ids,
+        "supporting_opinion_ids": supporting_opinion_ids,
+        "rejected_opinion_ids": rejected_opinion_ids,
+        "council_input_counts": council_input_counts,
+        "open_risks": open_risks,
+        "recommended_next_actions": recommended_next_actions,
+        "residual_disputes": residual_disputes,
+    }
+    report_packet = {
+        "packet_id": f"report-packet-{packet_suffix}",
+        "packet_kind": "decision-maker-policy-report-packet",
+        "report_type": "decision-maker-environmental-policy-report",
+        "recommended_sections": [
+            {"section_key": "decision-question", "required_basis": "moderator-defined question or decision memo"},
+            {"section_key": "regional-and-policy-context", "required_basis": "DB evidence bundle or report section draft"},
+            {"section_key": "evidence-sources-and-scope", "required_basis": "evidence_packet.evidence_index"},
+            {"section_key": "key-findings", "required_basis": "finding-record or report-section-draft"},
+            {"section_key": "options-and-tradeoffs", "required_basis": "proposal or report-section-draft"},
+            {"section_key": "risks-and-uncertainties", "required_basis": "uncertainty_register"},
+            {"section_key": "recommendations", "required_basis": "policy_recommendations with evidence refs"},
+            {"section_key": "remaining-disputes", "required_basis": "residual_disputes"},
+            {"section_key": "citation-index", "required_basis": "evidence_packet.evidence_index"},
+        ],
+        "uncertainty_register": uncertainty_register,
+        "residual_disputes": residual_disputes,
+        "policy_recommendations": policy_recommendations,
+    }
+    return evidence_packet, decision_packet, report_packet
 
 
 def materialize_reporting_handoff_skill(
@@ -496,11 +802,84 @@ def materialize_reporting_handoff_skill(
     )
     reporting_blocker_hints = reporting_blocker_summaries(reporting_blockers)
 
-    key_findings = build_key_findings(promotion_basis, max_findings)
+    council_basis = load_reporting_basis_objects(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    key_findings = build_key_findings_from_council_basis(council_basis, max_findings)
+    ignored_legacy_basis_count = legacy_reporting_basis_count(promotion_basis)
+    if ignored_legacy_basis_count:
+        warnings.append(
+            {
+                "code": "legacy-wp4-reporting-basis-ignored",
+                "message": (
+                    "Ignored legacy claim/coverage, routing, linkage, gap, or diffusion "
+                    f"basis rows ({ignored_legacy_basis_count}) while materializing reporting handoff."
+                ),
+            }
+        )
     open_risks = build_open_risks(promotion_basis=promotion_basis, supervisor_state=supervisor_state, readiness=readiness)
     next_actions = build_recommended_next_actions(
         supervisor_state,
         open_risks=open_risks,
+        reporting_blocker_hints=reporting_blocker_hints,
+    )
+    selected_basis_object_ids = unique_texts(
+        promotion_basis.get("selected_basis_object_ids", [])
+        if isinstance(promotion_basis.get("selected_basis_object_ids"), list)
+        else []
+    )
+    supporting_proposal_ids = unique_texts(
+        promotion_basis.get("supporting_proposal_ids", [])
+        if isinstance(promotion_basis.get("supporting_proposal_ids"), list)
+        else []
+    )
+    rejected_proposal_ids = unique_texts(
+        promotion_basis.get("rejected_proposal_ids", [])
+        if isinstance(promotion_basis.get("rejected_proposal_ids"), list)
+        else []
+    )
+    supporting_opinion_ids = unique_texts(
+        promotion_basis.get("supporting_opinion_ids", [])
+        if isinstance(promotion_basis.get("supporting_opinion_ids"), list)
+        else []
+    )
+    rejected_opinion_ids = unique_texts(
+        promotion_basis.get("rejected_opinion_ids", [])
+        if isinstance(promotion_basis.get("rejected_opinion_ids"), list)
+        else []
+    )
+    council_input_counts = (
+        promotion_basis.get("council_input_counts", {})
+        if isinstance(promotion_basis.get("council_input_counts"), dict)
+        else {}
+    )
+    selected_evidence_refs = unique_texts(
+        promotion_basis.get("selected_evidence_refs", [])
+        if isinstance(promotion_basis.get("selected_evidence_refs"), list)
+        else []
+    )
+    evidence_packet, decision_packet, report_packet = build_packets(
+        run_id=run_id,
+        round_id=round_id,
+        reporting_ready=reporting_ready,
+        handoff_status=handoff_status,
+        promotion_status=promotion_status,
+        readiness_status=readiness_status,
+        supervisor_status=supervisor_status,
+        reporting_blockers=reporting_blockers,
+        selected_basis_object_ids=selected_basis_object_ids,
+        selected_evidence_refs=selected_evidence_refs,
+        supporting_proposal_ids=supporting_proposal_ids,
+        rejected_proposal_ids=rejected_proposal_ids,
+        supporting_opinion_ids=supporting_opinion_ids,
+        rejected_opinion_ids=rejected_opinion_ids,
+        council_input_counts=council_input_counts,
+        key_findings=key_findings,
+        open_risks=open_risks,
+        recommended_next_actions=next_actions,
+        council_basis=council_basis,
         reporting_blocker_hints=reporting_blocker_hints,
     )
     board_excerpt = excerpt_text(board_brief_text)
@@ -526,31 +905,11 @@ def materialize_reporting_handoff_skill(
         **contract_fields,
         "promoted_basis_id": maybe_text(promotion_basis.get("basis_id")),
         "basis_selection_mode": maybe_text(promotion_basis.get("basis_selection_mode")),
-        "selected_basis_object_ids": unique_texts(
-            promotion_basis.get("selected_basis_object_ids", [])
-            if isinstance(promotion_basis.get("selected_basis_object_ids"), list)
-            else []
-        ),
-        "supporting_proposal_ids": unique_texts(
-            promotion_basis.get("supporting_proposal_ids", [])
-            if isinstance(promotion_basis.get("supporting_proposal_ids"), list)
-            else []
-        ),
-        "rejected_proposal_ids": unique_texts(
-            promotion_basis.get("rejected_proposal_ids", [])
-            if isinstance(promotion_basis.get("rejected_proposal_ids"), list)
-            else []
-        ),
-        "supporting_opinion_ids": unique_texts(
-            promotion_basis.get("supporting_opinion_ids", [])
-            if isinstance(promotion_basis.get("supporting_opinion_ids"), list)
-            else []
-        ),
-        "rejected_opinion_ids": unique_texts(
-            promotion_basis.get("rejected_opinion_ids", [])
-            if isinstance(promotion_basis.get("rejected_opinion_ids"), list)
-            else []
-        ),
+        "selected_basis_object_ids": selected_basis_object_ids,
+        "supporting_proposal_ids": supporting_proposal_ids,
+        "rejected_proposal_ids": rejected_proposal_ids,
+        "supporting_opinion_ids": supporting_opinion_ids,
+        "rejected_opinion_ids": rejected_opinion_ids,
         "promotion_resolution_mode": maybe_text(
             promotion_basis.get("promotion_resolution_mode")
         ),
@@ -559,18 +918,22 @@ def materialize_reporting_handoff_skill(
             if isinstance(promotion_basis.get("promotion_resolution_reasons"), list)
             else []
         ),
-        "council_input_counts": (
-            promotion_basis.get("council_input_counts", {})
-            if isinstance(promotion_basis.get("council_input_counts"), dict)
-            else {}
-        ),
-        "selected_evidence_refs": unique_texts(promotion_basis.get("selected_evidence_refs", []) if isinstance(promotion_basis.get("selected_evidence_refs"), list) else []),
+        "council_input_counts": council_input_counts,
+        "selected_evidence_refs": selected_evidence_refs,
+        "evidence_packet": evidence_packet,
+        "decision_packet": decision_packet,
+        "report_packet": report_packet,
+        "evidence_index": list_items(evidence_packet.get("evidence_index")),
+        "uncertainty_register": list_items(report_packet.get("uncertainty_register")),
+        "residual_disputes": list_items(report_packet.get("residual_disputes")),
+        "policy_recommendations": list_items(report_packet.get("policy_recommendations")),
         "board_brief_excerpt": board_excerpt,
         "key_findings": key_findings,
         "open_risks": open_risks,
         "recommended_next_actions": next_actions,
         "recommended_sections": recommended_sections(reporting_ready),
         "report_targets": ["expert-report-draft", "council-decision-draft"] if reporting_ready else ["expert-report-draft", "another-round-decision"],
+        "warnings": warnings,
     }
     stored_payload = store_reporting_handoff_record(
         run_dir_path,
@@ -592,6 +955,10 @@ def materialize_reporting_handoff_skill(
             "handoff_status": handoff_status,
             "reporting_ready": reporting_ready,
             "finding_count": len(key_findings),
+            "evidence_packet_id": maybe_text(evidence_packet.get("packet_id")),
+            "decision_packet_id": maybe_text(decision_packet.get("packet_id")),
+            "report_packet_id": maybe_text(report_packet.get("packet_id")),
+            "evidence_index_count": len(list_items(evidence_packet.get("evidence_index"))),
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
             "promotion_source": maybe_text(contract_fields.get("promotion_source")),
@@ -614,7 +981,7 @@ def materialize_reporting_handoff_skill(
                 + (reporting_blocker_hints if not reporting_ready else [])
             )[:3] if not reporting_ready else [],
             "challenge_hints": [item.get("summary", "") for item in open_risks[:2] if maybe_text(item.get("summary"))],
-            "suggested_next_skills": ["draft-expert-report", "draft-council-decision"] if reporting_ready else ["draft-expert-report", "draft-council-decision", "submit-council-proposal", "submit-readiness-opinion", "propose-next-actions", "open-falsification-probe"],
+            "suggested_next_skills": ["draft-expert-report", "draft-council-decision"] if reporting_ready else ["draft-expert-report", "draft-council-decision", "submit-finding-record", "submit-evidence-bundle", "submit-council-proposal", "submit-readiness-opinion"],
         },
     }
 

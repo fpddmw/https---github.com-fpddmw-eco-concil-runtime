@@ -75,6 +75,8 @@ def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
         "environmentalist",
         "--linked-claim-id",
         issue_id,
+        "--linked-artifact-ref",
+        evidence_ref,
         "--confidence",
         "0.91",
     )
@@ -102,6 +104,8 @@ def prepare_hold_board_state(run_dir: Path, root: Path) -> None:
         "moderator",
         "--linked-claim-id",
         issue_id,
+        "--linked-artifact-ref",
+        evidence_ref,
         "--confidence",
         "0.52",
     )

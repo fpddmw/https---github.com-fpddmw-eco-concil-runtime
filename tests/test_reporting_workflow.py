@@ -136,6 +136,8 @@ def seed_ready_reporting_context(
         owner_role,
         "--linked-claim-id",
         issue_id,
+        "--linked-artifact-ref",
+        evidence_ref,
         "--confidence",
         confidence,
     )
@@ -199,6 +201,30 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertEqual([], handoff_artifact["reporting_blockers"])
             self.assertEqual("promoted", handoff_artifact["promotion_status"])
             self.assertEqual([], handoff_artifact["key_findings"])
+            self.assertEqual(
+                "decision-maker-report-evidence-packet",
+                handoff_artifact["evidence_packet"]["packet_kind"],
+            )
+            self.assertEqual(
+                "moderator-decision-memo-packet",
+                handoff_artifact["decision_packet"]["packet_kind"],
+            )
+            self.assertEqual(
+                "decision-maker-policy-report-packet",
+                handoff_artifact["report_packet"]["packet_kind"],
+            )
+            self.assertEqual(
+                handoff_artifact["evidence_packet"]["evidence_index"],
+                handoff_artifact["evidence_index"],
+            )
+            self.assertGreaterEqual(len(handoff_artifact["evidence_index"]), 1)
+            self.assertIn(
+                "citation-index",
+                [
+                    item["section_key"]
+                    for item in handoff_artifact["report_packet"]["recommended_sections"]
+                ],
+            )
             self.assertEqual("deliberation-plane", promotion_artifact["board_state_source"])
             self.assertEqual("missing-coverage", promotion_artifact["coverage_source"])
             self.assertEqual(
@@ -263,6 +289,11 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertEqual("finalize", decision_payload["summary"]["moderator_status"])
             self.assertEqual("ready", decision_artifact["publication_readiness"])
             self.assertFalse(decision_artifact["next_round_required"])
+            self.assertEqual(
+                "moderator-decision-memo-packet",
+                decision_artifact["decision_packet"]["packet_kind"],
+            )
+            self.assertGreaterEqual(len(decision_artifact["memo_sections"]), 4)
             self.assertEqual(
                 "deliberation-plane-reporting-handoff",
                 decision_artifact["reporting_handoff_source"],
@@ -543,6 +574,8 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "moderator",
                 "--linked-claim-id",
                 issue_id,
+                "--linked-artifact-ref",
+                coverage_ref,
                 "--confidence",
                 "0.52",
             )

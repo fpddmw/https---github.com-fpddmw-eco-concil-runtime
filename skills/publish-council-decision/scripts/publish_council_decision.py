@@ -680,7 +680,7 @@ def publish_council_decision_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [],
             "challenge_hints": [],
-            "suggested_next_skills": ["materialize-final-publication"] if publication_readiness == "ready" else ["materialize-final-publication", "submit-council-proposal", "submit-readiness-opinion", "propose-next-actions", "open-falsification-probe"],
+            "suggested_next_skills": ["materialize-final-publication"] if publication_readiness == "ready" else ["materialize-final-publication", "submit-finding-record", "submit-evidence-bundle", "submit-council-proposal", "submit-readiness-opinion"],
         },
     }
 

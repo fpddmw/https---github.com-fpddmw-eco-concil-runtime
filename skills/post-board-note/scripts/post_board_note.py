@@ -180,12 +180,14 @@ def post_board_note_skill(
         "artifact_refs": artifact_refs,
         "canonical_ids": [note_id],
         "warnings": [],
+        "note_scope": "human-readable-board-note",
+        "canonical_judgement": False,
         "board_handoff": {
             "candidate_ids": [note_id],
             "evidence_refs": artifact_refs,
             "gap_hints": [],
             "challenge_hints": [],
-            "suggested_next_skills": ["update-hypothesis-status", "open-challenge-ticket", "claim-board-task"],
+            "suggested_next_skills": [],
         },
     }
 

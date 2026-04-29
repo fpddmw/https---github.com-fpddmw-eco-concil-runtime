@@ -69,6 +69,8 @@ def seed_open_challenge_context(
         "moderator",
         "--linked-claim-id",
         issue_id,
+        "--linked-artifact-ref",
+        evidence_ref,
         "--confidence",
         "0.52",
     )
@@ -144,6 +146,8 @@ def seed_ready_investigation_context(run_dir: Path, root: Path) -> dict[str, str
         "environmentalist",
         "--linked-claim-id",
         issue_id,
+        "--linked-artifact-ref",
+        evidence_ref,
         "--confidence",
         "0.91",
     )

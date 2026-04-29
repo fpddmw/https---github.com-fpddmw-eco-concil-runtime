@@ -691,3 +691,78 @@ skills 侧重构完成至少应满足：
 - 测试：
   - 已运行：`.venv/bin/python -m unittest tests.test_signal_plane_workflow tests.test_council_submission_workflow tests.test_agent_entry_gate`
   - 结果：`18` 项通过。
+
+## 15. 2026-04-29 Skills Batch 5 / WP5 代码交付回写
+
+- 已完成：
+  - `update-hypothesis-status` 已改成 evidence-backed board mutation：本次调用、已存在 hypothesis 或已接受 proposal 必须提供至少一个 evidence ref；无 evidence ref 时返回 `status=blocked`，不写 canonical hypothesis。
+  - `post-board-note` 已降为 human-readable board note：输出显式标记 `canonical_judgement=false`，`board_handoff.suggested_next_skills` 清空，不再把 note 暗示成 finding、readiness opinion 或 report basis。
+  - `materialize-board-brief` 已降为 human-readable export：删除自动 `Immediate Next Moves` 生成，改为只展示 open board item counts，并清空 handoff next-skill 建议。
+  - `promote-evidence-basis` 保留兼容 skill id，但语义已明确为 `freeze-report-basis`：输出新增 `basis_object_kind=report-basis-freeze`、`transition_semantics=freeze-report-basis`、`report_basis_selection_mode=freeze-report-basis-v1`，并清空 promotion handoff 的默认下一步建议。
+  - `skill_registry.py` 已同步 WP5 边界：`update-hypothesis-status` 输入面包含 finding / evidence-bundle / proposal，`promote-evidence-basis` 输出面包含 `report-basis-freeze`。
+  - 所有直接调用 `update-hypothesis-status` 的 workflow 测试夹具已显式传入 evidence ref；新增无 evidence ref 被阻断的 board mutation 回归。
+
+- 未完成：
+  - `promote-evidence-basis` 的 skill id、transition kind、DB 表名仍保留历史 `promotion` 命名，以避免本批扩大为 schema/CLI 迁移；本批完成的是语义收缩和输出标记。
+  - publish/finalize 仍未统一纳入独立 publish transition kind；这仍属于 WP6/reporting 审批模型范围。
+  - `post-board-note` 仍写入 deliberation board note 表和 JSON export；它只是明确不再承载 canonical judgement。
+
+- 新发现的问题：
+  - benchmark replay 中 artifact drift 数量会随 board brief/report-basis 输出语义变化增加；测试已改为断言关键 `orchestration_plan` drift 存在，而不是固定 drift 数量为 `1`。
+  - 历史测试中很多 hypothesis 更新只传 `linked_claim_id`，没有 evidence ref；这些 fixture 反映旧“board judgement 可裸写”的习惯，本批已全部改为显式 evidence-backed。
+  - `promote-evidence-basis` 仍有兼容字段 `promotion_status / selected_coverages / basis_selection_mode`，后续若要彻底改名为 `freeze-report-basis`，需要单独迁移 reporting、benchmark、runtime state surface 和历史 artifact export。
+
+- 是否影响后续计划：
+  - 不阻塞 WP6；相反，reporting 可以在 `report-basis-freeze` 语义上继续拆分 evidence packet / decision packet / report packet。
+  - 后续新增 board mutation 必须延续本批约束：有 canonical judgement 的写入必须引用 finding / evidence bundle / proposal / evidence ref；human-readable export 不得携带默认 next-action 或 phase advice。
+  - 若后续要重命名 `promote-evidence-basis`，应作为 breaking schema/CLI migration 单独推进，不应在 reporting 重构中隐式完成。
+
+- 测试：
+  - 已运行：`.venv/bin/python -m py_compile skills/update-hypothesis-status/scripts/update_hypothesis_status.py skills/post-board-note/scripts/post_board_note.py skills/materialize-board-brief/scripts/materialize_board_brief.py skills/promote-evidence-basis/scripts/promote_evidence_basis.py eco-concil-runtime/src/eco_council_runtime/kernel/skill_registry.py`
+  - 结果：通过。
+  - 已运行：`.venv/bin/python -m unittest tests.test_board_workflow tests.test_investigation_workflow tests.test_runtime_kernel`
+  - 结果：`66` 项通过。
+  - 已运行：`.venv/bin/python -m unittest tests.test_benchmark_replay_workflow`
+  - 结果：`2` 项通过。
+  - 已运行：`.venv/bin/python -m unittest tests.test_archive_history_workflow tests.test_benchmark_replay_workflow tests.test_board_workflow tests.test_council_autonomy_flow tests.test_council_query_surface tests.test_decision_trace_workflow tests.test_investigation_workflow tests.test_orchestration_ingress_workflow tests.test_orchestration_planner_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_reporting_workflow tests.test_runtime_kernel tests.test_supervisor_simulation_regression`
+  - 结果：`125` 项通过。
+  - 已运行：`.venv/bin/python -m unittest tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`
+  - 结果：`10` 项通过。
+  - 已运行：`git diff --check`
+  - 结果：通过。
+
+## 16. 2026-04-29 Skills Batch 6 / WP6 代码交付回写
+
+- 已完成：
+  - `materialize-reporting-handoff` 已从单一 handoff 封装改为显式 packet 化输出：`evidence_packet / decision_packet / report_packet`，并在 canonical reporting handoff raw JSON 中保留 `evidence_index / uncertainty_register / residual_disputes / policy_recommendations`。
+  - `draft-council-decision` 已改为 decision memo drafter：优先消费 handoff `decision_packet`，输出 `decision_packet / memo_sections`，不再把 reporting posture 重新解释成 phase-2 结论。
+  - `draft-expert-report` 已改为章节化 role report drafter：读取 handoff `report_packet` 与 DB `report-section-draft` rows，输出 `report_sections / section_draft_refs / evidence_index / uncertainty_register / residual_disputes / policy_recommendations`。
+  - `materialize-final-publication` 已改为 decision-maker report assembler：输出 `decision_maker_report`，并显式包含证据索引、引用索引、风险与不确定性、剩余争议、建议措施和 audit refs。
+  - reporting skills 的 `board_handoff.suggested_next_skills` 已移除 `propose-next-actions / open-falsification-probe / post-board-note` 这类旧默认建议；hold path 只提示 DB council/reporting basis 写入面，例如 finding、evidence bundle、proposal、readiness opinion。
+  - `canonical_contracts.py / deliberation_plane.py / skill_registry.py` 已同步 WP6 字段与 reporting 输入面；publish/finalize 继续通过 `requires_operator_approval=True` 的 skill approval 链执行，不新增本批 schema 级 publish transition。
+  - 触达 reporting skills 的 `SKILL.md` 与 agent prompt 已同步为 DB evidence basis、packet、decision-maker report、operator approval 口径。
+
+- 未完成：
+  - 未把 `promote-evidence-basis`、`promotion_status`、`promotion_path` 等历史命名做 schema/CLI 级改名；本批仍沿用既有 DB 表和 wrapper，只在 reporting 输出中明确 `report-basis-freeze` 与 packet 语义。
+  - 未新增独立 `materialize-evidence-packet / materialize-decision-packet / materialize-report-packet` 三个 skill；本批选择在现有 `materialize-reporting-handoff` 内形成等价清晰职责，避免扩大 skill id 与 registry 迁移。
+  - 未重写 `sociologist / environmentalist` 旧 role id；本批只把 role report 章节内容改成 public-discourse/community-impact 与 environmental-evidence/risk 口径。
+
+- 新发现的问题：
+  - 当前 ready-round fixture 仍可能没有 DB `finding-record` 或 `evidence-bundle`，因此 `key_findings` 可以为空；final report 会把这标成 report-basis gap，而不是从 coverage/helper 结果伪造 finding。
+  - final publication 过去只有 `evidence-index` section；本批增加显式 `citation-index`，否则决策者报告的引用索引要求不够清楚。
+  - reporting 仍需保留 `coverage_source=missing-coverage` 等兼容 trace 字段，原因是 reporting contract 还复用历史 D1 trace shape；本批未做 trace contract 改名迁移。
+
+- 是否影响后续计划：
+  - 不阻塞 WP7。相反，WP7 可以直接用 `evidence_packet -> decision_packet -> report_packet -> decision_maker_report` 做端到端 case fixture。
+  - 后续若要彻底消除 promotion 命名债，应单独做 breaking DB/schema/query migration，不应在 report assembler 中隐式改名。
+  - 后续 case fixture 应补 DB-backed `finding-record / evidence-bundle / report-section-draft`，让 final report 的 key findings 和 recommendations 来自明确 report basis。
+
+- 测试：
+  - 已运行：`.venv/bin/python -m py_compile eco-concil-runtime/src/eco_council_runtime/canonical_contracts.py eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py skills/materialize-reporting-handoff/scripts/materialize_reporting_handoff.py skills/draft-council-decision/scripts/draft_council_decision.py skills/draft-expert-report/scripts/draft_expert_report.py skills/publish-expert-report/scripts/publish_expert_report.py skills/publish-council-decision/scripts/publish_council_decision.py skills/materialize-final-publication/scripts/materialize_final_publication.py`
+  - 结果：通过。
+  - 已运行：`.venv/bin/python -m unittest tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface`
+  - 结果：`21` 项通过。
+  - 已运行：`.venv/bin/python -m unittest tests.test_reporting_publish_workflow.ReportingPublishWorkflowTests.test_final_publication_ready_round_collects_reports_and_decision`
+  - 结果：`1` 项通过。
+  - 已运行：`.venv/bin/python -m unittest tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate`
+  - 结果：`10` 项通过。

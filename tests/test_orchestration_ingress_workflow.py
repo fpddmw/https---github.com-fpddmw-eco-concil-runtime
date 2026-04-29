@@ -406,6 +406,8 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 "environmentalist",
                 "--linked-claim-id",
                 issue_id,
+                "--linked-artifact-ref",
+                coverage_ref,
                 "--confidence",
                 "0.93",
             )

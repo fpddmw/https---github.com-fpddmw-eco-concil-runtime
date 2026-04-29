@@ -93,6 +93,8 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         "environmentalist",
         "--linked-claim-id",
         issue_id,
+        "--linked-artifact-ref",
+        evidence_ref,
         "--confidence",
         "0.93",
     )

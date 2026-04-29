@@ -72,6 +72,8 @@ def prepare_round_base(run_dir: Path, root: Path) -> dict[str, str]:
         "environmentalist",
         "--linked-claim-id",
         claim_id,
+        "--linked-artifact-ref",
+        coverage_ref,
         "--confidence",
         "0.93",
     )

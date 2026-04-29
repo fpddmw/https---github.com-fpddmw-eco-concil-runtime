@@ -713,6 +713,45 @@ def load_json_file(path_text: str, default: Any) -> Any:
     return payload
 
 
+def explicit_approval_ref(value: Any) -> str:
+    text = maybe_text(value)
+    if not text or text.startswith("required:"):
+        return ""
+    return text
+
+
+def approved_wp4_helper_input_payload(
+    payload: Any,
+    *,
+    allowed_skills: set[str] | None = None,
+) -> tuple[bool, str]:
+    if not isinstance(payload, dict):
+        return False, "input-artifact-is-not-object"
+    metadata = dict_items(payload.get("wp4_helper_metadata"))
+    source_skill = maybe_text(metadata.get("skill") or payload.get("skill"))
+    if allowed_skills is not None and source_skill not in allowed_skills:
+        return False, "input-artifact-skill-not-allowed"
+    if maybe_text(metadata.get("decision_source")) != WP4_DECISION_SOURCE_APPROVED_HELPER_VIEW:
+        return False, "input-artifact-missing-approved-helper-view"
+    if not maybe_text(metadata.get("rule_id")).startswith("HEUR-"):
+        return False, "input-artifact-missing-rule-id"
+    helper_status = maybe_text(metadata.get("helper_status"))
+    audit_status = maybe_text(metadata.get("audit_status"))
+    if "approval" not in helper_status and "approval" not in audit_status:
+        return False, "input-artifact-missing-approval-gate-metadata"
+    return True, ""
+
+
+def unapproved_input_warning(input_path: str, reason: str) -> dict[str, str]:
+    return {
+        "code": "unapproved-input-artifact",
+        "message": (
+            f"Ignored input artifact {maybe_text(input_path) or '<empty>'}: "
+            f"{reason}. Use DB-backed signals or an approved WP4 helper artifact."
+        ),
+    }
+
+
 def run_suggest_evidence_lanes(
     *,
     run_dir: str,
@@ -724,8 +763,10 @@ def run_suggest_evidence_lanes(
     skill_name = "suggest-evidence-lanes"
     run_dir_path = resolve_run_dir(run_dir)
     output_file = resolve_output_path(run_dir_path, output_path, f"evidence_lane_suggestions_{round_id}.json")
-    input_payload = load_json_file(input_path, {})
-    hints = list_items(input_payload.get("discourse_issue_hints")) if isinstance(input_payload, dict) else []
+    hints, input_warnings = load_issue_hints_from_path(
+        input_path,
+        allowed_skills={"discover-discourse-issues", "materialize-research-issue-surface"},
+    )
     if not hints:
         findings = query_council_objects(run_dir_path, object_kind="finding", run_id=run_id, round_id=round_id, limit=100).get("objects", [])
         hints = [
@@ -780,7 +821,7 @@ def run_suggest_evidence_lanes(
         "status": "completed",
         "wp4_helper_metadata": metadata,
         "suggestions": suggestions,
-        "warnings": [] if suggestions else [{"code": "no-approved-inputs", "message": "No discovery hints or finding records were available."}],
+        "warnings": input_warnings + ([] if suggestions else [{"code": "no-approved-inputs", "message": "No discovery hints or finding records were available."}]),
     }
     write_json(output_file, payload)
     return {
@@ -829,10 +870,19 @@ def issue_terms_for_signal(signal: dict[str, Any]) -> list[str]:
     return unique_texts(values)[:8]
 
 
-def load_issue_hints_from_path(input_path: str) -> list[dict[str, Any]]:
-    payload = load_json_file(input_path, {})
+def load_issue_hints_from_path(
+    input_path: str,
+    *,
+    allowed_skills: set[str] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    if not maybe_text(input_path):
+        return [], []
+    payload = load_json_file(input_path, None)
     if not isinstance(payload, dict):
-        return []
+        return [], [unapproved_input_warning(input_path, "input-artifact-missing-or-invalid")]
+    approved, reason = approved_wp4_helper_input_payload(payload, allowed_skills=allowed_skills)
+    if not approved:
+        return [], [unapproved_input_warning(input_path, reason)]
     for field_name in (
         "research_issues",
         "issue_views",
@@ -841,8 +891,8 @@ def load_issue_hints_from_path(input_path: str) -> list[dict[str, Any]]:
     ):
         items = list_items(payload.get(field_name))
         if items:
-            return [dict_items(item) for item in items]
-    return []
+            return [dict_items(item) for item in items], []
+    return [], []
 
 
 def refs_from_signals(signals: list[dict[str, Any]]) -> list[Any]:
@@ -865,7 +915,10 @@ def run_materialize_research_issue_surface(
     skill_name = "materialize-research-issue-surface"
     run_dir_path = resolve_run_dir(run_dir)
     output_file = resolve_output_path(run_dir_path, output_path, f"research_issue_surface_{round_id}.json")
-    loaded_hints = load_issue_hints_from_path(input_path)
+    loaded_hints, input_warnings = load_issue_hints_from_path(
+        input_path,
+        allowed_skills={"discover-discourse-issues", "suggest-evidence-lanes"},
+    )
     public_signals, db_path = query_signals(run_dir_path, run_id=run_id, round_id=round_id, plane="public", limit=limit)
     formal_signals, _ = query_signals(run_dir_path, run_id=run_id, round_id=round_id, plane="formal", limit=limit)
     signals = [*public_signals, *formal_signals]
@@ -930,8 +983,9 @@ def run_materialize_research_issue_surface(
             "public_signal_count": len(public_signals),
             "formal_signal_count": len(formal_signals),
             "input_hint_count": len(loaded_hints),
+            "input_artifact_warning_count": len(input_warnings),
         },
-        "warnings": [] if issues else [{"code": "no-issue-surface-inputs", "message": "No DB discourse signals or approved input hints were available."}],
+        "warnings": input_warnings + ([] if issues else [{"code": "no-issue-surface-inputs", "message": "No DB discourse signals or approved input hints were available."}]),
     }
     write_json(output_file, payload)
     return {
@@ -959,7 +1013,10 @@ def run_project_research_issue_views(
     skill_name = "project-research-issue-views"
     run_dir_path = resolve_run_dir(run_dir)
     output_file = resolve_output_path(run_dir_path, output_path, f"research_issue_views_{round_id}.json")
-    issues = load_issue_hints_from_path(input_path)
+    issues, input_warnings = load_issue_hints_from_path(
+        input_path,
+        allowed_skills={"materialize-research-issue-surface", "discover-discourse-issues"},
+    )
     public_signals, db_path = query_signals(run_dir_path, run_id=run_id, round_id=round_id, plane="public", limit=limit)
     formal_signals, _ = query_signals(run_dir_path, run_id=run_id, round_id=round_id, plane="formal", limit=limit)
     signals = [*public_signals, *formal_signals]
@@ -1038,8 +1095,8 @@ def run_project_research_issue_views(
         "status": "completed",
         "wp4_helper_metadata": metadata,
         "issue_views": views,
-        "observed_inputs": {"db_path": db_path, "issue_count": len(issues), "signal_count": len(signals)},
-        "warnings": [] if views else [{"code": "no-issue-view-inputs", "message": "No issue surface or DB discourse signals were available."}],
+        "observed_inputs": {"db_path": db_path, "issue_count": len(issues), "signal_count": len(signals), "input_artifact_warning_count": len(input_warnings)},
+        "warnings": input_warnings + ([] if views else [{"code": "no-issue-view-inputs", "message": "No issue surface or DB discourse signals were available."}]),
     }
     write_json(output_file, payload)
     return {
@@ -1067,14 +1124,31 @@ def run_export_research_issue_map(
     skill_name = "export-research-issue-map"
     run_dir_path = resolve_run_dir(run_dir)
     output_file = resolve_output_path(run_dir_path, output_path, f"research_issue_map_{round_id}.json")
-    issues = load_issue_hints_from_path(issue_surface_path)
-    views = load_issue_hints_from_path(issue_views_path)
+    warnings: list[dict[str, str]] = []
+    issues, issue_warnings = load_issue_hints_from_path(
+        issue_surface_path,
+        allowed_skills={"materialize-research-issue-surface"},
+    )
+    views, view_warnings = load_issue_hints_from_path(
+        issue_views_path,
+        allowed_skills={"project-research-issue-views"},
+    )
+    warnings.extend(issue_warnings)
+    warnings.extend(view_warnings)
     if not issues:
         default_surface = run_dir_path / "analytics" / f"research_issue_surface_{round_id}.json"
-        issues = load_issue_hints_from_path(str(default_surface))
+        issues, issue_warnings = load_issue_hints_from_path(
+            str(default_surface),
+            allowed_skills={"materialize-research-issue-surface"},
+        )
+        warnings.extend(issue_warnings)
     if not views:
         default_views = run_dir_path / "analytics" / f"research_issue_views_{round_id}.json"
-        views = load_issue_hints_from_path(str(default_views))
+        views, view_warnings = load_issue_hints_from_path(
+            str(default_views),
+            allowed_skills={"project-research-issue-views"},
+        )
+        warnings.extend(view_warnings)
     metadata = helper_metadata(
         skill_name=skill_name,
         rule_trace=["research-issue-map-export"],
@@ -1143,7 +1217,7 @@ def run_export_research_issue_map(
         "generated_at_utc": utc_now_iso(),
         "status": "completed",
         "research_issue_map": issue_map,
-        "warnings": [] if nodes else [{"code": "no-map-inputs", "message": "No issue surface or issue views were available."}],
+        "warnings": warnings + ([] if nodes else [{"code": "no-map-inputs", "message": "No issue surface or issue views were available."}]),
     }
     write_json(output_file, payload)
     return {
@@ -1194,12 +1268,17 @@ def run_apply_approved_formal_public_taxonomy(
     output_file = resolve_output_path(run_dir_path, output_path, f"formal_public_taxonomy_labels_{round_id}.json")
     taxonomy_payload = load_json_file(taxonomy_path, {})
     labels = taxonomy_labels(taxonomy_payload)
+    taxonomy_payload_object = dict_items(taxonomy_payload)
+    taxonomy_approval_ref = explicit_approval_ref(approval_ref) or explicit_approval_ref(
+        taxonomy_payload_object.get("approval_ref")
+        or taxonomy_payload_object.get("approved_taxonomy_ref")
+    )
     public_signals, db_path = query_signals(run_dir_path, run_id=run_id, round_id=round_id, plane="public", limit=limit)
     formal_signals, _ = query_signals(run_dir_path, run_id=run_id, round_id=round_id, plane="formal", limit=limit)
     metadata = helper_metadata(
         skill_name=skill_name,
-        taxonomy_version=maybe_text(taxonomy_version) or maybe_text(dict_items(taxonomy_payload).get("version")),
-        approval_ref=maybe_text(approval_ref) or "required:approved_taxonomy_record",
+        taxonomy_version=maybe_text(taxonomy_version) or maybe_text(taxonomy_payload_object.get("version")),
+        approval_ref=taxonomy_approval_ref or "required:approved_taxonomy_record",
         rule_trace=["approved-taxonomy-label-cues"],
         caveats=[
             "No global taxonomy is applied without an explicit approved taxonomy file or record.",
@@ -1208,7 +1287,8 @@ def run_apply_approved_formal_public_taxonomy(
     )
     signals = [*public_signals, *formal_signals]
     label_cues: list[dict[str, Any]] = []
-    if labels:
+    approval_missing = bool(labels and not taxonomy_approval_ref)
+    if labels and not approval_missing:
         for signal in signals:
             text = signal_text(signal).casefold()
             matched_labels: list[str] = []
@@ -1239,6 +1319,9 @@ def run_apply_approved_formal_public_taxonomy(
     if not labels:
         status = "taxonomy-required"
         warnings.append({"code": "taxonomy-required", "message": "Provide an approved mission-scoped taxonomy before applying labels."})
+    elif approval_missing:
+        status = "taxonomy-approval-required"
+        warnings.append({"code": "taxonomy-approval-required", "message": "Provide a concrete approved taxonomy reference before applying taxonomy labels."})
     elif not label_cues:
         warnings.append({"code": "no-taxonomy-cues", "message": "No DB public/formal signals matched the approved taxonomy terms."})
     payload = {

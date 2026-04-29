@@ -224,6 +224,32 @@ class FormalPublicWorkflowTests(unittest.TestCase):
             self.assertEqual([], artifact["taxonomy_labels"])
             self.assertTrue(any(warning["code"] == "taxonomy-required" for warning in payload["warnings"]))
 
+    def test_taxonomy_helper_rejects_taxonomy_file_without_approval_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seed_regulationsgov_comments(run_dir, root)
+            seed_public_only_trust_signal(run_dir, root)
+            taxonomy_path = write_approved_taxonomy(root)
+
+            payload = run_script(
+                script_path("apply-approved-formal-public-taxonomy"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--taxonomy-path",
+                str(taxonomy_path),
+            )
+            artifact = load_json(analytics_path(run_dir, f"formal_public_taxonomy_labels_{ROUND_ID}.json"))
+
+            self.assertEqual("taxonomy-approval-required", payload["status"])
+            self.assertEqual(0, payload["summary"]["label_cue_count"])
+            self.assertEqual([], artifact["taxonomy_labels"])
+            self.assertTrue(any(warning["code"] == "taxonomy-approval-required" for warning in payload["warnings"]))
+
 
 if __name__ == "__main__":
     unittest.main()

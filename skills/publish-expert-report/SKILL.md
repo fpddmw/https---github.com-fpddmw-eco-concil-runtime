@@ -3,12 +3,13 @@ name: publish-expert-report
 description: Publish a canonical expert report from a role-specific draft while enforcing round and overwrite guards.
 ---
 
-# Eco Publish Expert Report
+# Publish Expert Report
 
 ## Core Goal
 - Promote a role-specific expert report draft into a canonical report artifact.
 - Keep publish semantics and overwrite guards in a skill instead of runtime.
 - Allow deterministic no-op republish when the canonical artifact already matches the draft.
+- Require explicit operator approval for governed publish execution; this skill does not advance investigation state.
 
 ## Triggering Conditions
 - A role-specific expert report draft already exists.
@@ -41,10 +42,11 @@ description: Publish a canonical expert report from a role-specific draft while 
 - `analysis_sync`
 - `board_handoff`
 - The emitted canonical report preserves normalized reporting-chain trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `decision_source`, `expert_report_draft_source`, `db_path`, and `observed_inputs`.
+- The canonical report preserves `report_packet`, section draft refs, evidence index, uncertainty register, residual disputes, and policy recommendations from the draft.
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
+- `../../docs/openclaw-skills-refactor-checklist-v2.md`
 
 ## Scripts
 - `scripts/publish_expert_report.py`

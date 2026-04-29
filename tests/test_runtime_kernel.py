@@ -113,6 +113,8 @@ class RuntimeKernelTests(unittest.TestCase):
                 "moderator",
                 "--linked-claim-id",
                 issue_id,
+                "--linked-artifact-ref",
+                evidence_ref,
                 "--confidence",
                 "0.88",
             )

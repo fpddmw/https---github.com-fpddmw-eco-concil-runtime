@@ -1,4 +1,4 @@
 interface:
   display_name: "Eco Materialize Reporting Handoff"
-  short_description: "Assemble a DB-backed reporting handoff"
-  default_prompt: "Use $materialize-reporting-handoff to assemble a DB-backed reporting handoff from frozen evidence basis, readiness, board, and supervisor state. Treat artifacts as rebuildable exports, not the source of reporting truth."
+  short_description: "Assemble DB-backed reporting packets"
+  default_prompt: "Use $materialize-reporting-handoff to assemble DB-backed evidence, decision, and report packets from frozen report basis and reporting gate state. Treat artifacts as rebuildable exports, not the source of reporting truth."

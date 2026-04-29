@@ -132,6 +132,8 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         "environmentalist",
         "--linked-claim-id",
         issue_id,
+        "--linked-artifact-ref",
+        evidence_ref,
         "--confidence",
         "0.93",
     )
@@ -308,7 +310,14 @@ class BenchmarkReplayWorkflowTests(unittest.TestCase):
             )
             self.assertEqual("regression", compare_artifact["verdict"])
             self.assertEqual("regression-detected", replay_report["replay_verdict"])
-            self.assertEqual(1, replay_report["artifact_drift_count"])
+            self.assertGreaterEqual(replay_report["artifact_drift_count"], 1)
+            self.assertTrue(
+                any(
+                    item.get("key") == "orchestration_plan"
+                    for item in compare_artifact["artifact_drift"]
+                    if isinstance(item, dict)
+                )
+            )
             self.assertEqual(0, candidate_manifest["summary"]["failed_event_count"])
             self.assertEqual(
                 candidate_manifest["phase2_summary"]["reporting_ready"],

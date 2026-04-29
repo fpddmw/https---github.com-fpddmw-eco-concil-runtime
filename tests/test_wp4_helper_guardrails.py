@@ -384,6 +384,72 @@ class WP4HelperGuardrailTests(unittest.TestCase):
             self.assertIn("insufficient-temporal-basis", artifact_text)
             self.assertNotIn("1970", artifact_text)
 
+    def test_research_issue_helpers_ignore_unapproved_input_artifacts_without_db_basis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            raw_input = root / "unapproved_issue_hints.json"
+            raw_input.write_text(
+                json.dumps(
+                    {
+                        "discourse_issue_hints": [
+                            {
+                                "hint_id": "raw-hint-001",
+                                "hint_label": "Raw artifact issue",
+                                "text_evidence_snippets": ["This should not become a research issue."],
+                                "evidence_refs": ["artifact://raw"],
+                            }
+                        ]
+                    },
+                    ensure_ascii=True,
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+
+            surface_payload = run_script(
+                script_path("materialize-research-issue-surface"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--input-path",
+                str(raw_input),
+            )
+            views_payload = run_script(
+                script_path("project-research-issue-views"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--input-path",
+                str(raw_input),
+            )
+
+            surface_artifact = load_json(
+                run_dir / "analytics" / f"research_issue_surface_{ROUND_ID}.json"
+            )
+            views_artifact = load_json(
+                run_dir / "analytics" / f"research_issue_views_{ROUND_ID}.json"
+            )
+
+            self.assertEqual("completed", surface_payload["status"])
+            self.assertEqual(0, surface_payload["summary"]["issue_count"])
+            self.assertEqual([], surface_artifact["research_issues"])
+            self.assertTrue(
+                any(warning["code"] == "unapproved-input-artifact" for warning in surface_payload["warnings"])
+            )
+            self.assertEqual("completed", views_payload["status"])
+            self.assertEqual(0, views_payload["summary"]["view_count"])
+            self.assertEqual([], views_artifact["issue_views"])
+            self.assertTrue(
+                any(warning["code"] == "unapproved-input-artifact" for warning in views_payload["warnings"])
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

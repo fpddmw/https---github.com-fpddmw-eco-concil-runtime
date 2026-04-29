@@ -1170,6 +1170,10 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "recommended_next_actions",
             "key_findings",
             "open_risks",
+            "evidence_index",
+            "uncertainty_register",
+            "residual_disputes",
+            "policy_recommendations",
         ),
         required_dict_fields=(
             "provenance",
@@ -1177,6 +1181,9 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "analysis_sync",
             "deliberation_sync",
             "council_input_counts",
+            "evidence_packet",
+            "decision_packet",
+            "report_packet",
         ),
     ),
     "council-decision": _contract(
@@ -1207,6 +1214,7 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "recommended_next_actions",
             "key_findings",
             "open_risks",
+            "memo_sections",
         ),
         required_dict_fields=(
             "provenance",
@@ -1215,6 +1223,7 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "deliberation_sync",
             "decision_gating",
             "council_input_counts",
+            "decision_packet",
         ),
     ),
     "expert-report": _contract(
@@ -1240,6 +1249,7 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "open_questions",
             "recommended_next_actions",
             "report_sections",
+            "section_draft_refs",
         ),
         required_dict_fields=(
             "provenance",
@@ -1247,6 +1257,7 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "analysis_sync",
             "deliberation_sync",
             "audit_refs",
+            "report_packet",
         ),
     ),
     "final-publication": _contract(
@@ -1273,6 +1284,10 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "recommended_next_actions",
             "selected_evidence_refs",
             "operator_review_hints",
+            "evidence_index",
+            "uncertainty_register",
+            "residual_disputes",
+            "policy_recommendations",
         ),
         required_dict_fields=(
             "provenance",
@@ -1281,6 +1296,7 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "deliberation_sync",
             "decision",
             "audit_refs",
+            "decision_maker_report",
         ),
     ),
 }

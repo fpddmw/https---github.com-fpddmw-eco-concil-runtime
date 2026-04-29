@@ -853,7 +853,7 @@ def promote_evidence_basis_skill(
         + fallback_remaining_risks
     )[:4]
 
-    basis_id = "evidence-basis-" + stable_hash(run_id, round_id, promotion_status)[:12]
+    basis_id = "report-basis-" + stable_hash(run_id, round_id, promotion_status)[:12]
     decision_source = maybe_text(readiness.get("decision_source")) or "policy-fallback"
     if maybe_text(promotion_resolution.get("decision_source")):
         decision_source = maybe_text(promotion_resolution.get("decision_source"))
@@ -877,25 +877,11 @@ def promote_evidence_basis_skill(
         + supporting_opinion_ids
         + rejected_opinion_ids
     )
-    withheld_next_skills = [
-        "summarize-round-readiness",
-        "propose-next-actions",
-    ]
-    if empirical_claim_ids or selected_coverages:
-        withheld_next_skills.append("open-falsification-probe")
-    if basis_counts["formal_public_link_count"] > 0:
-        withheld_next_skills.append("compare-formal-public-footprints")
-    if basis_counts["representation_gap_count"] > 0:
-        withheld_next_skills.append("identify-representation-audit-cues")
-    if basis_counts["diffusion_edge_count"] > 0:
-        withheld_next_skills.append("detect-temporal-cooccurrence-cues")
-    deduped_withheld_next_skills: list[str] = []
-    for skill_name in withheld_next_skills:
-        if skill_name not in deduped_withheld_next_skills:
-            deduped_withheld_next_skills.append(skill_name)
     wrapper = {
         "schema_version": "d2.1",
         "skill": SKILL_NAME,
+        "basis_object_kind": "report-basis-freeze",
+        "transition_semantics": "freeze-report-basis",
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
@@ -914,6 +900,7 @@ def promote_evidence_basis_skill(
             if decision_source == "agent-council"
             else "freeze-controversy-basis-v1"
         ),
+        "report_basis_selection_mode": "freeze-report-basis-v1",
         "promotion_resolution_mode": maybe_text(
             promotion_resolution.get("promotion_resolution_mode")
         ),
@@ -942,6 +929,7 @@ def promote_evidence_basis_skill(
         "lineage": lineage,
         "provenance": {
             "source_skill": SKILL_NAME,
+            "transition_semantics": "freeze-report-basis",
             "decision_source": decision_source,
             "readiness_source": maybe_text(contract_fields.get("readiness_source")),
             "coverage_source": maybe_text(contract_fields.get("coverage_source")),
@@ -964,14 +952,14 @@ def promote_evidence_basis_skill(
         "gate_reasons": merged_gate_reasons,
         "remaining_risks": remaining_risks,
         "promotion_notes": (
-            "Round is ready and a compact controversy basis has been frozen for downstream reporting."
+            "Round is ready and a DB-backed report evidence basis has been frozen for downstream reporting."
             if promotion_status == "promoted" and not selected_coverages
             else (
-                "Round is ready and a compact controversy basis plus route-gated empirical support has been frozen for downstream reporting."
+                "Round is ready and a DB-backed report evidence basis plus route-gated empirical support has been frozen for downstream reporting."
                 if promotion_status == "promoted"
                 else (
                     maybe_text(promotion_resolution_reasons[0])
-                    or "Round is not yet ready; the basis artifact freezes the current controversy basis and route-gated empirical support posture while promotion remains withheld."
+                    or "Round is not yet ready; the basis artifact freezes the current DB-backed report basis posture while promotion remains withheld."
                 )
             )
         ),
@@ -1003,6 +991,8 @@ def promote_evidence_basis_skill(
             "round_id": round_id,
             "output_path": str(output_file),
             "basis_id": basis_id,
+            "basis_object_kind": "report-basis-freeze",
+            "transition_semantics": "freeze-report-basis",
             "promotion_status": promotion_status,
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
@@ -1029,15 +1019,7 @@ def promote_evidence_basis_skill(
                 or ["Round readiness is not yet sufficient for promotion."]
             ),
             "challenge_hints": [],
-            "suggested_next_skills": (
-                [
-                    "materialize-reporting-handoff",
-                    "draft-council-decision",
-                    "draft-expert-report",
-                ]
-                if promotion_status == "promoted"
-                else deduped_withheld_next_skills
-            ),
+            "suggested_next_skills": [],
         },
     }
 

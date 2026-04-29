@@ -136,11 +136,7 @@ def blocked_payload(
             "evidence_refs": [],
             "gap_hints": [item["message"] for item in warnings],
             "challenge_hints": [],
-            "suggested_next_skills": [
-                "query-board-delta",
-                "post-board-note",
-                "update-hypothesis-status",
-            ],
+            "suggested_next_skills": [],
         },
     }
 
@@ -310,14 +306,36 @@ def update_hypothesis_status_skill(
         )
         if resolved_confidence is None and isinstance(existing, dict):
             resolved_confidence = maybe_number(existing.get("confidence"))
+        existing_evidence_refs = (
+            existing.get("evidence_refs", [])
+            if isinstance(existing, dict)
+            and isinstance(existing.get("evidence_refs"), list)
+            else []
+        )
         judgement = board_judgement_metadata(
             selected_proposal,
             source_skill=SKILL_NAME,
             default_decision_source="operator-command",
-            base_evidence_refs=linked_artifact_refs,
+            base_evidence_refs=[*linked_artifact_refs, *existing_evidence_refs],
             base_lineage=[resolved_hypothesis_id, *resolved_linked_claim_ids],
             base_source_ids=[resolved_hypothesis_id, *resolved_linked_claim_ids],
         )
+        if not judgement["evidence_refs"]:
+            return blocked_payload(
+                run_id=run_id,
+                round_id=round_id,
+                board_file=board_file,
+                warnings=[
+                    {
+                        "code": "missing-evidence-refs",
+                        "message": (
+                            "Hypothesis status changes must cite at least one "
+                            "DB-backed finding, evidence bundle, proposal, or "
+                            "source evidence ref."
+                        ),
+                    }
+                ],
+            )
         if not resolved_title or not resolved_status:
             return blocked_payload(
                 run_id=run_id,
@@ -434,7 +452,7 @@ def update_hypothesis_status_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [],
             "challenge_hints": ["Hypotheses with low confidence should usually be paired with a challenge ticket."] if maybe_number(confidence) is not None and float(maybe_number(confidence) or 0.0) < 0.6 else [],
-            "suggested_next_skills": ["open-challenge-ticket", "claim-board-task", "summarize-board-state"],
+            "suggested_next_skills": [],
         },
     }
 
@@ -453,6 +471,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--owner-role", default="")
     parser.add_argument("--linked-claim-id", action="append", default=[])
     parser.add_argument("--linked-artifact-ref", action="append", default=[])
+    parser.add_argument("--evidence-ref", action="append", default=[])
     parser.add_argument("--confidence", type=float)
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
@@ -472,7 +491,7 @@ def main() -> int:
         status=args.status,
         owner_role=args.owner_role,
         linked_claim_ids=args.linked_claim_id,
-        linked_artifact_refs=args.linked_artifact_ref,
+        linked_artifact_refs=[*args.linked_artifact_ref, *args.evidence_ref],
         confidence=args.confidence,
     )
     print(pretty_json(payload, args.pretty))

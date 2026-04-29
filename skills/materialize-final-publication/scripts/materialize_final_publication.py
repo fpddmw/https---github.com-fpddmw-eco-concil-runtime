@@ -63,6 +63,10 @@ def list_items(value: Any) -> list[Any]:
     return list(value) if isinstance(value, list) else []
 
 
+def dict_items(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
 def pretty_json(data: Any, pretty: bool) -> str:
     if pretty:
         return json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True)
@@ -134,7 +138,7 @@ def release_summary(*, decision: dict[str, Any], handoff: dict[str, Any], public
 
 
 def published_sections(publication_posture: str, report_rows: list[dict[str, Any]]) -> list[str]:
-    sections = ["publication-summary", "council-decision", "audit-trace"]
+    sections = ["publication-summary", "council-decision", "evidence-index", "citation-index", "uncertainty-register", "remaining-disputes", "recommendations", "audit-trace"]
     if report_rows:
         sections.insert(2, "role-reports")
     if publication_posture == "release":
@@ -187,6 +191,145 @@ def summarized_decision_traces(traces: list[dict[str, Any]]) -> list[dict[str, A
         }
         for trace in traces
     ]
+
+
+def collect_report_evidence_index(
+    *,
+    handoff: dict[str, Any],
+    decision: dict[str, Any],
+    report_payloads: dict[str, dict[str, Any]],
+    selected_evidence_refs: list[str],
+) -> list[dict[str, Any]]:
+    evidence_packet = dict_items(handoff.get("evidence_packet"))
+    rows = list_items(evidence_packet.get("evidence_index"))
+    if not rows:
+        rows = list_items(handoff.get("evidence_index"))
+    for role, report in sorted(report_payloads.items()):
+        for ref in list_items(report.get("selected_evidence_refs")):
+            rows.append(
+                {
+                    "evidence_id": f"report:{role}:{maybe_text(ref)}",
+                    "object_kind": "expert-report",
+                    "object_id": maybe_text(report.get("report_id")),
+                    "summary": f"{role} report cites frozen evidence reference.",
+                    "evidence_refs": [ref],
+                    "basis_role": "role-report-citation",
+                    "source_plane": "reporting",
+                    "report_use": "citation-index",
+                }
+            )
+    for ref in selected_evidence_refs:
+        rows.append(
+            {
+                "evidence_id": f"final-evidence-ref:{maybe_text(ref)}",
+                "object_kind": "evidence-ref",
+                "object_id": maybe_text(ref),
+                "summary": "Final publication selected evidence reference.",
+                "evidence_refs": [ref],
+                "basis_role": "final-publication-citation",
+                "source_plane": "reporting",
+                "report_use": "citation-index",
+            }
+        )
+    deduped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        refs = unique_texts(list_items(row.get("evidence_refs")))
+        key = "|".join([maybe_text(row.get("object_kind")), maybe_text(row.get("object_id")), ",".join(refs)])
+        if key and key not in deduped:
+            copied = dict(row)
+            copied["evidence_refs"] = refs
+            deduped[key] = copied
+    return list(deduped.values())[:80]
+
+
+def decision_maker_report(
+    *,
+    publication_posture: str,
+    publication_summary: str,
+    handoff: dict[str, Any],
+    decision: dict[str, Any],
+    report_rows: list[dict[str, Any]],
+    evidence_index: list[dict[str, Any]],
+    selected_evidence_refs: list[str],
+) -> dict[str, Any]:
+    report_packet = dict_items(handoff.get("report_packet"))
+    uncertainty_register = list_items(report_packet.get("uncertainty_register")) or list_items(handoff.get("uncertainty_register"))
+    residual_disputes = list_items(report_packet.get("residual_disputes")) or list_items(handoff.get("residual_disputes"))
+    policy_recommendations = list_items(report_packet.get("policy_recommendations")) or list_items(handoff.get("policy_recommendations"))
+    key_findings = list_items(handoff.get("key_findings"))
+    sections = [
+        {
+            "section_key": "executive-summary",
+            "title": "Executive Summary",
+            "status": "included",
+            "summary": publication_summary,
+        },
+        {
+            "section_key": "decision-question-and-boundary",
+            "title": "Decision Question And Boundary",
+            "status": "needs-explicit-moderator-text" if not maybe_text(decision.get("decision_question")) else "included",
+            "summary": maybe_text(decision.get("decision_question")) or "Decision boundary must be taken from moderator-defined mission context or decision memo.",
+        },
+        {
+            "section_key": "evidence-sources-and-scope",
+            "title": "Evidence Sources And Scope",
+            "status": "included" if evidence_index else "basis-gap",
+            "summary": f"{len(evidence_index)} DB evidence index rows and {len(selected_evidence_refs)} selected evidence refs are available.",
+        },
+        {
+            "section_key": "key-findings",
+            "title": "Key Findings",
+            "status": "included" if key_findings else "basis-gap",
+            "summary": f"{len(key_findings)} DB finding records are included." if key_findings else "No DB finding records were included as final report findings.",
+        },
+        {
+            "section_key": "options-and-tradeoffs",
+            "title": "Options And Tradeoffs",
+            "status": "basis-required",
+            "summary": "Policy options require proposal or report-section-draft basis before they can be stated as recommendations.",
+        },
+        {
+            "section_key": "risks-and-uncertainties",
+            "title": "Risks And Uncertainties",
+            "status": "included" if uncertainty_register else "basis-gap",
+            "summary": f"{len(uncertainty_register)} uncertainty rows are carried into the report.",
+        },
+        {
+            "section_key": "remaining-disputes",
+            "title": "Remaining Disputes",
+            "status": "included" if residual_disputes else "no-open-disputes-recorded",
+            "summary": f"{len(residual_disputes)} residual dispute rows are carried into the report.",
+        },
+        {
+            "section_key": "recommendations",
+            "title": "Recommendations",
+            "status": "included" if policy_recommendations else "basis-gap",
+            "summary": f"{len(policy_recommendations)} DB-backed recommendation cues are included.",
+        },
+        {
+            "section_key": "citation-index",
+            "title": "Citation Index",
+            "status": "included" if evidence_index else "basis-gap",
+            "summary": "Citation rows are derived from DB canonical reporting and deliberation objects.",
+        },
+    ]
+    return {
+        "report_type": "decision-maker-environmental-policy-report",
+        "publication_posture": publication_posture,
+        "sections": sections,
+        "role_reports": report_rows,
+        "evidence_index": evidence_index,
+        "key_findings": key_findings,
+        "uncertainty_register": uncertainty_register,
+        "residual_disputes": residual_disputes,
+        "policy_recommendations": policy_recommendations,
+        "guardrails": [
+            "Report conclusions must cite DB canonical evidence basis, finding, evidence bundle, proposal, or report section draft objects.",
+            "Heuristic helper cues remain appendix/audit material unless explicitly cited through report basis.",
+        ],
+    }
 
 
 def materialize_final_publication_skill(
@@ -526,6 +669,27 @@ def materialize_final_publication_skill(
             for ref in list_items(trace.get("evidence_refs"))
         ]
     )
+    evidence_index = collect_report_evidence_index(
+        handoff=handoff,
+        decision=decision,
+        report_payloads=report_payloads,
+        selected_evidence_refs=selected_evidence_refs,
+    )
+    publication_summary = release_summary(
+        decision=decision,
+        handoff=handoff,
+        publication_posture=publication_posture,
+        report_rows=report_rows,
+    )
+    decision_report = decision_maker_report(
+        publication_posture=publication_posture,
+        publication_summary=publication_summary,
+        handoff=handoff,
+        decision=decision,
+        report_rows=report_rows,
+        evidence_index=evidence_index,
+        selected_evidence_refs=selected_evidence_refs,
+    )
 
     publication_payload = normalized_final_publication_payload(
         {
@@ -540,12 +704,8 @@ def materialize_final_publication_skill(
             else "hold-release",
             "publication_posture": publication_posture,
             **contract_fields,
-            "publication_summary": release_summary(
-                decision=decision,
-                handoff=handoff,
-                publication_posture=publication_posture,
-                report_rows=report_rows,
-            ),
+            "publication_summary": publication_summary,
+            "decision_maker_report": decision_report,
             "published_sections": published_sections(
                 publication_posture, report_rows
             ),
@@ -576,6 +736,10 @@ def materialize_final_publication_skill(
             if isinstance(handoff.get("recommended_next_actions"), list)
             else [],
             "selected_evidence_refs": selected_evidence_refs,
+            "evidence_index": evidence_index,
+            "uncertainty_register": list_items(decision_report.get("uncertainty_register")),
+            "residual_disputes": list_items(decision_report.get("residual_disputes")),
+            "policy_recommendations": list_items(decision_report.get("policy_recommendations")),
             "operator_review_hints": operator_review_hints(
                 supervisor_state, handoff, publication_posture
             ),
@@ -629,7 +793,7 @@ def materialize_final_publication_skill(
         write_json_file(output_file, stored_payload)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"}]
-    suggested_next_skills = ["post-board-note"] if publication_posture == "release" else ["post-board-note", "propose-next-actions", "open-falsification-probe"]
+    suggested_next_skills = [] if publication_posture == "release" else ["submit-finding-record", "submit-evidence-bundle", "submit-council-proposal", "submit-readiness-opinion"]
     publication_id = maybe_text(stored_payload.get("publication_id")) or publication_id
     return {
         "status": "completed",
@@ -644,6 +808,8 @@ def materialize_final_publication_skill(
             "publication_status": publication_payload["publication_status"],
             "publication_posture": publication_posture,
             "decision_trace_count": len(decision_traces),
+            "evidence_index_count": len(evidence_index),
+            "report_section_count": len(list_items(decision_report.get("sections"))),
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
             "reporting_handoff_source": maybe_text(

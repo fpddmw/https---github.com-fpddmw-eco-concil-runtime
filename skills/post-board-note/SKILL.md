@@ -1,17 +1,18 @@
 ---
 name: post-board-note
-description: Append a compact investigation note to the local board artifact, preserve linked evidence refs, and emit an auditable board event for downstream moderator and challenger work.
+description: Append a compact human-readable investigation note to the local board export, preserve linked evidence refs, and emit an auditable board event without creating canonical judgement.
 ---
 
-# Eco Post Board Note
+# Post Board Note
 
 ## Core Goal
 - Append one compact note to the current round's board state.
 - Preserve linked evidence refs and related ids.
 - Emit an auditable board event for downstream review.
+- Keep the note human-readable; it is not a finding, hypothesis judgement, readiness opinion, or report basis.
 
 ## Triggering Conditions
-- Need to capture an analysis note or working conclusion on the board.
+- Need to capture a human-readable note on the board.
 - Need to anchor compact evidence refs to a board-visible note.
 - Need to initialize board activity for a run or round.
 

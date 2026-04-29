@@ -73,6 +73,7 @@ def prepare_ready_round(run_dir: Path, root: Path) -> None:
         "--statement", "Public smoke reports are backed by elevated PM2.5 observations.",
         "--status", "active", "--owner-role", "environmentalist",
         "--linked-claim-id", issue_id,
+        "--linked-artifact-ref", evidence_ref,
         "--confidence", "0.93",
     )
     run_script(
@@ -101,6 +102,7 @@ def prepare_hold_round(run_dir: Path, root: Path) -> None:
         "--statement", "Public reports may overstate severity relative to observed PM2.5 coverage.",
         "--status", "active", "--owner-role", "moderator",
         "--linked-claim-id", issue_id,
+        "--linked-artifact-ref", evidence_ref,
         "--confidence", "0.52",
     )
     run_script(
@@ -491,6 +493,18 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("ready-for-release", publication_payload["summary"]["publication_status"])
             self.assertEqual("noop", publication_noop["summary"]["operation"])
             self.assertEqual("release", publication["publication_posture"])
+            self.assertEqual(
+                "decision-maker-environmental-policy-report",
+                publication["decision_maker_report"]["report_type"],
+            )
+            self.assertGreaterEqual(len(publication["decision_maker_report"]["sections"]), 8)
+            self.assertEqual(
+                publication["decision_maker_report"]["evidence_index"],
+                publication["evidence_index"],
+            )
+            self.assertIn("citation-index", publication["published_sections"])
+            self.assertIn("uncertainty-register", publication["published_sections"])
+            self.assertIn("remaining-disputes", publication["published_sections"])
             self.assertEqual("missing-board", publication["board_state_source"])
             self.assertEqual("missing-coverage", publication["coverage_source"])
             self.assertEqual(

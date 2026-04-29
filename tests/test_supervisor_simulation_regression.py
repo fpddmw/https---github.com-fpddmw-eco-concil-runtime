@@ -83,6 +83,8 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 "environmentalist",
                 "--linked-claim-id",
                 issue_id,
+                "--linked-artifact-ref",
+                coverage_ref,
                 "--confidence",
                 "0.91",
             )
@@ -153,6 +155,8 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 "moderator",
                 "--linked-claim-id",
                 issue_id,
+                "--linked-artifact-ref",
+                coverage_ref,
                 "--confidence",
                 "0.52",
             )

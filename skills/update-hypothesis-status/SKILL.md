@@ -1,13 +1,13 @@
 ---
 name: update-hypothesis-status
-description: Create or update a hypothesis card on the local investigation board, preserve linked claim ids and confidence, and emit an auditable board event for downstream multi-agent review.
+description: Create or update an evidence-backed hypothesis card on the local investigation board, preserve evidence refs and confidence, and emit an auditable board event for downstream multi-agent review.
 ---
 
-# Eco Update Hypothesis Status
+# Update Hypothesis Status
 
 ## Core Goal
-- Create or update one hypothesis card on the current round's board state.
-- Preserve linked claim ids, owner role, and confidence.
+- Create or update one evidence-backed hypothesis card on the current round's board state.
+- Preserve linked evidence refs, owner role, and confidence.
 - Emit an auditable board event for downstream review.
 
 ## Triggering Conditions
@@ -26,13 +26,18 @@ description: Create or update a hypothesis card on the local investigation board
 - `round_id`
 - `title`
 - `status`
+- At least one evidence ref, supplied by `evidence_ref`, `linked_artifact_ref`, an accepted proposal, or an existing hypothesis record.
 - Optional:
   - `board_path`
   - `hypothesis_id`
   - `statement`
   - `owner_role`
   - `linked_claim_id`
+  - `linked_artifact_ref`
+  - `evidence_ref`
   - `confidence`
+
+Calls without evidence refs return `status=blocked` and do not mutate the board.
 
 ## Output Contract
 - `status`

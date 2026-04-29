@@ -3,20 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .kernel.analysis_plane import (
-    load_actor_profile_context,
-    load_claim_verifiability_context,
-    load_concern_facet_context,
-    load_controversy_map_context,
-    load_diffusion_edge_context,
-    load_evidence_citation_type_context,
-    load_evidence_coverage_context,
-    load_formal_public_link_context,
-    load_issue_cluster_context,
-    load_representation_gap_context,
-    load_stance_group_context,
-    load_verification_route_context,
-)
 from .kernel.deliberation_plane import load_round_snapshot
 from .phase2_fallback_agenda import (
     board_snapshot,
@@ -29,7 +15,6 @@ from .phase2_fallback_common import (
     maybe_text,
     optional_context_count,
     optional_context_present,
-    optional_context_warnings,
     resolve_path,
 )
 from .phase2_fallback_contracts import d1_contract_fields
@@ -111,109 +96,34 @@ def load_d1_shared_context(
         else {}
     )
     db_path = maybe_text(round_snapshot.get("db_path"))
-    coverage_context = load_evidence_coverage_context(
+    coverage_file = resolve_path(
         run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        coverage_path=coverage_path,
-        db_path=db_path,
+        coverage_path,
+        f"analysis/evidence_coverage_{round_id}.json",
     )
-    coverage_warnings = (
-        coverage_context.get("warnings", [])
-        if isinstance(coverage_context.get("warnings"), list)
-        else []
-    )
-    warnings.extend(coverage_warnings)
-    coverages = (
-        coverage_context.get("coverages", [])
-        if isinstance(coverage_context.get("coverages"), list)
-        else []
-    )
-    coverage_file = maybe_text(coverage_context.get("coverage_file"))
-    coverage_source = maybe_text(coverage_context.get("coverage_source"))
-    if not db_path:
-        db_path = maybe_text(coverage_context.get("db_path"))
-    issue_cluster_context = load_issue_cluster_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        db_path=db_path,
-    )
-    if not db_path:
-        db_path = maybe_text(issue_cluster_context.get("db_path"))
-    controversy_map_context = load_controversy_map_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        db_path=db_path,
-    )
-    if not db_path:
-        db_path = maybe_text(controversy_map_context.get("db_path"))
-    verification_route_context = load_verification_route_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        db_path=db_path,
-    )
-    claim_verifiability_context = load_claim_verifiability_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        db_path=db_path,
-    )
-    formal_public_link_context = load_formal_public_link_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        db_path=db_path,
-    )
-    representation_gap_context = load_representation_gap_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        db_path=db_path,
-    )
-    diffusion_edge_context = load_diffusion_edge_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        db_path=db_path,
-    )
-    stance_group_context = load_stance_group_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        db_path=db_path,
-    )
-    concern_facet_context = load_concern_facet_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        db_path=db_path,
-    )
-    actor_profile_context = load_actor_profile_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        db_path=db_path,
-    )
-    evidence_citation_type_context = load_evidence_citation_type_context(
-        run_dir_path,
-        run_id=run_id,
-        round_id=round_id,
-        db_path=db_path,
-    )
-    warnings.extend(optional_context_warnings(issue_cluster_context))
-    warnings.extend(optional_context_warnings(controversy_map_context))
-    warnings.extend(optional_context_warnings(verification_route_context))
-    warnings.extend(optional_context_warnings(claim_verifiability_context))
-    warnings.extend(optional_context_warnings(formal_public_link_context))
-    warnings.extend(optional_context_warnings(representation_gap_context))
-    warnings.extend(optional_context_warnings(diffusion_edge_context))
-    warnings.extend(optional_context_warnings(stance_group_context))
-    warnings.extend(optional_context_warnings(concern_facet_context))
-    warnings.extend(optional_context_warnings(actor_profile_context))
-    warnings.extend(optional_context_warnings(evidence_citation_type_context))
+    coverage_context = {
+        "coverage_file": str(coverage_file),
+        "coverage_artifact_present": coverage_file.exists(),
+        "coverage_count": 0,
+        "analysis_sync": {
+            "status": "missing-coverage",
+            "legacy_wp4_analysis_quarantined": True,
+            "legacy_wp4_analysis_policy": "do-not-consume-claim-observation-or-typed-heuristic-objects",
+        },
+    }
+    coverages: list[dict[str, Any]] = []
+    coverage_source = "missing-coverage"
+    issue_cluster_context: dict[str, Any] = {}
+    controversy_map_context: dict[str, Any] = {}
+    verification_route_context: dict[str, Any] = {}
+    claim_verifiability_context: dict[str, Any] = {}
+    formal_public_link_context: dict[str, Any] = {}
+    representation_gap_context: dict[str, Any] = {}
+    diffusion_edge_context: dict[str, Any] = {}
+    stance_group_context: dict[str, Any] = {}
+    concern_facet_context: dict[str, Any] = {}
+    actor_profile_context: dict[str, Any] = {}
+    evidence_citation_type_context: dict[str, Any] = {}
     analysis_sync = primary_analysis_sync(
         {
             "issue-cluster": (issue_cluster_context, "issue_cluster_count"),
@@ -315,6 +225,7 @@ def load_d1_shared_context(
             "board_summary_present": isinstance(board_summary, dict),
             "board_brief_artifact_present": board_brief_file.exists(),
             "board_brief_present": bool(maybe_text(brief_text)),
+            "legacy_wp4_analysis_quarantined": True,
             "coverage_present": bool(coverages),
             "coverage_artifact_present": bool(
                 coverage_context.get("coverage_artifact_present")

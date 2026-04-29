@@ -215,6 +215,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 "environmentalist",
                 "--linked-claim-id",
                 issue_id,
+                "--linked-artifact-ref",
+                coverage_ref,
                 "--confidence",
                 "0.82",
             )
@@ -297,6 +299,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 "environmentalist",
                 "--linked-claim-id",
                 issue_id,
+                "--linked-artifact-ref",
+                coverage_ref,
                 "--confidence",
                 "0.82",
             )
@@ -408,15 +412,53 @@ class BoardWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", brief_payload["deliberation_sync"]["status"])
             self.assertIn("Smoke over NYC was materially significant", brief_text)
             self.assertIn("State source: deliberation-plane", brief_text)
+            self.assertIn("Open Board Items", brief_text)
+            self.assertNotIn("Immediate Next Moves", brief_text)
+            self.assertEqual([], brief_payload["board_handoff"]["suggested_next_skills"])
             self.assertIn(task_payload["canonical_ids"][0], brief_text)
             self.assertEqual("closed", close_payload["summary"]["operation"])
+
+    def test_update_hypothesis_status_blocks_without_evidence_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+
+            payload = run_script(
+                script_path("update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Unsupported hypothesis update",
+                "--statement",
+                "This status update has no evidence basis.",
+                "--status",
+                "active",
+                "--owner-role",
+                "moderator",
+                "--confidence",
+                "0.5",
+            )
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertEqual([], payload["canonical_ids"])
+            self.assertEqual([], payload["board_handoff"]["suggested_next_skills"])
+            self.assertTrue(
+                any(
+                    warning.get("code") == "missing-evidence-refs"
+                    for warning in payload["warnings"]
+                    if isinstance(warning, dict)
+                )
+            )
 
     def test_board_brief_reads_deliberation_plane_without_summary_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
 
-            run_script(
+            note_payload = run_script(
                 script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
@@ -445,6 +487,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 "active",
                 "--owner-role",
                 "moderator",
+                "--linked-artifact-ref",
+                note_payload["artifact_refs"][0]["artifact_ref"],
                 "--confidence",
                 "0.7",
             )
@@ -582,6 +626,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 "environmentalist",
                 "--linked-claim-id",
                 claim_id,
+                "--linked-artifact-ref",
+                coverage_ref,
                 "--confidence",
                 "0.82",
             )
@@ -691,6 +737,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 "environmentalist",
                 "--linked-claim-id",
                 claim_id,
+                "--linked-artifact-ref",
+                coverage_ref,
                 "--confidence",
                 "0.82",
             )
@@ -853,6 +901,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 "environmentalist",
                 "--linked-claim-id",
                 claim_id,
+                "--linked-artifact-ref",
+                coverage_ref,
                 "--confidence",
                 "0.82",
             )
@@ -1294,6 +1344,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 "moderator",
                 "--linked-claim-id",
                 issue_id,
+                "--linked-artifact-ref",
+                coverage_ref,
                 "--confidence",
                 "0.52",
             )
@@ -1495,6 +1547,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 "active",
                 "--owner-role",
                 "moderator",
+                "--linked-artifact-ref",
+                first_note["artifact_refs"][0]["artifact_ref"],
                 "--confidence",
                 "0.71",
             )
@@ -1535,7 +1589,7 @@ class BoardWorkflowTests(unittest.TestCase):
             root = Path(tmpdir)
             run_dir = root / "run"
 
-            run_script(
+            note_payload = run_script(
                 script_path("post-board-note"),
                 "--run-dir",
                 str(run_dir),
@@ -1564,6 +1618,8 @@ class BoardWorkflowTests(unittest.TestCase):
                 "active",
                 "--owner-role",
                 "moderator",
+                "--linked-artifact-ref",
+                note_payload["artifact_refs"][0]["artifact_ref"],
                 "--confidence",
                 "0.68",
             )

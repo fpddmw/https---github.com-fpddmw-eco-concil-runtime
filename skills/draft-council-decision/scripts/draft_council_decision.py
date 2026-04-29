@@ -144,6 +144,71 @@ def reason_codes(
     return unique_texts(codes)
 
 
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
+def dict_items(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def decision_memo_sections(
+    *,
+    reporting_ready: bool,
+    summary_text: str,
+    reporting_blockers: list[str],
+    key_findings: list[dict[str, Any]],
+    open_risks: list[dict[str, Any]],
+    selected_evidence_refs: list[str],
+) -> list[dict[str, Any]]:
+    sections = [
+        {
+            "section_id": "decision-posture",
+            "title": "Decision Posture",
+            "summary": summary_text,
+            "evidence_refs": [],
+        },
+        {
+            "section_id": "evidence-basis",
+            "title": "Evidence Basis",
+            "summary": (
+                f"{len(selected_evidence_refs)} frozen DB evidence refs are available for report citation."
+                if selected_evidence_refs
+                else "No frozen DB evidence refs are available for report citation."
+            ),
+            "evidence_refs": selected_evidence_refs,
+        },
+        {
+            "section_id": "key-findings",
+            "title": "Key Findings",
+            "summary": (
+                f"{len(key_findings)} DB finding records are available for the decision memo."
+                if key_findings
+                else "No DB finding records have been promoted into the memo yet."
+            ),
+            "evidence_refs": unique_texts(
+                [
+                    ref
+                    for finding in key_findings
+                    if isinstance(finding, dict)
+                    for ref in list_items(finding.get("evidence_refs"))
+                ]
+            ),
+        },
+        {
+            "section_id": "risks-and-uncertainties",
+            "title": "Risks And Uncertainties",
+            "summary": (
+                "; ".join(maybe_text(item.get("summary")) for item in open_risks[:3] if isinstance(item, dict) and maybe_text(item.get("summary")))
+                if open_risks
+                else ("No open reporting risks remain." if reporting_ready else "; ".join(reporting_blocker_summaries(reporting_blockers)[:3]))
+            ),
+            "evidence_refs": [],
+        },
+    ]
+    return sections
+
+
 def draft_council_decision_skill(
     run_dir: str,
     run_id: str,
@@ -273,6 +338,32 @@ def draft_council_decision_skill(
         key_findings=key_findings,
         open_risks=open_risks,
     )
+    handoff_decision_packet = dict_items(handoff.get("decision_packet"))
+    handoff_evidence_packet = dict_items(handoff.get("evidence_packet"))
+    selected_evidence_refs = unique_texts(
+        handoff.get("selected_evidence_refs", [])
+        if isinstance(handoff.get("selected_evidence_refs"), list)
+        else promotion_basis.get("selected_evidence_refs", [])
+        if isinstance(promotion_basis.get("selected_evidence_refs"), list)
+        else []
+    )
+    memo_sections = decision_memo_sections(
+        reporting_ready=reporting_ready,
+        summary_text=summary_text,
+        reporting_blockers=reporting_blockers,
+        key_findings=key_findings,
+        open_risks=open_risks,
+        selected_evidence_refs=selected_evidence_refs,
+    )
+    decision_packet = {
+        **handoff_decision_packet,
+        "packet_kind": maybe_text(handoff_decision_packet.get("packet_kind")) or "moderator-decision-memo-packet",
+        "moderator_status": moderator_status,
+        "publication_readiness": publication_readiness,
+        "decision_summary": summary_text,
+        "memo_sections": memo_sections,
+        "evidence_packet_id": maybe_text(handoff_evidence_packet.get("packet_id")),
+    }
 
     wrapper = {
         "schema_version": "e1.0",
@@ -288,6 +379,8 @@ def draft_council_decision_skill(
         "publication_readiness": publication_readiness,
         "next_round_required": moderator_status != "finalize",
         "decision_summary": summary_text,
+        "decision_packet": decision_packet,
+        "memo_sections": memo_sections,
         **contract_fields,
         "promoted_basis_id": maybe_text(handoff.get("promoted_basis_id"))
         or maybe_text(promotion_basis.get("basis_id")),
@@ -355,9 +448,7 @@ def draft_council_decision_skill(
         },
         "key_findings": key_findings[:3],
         "recommended_next_actions": [item for item in recommended_next_actions[: max(1, max_actions)] if isinstance(item, dict)],
-        "selected_evidence_refs": unique_texts(
-            handoff.get("selected_evidence_refs", []) if isinstance(handoff.get("selected_evidence_refs"), list) else promotion_basis.get("selected_evidence_refs", []) if isinstance(promotion_basis.get("selected_evidence_refs"), list) else []
-        ),
+        "selected_evidence_refs": selected_evidence_refs,
         "audit_refs": {
             "reporting_handoff_path": str(handoff_file),
             "promotion_path": str(promotion_file),
@@ -403,7 +494,7 @@ def draft_council_decision_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [maybe_text(item.get("summary")) for item in open_risks[:3] if maybe_text(item.get("summary"))] if moderator_status != "finalize" else [],
             "challenge_hints": [summary_text] if moderator_status != "finalize" else [],
-            "suggested_next_skills": ["draft-expert-report", "publish-expert-report", "publish-council-decision"] if moderator_status == "finalize" else ["draft-expert-report", "submit-council-proposal", "submit-readiness-opinion", "propose-next-actions", "open-falsification-probe"],
+            "suggested_next_skills": ["draft-expert-report", "publish-expert-report", "publish-council-decision"] if moderator_status == "finalize" else ["draft-expert-report", "submit-finding-record", "submit-evidence-bundle", "submit-council-proposal", "submit-readiness-opinion"],
         },
     }
 

@@ -1,18 +1,18 @@
 ---
 name: materialize-board-brief
-description: Materialize the current round's investigation board into a compact human-readable markdown brief that is ready for moderator review or Phase D handoff.
+description: Materialize the current round's investigation board into a compact human-readable markdown brief without generating next-action, readiness, or phase-transition advice.
 ---
 
-# Eco Materialize Board Brief
+# Materialize Board Brief
 
 ## Core Goal
 - Materialize one round's board state into a concise markdown brief.
-- Surface active hypotheses, open challenges, active tasks, and immediate next moves.
-- Provide a human-readable handoff artifact for moderator review and Phase D planning.
+- Surface active hypotheses, open challenges, active tasks, and open board item counts.
+- Provide a human-readable export for moderator review without carrying canonical judgement.
 
 ## Triggering Conditions
 - Need a concise board brief after the board has been organized.
-- Need a durable summary to hand off into action planning or readiness review.
+- Need a durable summary for human review.
 - Need to inspect open tasks and remaining risks without re-reading raw board JSON.
 
 ## Read/Write Contract

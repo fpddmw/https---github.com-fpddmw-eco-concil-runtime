@@ -28,6 +28,7 @@ from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
     load_council_decision_wrapper,
     load_reporting_handoff_wrapper,
 )
+from eco_council_runtime.reporting_objects import query_reporting_objects  # noqa: E402
 from eco_council_runtime.reporting_status import (  # noqa: E402
     reporting_gate_state,
 )
@@ -53,6 +54,14 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
+def dict_items(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -107,14 +116,14 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
 def role_profile(role: str) -> dict[str, Any]:
     if role == "sociologist":
         return {
-            "label": "public-discussion",
-            "summary_prefix": "Public-facing interpretation",
-            "section_hints": ["role-summary", "public-claim-interpretation", "evidence-basis", "residual-risks"],
+            "label": "public-discourse-and-community-impact",
+            "summary_prefix": "Public discourse and community impact section",
+            "section_hints": ["role-summary", "stakeholder-and-discourse-context", "social-impact-risks", "uncertainty-and-source-limits"],
         }
     return {
-        "label": "physical-evidence",
-        "summary_prefix": "Physical evidence interpretation",
-        "section_hints": ["role-summary", "physical-evidence", "coverage-posture", "residual-risks"],
+        "label": "environmental-evidence-and-risk",
+        "summary_prefix": "Environmental evidence and risk section",
+        "section_hints": ["role-summary", "environmental-baseline", "evidence-scope-and-quality", "uncertainty-and-source-limits"],
     }
 
 
@@ -134,9 +143,8 @@ def role_findings(role: str, key_findings: list[dict[str, Any]], max_findings: i
                 "title": title,
                 "summary": summary,
                 "focus": profile["label"],
-                "claim_id": maybe_text(finding.get("claim_id")),
-                "coverage_id": maybe_text(finding.get("coverage_id")),
-                "evidence_refs": unique_texts(finding.get("evidence_refs", []) if isinstance(finding.get("evidence_refs"), list) else []),
+                "basis_object_ids": unique_texts(list_items(finding.get("basis_object_ids"))),
+                "evidence_refs": unique_texts(list_items(finding.get("evidence_refs"))),
             }
         )
     return findings
@@ -185,6 +193,75 @@ def filtered_actions(role: str, recommendations: list[dict[str, Any]], report_st
             }
         ]
     return []
+
+
+def load_report_section_drafts(run_dir: Path, *, run_id: str, round_id: str, role: str) -> list[dict[str, Any]]:
+    try:
+        payload = query_reporting_objects(
+            run_dir,
+            object_kind="report-section-draft",
+            run_id=run_id,
+            round_id=round_id,
+            agent_role=role,
+            limit=50,
+        )
+    except Exception:
+        return []
+    rows = payload.get("objects", []) if isinstance(payload.get("objects"), list) else []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def role_report_sections(
+    *,
+    section_hints: list[str],
+    section_drafts: list[dict[str, Any]],
+    report_packet: dict[str, Any],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for draft in section_drafts:
+        rows.append(
+            {
+                "section_key": maybe_text(draft.get("section_key")) or "section",
+                "section_title": maybe_text(draft.get("section_title")) or maybe_text(draft.get("section_key")) or "Section",
+                "section_id": maybe_text(draft.get("section_id")),
+                "status": maybe_text(draft.get("status")) or "draft",
+                "source": "report-section-draft",
+                "evidence_refs": unique_texts(list_items(draft.get("evidence_refs"))),
+            }
+        )
+    existing_keys = {maybe_text(row.get("section_key")) for row in rows}
+    required_sections = list_items(report_packet.get("recommended_sections"))
+    for section in required_sections:
+        if not isinstance(section, dict):
+            continue
+        section_key = maybe_text(section.get("section_key"))
+        if not section_key or section_key in existing_keys:
+            continue
+        rows.append(
+            {
+                "section_key": section_key,
+                "section_title": section_key.replace("-", " ").title(),
+                "section_id": "",
+                "status": "basis-required",
+                "source": "report-packet-template",
+                "required_basis": maybe_text(section.get("required_basis")),
+                "evidence_refs": [],
+            }
+        )
+    for section_key in section_hints:
+        if section_key in {maybe_text(row.get("section_key")) for row in rows}:
+            continue
+        rows.append(
+            {
+                "section_key": section_key,
+                "section_title": section_key.replace("-", " ").title(),
+                "section_id": "",
+                "status": "role-draft-needed",
+                "source": "role-profile",
+                "evidence_refs": [],
+            }
+        )
+    return rows[:12]
 
 
 def draft_expert_report_skill(
@@ -315,6 +392,18 @@ def draft_expert_report_skill(
     decision_summary = maybe_text(decision.get("decision_summary"))
     profile = role_profile(role)
     report_id = f"expert-report-{role}-{round_id}"
+    report_packet = dict_items(handoff.get("report_packet"))
+    section_drafts = load_report_section_drafts(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+        role=role,
+    )
+    report_sections = role_report_sections(
+        section_hints=profile["section_hints"],
+        section_drafts=section_drafts,
+        report_packet=report_packet,
+    )
 
     payload = {
         "schema_version": "e1.1",
@@ -329,6 +418,12 @@ def draft_expert_report_skill(
         "reporting_ready": reporting_ready,
         "reporting_blockers": reporting_blockers,
         "publication_readiness": publication_readiness,
+        "report_packet": report_packet
+        or {
+            "packet_kind": "decision-maker-policy-report-packet",
+            "report_type": "decision-maker-environmental-policy-report",
+            "recommended_sections": report_sections,
+        },
         **contract_fields,
         "summary": (
             f"{profile['summary_prefix']} for round {round_id}. {decision_summary or 'The round still needs more reporting context.'}"
@@ -338,7 +433,19 @@ def draft_expert_report_skill(
         "findings": role_findings(role, key_findings, max_findings, board_excerpt),
         "open_questions": role_questions(role, open_risks, decision_summary),
         "recommended_next_actions": filtered_actions(role, recommendations, report_status),
-        "report_sections": profile["section_hints"],
+        "report_sections": report_sections,
+        "section_draft_refs": [
+            {
+                "section_id": maybe_text(section.get("section_id")),
+                "section_key": maybe_text(section.get("section_key")),
+            }
+            for section in section_drafts
+            if maybe_text(section.get("section_id"))
+        ],
+        "evidence_index": list_items(dict_items(handoff.get("evidence_packet")).get("evidence_index")),
+        "uncertainty_register": list_items(report_packet.get("uncertainty_register")),
+        "residual_disputes": list_items(report_packet.get("residual_disputes")),
+        "policy_recommendations": list_items(report_packet.get("policy_recommendations")),
         "audit_refs": {
             "reporting_handoff_path": str(handoff_file),
             "decision_path": str(decision_file),
@@ -384,7 +491,7 @@ def draft_expert_report_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [maybe_text(item.get("summary")) for item in open_risks[:3] if maybe_text(item.get("summary"))] if report_status != "ready-to-publish" else [],
             "challenge_hints": [maybe_text(item) for item in payload["open_questions"] if maybe_text(item)],
-            "suggested_next_skills": ["publish-expert-report", "publish-council-decision"] if report_status == "ready-to-publish" else ["submit-council-proposal", "submit-readiness-opinion", "propose-next-actions", "open-falsification-probe"],
+            "suggested_next_skills": ["publish-expert-report", "publish-council-decision"] if report_status == "ready-to-publish" else ["submit-finding-record", "submit-evidence-bundle", "submit-council-proposal", "submit-readiness-opinion"],
         },
     }
 

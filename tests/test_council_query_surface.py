@@ -284,6 +284,8 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
         "active",
         "--owner-role",
         "moderator",
+        "--linked-artifact-ref",
+        f"proposal:{proposal_id}",
         "--confidence",
         "0.67",
     )

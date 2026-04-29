@@ -128,24 +128,14 @@ def summarize_from_round_state(round_state: dict[str, Any], *, state_source: str
     }
 
 
-def next_moves(snapshot: dict[str, Any]) -> list[str]:
+def board_open_item_lines(snapshot: dict[str, Any]) -> list[str]:
     counts = snapshot.get("counts", {}) if isinstance(snapshot.get("counts"), dict) else {}
-    active_hypotheses = int(counts.get("hypotheses_active") or 0)
-    open_challenges = int(counts.get("challenge_open") or 0)
-    open_tasks = int(counts.get("tasks_open") or 0)
-    note_count = int(counts.get("notes_total") or 0)
-    moves: list[str] = []
-    if open_challenges > 0 and open_tasks == 0:
-        moves.append("Claim at least one follow-up task for each open challenge ticket.")
-    if open_challenges > 0:
-        moves.append("Close resolved challenge tickets after the task outcome is recorded.")
-    if active_hypotheses == 0:
-        moves.append("Promote at least one active hypothesis before readiness review.")
-    if note_count == 0:
-        moves.append("Add a moderator note that explains why the current board state is actionable.")
-    if not moves:
-        moves.append("Board state is organized enough to move into Phase D action planning.")
-    return moves
+    return [
+        f"Active hypotheses: {int(counts.get('hypotheses_active') or 0)}",
+        f"Open challenges: {int(counts.get('challenge_open') or 0)}",
+        f"Open tasks: {int(counts.get('tasks_open') or 0)}",
+        f"Notes: {int(counts.get('notes_total') or 0)}",
+    ]
 
 
 def materialize_board_brief_skill(
@@ -203,7 +193,7 @@ def materialize_board_brief_skill(
     open_challenges = snapshot.get("open_challenges", []) if isinstance(snapshot.get("open_challenges"), list) else []
     open_tasks = snapshot.get("open_tasks", []) if isinstance(snapshot.get("open_tasks"), list) else []
     state_source = maybe_text(snapshot.get("state_source")) or "missing-board"
-    moves = next_moves(snapshot)
+    open_item_lines = board_open_item_lines(snapshot)
 
     hypothesis_lines = [
         f"{maybe_text(item.get('hypothesis_id'))}: {maybe_text(item.get('title')) or maybe_text(item.get('statement'))} | status={maybe_text(item.get('status'))} | owner={maybe_text(item.get('owner_role'))} | confidence={maybe_number(item.get('confidence')) if maybe_number(item.get('confidence')) is not None else 'n/a'}"
@@ -239,16 +229,13 @@ def materialize_board_brief_skill(
     lines.append("")
     lines.extend(render_markdown_section("Open Tasks", task_lines))
     lines.append("")
-    lines.extend(render_markdown_section("Immediate Next Moves", moves))
+    lines.extend(render_markdown_section("Open Board Items", open_item_lines))
     lines.append("")
     brief_file.parent.mkdir(parents=True, exist_ok=True)
     brief_file.write_text("\n".join(lines), encoding="utf-8")
 
     brief_id = "board-brief-" + stable_hash(run_id, round_id, brief_file.name)[:12]
     artifact_refs = [{"signal_id": "", "artifact_path": str(brief_file), "record_locator": "", "artifact_ref": str(brief_file)}]
-    suggested_next_skills = ["propose-next-actions", "summarize-round-readiness"]
-    if int(counts.get("challenge_open") or 0) > 0 or int(counts.get("tasks_open") or 0) > 0:
-        suggested_next_skills = ["summarize-board-state", "post-board-note", "close-challenge-ticket"]
     candidate_ids: list[Any] = []
     for item in active_hypotheses[:4]:
         if isinstance(item, dict):
@@ -276,12 +263,14 @@ def materialize_board_brief_skill(
         "canonical_ids": [brief_id],
         "warnings": warnings,
         "deliberation_sync": deliberation_sync,
+        "brief_scope": "human-readable-board-export",
+        "canonical_judgement": False,
         "board_handoff": {
             "candidate_ids": [maybe_text(item) for item in candidate_ids if maybe_text(item)],
             "evidence_refs": artifact_refs,
-            "gap_hints": [] if moves == ["Board state is organized enough to move into Phase D action planning."] else moves[:2],
+            "gap_hints": [],
             "challenge_hints": [],
-            "suggested_next_skills": suggested_next_skills,
+            "suggested_next_skills": [],
         },
     }
 

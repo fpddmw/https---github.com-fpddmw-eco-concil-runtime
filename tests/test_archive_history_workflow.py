@@ -123,6 +123,8 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "environmentalist",
         "--linked-claim-id",
         issue_id,
+        "--linked-artifact-ref",
+        evidence_ref,
         "--confidence",
         "0.93",
     )

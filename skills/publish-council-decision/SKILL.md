@@ -3,12 +3,13 @@ name: publish-council-decision
 description: Publish a canonical council decision from the current decision draft while enforcing report prerequisites and overwrite guards.
 ---
 
-# Eco Publish Council Decision
+# Publish Council Decision
 
 ## Core Goal
 - Promote the current council decision draft into a canonical decision artifact.
 - Enforce overwrite protection and, when appropriate, require canonical expert reports.
 - Keep publish semantics outside the runtime kernel.
+- Require explicit operator approval for governed publish execution; this skill does not advance investigation state.
 
 ## Triggering Conditions
 - A council decision draft already exists.
@@ -45,10 +46,11 @@ description: Publish a canonical council decision from the current decision draf
 - `analysis_sync`
 - `board_handoff`
 - The emitted canonical decision preserves normalized reporting-chain trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `promotion_source`, `decision_source`, `sociologist_report_source`, `environmentalist_report_source`, `db_path`, and `observed_inputs`.
+- The canonical decision preserves `decision_packet`, memo sections, report refs, evidence refs, and decision trace ids for final report assembly.
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
+- `../../docs/openclaw-skills-refactor-checklist-v2.md`
 
 ## Scripts
 - `scripts/publish_council_decision.py`

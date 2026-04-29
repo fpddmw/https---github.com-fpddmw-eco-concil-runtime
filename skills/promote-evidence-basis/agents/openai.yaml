@@ -1,4 +1,4 @@
 interface:
-  display_name: "Eco Promote Evidence Basis"
-  short_description: "Freeze the current round into a compact evidence-basis artifact"
-  default_prompt: "Use $promote-evidence-basis to freeze the current round into a compact controversy-basis artifact by combining readiness state, explicit council proposal/readiness judgements from the deliberation DB, issue clusters, routing posture, formal/public linkage, representation gaps, diffusion edges, and strongest coverage objects. Do not treat legacy proposal names alone as promotion support."
+  display_name: "Promote Evidence Basis"
+  short_description: "Freeze an approved DB-backed report evidence basis"
+  default_prompt: "Use $promote-evidence-basis only after a moderator transition request has operator approval. Treat the skill as freeze-report-basis compatibility surface: preserve DB-backed evidence refs, proposals, readiness opinions, and basis ids; do not create research conclusions or default investigation advice."
