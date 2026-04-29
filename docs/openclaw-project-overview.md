@@ -327,3 +327,39 @@ OpenClaw 当前更准确的定位是：
 剩余风险：
 
 1. optional-analysis 的 legacy/audit-only 词汇仍存在，但它们表示冻结治理和人工审计状态，不再承担旧架构兼容目标。
+
+2026-04-29 agent entry 补充验收：
+
+已完成：
+
+1. 发现默认 agent entry/operator surface 仍残留 `claim-cluster` analysis 查询模板；这会让冻结的 legacy analysis surface 看起来仍是默认入口。
+2. 已修正 runtime 代码，默认 operator view 不再暴露 `claim-cluster` query command key；测试已增加防回归断言。
+3. 复核当前 active registry 与 `skills/` 目录均为 `79` 个 skill，原始 `88` 个 skill 是迁移基线口径。
+
+未完成：
+
+1. optional-analysis freeze line 仍为 `audit-pending`，不是完整人工审计批准记录。
+2. legacy analysis kind 仍保留 compatibility query / replay surface，未物理删除。
+
+新发现的问题：
+
+1. 文档最新验收结论与代码默认 operator surface 曾存在偏差；本次已同步。
+
+是否影响后续计划：
+
+1. 不阻塞当前重构验收。
+2. 后续新增默认入口时不得重新暴露 frozen legacy analysis query surface。
+
+本次实际运行：
+
+1. `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`：`111` 项通过。
+2. `git diff --check`：通过。
+
+2026-04-29 破坏性清理补记：
+
+1. 已删除旧 direct/advisory 入口：`phase2_direct_advisory.py`、`agent_advisory_plan_*`、`--refresh-advisory-plan`、`agent-advisory / advisory-only` planner mode 均不再保留。
+2. 已删除兼容门面 `kernel/investigation_planning.py`、`phase2_fallback_planning.py`、`kernel/phase2_contract.py`。
+3. 已删除 active `build-normalization-audit` skill；optional-analysis active helper 现为 `16` 个。
+4. `plan-round-orchestration` 只输出 queue-owned runtime plan，council DB 输入直承路径用 `council_proposal_queue` 表达。
+5. 未完成：旧 analysis kind / canonical contract 命名仍需独立 DB/query schema migration；内部 `phase2_fallback_*` 模块名仍需后续大规模改名。
+6. 本次运行 `.venv/bin/python -m unittest tests.test_investigation_contracts tests.test_agent_entry_gate tests.test_orchestration_planner_workflow tests.test_runtime_kernel -v`，`58` 项通过。

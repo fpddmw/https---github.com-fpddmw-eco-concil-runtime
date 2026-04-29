@@ -24,7 +24,6 @@ FETCH_SKILLS = {
 }
 
 OPTIONAL_ANALYSIS_SKILLS = {
-    "build-normalization-audit",
     "aggregate-environment-evidence",
     "review-fact-check-evidence-scope",
     "review-evidence-sufficiency",
@@ -55,10 +54,6 @@ OPTIONAL_ANALYSIS_NOTES = {
     "summarize-round-readiness": (
         "Moderator-only optional advisory for compiling readiness evidence. Formal "
         "phase movement still requires a transition request and operator approval."
-    ),
-    "build-normalization-audit": (
-        "Operator QA export for signal-plane ingestion checks. It is not a "
-        "board-facing moderation step and requires an approval record."
     ),
     "aggregate-environment-evidence": (
         "Approval-gated DB-backed environment aggregation helper. It summarizes "

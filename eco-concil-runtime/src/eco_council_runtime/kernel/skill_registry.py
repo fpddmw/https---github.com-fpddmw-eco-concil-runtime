@@ -204,7 +204,6 @@ NORMALIZE_SKILLS = [
 ]
 
 OPTIONAL_ANALYSIS_SKILLS = [
-    "build-normalization-audit",
     "aggregate-environment-evidence",
     "review-fact-check-evidence-scope",
     "discover-discourse-issues",
@@ -227,12 +226,6 @@ OPTIONAL_HELPER_ALLOWED_DECISION_SOURCES = [
 ]
 
 OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
-    "build-normalization-audit": {
-        "rule_id": "HEUR-NORMALIZATION-AUDIT-001",
-        "decision_source": "approved-helper-view",
-        "destination": "operator QA export",
-        "audit_status": "default-frozen; approval-required; audit-pending",
-    },
     "aggregate-environment-evidence": {
         "rule_id": "HEUR-ENV-AGGREGATE-001",
         "destination": "DB-backed environment evidence aggregation helper",
@@ -389,7 +382,7 @@ POLICIES.update(
 )
 POLICIES.update(
     _group(
-        [name for name in OPTIONAL_ANALYSIS_SKILLS if name != "build-normalization-audit"],
+        OPTIONAL_ANALYSIS_SKILLS,
         skill_layer=SKILL_LAYER_OPTIONAL_ANALYSIS,
         allowed_roles=RESEARCH_ROLES,
         required_capabilities=[CAPABILITY_ANALYSIS],
@@ -400,19 +393,6 @@ POLICIES.update(
         write_scope=WRITE_SCOPE_ANALYSIS,
         requires_operator_approval=True,
     )
-)
-POLICIES["build-normalization-audit"] = _policy(
-    skill_name="build-normalization-audit",
-    skill_layer=SKILL_LAYER_OPTIONAL_ANALYSIS,
-    allowed_roles=[ROLE_RUNTIME_OPERATOR],
-    required_capabilities=[CAPABILITY_RUNTIME_ADMIN],
-    side_effect_scope=["db-read", "artifact-write"],
-    db_write_planes=[],
-    input_object_kinds=["normalized-signal"],
-    output_object_kinds=["normalization-audit"],
-    write_scope=WRITE_SCOPE_ARTIFACT,
-    requires_operator_approval=True,
-    default_actor_role_hint=ROLE_RUNTIME_OPERATOR,
 )
 
 POLICIES.update(

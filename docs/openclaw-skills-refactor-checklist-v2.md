@@ -2,20 +2,22 @@
 
 ## 1. 文档定位
 
-本清单覆盖当前仓库内全部 `88` 个 skills，并按新目标架构重新分类：
+本清单最初覆盖仓库内原始盘点的 `88` 个 skills，并按新目标架构重新分类：
 
 1. 哪些 skill 保留
 2. 哪些 skill 废弃
 3. 哪些 skill 需要拆分重写
 4. 哪些 skill 虽可保留，但必须降级为 optional / audited helper
 
-分类统计：
+分类统计（原始盘点口径）：
 
 1. `16` 个 fetch skills
 2. `16` 个 normalize skills
 3. `21` 个 analysis / heuristic skills
 4. `19` 个 board / council / phase-2 skills
 5. `16` 个 query / history / reporting skills
+
+验收补记：截至 2026-04-29 最新 active registry，旧 claim / observation / route / coverage 系列入口已删除并由 successor optional-analysis helper 替换，且 `build-normalization-audit` 已在破坏性清理中删除；当前 `skills/` 目录与 registry 均为 `79` 个 active skills。下文第 `18`、`21`、`24`、`26` 和最新验收回写为当前状态准线；第 `4` 节全量表保留原始盘点和迁移判定语境。
 
 ## 2. 判定原则
 
@@ -882,6 +884,31 @@ skills 侧重构完成至少应满足：
   - 结果：`111` 项通过。
   - `git diff --check`：通过。
 
+## 26. 2026-04-29 破坏性清理补记：旧兼容 skill / advisory 接口删除
+
+- 已完成：
+  - 删除 active `build-normalization-audit` skill、脚本、agent yaml、registry policy 和 source queue profile；该 skill 不再作为 operator QA 兼容入口保留。
+  - 删除 direct council advisory compiler 与测试；agent entry/controller/planning profile 不再支持 direct advisory materialization。
+  - 删除 `--refresh-advisory-plan`、`agent_advisory_plan_*`、`agent-advisory / advisory-only` planner mode。
+  - 删除 `kernel/investigation_planning.py`、`phase2_fallback_planning.py`、`kernel/phase2_contract.py` 兼容门面。
+  - `plan-round-orchestration` 改为 queue-owned runtime plan，`direct_council_queue` 字段改为 `council_proposal_queue`。
+  - 当前 active skills 为 `79` 个，optional-analysis active helper 为 `16` 个。
+
+- 未完成：
+  - 旧 analysis kind / canonical contract / query object 命名尚未完成物理迁移。
+  - 内部 helper 共享模块 `phase2_fallback_*` 仍需后续重命名或拆分。
+
+- 新发现的问题：
+  - `build-normalization-audit` 曾被记录为“可审批保留”，但它本身仍读取旧 claim/observation candidate 兼容面；按本次要求已删除。
+  - advisory 旧接口跨 CLI、artifact、planning mode、controller source、state surface 多处残留。
+
+- 是否影响后续计划：
+  - 影响外部旧调用和历史测试；失败不应通过恢复旧入口解决。
+  - 后续计划应聚焦 DB/query/schema 命名迁移与内部 module rename。
+
+- 本次实际运行：
+  - `.venv/bin/python -m unittest tests.test_investigation_contracts tests.test_agent_entry_gate tests.test_orchestration_planner_workflow tests.test_runtime_kernel -v`：`58` 项通过。
+
 ## 20. 2026-04-29 测试命名清理回写
 
 - 已完成：
@@ -1007,3 +1034,29 @@ skills 侧重构完成至少应满足：
   - `.venv/bin/python -m compileall -q eco-concil-runtime/src skills tests`：通过。
   - `.venv/bin/python -m unittest tests.test_phase2_gate_handlers tests.test_phase2_contracts tests.test_runtime_kernel tests.test_control_query_surface tests.test_phase2_state_surfaces tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_decision_trace_workflow tests.test_council_submission_workflow tests.test_supervisor_simulation_regression -v`：`84` 项通过，用时 `81.445s`。
   - `.venv/bin/python -m unittest discover -s tests -v`：`235` 项通过，用时 `222.805s`。
+
+## 25. 2026-04-29 验收审阅补充：agent entry 旧 analysis 命令收口
+
+- 已完成：
+  - 本次按最终验收口径复核 `phase2_agent_entry_profile.py / kernel/agent_entry.py / source_queue_profile.py / skill_registry.py / skill_approvals.py / reporting handoff / policy research fixture`。
+  - 修正默认 agent entry operator surface 中残留的 `claim-cluster` analysis 查询模板：`list_claim_cluster_result_sets_command` 与 `query_claim_cluster_items_command_template` 不再由默认 entry/operator view 暴露。
+  - `tests/test_agent_entry_gate.py` 已改为防回归断言：默认 operator surface 不包含旧 claim-cluster 命令，也不包含 `claim-cluster` 命令文本。
+  - 复核确认 active `skills/` 与 registry 均为 `79` 个 skill；optional-analysis 为 `16` 个，其中均需 approval/freeze metadata。
+
+- 未完成：
+  - optional-analysis freeze line 仍是 `audit-pending`，不是完整人工审计批准记录。
+  - frozen legacy analysis kind / query object 仍作为 compatibility query / replay surface 保留，未做物理删除。
+  - 本次补充未运行全仓 discover；运行的是覆盖本补丁和最终验收主路径的 targeted regression。
+
+- 新发现的问题：
+  - 早前文档已写明“默认 agent entry 不再暴露旧 analysis query commands”，但代码默认 operator surface 仍残留 `claim-cluster` 查询模板；该问题已在本次修复。
+  - 第 `1` 节原始 `88` 个 skill 盘点容易和当前 active registry `79` 个 skill 混读；已在文档顶部补充当前口径说明。
+
+- 是否影响后续计划：
+  - 不阻塞本轮 skills 重构验收；修复后默认入口、source queue 和 optional-analysis approval 链与最终架构一致。
+  - 后续新增 agent entry/operator command 时，不得默认暴露 frozen legacy analysis query surface；如需访问，只能通过显式审计/回放/兼容查询语境。
+
+- 本次实际运行：
+  - `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`
+  - 结果：`111` 项通过。
+  - `git diff --check`：通过。

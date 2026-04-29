@@ -51,7 +51,7 @@ def seed_control_state(run_dir: Path) -> dict[str, str]:
             "recommended_skill_sequence": ["summarize-round-readiness"],
         },
         "observed_state": {
-            "direct_council_queue": True,
+            "council_proposal_queue": True,
             "next_actions_stage_skipped": True,
         },
         "inputs": {

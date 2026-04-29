@@ -420,8 +420,6 @@ def load_report_basis_freeze_wrapper(
 
 
 def plan_wrapper_kind(plan_file: Path) -> tuple[str, str]:
-    if plan_file.name.startswith("agent_advisory_plan_"):
-        return "advisory-only", "agent-advisory-plan"
     return "queue-owner", "orchestration-plan"
 
 

@@ -447,9 +447,6 @@ def validate_fetch_side_effects(values: list[str], *, field_name: str) -> list[s
 
 def normalize_fetch_declared_side_effects(payload: dict[str, Any]) -> list[str]:
     declared = normalize_text_list(payload.get("declared_side_effects"))
-    if not declared:
-        # Backward-compatible fallback for older mission contracts.
-        declared = normalize_text_list(payload.get("allow_side_effects"))
     validated = validate_fetch_side_effects(declared, field_name="declared_side_effects")
     return unique_texts(["writes-artifacts", *validated])
 

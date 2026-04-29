@@ -123,6 +123,7 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
             self.assertFalse(profiles[skill_name]["default_chain_eligible"])
 
         for removed_skill in [
+            "build-normalization-audit",
             "extract-observation-candidates",
             "merge-observation-candidates",
             "derive-observation-scope",

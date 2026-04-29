@@ -670,7 +670,7 @@ def fallback_path(
     probe_reason_codes: list[str],
     signal_counts: dict[str, Any],
     *,
-    direct_council_queue: bool,
+    council_proposal_queue: bool,
 ) -> list[dict[str, Any]]:
     counts = snapshot.get("counts", {}) if isinstance(snapshot.get("counts"), dict) else {}
     fallback_rows: list[dict[str, Any]] = []
@@ -685,7 +685,7 @@ def fallback_path(
                         "submit-readiness-opinion",
                         "close-challenge-ticket",
                     ]
-                    if direct_council_queue
+                    if council_proposal_queue
                     else [
                         "submit-council-proposal",
                         "submit-readiness-opinion",
@@ -742,7 +742,7 @@ def fallback_path(
                         "submit-council-proposal",
                         "submit-readiness-opinion",
                     ]
-                    if direct_council_queue
+                    if council_proposal_queue
                     else [
                         "propose-next-actions",
                         "open-falsification-probe",
@@ -774,7 +774,6 @@ def plan_round_orchestration_skill(
     probes_path: str,
     readiness_path: str,
     output_path: str,
-    planner_mode: str,
     council_execution_mode: str,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
@@ -915,7 +914,7 @@ def plan_round_orchestration_skill(
         else top_actions(next_actions)
     )
     primary_action_role = top_action_rows[0]["assigned_role"] if top_action_rows else "moderator"
-    direct_council_queue = council_execution_uses_direct_queue(
+    council_proposal_queue = council_execution_uses_direct_queue(
         normalized_council_execution_mode,
         proposal_actions=proposal_actions,
         readiness_opinions=council_readiness_opinions,
@@ -923,7 +922,7 @@ def plan_round_orchestration_skill(
 
     execution_queue: list[dict[str, Any]] = []
     previous_stage_names = ["orchestration-planner"]
-    if not direct_council_queue:
+    if not council_proposal_queue:
         execution_queue.append(
             step_entry(
                 "next-actions",
@@ -955,7 +954,7 @@ def plan_round_orchestration_skill(
             "summarize-round-readiness",
             (
                 "Re-evaluate round readiness directly from council readiness opinions and governed probe state."
-                if direct_council_queue
+                if council_proposal_queue
                 else "Re-evaluate round readiness from shared board state, action, and probe artifacts."
             ),
             "moderator",
@@ -1057,7 +1056,7 @@ def plan_round_orchestration_skill(
         posture,
         probe_reason_codes,
         signal_counts,
-        direct_council_queue=direct_council_queue,
+        council_proposal_queue=council_proposal_queue,
     )
     plan_id = "orchestration-plan-" + stable_hash(run_id, round_id, posture, *(step["skill_name"] for step in execution_queue))[:12]
     planning_notes = [
@@ -1065,9 +1064,9 @@ def plan_round_orchestration_skill(
         "Probe materialization is decided from DB council objects and agenda artifacts; missing derived artifacts must be recorded as caveats.",
         "Board summary and board brief are treated as derived exports rather than controller prerequisites.",
     ]
-    if direct_council_queue:
+    if council_proposal_queue:
         planning_notes.append(
-            "Direct council proposals or readiness opinions are authoritative in the default execution mode, so the controller queue skips a mandatory next-actions recomputation."
+            "Council proposals or readiness opinions are authoritative in the selected execution mode, so the controller queue skips a mandatory next-actions recomputation."
         )
     if brief_text:
         planning_notes.append(f"Board brief context: {maybe_text(brief_text)[:180]}")
@@ -1079,9 +1078,9 @@ def plan_round_orchestration_skill(
         "round_id": round_id,
         "plan_id": plan_id,
         "council_execution_mode": normalized_council_execution_mode,
-        "planning_status": "advisory-plan-ready" if planner_mode == "agent-advisory" else "ready-for-controller",
-        "planning_mode": "agent-advisory" if planner_mode == "agent-advisory" else "planner-backed-phase2",
-        "controller_authority": "advisory-only" if planner_mode == "agent-advisory" else "queue-owner",
+        "planning_status": "ready-for-controller",
+        "planning_mode": "planner-backed-phase2",
+        "controller_authority": "queue-owner",
         "probe_stage_included": probe_stage_included,
         "downstream_posture": posture,
         "phase_decision_basis": phase_decision_basis,
@@ -1096,8 +1095,8 @@ def plan_round_orchestration_skill(
             "board_summary_present": isinstance(board_summary, dict),
             "board_brief_present": bool(brief_text),
             "board_exports_are_derived": True,
-            "direct_council_queue": direct_council_queue,
-            "next_actions_stage_skipped": direct_council_queue,
+            "council_proposal_queue": council_proposal_queue,
+            "next_actions_stage_skipped": council_proposal_queue,
             "council_execution_resolution": resolved_action_queue["resolution"],
             "council_proposal_count": len(council_proposals),
             "council_proposal_action_count": len(proposal_actions),
@@ -1116,7 +1115,7 @@ def plan_round_orchestration_skill(
             "probes_present": isinstance(probes, dict) and bool(probes),
             "next_actions_source": (
                 "council-proposals-direct"
-                if direct_council_queue and proposal_actions and not next_actions
+                if council_proposal_queue and proposal_actions and not next_actions
                 else maybe_text(next_actions_context.get("source"))
             ),
             "probes_source": maybe_text(probes_context.get("source")),
@@ -1187,7 +1186,7 @@ def plan_round_orchestration_skill(
             "planned_stage_count": len(execution_queue) + len(gate_steps) + len(post_gate_steps),
             "derived_export_count": len(derived_exports),
             "planning_mode": plan_payload["planning_mode"],
-            "direct_council_queue": direct_council_queue,
+            "council_proposal_queue": council_proposal_queue,
             "probe_stage_included": probe_stage_included,
             "downstream_posture": posture,
             "board_state_source": maybe_text(snapshot.get("state_source")),
@@ -1221,7 +1220,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--probes-path", default="")
     parser.add_argument("--readiness-path", default="")
     parser.add_argument("--output-path", default="")
-    parser.add_argument("--planner-mode", choices=["runtime-phase2", "agent-advisory"], default="runtime-phase2")
     parser.add_argument(
         "--council-execution-mode",
         choices=sorted(VALID_COUNCIL_EXECUTION_MODES),
@@ -1244,7 +1242,6 @@ def main() -> int:
         probes_path=args.probes_path,
         readiness_path=args.readiness_path,
         output_path=args.output_path,
-        planner_mode=args.planner_mode,
         council_execution_mode=args.council_execution_mode,
     )
     print(pretty_json(payload, args.pretty))

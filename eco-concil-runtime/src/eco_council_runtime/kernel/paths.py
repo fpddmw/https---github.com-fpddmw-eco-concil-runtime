@@ -51,10 +51,6 @@ def mission_scaffold_path(run_dir: Path, round_id: str) -> Path:
     return runtime_dir(run_dir) / f"mission_scaffold_{round_id}.json"
 
 
-def agent_advisory_plan_path(run_dir: Path, round_id: str) -> Path:
-    return runtime_dir(run_dir) / f"agent_advisory_plan_{round_id}.json"
-
-
 def agent_entry_gate_path(run_dir: Path, round_id: str) -> Path:
     return runtime_dir(run_dir) / f"agent_entry_gate_{round_id}.json"
 

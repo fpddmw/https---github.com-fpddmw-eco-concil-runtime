@@ -2074,9 +2074,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_entry_cmd.add_argument("--round-id", required=True)
     add_actor_role_arg(agent_entry_cmd)
     agent_entry_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
-    agent_entry_cmd.add_argument("--refresh-advisory-plan", action="store_true")
     agent_entry_cmd.add_argument("--pretty", action="store_true")
-    add_execution_policy_args(agent_entry_cmd)
 
     dead_letters_cmd = sub.add_parser("show-dead-letters", help="Show open runtime dead letters for the selected run or round.")
     dead_letters_cmd.add_argument("--run-dir", required=True)
@@ -3443,11 +3441,6 @@ def main(
                 hard_gate_command_builder=hard_gate_command_builder,
                 entry_chain_builder=entry_chain_builder,
                 contract_mode=args.contract_mode,
-                refresh_advisory_plan=args.refresh_advisory_plan,
-                timeout_seconds=args.timeout_seconds,
-                retry_budget=args.retry_budget,
-                retry_backoff_ms=args.retry_backoff_ms,
-                allow_side_effects=args.allow_side_effect,
             )
         except SkillExecutionError as exc:
             failure = exc.payload or {

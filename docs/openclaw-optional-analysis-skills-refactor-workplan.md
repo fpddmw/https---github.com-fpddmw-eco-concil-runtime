@@ -457,6 +457,35 @@ optional-analysis helper 必须支持 challenger 对以下内容提交 review co
 1. `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`：`111` 项通过。
 2. `git diff --check`：通过。
 
+## 7.14 2026-04-29 破坏性清理补记：不保留旧兼容入口
+
+已完成：
+
+1. `build-normalization-audit` 已从 active optional-analysis registry、source queue profile、skill files 和 approval workflow 测试中删除；不再作为 operator QA 兼容 helper 保留。
+2. direct council advisory compiler 已物理删除；agent entry、controller、planning profile 和 state surface 不再支持 `direct-council-advisory / agent-advisory / advisory-only / agent_advisory_plan_*`。
+3. `plan-round-orchestration` 不再提供 `--planner-mode agent-advisory`；runtime plan 固定为 queue-owned `planner-backed-phase2`，council DB 输入路径用 `council_proposal_queue` 表达。
+4. 兼容门面 `phase2_fallback_planning.py / kernel/investigation_planning.py / kernel/phase2_contract.py` 已删除，测试改为直接引用 canonical 模块。
+5. optional-analysis active helper 数量从 `17` 收缩为 `16`。
+
+未完成：
+
+1. 旧 analysis kind / canonical contract 命名仍存在于 `analysis_plane.py / analysis_objects.py / canonical_contracts.py` 和若干负向 guardrail 测试；这需要单独 DB/query schema breaking migration。
+2. 部分 optional helper 内部仍使用 `phase2_fallback_*` 共享模块名；本批删除了兼容门面和旧 advisory 接口，但未做全量内部模块改名。
+
+新发现的问题：
+
+1. 旧 advisory 语义通过 CLI flag、artifact path、planner mode、controller planning source 和 state-surface wrapper 多点残留，不能只检查默认 planning source。
+2. 文档此前把 `build-normalization-audit` 描述为“仍保留但需审批”，与“不保留旧兼容”新要求冲突；本批按新要求删除。
+
+是否影响后续计划：
+
+1. 影响所有外部调用：不得继续调用 `$build-normalization-audit`、`--refresh-advisory-plan`、`--planner-mode agent-advisory` 或读取 `agent_advisory_plan_<round>.json`。
+2. 后续计划应优先做 old analysis DB/query naming migration，而不是恢复这些已删除入口。
+
+本次实际运行：
+
+1. `.venv/bin/python -m unittest tests.test_investigation_contracts tests.test_agent_entry_gate tests.test_orchestration_planner_workflow tests.test_runtime_kernel -v`：`58` 项通过。
+
 ## 7.8 2026-04-29 测试命名清理
 
 已完成：
@@ -602,7 +631,6 @@ optional-analysis helper 必须支持 challenger 对以下内容提交 review co
 
 | rule_id | skill | current status | helper destination |
 | --- | --- | --- | --- |
-| `HEUR-NORMALIZATION-AUDIT-001` | `build-normalization-audit` | `default-frozen; approval-required; audit-pending` | operator QA export |
 | `HEUR-ENV-AGGREGATE-001` | `aggregate-environment-evidence` | `default-frozen; approval-required; audit-pending` | DB-backed environment evidence aggregation helper |
 | `HEUR-FACT-SCOPE-001` | `review-fact-check-evidence-scope` | `default-frozen; approval-required; audit-pending` | explicit fact-check scope review helper |
 | `HEUR-DISCOURSE-DISCOVERY-001` | `discover-discourse-issues` | `default-frozen; approval-required; audit-pending` | DB-backed public/formal discourse issue hints |
@@ -647,3 +675,32 @@ optional-analysis helper 必须支持 challenger 对以下内容提交 review co
   - `compileall` 通过。
   - 目标回归 `84` 项通过。
   - 全量 `unittest discover`：`235` 项通过，用时 `222.805s`。
+
+## 7.13 2026-04-29 agent entry 旧 analysis command 补充收口
+
+已完成：
+
+1. 复核默认 agent entry/operator surface 后，发现并删除残留的 `claim-cluster` 查询模板：默认 `phase2_agent_entry_profile.py` 不再生成 `list_claim_cluster_result_sets_command` / `query_claim_cluster_items_command_template`。
+2. `kernel/agent_entry.py` 的 operator view 不再固定输出上述 legacy analysis command key，避免空值键继续暗示默认入口存在。
+3. `tests/test_agent_entry_gate.py` 增加默认 operator surface 不含 `claim-cluster` 命令文本的防回归断言。
+4. optional-analysis 旧 skill 入口仍保持删除状态；active registry 为 `79` 个 skill，optional-analysis active helper 为 `16` 个。
+
+未完成：
+
+1. 第 `8` 节 freeze line 仍是 `audit-pending`，尚未替换为完整人工审计批准记录。
+2. frozen legacy analysis kind / query object 仍保留 compatibility query / replay surface，未做 DB/query schema 物理迁移。
+
+新发现的问题：
+
+1. 此前验收文本已声明默认 agent entry 移除旧 analysis query commands，但代码默认 operator surface 仍残留两个 `claim-cluster` command key；本批已修复。
+2. 原始 skills 清单中的 `88` 个 skill 与当前 active `79` 个 skill 需要明确区分，避免把已删除旧入口误认为待恢复对象。
+
+是否影响后续计划：
+
+1. 不阻塞 optional-analysis hard acceptance；默认入口风险已收口。
+2. 后续新增 agent entry/operator command 时，不得把 frozen helper/query surface 作为默认角色能力暴露。
+
+本次实际运行：
+
+1. `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`：`111` 项通过。
+2. `git diff --check`：通过。

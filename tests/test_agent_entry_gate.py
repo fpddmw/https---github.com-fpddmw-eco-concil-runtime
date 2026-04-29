@@ -4,7 +4,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from _workflow_support import (
     kernel_script_path,
@@ -211,8 +210,6 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertEqual("completed", payload["status"])
             self.assertEqual("runtime-operator", payload["summary"]["requested_by_role"])
             self.assertEqual("ready", payload["summary"]["entry_status"])
-            self.assertFalse(payload["summary"]["advisory_plan_present"])
-            self.assertFalse(payload["summary"]["advisory_plan_materialized"])
             self.assertEqual("openclaw-agent", payload["agent_entry"]["orchestration_mode"])
             self.assertEqual("runtime-operator", payload["agent_entry"]["requested_by_role"])
             self.assertEqual(
@@ -365,17 +362,15 @@ class AgentEntryGateTests(unittest.TestCase):
                 "approve-phase-transition",
                 state_payload["agent_entry"]["operator"]["approve_transition_request_command_template"],
             )
-            self.assertEqual(
-                "",
-                state_payload["agent_entry"]["operator"]["materialize_agent_advisory_plan_command"],
-            )
+            self.assertNotIn("materialize_agent_advisory_plan_command", state_payload["agent_entry"]["operator"])
+            self.assertNotIn("agent_advisory_plan_path", state_payload["agent_entry"]["operator"])
             self.assertIn(
                 "supervise-round",
                 state_payload["agent_entry"]["operator"]["return_to_supervisor_command"],
             )
             self.assertEqual("eco_runtime_kernel.py", kernel_script_path().name)
 
-    def test_materialize_agent_entry_gate_does_not_materialize_default_advisory(
+    def test_materialize_agent_entry_gate_does_not_expose_advisory_surface(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -429,23 +424,20 @@ class AgentEntryGateTests(unittest.TestCase):
                 },
             )
 
-            with mock.patch("eco_council_runtime.phase2_agent_entry_profile.run_skill") as run_skill_mock:
-                payload = materialize_agent_entry_gate(
-                    run_dir,
-                    run_id=RUN_ID,
-                    round_id=ROUND_ID,
-                    agent_entry_profile=default_phase2_agent_entry_profile(),
-                    hard_gate_command_builder=default_phase2_hard_gate_commands,
-                    entry_chain_builder=default_phase2_entry_chain,
-                    contract_mode="warn",
-                )
-
-            run_skill_mock.assert_not_called()
+            payload = materialize_agent_entry_gate(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                agent_entry_profile=default_phase2_agent_entry_profile(),
+                hard_gate_command_builder=default_phase2_hard_gate_commands,
+                entry_chain_builder=default_phase2_entry_chain,
+                contract_mode="warn",
+            )
             self.assertEqual("completed", payload["status"])
-            self.assertFalse(payload["summary"]["advisory_plan_materialized"])
-            self.assertEqual("", payload["summary"]["advisory_plan_source"])
-            self.assertFalse(payload["summary"]["advisory_plan_present"])
-            self.assertFalse(payload["agent_entry"]["advisory_plan"]["present"])
+            self.assertNotIn("advisory_plan_materialized", payload["summary"])
+            self.assertNotIn("advisory_plan_source", payload["summary"])
+            self.assertNotIn("advisory_plan_present", payload["summary"])
+            self.assertNotIn("advisory_plan", payload["agent_entry"])
 
     def test_materialize_agent_entry_gate_accepts_injected_handoff_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -571,13 +563,10 @@ class AgentEntryGateTests(unittest.TestCase):
             custom_profile["operator_commands_builder"] = lambda **_: {
                 "materialize_agent_entry_gate_command": "custom-materialize-entry-gate",
                 "refresh_agent_entry_gate_command": "custom-refresh-entry-gate",
-                "materialize_agent_advisory_plan_command": "custom-refresh-advisory",
                 "read_board_delta_command": "custom-read-board",
                 "query_public_signals_command": "custom-query-public",
                 "query_formal_signals_command": "custom-query-formal",
                 "query_environment_signals_command": "custom-query-environment",
-                "list_claim_cluster_result_sets_command": "custom-list-analysis",
-                "query_claim_cluster_items_command_template": "custom-query-analysis-items",
             }
 
             payload = materialize_agent_entry_gate(
@@ -611,10 +600,6 @@ class AgentEntryGateTests(unittest.TestCase):
                 "custom-query-formal",
                 state_payload["operator"]["query_formal_signals_command"],
             )
-            self.assertEqual(
-                "custom-query-analysis-items",
-                state_payload["operator"]["query_claim_cluster_items_command_template"],
-            )
             self.assertIn(
                 "round-agent-entry-custom-next",
                 payload["agent_entry"]["hard_gate_commands"]["open_next_round"],
@@ -643,7 +628,15 @@ class AgentEntryGateTests(unittest.TestCase):
             operator = state_payload["agent_entry"]["operator"]
             self.assertFalse(operator["entry_gate_present"])
             self.assertIn("materialize-agent-entry-gate", operator["materialize_agent_entry_gate_command"])
-            self.assertIn("claim-cluster", operator["list_claim_cluster_result_sets_command"])
+            self.assertNotIn("list_claim_cluster_result_sets_command", operator)
+            self.assertNotIn("query_claim_cluster_items_command_template", operator)
+            self.assertTrue(
+                all(
+                    "claim-cluster" not in command
+                    for command in operator.values()
+                    if isinstance(command, str)
+                )
+            )
             self.assertIn("query-board-delta", operator["read_board_delta_command"])
             self.assertIn("query-public-signals", operator["query_public_signals_command"])
             self.assertIn("query-formal-signals", operator["query_formal_signals_command"])

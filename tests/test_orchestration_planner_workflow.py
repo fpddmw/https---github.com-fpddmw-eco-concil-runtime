@@ -135,7 +135,7 @@ def prepare_hold_board_state(run_dir: Path, root: Path) -> None:
 
 
 class OrchestrationPlannerWorkflowTests(unittest.TestCase):
-    def test_agent_advisory_mode_marks_plan_as_advisory(self) -> None:
+    def test_runtime_plan_is_queue_owned(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -149,14 +149,12 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
-                "--planner-mode",
-                "agent-advisory",
             )
             plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
 
-            self.assertEqual("agent-advisory", payload["summary"]["planning_mode"])
-            self.assertEqual("agent-advisory", plan["planning_mode"])
-            self.assertEqual("advisory-only", plan["controller_authority"])
+            self.assertEqual("planner-backed-phase2", payload["summary"]["planning_mode"])
+            self.assertEqual("planner-backed-phase2", plan["planning_mode"])
+            self.assertEqual("queue-owner", plan["controller_authority"])
             self.assertIn("recommended_skill_sequence", plan["agent_turn_hints"])
 
             runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json").unlink()
@@ -171,15 +169,15 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--controller-authority",
-                "advisory-only",
+                "queue-owner",
             )
             self.assertEqual(1, plan_query["summary"]["returned_object_count"])
             self.assertEqual(
-                "advisory-only",
+                "queue-owner",
                 plan_query["objects"][0]["controller_authority"],
             )
 
-    def test_agent_advisory_plan_can_skip_next_actions_from_council_readiness(self) -> None:
+    def test_runtime_plan_can_skip_next_actions_from_council_readiness(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
             store_readiness_opinion_records(
@@ -222,8 +220,6 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
-                "--planner-mode",
-                "agent-advisory",
             )
             plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
             stage_names = [item["stage_name"] for item in plan["execution_queue"]]
@@ -233,7 +229,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             self.assertEqual(["round-readiness"], stage_names)
             self.assertEqual(["report-basis-gate"], gate_stage_names)
             self.assertEqual("report-basis-candidate", plan["downstream_posture"])
-            self.assertTrue(plan["observed_state"]["direct_council_queue"])
+            self.assertTrue(plan["observed_state"]["council_proposal_queue"])
             self.assertTrue(plan["observed_state"]["next_actions_stage_skipped"])
             self.assertEqual(2, plan["observed_state"]["council_readiness_opinion_count"])
             self.assertEqual("ready", plan["observed_state"]["council_readiness_status"])
@@ -246,7 +242,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                 plan["agent_turn_hints"]["recommended_skill_sequence"],
             )
 
-    def test_agent_advisory_plan_can_execute_probe_queue_directly_from_council_proposals(self) -> None:
+    def test_runtime_plan_can_execute_probe_queue_from_council_proposals(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
             store_council_proposal_records(
@@ -287,8 +283,6 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
-                "--planner-mode",
-                "agent-advisory",
             )
             plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
             stage_names = [item["stage_name"] for item in plan["execution_queue"]]
@@ -299,7 +293,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             self.assertEqual(["report-basis-gate"], gate_stage_names)
             self.assertTrue(plan["probe_stage_included"])
             self.assertEqual("hold-investigation-open", plan["downstream_posture"])
-            self.assertTrue(plan["observed_state"]["direct_council_queue"])
+            self.assertTrue(plan["observed_state"]["council_proposal_queue"])
             self.assertTrue(plan["observed_state"]["next_actions_stage_skipped"])
             self.assertEqual(1, plan["observed_state"]["council_proposal_count"])
             self.assertEqual(1, plan["observed_state"]["council_proposal_action_count"])
@@ -313,7 +307,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                 plan["phase_decision_basis"]["probe_stage_reason_codes"],
             )
 
-    def test_runtime_phase2_plan_defaults_to_direct_council_queue_when_proposals_exist(
+    def test_runtime_phase2_plan_defaults_to_council_proposal_queue_when_proposals_exist(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -362,7 +356,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual("planner-backed-phase2", plan["planning_mode"])
-            self.assertTrue(plan["observed_state"]["direct_council_queue"])
+            self.assertTrue(plan["observed_state"]["council_proposal_queue"])
             self.assertTrue(plan["observed_state"]["next_actions_stage_skipped"])
             self.assertEqual(
                 "proposal-authoritative",

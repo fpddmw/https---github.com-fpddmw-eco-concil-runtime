@@ -16,6 +16,7 @@ if str(RUNTIME_SRC) not in sys.path:
 RUN_ID = "run-optional-analysis-guardrails"
 ROUND_ID = "round-optional-analysis-guardrails"
 REMOVED_LEGACY_SKILLS = [
+    "build-normalization-audit",
     "extract-observation-candidates",
     "merge-observation-candidates",
     "derive-observation-scope",
@@ -125,7 +126,7 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
             if skill["skill_layer"] == SKILL_LAYER_OPTIONAL_ANALYSIS
         ]
 
-        self.assertGreaterEqual(len(optional_skills), 17)
+        self.assertGreaterEqual(len(optional_skills), 16)
         for skill in optional_skills:
             with self.subTest(skill=skill["skill_name"]):
                 self.assertTrue(skill["requires_operator_approval"])

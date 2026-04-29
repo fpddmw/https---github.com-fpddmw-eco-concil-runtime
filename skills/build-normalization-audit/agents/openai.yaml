@@ -1,4 +1,0 @@
-interface:
-  display_name: "Eco Build Normalization Audit"
-  short_description: "Summarize claim and observation candidate coverage for board review"
-  default_prompt: "Use $build-normalization-audit to read the current round's claim and observation candidate artifacts, summarize candidate coverage and unresolved gaps, persist the audit artifact, and return board handoff hints only."

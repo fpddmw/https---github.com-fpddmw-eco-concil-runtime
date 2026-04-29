@@ -71,7 +71,7 @@ ROLE_ALIASES = {
 ROLE_CONTRACTS = {
     ROLE_MODERATOR: {
         "canonical_role": ROLE_MODERATOR,
-        "legacy_aliases": ["moderator"],
+        "aliases": ["moderator"],
         "description": "Owns agenda framing, board coordination, structured proposal submission, and stage-transition requests.",
         "capabilities": [
             CAPABILITY_QUERY,
@@ -92,7 +92,7 @@ ROLE_CONTRACTS = {
     },
     ROLE_ENVIRONMENTAL_INVESTIGATOR: {
         "canonical_role": ROLE_ENVIRONMENTAL_INVESTIGATOR,
-        "legacy_aliases": [
+        "aliases": [
             "environmentalist",
             "environmental-investigator",
             "hydrology-analyst",
@@ -116,7 +116,7 @@ ROLE_CONTRACTS = {
     },
     ROLE_PUBLIC_DISCOURSE_INVESTIGATOR: {
         "canonical_role": ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
-        "legacy_aliases": [
+        "aliases": [
             "sociologist",
             "public-discourse-investigator",
             "community-impact-analyst",
@@ -139,7 +139,7 @@ ROLE_CONTRACTS = {
     },
     ROLE_FORMAL_RECORD_INVESTIGATOR: {
         "canonical_role": ROLE_FORMAL_RECORD_INVESTIGATOR,
-        "legacy_aliases": [
+        "aliases": [
             "formal-record-investigator",
             "policy-analyst",
         ],
@@ -161,7 +161,7 @@ ROLE_CONTRACTS = {
     },
     ROLE_CHALLENGER: {
         "canonical_role": ROLE_CHALLENGER,
-        "legacy_aliases": ["challenger"],
+        "aliases": ["challenger"],
         "description": "Tests competing explanations, opens/closes challenges, and pushes contradiction or falsification work.",
         "capabilities": [
             CAPABILITY_QUERY,
@@ -180,7 +180,7 @@ ROLE_CONTRACTS = {
     },
     ROLE_REPORT_EDITOR: {
         "canonical_role": ROLE_REPORT_EDITOR,
-        "legacy_aliases": ["report-editor"],
+        "aliases": ["report-editor"],
         "description": "Builds evidence-backed report artifacts and publication-ready reporting outputs without changing investigation state.",
         "capabilities": [
             CAPABILITY_QUERY,
@@ -192,7 +192,7 @@ ROLE_CONTRACTS = {
     },
     ROLE_RUNTIME_OPERATOR: {
         "canonical_role": ROLE_RUNTIME_OPERATOR,
-        "legacy_aliases": ["runtime-operator"],
+        "aliases": ["runtime-operator"],
         "description": "Owns runtime governance, audit, replay, export rebuild, admission policy, and operational write surfaces.",
         "capabilities": [
             CAPABILITY_QUERY,
@@ -205,7 +205,7 @@ ROLE_CONTRACTS = {
 
 CANONICAL_ROLE_NAMES = tuple(ROLE_CONTRACTS)
 KNOWN_ROLE_NAMES = tuple(
-    unique_texts([*ROLE_CONTRACTS, *ROLE_ALIASES, *(alias for item in ROLE_CONTRACTS.values() for alias in item.get("legacy_aliases", []))])
+    unique_texts([*ROLE_CONTRACTS, *ROLE_ALIASES, *(alias for item in ROLE_CONTRACTS.values() for alias in item.get("aliases", []))])
 )
 
 
@@ -230,7 +230,7 @@ def role_contract(actor_role: Any) -> dict[str, Any]:
         return {}
     return {
         "canonical_role": normalized,
-        "legacy_aliases": unique_texts(contract.get("legacy_aliases", [])),
+        "aliases": unique_texts(contract.get("aliases", [])),
         "description": maybe_text(contract.get("description")),
         "capabilities": unique_texts(contract.get("capabilities", [])),
     }
@@ -246,8 +246,8 @@ def preferred_role_label(actor_role: Any) -> str:
     if not normalized:
         return ""
     contract = role_contract(normalized)
-    legacy_aliases = contract.get("legacy_aliases", []) if isinstance(contract.get("legacy_aliases"), list) else []
-    return maybe_text(legacy_aliases[0]) if legacy_aliases else normalized
+    aliases = contract.get("aliases", []) if isinstance(contract.get("aliases"), list) else []
+    return maybe_text(aliases[0]) if aliases else normalized
 
 
 __all__ = [

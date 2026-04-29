@@ -23,13 +23,11 @@ from ..phase2_controller_state import (
     step_index,
     unique_texts,
 )
-from ..phase2_direct_advisory import materialize_direct_council_advisory_plan
 from ..phase2_posture_profile import (
     posture_profile_callable,
     resolve_phase2_posture_profile,
 )
 from ..phase2_planning_profile import (
-    advisory_planning_bundle as advisory_planning_bundle_from_profile,
     agent_orchestration_requested as agent_orchestration_requested_from_profile,
     ensure_executable_planning as ensure_executable_planning_from_profile,
     normalized_controller_planning_mode as normalized_controller_planning_mode_from_profile,
@@ -37,7 +35,6 @@ from ..phase2_planning_profile import (
     planning_bundle as planning_bundle_from_result,
     planning_from_controller as planning_from_controller_from_profile,
     planning_source_output_path,
-    relative_runtime_path as relative_runtime_path_from_profile,
     resolve_phase2_planning_sources,
 )
 from ..phase2_stage_profile import (
@@ -54,7 +51,6 @@ from .gate import GateHandler, execute_gate_step as execute_runtime_gate_step
 from .ledger import append_ledger_event
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists, write_json
 from .paths import (
-    agent_advisory_plan_path,
     agent_entry_gate_path,
     controller_state_path,
     ensure_runtime_dirs,
@@ -225,7 +221,6 @@ def controller_stage_skill_args(
 
 def phase2_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
     return {
-        "agent_advisory_plan_path": str(agent_advisory_plan_path(run_dir, round_id).resolve()),
         "agent_entry_gate_path": str(agent_entry_gate_path(run_dir, round_id).resolve()),
         "board_summary_path": str((run_dir / "board" / f"board_state_summary_{round_id}.json").resolve()),
         "board_brief_path": str((run_dir / "board" / f"board_brief_{round_id}.md").resolve()),
@@ -245,10 +240,6 @@ def normalized_controller_planning_mode(value: Any, *, default: str = "planner-b
     return normalized_controller_planning_mode_from_profile(value, default=default)
 
 
-def relative_runtime_path(run_dir: Path, path: Path) -> str:
-    return relative_runtime_path_from_profile(run_dir, path)
-
-
 def agent_orchestration_requested(run_dir: Path, round_id: str) -> bool:
     return agent_orchestration_requested_from_profile(run_dir, round_id)
 
@@ -258,14 +249,6 @@ def planning_bundle(run_dir: Path, round_id: str, planner_result: dict[str, Any]
         run_dir,
         round_id,
         planner_result,
-        planner_skill_name=PLANNER_SKILL_NAME,
-    )
-
-
-def advisory_planning_bundle(run_dir: Path, round_id: str) -> dict[str, Any]:
-    return advisory_planning_bundle_from_profile(
-        run_dir,
-        round_id,
         planner_skill_name=PLANNER_SKILL_NAME,
     )
 
@@ -370,7 +353,7 @@ def transition_executor_plan_payload(
         },
         "planning_notes": [
             "Runtime controller executed the approved transition request directly.",
-            "No planner, fallback agenda, or direct council advisory source was used on the default kernel path.",
+            "No planner or advisory source was used on the default kernel path.",
         ],
     }
 
@@ -910,24 +893,6 @@ def run_phase2_round_with_contract_mode(
                 and not agent_orchestration_requested(run_dir, round_id)
             ):
                 continue
-            if source_kind == "existing-advisory":
-                advisory_planning = advisory_planning_bundle(run_dir, round_id)
-                if not advisory_planning:
-                    continue
-                adopted_source = (
-                    maybe_text(advisory_planning.get("plan_source")) or source_name
-                )
-                adopt_planning(
-                    advisory_planning,
-                    source_name=adopted_source,
-                    status="adopted",
-                    message=(
-                        maybe_text(source_spec.get("adopted_message"))
-                        or "Controller adopted a pre-materialized advisory plan."
-                    ),
-                )
-                break
-
             output_path = planning_source_output_path(
                 run_dir,
                 round_id,
@@ -935,59 +900,6 @@ def run_phase2_round_with_contract_mode(
                 source_spec,
             )
             planner_index = start_planner_attempt(output_path)
-            if source_kind == "direct-council-advisory":
-                try:
-                    direct_result = materialize_direct_council_advisory_plan(
-                        run_dir,
-                        run_id=run_id,
-                        round_id=round_id,
-                        output_path=relative_runtime_path(run_dir, output_path),
-                        contract_mode=contract_mode,
-                    )
-                except Exception as exc:
-                    append_planning_attempt(
-                        controller_payload,
-                        planning_attempt_record(
-                            source=source_name,
-                            status="failed",
-                            plan_path=str(output_path.resolve()),
-                            message=str(exc),
-                        ),
-                    )
-                    persist_controller_state(run_dir, round_id, controller_payload)
-                    continue
-                selected_planning = advisory_planning_bundle(run_dir, round_id)
-                if direct_result and selected_planning:
-                    adopt_planning(
-                        selected_planning,
-                        source_name=(
-                            maybe_text(selected_planning.get("plan_source"))
-                            or source_name
-                        ),
-                        status="materialized",
-                        message=(
-                            maybe_text(source_spec.get("materialized_message"))
-                            or "Controller compiled and selected a direct council advisory plan."
-                        ),
-                        planner_result=direct_result,
-                    )
-                    break
-                append_planning_attempt(
-                    controller_payload,
-                    planning_attempt_record(
-                        source=source_name,
-                        status="failed" if direct_result else "unavailable",
-                        plan_path=str(output_path.resolve()),
-                        message=(
-                            maybe_text(source_spec.get("failed_message"))
-                            if direct_result
-                            else maybe_text(source_spec.get("unavailable_message"))
-                        ),
-                    ),
-                )
-                persist_controller_state(run_dir, round_id, controller_payload)
-                continue
-
             if source_kind != "planner-skill":
                 continue
             skill_name = maybe_text(source_spec.get("planner_skill_name")) or PLANNER_SKILL_NAME
@@ -1038,12 +950,7 @@ def run_phase2_round_with_contract_mode(
                 persist_controller_state(run_dir, round_id, controller_payload)
                 continue
 
-            selected_planning = (
-                advisory_planning_bundle(run_dir, round_id)
-                if maybe_text(source_spec.get("output_path_key"))
-                == "agent_advisory_plan_path"
-                else planning_bundle(run_dir, round_id, planner_result)
-            )
+            selected_planning = planning_bundle(run_dir, round_id, planner_result)
             if selected_planning:
                 adopt_planning(
                     selected_planning,

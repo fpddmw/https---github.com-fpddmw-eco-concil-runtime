@@ -805,7 +805,7 @@ def run_suggest_evidence_lanes(
                 "suggestion_id": suggestion_id,
                 "source_hint_id": maybe_text(hint.get("hint_id")),
                 "advisory_lanes": unique_texts(lanes),
-                "review_status": "advisory-only",
+                "review_status": "human-review-only",
                 "disabled_workflow_controls": ["owner-assignment", "queue-driver", "phase-transition"],
                 "evidence_refs": list_items(hint.get("evidence_refs")),
                 "lineage": unique_texts([maybe_text(hint.get("hint_id")), *list_items(hint.get("lineage"))]),

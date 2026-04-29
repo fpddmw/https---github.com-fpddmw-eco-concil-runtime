@@ -723,3 +723,51 @@
   - `compileall` 通过。
   - runtime/reporting/decision/submission/supervisor 目标回归 `84` 项通过。
   - 全量 `unittest discover`：`235` 项通过，用时 `222.805s`。
+
+## 19. 2026-04-29 验收补充：默认 agent entry legacy analysis 命令清除
+
+- 已完成：
+  - 复核最终硬完成检查表后，发现默认 agent entry/operator view 仍残留 `claim-cluster` analysis query command key。
+  - 已从 `phase2_agent_entry_profile.py` 默认 operator commands 和 `kernel/agent_entry.py` operator view 中删除 `list_claim_cluster_result_sets_command / query_claim_cluster_items_command_template`。
+  - 已更新 `tests/test_agent_entry_gate.py`，默认 operator surface 现在断言不包含旧 `claim-cluster` 命令。
+  - 当前 active skills 数量经复核为 `79`；原始 `88` 个 skill 盘点只作为迁移历史口径。
+
+- 未完成：
+  - optional-analysis 的逐项人工审计仍未完成，freeze line 仍为 `audit-pending`。
+  - frozen legacy analysis kind / query contract 仍作为 compatibility query / replay surface 保留，未物理删除。
+
+- 新发现的问题：
+  - 文档已宣称默认 agent entry 无旧 analysis query commands，但代码仍有残留默认 operator command；本次已修正。
+  - 历史 checklist 中未勾选项应继续区分“默认链阻塞”与“物理删除/命名迁移债”。
+
+- 是否影响后续计划：
+  - 不阻塞当前重构完成判断；修复后默认链继续满足 fetch/normalize/query/DB council object/reporting basis 的目标。
+  - 后续不得将 legacy analysis query surface 重新放入默认 operator/agent entry。
+
+- 本次实际运行：
+  - `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`
+  - 结果：`111` 项通过。
+  - `git diff --check`：通过。
+
+## 20. 2026-04-29 破坏性清理补记
+
+- 已完成：
+  - `build-normalization-audit` 已删除，不再作为 active skill 或 operator QA 兼容入口存在。
+  - direct council advisory 与 agent advisory plan 接口已删除，包括 compiler、CLI refresh flag、artifact path 和 planner mode。
+  - 删除 `kernel/investigation_planning.py`、`phase2_fallback_planning.py`、`kernel/phase2_contract.py` 兼容门面。
+  - planner 的 council DB 直承字段改为 `council_proposal_queue`。
+
+- 未完成：
+  - 旧 analysis kind/canonical contract/query surface 命名仍需单独迁移。
+  - 内部 `phase2_fallback_*` 模块名仍未整体重命名。
+
+- 新发现的问题：
+  - 旧 advisory 兼容接口散落在 agent-entry、controller、planning、state surface 多层。
+  - active skill 数量从 `80` 降为 `79`，optional-analysis helper 从 `17` 降为 `16`。
+
+- 是否影响后续计划：
+  - 影响旧外部调用；这是预期 breaking cleanup。
+  - 不阻塞当前 fetch/normalize/query/council object/reporting basis 主线。
+
+- 本次实际运行：
+  - `.venv/bin/python -m unittest tests.test_investigation_contracts tests.test_agent_entry_gate tests.test_orchestration_planner_workflow tests.test_runtime_kernel -v`：`58` 项通过。

@@ -1565,45 +1565,16 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("withheld", payload["controller"]["report_basis_status"])
             self.assertEqual([], payload["controller"]["planning_attempts"])
 
-    def test_controller_ignores_optional_advisory_artifacts_on_default_path(
+    def test_controller_uses_only_approved_transition_request_on_default_path(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            runtime_dir = run_dir / "runtime"
-            runtime_dir.mkdir(parents=True, exist_ok=True)
             ensure_runtime_src_on_path()
 
             from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
 
-            advisory_plan_path = runtime_dir / f"agent_advisory_plan_{ROUND_ID}.json"
-            advisory_plan_path.write_text(
-                json.dumps(
-                    {
-                        "plan_id": "agent-plan-ignored-001",
-                        "planning_status": "advisory-plan-ready",
-                        "planning_mode": "agent-advisory",
-                        "controller_authority": "advisory-only",
-                        "execution_queue": [
-                            {
-                                "stage_name": "round-readiness",
-                                "skill_name": "summarize-round-readiness",
-                                "skill_args": [],
-                                "assigned_role_hint": "moderator",
-                                "reason": "This optional advisory plan should not run on the default controller path.",
-                                "expected_output_path": str(root / "ignored_readiness.json"),
-                            }
-                        ],
-                        "fallback_path": [],
-                    },
-                    ensure_ascii=True,
-                    indent=2,
-                    sort_keys=True,
-                )
-                + "\n",
-                encoding="utf-8",
-            )
             report_basis_result = {
                 "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
                 "event": {"status": "completed"},
@@ -1648,7 +1619,6 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("approved-transition-request", payload["summary"]["plan_source"])
             self.assertEqual("transition-executor", payload["controller"]["planning_mode"])
             self.assertEqual("approved-transition-request", payload["controller"]["planning"]["plan_source"])
-            self.assertNotEqual(str(advisory_plan_path.resolve()), payload["controller"]["planning"]["plan_path"])
             self.assertEqual(
                 [{"source": "approved-transition-request", "status": "adopted"}],
                 [
@@ -1830,50 +1800,10 @@ class RuntimeKernelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
-            runtime_dir = run_dir / "runtime"
-            runtime_dir.mkdir(parents=True, exist_ok=True)
             ensure_runtime_src_on_path()
 
             from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
             from eco_council_runtime.phase2_planning_profile import phase2_planning_source
-
-            advisory_plan_path = runtime_dir / f"agent_advisory_plan_{ROUND_ID}.json"
-            advisory_plan_path.write_text(
-                json.dumps(
-                    {
-                        "plan_id": "agent-plan-should-not-run",
-                        "planning_status": "advisory-plan-ready",
-                        "planning_mode": "agent-advisory",
-                        "controller_authority": "advisory-only",
-                        "execution_queue": [
-                            {
-                                "stage_name": "round-readiness",
-                                "skill_name": "summarize-round-readiness",
-                                "skill_args": [],
-                                "assigned_role_hint": "moderator",
-                                "reason": "This advisory plan should be ignored by injected planning sources.",
-                                "expected_output_path": str(root / "ignored_readiness.json"),
-                            }
-                        ],
-                        "post_gate_steps": [
-                            {
-                                "stage_name": "report-basis-freeze",
-                                "skill_name": "freeze-report-basis",
-                                "skill_args": [],
-                                "assigned_role_hint": "moderator",
-                                "reason": "Ignore this advisory post-gate path.",
-                                "expected_output_path": str(root / "ignored_basis.json"),
-                            }
-                        ],
-                        "fallback_path": [],
-                    },
-                    ensure_ascii=True,
-                    indent=2,
-                    sort_keys=True,
-                )
-                + "\n",
-                encoding="utf-8",
-            )
 
             planner_result = {
                 "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},

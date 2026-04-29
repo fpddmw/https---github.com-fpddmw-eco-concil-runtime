@@ -11,7 +11,6 @@ from .phase2_stage_profile import (
 from .kernel.deliberation_plane import load_orchestration_plan_record
 from .kernel.manifest import load_json_if_exists
 from .kernel.paths import (
-    agent_advisory_plan_path,
     agent_entry_gate_path,
     mission_scaffold_path,
     orchestration_plan_path,
@@ -100,8 +99,6 @@ def resolve_plan_path(run_dir: Path, round_id: str, plan_payload: dict[str, Any]
 
 def normalized_controller_planning_mode(value: Any, *, default: str = "planner-backed") -> str:
     mode = maybe_text(value)
-    if mode == "agent-advisory":
-        return mode
     if mode == "planner-pending":
         return mode
     if mode == "transition-executor":
@@ -119,8 +116,6 @@ def planning_source_from_payload(plan_payload: dict[str, Any]) -> str:
     controller_authority = maybe_text(plan_payload.get("controller_authority"))
     if planning_mode == "transition-executor" or controller_authority == "transition-executor":
         return "approved-transition-request"
-    if planning_mode == "agent-advisory" or controller_authority == "advisory-only":
-        return "agent-advisory"
     return "runtime-planner"
 
 
@@ -132,8 +127,6 @@ def relative_runtime_path(run_dir: Path, path: Path) -> str:
 
 
 def inferred_plan_controller_authority(plan_path: str) -> str:
-    if Path(plan_path).name.startswith("agent_advisory_plan_"):
-        return "advisory-only"
     return "queue-owner"
 
 
@@ -209,10 +202,7 @@ def agent_orchestration_requested(run_dir: Path, round_id: str) -> bool:
     if maybe_text(mission_payload.get("orchestration_mode")) == "openclaw-agent":
         return True
     entry_gate_payload = load_json_if_exists(agent_entry_gate_path(run_dir, round_id)) or {}
-    return maybe_text(entry_gate_payload.get("orchestration_mode")) in {
-        "openclaw-agent",
-        "openclaw-agent-compatible",
-    }
+    return maybe_text(entry_gate_payload.get("orchestration_mode")) == "openclaw-agent"
 
 
 def planning_bundle_from_payload(
@@ -286,42 +276,6 @@ def planning_bundle(
         plan_payload,
         planner_skill_name=planner_skill_name,
     )
-
-
-def advisory_planning_bundle(
-    run_dir: Path,
-    round_id: str,
-    *,
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
-) -> dict[str, Any]:
-    advisory_path = agent_advisory_plan_path(run_dir, round_id)
-    advisory_payload = load_runtime_plan_payload(
-        run_dir,
-        round_id,
-        plan_path=str(advisory_path.resolve()),
-        controller_authority="advisory-only",
-    )
-    if not advisory_payload:
-        return {}
-    if (
-        maybe_text(advisory_payload.get("planning_mode")) not in {"agent-advisory", ""}
-        and maybe_text(advisory_payload.get("controller_authority")) != "advisory-only"
-    ):
-        return {}
-    execution_queue = normalized_planned_steps(advisory_payload.get("execution_queue"))
-    if not execution_queue:
-        return {}
-    planning = planning_bundle_from_payload(
-        run_dir,
-        round_id,
-        str(advisory_path.resolve()),
-        advisory_payload,
-        planner_skill_name=planner_skill_name,
-    )
-    planning["planning_mode"] = maybe_text(advisory_payload.get("planning_mode")) or "agent-advisory"
-    planning["controller_authority"] = maybe_text(advisory_payload.get("controller_authority")) or "advisory-only"
-    planning["plan_source"] = maybe_text(advisory_payload.get("plan_source")) or "agent-advisory"
-    return planning
 
 
 def planning_from_controller(
@@ -455,8 +409,6 @@ def planning_source_output_path(
         artifact_path = maybe_text(artifacts.get(output_path_key))
         if artifact_path:
             return Path(artifact_path)
-    if output_path_key == "agent_advisory_plan_path":
-        return agent_advisory_plan_path(run_dir, round_id)
     return orchestration_plan_path(run_dir, round_id)
 
 
@@ -484,17 +436,7 @@ def planning_bundle_for_source(
     *,
     planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
 ) -> dict[str, Any]:
-    source_kind = maybe_text(source_spec.get("source_kind"))
-    output_path_key = maybe_text(source_spec.get("output_path_key"))
-    if output_path_key == "agent_advisory_plan_path" or source_kind in {
-        "existing-advisory",
-        "direct-council-advisory",
-    }:
-        return advisory_planning_bundle(
-            run_dir,
-            round_id,
-            planner_skill_name=planner_skill_name,
-        )
+    del source_spec
     if planner_result is None:
         return {}
     return planning_bundle(

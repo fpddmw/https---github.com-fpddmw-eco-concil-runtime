@@ -4464,10 +4464,6 @@ def planning_source_from_runtime_plan(plan_payload: dict[str, Any]) -> str:
     explicit_source = maybe_text(plan_payload.get("plan_source"))
     if explicit_source:
         return explicit_source
-    planning_mode = maybe_text(plan_payload.get("planning_mode"))
-    controller_authority = maybe_text(plan_payload.get("controller_authority"))
-    if planning_mode == "agent-advisory" or controller_authority == "advisory-only":
-        return "agent-advisory"
     return "runtime-planner"
 
 
@@ -4490,11 +4486,7 @@ def normalized_orchestration_plan_payload(
     )
     normalized["controller_authority"] = (
         maybe_text(normalized.get("controller_authority"))
-        or (
-            "advisory-only"
-            if normalized["planning_mode"] == "agent-advisory"
-            else "queue-owner"
-        )
+        or "queue-owner"
     )
     normalized["plan_source"] = planning_source_from_runtime_plan(normalized)
     normalized["council_execution_mode"] = maybe_text(

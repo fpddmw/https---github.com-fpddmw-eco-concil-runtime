@@ -4,7 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable
 
-from .kernel.executor import maybe_text, run_skill
+from .kernel.executor import maybe_text
 from .kernel.role_contracts import (
     ROLE_CHALLENGER,
     ROLE_ENVIRONMENTAL_INVESTIGATOR,
@@ -23,19 +23,14 @@ from .kernel.skill_registry import (
     SKILL_LAYER_REPORTING,
     SKILL_LAYER_STATE_TRANSITION,
     available_skill_names,
-    default_actor_role_hint,
     resolve_skill_policy,
 )
-from .kernel.paths import agent_advisory_plan_path
 from .kernel.transition_requests import (
     TRANSITION_KIND_CLOSE_ROUND,
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
     TRANSITION_KIND_FREEZE_REPORT_BASIS,
 )
-from .phase2_direct_advisory import materialize_direct_council_advisory_plan
-from .phase2_planning_profile import planner_skill_args_for_source
 from .phase2_round_profile import default_next_round_id_builder
-from .phase2_stage_profile import DEFAULT_PHASE2_PLANNER_SKILL_NAME
 from .runtime_command_hints import kernel_command, run_skill_command
 
 EntryStatusEvaluator = Callable[..., tuple[str, list[dict[str, str]]]]
@@ -204,10 +199,6 @@ def capability_layers(role: str) -> list[str]:
     ] + [layer for layer in sorted(grouped) if layer not in ordered_layers]
 
 
-def advisory_plan_relative_path(run_dir: Path, round_id: str) -> str:
-    return str(agent_advisory_plan_path(run_dir, round_id).relative_to(run_dir))
-
-
 def query_result_set_command(*, run_dir: Path, run_id: str, round_id: str, analysis_kind: str) -> str:
     return kernel_command(
         "list-analysis-result-sets",
@@ -241,25 +232,6 @@ def query_result_item_template(*, run_dir: Path, run_id: str, round_id: str, ana
         f"<{analysis_kind.replace('-', '_')}_id>",
         "--include-result-sets",
         "--include-contract",
-        "--pretty",
-    )
-
-
-def advisory_plan_command(
-    *,
-    run_dir: Path,
-    run_id: str,
-    round_id: str,
-) -> str:
-    return kernel_command(
-        "materialize-agent-entry-gate",
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
-        "--refresh-advisory-plan",
         "--pretty",
     )
 
@@ -720,8 +692,7 @@ def default_role_entry_points(
     return results
 
 
-def default_agent_entry_recommended_skills(*, advisory_plan: dict[str, Any]) -> list[str]:
-    del advisory_plan
+def default_agent_entry_recommended_skills() -> list[str]:
     return []
 
 
@@ -729,7 +700,6 @@ def default_agent_entry_operator_notes(
     *,
     status: str,
     mission: dict[str, Any],
-    advisory_plan: dict[str, Any],
     round_surface_payload: dict[str, Any],
     analysis: dict[str, Any],
 ) -> list[str]:
@@ -739,10 +709,6 @@ def default_agent_entry_operator_notes(
     ]
     if maybe_text(mission.get("orchestration_mode")) == "openclaw-agent":
         notes.append("Mission scaffold already marks this round as `openclaw-agent`, so the operator-visible entry chain is explicitly enabled.")
-    if advisory_plan.get("present"):
-        notes.append(
-            f"An optional advisory plan is present from `{maybe_text(advisory_plan.get('plan_source')) or 'unknown'}`, but it is not part of the default kernel execution path."
-        )
     if int(analysis.get("matching_result_set_count") or 0) > 0:
         notes.append(
             f"Analysis plane currently exposes {int(analysis.get('matching_result_set_count') or 0)} latest result sets for this round."
@@ -785,7 +751,6 @@ def default_agent_entry_operator_commands(
             round_id,
             "--pretty",
         ),
-        "materialize_agent_advisory_plan_command": "",
         "read_board_delta_command": run_skill_command(
             run_dir=run_dir,
             run_id=run_id,
@@ -1227,116 +1192,10 @@ def default_agent_entry_operator_commands(
                 "<basis_object_id>",
             ],
         ),
-        "list_claim_cluster_result_sets_command": query_result_set_command(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            analysis_kind="claim-cluster",
-        ),
-        "query_claim_cluster_items_command_template": query_result_item_template(
-            run_dir=run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            analysis_kind="claim-cluster",
-        ),
     }
 
 
-def agent_entry_advisory_source(
-    source_name: str,
-    *,
-    source_kind: str,
-    planner_mode: str = "",
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
-) -> dict[str, Any]:
-    return {
-        "source_name": maybe_text(source_name),
-        "source_kind": maybe_text(source_kind),
-        "planner_mode": maybe_text(planner_mode),
-        "planner_skill_name": maybe_text(planner_skill_name) or DEFAULT_PHASE2_PLANNER_SKILL_NAME,
-        "output_path_key": "agent_advisory_plan_path",
-    }
-
-
-def default_agent_entry_advisory_sources(
-    *,
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
-) -> list[dict[str, Any]]:
-    del planner_skill_name
-    return []
-
-
-def materialize_agent_entry_advisory_plan(
-    run_dir: Path,
-    *,
-    run_id: str,
-    round_id: str,
-    contract_mode: str,
-    advisory_sources: list[dict[str, Any]],
-    timeout_seconds: float | None = None,
-    retry_budget: int | None = None,
-    retry_backoff_ms: int | None = None,
-    allow_side_effects: list[str] | None = None,
-) -> dict[str, Any]:
-    output_path = agent_advisory_plan_path(run_dir, round_id)
-    for source_spec in advisory_sources:
-        source_kind = maybe_text(source_spec.get("source_kind"))
-        source_name = maybe_text(source_spec.get("source_name"))
-        if source_kind == "direct-council-advisory":
-            try:
-                result = materialize_direct_council_advisory_plan(
-                    run_dir,
-                    run_id=run_id,
-                    round_id=round_id,
-                    output_path=advisory_plan_relative_path(run_dir, round_id),
-                    contract_mode=contract_mode,
-                )
-            except Exception:
-                continue
-            if isinstance(result, dict) and result:
-                summary = result.get("summary", {}) if isinstance(result.get("summary"), dict) else {}
-                skill_payload = result.get("skill_payload", {}) if isinstance(result.get("skill_payload"), dict) else {}
-                return {
-                    "materialized": True,
-                    "receipt_id": maybe_text(summary.get("receipt_id")),
-                    "source": maybe_text(skill_payload.get("plan_source")) or source_name,
-                }
-            continue
-        if source_kind != "planner-skill":
-            continue
-        planner_result = run_skill(
-            run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            skill_name=maybe_text(source_spec.get("planner_skill_name")) or DEFAULT_PHASE2_PLANNER_SKILL_NAME,
-            actor_role=default_actor_role_hint(
-                maybe_text(source_spec.get("planner_skill_name")) or DEFAULT_PHASE2_PLANNER_SKILL_NAME
-            ),
-            skill_args=planner_skill_args_for_source(run_dir, source_spec, output_path),
-            contract_mode=contract_mode,
-            timeout_seconds=timeout_seconds,
-            retry_budget=retry_budget,
-            retry_backoff_ms=retry_backoff_ms,
-            allow_side_effects=allow_side_effects,
-        )
-        summary = planner_result.get("summary", {}) if isinstance(planner_result.get("summary"), dict) else {}
-        skill_payload = planner_result.get("skill_payload", {}) if isinstance(planner_result.get("skill_payload"), dict) else {}
-        return {
-            "materialized": True,
-            "receipt_id": maybe_text(summary.get("receipt_id")),
-            "source": maybe_text(skill_payload.get("plan_source")) or source_name,
-        }
-    return {
-        "materialized": False,
-        "receipt_id": "",
-        "source": "",
-    }
-
-
-def default_phase2_agent_entry_profile(
-    *,
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
-) -> dict[str, Any]:
+def default_phase2_agent_entry_profile() -> dict[str, Any]:
     return {
         "role_definitions": deepcopy(DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS),
         "status_evaluator": default_agent_entry_status,
@@ -1345,11 +1204,6 @@ def default_phase2_agent_entry_profile(
         "recommended_skills_builder": default_agent_entry_recommended_skills,
         "operator_notes_builder": default_agent_entry_operator_notes,
         "operator_commands_builder": default_agent_entry_operator_commands,
-        "advisory_sources": deepcopy(
-            default_agent_entry_advisory_sources(
-                planner_skill_name=planner_skill_name,
-            )
-        ),
     }
 
 
@@ -1359,13 +1213,10 @@ __all__ = [
     "OperatorNotesBuilder",
     "RecommendedSkillsBuilder",
     "RoleEntryBuilder",
-    "advisory_plan_command",
-    "default_agent_entry_advisory_sources",
     "default_agent_entry_operator_commands",
     "default_agent_entry_operator_notes",
     "default_agent_entry_recommended_skills",
     "default_agent_entry_status",
     "default_phase2_agent_entry_profile",
     "default_role_entry_points",
-    "materialize_agent_entry_advisory_plan",
 ]

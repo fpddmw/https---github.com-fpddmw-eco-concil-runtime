@@ -527,6 +527,30 @@ runtime kernel 只保留以下职责：
   - 结果：`111` 项通过。
   - `git diff --check`：通过。
 
+## 2026-04-29 破坏性清理补记：旧 advisory/compat surface 删除
+
+- 已完成：
+  - 物理删除 `phase2_direct_advisory.py`、`tests/test_direct_council_advisory.py`，controller 与 agent entry 不再导入或物化 `direct-council-advisory`。
+  - 删除 `kernel/investigation_planning.py`、`phase2_fallback_planning.py` 与 `kernel/phase2_contract.py` 兼容门面；测试改为直接引用当前 canonical 模块。
+  - agent entry 删除 `--refresh-advisory-plan`、`agent_advisory_plan_path`、`materialize_agent_advisory_plan_command`、`advisory_sources` 和 `materialize_agent_entry_advisory_plan`。
+  - `plan-round-orchestration` 删除 `agent-advisory / advisory-only` planner mode，统一输出 queue-owned runtime orchestration plan；`direct_council_queue` 改为 `council_proposal_queue`。
+  - 删除 active `build-normalization-audit` skill、registry policy、source queue profile 和脚本目录。
+
+- 未完成：
+  - `analysis_plane.py` 与若干 council/reporting/archive 测试仍保留旧 analysis kind / canonical object 命名，用于负向 guardrail 或后续 DB/query schema migration。
+  - `phase2_fallback_common/context/contracts` 仍是若干 optional helper 的内部共享模块名；本批未做大规模模块重命名。
+
+- 新发现的问题：
+  - 旧 advisory 不是只存在于默认 planning source；它还通过 agent-entry CLI、runtime artifact path、state surface、deliberation plan normalization 和 planner mode 留有接口。
+  - `build-normalization-audit` 虽已被文档描述为非默认 QA helper，但仍是 active registry skill；本批已按“无旧兼容”要求删除。
+
+- 是否影响后续计划：
+  - 影响：后续不能再依赖 `direct-council-advisory`、`agent-advisory`、`agent_advisory_plan_*` 或 `build-normalization-audit`。
+  - 不阻塞 runtime kernel 主线；默认 controller 仍只执行已批准 transition request 或 inspection-only/no-op。
+
+- 本次实际运行：
+  - `.venv/bin/python -m unittest tests.test_investigation_contracts tests.test_agent_entry_gate tests.test_orchestration_planner_workflow tests.test_runtime_kernel -v`：`58` 项通过。
+
 ## 14. 2026-04-29 runtime/control freeze 拆分回写
 
 - 已完成：
@@ -586,3 +610,26 @@ runtime kernel 只保留以下职责：
   - `.venv/bin/python -m compileall -q eco-concil-runtime/src skills tests`：通过。
   - 目标回归 `84` 项通过。
   - `.venv/bin/python -m unittest discover -s tests -v`：`235` 项通过，用时 `222.805s`。
+
+## 2026-04-29 agent entry 默认 surface 补充验收
+
+- 已完成：
+  - 复核 runtime/kernel 默认入口后，清除 `kernel/agent_entry.py` 与 `phase2_agent_entry_profile.py` 默认 operator surface 中残留的旧 `claim-cluster` analysis 查询命令。
+  - 默认 agent entry 现在只暴露 DB query、finding/evidence-bundle/proposal/readiness/report-section-draft 写入面，以及 optional-analysis approval/run 模板；不再把 frozen legacy analysis query surface 放进默认 operator view。
+  - `tests/test_agent_entry_gate.py` 已补断言，防止默认 operator surface 再次出现 `claim-cluster` 命令。
+
+- 未完成：
+  - `phase2_fallback_* / phase2_direct_advisory.py / plan-round-orchestration` 仍作为可注入或 approval-gated 兼容/辅助面存在，未物理删除。
+  - frozen legacy analysis kind 仍可在明确兼容查询场景中回放，不属于默认 agent entry。
+
+- 新发现的问题：
+  - 文档此前已经把“默认 agent entry 已移除旧 analysis query commands”列为完成，但默认 operator command map 仍有两个 `claim-cluster` 模板键；本次已修正代码和测试。
+
+- 是否影响后续计划：
+  - 不影响 runtime/kernel 权限重构验收；该补丁进一步加固第 `10.3 / 10.5 / 10.7` 项。
+  - 后续不得把 legacy analysis query command 作为默认 role/operator entry surface，只能放在显式审计、兼容查询或 migration 工具链中。
+
+- 本次实际运行：
+  - `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`
+  - 结果：`111` 项通过。
+  - `git diff --check`：通过。

@@ -9,9 +9,9 @@ RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.investigation_planning import (  # noqa: E402
-    d1_contract_fields_from_payload,
+from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
     normalize_d1_observed_inputs,
+    reporting_contract_fields_from_payload,
 )
 
 
@@ -34,8 +34,8 @@ class InvestigationContractTests(unittest.TestCase):
         self.assertFalse(normalized["next_actions_artifact_present"])
         self.assertFalse(normalized["probes_artifact_present"])
 
-    def test_contract_fields_from_payload_backfills_new_flags_from_legacy_payload(self) -> None:
-        fields = d1_contract_fields_from_payload(
+    def test_contract_fields_from_payload_backfills_observed_input_flags(self) -> None:
+        fields = reporting_contract_fields_from_payload(
             {
                 "board_state_source": "deliberation-plane",
                 "coverage_source": "analysis-plane",

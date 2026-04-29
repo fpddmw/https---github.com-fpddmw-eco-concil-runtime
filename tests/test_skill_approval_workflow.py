@@ -22,7 +22,6 @@ if str(RUNTIME_SRC) not in sys.path:
 RUN_ID = "run-skill-approval-001"
 ROUND_ID = "round-skill-approval-001"
 OPTIONAL_SKILL = "discover-discourse-issues"
-OPERATOR_OPTIONAL_SKILL = "build-normalization-audit"
 
 
 class SkillApprovalWorkflowTests(unittest.TestCase):
@@ -54,7 +53,7 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 {item["code"] for item in payload["preflight"]["issues"]},
             )
 
-    def test_preflight_blocks_operator_optional_analysis_without_approval_record(self) -> None:
+    def test_preflight_accepts_optional_analysis_after_approval_record(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
 
@@ -67,9 +66,9 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                OPERATOR_OPTIONAL_SKILL,
+                OPTIONAL_SKILL,
                 "--actor-role",
-                "runtime-operator",
+                "moderator",
                 "--contract-mode",
                 "warn",
                 auto_actor_role=False,
@@ -91,11 +90,11 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                OPERATOR_OPTIONAL_SKILL,
+                OPTIONAL_SKILL,
                 "--requested-actor-role",
-                "runtime-operator",
+                "moderator",
                 "--rationale",
-                "Record operator approval for normalization audit.",
+                "Record approval for optional discourse discovery.",
                 "--actor-role",
                 "runtime-operator",
             )
@@ -121,9 +120,9 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--skill-name",
-                OPERATOR_OPTIONAL_SKILL,
+                OPTIONAL_SKILL,
                 "--actor-role",
-                "runtime-operator",
+                "moderator",
                 "--contract-mode",
                 "warn",
                 "--skill-approval-request-id",

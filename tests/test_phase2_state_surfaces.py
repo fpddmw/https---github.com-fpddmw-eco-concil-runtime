@@ -23,7 +23,7 @@ RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel import investigation_planning, phase2_state_surfaces  # noqa: E402
+from eco_council_runtime.kernel import phase2_state_surfaces  # noqa: E402
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_falsification_probe_records,
     store_falsification_probe_snapshot,
@@ -209,7 +209,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
             ],
         },
         "observed_state": {
-            "direct_council_queue": False,
+            "council_proposal_queue": False,
             "next_actions_stage_skipped": False,
         },
         "inputs": {
@@ -406,14 +406,6 @@ class Phase2StateSurfaceTests(unittest.TestCase):
         for name in WRAPPER_NAMES:
             self.assertIn(name, exported)
         self.assertIn("build_reporting_surface", exported)
-
-    def test_investigation_planning_reexports_phase2_surface_wrappers(self) -> None:
-        for name in WRAPPER_NAMES:
-            self.assertIs(
-                getattr(investigation_planning, name),
-                getattr(phase2_state_surfaces, name),
-                name,
-            )
 
     def test_phase2_wrappers_flag_orphaned_artifacts_instead_of_reusing_them(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

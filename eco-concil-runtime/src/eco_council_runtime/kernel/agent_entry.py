@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..phase2_agent_entry_profile import materialize_agent_entry_advisory_plan
 from ..phase2_agent_handoff import EntryChainBuilder, HardGateCommandBuilder
 from .role_contracts import normalize_actor_role
 from .analysis_plane import query_analysis_result_sets
@@ -17,12 +16,10 @@ from .ledger import append_ledger_event
 from .manifest import load_json_if_exists, write_json
 from .operations import load_admission_policy, runtime_health_payload
 from .paths import (
-    agent_advisory_plan_path,
     agent_entry_gate_path,
     mission_scaffold_path,
     resolve_run_dir,
 )
-from .phase2_state_surfaces import load_orchestration_plan_wrapper
 
 
 def board_counts(round_state: dict[str, Any]) -> dict[str, int]:
@@ -181,38 +178,6 @@ def mission_surface(run_dir: Path, round_id: str) -> dict[str, Any]:
     }
 
 
-def advisory_plan_surface(run_dir: Path, round_id: str) -> dict[str, Any]:
-    advisory_path = agent_advisory_plan_path(run_dir, round_id)
-    context = load_orchestration_plan_wrapper(
-        run_dir,
-        round_id=round_id,
-        orchestration_plan_path=str(advisory_path.resolve()),
-    )
-    payload = context.get("payload", {}) if isinstance(context.get("payload"), dict) else {}
-    return {
-        "present": bool(payload),
-        "path": str(advisory_path.resolve()),
-        "planning_mode": maybe_text(payload.get("planning_mode")),
-        "controller_authority": maybe_text(payload.get("controller_authority")),
-        "plan_source": maybe_text(payload.get("plan_source")),
-        "downstream_posture": maybe_text(payload.get("downstream_posture")),
-        "direct_council_queue": bool(payload.get("observed_state", {}).get("direct_council_queue"))
-        if isinstance(payload.get("observed_state"), dict)
-        else False,
-        "recommended_skill_sequence": payload.get("agent_turn_hints", {}).get("recommended_skill_sequence", [])
-        if isinstance(payload.get("agent_turn_hints"), dict)
-        and isinstance(payload.get("agent_turn_hints", {}).get("recommended_skill_sequence"), list)
-        else [],
-        "primary_role": maybe_text(payload.get("agent_turn_hints", {}).get("primary_role"))
-        if isinstance(payload.get("agent_turn_hints"), dict)
-        else "",
-        "support_roles": payload.get("agent_turn_hints", {}).get("support_roles", [])
-        if isinstance(payload.get("agent_turn_hints"), dict)
-        and isinstance(payload.get("agent_turn_hints", {}).get("support_roles"), list)
-        else [],
-    }
-
-
 def resolved_agent_entry_profile(agent_entry_profile: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(agent_entry_profile, dict):
         raise ValueError("No agent entry profile was injected into kernel.agent_entry.")
@@ -253,7 +218,6 @@ def build_agent_entry_payload(
     role_definitions = profile_list(profile, "role_definitions")
     governance = governance_surface(run_dir, round_id=round_id)
     mission = mission_surface(run_dir, round_id)
-    advisory_plan = advisory_plan_surface(run_dir, round_id)
     round_state = round_surface(run_dir, run_id=run_id, round_id=round_id)
     analysis = analysis_surface(run_dir, run_id=run_id, round_id=round_id)
     next_round_id = maybe_text(
@@ -276,7 +240,7 @@ def build_agent_entry_payload(
         next_round_id=next_round_id,
         role_definitions=role_definitions,
     )
-    recommended_skills = recommended_skills_builder(advisory_plan=advisory_plan)
+    recommended_skills = recommended_skills_builder()
     requested_by_role = maybe_text(actor_role)
     payload = {
         "schema_version": "runtime-agent-entry-gate-v1",
@@ -287,14 +251,13 @@ def build_agent_entry_payload(
         "resolved_requested_by_role": normalize_actor_role(requested_by_role),
         "entry_id": "agent-entry-" + new_runtime_event_id("gate", run_id, round_id, status).split("-", 1)[1],
         "entry_status": status,
-        "orchestration_mode": maybe_text(mission.get("orchestration_mode")) or "openclaw-agent-compatible",
+        "orchestration_mode": maybe_text(mission.get("orchestration_mode")) or "openclaw-agent",
         "contract_mode": contract_mode,
         "output_path": str(agent_entry_gate_path(run_dir, round_id).resolve()),
         "mission": mission,
         "governance": governance,
         "round_surface": round_state,
         "analysis_surface": analysis,
-        "advisory_plan": advisory_plan,
         "capability_surface": role_entries,
         "recommended_entry_skills": recommended_skills,
         "role_entry_points": role_entries,
@@ -315,7 +278,6 @@ def build_agent_entry_payload(
         "operator_notes": operator_notes_builder(
             status=status,
             mission=mission,
-            advisory_plan=advisory_plan,
             round_surface_payload=round_state,
             analysis=analysis,
         ),
@@ -380,11 +342,9 @@ def agent_entry_operator_view(
         "orchestration_mode": maybe_text(gate.get("orchestration_mode")) or "",
         "entry_gate_path": str(agent_entry_gate_path(run_dir, round_id).resolve()) if round_id else "",
         "mission_scaffold_path": str(mission_scaffold_path(run_dir, round_id).resolve()) if round_id else "",
-        "agent_advisory_plan_path": str(agent_advisory_plan_path(run_dir, round_id).resolve()) if round_id else "",
         "recommended_entry_skills": gate.get("recommended_entry_skills", []) if isinstance(gate.get("recommended_entry_skills"), list) else [],
         "materialize_agent_entry_gate_command": maybe_text(entry_commands.get("materialize_agent_entry_gate_command")),
         "refresh_agent_entry_gate_command": maybe_text(entry_commands.get("refresh_agent_entry_gate_command")),
-        "materialize_agent_advisory_plan_command": maybe_text(entry_commands.get("materialize_agent_advisory_plan_command")),
         "read_board_delta_command": maybe_text(entry_commands.get("read_board_delta_command")),
         "query_public_signals_command": maybe_text(entry_commands.get("query_public_signals_command")),
         "query_formal_signals_command": maybe_text(entry_commands.get("query_formal_signals_command")),
@@ -414,8 +374,6 @@ def agent_entry_operator_view(
         "submit_evidence_bundle_command_template": maybe_text(entry_commands.get("submit_evidence_bundle_command_template")),
         "submit_report_section_draft_command_template": maybe_text(entry_commands.get("submit_report_section_draft_command_template")),
         "submit_readiness_opinion_command_template": maybe_text(entry_commands.get("submit_readiness_opinion_command_template")),
-        "list_claim_cluster_result_sets_command": maybe_text(entry_commands.get("list_claim_cluster_result_sets_command")),
-        "query_claim_cluster_items_command_template": maybe_text(entry_commands.get("query_claim_cluster_items_command_template")),
         "open_next_round_command_template": maybe_text(handoff_commands.get("open_next_round")),
         "return_to_supervisor_command": maybe_text(handoff_commands.get("supervise_round")),
     }
@@ -457,44 +415,9 @@ def materialize_agent_entry_gate(
     hard_gate_command_builder: HardGateCommandBuilder,
     entry_chain_builder: EntryChainBuilder,
     contract_mode: str = "warn",
-    refresh_advisory_plan: bool = False,
-    timeout_seconds: float | None = None,
-    retry_budget: int | None = None,
-    retry_backoff_ms: int | None = None,
-    allow_side_effects: list[str] | None = None,
 ) -> dict[str, Any]:
     profile = resolved_agent_entry_profile(agent_entry_profile)
     resolved_run_dir = resolve_run_dir(run_dir)
-    initial_payload = build_agent_entry_payload(
-        resolved_run_dir,
-        run_id=run_id,
-        round_id=round_id,
-        actor_role=actor_role,
-        contract_mode=contract_mode,
-        agent_entry_profile=profile,
-        hard_gate_command_builder=hard_gate_command_builder,
-        entry_chain_builder=entry_chain_builder,
-    )
-    advisory_plan_file = agent_advisory_plan_path(resolved_run_dir, round_id)
-    advisory_plan_materialized = False
-    advisory_plan_receipt_id = ""
-    advisory_sources = profile_list(profile, "advisory_sources")
-    if maybe_text(initial_payload.get("entry_status")) != "blocked" and (
-        refresh_advisory_plan or not advisory_plan_file.exists()
-    ) and advisory_sources:
-        plan_result = materialize_agent_entry_advisory_plan(
-            resolved_run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            contract_mode=contract_mode,
-            advisory_sources=advisory_sources,
-            timeout_seconds=timeout_seconds,
-            retry_budget=retry_budget,
-            retry_backoff_ms=retry_backoff_ms,
-            allow_side_effects=allow_side_effects,
-        )
-        advisory_plan_materialized = bool(plan_result.get("materialized"))
-        advisory_plan_receipt_id = maybe_text(plan_result.get("receipt_id"))
     payload = build_agent_entry_payload(
         resolved_run_dir,
         run_id=run_id,
@@ -530,12 +453,6 @@ def materialize_agent_entry_gate(
             "entry_status": payload.get("entry_status"),
             "orchestration_mode": payload.get("orchestration_mode"),
             "agent_entry_gate_path": str(output_file.resolve()),
-            "agent_advisory_plan_path": str(advisory_plan_file.resolve()),
-            "advisory_plan_materialized": advisory_plan_materialized,
-            "advisory_plan_receipt_id": advisory_plan_receipt_id,
-            "advisory_plan_source": maybe_text(payload.get("advisory_plan", {}).get("plan_source"))
-            if isinstance(payload.get("advisory_plan"), dict)
-            else "",
         },
     )
     return {
@@ -549,14 +466,6 @@ def materialize_agent_entry_gate(
             "entry_status": maybe_text(payload.get("entry_status")),
             "orchestration_mode": maybe_text(payload.get("orchestration_mode")),
             "output_path": str(output_file.resolve()),
-            "advisory_plan_path": str(advisory_plan_file.resolve()),
-            "advisory_plan_present": bool(payload.get("advisory_plan", {}).get("present"))
-            if isinstance(payload.get("advisory_plan"), dict)
-            else False,
-            "advisory_plan_materialized": advisory_plan_materialized,
-            "advisory_plan_source": maybe_text(payload.get("advisory_plan", {}).get("plan_source"))
-            if isinstance(payload.get("advisory_plan"), dict)
-            else "",
             "analysis_kind_count": int(payload.get("analysis_surface", {}).get("analysis_kind_count") or 0)
             if isinstance(payload.get("analysis_surface"), dict)
             else 0,
