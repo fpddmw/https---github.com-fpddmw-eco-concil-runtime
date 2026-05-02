@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from .canonical_contracts import canonical_contract, validate_canonical_payload
+from .canonical_contracts import (
+    ENVIRONMENT_SIGNAL_TAXONOMY_APPROVAL_REF,
+    ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
+    SIGNAL_ROLE_VALUES,
+    SPATIOTEMPORAL_RELATION_STATUS_VALUES,
+    SPATIOTEMPORAL_RELATION_TYPE_VALUES,
+    canonical_contract,
+    validate_canonical_payload,
+)
 
 
 OBJECT_KIND_ACTOR_PROFILE = "actor-profile"
@@ -16,6 +24,7 @@ OBJECT_KIND_EVIDENCE_CITATION_TYPE = "evidence-citation-type"
 OBJECT_KIND_FORMAL_PUBLIC_LINK = "formal-public-link"
 OBJECT_KIND_ISSUE_CLUSTER = "issue-cluster"
 OBJECT_KIND_REPRESENTATION_GAP = "representation-gap"
+OBJECT_KIND_SPATIOTEMPORAL_RELATION_CUE = "spatiotemporal-relation-cue"
 OBJECT_KIND_STANCE_GROUP = "stance-group"
 OBJECT_KIND_VERIFIABILITY_ASSESSMENT = "verifiability-assessment"
 OBJECT_KIND_VERIFICATION_ROUTE = "verification-route"
@@ -245,6 +254,112 @@ def build_heuristic_wrapper_provenance(
             "parent_source": maybe_text(parent_source),
             **(extra if isinstance(extra, dict) else {}),
         },
+    )
+
+
+def normalize_spatiotemporal_relation_cue_payload(
+    payload: dict[str, Any],
+    *,
+    source_skill: str = "",
+    artifact_path: str = "",
+) -> dict[str, Any]:
+    normalized = dict(payload)
+    decision_source = (
+        maybe_text(normalized.get("decision_source"))
+        or HELPER_DECISION_SOURCE_APPROVED_VIEW
+    )
+    relation_type = maybe_text(normalized.get("relation_type")) or "insufficient-basis"
+    relation_status = (
+        maybe_text(normalized.get("relation_status")) or "insufficient-basis"
+    )
+    if relation_type not in SPATIOTEMPORAL_RELATION_TYPE_VALUES:
+        raise ValueError(f"Unsupported spatiotemporal relation_type: {relation_type}")
+    if relation_status not in SPATIOTEMPORAL_RELATION_STATUS_VALUES:
+        raise ValueError(
+            f"Unsupported spatiotemporal relation_status: {relation_status}"
+        )
+
+    source_role = (
+        maybe_text(normalized.get("source_role"))
+        or "unknown-environment-signal-role"
+    )
+    target_role = (
+        maybe_text(normalized.get("target_role"))
+        or "unknown-environment-signal-role"
+    )
+    if source_role not in SIGNAL_ROLE_VALUES:
+        raise ValueError(f"Unsupported source_role: {source_role}")
+    if target_role not in SIGNAL_ROLE_VALUES:
+        raise ValueError(f"Unsupported target_role: {target_role}")
+
+    source_signal_id = maybe_text(normalized.get("source_signal_id"))
+    target_signal_id = maybe_text(normalized.get("target_signal_id"))
+    context_signal_ids = unique_texts(list_items(normalized.get("context_signal_ids")))
+    evidence_refs = unique_artifact_refs(
+        list_items(normalized.get("evidence_refs")),
+        limit=20,
+    )
+    helper_governance = dict_items(normalized.get("helper_governance"))
+    if not helper_governance:
+        helper_governance = helper_governance_metadata(
+            skill_name=source_skill or "detect-temporal-cooccurrence-cues",
+            rule_id="HEUR-SPATIOTEMPORAL-RELATION-001",
+            destination="spatiotemporal-relation-cue",
+            taxonomy_version=ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
+            approval_ref=ENVIRONMENT_SIGNAL_TAXONOMY_APPROVAL_REF,
+            rule_trace=["spatiotemporal-relation-taxonomy"],
+            caveats=[
+                "Relation cues are candidate evidence organization objects only.",
+                "Relation cues do not prove causality, transport, source attribution, or exclusion of alternatives.",
+            ],
+        )
+
+    normalized["schema_version"] = canonical_contract(
+        OBJECT_KIND_SPATIOTEMPORAL_RELATION_CUE
+    ).schema_version
+    normalized["decision_source"] = decision_source
+    normalized["relation_id"] = maybe_text(normalized.get("relation_id")) or (
+        "strel-"
+        + maybe_text(source_signal_id or "missing-source")
+        + "-"
+        + maybe_text(target_signal_id or "missing-target")
+    )
+    normalized["relation_type"] = relation_type
+    normalized["relation_status"] = relation_status
+    normalized["source_signal_id"] = source_signal_id
+    normalized["target_signal_id"] = target_signal_id
+    normalized["context_signal_ids"] = context_signal_ids
+    normalized["source_role"] = source_role
+    normalized["target_role"] = target_role
+    normalized["temporal_rule"] = dict_items(normalized.get("temporal_rule"))
+    normalized["spatial_rule"] = dict_items(normalized.get("spatial_rule"))
+    normalized["lag_window"] = dict_items(normalized.get("lag_window"))
+    normalized["time_delta"] = dict_items(normalized.get("time_delta"))
+    normalized["distance"] = dict_items(normalized.get("distance"))
+    normalized["spatial_basis"] = dict_items(normalized.get("spatial_basis"))
+    normalized["temporal_basis"] = dict_items(normalized.get("temporal_basis"))
+    normalized["rejection_reasons"] = unique_texts(
+        list_items(normalized.get("rejection_reasons"))
+    )
+    normalized["caveats"] = unique_texts(list_items(normalized.get("caveats")))
+    normalized["evidence_refs"] = evidence_refs
+    normalized["lineage"] = merged_lineage(
+        normalized.get("lineage"),
+        source_signal_id,
+        target_signal_id,
+        context_signal_ids,
+    )
+    normalized["provenance"] = normalized_provenance(
+        normalized.get("provenance"),
+        source_skill=source_skill,
+        decision_source=decision_source,
+        artifact_path=artifact_path,
+        extra={"canonical_object_kind": OBJECT_KIND_SPATIOTEMPORAL_RELATION_CUE},
+    )
+    normalized["helper_governance"] = helper_governance
+    return validate_canonical_payload(
+        OBJECT_KIND_SPATIOTEMPORAL_RELATION_CUE,
+        normalized,
     )
 
 
@@ -1861,6 +1976,7 @@ __all__ = [
     "LEGACY_PUBLIC_REFS_FIELD",
     "OBJECT_KIND_ISSUE_CLUSTER",
     "OBJECT_KIND_REPRESENTATION_GAP",
+    "OBJECT_KIND_SPATIOTEMPORAL_RELATION_CUE",
     "OBJECT_KIND_STANCE_GROUP",
     "OBJECT_KIND_VERIFIABILITY_ASSESSMENT",
     "OBJECT_KIND_VERIFICATION_ROUTE",
@@ -1880,6 +1996,7 @@ __all__ = [
     "normalize_formal_public_link_payload",
     "normalize_issue_cluster_payload",
     "normalize_representation_gap_payload",
+    "normalize_spatiotemporal_relation_cue_payload",
     "normalize_stance_group_payload",
     "normalize_verifiability_assessment_payload",
     "normalize_verification_route_payload",

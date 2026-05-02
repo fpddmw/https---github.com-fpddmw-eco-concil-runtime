@@ -12,7 +12,13 @@ OPEN_CHALLENGE_PROPOSAL_KINDS = {
     "challenge-claim",
     "challenge-hypothesis",
 }
-OPEN_CHALLENGE_TARGET_KINDS = {"claim", "claim-cluster", "hypothesis", "hypothesis-card"}
+OPEN_CHALLENGE_TARGET_KINDS = {
+    "claim",
+    "claim-cluster",
+    "hypothesis",
+    "hypothesis-card",
+    "spatiotemporal-relation-cue",
+}
 CLOSE_CHALLENGE_PROPOSAL_KINDS = {
     "close-challenge",
     "close-challenge-ticket",

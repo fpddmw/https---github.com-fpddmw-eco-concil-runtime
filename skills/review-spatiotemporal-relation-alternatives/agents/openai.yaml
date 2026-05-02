@@ -1,0 +1,2 @@
+name: review-spatiotemporal-relation-alternatives
+default_prompt: "Use $review-spatiotemporal-relation-alternatives only after approval. Treat outputs as objection candidates that must be carried by a challenge, probe, or review comment before downstream use."

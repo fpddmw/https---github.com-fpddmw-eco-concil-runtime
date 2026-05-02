@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ..canonical_contracts import ENVIRONMENT_SIGNAL_TAXONOMY_VERSION
 from .role_contracts import (
     CAPABILITY_ANALYSIS,
     CAPABILITY_ARCHIVE_WRITE,
@@ -215,6 +216,7 @@ OPTIONAL_ANALYSIS_SKILLS = [
     "compare-formal-public-footprints",
     "identify-representation-audit-cues",
     "detect-temporal-cooccurrence-cues",
+    "review-spatiotemporal-relation-alternatives",
     "review-evidence-sufficiency",
 ]
 
@@ -296,11 +298,23 @@ OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
         ],
     },
     "detect-temporal-cooccurrence-cues": {
-        "rule_id": "HEUR-TEMPORAL-COOCCURRENCE-001",
-        "destination": "temporal co-occurrence cue helper",
+        "rule_id": "HEUR-SPATIOTEMPORAL-RELATION-001",
+        "taxonomy_version": ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
+        "destination": "temporal co-occurrence and spatiotemporal relation cue helper",
         "caveats": [
             "Temporal cues are descriptive only and do not imply influence, causality, spread, or direction.",
             "Missing timestamps must be reported as insufficient temporal basis, not silently defaulted.",
+            "Legacy same-day cues are not DB-backed spatiotemporal relation conclusions.",
+        ],
+    },
+    "review-spatiotemporal-relation-alternatives": {
+        "rule_id": "HEUR-SPATIOTEMPORAL-ALTERNATIVES-001",
+        "taxonomy_version": ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
+        "destination": "spatiotemporal relation challenger objection candidate helper",
+        "caveats": [
+            "Relation objection candidates are prompts for challenger review, not findings.",
+            "This helper does not prove or invalidate relation cues by itself.",
+            "Report-facing use must be carried by challenge, probe, review comment, finding, or report basis.",
         ],
     },
     "review-evidence-sufficiency": {
@@ -335,6 +349,7 @@ QUERY_SKILLS = [
     "query-formal-signals",
     "query-environment-signals",
     "query-normalized-signal",
+    "query-spatiotemporal-relations",
     "query-raw-record",
     "query-signal-corpus",
     "query-case-library",

@@ -22,6 +22,19 @@ def main() -> int:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--output-path", default="")
+    parser.add_argument("--relation-output-path", default="")
+    parser.add_argument("--source-role", default="")
+    parser.add_argument("--target-role", default="")
+    parser.add_argument("--source-class", default="")
+    parser.add_argument("--target-class", default="")
+    parser.add_argument("--observed-after-utc", default="")
+    parser.add_argument("--observed-before-utc", default="")
+    parser.add_argument("--lag-min-hours", type=float, default=None)
+    parser.add_argument("--lag-max-hours", type=float, default=None)
+    parser.add_argument("--bbox", default="")
+    parser.add_argument("--max-distance-km", type=float, default=None)
+    parser.add_argument("--spatial-rule", default="")
+    parser.add_argument("--taxonomy-version", default="")
     parser.add_argument("--limit", type=int, default=700)
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args()
@@ -30,6 +43,19 @@ def main() -> int:
         run_id=args.run_id,
         round_id=args.round_id,
         output_path=args.output_path,
+        relation_output_path=args.relation_output_path,
+        source_role=args.source_role,
+        target_role=args.target_role,
+        source_class=args.source_class,
+        target_class=args.target_class,
+        observed_after_utc=args.observed_after_utc,
+        observed_before_utc=args.observed_before_utc,
+        lag_min_hours=args.lag_min_hours,
+        lag_max_hours=args.lag_max_hours,
+        bbox=args.bbox,
+        max_distance_km=args.max_distance_km,
+        spatial_rule=args.spatial_rule,
+        taxonomy_version=args.taxonomy_version,
         limit=args.limit,
     )
     print(pretty_json(payload, args.pretty))

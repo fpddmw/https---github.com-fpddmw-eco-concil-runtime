@@ -8,6 +8,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ..canonical_contracts import (
+    ENVIRONMENT_SIGNAL_CLASS_VALUES,
+    ENVIRONMENT_SIGNAL_TAXONOMY_AUDIT_STATUS,
+    ENVIRONMENT_SIGNAL_TAXONOMY_APPROVAL_REF,
+    ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
+    SIGNAL_ROLE_VALUES,
+)
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
     signal_id TEXT PRIMARY KEY,
@@ -157,8 +165,11 @@ INDEXED_METADATA_TEXT_FIELDS = (
     "comment_on_id",
     "decision_source",
     "docket_id",
+    "environment_signal_class",
     "route_hint",
     "route_status_hint",
+    "relation_candidate_role",
+    "signal_role",
     "stance_hint",
     "submitter_name",
     "submitter_type",
@@ -401,6 +412,80 @@ def default_coverage_limitations(*, plane: str, source_skill: str) -> list[str]:
     return ["Coverage is limited to the raw artifact and provider fields normalized into this signal row."]
 
 
+def environment_signal_taxonomy_defaults(
+    *,
+    source_skill: str,
+    metric: str,
+) -> dict[str, str]:
+    source = maybe_text(source_skill)
+    metric_text = maybe_text(metric).casefold().replace("-", "_")
+    if source == "fetch-nasa-firms-fire":
+        return {
+            "signal_role": "source-event",
+            "environment_signal_class": "fire-detection",
+        }
+    if source in {
+        "fetch-airnow-hourly-observations",
+        "fetch-openaq",
+        "fetch-open-meteo-air-quality",
+    }:
+        return {
+            "signal_role": "receptor-observation",
+            "environment_signal_class": "air-quality",
+        }
+    if source == "fetch-open-meteo-historical" and any(
+        token in metric_text
+        for token in ("wind", "precip", "rain", "temperature", "humidity")
+    ):
+        return {
+            "signal_role": "context-observation",
+            "environment_signal_class": "meteorology",
+        }
+    if source == "fetch-usgs-water-iv":
+        return {
+            "signal_role": "unknown-environment-signal-role",
+            "environment_signal_class": "hydrology",
+        }
+    return {
+        "signal_role": "unknown-environment-signal-role",
+        "environment_signal_class": "unknown-environment-class",
+    }
+
+
+def enrich_environment_taxonomy_metadata(
+    metadata: dict[str, Any],
+    *,
+    plane: str,
+    source_skill: str,
+    metric: str,
+) -> None:
+    if maybe_text(plane) != "environment":
+        return
+    defaults = environment_signal_taxonomy_defaults(
+        source_skill=source_skill,
+        metric=metric,
+    )
+    signal_role = maybe_text(metadata.get("signal_role")) or defaults["signal_role"]
+    environment_class = (
+        maybe_text(metadata.get("environment_signal_class"))
+        or defaults["environment_signal_class"]
+    )
+    if signal_role not in SIGNAL_ROLE_VALUES:
+        signal_role = "unknown-environment-signal-role"
+    if environment_class not in ENVIRONMENT_SIGNAL_CLASS_VALUES:
+        environment_class = "unknown-environment-class"
+    metadata["signal_role"] = signal_role
+    metadata["environment_signal_class"] = environment_class
+    metadata.setdefault(
+        "environment_signal_taxonomy",
+        {
+            "taxonomy_version": ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
+            "approval_ref": ENVIRONMENT_SIGNAL_TAXONOMY_APPROVAL_REF,
+            "audit_status": ENVIRONMENT_SIGNAL_TAXONOMY_AUDIT_STATUS,
+        },
+    )
+
+
 def safe_json_object(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -421,6 +506,12 @@ def enrich_signal_metadata_fields(signal: dict[str, Any]) -> dict[str, Any]:
     plane = maybe_text(signal.get("plane"))
     source_skill = maybe_text(signal.get("source_skill"))
     bbox = safe_json_object(signal.get("bbox_json"))
+    enrich_environment_taxonomy_metadata(
+        metadata,
+        plane=plane,
+        source_skill=source_skill,
+        metric=maybe_text(signal.get("metric")),
+    )
 
     metadata.setdefault(
         "source_provenance",

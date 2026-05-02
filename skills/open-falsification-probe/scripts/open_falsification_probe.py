@@ -64,6 +64,8 @@ PROBE_ACTION_KINDS = {
     "analyze-public-discourse",
     "analyze-stakeholder-deliberation",
     "trace-cross-platform-diffusion",
+    "review-spatiotemporal-relation",
+    "review-spatiotemporal-relation-alternatives",
     "classify-verifiability",
     "expand-coverage",
     "open-probe",
@@ -162,6 +164,18 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
                 "submit-council-proposal",
             ]
         )
+    if action_kind in {
+        "review-spatiotemporal-relation",
+        "review-spatiotemporal-relation-alternatives",
+    } or maybe_text(action.get("relation_id")):
+        suggestions.extend(
+            [
+                "query-spatiotemporal-relations",
+                "review-spatiotemporal-relation-alternatives",
+                "post-review-comment",
+                "open-challenge-ticket",
+            ]
+        )
     if action_kind in {"resolve-contradiction", "expand-coverage"}:
         suggestions.extend(["query-environment-signals", "query-public-signals"])
     if action_kind == "classify-verifiability":
@@ -250,6 +264,11 @@ def probe_type_for_action(action: dict[str, Any]) -> str:
         return "representation-probe"
     if action_kind == "trace-cross-platform-diffusion" or controversy_gap == "cross-platform-diffusion":
         return "diffusion-probe"
+    if action_kind in {
+        "review-spatiotemporal-relation",
+        "review-spatiotemporal-relation-alternatives",
+    } or maybe_text(action.get("relation_id")):
+        return "spatiotemporal-relation-probe"
     return "uncertainty-probe"
 
 
@@ -274,6 +293,10 @@ def falsification_question_for_action(action: dict[str, Any], objective: str) ->
     if probe_type == "diffusion-probe":
         return (
             f"What evidence would show the inferred cross-platform diffusion path is misleading or not materially relevant: {objective}"
+        )
+    if probe_type == "spatiotemporal-relation-probe":
+        return (
+            f"What evidence would show the candidate spatiotemporal relation is too weak, overclaimed, or mis-scoped: {objective}"
         )
     if probe_type == "issue-structure-probe":
         return (
@@ -310,6 +333,11 @@ def success_criteria_for_action(action: dict[str, Any]) -> list[str]:
         return [
             "Confirm whether the inferred diffusion path survives timestamp and platform checks.",
             "Explain whether the diffusion pattern materially changes how the issue should be interpreted.",
+        ]
+    if probe_type == "spatiotemporal-relation-probe":
+        return [
+            "Check relation timestamp, lag window, spatial rule, source/target roles, and evidence refs.",
+            "Record any objection_code and required follow-up evidence before the relation is used downstream.",
         ]
     if probe_type == "issue-structure-probe":
         return [
@@ -349,6 +377,11 @@ def disconfirm_signals_for_action(action: dict[str, Any]) -> list[str]:
             "The inferred diffusion path disappears after checking timestamps, aliases, or issue assignment.",
             "Cross-platform spread exists but is not material to the current controversy decision.",
         ]
+    if probe_type == "spatiotemporal-relation-probe":
+        return [
+            "The relation fails the stated temporal or spatial rule.",
+            "The relation remains only a weak cue and cannot support report language without follow-up evidence.",
+        ]
     if probe_type == "issue-structure-probe":
         return [
             "The current hypothesis collapses multiple distinct issues into one board item.",
@@ -383,6 +416,12 @@ def build_probe(
     default_round_id: str,
 ) -> dict[str, Any]:
     raw_target = action.get("target", {}) if isinstance(action.get("target"), dict) else {}
+    relation_id = maybe_text(action.get("relation_id"))
+    if relation_id and not raw_target:
+        raw_target = {
+            "object_kind": "spatiotemporal-relation-cue",
+            "object_id": relation_id,
+        }
     target = normalized_deliberation_target(
         raw_target,
         issue_label=maybe_text(action.get("issue_label")),
@@ -408,7 +447,9 @@ def build_probe(
     policy_owner = maybe_text(action.get("policy_owner"))
     source_proposal_id = source_proposal_id_from_payload(action)
     source_ids = unique_texts(
-        list_items(action.get("source_ids")) + ([source_proposal_id] if source_proposal_id else [])
+        list_items(action.get("source_ids"))
+        + ([source_proposal_id] if source_proposal_id else [])
+        + ([relation_id] if relation_id else [])
     )
     return {
         "probe_id": probe_id,
@@ -422,6 +463,14 @@ def build_probe(
         "target_hypothesis_id": hypothesis_id,
         "target_claim_id": claim_id,
         "target_ticket_id": ticket_id,
+        "relation_id": relation_id,
+        "objection_code": maybe_text(action.get("objection_code")),
+        "challenged_rule": maybe_text(action.get("challenged_rule")),
+        "alternative_explanation": maybe_text(action.get("alternative_explanation")),
+        "required_followup_evidence": unique_texts(
+            list_items(action.get("required_followup_evidence"))
+        ),
+        "report_risk": maybe_text(action.get("report_risk")),
         "target": target,
         "probe_type": probe_type,
         "controversy_gap": maybe_text(action.get("controversy_gap")),
@@ -446,7 +495,7 @@ def build_probe(
         "lineage": unique_texts(
             list_items(action.get("lineage"))
             + source_ids
-            + [action_id, hypothesis_id, claim_id, ticket_id]
+            + [action_id, hypothesis_id, claim_id, ticket_id, relation_id]
         ),
         "provenance": (
             action.get("provenance")

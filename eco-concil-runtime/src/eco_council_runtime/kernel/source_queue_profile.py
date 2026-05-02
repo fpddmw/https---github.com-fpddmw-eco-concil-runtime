@@ -36,6 +36,7 @@ OPTIONAL_ANALYSIS_SKILLS = {
     "compare-formal-public-footprints",
     "identify-representation-audit-cues",
     "detect-temporal-cooccurrence-cues",
+    "review-spatiotemporal-relation-alternatives",
     "plan-round-orchestration",
     "propose-next-actions",
     "open-falsification-probe",
@@ -90,6 +91,10 @@ OPTIONAL_ANALYSIS_NOTES = {
     "detect-temporal-cooccurrence-cues": (
         "Approval-gated temporal co-occurrence helper. It is descriptive only and "
         "does not infer influence, causality, spread, or direction."
+    ),
+    "review-spatiotemporal-relation-alternatives": (
+        "Approval-gated relation challenger helper. It emits objection candidates "
+        "only and must be carried by challenge, probe, or review comment."
     ),
 }
 

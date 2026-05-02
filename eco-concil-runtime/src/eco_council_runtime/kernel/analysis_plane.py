@@ -21,6 +21,7 @@ ANALYSIS_KIND_CLAIM_VERIFIABILITY = "claim-verifiability"
 ANALYSIS_KIND_FORMAL_PUBLIC_LINK = "formal-public-link"
 ANALYSIS_KIND_REPRESENTATION_GAP = "representation-gap"
 ANALYSIS_KIND_DIFFUSION_EDGE = "diffusion-edge"
+ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE = "spatiotemporal-relation-cue"
 ANALYSIS_KIND_CLAIM_SCOPE = "claim-scope"
 ANALYSIS_KIND_OBSERVATION_SCOPE = "observation-scope"
 ANALYSIS_KIND_CLAIM_OBSERVATION_LINK = "claim-observation-link"
@@ -53,6 +54,10 @@ ANALYSIS_KIND_GOVERNANCE_OVERRIDES: dict[str, dict[str, str]] = {
         "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
         "successor_skill": "aggregate-environment-evidence",
         "freeze_reason": "old observation candidate extraction is replaced by descriptive environmental evidence aggregation",
+    },
+    ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE: {
+        "successor_skill": "detect-temporal-cooccurrence-cues",
+        "freeze_reason": "spatiotemporal relation cues are candidate relation objects and cannot prove causality, transport, source attribution, or report readiness",
     },
     ANALYSIS_KIND_MERGED_OBSERVATION: {
         "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
@@ -330,6 +335,38 @@ ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
             "target_signal_ids",
             "lineage",
         ],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE: {
+        "artifact_label": "spatiotemporal-relation-cue",
+        "default_relative": "analytics/spatiotemporal_relation_cues_{round_id}.json",
+        "items_key": "spatiotemporal_relation_cues",
+        "count_key": "relation_cue_count",
+        "id_field": "relation_id",
+        "subject_field": "relation_id",
+        "state_field": "relation_status",
+        "related_id_fields": [
+            "relation_id",
+            "relation_type",
+            "relation_status",
+            "source_signal_id",
+            "target_signal_id",
+            "source_role",
+            "target_role",
+        ],
+        "canonical_object_kind": "spatiotemporal-relation-cue",
+        "default_source_skill": "detect-temporal-cooccurrence-cues",
+        "summary_fields": ["relation_rule_ref", "taxonomy_version"],
+        "query_basis_fields": [
+            "verification_scope",
+            "relation_rule_ref",
+            "taxonomy_version",
+        ],
+        "item_parent_id_fields": [
+            "source_signal_id",
+            "target_signal_id",
+        ],
+        "item_parent_id_list_fields": ["context_signal_ids", "lineage"],
         "item_artifact_ref_fields": ["evidence_refs"],
     },
     ANALYSIS_KIND_FORMAL_PUBLIC_LINK: {
@@ -1988,6 +2025,126 @@ def query_analysis_result_items(
     }
 
 
+def query_spatiotemporal_relation_cues(
+    run_dir: str | Path,
+    *,
+    result_set_id: str = "",
+    run_id: str = "",
+    round_id: str = "",
+    relation_id: str = "",
+    relation_type: str = "",
+    relation_status: str = "",
+    source_signal_id: str = "",
+    target_signal_id: str = "",
+    source_role: str = "",
+    target_role: str = "",
+    latest_only: bool = False,
+    include_result_sets: bool = False,
+    include_contract: bool = False,
+    limit: int = 20,
+    offset: int = 0,
+    db_path: str = "",
+) -> dict[str, Any]:
+    base = query_analysis_result_items(
+        run_dir,
+        result_set_id=result_set_id,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE,
+        subject_id=relation_id,
+        latest_only=latest_only,
+        include_result_sets=include_result_sets,
+        include_contract=include_contract,
+        limit=0,
+        offset=0,
+        db_path=db_path,
+    )
+
+    def matches(row: dict[str, Any]) -> bool:
+        item = row.get("item") if isinstance(row.get("item"), dict) else {}
+        filters = {
+            "relation_id": relation_id,
+            "relation_type": relation_type,
+            "relation_status": relation_status,
+            "source_signal_id": source_signal_id,
+            "target_signal_id": target_signal_id,
+            "source_role": source_role,
+            "target_role": target_role,
+        }
+        for field_name, expected in filters.items():
+            expected_text = maybe_text(expected)
+            if expected_text and maybe_text(item.get(field_name)) != expected_text:
+                return False
+        return True
+
+    matching_items = [row for row in base.get("items", []) if matches(row)]
+    paged_items, safe_offset, safe_limit = _paged_rows(
+        matching_items,
+        limit=limit,
+        offset=offset,
+    )
+    artifact_refs: list[Any] = []
+    for row in paged_items:
+        refs = row.get("evidence_refs")
+        if isinstance(refs, list):
+            artifact_refs.extend(refs)
+    filters = {
+        "result_set_id": maybe_text(result_set_id),
+        "run_id": maybe_text(run_id),
+        "round_id": maybe_text(round_id),
+        "analysis_kind": ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE,
+        "relation_id": maybe_text(relation_id),
+        "relation_type": maybe_text(relation_type),
+        "relation_status": maybe_text(relation_status),
+        "source_signal_id": maybe_text(source_signal_id),
+        "target_signal_id": maybe_text(target_signal_id),
+        "source_role": maybe_text(source_role),
+        "target_role": maybe_text(target_role),
+        "latest_only": bool(latest_only),
+    }
+    return {
+        "schema_version": "spatiotemporal-relation-query-v1",
+        "status": "completed",
+        "summary": {
+            "db_path": maybe_text(base.get("summary", {}).get("db_path"))
+            if isinstance(base.get("summary"), dict)
+            else "",
+            "matching_result_set_count": int(
+                base.get("summary", {}).get("matching_result_set_count") or 0
+            )
+            if isinstance(base.get("summary"), dict)
+            else 0,
+            "matching_relation_count": len(matching_items),
+            "returned_relation_count": len(paged_items),
+        },
+        "filters": filters,
+        "analysis_kind_governance": analysis_kind_governance(
+            ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE
+        ),
+        "paging": {
+            "offset": safe_offset,
+            "limit": safe_limit,
+            "returned_count": len(paged_items),
+            "matching_count": len(matching_items),
+        },
+        "warnings": []
+        if paged_items
+        else [
+            {
+                "code": "no-relation-cues",
+                "message": "No spatiotemporal relation cues matched the supplied filters.",
+            }
+        ],
+        "result_sets": base.get("result_sets", []),
+        "items": paged_items,
+        "relations": [
+            row.get("item") if isinstance(row.get("item"), dict) else {}
+            for row in paged_items
+        ],
+        "artifact_refs": unique_artifact_refs(artifact_refs),
+    }
+
+
 def _resolve_analysis_artifact_path(
     run_dir: Path,
     *,
@@ -2576,6 +2733,58 @@ def load_diffusion_edge_context(
         "analysis_sync": context.get("analysis_sync", {}),
         "result_contract": context.get("result_contract", empty_result_contract()),
         "diffusion_edges_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+
+def sync_spatiotemporal_relation_cue_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    relation_cues_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=relation_cues_path,
+        db_path=db_path,
+    )
+    return {
+        **result,
+        "relation_cues_path": maybe_text(result.get("artifact_path")),
+    }
+
+
+def load_spatiotemporal_relation_cue_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    relation_cues_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE,
+        artifact_path=relation_cues_path,
+        db_path=db_path,
+    )
+    return {
+        "relation_cues_wrapper": context.get("payload_wrapper", {}),
+        "spatiotemporal_relation_cues": context.get("items", []),
+        "relation_cue_count": int(context.get("item_count") or 0),
+        "relation_cue_source": maybe_text(context.get("source")),
+        "relation_cues_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "relation_cues_artifact_present": bool(context.get("artifact_present")),
         "warnings": context.get("warnings", []),
     }
 

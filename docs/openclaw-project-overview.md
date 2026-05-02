@@ -1,365 +1,202 @@
-# OpenClaw 项目总览、当前问题与目标架构
+# OpenClaw 项目架构总览与后续开发计划
 
-## 1. 文档定位
+## 1. 项目定位
 
-本文件只承担三件事：
+OpenClaw 是一个面向生态环境争议调查的 DB-first 多 agent 议会运行时。它的目标不是让模型直接给出不可审计的结论，而是把模型调查、证据抓取、反证挑战、阶段推进、报告冻结和最终发布组织成一条可追溯、可复核、可恢复的工作流。
 
-1. 说明 OpenClaw 当前已经做成了什么。
-2. 明确当前系统真正存在的问题，而不是只写能力亮点。
-3. 作为下一阶段规划与迁移清单的统一基线。
+一句话定位：
 
-与历史文档不同，本文件不再把“多 agent 平台”当成默认正确方向；它首先回答系统当前是什么，其次回答系统下一步应该改成什么。
+`一个受治理、DB-first、证据可审计的生态环境调查议会系统。`
 
-## 2. 一句话定位
+核心分工：
 
-OpenClaw 当前更准确的定位是：
+1. `runtime kernel` 负责执行、权限、审批、ledger、receipt、replay、DB 持久化和 operator 可见状态。
+2. `agent council` 负责实质性调查判断，包括 proposal、finding、evidence bundle、challenge、readiness opinion。
+3. `database` 是议会状态、调查对象和报告依据的主要状态源。
+4. `artifact` 是导出、handoff、调试和人类阅读材料，不作为唯一事实源。
 
-`一个受治理的、DB-first 的环境调查 workflow engine。`
+## 2. 架构总览
 
-下一阶段希望把它推进为：
-
-`一个受治理但高自主、DB-native 的环境争议议会系统。`
-
-这里的关键区别不是宣传口径，而是职责分配：
-
-1. `runtime kernel` 只负责治理、执行、持久化、查询与审计。
-2. `agent council` 负责实质性的争议判断、提案、挑战与分诊。
-3. `database` 是议会状态与流程推进的真实状态源。
-4. `artifact` 只承担导出、handoff 与人类可读展示。
-
-## 3. 当前已经完成什么
-
-截至当前仓库状态，OpenClaw 已经完成上一轮 DB-first 主计划的基础收口。真正落下来的不是 skill 数量，而是四个工作面：
+系统按工作面分为七层：
 
 1. `runtime / governance`
-   - 已能管理 run、round、source governance、admission、execution、receipt、replay 与 archive/publication 边界。
-2. `signal plane`
-   - 已能把 public 与 environment 两类异构输入写入统一的 `normalized_signals` 工作面。
-3. `analysis plane`
-   - 已能把 candidate、cluster、scope、link、coverage、controversy-map 与 typed issue decomposition 等对象写入统一 result-set / lineage 结构；其中 `issue-cluster / stance-group / concern-facet / actor-profile / evidence-citation-type / claim-candidate / claim-cluster / claim-scope / verifiability / route / formal-public-link / representation-gap / diffusion-edge / controversy-map` 已具备 canonical contract、item-level query 与 DB-native evidence/lineage 持久化。
-4. `deliberation plane`
-   - 已能把 hypothesis、challenge、board-task、proposal、next-action、probe、readiness、decision trace、round transition 等议会状态写入 DB-first 状态面。
-5. `reporting plane`
-   - 已建立独立 reporting canonical plane、独立 query surface，并把 reporting artifact 降级为 DB-backed export；`materialize-reporting-exports` 已可从 SQLite 重建 handoff / decision / expert report / final publication 全套导出物。
-6. `runtime / control plane`
-   - `runtime-control-freeze / controller-state / gate-state / supervisor-state` 已进入 runtime canonical contract registry；报告证据 basis 则保留在 deliberation plane 的 `report-basis-freeze`。
-   - deliberation DB 已新增 `controller_snapshots / gate_snapshots / supervisor_snapshots` 独立表，`query-control-objects` 也已提供对称的一等 query surface。
-   - `show-run-state` 与 phase-2 state wrapper 现在会优先消费这些 control rows，而不是只读 runtime-control freeze 的 `raw_json` 或 runtime artifact。
-7. `agent entry / phase-2 orchestration`
-   - `openclaw-agent` 轮次进入 phase-2 时，controller 与 agent entry 已能优先采用 `direct-council-advisory` plan，并把 `plan_source / planning_attempts` 写入 controller 状态；当 DB 中已有直接 `proposal / readiness-opinion / probe` 时，advisory queue 已能直接由这些对象编译，不再强制重跑 planner skill。与此同时，`next_actions / probes / readiness` 的 DB/artifact read surface 已从 `investigation_planning.py` 抽到独立模块，phase-2 主链对启发式规划模块的直连已经开始断开。
-
-这说明系统已经脱离“抓数据 + 生成文档”的脚本集合，具备了共享状态、受治理执行和跨轮次恢复的骨架。
-
-## 4. 当前工作流与状态面
-
-### 4.1 当前主干
-
-当前工作流主干可以概括为：
-
-`mission / run -> round / source governance -> fetch / import -> normalize -> analysis -> board / moderation -> reporting / archive`
-
-对应的数据层级大致是：
-
-`raw -> normalized -> analytics -> deliberation -> reporting -> archive/history`
-
-### 4.2 当前状态源的真实情况
-
-当前系统已经明显转向 DB-first；reporting/publication、phase-2 / investigation 中间态，以及 phase-2 control surface 都已经收口到 DB-native only + export rebuild。但整轮议会流程还没有彻底摆脱 orchestration plan / operator export 与旧主链假设。
-
-已经成立的部分：
-
-1. SQLite 已经是 signal、analysis、board 状态查询与恢复的主工作面。
-2. result-set / lineage 与 deliberation state 已经形成稳定的 DB 写入面。
-3. reporting / publication 现在已经可以从 DB canonical objects 重新物化；artifact-only 文件也会被显式视为 orphaned export，而不是隐式恢复源。
-4. `next_actions / probes / readiness / report_basis_freeze / supervisor_state` 现在也都能从 DB canonical rows/snapshots 重建；phase-2 artifact 已降级为 export-only。
-5. `controller / gate / supervisor / runtime_control_freeze` 现在也拥有独立 runtime canonical rows 与 query surface；控制面不再只是 report-basis export 的嵌套 snapshot。
-
-尚未完全成立的部分：
-
-1. `openclaw-agent` 的 advisory 主路径已基本 DB-native，但 `orchestration_plan` 仍主要是 runtime export，而不是独立 canonical object。
-2. 某些 runtime/post-round/benchmark 控制链路仍保留历史导出物约定。
-3. analysis plane 的 controversy 主结构链已基本 DB-native；当前残余问题已主要收缩到 `issue / stance / concern / actor / citation` typed decomposition、board/reporting issue-centric 化，以及少数 runtime export 约定与旧 fallback heuristic。
-
-因此，当前最准确的判断不是“议会已经完全基于数据库运作”，而是：
-
-`议会关键状态、controversy 主链、phase-2 / reporting 中间态与 phase-2 control surface 已大体 DB-native，但整轮议会流程还没有完全摆脱 orchestration export 与少数旧主链假设。`
-
-## 5. 当前系统的关键问题
-
-### 5.1 Agent 自主权不足
-
-当前系统里的角色语义是清楚的，但 agent 主要仍是“受治理执行端”而不是“实质性议会参与者”。
-
-当前主要问题：
-
-1. 议会流程的核心推进仍主要依赖 runtime 预定义阶段与 skill 链。
-2. agent 的写入能力主要表现为执行预设 command/skill，而不是基于共享状态自主形成可对抗的 deliberation proposal。
-3. report basis、publication、archive 仍完全在 agent 外环。
-4. 虽然 `openclaw-agent` 轮次已能由 DB 中的 council objects 直接编译 advisory queue，而且 controller 已不再强行插入默认 `report-basis-gate` / post-gate 阶段、也不再内嵌 `report-basis-gate` 特判，但 phase-2 仍围绕 readiness/report basis 语义和既有 gate handler 展开，agent 还不能真正自定义更宽的 phase-2 语义空间。
-
-这意味着当前系统适合“治理内协作”，不适合被称为“高自主议会”。
-
-### 5.2 Runtime kernel 边界过宽
-
-如果把 `runtime kernel` 理解为最小执行内核，那么当前边界明显过宽。
-
-当前 kernel 同时承担了：
-
-1. admission / execution / ledger / replay
-2. phase-2 stage contract 与 controller
-3. operator health surface
-4. 部分议会流程语义与阶段推进假设
-
-这更像一个完整的 workflow engine，而不是最小 kernel。下一阶段如果不收边界，系统会持续把 domain policy、heuristic scoring 和 moderation logic 堆进 kernel。
-
-### 5.3 启发式与规则占比过高
-
-当前 public-side 主链仍高度依赖规则与固定公式：
-
-1. claim/issue 抽取依赖规则表和文本 pattern。
-2. cluster、scope、routing、readiness、probe typing 里有大量固定阈值和公式。
-3. 议会流程稳定性主要靠规则化流程，而不是靠 agent 在共享状态上的自主判断。
-
-规则不是问题本身；问题在于它们当前仍是主判断来源，而不是 fallback、bootstrap 或 audit。
-
-### 5.4 数据契约还不够硬
-
-当前契约在运行治理层已经比较完整，但在领域语义层仍不够硬。
-
-已有基础：
-
-1. runtime admission/preflight 边界较清楚。
-2. analysis result-set / lineage 已有通用 contract。
-3. observed inputs / trace metadata 已开始统一。
-
-主要缺口：
-
-1. `formal-comment-signal` 现在已直接携带 `docket / agency / submitter / issue / stance / concern / citation / route` typed surface，并通过 `normalized_signal_index` 写成 DB index；formal-side 维度不再只存在于 artifact 或临时文本推断里。
-2. analysis plane 的 typed controversy issue layer 已建成；`issue-cluster / stance-group / concern-facet / actor-profile / evidence-citation-type / formal-public-link / representation-gap / diffusion-edge / controversy-map` 均已完成强契约、canonical normalization 与 DB item-level query。当前剩余问题不再是“formal-side 完全没 typed surface”，而是 formal typed surface 主要停留在 signal plane，尚未额外拆成独立的 formal-only analysis result-set family。
-3. 少数 skill 仍依赖 envelope 兼容字段和松散 dict 约定，尚未全部收口到唯一 object shape。
-4. board / reporting 的 shared context 已切到 `issue-cluster-first`；formal signal typed surface 已在 query/linkage 中被直接消费，但更多 deliberation judgement 仍主要读取 issue-layer objects。
-
-### 5.5 议会尚未真正以数据库为唯一工作面
-
-当前系统已经能够把很多状态写入数据库，但“基于数据库运作”需要更强的标准：
-
-1. 没有中间 artifact 时，round 仍能继续推进。
-2. 关键 phase-2 对象可以 item-level 查询，而不是只存整包 snapshot。
-3. reporting 与 publication 应默认从 DB 重新物化，而不是依赖历史 handoff 文件。
-
-这一标准现在已经在 reporting/publication、phase-2 investigation 中间态、phase-2 control surface、formal/public/environment signal plane typed 化，以及 controversy 主结构链和 issue typed layer 上基本达到；剩余缺口主要转移到 orchestration plan / agent entry / post-round / benchmark 的导出约定，以及旧 empirical 主链默认方向上。
-
-## 6. 下一阶段的目标架构
-
-下一阶段不是继续补更多 surface，而是同时修正研究方向和架构方向。
-
-### 6.1 最小 runtime kernel
-
-目标中的 `runtime kernel` 只保留以下职责：
-
-1. run / round 生命周期管理
-2. admission、capability、side-effect governance
-3. 执行调度、receipt、ledger、replay
-4. DB persistence 与 query surface
-5. operator-visible health 与审计入口
-
-以下内容不应继续属于 kernel 本体：
-
-1. 具体领域 stage 语义
-2. 争议判断公式
-3. board posture 评分逻辑
-4. 过多的 phase-specific handoff 约定
-
-这些内容应下沉到 `council policy / domain workflow / typed plane objects`。
-
-### 6.2 更高自主的议会回路
-
-目标不是无治理放权，而是把“实质判断”从 runtime 规则链移回 agent council。
-
-下一阶段的议会回路应满足：
-
-1. agent 在共享 DB 状态上形成 `proposal / challenge / task / probe / readiness opinion`。
-2. 每个 proposal 都带有 `rationale / confidence / evidence refs / provenance`。
-3. runtime 负责治理和执行，不负责替议会做实质判断。
-4. 规则化 heuristic 只在 agent 缺席、输入不足或审计模式下作为 fallback。
-
-### 6.3 一等领域对象与数据契约
-
-下一阶段的 canonical 对象应明确分层：
-
-1. `signal plane`
-   - `public-discourse-signal`
-   - `formal-comment-signal`
-   - `environment-observation-signal`
-2. `analysis plane`
-   - `issue-cluster`
-   - `stance-group`
-   - `concern-facet`
-   - `actor-profile`
-   - `evidence-citation-type`
-   - `verifiability-assessment`
-   - `verification-route`
-   - `formal-public-link`
-   - `representation-gap`
-   - `diffusion-edge`
-3. `deliberation plane`
-   - `hypothesis`
-   - `challenge`
-   - `board-task`
-   - `next-action`
-   - `probe`
-   - `readiness-assessment`
-   - `report-basis-freeze`
-4. `runtime / control plane`
-   - `runtime-control-freeze`
-   - `controller-state`
-   - `gate-state`
-   - `supervisor-state`
-
-这里的关键是：议会关键对象不能只存在于导出物里，必须进入可查询的 plane。
-
-### 6.4 数据库是真实状态源
-
-下一阶段的硬方向应是：
-
-1. 所有 council-critical 对象先写 DB，再导出 artifact。
-2. artifact 缺失时，系统仍能从 DB-only 状态恢复同等语义。
-3. JSON / Markdown 是 export，不再是 phase-2 控制流程的隐性依赖。
-
-### 6.5 Verification lane 降为可选支路
-
-环境观测链应保留，但必须从默认主链降为 optional lane。
-
-只有在以下条件同时满足时才进入 observation matching：
-
-1. 问题本质上是经验性的。
-2. 有明确时间范围。
-3. 有明确地点范围。
-4. 存在可对照的外部观测源。
-
-程序争议、代表性缺口、价值冲突、信任问题和 formal/public 错位，默认不应被硬塞进 observation coverage 流程。
-
-## 7. 下一阶段优先级
-
-下一阶段的优先级必须是：
-
-1. 先写清目标架构、边界与验收标准。
-2. 先硬化 canonical contract，再重写主分析链。
-3. 先让议会对象 DB-native，再去改 reporting 和 publication。
-4. 先提升 agent 在议会中的实质作用，再考虑更复杂的外层 runtime 包装。
-
-不应继续优先的事项：
-
-1. 再扩一批数据源。
-2. 继续堆 publication 样式。
-3. 仅靠改名或加字段来掩盖旧规则链。
-4. 继续把 kernel 当成 domain workflow 的默认承载体。
-
-## 8. 完成定义
-
-当以下条件同时满足时，才能说 OpenClaw 方向真正被纠正：
-
-1. 至少一轮议会可以依靠 agent 形成 `next-action / probe / readiness` 提案，而不是只靠固定公式输出。
-2. 删除中间 `next_actions / probes / readiness / board_summary / board_brief` artifact 后，round 仍能从 DB-only 状态继续推进。
-3. formal comments 不再只是 generic public signal，而是能生成结构化的争议对象。
-4. heuristic 在主链里降为 fallback，并且每次触发都有可审计标记。
-5. runtime kernel 的职责边界被明确收紧，domain workflow 不再继续向 kernel 内部膨胀。
-
-## 9. 文档分工
-
-从现在开始，`docs/` 只保留以下 active 文档；不再保留单独索引、历史 archive 或过程草稿。
-
-1. `openclaw-project-overview.md`
-   - 当前状态、核心问题与目标架构。
-2. `openclaw-refactor-overall-notes.md`
-   - 项目级硬约束、数据原则、规则审计原则和迁移顺序。
-3. `openclaw-runtime-kernel-agent-refactor-checklist.md`
-   - runtime kernel、agent 权限、阶段推进和控制面的重构/验收记录。
-4. `openclaw-skills-refactor-checklist-v2.md`
-   - skills 侧分批规划、baseline through query/investigator-submission tracks 已交付记录和后续总验收口径。
-5. `openclaw-skill-refactor-checklist.md`
-   - 彻底重构执行清单与历史 batch 状态。
-6. `openclaw-optional-analysis-skills-refactor-workplan.md`
-   - optional-analysis helper governance 启发式 helper 重构的唯一施工清单。
-
-规则/启发式 skill 的 freeze line 和后续 versioned audit records 不再单独成文，统一收敛到 `openclaw-optional-analysis-skills-refactor-workplan.md`。
-
-## 10. 2026-04-29 验收结论
-
-已完成：
-
-1. 按当前代码与 targeted regression 复核，规划内硬目标已经达到可验收状态：runtime kernel 默认路径不再承担调查结论、议程生成或 report basis 主判断；阶段推进由 `moderator` transition request 与 `runtime-operator` approval/commit 链承接。
-2. investigator 默认入口已收敛为 `fetch / normalize / query -> finding / evidence-bundle -> optional proposal/readiness`，旧 analysis query helper 不再作为默认 role capability 暴露。
-3. optional-analysis helper、formal/public taxonomy cue、legacy analysis kind 已具备冻结/审批/审计元数据；报告正文 basis 由 DB `finding / evidence-bundle / proposal / review-comment / report-section-draft / readiness` 等对象承接。
-4. reporting/publication 可在删除关键导出物后从 DB canonical rows 重建；三类 policy research case fixture 已覆盖政策争议、formal/public 混合争议和可核实经验事件。
-
-未完成：
-
-1. 默认 gate/CLI/artifact 已切到 `report-basis-gate / apply-report-basis-gate / report_basis_gate_path`；report-basis-only 收尾已删除旧 promotion DB/CLI/path 兼容命名。
-2. 旧 analysis kind 与旧 canonical contract 未物理删除；当前处理方式是冻结为 compatibility query / replay surface。
-3. optional-analysis freeze line 仍是 `audit-pending` 台账，不等于所有规则已经完成人工审计。
-4. 早前验收曾只运行 targeted regression；本次补充验收已重新运行全仓 discover。
-
-2026-04-29 补充验收：
-
-1. `report-basis-gate` 已成为默认 stage/handler/operator/artifact 命名；旧 gate alias 已在 report-basis-only 收尾中删除。
-2. reporting 与 runtime surfaces 已输出 `report_basis_*` 镜像字段，并保留 `report_basis_*` 兼容双写。
-3. 已重新运行 `.venv/bin/python -m unittest discover -s tests -v`，`235` 项通过，用时 `216.605s`。
-
-新发现的问题：
-
-1. 本文件前文仍保留较多“下一阶段目标/当前问题”的历史表述；阅读时应以本节和各 checklist 的最新验收回写为准。
-2. 旧 workplan/checklist 中仍有未勾选的物理删除、彻底改名、完整审计类条目；这些不是默认主链阻塞，但应在后续 breaking migration 中单列。
-
-是否影响后续计划：
-
-1. 不影响当前重构验收通过。
-2. 后续计划应聚焦命名/兼容迁移、完整人工审计与全仓回归，而不是继续扩大 runtime kernel 或恢复 claim matching 主链。
-
-2026-04-29 report-basis-only 补充验收：
-
-1. 旧 promotion 兼容层已按最新架构删除；代码和测试中不再保留 `promotion-gate / promotion_status / promote_allowed / promotion_path / promotion/` 默认路径。
-2. DB schema、runtime control、reporting、publication 与 archive/history context 已统一到 `report_basis_*`。
-3. 已运行 `.venv/bin/python -m compileall -q eco-concil-runtime/src skills tests`，通过。
-4. 已运行目标回归 `84` 项，通过，用时 `81.445s`。
-5. 已运行 `.venv/bin/python -m unittest discover -s tests -v`，`235` 项通过，用时 `222.805s`。
-
-剩余风险：
-
-1. optional-analysis 的 legacy/audit-only 词汇仍存在，但它们表示冻结治理和人工审计状态，不再承担旧架构兼容目标。
-
-2026-04-29 agent entry 补充验收：
-
-已完成：
-
-1. 发现默认 agent entry/operator surface 仍残留 `claim-cluster` analysis 查询模板；这会让冻结的 legacy analysis surface 看起来仍是默认入口。
-2. 已修正 runtime 代码，默认 operator view 不再暴露 `claim-cluster` query command key；测试已增加防回归断言。
-3. 复核当前 active registry 与 `skills/` 目录均为 `79` 个 skill，原始 `88` 个 skill 是迁移基线口径。
-
-未完成：
-
-1. optional-analysis freeze line 仍为 `audit-pending`，不是完整人工审计批准记录。
-2. legacy analysis kind 仍保留 compatibility query / replay surface，未物理删除。
-
-新发现的问题：
-
-1. 文档最新验收结论与代码默认 operator surface 曾存在偏差；本次已同步。
-
-是否影响后续计划：
-
-1. 不阻塞当前重构验收。
-2. 后续新增默认入口时不得重新暴露 frozen legacy analysis query surface。
-
-本次实际运行：
-
-1. `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`：`111` 项通过。
-2. `git diff --check`：通过。
-
-2026-04-29 破坏性清理补记：
-
-1. 已删除旧 direct/advisory 入口：`phase2_direct_advisory.py`、`agent_advisory_plan_*`、`--refresh-advisory-plan`、`agent-advisory / advisory-only` planner mode 均不再保留。
-2. 已删除兼容门面 `kernel/investigation_planning.py`、`phase2_fallback_planning.py`、`kernel/phase2_contract.py`。
-3. 已删除 active `build-normalization-audit` skill；optional-analysis active helper 现为 `16` 个。
-4. `plan-round-orchestration` 只输出 queue-owned runtime plan，council DB 输入直承路径用 `council_proposal_queue` 表达。
-5. 未完成：旧 analysis kind / canonical contract 命名仍需独立 DB/query schema migration；内部 `phase2_fallback_*` 模块名仍需后续大规模改名。
-6. 本次运行 `.venv/bin/python -m unittest tests.test_investigation_contracts tests.test_agent_entry_gate tests.test_orchestration_planner_workflow tests.test_runtime_kernel -v`，`58` 项通过。
+   - run、round、skill registry、actor role、admission、side effect、operator approval、receipt、ledger、dead letter、health、replay。
+2. `source / ingestion`
+   - source catalog、source governance、source selection、fetch/import plan、detached fetch、raw artifact 管理。
+3. `signal plane`
+   - 将 public、formal、environment 三类输入统一归一化为 `normalized_signals` 和索引字段。
+4. `analysis plane`
+   - 承载 approval-gated 的 optional analysis helper 输出，以及 DB-backed result set / lineage。
+5. `deliberation plane`
+   - 承载议会对象：finding、evidence bundle、proposal、hypothesis、challenge、board task、probe、readiness、round transition、report-basis-freeze。
+6. `control plane`
+   - controller、gate、supervisor、runtime-control-freeze、orchestration step 等运行状态。
+7. `reporting / archive`
+   - reporting handoff、council decision、expert report、final publication、case library、signal archive、history context。
+
+## 3. 主工作流
+
+当前主干流程：
+
+`mission -> run/round -> source governance -> fetch/import -> normalize -> query/analysis -> council deliberation -> readiness/gate -> report basis freeze -> reporting -> archive/history`
+
+细化为：
+
+1. `scaffold-mission-run`
+   - 创建 run/round、mission、初始 board、round task scaffold。
+2. `prepare-round`
+   - 根据 mission、round tasks、source governance 生成 source selections 和 fetch plan。
+3. `fetch/import + normalize`
+   - 抓取或导入 raw artifact，并通过对应 normalizer 写入 signal plane。
+4. `query`
+   - investigator 通过 public/formal/environment/raw/normalized query surfaces 获取 item-level evidence basis。
+5. `council write`
+   - agent 提交 finding、evidence bundle、proposal、review comment、challenge、hypothesis、readiness opinion。
+6. `optional analysis`
+   - 经 operator approval 后运行 helper，输出审计视图、证据覆盖摘要、议题线索、footprint、temporal cue、sufficiency note 等。
+7. `phase control`
+   - controller/gate/supervisor 读取 DB council objects，判断是否继续调查、打开新 round、冻结 report basis 或阻断报告。
+8. `reporting`
+   - report editor 基于 frozen report basis 和 DB reporting objects 生成 handoff、decision、expert report、final publication。
+9. `archive/history`
+   - close-round 后归档 signal/case，并可为新 run 物化 history context。
+
+## 4. 多轮调查能力
+
+系统支持分批取证。若议会认为证据不足，moderator 可以发起 `open-investigation-round` transition request，经 runtime-operator 批准后打开 follow-up round。
+
+新 round 会保留：
+
+1. source round 的历史引用。
+2. active hypotheses。
+3. open challenges 转成 follow-up tasks。
+4. 未完成 board tasks。
+5. next actions 转成下一轮任务。
+6. cross-round query hints。
+7. round transition record 和 round task snapshot。
+
+public/environment query 支持 `round_scope=current|up-to-current|all`，因此第二轮可以读取第一轮和当前轮的 normalized signals。source queue 也会记录 prior-round family memory，并支持受治理的 prior-round anchor。
+
+## 5. Agent 权责
+
+核心角色：
+
+1. `moderator`
+   - 主持议程、协调 board、提交 proposal/readiness、请求 phase transition。
+2. `environmental-investigator`
+   - 抓取、归一化、查询、分析环境与物理证据，提交 finding/proposal/readiness。
+3. `public-discourse-investigator`
+   - 调查公共讨论、媒体、社区表达与公众证据。
+4. `formal-record-investigator`
+   - 调查正式记录、监管材料、政策文本和 docket/comment。
+5. `challenger`
+   - 提交反证、开启 challenge/probe、质疑证据范围、taxonomy、时空匹配和结论表述。
+6. `report-editor`
+   - 基于 frozen basis 写报告，不改变调查状态。
+7. `runtime-operator`
+   - 管理审批、运行边界、归档、审计、恢复和重放，不做实质议会判断。
+
+协作原则：
+
+1. 自由文本可以解释理由，但权威状态必须落到 DB council object。
+2. proposal/readiness/challenge/finding/evidence bundle 是议会推进主路径。
+3. helper 输出默认不能直接成为报告结论，必须被 DB council/reporting basis 显式引用。
+4. phase transition 由 moderator 请求，runtime-operator 批准，runtime kernel 执行。
+
+## 6. 数据契约
+
+主要 canonical planes：
+
+1. `signal`
+   - `public-discourse-signal`、`formal-comment-signal`、`environment-observation-signal`。
+2. `analysis`
+   - optional-analysis result sets、issue surfaces、typed projections、footprints、audit cues、sufficiency reviews。
+3. `deliberation`
+   - `finding`、`evidence-bundle`、`proposal`、`hypothesis`、`challenge`、`board-task`、`probe`、`readiness-opinion`、`readiness-assessment`、`report-basis-freeze`。
+4. `runtime/control`
+   - `transition-request`、`skill-approval`、`controller-state`、`gate-state`、`supervisor-state`、`runtime-control-freeze`、`orchestration-plan-step`。
+5. `reporting`
+   - `reporting-handoff`、`report-section-draft`、`council-decision`、`expert-report`、`final-publication`。
+
+关键字段原则：
+
+1. 每个重要对象必须能定位 `run_id`、`round_id`、object id。
+2. 每个判断型对象必须保留 `evidence_refs`、`lineage`、`provenance`。
+3. 每个 helper 输出必须标注 decision source、rule id、caveats、audit status。
+4. 报告正文必须引用 finding/evidence bundle/proposal/report section/report basis 等 DB-backed basis。
+
+## 7. 当前能力边界
+
+已具备：
+
+1. 受治理 run/round 生命周期。
+2. 多源抓取、导入、归一化和 DB query。
+3. 多 agent 议会对象写入与跨轮持久化。
+4. proposal-authoritative 的议会推进路径。
+5. report basis gate、freeze、reporting、archive/history。
+6. approval-gated optional-analysis helper governance。
+
+仍有限：
+
+1. 专业环境模型较少，当前更适合“证据组织和审议”，不适合直接做强因果归因。
+2. 部分历史命名仍保留，如 `report_basis_*`、legacy analysis kind query compatibility。
+3. source queue 的 family memory 和 prior-round anchor 仍依赖部分 runtime artifact。
+4. optional-analysis helper 多为启发式视图，默认 `audit-pending`，不是专业结论模型。
+
+## 8. 后续开发计划
+
+### 8.1 近期展示增强
+
+优先做一个专业深案例，而不是扩展很多浅层 skill。
+
+推荐 benchmark case：
+
+`跨区域烟霾 / PM2.5 时空关系争议的多轮议会调查`
+
+目标演示：
+
+1. 第一轮收集公众讨论、正式记录、受体区空气质量和火点/气象背景。
+2. 议会判断证据不足，提交 readiness opinion 和 follow-up proposal。
+3. moderator 打开第二轮，补充上风向、下风向、时滞和候选源区证据。
+4. challenger 质疑本地源、站点代表性、时间窗错配、气象条件不足。
+5. 最终输出 withhold 或 cautious release 的报告，展示 evidence index、uncertainty、residual disputes。
+
+### 8.2 通用关系基础设施
+
+近期优先补 `spatiotemporal-relation` 基础设施，而不是新增 `transport-investigation` 窄 skill 包：
+
+1. `spatiotemporal-relation-cue`
+   - 作为 analysis plane canonical object，表达候选 source-target relation、lag window、spatial rule、rejection reason。
+2. `signal_role` / `environment_signal_class`
+   - 在 normalized environment signal metadata 和 DB index 中区分 source-event、receptor-observation、context-observation。
+3. `detect-temporal-cooccurrence-cues`
+   - 保留旧 same-day cue，同时在显式 scope 下输出 structured relation cue。
+4. `query-spatiotemporal-relations`
+   - 支持 relation_id、relation_status、source_signal_id、target_signal_id、source_role、target_role 查询。
+5. relation-oriented challenger inputs
+   - `open-challenge-ticket`、`open-falsification-probe`、`post-review-comment` 支持 relation_id、objection_code、challenged_rule、alternative_explanation、required_followup_evidence、report_risk。
+6. `review-spatiotemporal-relation-alternatives`
+   - 输出 relation objection candidates，必须经 challenge/probe/review comment 承接后才能进入后续报告链。
+7. `spatiotemporal-relation-evidence-packet`
+   - 后续把 relation cues、rejections、challenger objections 和 uncertainty register 转成 council/reporting 可引用材料。
+
+### 8.3 工程硬化
+
+1. 将 spatiotemporal relation 相关对象纳入 canonical contract。
+2. 为新 skill 建立最小端到端 fixture。
+3. 补齐 DB-only recovery 测试。
+4. 保持 optional-analysis helper 不直通 report basis。
+5. 整理 legacy naming debt，但不要在论文展示前做大规模 breaking migration。
+
+## 9. 文档地图
+
+1. `docs/openclaw-project-overview.md`
+   - 项目总览、主工作流、能力边界、后续计划。
+2. `docs/openclaw-runtime-kernel-agent-refactor-checklist.md`
+   - runtime kernel 与 agent council 架构。
+3. `docs/openclaw-skills-refactor-checklist-v2.md`
+   - skills 分层、能力矩阵和扩展规范。
+4. `docs/openclaw-optional-analysis-skills-refactor-workplan.md`
+   - optional-analysis helper 治理与可靠性边界。
+5. `docs/openclaw-refactor-overall-notes.md`
+   - 工程原则、运行护栏和论文展示建议。

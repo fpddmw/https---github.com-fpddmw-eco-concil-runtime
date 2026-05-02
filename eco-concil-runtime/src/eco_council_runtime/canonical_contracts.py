@@ -10,6 +10,73 @@ PLANE_DELIBERATION = "deliberation"
 PLANE_REPORTING = "reporting"
 PLANE_RUNTIME = "runtime"
 
+ENVIRONMENT_SIGNAL_TAXONOMY_VERSION = "environment-signal-taxonomy-v1"
+ENVIRONMENT_SIGNAL_TAXONOMY_APPROVAL_REF = (
+    "required:mission-or-runtime-taxonomy-approval"
+)
+ENVIRONMENT_SIGNAL_TAXONOMY_AUDIT_STATUS = (
+    "default-frozen; approval-required; audit-pending"
+)
+
+SIGNAL_ROLE_VALUES = (
+    "source-event",
+    "receptor-observation",
+    "context-observation",
+    "claim-or-report-signal",
+    "unknown-environment-signal-role",
+)
+
+ENVIRONMENT_SIGNAL_CLASS_VALUES = (
+    "air-quality",
+    "fire-detection",
+    "meteorology",
+    "hydrology",
+    "water-quality",
+    "soil",
+    "ecology",
+    "emission-or-release-event",
+    "infrastructure-or-operations-event",
+    "unknown-environment-class",
+)
+
+SPATIOTEMPORAL_RELATION_TYPE_VALUES = (
+    "temporal-window-candidate",
+    "spatial-window-candidate",
+    "spatiotemporal-window-candidate",
+    "same-day-cooccurrence",
+    "lag-window-candidate",
+    "context-window-candidate",
+    "scope-overlap-candidate",
+    "rejected-by-temporal-rule",
+    "rejected-by-spatial-rule",
+    "insufficient-basis",
+)
+
+SPATIOTEMPORAL_RELATION_STATUS_VALUES = (
+    "candidate",
+    "weak-candidate",
+    "insufficient-basis",
+    "rejected-by-rule",
+    "needs-human-review",
+    "deprecated-legacy-cue",
+)
+
+SPATIOTEMPORAL_OBJECTION_CODE_VALUES = (
+    "temporal-window-mismatch",
+    "lag-assumption-unsupported",
+    "spatial-scope-overbroad",
+    "spatial-scope-too-narrow",
+    "coordinate-missing",
+    "timestamp-missing",
+    "source-event-background-noise",
+    "local-alternative-source",
+    "receptor-coverage-gap",
+    "context-variable-missing",
+    "provider-quality-limitation",
+    "taxonomy-misclassification",
+    "report-overclaim-risk",
+)
+
 
 @dataclass(frozen=True)
 class CanonicalContract:
@@ -33,6 +100,21 @@ def maybe_text(value: Any) -> str:
     if value is None:
         return ""
     return " ".join(str(value).split())
+
+
+def environment_signal_taxonomy_metadata() -> dict[str, Any]:
+    return {
+        "taxonomy_version": ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
+        "approval_ref": ENVIRONMENT_SIGNAL_TAXONOMY_APPROVAL_REF,
+        "audit_status": ENVIRONMENT_SIGNAL_TAXONOMY_AUDIT_STATUS,
+        "signal_roles": list(SIGNAL_ROLE_VALUES),
+        "environment_signal_classes": list(ENVIRONMENT_SIGNAL_CLASS_VALUES),
+        "spatiotemporal_relation_types": list(SPATIOTEMPORAL_RELATION_TYPE_VALUES),
+        "spatiotemporal_relation_statuses": list(
+            SPATIOTEMPORAL_RELATION_STATUS_VALUES
+        ),
+        "spatiotemporal_objection_codes": list(SPATIOTEMPORAL_OBJECTION_CODE_VALUES),
+    }
 
 
 def _contract(
@@ -85,6 +167,41 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
         schema_version="environment-observation-signal-v1",
         id_field="signal_id",
         required_text_fields=("decision_source", "source_skill"),
+    ),
+    "spatiotemporal-relation-cue": _contract(
+        "spatiotemporal-relation-cue",
+        plane=PLANE_ANALYSIS,
+        schema_version="spatiotemporal-relation-cue-v1",
+        id_field="relation_id",
+        required_text_fields=(
+            "decision_source",
+            "relation_type",
+            "relation_status",
+            "source_signal_id",
+            "target_signal_id",
+            "source_role",
+            "target_role",
+        ),
+        required_list_fields=(
+            "evidence_refs",
+            "lineage",
+            "context_signal_ids",
+            "rejection_reasons",
+            "caveats",
+        ),
+        required_dict_fields=(
+            "provenance",
+            "temporal_rule",
+            "spatial_rule",
+            "lag_window",
+            "time_delta",
+            "distance",
+            "spatial_basis",
+            "temporal_basis",
+            "helper_governance",
+        ),
+        required_non_empty_list_fields=("evidence_refs",),
+        required_non_empty_dict_fields=("provenance", "helper_governance"),
     ),
     "issue-cluster": _contract(
         "issue-cluster",

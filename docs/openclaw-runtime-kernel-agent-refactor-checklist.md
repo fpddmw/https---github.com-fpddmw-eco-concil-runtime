@@ -1,635 +1,178 @@
-# OpenClaw Runtime Kernel 与 Agent 权限重构清单
+# OpenClaw Runtime Kernel 与 Agent Council 架构
 
 ## 1. 文档定位
 
-本清单面向新的目标架构：
+本文描述当前 runtime kernel、agent council、权限、审批、状态推进和多轮协作架构。文件名保留历史路径，但本文不再是重构 checklist。
 
-1. `moderator` 主持议会、推进阶段、请求状态变更。
-2. 调查型 agent 负责抓取、归一化、检索、思考、提交结构化发现。
-3. `runtime kernel` 负责权限边界、审计、回放、数据库一致性、人工确认。
-4. 技能是原子工具，不再替代 agent 做默认调查结论。
+## 2. Runtime Kernel 职责
 
-本清单默认接受 breaking change，不以兼容当前 phase-2 主链为目标。
+runtime kernel 是运行治理层，不是实质调查判断者。
 
-## 2. 当前实现的核心偏差
+职责范围：
 
-### 2.1 运行时越界
+1. run / round 生命周期。
+2. skill registry 与 skill contract 解析。
+3. actor role、capability、access policy。
+4. preflight / postflight contract 检查。
+5. skill approval、transition approval、side-effect governance。
+6. skill execution、timeout、retry、lock、receipt。
+7. ledger event、dead letter、manifest、cursor。
+8. controller/gate/supervisor snapshot。
+9. archive、history bootstrap、replay、benchmark、health。
 
-当前 kernel / phase2 模块不仅负责审计和执行，还实际承担了：
+非职责：
 
-1. 议程排序
-2. readiness 判断
-3. report basis freeze 语义裁决
-4. direct council advisory 编排
-5. 默认 agent 入口链提示
+1. 不替 agent 判断事实结论。
+2. 不把 optional helper 输出直接提升为报告结论。
+3. 不绕过 moderator/operator 审批推进阶段。
+4. 不把 artifact 当作唯一状态源。
 
-代表性代码：
+## 3. Agent Council 职责
 
-1. `eco-concil-runtime/src/eco_council_runtime/kernel/controller.py`
-2. `eco-concil-runtime/src/eco_council_runtime/phase2_direct_advisory.py`
-3. `eco-concil-runtime/src/eco_council_runtime/phase2_fallback_*`
-4. `eco-concil-runtime/src/eco_council_runtime/phase2_planning_profile.py`
-5. `eco-concil-runtime/src/eco_council_runtime/phase2_stage_profile.py`
+agent council 负责实质调查和议会判断。
 
-### 2.2 agent 被降格为“读现成状态并提交意见”
+主要写入对象：
 
-当前默认 agent path 更接近：
+1. `finding`
+   - 调查发现，必须引用 evidence refs。
+2. `evidence-bundle`
+   - 把多个证据组织为可复核证据包。
+3. `proposal`
+   - 建议行动、冻结、阻断、挑战、更新假设或推进下一轮。
+4. `readiness-opinion`
+   - 表达 ready、blocked、needs-more-data。
+5. `hypothesis`
+   - 记录待检验解释或调查命题。
+6. `challenge`
+   - 记录反证、疑点、替代解释。
+7. `board-task`
+   - 记录任务分配、carryover、follow-up。
+8. `probe`
+   - 记录反证或 falsification 子任务。
+9. `report-section-draft`
+   - 报告章节草案与引用 basis。
 
-1. 读取 board / query / analysis surface
-2. 提交 `proposal`
-3. 提交 `readiness opinion`
-4. 交还 runtime gate
+## 4. 角色权限
 
-这使得 agent 更像“结构化评论员”，而不是“调查者”。
+| 角色 | 主要职责 | 关键权限 |
+| --- | --- | --- |
+| `moderator` | 主持议程、协调议会、请求状态转换 | query、proposal、readiness、board task、round bootstrap、state transition、report draft/publish |
+| `environmental-investigator` | 环境与物理证据调查 | fetch、normalize、query、analysis、finding、evidence bundle、proposal、readiness |
+| `public-discourse-investigator` | 公共讨论与社区证据调查 | fetch、normalize、query、analysis、finding、evidence bundle、proposal、readiness |
+| `formal-record-investigator` | 正式记录与政策材料调查 | fetch、normalize、query、analysis、finding、evidence bundle、proposal、readiness |
+| `challenger` | 反证、质疑、替代解释 | query、analysis、review comment、challenge、probe、proposal、readiness |
+| `report-editor` | 报告草拟与发布准备 | query、report draft、report publish |
+| `runtime-operator` | 运行治理、审批、归档、恢复 | runtime admin、archive、derived export、approval |
 
-### 2.3 moderator 不是唯一 phase owner
+## 5. 审批模型
 
-当前 phase-2 真实 owner 更接近 `planner + controller + gate`。  
-`moderator` 是高权限参与者，但不是唯一主持者。
+OpenClaw 使用两类审批：
 
-## 3. 重构后的目标架构
+1. `skill approval`
+   - 用于 optional-analysis、report publish、planner 等高影响或启发式 skill。
+   - 典型链路：`request-skill-approval -> approve-skill-approval -> run-skill --skill-approval-request-id`。
+2. `transition approval`
+   - 用于打开新调查轮、冻结报告依据、关闭轮次等状态变更。
+   - 典型链路：`request-transition -> approve-transition -> run state transition skill`。
 
-## 3.1 kernel 保留职责
+审批目标：
 
-runtime kernel 只保留以下职责：
+1. 保留人工/操作员可控边界。
+2. 让高影响输出有明确 approval ref。
+3. 阻止 helper 或 agent 自行推进不可逆阶段。
 
-1. 技能执行包装、超时、重试、dead letter、ledger
-2. side effect policy、sandbox boundary、approval policy
-3. DB canonical store 与 export rebuild
-4. agent 角色绑定、技能访问控制、写权限控制
-5. 状态推进请求的人工确认与审计
-6. 运行时健康面、operator runbook、replay / benchmark
+## 6. Controller / Gate / Supervisor
 
-## 3.2 kernel 不再承担的职责
+### Controller
 
-以下职责不再由 kernel 默认拥有：
+controller 负责执行已允许的阶段计划或 transition-executor 路径。
 
-1. 自动生成调查议程
-2. 自动决定问题该走哪条语义路线
-3. 自动决定 round 是否足够 ready
-4. 自动决定 report basis 是否应被视为支持
-5. 自动规定 agent 的固定讨论顺序
+主要行为：
 
-这些能力如果保留，只能作为：
+1. 读取 planning source 或 transition request。
+2. 运行 skill stage 或 gate stage。
+3. 每步写 controller state、orchestration step、ledger。
+4. 不替代 council proposal 做实质判断。
 
-1. agent 可选调用的 advisory skill
-2. operator 明确批准后使用的分析辅助
-3. 明确标记为 heuristic 的派生输出
+### Gate
 
-## 3.3 目标工作流
+gate 负责把 policy profile、readiness、proposal、opinion 汇总为可审计 gate result。
 
-目标工作流应改为：
+当前关键 gate：
 
-1. `moderator` 定义问题、阶段目标、证据缺口、角色分工。
-2. 调查 agent 自行使用 fetch / normalize / query / optional analysis skills 完成调查。
-3. agent 通过结构化 DB 对象交换发现、质疑、反证、建议。
-4. `moderator` 汇总争议点并提交阶段推进请求。
-5. `runtime kernel` 校验权限、前置条件、人工确认状态。
-6. operator 审批后，状态才真正推进。
-7. report agent 在冻结的 evidence basis 上起草报告。
+1. `report-basis-gate`
+   - 只在 readiness 与 council inputs 允许时放行 freeze。
+   - council veto / withhold 可以阻断报告依据冻结。
 
-## 4. 需要从 kernel 抽取成 skill 或直接移除的部分
+### Supervisor
 
-| 当前模块 | 当前问题 | 处理决定 | 目标去向 |
-| --- | --- | --- | --- |
-| `phase2_direct_advisory.py` | runtime 直接拼接 council queue，越过 moderator 主持 | 从 kernel 主路径移除 | 可选 advisory skill 或废弃 |
-| `phase2_fallback_agenda.py` | runtime 内嵌议程启发式 | 抽离 | 可选 `suggest-next-actions` 类 skill |
-| `phase2_fallback_policy.py` | runtime 内嵌优先级/pressure 规则 | 抽离 | 可审计规则 skill 或规则配置 |
-| `phase2_fallback_context.py` | 为启发式议程服务的共享上下文 | 抽离 | skill 内部库 |
-| `phase2_fallback_planning.py` | runtime 计划含隐式议程语义 | 抽离或删除 | skill 内部库 |
-| `phase2_action_semantics.py` | runtime 拥有过多 next-action 语义 | 收缩 | 仅保留最小字段校验，其余下沉到 skill |
-| `phase2_report_basis_resolution.py` | 解析 report-basis freeze support/veto judgement，并保留历史 `report_basis_*` 字段镜像 | 拆分 | kernel 只做 prerequisites，语义判断变 moderator / report advisory |
-| `phase2_planning_profile.py` | runtime 规定计划来源与行为 | 收缩 | 只保留 registry；策略抽离为 skill |
-| `phase2_stage_profile.py` | runtime 固化 phase-2 阶段顺序 | 收缩 | 仅保留 transition contract；阶段建议移入 moderator skill |
-| `phase2_agent_entry_profile.py` | runtime 预设 agent 推荐技能序列 | 重写 | 改成 role capability surface |
-| `phase2_agent_handoff.py` | 默认 handoff 仍是“提 proposal / readiness” | 重写 | 改成“调查 -> 提 findings -> moderator 请求推进” |
-| `kernel/source_queue_profile.py` | `core_queue_default` 实质上替 agent 决策 | 重写 | 改成 capability metadata，不再决定默认调查链 |
-| `kernel/controller.py` | runtime 当前是 phase owner | 重写 | 改为 transition executor + audit logger |
+supervisor 负责把 controller/gate/reporting 状态转换为 operator 可见姿态。
 
-## 5. kernel 保留并强化的部分
+典型状态：
 
-### 5.1 必须保留
+1. `reporting-ready`
+2. `hold-investigation-open`
+3. `controller-failed`
+4. `report-basis-withheld`
 
-1. `kernel/operations.py`
-2. `kernel/executor.py`
-3. `kernel/ledger.py`
-4. `kernel/manifest.py`
-5. `kernel/locking.py`
-6. `kernel/registry.py`
-7. `kernel/deliberation_plane.py`
-8. `kernel/signal_plane_normalizer.py`
-9. `kernel/reporting_contracts.py`
+当证据不足时，supervisor 会推荐继续调查和 `open-investigation-round`。
 
-### 5.2 保留但重写职责
+## 7. 多轮运行机制
 
-1. `kernel/controller.py`
-   - 从“流程拥有者”改为“transition request executor”
-2. `kernel/gate.py`
-   - 从“自动 gate runner”改为“前置条件验证 + 审批 hook”
-3. `kernel/agent_entry.py`
-   - 从“建议 agent 做什么”改为“暴露当前 role、权限、可见数据面”
-4. `kernel/source_queue_contract.py`
-   - 从“source governance + default source sequencing”改为“source capability registry”
+多轮调查由 `open-investigation-round` 实现。
 
-## 6. 需要新增的 kernel 能力
+流程：
 
-## 6.1 角色与权限
+1. council 判断当前 round 证据不足。
+2. moderator 请求 `open-investigation-round` transition。
+3. runtime-operator 批准。
+4. skill 读取 source round 的 DB-backed board state。
+5. skill 创建 target round，写入 carried hypotheses、follow-up tasks、transition note。
+6. skill 生成新的 `round_tasks_<round_id>.json` 并存 DB snapshot。
+7. 新 round 继续 `prepare-round -> fetch/import -> normalize -> query -> council write`。
 
-新增建议：
-
-1. `kernel/access_policy.py`
-2. `kernel/skill_registry.py`
-3. `kernel/role_contracts.py`
+可靠性设计：
 
-每个 skill 必须声明：
+1. source round 不被覆盖。
+2. target round 已存在时执行 noop，避免重复 mutation。
+3. board artifact 缺失时可从 deliberation plane 恢复。
+4. transition record 写入 DB，artifact 只是导出。
+5. query 支持 `round_scope=up-to-current`。
 
-1. `allowed_roles`
-2. `denied_roles`
-3. `required_capabilities`
-4. `side_effect_scope`
-5. `db_write_planes`
-6. `input_object_kinds`
-7. `output_object_kinds`
-8. `requires_operator_approval`
+## 8. 状态持久化
 
-`run_skill(...)` 必须接收 `actor_role`，并在运行前做强制校验。
+主要持久化面：
 
-## 6.2 状态推进请求
+1. `analytics/signal_plane.sqlite`
+   - signal、analysis、deliberation、runtime snapshots、reporting records。
+2. `runtime/*.json`
+   - controller、supervisor、gate、transition、receipt、approval、fetch plan 等导出。
+3. `board/*.json|md`
+   - board summary/brief 兼容导出。
+4. `reporting/*.json`
+   - reporting handoff、decision、expert report、final publication 导出。
+5. `archive/*.json` 与 shared archive SQLite
+   - close-round 后的 signal/case archive。
 
-新增建议：
+DB 优先级：
 
-1. `kernel/transition_requests.py`
-2. 新表：
-   - `transition_requests`
-   - `transition_approvals`
-   - `transition_rejections`
+1. 查询、恢复、报告链路优先读 DB canonical rows。
+2. artifact 缺失时，能从 DB wrapper 恢复的对象不应视为丢失。
+3. artifact-only 文件如果没有 DB row，应视为 orphaned export 或兼容输入。
 
-流程必须变为：
+## 9. 运行护栏
 
-1. `moderator` 提交 `transition request`
-2. kernel 检查前置条件与权限
-3. request 进入 `pending-operator-confirmation`
-4. operator 批准或拒绝
-5. 只有批准后才写入正式 round transition / close / report basis freeze
+1. 写入型 skill 必须声明 actor role。
+2. optional-analysis helper 必须 approval-gated。
+3. 事实性 judgement 必须引用 evidence refs。
+4. report basis freeze 必须经过 transition approval。
+5. reporting publish 必须经过 operator approval。
+6. runtime-operator 不做实质调查判断。
+7. helper 输出不得自动进入 report basis。
 
-## 6.3 多 agent 讨论面
+## 10. 后续方向
 
-新增建议：
-
-1. `discussion_messages`
-2. `finding_records`
-3. `evidence_bundles`
-4. `review_comments`
-
-要求：
-
-1. agent 之间交换信息必须 DB-native
-2. 必须可 thread
-3. 必须可附证据
-4. 必须可被 moderator 汇总
-5. 不允许只靠 `board_brief.md` 或 prompt 内存交流
-
-## 7. 角色职责与权限边界
-
-## 7.1 建议角色集合
-
-固定四角色已经不够。建议改成“核心角色 + 任务专门角色”模型。
-
-核心角色：
-
-1. `moderator`
-2. `environmental-investigator`
-3. `public-discourse-investigator`
-4. `formal-record-investigator`
-5. `challenger`
-6. `report-editor`
-
-任务专门角色按 mission 配置启用，例如：
-
-1. `hydrology-analyst`
-2. `ecology-analyst`
-3. `policy-analyst`
-4. `economics-analyst`
-5. `community-impact-analyst`
-
-## 7.2 角色职责表
-
-| 角色 | 主要职责 | 允许写入 | 禁止行为 |
-| --- | --- | --- | --- |
-| `moderator` | 定义议程、分配任务、收口争议、请求阶段推进 | board task, round note, transition request, proposal, readiness opinion | 不直接跑外部 fetch；不替调查员完成调查 |
-| `environmental-investigator` | 获取环境/物理/水文/生态证据并形成发现 | finding, evidence bundle, proposal, optional readiness opinion | 不得推进 round；不得 claim/close round |
-| `public-discourse-investigator` | 获取舆情/媒体/社区叙事证据 | finding, evidence bundle, proposal | 不得推进 round |
-| `formal-record-investigator` | 获取法规、政策、EIA、审批等正式记录 | finding, evidence bundle, proposal | 不得推进 round |
-| `challenger` | 发现偏差、缺口、替代解释、证据冲突 | challenge, review comment, proposal | 不得推进 round；默认不跑外部 fetch |
-| `report-editor` | 组装证据包、起草报告、格式检查 | report section draft, report draft | 不得修改调查状态；不得推进 round |
-| `runtime-operator` | 审批风险 side effect、审批状态推进 | approval / rejection / override | 不直接写研究结论 |
-
-## 7.3 技能访问矩阵
-
-| 技能类别 | moderator | investigator | challenger | report-editor | operator |
-| --- | --- | --- | --- | --- | --- |
-| fetch | 默认禁用 | 允许 | 默认禁用 | 禁用 | 审批 |
-| normalize | 默认只读 | 允许 | 禁用 | 禁用 | 审批 |
-| query / lookup | 允许 | 允许 | 允许 | 允许 | 允许 |
-| optional heuristic analysis | 允许查看，不默认执行 | 允许按需执行 | 允许按需执行 | 仅查看 | 审批规则版本 |
-| board read | 允许 | 允许 | 允许 | 允许 | 允许 |
-| board write | 允许 | 限 finding / note 子集 | 限 challenge / review | 禁用 | override only |
-| transition request | 仅 moderator | 禁用 | 禁用 | 禁用 | 审批 |
-| publish / finalize | moderator + report-editor 协作 | 禁用 | 禁用 | 允许草拟 | 审批 |
-
-## 8. agents 与 skills 的对接模式
-
-## 8.1 技能分层
-
-所有 skill 必须显式标记层级：
-
-1. `fetch`
-2. `normalize`
-3. `query`
-4. `optional-analysis`
-5. `deliberation-write`
-6. `reporting`
-7. `state-transition`
-
-## 8.2 调用模式
-
-1. investigator 先调用 `fetch -> normalize -> query/lookup`
-2. 如有必要，再调用 `optional-analysis`
-3. 调查结论通过 `finding / proposal / challenge` 写入 DB
-4. moderator 读取这些结构化对象后，发起 `state-transition request`
-5. runtime kernel 完成验证与 operator approval
-
-## 8.3 必须删除的旧耦合
-
-1. “agent 入口默认等于 proposal/readiness 提交”
-2. “controller 默认重跑 next-actions / readiness / report basis”
-3. “core_queue_default 决定 agent 调查顺序”
-4. “phase2 planner 默认拥有议会阶段语义”
-
-## 9. 代码实施清单
-
-## 9.1 第一批：权限与边界
-
-- [x] 新增 `kernel/access_policy.py`
-- [x] 新增 `kernel/skill_registry.py`
-- [x] 为全部 88 个 skill 补 `allowed_roles / required_capabilities`
-- [x] 修改 `kernel/executor.py`，执行前强制校验角色与 side effect
-- [x] 修改 `kernel/cli.py`，所有写操作必须显式携带 `--actor-role`
-
-### 2026-04-23 Session 收口
-
-- 已完成：
-  - 新增 `kernel/role_contracts.py`，统一 canonical role、legacy alias、capability contract，消除旧 `environmentalist / sociologist / policy-analyst` 等角色名直接参与 runtime 判权的散点语义。
-  - 新增 `kernel/skill_registry.py`，为当前 88 个 skill 集中声明 `skill_layer / allowed_roles / required_capabilities / write_scope / requires_operator_approval / default_actor_role_hint`。
-  - 新增 `kernel/access_policy.py`，把 skill 执行与 kernel 写命令的 actor-role 校验集中到 kernel，而不是继续依赖 skill 脚本的隐式约定。
-  - 修改 `kernel/governance.py` 与 `kernel/executor.py`，在 preflight / execution / ledger payload 中加入 `actor_role` / `resolved_actor_role` / `skill_access`，执行前先过角色与 side-effect 校验。
-  - 修改 `kernel/cli.py` 与 `runtime_command_hints.py`，所有 kernel 写命令都要求显式 `--actor-role`，`run-skill` / `preflight-skill` / round control / export rebuild / benchmark / operator surfaces 全部按新入口生成命令模板。
-  - 修改 `kernel/controller.py`、`kernel/supervisor.py`、`kernel/post_round.py`、`kernel/agent_entry.py` 以及 phase2 handoff/profile 相关模块，把请求角色继续向下透传，避免 moderator/runtime-operator 语义在链路中丢失。
-  - 补了最小回归测试，覆盖 registry skill access、CLI 显式 `--actor-role`、角色越权拦截、command template 注入、agent entry / runbook surface。
-
-- 未完成：
-  - `9.2` 的 `transition_requests / approvals / rejections` 还未开始，阶段推进仍未进入 `request -> approve/reject -> commit` 的完整持久化审批链。
-  - operator approval 目前仍主要体现在 skill policy 与 contract mode 上，尚未落成独立的审批记录表和审批命令。
-
-- 新发现的问题：
-  - 旧的 operator/runbook/benchmark 命令模板里原本还残留未带 `--actor-role` 的硬编码字符串，已在本次收口中修正；后续新增 runtime command surface 不能再绕过 `runtime_command_hints.py`。
-  - 部分“需人工审计”的 heuristic / optional-analysis skill 当前仍依赖 `contract_mode=strict` 才会硬阻断；这说明 batch-2 之前，operator approval 语义还没有完全从“告警”提升到“持久化审批对象”。
-
-- 是否影响后续计划：
-  - 不改变 `9.2 / 9.3` 的主顺序，但 `9.2` 现在可以直接建立在 canonical role + centralized skill policy + explicit actor-role command surfaces 之上，不需要再返工第一批边界层。
-
-- 第一批复核结果：
-  - 运行时角色边界与 `--actor-role` 强制透传本身无需新的功能性补正；本次仅同步修正了 `supervise-round -> controller` 相关 unittest 断言，确认 batch-1 已落地的 actor-role 透传语义确实在主链生效。
-  - 当前没有发现会破坏 `9.2` 的 batch-1 残缺实现，后续可以继续按既定顺序推进 kernel 语义收缩。
-
-## 9.2 第二批：状态推进与人工确认
-
-- [x] 新增 `transition_requests / transition_approvals / transition_rejections`
-- [x] 新增 `request-phase-transition`
-- [x] 新增 `approve-phase-transition`
-- [x] 新增 `reject-phase-transition`
-- [x] 修改 `open-investigation-round`，只能消费已批准 transition request
-- [x] 修改 report basis / close round 流程，必须经过 operator approval
-
-### 2026-04-23 Session 收口
-
-- 已完成：
-  - `kernel/transition_requests.py` 与 deliberation DB schema 已建立 `transition-request / transition-approval / transition-rejection` canonical 持久化链，`query-control-objects` 与 operator/runbook surface 也已对称暴露这三类 runtime object。
-  - `request-phase-transition / approve-phase-transition / reject-phase-transition / close-round --transition-request-id` 已在 kernel CLI、access policy、operator hints、handoff surface 中贯通；`moderator` 只能发起 request，`runtime-operator` 才能 approve/reject/commit。
-  - `open-investigation-round / freeze-report-basis / close-round` 现在都只能消费已批准 request；实际 side effect 成功后才把 request 状态写成 `committed`，不再把 `round_transitions` 当审批对象。
-  - `kernel/controller.py` 已补上 report basis-stage 治理前置：`report-basis-freeze` stage 会解析当前 round 该 kind 的最新 request，并只在状态为 `approved / committed` 时注入 `--transition-request-id` 执行；否则 controller 会以清晰的治理阻断失败收口，而不是回退到旧的“无审批直接 freeze report basis”语义。
-  - `phase2_direct_advisory.py` 与 `plan-round-orchestration` 的 stop-condition 文案已同步改成“moderator request + operator approval first”，避免 advisory/operator surface 继续暗示可直接 freeze report basis。
-  - 相关测试入口已全部切到新审批链：open-round / freeze report basis / close-round / supervise-round / run-phase2-round 相关 unittest 现在都会先创建并批准对应 request，再执行 runtime/skill 主链。
-  - 本次实际回归通过：
-    - `tests.test_runtime_kernel`
-    - `tests.test_board_workflow`
-    - `tests.test_archive_history_workflow`
-    - `tests.test_control_query_surface`
-    - `tests.test_supervisor_simulation_regression`
-    - `tests.test_reporting_workflow`
-    - `tests.test_reporting_publish_workflow`
-    - `tests.test_reporting_query_surface`
-    - `tests.test_decision_trace_workflow`
-    - `tests.test_deliberation_agenda_workflow`
-    - `tests.test_investigation_workflow`
-    - `tests.test_benchmark_replay_workflow`
-    - `tests.test_orchestration_ingress_workflow`
-
-- 未完成：
-  - 就本批明确定义的三条链路（`open-investigation-round / freeze-report-basis / close-round`）而言，没有新的功能性遗留；更广义的 kernel phase ownership 收缩仍留在 `9.3`。
-  - controller 侧的 transition request 自动注入目前只对当前 batch 实际进入 controller 的 `freeze-report-basis` 做了硬化；如果后续再把新的 state-transition skill 放回 controller 主链，需要继续沿同一治理模式扩展，而不是重回旧式裸 skill 调用。
-
-- 新发现的问题：
-  - 旧测试中仍有少量断言默认 `supervise-round` 不会把 `actor_role="runtime-operator"` 继续传给 controller；本次已作为 batch-1 复核的一部分修正，说明测试层面对新边界语义曾经落后于代码实现。
-  - 目前 planner/advisory 仍然会产出 `report-basis-freeze` stage，只是 runtime 不再允许它绕过审批直接执行；这再次说明 `phase2 planner / direct advisory` 的默认 phase ownership 仍需在 `9.3` 继续收缩。
-
-- 是否影响后续计划：
-  - 不阻塞 `9.3`。相反，`9.3` 现在可以建立在已经硬化的 `request -> approve/reject -> commit` 审批链之上，继续把 controller 从“默认 phase owner”收缩成“受治理的 transition executor + audit logger”。
-
-## 9.3 第三批：缩小 kernel 语义面
-
-- [x] 把 `phase2_fallback_*` 从 kernel 主路径移除
-- [x] 把 `phase2_direct_advisory.py` 从默认计划源移除
-- [x] 重写 `kernel/controller.py`，仅负责任务执行与日志
-- [x] 重写 `phase2_agent_entry_profile.py`，只输出 capability surface
-- [x] 移除 `core_queue_default` 对 phase-2 行为的支配
-
-### 本次收口回写
-
-- 已完成：
-  - `phase2_planning_profile.py` 的默认 planning source 已收缩为 `[]`；`kernel/controller.py` 默认路径不再采用 `runtime-planner / agent-advisory / direct-council-advisory`，而是只消费已批准的 `freeze-report-basis` transition request，或在无批准请求时以 inspection-only/no-op 收口。
-  - `kernel/controller.py` 现已把默认 phase-2 语义改成 `transition-executor`：默认只执行 `report-basis-gate -> report-basis-freeze` 这一条已审批 transition 链，不再默认生成 `next-actions / readiness / advisory` 议程；`kernel/supervisor.py` 也同步改成只有在 planning 真正包含 `next-actions` stage 时才消费该 surface。
-  - `phase2_agent_entry_profile.py` 与 `kernel/agent_entry.py` 已改为输出 canonical role capability surface、技能层级、transition request/approve/reject 命令模板；默认 recommended skills 与 advisory sources 均为空，agent entry 不再把调查者引导到默认 advisory plan 主链。
-  - `kernel/source_queue_profile.py` 已停止向外导出 `core_queue_default`；对外改为 `phase2_behavior` 分类，避免 queue profile 继续暗示 phase-2 默认拥有权。`kernel/operations.py` 的 runbook 文案也已改成 transition/query 导向，而不是 advisory refresh 导向。
-  - 已补充并通过本批最小相关回归 `14` 项：
-    - `tests.test_agent_entry_gate`
-    - `tests.test_runtime_source_queue_profiles`
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_executes_approved_report_basis_request_without_planner_stage`
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_completes_without_default_plan_when_no_transition_request_exists`
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_ignores_optional_advisory_artifacts_on_default_path`
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_respects_injected_planning_sources`
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_resume_skips_completed_stages_after_failure`
-
-- 未完成：
-  - `phase2_fallback_*` 与 `phase2_direct_advisory.py` 仍作为可注入 / 可选兼容模块保留在仓库内；本批完成的是“移出 kernel 默认主路径”，不是删除这些模块本身。
-  - 非默认的 injected planner/advisory 路径仍保留历史 plan metadata（例如 `recommended_skill_sequence`）；如果后续目标是进一步压缩兼容语义面，需要在后续批次继续清理这些 optional surface，而不是把它们重新接回默认链。
-
-- 新发现的问题：
-  - stage validation 之前会把显式声明的空 `required_previous_stages=[]` 误当成“未声明”，从而回退到 stage contract 的旧依赖，导致 `transition-executor` 的 `report-basis-gate` 被重新绑回 `round-readiness`；本次已同时在 `phase2_controller_state.py` 与 `phase2_stage_profile.py` 修复。
-  - 旧 resume 回归仍默认假设 controller 首轮会自动走 runtime planner；本次已把该测试改为显式注入 planning source，避免测试层继续固化旧的 kernel default ownership。
-
-- 是否影响后续计划：
-  - 不阻塞 `9.4 / 9.5`。相反，batch3 完成后，后续讨论面 / 报告面可以建立在“kernel 无默认议程所有权、moderator 通过 request/approve/reject/commit 推进、证据 basis 依赖 DB canonical state”这一前提上继续展开。
-  - 后续如果再把新的 state-transition skill 放回 controller 执行面，必须沿用本批已经建立的模式：显式 transition request、显式审批状态校验、显式 stage dependency，而不是恢复旧式 planner/fallback 代替治理判断。
-
-## 9.4 第四批：讨论面与报告面
-
-- [x] 新增 `finding_records`
-- [x] 新增 `discussion_messages`
-- [x] 新增 `evidence_bundles`
-- [x] 新增 `report_section_drafts`
-- [x] 让 `proposal / readiness opinion` 不再是唯一讨论对象
-
-### 本次收口回写
-
-- 已完成：
-  - 已按本次收口前置要求复核前三批（重点 batch3）最小回归：`tests.test_direct_council_advisory + tests.test_board_workflow` 共 `16` 项通过，未发现回退。
-  - `kernel/deliberation_plane.py` 已落地 `report_section_drafts` canonical table 与索引；reporting plane 讨论输出可直接 DB-native 持久化。
-  - `reporting_objects.py` 已新增 `report-section-draft` canonical object：`normalize / validate / store / query` 全链路可用，并接入 `query-reporting-objects`。
-  - `kernel/cli.py` 已新增四个 direct write 命令：`submit-finding-record`、`post-discussion-message`、`submit-evidence-bundle`、`submit-report-section-draft`。
-  - `phase2_agent_entry_profile.py` + `kernel/agent_entry.py` + `show-reporting-state` 已补齐 operator/role surface：新增 finding/discussion/evidence/report-section-draft 的 query 与 submit command templates。
-  - 已补回归并通过 focused unittest：
-    - `tests.test_council_submission_workflow`
-    - `tests.test_reporting_query_surface`
-    - `tests.test_agent_entry_gate`
-    - 执行命令：`/home/fpddmw/projects/openclaw-eco-concil_v1/.venv/bin/python -m unittest tests.test_council_submission_workflow tests.test_reporting_query_surface tests.test_agent_entry_gate`（`15` 项通过）。
-
-- 未完成：
-  - 本批范围内无新的功能性遗留；`proposal / readiness opinion` 仍保留为有效 deliberation 对象，但已不再是唯一讨论写入通道。
-  - 若后续要继续压缩兼容语义面（例如进一步弱化旧 proposal-first 引导文案），属于后续批次，不属于本批阻塞项。
-
-- 新发现的问题：
-  - 本批接线阶段暴露出 `phase2_agent_entry_profile.py` 与 `kernel/cli.py` 的局部补丁插入风险（缩进/分支边界容易被破坏）；已在同一轮修复并通过回归确认。
-  - reporting workflow 的 `council-decision / expert-report / final-publication` 状态值已转为更动态的 posture（如 `continue / needs-more-evidence / hold-release`）；原有测试中硬编码状态值不再稳健，已改为以 stage/对象存在性为主断言。
-
-- 是否影响后续计划：
-  - 不阻塞后续批次。batch4 已把讨论面与报告面的关键 runtime surface 补齐到 DB-first 主线。
-  - 对后续是正向约束：新增 deliberation/reporting 对象应继续沿用“canonical contract + direct command + query surface + operator template + focused regression”同一交付模式。
-
-## 10. 验收标准
-
-以下条件全部满足，才算 runtime/kernel 权限重构完成：
-
-1. `moderator` 是唯一可请求阶段推进的 agent。
-2. investigator 可以完成完整调查闭环，而不是只能读 query surface。
-3. kernel 无默认议程所有权，只负责验证、审计、审批。
-4. 任意状态推进都有 `request -> validate -> approve/reject -> commit` 链。
-5. 所有写技能都有显式 role allowlist。
-6. `environmentalist` 不能调用议会状态推进技能。
-7. agent 间讨论可以只依赖 DB-native finding / challenge / comment / evidence bundle。
-8. 删除 `next-actions / readiness / report basis` artifact 后，核心研究状态仍可从 DB 恢复。
-9. operator 能在 runbook 中看到每一次阶段推进请求、审批人、审批理由和证据 basis。
-
-## 11. 2026-04-24 Session 验收复核（runtime/kernel）
-
-- 已完成：
-  - 逐条复核 `runtime/kernel` 关键边界实现（`controller / access_policy / skill_registry / transition_requests / cli / operations`）并对照本清单第 `10` 节验收标准做代码级核验。
-  - 在 `kernel/transition_requests.py` 增加数据层强制角色校验：
-    - `store_transition_request` 仅接受 `moderator`。
-    - `approve_transition_request / reject_transition_request / mark_transition_request_committed` 仅接受 `required_approval_role`（当前为 `runtime-operator`）。
-    - 该校验位于 DB 写入函数本身，避免仅依赖 CLI `--actor-role` 入口拦截。
-  - 在 `kernel/operations.py` 的 runbook 模板中把 `approve/reject-phase-transition` 命令改为显式 `actor_role='runtime-operator'`，避免 operator 模板语义依赖隐式默认值。
-  - 新增并通过 runtime 最小回归：
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_transition_request_store_rejects_non_moderator_role`
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_transition_request_approval_rejects_non_operator_role`
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_transition_request_commit_rejects_non_operator_role`
-  - 同步通过本批关联既有回归：
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_executes_approved_report_basis_request_without_planner_stage`
-    - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_completes_without_default_plan_when_no_transition_request_exists`
-    - `tests.test_agent_entry_gate`（6 项）
-
-- 未完成：
-  - `optional-analysis` 的“人工审计”语义仍主要依赖 `contract_mode=strict` 时的硬阻断；在 `warn` 模式下仍会以 warning 方式放行，尚未落成独立“审批对象 + 持久化审批记录”链。
-  - 本 session 未重跑全量跨面回归（仅执行本批直接相关最小集合）；第 `10` 节中“调查闭环稳定性”与“artifact 删除后的跨链恢复稳定性”仍依赖此前批次回归与后续整体验收。
-
-- 新发现的问题：
-  - 旧实现中 transition request 的角色约束主要落在 CLI 层；若直接调用 kernel 模块函数可绕过入口校验写入越权请求/审批。本次已在数据层修复。
-  - operator runbook 的审批命令模板此前虽可由 `kernel_command(...)` 自动补 actor role，但模板文本本身未显式声明角色，存在运维误读风险；本次已在 runbook 文案侧显式化。
-  - `requires_operator_approval` 与 `allowed_roles` 在 optional-analysis 技能上仍存在“策略提示强、执行阻断弱”的张力，需要后续统一审批语义。
-
-- 是否影响后续计划：
-  - 不阻塞后续批次，且对第 `10.1 / 10.4 / 10.6 / 10.9` 验收项形成正向加固（尤其是 moderator/operator 角色边界与 transition 审批链的一致性）。
-  - 建议下一步把 optional-analysis 的人工审计从 `contract_mode` 提示升级为可查询、可审批、可回放的持久化审批对象，避免再次回退到“warn 可执行”的软约束语义。
-
-## 12. 2026-04-27 Session 验收复核（runtime/kernel）
-
-- 已完成：
-  - 重新对照本清单第 `10` 节验收标准复核 runtime/kernel 主边界，重点核验 `controller / transition_requests / skill_approvals / governance / executor / access_policy / skill_registry / agent_entry / operations / reporting handoff`。
-  - 确认 `phase2_planning_profile.default_phase2_planning_sources()` 当前返回空列表；默认 controller 路径只采用已批准的 `freeze-report-basis` transition request，或在无批准 request 时以 inspection-only/no-op 收口，不再默认 materialize planner / fallback agenda / direct council advisory。
-  - 确认 88 个 skill 均有显式 `allowed_roles`；当前 32 个 skill 声明 `requires_operator_approval`。
-  - 确认 optional-analysis 已新增持久化审批链：
-    - `skill_approval_requests`
-    - `skill_approvals`
-    - `skill_approval_rejections`
-    - `skill_approval_consumptions`
-    - `run-skill / preflight-skill` 在 optional-analysis 情况下要求 `--skill-approval-request-id`；即使由 `runtime-operator` 执行 operator-owned optional audit，也必须先留下 approval request / approval 记录。
-    - 批准 request 成功执行后会被标记为 `consumed`，不能重复使用。
-  - 确认 operator runbook 与 `query-control-objects` 已暴露 skill approval request / approval / rejection / consumption 查询与审批命令模板。
-  - 修复 `materialize-reporting-handoff` 的 hold-path 回归：默认 kernel 不再生成 `next-actions` 后，supervisor `top_actions` 可能为空；handoff 现在会在无 supervisor top actions 时，从 DB-backed `open_risks / reporting_blockers` 生成结构化 `recommended_next_actions`，避免把“kernel 无默认议程”误读成“报告无需后续动作”。
-  - 新增并通过回归：`tests.test_skill_approval_workflow.SkillApprovalWorkflowTests.test_preflight_blocks_operator_optional_analysis_without_approval_record`，确认 optional-analysis 不再存在 `runtime-operator` bypass。
-  - 本轮实际通过 focused 回归：
-    - `tests.test_skill_approval_workflow`
-    - `tests.test_runtime_kernel`
-    - `tests.test_reporting_workflow`
-    - `tests.test_agent_entry_gate`
-    - `tests.test_control_query_surface`
-    - `tests.test_runtime_source_queue_profiles`
-    - `tests.test_council_submission_workflow`
-    - 执行命令：`.venv/bin/python -m unittest tests.test_skill_approval_workflow tests.test_runtime_kernel tests.test_reporting_workflow tests.test_agent_entry_gate tests.test_control_query_surface tests.test_runtime_source_queue_profiles tests.test_council_submission_workflow`（`67` 项通过）。
-
-- 未完成：
-  - 本轮未重跑全量跨面回归；验收结论只覆盖 runtime/kernel 权限、阶段推进、optional-analysis 审批、agent entry/control surface 与 reporting handoff 的直接相关路径。
-  - `phase2_fallback_* / phase2_direct_advisory.py / plan-round-orchestration` 仍作为可注入或可选模块存在；本轮确认它们不在默认 kernel 主路径，但未删除兼容模块。
-  - `requires_operator_approval=True` 的非 optional-analysis / 非 state-transition 技能仍没有统一纳入 `skill_approval_requests`；当前硬审批链主要覆盖 optional-analysis，阶段推进则由 `transition_requests` 覆盖。后续若要把 reporting publish/finalize 也变成同等审批对象，需要扩展审批模型或新增 publish transition kind。
-
-- 新发现的问题：
-  - reporting handoff 曾隐含依赖 supervisor `top_actions`；在 controller 收缩为 transition executor 后，这会导致 withheld round 缺少 `recommended_next_actions`。本轮已修复为基于 DB 风险/blocker 的结构化 fallback，不恢复旧的 runtime agenda ownership。
-  - 测试层存在 staged 改动，正在把 reporting/runtime workflow 中直接运行 optional-analysis 的路径改为先创建并批准 skill approval request；这与当前代码目标一致，但需要保留这些测试修改，不能回退。
-  - `source_queue_profile.py` 内部仍使用 `core_queue_default` 作为计算 `phase2_behavior` 的私有参数；对外已不导出该字段。本轮未发现它支配 phase-2 默认 controller 行为，但后续清理文案时可进一步改名以避免误读。
-
-- 是否影响后续计划：
-  - 不阻塞后续计划；本轮对第 `10.1 / 10.3 / 10.4 / 10.5 / 10.7 / 10.9` 验收项形成进一步确认。
-  - 对后续的约束是：任何新增默认执行路径都必须继续满足 `moderator request -> runtime-operator approve/reject -> governed execution/commit`；任何 optional-analysis 运行都必须留下可查询的 request / approval / consumption 记录，不能退回到 `warn` 模式软放行。
-
-## 13. 2026-04-29 最终验收审阅回写
-
-- 已完成：
-  - 复核 `controller / transition_requests / skill_approvals / agent_entry / analysis_plane / open-investigation-round / reporting handoff` 后，确认 runtime kernel 当前默认路径符合第 `10` 节硬验收：无 approved transition request 时不执行默认 phase-2 planner；有 approved request 时作为 transition executor 执行并审计。
-  - `moderator` 是唯一 transition request 发起角色，`runtime-operator` 是审批/commit 角色；相关数据层与 CLI 层均有测试覆盖。
-  - 默认 agent entry 已移除 analysis helper commands，保留 DB query、finding/evidence-bundle/proposal/readiness 写入面与 optional-analysis 审批模板。
-  - optional-analysis approval 已覆盖 request、approval、consumption 与 consumed request reuse block。
-
-- 未完成：
-  - 兼容模块 `phase2_fallback_* / phase2_direct_advisory.py / plan-round-orchestration` 仍保留为可注入或 approval-gated surface，未物理删除。
-  - `freeze-report-basis` 等历史 phase/report basis 命名仍未做 breaking schema/CLI rename。
-  - 本次未运行全仓 discover。
-
-- 新发现的问题：
-  - runtime 硬边界已达标，但文档中旧“下一阶段/当前偏差”段落仍容易被误读为当前代码状态；后续应把历史基线与最新验收状态分层。
-  - `freeze-report-basis` 内仍保留 legacy coverage helper 函数；默认 shared context 已 quarantine legacy analysis 且 reporting handoff 会忽略 legacy optional-analysis basis，但后续迁移时应物理清掉这段兼容语义。
-
-- 是否影响后续计划：
-  - 不阻塞 runtime/kernel 权限重构验收。
-  - 后续只应推进兼容清理、命名迁移和全仓回归，不应扩大 kernel domain policy。
-
-- 本次验收实际运行：
-  - `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`
-  - 结果：`111` 项通过。
-  - `git diff --check`：通过。
-
-## 2026-04-29 破坏性清理补记：旧 advisory/compat surface 删除
-
-- 已完成：
-  - 物理删除 `phase2_direct_advisory.py`、`tests/test_direct_council_advisory.py`，controller 与 agent entry 不再导入或物化 `direct-council-advisory`。
-  - 删除 `kernel/investigation_planning.py`、`phase2_fallback_planning.py` 与 `kernel/phase2_contract.py` 兼容门面；测试改为直接引用当前 canonical 模块。
-  - agent entry 删除 `--refresh-advisory-plan`、`agent_advisory_plan_path`、`materialize_agent_advisory_plan_command`、`advisory_sources` 和 `materialize_agent_entry_advisory_plan`。
-  - `plan-round-orchestration` 删除 `agent-advisory / advisory-only` planner mode，统一输出 queue-owned runtime orchestration plan；`direct_council_queue` 改为 `council_proposal_queue`。
-  - 删除 active `build-normalization-audit` skill、registry policy、source queue profile 和脚本目录。
-
-- 未完成：
-  - `analysis_plane.py` 与若干 council/reporting/archive 测试仍保留旧 analysis kind / canonical object 命名，用于负向 guardrail 或后续 DB/query schema migration。
-  - `phase2_fallback_common/context/contracts` 仍是若干 optional helper 的内部共享模块名；本批未做大规模模块重命名。
-
-- 新发现的问题：
-  - 旧 advisory 不是只存在于默认 planning source；它还通过 agent-entry CLI、runtime artifact path、state surface、deliberation plan normalization 和 planner mode 留有接口。
-  - `build-normalization-audit` 虽已被文档描述为非默认 QA helper，但仍是 active registry skill；本批已按“无旧兼容”要求删除。
-
-- 是否影响后续计划：
-  - 影响：后续不能再依赖 `direct-council-advisory`、`agent-advisory`、`agent_advisory_plan_*` 或 `build-normalization-audit`。
-  - 不阻塞 runtime kernel 主线；默认 controller 仍只执行已批准 transition request 或 inspection-only/no-op。
-
-- 本次实际运行：
-  - `.venv/bin/python -m unittest tests.test_investigation_contracts tests.test_agent_entry_gate tests.test_orchestration_planner_workflow tests.test_runtime_kernel -v`：`58` 项通过。
-
-## 14. 2026-04-29 runtime/control freeze 拆分回写
-
-- 已完成：
-  - `report-basis-freeze` 现在只表示 deliberation/report basis；runtime 聚合控制面改为 `runtime-control-freeze`。
-  - controller、gate handler、supervisor 的 control snapshot 聚合写入改为 `store_runtime_control_freeze_record(...)`。
-  - `query_runtime_control_freeze_command` 与 `query_report_basis_freeze_command` 分离，operator view 不再同名覆盖。
-  - transition request 常量改为 `TRANSITION_KIND_FREEZE_REPORT_BASIS`，旧 freeze report basis 命名不再作为默认 transition alias。
-
-- 未完成：
-  - `report-basis-gate` stage name、`report_basis_status` DB 字段和历史 artifact path 仍保留兼容；后续若改名需单独 schema/replay migration。
-
-- 新发现的问题：
-  - runtime control freeze 与 report basis 共用 object kind 会隐藏 canonical registry 覆盖问题；本批已用 contract test 和 full discover 固定。
-
-- 是否影响后续计划：
-  - 不阻塞；本批降低了 runtime kernel 被误读为报告 basis/调查结论来源的风险。
-
-## 2026-04-29 report-basis gate 命名收尾
-
-- 已完成：
-  - 默认 phase-2 gate stage / handler 改为 `report-basis-gate`；后续 report-basis-only 收尾已删除旧 handler/CLI alias。
-  - `apply-report-basis-gate`、`report_basis_gate_path`、`runtime/report_basis_gate_<round>.json` 已成为默认 operator/API/artifact surface。
-  - controller、supervisor、benchmark、show-run-state、state surfaces 已输出 `report_basis_status / report_basis_gate_status / report_basis_freeze_allowed`。
-  - `query-control-objects` 增加 `--report-basis-status`，并兼容映射到底层历史 DB column。
-
-- 未完成：
-  - 该条已被后续 report-basis-only 收尾覆盖；旧 promotion DB/CLI/path 兼容命名已删除。
-
-- 新发现的问题：
-  - full discover 首轮发现一个 decision trace 测试还读取旧 `report_basis_gate_*.json`，已改为 `report_basis_gate_*.json`。
-
-- 是否影响后续计划：
-  - 不阻塞；默认 runtime kernel gate 语义已从“report basis”转为“report basis freeze readiness”。
-  - legacy alias 删除已在后续 report-basis-only 收尾完成。
-
-- 本次实际运行：
-  - `.venv/bin/python -m unittest discover -s tests -v`：`235` 项通过。
-
-## 2026-04-29 report-basis-only 破坏性收尾
-
-- 已完成：
-  - 删除旧 report basis promotion 兼容入口：不再注册 `apply-promotion-gate`、不再保留旧 gate alias、runtime ledger 不再写 `legacy_event_type`。
-  - runtime/control DB column 与 query surface 统一为 `report_basis_status / report_basis_freeze_allowed / report_basis_gate_path`。
-  - 默认 report-basis freeze export 目录改为 `report_basis/`，不再使用旧 `promotion/` 路径。
-
-- 未完成：
-  - 无 runtime kernel 旧 promotion 兼容项残留。
-  - `legacy` 一词仍用于 optional-analysis 审计冻结与 role alias 说明，语义是治理标记，不是旧数据兼容。
-
-- 新发现的问题：
-  - 旧 `freeze-withheld` 状态值会让报告 gate 状态语义不够明确；已统一为 `report-basis-freeze-withheld`。
-
-- 是否影响后续计划：
-  - 不阻塞；后续无需再规划 promotion DB/replay 兼容迁移。
-
-- 本次实际运行：
-  - `.venv/bin/python -m compileall -q eco-concil-runtime/src skills tests`：通过。
-  - 目标回归 `84` 项通过。
-  - `.venv/bin/python -m unittest discover -s tests -v`：`235` 项通过，用时 `222.805s`。
-
-## 2026-04-29 agent entry 默认 surface 补充验收
-
-- 已完成：
-  - 复核 runtime/kernel 默认入口后，清除 `kernel/agent_entry.py` 与 `phase2_agent_entry_profile.py` 默认 operator surface 中残留的旧 `claim-cluster` analysis 查询命令。
-  - 默认 agent entry 现在只暴露 DB query、finding/evidence-bundle/proposal/readiness/report-section-draft 写入面，以及 optional-analysis approval/run 模板；不再把 frozen legacy analysis query surface 放进默认 operator view。
-  - `tests/test_agent_entry_gate.py` 已补断言，防止默认 operator surface 再次出现 `claim-cluster` 命令。
-
-- 未完成：
-  - `phase2_fallback_* / phase2_direct_advisory.py / plan-round-orchestration` 仍作为可注入或 approval-gated 兼容/辅助面存在，未物理删除。
-  - frozen legacy analysis kind 仍可在明确兼容查询场景中回放，不属于默认 agent entry。
-
-- 新发现的问题：
-  - 文档此前已经把“默认 agent entry 已移除旧 analysis query commands”列为完成，但默认 operator command map 仍有两个 `claim-cluster` 模板键；本次已修正代码和测试。
-
-- 是否影响后续计划：
-  - 不影响 runtime/kernel 权限重构验收；该补丁进一步加固第 `10.3 / 10.5 / 10.7` 项。
-  - 后续不得把 legacy analysis query command 作为默认 role/operator entry surface，只能放在显式审计、兼容查询或 migration 工具链中。
-
-- 本次实际运行：
-  - `.venv/bin/python -m unittest tests.test_agent_entry_gate tests.test_runtime_source_queue_profiles tests.test_optional_analysis_guardrails tests.test_policy_research_case_fixtures tests.test_skill_approval_workflow tests.test_source_queue_rebuild tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_query_surface tests.test_runtime_kernel tests.test_board_workflow -v`
-  - 结果：`111` 项通过。
-  - `git diff --check`：通过。
+1. 继续减少 runtime kernel 中的领域语义，让 domain workflow 更多由 DB council objects 表达。
+2. 强化多轮调查下的 DB-only recovery。
+3. 为跨区域污染传输等专业场景新增 domain-specific council objects。
+4. 把 supervisor 的 operator action 与论文 demo 场景打通，展示从 evidence gap 到 follow-up round 的闭环。

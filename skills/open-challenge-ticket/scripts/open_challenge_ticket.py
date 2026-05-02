@@ -33,6 +33,7 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     connect_db,
     fetch_round_state,
 )
+from eco_council_runtime.canonical_contracts import SPATIOTEMPORAL_OBJECTION_CODE_VALUES  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -149,6 +150,12 @@ def open_challenge_ticket_skill(
     owner_role: str,
     linked_artifact_refs: list[str],
     evidence_bundle_ids: list[str],
+    relation_id: str = "",
+    objection_code: str = "",
+    challenged_rule: str = "",
+    alternative_explanation: str = "",
+    required_followup_evidence: list[str] | None = None,
+    report_risk: str = "",
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
@@ -235,6 +242,26 @@ def open_challenge_ticket_skill(
         f"evidence-bundle:{bundle_id}"
         for bundle_id in unique_texts(evidence_bundle_ids)
     ]
+    normalized_relation_id = maybe_text(relation_id)
+    normalized_objection_code = maybe_text(objection_code)
+    normalized_followup_evidence = unique_texts(required_followup_evidence or [])
+    warnings: list[dict[str, Any]] = []
+    if (
+        normalized_objection_code
+        and normalized_objection_code not in SPATIOTEMPORAL_OBJECTION_CODE_VALUES
+    ):
+        warnings.append(
+            {
+                "code": "invalid-objection-code",
+                "message": f"Unsupported relation objection_code: {normalized_objection_code}.",
+            }
+        )
+        return blocked_payload(
+            run_id=run_id,
+            round_id=round_id,
+            board_file=board_file,
+            warnings=warnings,
+        )
     judgement = board_judgement_metadata(
         selected_proposal,
         source_skill=SKILL_NAME,
@@ -243,18 +270,19 @@ def open_challenge_ticket_skill(
         base_lineage=[
             resolved_target_claim_id,
             resolved_target_hypothesis_id,
+            normalized_relation_id,
             *evidence_bundle_ids,
         ],
         base_source_ids=[
             resolved_target_claim_id,
             resolved_target_hypothesis_id,
+            normalized_relation_id,
             *evidence_bundle_ids,
         ],
     )
     resolved_linked_refs = unique_texts(
         linked_artifact_refs + linked_bundle_refs + judgement["evidence_refs"]
     )
-    warnings: list[dict[str, Any]] = []
     if not resolved_title or not resolved_statement:
         warnings.append(
             {
@@ -324,6 +352,18 @@ def open_challenge_ticket_skill(
             "challenge_statement": resolved_statement,
             "target_claim_id": resolved_target_claim_id,
             "target_hypothesis_id": resolved_target_hypothesis_id,
+            "relation_id": normalized_relation_id,
+            "objection_code": normalized_objection_code,
+            "challenged_rule": maybe_text(challenged_rule),
+            "alternative_explanation": maybe_text(alternative_explanation),
+            "required_followup_evidence": normalized_followup_evidence,
+            "report_risk": maybe_text(report_risk),
+            "target": {
+                "object_kind": "spatiotemporal-relation-cue",
+                "object_id": normalized_relation_id,
+            }
+            if normalized_relation_id
+            else {},
             "linked_artifact_refs": resolved_linked_refs,
             "evidence_bundle_ids": unique_texts(evidence_bundle_ids),
             "decision_source": judgement["decision_source"],
@@ -354,6 +394,8 @@ def open_challenge_ticket_skill(
                 "priority": ticket["priority"],
                 "target_claim_id": ticket["target_claim_id"],
                 "target_hypothesis_id": ticket["target_hypothesis_id"],
+                "relation_id": ticket["relation_id"],
+                "objection_code": ticket["objection_code"],
                 "decision_source": ticket["decision_source"],
                 "proposal_id": selected_proposal_id,
             },
@@ -385,6 +427,8 @@ def open_challenge_ticket_skill(
             "decision_source": ticket["decision_source"],
             "proposal_id": selected_proposal_id,
             "evidence_bundle_ids": unique_texts(evidence_bundle_ids),
+            "relation_id": normalized_relation_id,
+            "objection_code": normalized_objection_code,
             "db_path": maybe_text(write_summary.get("db_path")),
             "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
         },
@@ -418,6 +462,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--owner-role", default="")
     parser.add_argument("--linked-artifact-ref", action="append", default=[])
     parser.add_argument("--evidence-bundle-id", action="append", default=[])
+    parser.add_argument("--relation-id", default="")
+    parser.add_argument("--objection-code", default="")
+    parser.add_argument("--challenged-rule", default="")
+    parser.add_argument("--alternative-explanation", default="")
+    parser.add_argument("--required-followup-evidence", action="append", default=[])
+    parser.add_argument("--report-risk", default="")
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
@@ -438,6 +488,12 @@ def main() -> int:
         owner_role=args.owner_role,
         linked_artifact_refs=args.linked_artifact_ref,
         evidence_bundle_ids=args.evidence_bundle_id,
+        relation_id=args.relation_id,
+        objection_code=args.objection_code,
+        challenged_rule=args.challenged_rule,
+        alternative_explanation=args.alternative_explanation,
+        required_followup_evidence=args.required_followup_evidence,
+        report_risk=args.report_risk,
     )
     print(pretty_json(payload, args.pretty))
     return 0

@@ -20,6 +20,7 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     enrich_signal_metadata_fields,
     ensure_signal_plane_schema,
+    replace_signal_index_rows,
 )
 
 SKILL_NAME = "normalize-open-meteo-historical-signals"
@@ -188,6 +189,17 @@ def artifact_ref(signal: dict[str, Any]) -> dict[str, str]:
 
 def delete_existing_rows(connection: sqlite3.Connection, run_id: str, round_id: str, artifact_path: str) -> None:
     connection.execute(
+        """
+        DELETE FROM normalized_signal_index
+        WHERE signal_id IN (
+            SELECT signal_id
+            FROM normalized_signals
+            WHERE run_id = ? AND round_id = ? AND source_skill = ? AND artifact_path = ?
+        )
+        """,
+        (run_id, round_id, SOURCE_SKILL, artifact_path),
+    )
+    connection.execute(
         "DELETE FROM normalized_signals WHERE run_id = ? AND round_id = ? AND source_skill = ? AND artifact_path = ?",
         (run_id, round_id, SOURCE_SKILL, artifact_path),
     )
@@ -195,7 +207,9 @@ def delete_existing_rows(connection: sqlite3.Connection, run_id: str, round_id: 
 
 def insert_signals(connection: sqlite3.Connection, signals: list[dict[str, Any]]) -> None:
     for signal in signals:
-        connection.execute(INSERT_SQL, enrich_signal_metadata_fields(signal))
+        enriched_signal = enrich_signal_metadata_fields(signal)
+        connection.execute(INSERT_SQL, enriched_signal)
+        replace_signal_index_rows(connection, enriched_signal)
 
 
 def environment_gap_hints(signals: list[dict[str, Any]]) -> list[str]:

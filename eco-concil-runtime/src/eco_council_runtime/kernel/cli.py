@@ -11,6 +11,7 @@ from ..canonical_contracts import (
     PLANE_REPORTING,
     PLANE_RUNTIME,
     PLANE_SIGNAL,
+    SPATIOTEMPORAL_OBJECTION_CODE_VALUES,
     canonical_contracts_for_plane,
 )
 from ..control_objects import (
@@ -38,6 +39,7 @@ from .analysis_plane import (
     analysis_kind_names,
     query_analysis_result_items,
     query_analysis_result_sets,
+    query_spatiotemporal_relation_cues,
 )
 from .agent_entry import agent_entry_state, materialize_agent_entry_gate
 from .access_policy import (
@@ -1905,6 +1907,12 @@ def build_parser() -> argparse.ArgumentParser:
     post_review_cmd.add_argument("--target-id", default="")
     post_review_cmd.add_argument("--response-to-id", action="append", default=[])
     post_review_cmd.add_argument("--evidence-ref", action="append", default=[])
+    post_review_cmd.add_argument("--relation-id", default="")
+    post_review_cmd.add_argument("--objection-code", default="")
+    post_review_cmd.add_argument("--challenged-rule", default="")
+    post_review_cmd.add_argument("--alternative-explanation", default="")
+    post_review_cmd.add_argument("--required-followup-evidence", action="append", default=[])
+    post_review_cmd.add_argument("--report-risk", default="")
     post_review_cmd.add_argument("--provenance-json", default="{}")
     post_review_cmd.add_argument("--pretty", action="store_true")
 
@@ -2099,6 +2107,28 @@ def build_parser() -> argparse.ArgumentParser:
     query_items_cmd.add_argument("--readiness", default="")
     query_items_cmd.add_argument("--include-result-sets", action="store_true")
     query_items_cmd.add_argument("--include-contract", action="store_true")
+
+    relation_query_cmd = sub.add_parser(
+        "query-spatiotemporal-relations",
+        help="Query DB-backed spatiotemporal relation cue items from the analysis plane.",
+    )
+    relation_query_cmd.add_argument("--run-dir", required=True)
+    relation_query_cmd.add_argument("--result-set-id", default="")
+    relation_query_cmd.add_argument("--run-id", default="")
+    relation_query_cmd.add_argument("--round-id", default="")
+    relation_query_cmd.add_argument("--relation-id", default="")
+    relation_query_cmd.add_argument("--relation-type", default="")
+    relation_query_cmd.add_argument("--relation-status", default="")
+    relation_query_cmd.add_argument("--source-signal-id", default="")
+    relation_query_cmd.add_argument("--target-signal-id", default="")
+    relation_query_cmd.add_argument("--source-role", default="")
+    relation_query_cmd.add_argument("--target-role", default="")
+    relation_query_cmd.add_argument("--latest-only", action="store_true")
+    relation_query_cmd.add_argument("--include-result-sets", action="store_true")
+    relation_query_cmd.add_argument("--include-contract", action="store_true")
+    relation_query_cmd.add_argument("--limit", type=int, default=20)
+    relation_query_cmd.add_argument("--offset", type=int, default=0)
+    relation_query_cmd.add_argument("--pretty", action="store_true")
 
     council_query_cmd = sub.add_parser(
         "query-council-objects",
@@ -2896,6 +2926,26 @@ def main(
 
     if args.command == "post-review-comment":
             init_run(run_dir, args.run_id)
+            relation_id = maybe_text(args.relation_id)
+            objection_code = maybe_text(args.objection_code)
+            if objection_code and objection_code not in SPATIOTEMPORAL_OBJECTION_CODE_VALUES:
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "object_kind": "review-comment",
+                        "relation_id": relation_id,
+                    },
+                    "message": f"Unsupported relation objection_code: {objection_code}.",
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            target_kind = maybe_text(args.target_kind)
+            target_id = maybe_text(args.target_id)
+            if relation_id and (not target_id or target_kind == "round"):
+                target_kind = "spatiotemporal-relation-cue"
+                target_id = relation_id
             payload = {
                 "run_id": args.run_id,
                 "round_id": args.round_id,
@@ -2903,10 +2953,16 @@ def main(
                 "review_kind": args.review_kind,
                 "thread_id": args.thread_id,
                 "comment_text": args.comment_text,
-                "target_kind": args.target_kind,
-                "target_id": args.target_id,
+                "target_kind": target_kind,
+                "target_id": target_id,
                 "response_to_ids": args.response_to_id,
                 "evidence_refs": args.evidence_ref,
+                "relation_id": relation_id,
+                "objection_code": objection_code,
+                "challenged_rule": maybe_text(args.challenged_rule),
+                "alternative_explanation": maybe_text(args.alternative_explanation),
+                "required_followup_evidence": args.required_followup_evidence,
+                "report_risk": maybe_text(args.report_risk),
                 "provenance": parse_json_object_arg(args.provenance_json, field_name="provenance-json"),
             }
             try:
@@ -3528,6 +3584,41 @@ def main(
                     "analysis_kind": args.analysis_kind,
                     "result_set_id": args.result_set_id,
                     "subject_id": args.subject_id,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "query-spatiotemporal-relations":
+        try:
+            payload = query_spatiotemporal_relation_cues(
+                run_dir,
+                result_set_id=args.result_set_id,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                relation_id=args.relation_id,
+                relation_type=args.relation_type,
+                relation_status=args.relation_status,
+                source_signal_id=args.source_signal_id,
+                target_signal_id=args.target_signal_id,
+                source_role=args.source_role,
+                target_role=args.target_role,
+                latest_only=args.latest_only,
+                include_result_sets=args.include_result_sets,
+                include_contract=args.include_contract,
+                limit=args.limit,
+                offset=args.offset,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_dir": str(run_dir),
+                    "analysis_kind": "spatiotemporal-relation-cue",
+                    "relation_id": args.relation_id,
                 },
                 "message": str(exc),
             }
