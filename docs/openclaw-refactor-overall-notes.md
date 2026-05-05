@@ -55,64 +55,41 @@
 3. “optional-analysis helper 已经是专业模型”。
 4. “temporal cue 能证明污染传播方向”。
 
-## 6. 推荐论文 Demo
+## 6. 推荐真实案例评测议题
 
 主题：
 
 `跨区域烟霾 / PM2.5 时空关系争议的多轮议会调查`
 
-展示目标：
+评测时重点观察：
 
-1. 第一轮：公众讨论 + 环境观测 + 火点/气象背景。
-2. 议会：发现证据不足，提交 proposal/readiness/challenge。
-3. 第二轮：补充上风向、受体区、下风向证据。
-4. Challenger：提出本地源、时滞、站点代表性、时间窗错配。
-5. Gate：允许 cautious freeze 或 withheld。
-6. Report：展示 evidence index、uncertainty register、residual disputes。
+1. public、formal、environment、fire/weather 证据能否进入 DB-backed signal plane。
+2. 议会能否在证据不足时自然提交 proposal/readiness/challenge。
+3. follow-up round 是否由 evidence gap 和 open challenge 触发，而不是预设剧本触发。
+4. challenger 是否能提出本地源、时滞、站点代表性、时间窗错配等质疑。
+5. gate 是否能在证据不足时保持 withheld，或在依据充分时 cautious freeze。
+6. report 是否只展示 evidence index、uncertainty register、residual disputes 和被承接过的依据。
 
-## 7. 近期开发优先级
+案例评测计划见 `docs/openclaw-case-study-evaluation-workplan.md`。该议题不应先被写成机械化展示流程；应先真实运行、暴露问题、完成修复，再抽取一条可回放轨迹用于论文展示。
 
-### P0：固定端到端案例
+## 7. 独立后续工作面
 
-1. 选择一个固定事件、区域、时间窗。
-2. 准备 mission fixture。
-3. 准备最小 public/environment/formal/firms/weather 输入。
-4. 写出预期 evidence gap 与第二轮目标。
+本文不维护统一的近期优先级。`spatiotemporal-relation` 基础设施已进入 baseline，后续按下列独立计划分别推进。
 
-### P1：补通用时空关系基础设施
+建议的代码重构顺序是：质量门 -> DB-only recovery -> runtime-governed execution -> schema migration -> 大模块拆分 -> 真实案例评测 -> 可回放轨迹。这个顺序用于降低回归风险，不把各计划合并为一个总计划。
 
-优先级：
-
-1. `spatiotemporal-relation-cue` canonical contract。
-2. `signal_role` / `environment_signal_class` metadata。
-3. `detect-temporal-cooccurrence-cues` structured relation mode。
-4. relation-oriented challenger objection fields。
-5. `materialize-spatiotemporal-relation-evidence-packet`。
-
-可以暂缓：
-
-1. 大规模 geospatial engine。
-2. HYSPLIT/ERA5 等重型模型接入。
-3. 全领域 source catalog 扩展。
-
-### P2：补报告模板
-
-新增或强化报告章节：
-
-1. investigation question
-2. evidence scope
-3. spatiotemporal relation hypothesis
-4. supporting cues
-5. counter-evidence / alternatives
-6. uncertainty register
-7. council decision
-
-### P3：测试和演示
-
-1. 一条端到端 demo script。
-2. 一个 DB-only recovery test。
-3. 一个 helper-not-report-basis guardrail test。
-4. 一个 challenger-withhold scenario。
+1. `docs/openclaw-ci-quality-gates-workplan.md`
+   - unittest CI、targeted jobs、compile/lint 和文档命令检查。
+2. `docs/openclaw-db-only-recovery-hardening-workplan.md`
+   - artifact 删除、orphan artifact 和 DB-first 恢复测试。
+3. `docs/openclaw-runtime-governed-execution-workplan.md`
+   - 正式运行入口、approval、receipt、ledger、lock 和权限阻断。
+4. `docs/openclaw-schema-migration-hardening-workplan.md`
+   - schema version、migration ledger、旧库升级 fixture。
+5. `docs/openclaw-module-decomposition-workplan.md`
+   - `deliberation_plane.py`、`optional_analysis_helpers.py`、`analysis_plane.py`、`cli.py` 拆分。
+6. `docs/openclaw-case-study-evaluation-workplan.md`
+   - 真实案例探索运行、问题归类、修复后复跑和可回放轨迹沉淀。
 
 ## 8. 后续工程债
 
@@ -132,7 +109,7 @@
 
 ## 9. 验收清单
 
-论文/demo 前建议至少满足：
+真实案例评测和后续论文展示建议至少满足；具体实施由 `docs/openclaw-case-study-evaluation-workplan.md` 独立跟踪：
 
 1. 能初始化 mission/run/round。
 2. 能抓取或导入 public/environment/formal 数据。

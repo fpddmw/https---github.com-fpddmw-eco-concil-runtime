@@ -407,6 +407,26 @@ def materialize_spatiotemporal_relation_evidence_packet(
                 "message": "Basis objects were not written because the packet has no relation cues.",
             }
         )
+    missing_relation_artifact_paths = unique_texts(
+        [
+            item.get("artifact_path")
+            for item in list_items(relation_query.get("items"))
+            if isinstance(item, dict)
+            and maybe_text(item.get("artifact_path"))
+            and not bool(item.get("artifact_present"))
+        ]
+    )
+    if missing_relation_artifact_paths:
+        warnings.append(
+            {
+                "code": "relation-cue-artifact-missing-db-recovered",
+                "message": (
+                    "One or more relation cue artifacts were missing; packet materialization "
+                    "used DB-backed analysis result rows."
+                ),
+                "artifact_paths": missing_relation_artifact_paths,
+            }
+        )
 
     basis_evidence_refs = unique_values([packet_ref, *evidence_refs])
     basis_lineage = unique_texts([packet_id, *lineage])

@@ -314,7 +314,6 @@ def draft_expert_report_skill(
             "reporting_ready": False,
             "reporting_blockers": ["reporting-handoff-missing"],
             "report_basis_status": "withheld",
-            "report_basis_status": "withheld",
             "key_findings": [],
             "open_risks": [],
             "recommended_next_actions": [],

@@ -170,9 +170,17 @@ DB 优先级：
 6. runtime-operator 不做实质调查判断。
 7. helper 输出不得自动进入 report basis。
 
-## 10. 后续方向
+## 10. 后续工作入口
 
-1. 继续减少 runtime kernel 中的领域语义，让 domain workflow 更多由 DB council objects 表达。
-2. 强化多轮调查下的 DB-only recovery。
-3. 为跨区域污染传输等专业场景新增 domain-specific council objects。
-4. 把 supervisor 的 operator action 与论文 demo 场景打通，展示从 evidence gap 到 follow-up round 的闭环。
+本文不维护统一后续计划。runtime 相关后续工作按独立文档跟踪：
+
+1. `docs/openclaw-runtime-governed-execution-workplan.md`
+   - 正式运行入口、approval、receipt、ledger、lock、权限阻断和 direct script 兼容边界。
+2. `docs/openclaw-db-only-recovery-hardening-workplan.md`
+   - 多轮调查、board、analysis、reporting 在 artifact 缺失时的 DB-first 恢复。
+3. `docs/openclaw-case-study-evaluation-workplan.md`
+   - supervisor/operator action 与 evidence gap、follow-up round、cautious/withheld report 的真实案例评测闭环。
+4. `docs/openclaw-schema-migration-hardening-workplan.md`
+   - runtime/control/reporting 相关 schema 的版本和幂等迁移。
+5. `docs/openclaw-module-decomposition-workplan.md`
+   - 继续减少 runtime kernel 中的领域语义，但以行为不变的小步拆分推进。

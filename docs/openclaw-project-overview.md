@@ -1,4 +1,4 @@
-# OpenClaw 项目架构总览与后续开发计划
+# OpenClaw 项目架构总览
 
 ## 1. 项目定位
 
@@ -143,56 +143,31 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 3. source queue 的 family memory 和 prior-round anchor 仍依赖部分 runtime artifact。
 4. optional-analysis helper 多为启发式视图，默认 `audit-pending`，不是专业结论模型。
 
-## 8. 后续开发计划
+## 8. 独立后续工作面
 
-### 8.1 近期展示增强
+`spatiotemporal-relation` 基础设施已作为当前 baseline：canonical contract、environment signal role/class、structured relation cue、relation query、relation-oriented challenger inputs、relation alternatives review 和 relation evidence packet 均已有基础实现与测试覆盖。
 
-优先做一个专业深案例，而不是扩展很多浅层 skill。
+后续工作不再整理成一个全局修改计划，而拆成彼此独立的工作计划。每个计划都可单独排期、验收和暂停。
 
-推荐 benchmark case：
+推荐执行顺序不是依赖关系，而是风险控制顺序：先建立质量门，再修状态恢复和治理入口，然后处理 schema 与大模块维护性，最后使用真实案例评测系统能力。
 
-`跨区域烟霾 / PM2.5 时空关系争议的多轮议会调查`
-
-目标演示：
-
-1. 第一轮收集公众讨论、正式记录、受体区空气质量和火点/气象背景。
-2. 议会判断证据不足，提交 readiness opinion 和 follow-up proposal。
-3. moderator 打开第二轮，补充上风向、下风向、时滞和候选源区证据。
-4. challenger 质疑本地源、站点代表性、时间窗错配、气象条件不足。
-5. 最终输出 withhold 或 cautious release 的报告，展示 evidence index、uncertainty、residual disputes。
-
-### 8.2 通用关系基础设施
-
-近期优先补 `spatiotemporal-relation` 基础设施，而不是新增 `transport-investigation` 窄 skill 包：
-
-1. `spatiotemporal-relation-cue`
-   - 作为 analysis plane canonical object，表达候选 source-target relation、lag window、spatial rule、rejection reason。
-2. `signal_role` / `environment_signal_class`
-   - 在 normalized environment signal metadata 和 DB index 中区分 source-event、receptor-observation、context-observation。
-3. `detect-temporal-cooccurrence-cues`
-   - 保留旧 same-day cue，同时在显式 scope 下输出 structured relation cue。
-4. `query-spatiotemporal-relations`
-   - 支持 relation_id、relation_status、source_signal_id、target_signal_id、source_role、target_role 查询。
-5. relation-oriented challenger inputs
-   - `open-challenge-ticket`、`open-falsification-probe`、`post-review-comment` 支持 relation_id、objection_code、challenged_rule、alternative_explanation、required_followup_evidence、report_risk。
-6. `review-spatiotemporal-relation-alternatives`
-   - 输出 relation objection candidates，必须经 challenge/probe/review comment 承接后才能进入后续报告链。
-7. `materialize-spatiotemporal-relation-evidence-packet`
-   - 默认把 relation cues、rejections、challenger objections 和 uncertainty register 写成 packet artifact。
-   - 仅在显式 `--write-basis-objects` 下写入 finding/evidence bundle/report section draft 承接对象。
-
-### 8.3 工程硬化
-
-1. 将 spatiotemporal relation 相关对象纳入 canonical contract。
-2. 为新 skill 建立最小端到端 fixture。
-3. 补齐 DB-only recovery 测试。
-4. 保持 optional-analysis helper 不直通 report basis。
-5. 整理 legacy naming debt，但不要在论文展示前做大规模 breaking migration。
+1. `docs/openclaw-ci-quality-gates-workplan.md`
+   - 建立最小 CI、targeted tests 和轻量质量门。
+2. `docs/openclaw-db-only-recovery-hardening-workplan.md`
+   - 硬化 artifact 缺失和 orphan artifact 场景下的 DB-first 恢复。
+3. `docs/openclaw-runtime-governed-execution-workplan.md`
+   - 将真实案例评测和常规运行收束到 runtime-governed `run-skill` 路径。
+4. `docs/openclaw-schema-migration-hardening-workplan.md`
+   - 为 SQLite schema 增加版本、幂等迁移和旧库升级测试。
+5. `docs/openclaw-module-decomposition-workplan.md`
+   - 在不改变行为的前提下拆分过大的 runtime/kernel 模块。
+6. `docs/openclaw-case-study-evaluation-workplan.md`
+   - 以跨区域烟霾 / PM2.5 议题评测议会能力；真实运行和修复完成后再沉淀可回放轨迹。
 
 ## 9. 文档地图
 
 1. `docs/openclaw-project-overview.md`
-   - 项目总览、主工作流、能力边界、后续计划。
+   - 项目总览、主工作流、能力边界、独立后续工作面入口。
 2. `docs/openclaw-runtime-kernel-agent-refactor-checklist.md`
    - runtime kernel 与 agent council 架构。
 3. `docs/openclaw-skills-refactor-checklist-v2.md`
@@ -201,3 +176,17 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
    - optional-analysis helper 治理与可靠性边界。
 5. `docs/openclaw-refactor-overall-notes.md`
    - 工程原则、运行护栏和论文展示建议。
+6. `docs/openclaw-spatiotemporal-relation-taxonomy-workplan.md`
+   - 时空关系 taxonomy 基础设施的设计、落地状态和验收记录。
+7. `docs/openclaw-ci-quality-gates-workplan.md`
+   - CI 与质量门的独立计划。
+8. `docs/openclaw-db-only-recovery-hardening-workplan.md`
+   - DB-only recovery 的独立计划。
+9. `docs/openclaw-runtime-governed-execution-workplan.md`
+   - runtime-governed execution 的独立计划。
+10. `docs/openclaw-schema-migration-hardening-workplan.md`
+   - schema version 和 migration 的独立计划。
+11. `docs/openclaw-module-decomposition-workplan.md`
+   - 大模块拆分的独立计划。
+12. `docs/openclaw-case-study-evaluation-workplan.md`
+   - 真实案例议会能力评测和可回放轨迹沉淀的独立计划。

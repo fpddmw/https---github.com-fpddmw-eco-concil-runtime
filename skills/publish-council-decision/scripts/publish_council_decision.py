@@ -542,8 +542,6 @@ def publish_council_decision_skill(
             "rejected_opinion_ids": rejected_opinion_ids,
             "report_basis_resolution_mode": report_basis_resolution_mode,
             "report_basis_resolution_reasons": report_basis_resolution_reasons,
-            "report_basis_resolution_mode": report_basis_resolution_mode,
-            "report_basis_resolution_reasons": report_basis_resolution_reasons,
             "council_input_counts": (
                 draft_payload.get("council_input_counts", {})
                 if isinstance(draft_payload.get("council_input_counts"), dict)

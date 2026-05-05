@@ -907,11 +907,6 @@ def freeze_report_basis_skill(
             report_basis_resolution.get("report_basis_resolution_mode")
         ),
         "report_basis_resolution_reasons": report_basis_resolution_reasons,
-        "report_basis_resolution_mode": maybe_text(
-            report_basis_resolution.get("report_basis_resolution_mode")
-        )
-        or maybe_text(report_basis_resolution.get("report_basis_resolution_mode")),
-        "report_basis_resolution_reasons": report_basis_resolution_reasons,
         "basis_counts": basis_counts,
         "selected_basis_object_ids": selected_basis_object_ids,
         "supporting_proposal_ids": supporting_proposal_ids,
@@ -946,10 +941,6 @@ def freeze_report_basis_skill(
             "report_basis_resolution_mode": maybe_text(
                 report_basis_resolution.get("report_basis_resolution_mode")
             ),
-            "report_basis_resolution_mode": maybe_text(
-                report_basis_resolution.get("report_basis_resolution_mode")
-            )
-            or maybe_text(report_basis_resolution.get("report_basis_resolution_mode")),
             "transition_request_id": maybe_text(
                 transition_request.get("request_id")
             ),

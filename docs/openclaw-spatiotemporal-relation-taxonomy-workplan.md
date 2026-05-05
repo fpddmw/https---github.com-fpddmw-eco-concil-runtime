@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文把近期讨论收敛为一套可持久化、可审计、可测试的基础设施工作计划。目标不是新增大气传输模型或污染物扩散模拟，而是修正当前通用 skill 层对“时空匹配 / 关系线索”的表达不足。
+本文保留 `spatiotemporal-relation` 基础设施的设计、实施记录和验收边界。目标不是新增大气传输模型或污染物扩散模拟，而是修正通用 skill 层对“时空匹配 / 关系线索”的表达不足。
 
 核心判断：
 
@@ -17,9 +17,28 @@
 5. 反证和替代解释。
 6. 报告中可审计的 evidence packet。
 
+## 1.1 当前验收状态
+
+截至 2026-05-05，本文 P0-P5 的基础设施验收通过，作为当前 baseline 维护。验收覆盖：
+
+1. `spatiotemporal-relation-cue` canonical contract。
+2. `signal_role` 与 `environment_signal_class` metadata/index。
+3. structured relation cue 与 legacy same-day cue 兼容。
+4. `query-spatiotemporal-relations` 查询面。
+5. relation-oriented challenge/probe/review comment 字段。
+6. `review-spatiotemporal-relation-alternatives`。
+7. `materialize-spatiotemporal-relation-evidence-packet` 默认 artifact 与显式 basis handoff。
+
+验收命令：
+
+1. `python3 -m unittest tests.test_spatiotemporal_relation_taxonomy`
+2. `python3 -m unittest discover -s tests`
+
+本文后续只记录 taxonomy/contract 相关 bugfix 或边界修订。真实案例评测、DB-only recovery、runtime-governed execution、schema migration、模块拆分和 CI 质量门分别由独立计划跟踪。
+
 ## 2. 当前 Taxonomy 落地状态
 
-之前 taxonomy 工作并非完全没有落实，但落地范围有限。
+本节保留历史问题和当前处理状态，便于审阅后续变更是否偏离原始边界。
 
 已经具备：
 
@@ -35,20 +54,23 @@
 4. optional-analysis helper governance
    - 支持 `taxonomy_version`、`rubric_version`、`approval_ref`、`audit_status` 等治理字段。
 
-尚未充分落实：
+原始缺口与当前状态：
 
 1. 环境信号内部 taxonomy 过粗。
    - 多数环境输入都落在 `environment-observation-signal`。
-   - 缺少 `source-event`、`receptor-observation`、`context-observation` 等可查询分类。
+   - 当前已通过 `metadata.signal_role`、`metadata.environment_signal_class` 和 DB metadata index 提供可查询分类。
 2. 时空关系 taxonomy 缺位。
-   - 当前 `detect-temporal-cooccurrence-cues` 只做 same-day multi-plane co-occurrence cue。
-   - 未表达 source-target relation、lag window、spatial rule、distance、rejection reason。
+   - 原始状态中 `detect-temporal-cooccurrence-cues` 只做 same-day multi-plane co-occurrence cue。
+   - 当前已保留 same-day 兼容，并在 structured mode 下表达 source-target relation、lag window、spatial rule、distance、rejection reason。
 3. 关系结果未成为 DB-backed canonical object。
    - helper artifact 可以输出线索，但缺少可被 finding、evidence bundle、challenge、report basis 稳定引用的 relation row。
+   - 当前以 analysis plane result set 承载 `spatiotemporal-relation-cue`，并提供 relation query 与 evidence packet handoff。
 4. verification scope 仍偏文本化。
    - `review-fact-check-evidence-scope` 要求 scope 字段，但没有统一结构化 scope contract。
+   - 当前已有 structured scope/relation helper 路径；剩余风险是各任务是否都显式提供 scope。
 5. challenger 缺少通用关系质疑对象。
    - 现有 challenge/probe 能承接质疑，但没有专门针对时空关系的标准 objection taxonomy。
+   - 当前 challenge/probe/review comment 已支持 relation_id、objection_code、challenged_rule、alternative_explanation、required_followup_evidence、report_risk。
 
 ## 3. 设计原则
 
@@ -309,7 +331,7 @@ artifact 只作为导出，不是唯一事实源。
 10. `required_context_classes`
 11. `excluded_inferences`
 
-`review-fact-check-evidence-scope` 应从字符串检查升级为结构化 scope review：
+`review-fact-check-evidence-scope` 的目标状态是从字符串检查升级为结构化 scope review：
 
 1. 缺字段时输出 `scope-required`。
 2. 有字段时输出 `scope-reviewed-with-caveats`。
@@ -318,7 +340,7 @@ artifact 只作为导出，不是唯一事实源。
 
 ## 10. Challenger 工作面
 
-现有 `open-challenge-ticket` 和 `open-falsification-probe` 可继续使用，但要增加 relation-oriented 输入字段：
+现有 `open-challenge-ticket` 和 `open-falsification-probe` 继续使用，并支持 relation-oriented 输入字段：
 
 1. `relation_id`
 2. `objection_code`
@@ -327,7 +349,7 @@ artifact 只作为导出，不是唯一事实源。
 5. `required_followup_evidence`
 6. `report_risk`
 
-建议新增 helper 或扩展现有 helper：
+当前 helper：
 
 `review-spatiotemporal-relation-alternatives`
 
@@ -340,7 +362,7 @@ artifact 只作为导出，不是唯一事实源。
 
 ## 11. Reporting 与 Evidence Packet
 
-新增 reporting/council 可引用 packet：
+当前 reporting/council 可引用 packet：
 
 `spatiotemporal-relation-evidence-packet`
 
@@ -401,6 +423,8 @@ artifact 只作为导出，不是唯一事实源。
 
 ## 13. 实施顺序
 
+本节保留为实施记录。P0-P5 已按第 1.1 节命令完成基础验收；后续不在本文追加新的工程硬化主题。
+
 ### P0：契约设计
 
 1. 在 canonical contracts 中定义 `spatiotemporal-relation-cue` shape。
@@ -456,7 +480,7 @@ artifact 只作为导出，不是唯一事实源。
 1. challenger 可阻断 relation overclaim。
 2. readiness 能把 relation gap 转为 follow-up task。
 
-### P4：Evidence Packet 与 Demo
+### P4：Evidence Packet 与案例评测
 
 当前基础实现：
 
@@ -469,7 +493,7 @@ artifact 只作为导出，不是唯一事实源。
 
 1. 生成 relation evidence packet。
 2. 接入 finding/evidence bundle/report section basis。
-3. 准备烟气传输 demo 作为 benchmark case。
+3. 以烟气传输议题作为案例评测场景，但不预设固定流程或固定结论。
 
 验收：
 
@@ -486,7 +510,7 @@ artifact 只作为导出，不是唯一事实源。
 1. `tests/test_spatiotemporal_relation_taxonomy.py` 覆盖 structured relation cue、relation query、relation objection、relation probe、evidence packet artifact、显式 basis handoff。
 2. 验收命令：`python3 -m unittest tests.test_spatiotemporal_relation_taxonomy`。
 3. 全量回归命令：`python3 -m unittest discover -s tests`。
-4. `materialize-spatiotemporal-relation-evidence-packet` 可作为 demo/验收链路的最后一步；它不运行 HYSPLIT、WRF-Chem、Gaussian plume、化学传输模型、污染源解析、健康风险或合规裁决。
+4. `materialize-spatiotemporal-relation-evidence-packet` 可作为案例评测/验收链路的一个 reporting 边界检查点；它不运行 HYSPLIT、WRF-Chem、Gaussian plume、化学传输模型、污染源解析、健康风险或合规裁决。
 
 ## 14. 与专业化模型的边界
 
@@ -521,17 +545,19 @@ artifact 只作为导出，不是唯一事实源。
 3. “时空匹配等于因果关系。”
 4. “PM2.5 是系统唯一或主要适用领域。”
 
-## 16. 文档后续更新点
+## 16. 收尾与后续独立计划
 
-完成 P0-P2 后，应同步更新：
+本文不再维护统一后续计划。相关后续工作按独立文档跟踪：
 
-1. `docs/openclaw-project-overview.md`
-2. `docs/openclaw-skills-refactor-checklist-v2.md`
-3. `docs/openclaw-optional-analysis-skills-refactor-workplan.md`
-4. `docs/openclaw-refactor-overall-notes.md`
-
-更新重点：
-
-1. 将 transport-specific wording 调整为 relation-infrastructure wording。
-2. 明确 PM2.5/烟气传输只是 benchmark case。
-3. 明确专业模型另行立项。
+1. `docs/openclaw-case-study-evaluation-workplan.md`
+   - 将 PM2.5 / 烟霾议题作为真实案例评测场景，修复问题后再沉淀可回放轨迹。
+2. `docs/openclaw-db-only-recovery-hardening-workplan.md`
+   - 验证 relation cue、packet、board、reporting 在 artifact 缺失时的 DB-first 恢复。
+3. `docs/openclaw-runtime-governed-execution-workplan.md`
+   - 验证正式 relation helper 和 reporting 链路走 runtime-governed execution。
+4. `docs/openclaw-schema-migration-hardening-workplan.md`
+   - 将 relation metadata/index 和后续 schema 变化纳入 version/migration。
+5. `docs/openclaw-module-decomposition-workplan.md`
+   - 拆分 relation helper 所在大模块，保持行为不变。
+6. `docs/openclaw-ci-quality-gates-workplan.md`
+   - 将 relation taxonomy、helper guardrail 和 case-study replay 纳入回归门。

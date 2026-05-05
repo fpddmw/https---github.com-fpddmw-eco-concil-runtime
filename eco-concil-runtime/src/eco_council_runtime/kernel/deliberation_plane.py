@@ -6858,7 +6858,6 @@ def load_phase2_control_state(
             else {}
         ),
         "report_basis_gate": resolved_gate_record,
-        "report_basis_gate": resolved_gate_record,
         "supervisor": supervisor_record
         or (
             runtime_control_freeze_record.get("supervisor_snapshot", {})

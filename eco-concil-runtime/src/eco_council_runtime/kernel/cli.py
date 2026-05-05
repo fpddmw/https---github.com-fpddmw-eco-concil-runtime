@@ -1497,9 +1497,6 @@ def show_run_state(
             "report_basis_gate": gate_context.get("payload", {})
             if isinstance(gate_context.get("payload"), dict)
             else {},
-            "report_basis_gate": gate_context.get("payload", {})
-            if isinstance(gate_context.get("payload"), dict)
-            else {},
             "controller": controller_context.get("payload", {})
             if isinstance(controller_context.get("payload"), dict)
             else {},
@@ -1512,7 +1509,6 @@ def show_run_state(
             "control_contexts": {
                 "plan": plan_context,
                 "controller": controller_context,
-                "report_basis_gate": gate_context,
                 "report_basis_gate": gate_context,
                 "supervisor": supervisor_context,
             },

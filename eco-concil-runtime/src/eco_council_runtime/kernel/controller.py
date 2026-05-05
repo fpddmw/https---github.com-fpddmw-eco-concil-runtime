@@ -230,7 +230,6 @@ def phase2_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
         "readiness_path": str((run_dir / "reporting" / f"round_readiness_{round_id}.json").resolve()),
         "orchestration_plan_path": str(orchestration_plan_path(run_dir, round_id).resolve()),
         "report_basis_gate_path": str(report_basis_gate_path(run_dir, round_id).resolve()),
-        "report_basis_gate_path": str(report_basis_gate_path(run_dir, round_id).resolve()),
         "report_basis_freeze_path": str((run_dir / "report_basis" / f"frozen_report_basis_{round_id}.json").resolve()),
         "controller_state_path": str(controller_state_path(run_dir, round_id).resolve()),
     }
@@ -1104,9 +1103,7 @@ def run_phase2_round_with_contract_mode(
                         "readiness_status": gate_payload.get("readiness_status"),
                         "report_basis_freeze_allowed": bool(
                             gate_payload.get("report_basis_freeze_allowed")
-                        )
-                        or bool(gate_payload.get("report_basis_freeze_allowed")),
-                        "report_basis_freeze_allowed": bool(gate_payload.get("report_basis_freeze_allowed")),
+                        ),
                         "gate_path": gate_payload.get("output_path"),
                         "readiness_stage_name": readiness_stage_name,
                     },

@@ -1,8 +1,8 @@
-# OpenClaw Skills 架构与扩展计划
+# OpenClaw Skills 架构与治理边界
 
 ## 1. 文档定位
 
-本文描述当前 skills 体系、分层、治理边界和后续扩展计划。文件名保留历史路径，但本文不再是迁移清单。
+本文描述当前 skills 体系、分层和治理边界。文件名保留历史路径，但本文不再是迁移清单或统一扩展计划。
 
 当前 active skills：`82`。
 
@@ -209,17 +209,12 @@
 6. tests
    - 至少覆盖 successful output、missing input、governance boundary。
 
-## 6. 通用时空关系扩展计划
+## 6. 通用时空关系基础设施当前状态
 
-近期建议聚焦 `spatiotemporal-relation` 基础设施，而不是同时补全所有生态环境领域或新增 `transport-investigation` 窄 skill 包。
-
-### 6.1 Relation Infrastructure Skill Set
-
-建议补强：
+`spatiotemporal-relation` 基础设施已作为当前 skills baseline，而不是后续扩展计划。基础能力包括：
 
 1. `detect-temporal-cooccurrence-cues`
-   - 保留 legacy same-day cue。
-   - 在显式 source/target/scope 参数下输出 structured relation cue。
+   - 保留 legacy same-day cue，并在显式 source/target/scope 参数下输出 structured relation cue。
 2. `query-spatiotemporal-relations`
    - 支持按 relation_id、relation_status、source_signal_id、target_signal_id、source_role、target_role 查询。
 3. `review-spatiotemporal-relation-alternatives`
@@ -228,48 +223,38 @@
    - 默认写入 relation evidence packet artifact。
    - 仅在显式 `--write-basis-objects` 下把 relation cues、rejections、challenger objections、uncertainty 转成 finding/evidence bundle/report section 可引用 basis。
 
-### 6.2 Relation Canonical Objects
+该能力仍遵守 optional-analysis 降权原则：relation cue 是候选线索，不是传播证明、污染源归因或报告结论。
 
-建议新增或规范化对象：
+## 7. 真实案例评测链路
 
-1. `spatiotemporal-relation-cue`
-2. `spatiotemporal-relation-evidence-packet`
-3. relation-oriented `challenge` / `probe` fields
-4. structured `verification_scope`
+真实案例评测链路不在本文中继续展开，独立计划见 `docs/openclaw-case-study-evaluation-workplan.md`。
 
-每个对象必须带：
+以下是评测时需要观察的能力节点，不是固定脚本，也不要求每次真实案例运行都按相同顺序成功出现：
 
-1. spatial scope
-2. temporal scope
-3. data sources
-4. evidence refs
-5. lineage
-6. uncertainty / limitations
-7. challenger objections
+1. `scaffold-mission-run` 能初始化受治理 run/round。
+2. `prepare-round` 能生成可审计 source plan。
+3. fetch/import public + environment + fire/weather 能进入 raw/normalized surfaces。
+4. normalize 能写出可查询 signals 和 metadata。
+5. query signals 能返回 item-level evidence refs。
+6. investigator 能提交 finding/evidence bundle。
+7. optional helper 只能输出审计线索。
+8. challenger 能 open challenge 或 falsification probe。
+9. readiness opinion 能在证据不足时标记 `needs-more-data`。
+10. `open-investigation-round` 能从 gap/challenge 派生 follow-up round。
+11. structured relation cue 或 relation evidence packet 能暴露候选关系和不确定性。
+12. proposal/readiness 能承接下一步行动或阻断。
+13. `freeze-report-basis` 只能消费被承接过的 DB basis。
+14. reporting handoff / decision / expert reports / final publication 能保留 evidence index 和 residual disputes。
 
-## 7. Demo 推荐链路
+## 8. 后续清理入口
 
-建议论文/demo 使用以下链路：
+后续清理不在本文维护成总计划，按独立工作面跟踪：
 
-1. `scaffold-mission-run`
-2. `prepare-round`
-3. fetch/import public + environment + fire/weather
-4. normalize
-5. query signals
-6. investigator submit finding/evidence bundle
-7. optional `aggregate-environment-evidence`
-8. optional `discover-discourse-issues`
-9. challenger open challenge
-10. readiness opinion = needs-more-data
-11. `open-investigation-round`
-12. 第二轮补 structured relation cue 或 relation evidence packet
-13. proposal/readiness
-14. `freeze-report-basis`
-15. reporting handoff / decision / expert reports / final publication
-
-## 8. 后续清理
-
-1. 保留现有 skill ids，论文前不要做大规模 breaking rename。
-2. 将 legacy analysis kind query compatibility 标为 query-only。
-3. 将 relation cue / evidence packet 输出优先接入 DB basis。
-4. 后续再清理 `report_basis_*` 命名债、历史 artifact trace 字段和旧 helper module 名称。
+1. `docs/openclaw-module-decomposition-workplan.md`
+   - 拆分大模块，保留现有 skill ids 和 CLI 兼容。
+2. `docs/openclaw-schema-migration-hardening-workplan.md`
+   - 将 schema 变更纳入 version 和 migration ledger。
+3. `docs/openclaw-ci-quality-gates-workplan.md`
+   - 固定 skills 与 runtime 的 targeted 回归门。
+4. `docs/openclaw-runtime-governed-execution-workplan.md`
+   - 将正式运行入口收束到 runtime-governed execution。

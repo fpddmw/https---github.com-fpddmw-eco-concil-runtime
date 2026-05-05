@@ -190,9 +190,7 @@ def supervise_round_with_contract_mode(
             "readiness_status": maybe_text(controller.get("readiness_status")) or "pending",
             "gate_status": maybe_text(controller.get("gate_status")) or "not-evaluated",
             "report_basis_status": maybe_text(controller.get("report_basis_status"))
-            or maybe_text(controller.get("report_basis_status"))
             or "not-evaluated",
-            "report_basis_status": maybe_text(controller.get("report_basis_status")) or "not-evaluated",
             "reporting_ready": bool(reporting_state.get("reporting_ready")),
             "reporting_blockers": (
                 reporting_state.get("reporting_blockers", [])
@@ -206,8 +204,6 @@ def supervise_round_with_contract_mode(
             "planning_mode": maybe_text(controller.get("planning_mode")) or "planner-backed",
             "orchestration_plan_path": artifacts.get("orchestration_plan_path", ""),
             "controller_path": artifacts.get("controller_state_path", ""),
-            "report_basis_gate_path": artifacts.get("report_basis_gate_path", "")
-            or artifacts.get("report_basis_gate_path", ""),
             "report_basis_gate_path": artifacts.get("report_basis_gate_path", ""),
             "report_basis_freeze_path": artifacts.get("report_basis_freeze_path", ""),
             "recommended_next_skills": controller.get("recommended_next_skills", []),
@@ -234,8 +230,6 @@ def supervise_round_with_contract_mode(
             supervisor_snapshot=payload,
             artifact_paths={
                 "controller_state_path": artifacts.get("controller_state_path", ""),
-                "report_basis_gate_path": artifacts.get("report_basis_gate_path", "")
-                or artifacts.get("report_basis_gate_path", ""),
                 "report_basis_gate_path": artifacts.get("report_basis_gate_path", ""),
                 "supervisor_state_path": str(output_file),
             },
@@ -378,8 +372,6 @@ def supervise_round_with_contract_mode(
         "planning_mode": maybe_text(controller.get("planning_mode")) or maybe_text(controller.get("planning", {}).get("planning_mode") if isinstance(controller.get("planning"), dict) else "") or "planner-backed",
         "orchestration_plan_path": artifacts.get("orchestration_plan_path", ""),
         "controller_path": artifacts.get("controller_state_path", ""),
-        "report_basis_gate_path": artifacts.get("report_basis_gate_path", "")
-        or artifacts.get("report_basis_gate_path", ""),
         "report_basis_gate_path": artifacts.get("report_basis_gate_path", ""),
         "report_basis_freeze_path": artifacts.get("report_basis_freeze_path", ""),
         "recommended_next_skills": recommended_next_skills,
@@ -407,8 +399,6 @@ def supervise_round_with_contract_mode(
         supervisor_snapshot=payload,
         artifact_paths={
             "controller_state_path": artifacts.get("controller_state_path", ""),
-            "report_basis_gate_path": artifacts.get("report_basis_gate_path", "")
-            or artifacts.get("report_basis_gate_path", ""),
             "report_basis_gate_path": artifacts.get("report_basis_gate_path", ""),
             "supervisor_state_path": str(output_file),
         },

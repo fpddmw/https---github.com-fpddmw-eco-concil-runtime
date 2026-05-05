@@ -761,10 +761,6 @@ def materialize_reporting_handoff_skill(
                 report_basis_context.get("artifact_present")
             ),
             "report_basis_present": bool(report_basis_context.get("payload_present")),
-            "report_basis_artifact_present": bool(
-                report_basis_context.get("artifact_present")
-            ),
-            "report_basis_present": bool(report_basis_context.get("payload_present")),
             "readiness_artifact_present": bool(
                 readiness_context.get("artifact_present")
             ),
@@ -775,8 +771,6 @@ def materialize_reporting_handoff_skill(
             "supervisor_state_present": bool(supervisor_context.get("payload_present")),
         },
         field_overrides={
-            "report_basis_source": maybe_text(report_basis_context.get("source"))
-            or "missing-report-basis",
             "report_basis_source": maybe_text(report_basis_context.get("source"))
             or "missing-report-basis",
             "readiness_source": (
@@ -923,22 +917,9 @@ def materialize_reporting_handoff_skill(
         "rejected_opinion_ids": rejected_opinion_ids,
         "report_basis_resolution_mode": maybe_text(
             report_basis_freeze.get("report_basis_resolution_mode")
-        )
-        or maybe_text(report_basis_freeze.get("report_basis_resolution_mode")),
-        "report_basis_resolution_reasons": (
-            report_basis_freeze.get("report_basis_resolution_reasons", [])
-            if isinstance(report_basis_freeze.get("report_basis_resolution_reasons"), list)
-            else report_basis_freeze.get("report_basis_resolution_reasons", [])
-            if isinstance(report_basis_freeze.get("report_basis_resolution_reasons"), list)
-            else []
-        ),
-        "report_basis_resolution_mode": maybe_text(
-            report_basis_freeze.get("report_basis_resolution_mode")
         ),
         "report_basis_resolution_reasons": (
             report_basis_freeze.get("report_basis_resolution_reasons", [])
-            if isinstance(report_basis_freeze.get("report_basis_resolution_reasons"), list)
-            else report_basis_freeze.get("report_basis_resolution_reasons", [])
             if isinstance(report_basis_freeze.get("report_basis_resolution_reasons"), list)
             else []
         ),

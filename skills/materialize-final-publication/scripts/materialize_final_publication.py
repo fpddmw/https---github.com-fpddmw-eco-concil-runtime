@@ -615,10 +615,6 @@ def materialize_final_publication_skill(
                 report_basis_context.get("artifact_present")
             ),
             "report_basis_present": bool(report_basis_context.get("payload_present")),
-            "report_basis_artifact_present": bool(
-                report_basis_context.get("artifact_present")
-            ),
-            "report_basis_present": bool(report_basis_context.get("payload_present")),
             "supervisor_state_artifact_present": bool(
                 supervisor_context.get("artifact_present")
             ),
@@ -643,8 +639,6 @@ def materialize_final_publication_skill(
             or "missing-reporting-handoff",
             "decision_source": maybe_text(decision_context.get("source"))
             or "missing-canonical-decision",
-            "report_basis_source": maybe_text(report_basis_context.get("source"))
-            or "missing-report-basis",
             "report_basis_source": maybe_text(report_basis_context.get("source"))
             or "missing-report-basis",
             "supervisor_state_source": maybe_text(supervisor_context.get("source"))
@@ -752,7 +746,6 @@ def materialize_final_publication_skill(
             "audit_refs": {
                 "reporting_handoff_path": str(handoff_file),
                 "decision_path": str(decision_file),
-                "report_basis_path": str(report_basis_file),
                 "report_basis_path": str(report_basis_file),
                 "supervisor_state_path": str(supervisor_file),
                 "decision_trace_ids": unique_texts(

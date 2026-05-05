@@ -246,7 +246,7 @@ optional-analysis helper 的定位是：
 专业可靠性：
 
 1. 当前 helper 多数是启发式、描述性、审计型。
-2. 不应被论文或 demo 表述为专业环境模型。
+2. 不应被论文或案例展示表述为专业环境模型。
 3. 它们可靠地完成“辅助组织证据和暴露不确定性”，不可靠地完成“污染归因或事实裁决”。
 
 ## 6. Challenger 检查点
@@ -262,17 +262,20 @@ challenger 应重点质疑：
 7. temporal cue 是否被误读为传播因果。
 8. helper cue 是否被错误放入报告正文。
 
-## 7. 后续补强计划
+## 7. 后续补强入口
 
-近期不建议扩大 optional helper 数量，而应增强通用时空关系基础设施。
+近期不建议扩大 optional helper 数量。`spatiotemporal-relation` structured relation mode、relation cue、relation query、challenger objection 和 evidence packet 已进入当前 baseline。
 
-优先补强：
+后续重点是硬化运行、恢复和展示边界，分别由独立计划跟踪：
 
-1. 继续硬化 `detect-temporal-cooccurrence-cues` structured relation mode。
-2. 继续硬化 `spatiotemporal-relation-cue` analysis plane result set。
-3. 继续硬化 `signal_role` / `environment_signal_class` metadata query basis。
-4. 继续硬化 relation-oriented query 和 challenger objection 字段。
-5. `materialize-spatiotemporal-relation-evidence-packet` 默认只写 artifact；显式 `--write-basis-objects` 时承接到 evidence bundle / report section draft。
+1. `docs/openclaw-db-only-recovery-hardening-workplan.md`
+   - 验证 helper artifact 缺失时，analysis/result set、council object 和 reporting basis 能从 DB 恢复。
+2. `docs/openclaw-runtime-governed-execution-workplan.md`
+   - 验证 optional-analysis helper 在正式运行中必须经过 approval、receipt 和 ledger。
+3. `docs/openclaw-case-study-evaluation-workplan.md`
+   - 在真实案例评测中验证报告只使用 cautious/withheld 表述，不把 helper cue 误写成结论。
+4. `docs/openclaw-ci-quality-gates-workplan.md`
+   - 将 helper-not-report-basis、approval-gated 和 relation overclaim guardrail 纳入回归门。
 
 验收标准：
 

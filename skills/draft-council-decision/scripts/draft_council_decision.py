@@ -289,16 +289,10 @@ def draft_council_decision_skill(
                 report_basis_context.get("artifact_present")
             ),
             "report_basis_present": bool(report_basis_context.get("payload_present")),
-            "report_basis_artifact_present": bool(
-                report_basis_context.get("artifact_present")
-            ),
-            "report_basis_present": bool(report_basis_context.get("payload_present")),
         },
         field_overrides={
             "reporting_handoff_source": maybe_text(handoff_context.get("source"))
             or "missing-reporting-handoff",
-            "report_basis_source": maybe_text(report_basis_context.get("source"))
-            or "missing-report-basis",
             "report_basis_source": maybe_text(report_basis_context.get("source"))
             or "missing-report-basis",
         },
@@ -457,7 +451,6 @@ def draft_council_decision_skill(
         "selected_evidence_refs": selected_evidence_refs,
         "audit_refs": {
             "reporting_handoff_path": str(handoff_file),
-            "report_basis_path": str(report_basis_file),
             "report_basis_path": str(report_basis_file),
             "readiness_path": maybe_text(handoff.get("readiness_path")),
             "supervisor_state_path": maybe_text(handoff.get("supervisor_state_path")),
