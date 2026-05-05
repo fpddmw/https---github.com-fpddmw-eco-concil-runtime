@@ -678,6 +678,38 @@ POLICIES.update(
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
+        "materialize-spatiotemporal-relation-evidence-packet": _policy(
+            skill_name="materialize-spatiotemporal-relation-evidence-packet",
+            skill_layer=SKILL_LAYER_REPORTING,
+            allowed_roles=[
+                ROLE_MODERATOR,
+                ROLE_REPORT_EDITOR,
+                ROLE_ENVIRONMENTAL_INVESTIGATOR,
+            ],
+            required_capabilities=[CAPABILITY_REPORT_DRAFT],
+            side_effect_scope=[
+                "artifact-write",
+                "db-read",
+                "db-write:deliberation",
+                "db-write:reporting",
+            ],
+            db_write_planes=["deliberation", "reporting"],
+            input_object_kinds=[
+                "spatiotemporal-relation-cue",
+                "challenge",
+                "probe",
+                "review-comment",
+            ],
+            output_object_kinds=[
+                "spatiotemporal-relation-evidence-packet",
+                "finding",
+                "evidence-bundle",
+                "report-section-draft",
+            ],
+            write_scope=WRITE_SCOPE_REPORTING,
+            requires_operator_approval=True,
+            default_actor_role_hint=ROLE_REPORT_EDITOR,
+        ),
         "draft-council-decision": _policy(
             skill_name="draft-council-decision",
             skill_layer=SKILL_LAYER_REPORTING,

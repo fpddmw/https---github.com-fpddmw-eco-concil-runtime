@@ -4,7 +4,7 @@
 
 本文描述当前 skills 体系、分层、治理边界和后续扩展计划。文件名保留历史路径，但本文不再是迁移清单。
 
-当前 active skills：`81`。
+当前 active skills：`82`。
 
 分层统计：
 
@@ -13,7 +13,7 @@
 3. `query`: 9
 4. `optional-analysis`: 17
 5. `deliberation-write`: 9
-6. `reporting`: 7
+6. `reporting`: 8
 7. `state-transition`: 4
 8. `runtime-admin`: 2
 
@@ -140,12 +140,13 @@
 代表技能：
 
 1. `materialize-reporting-handoff`
-2. `draft-council-decision`
-3. `draft-expert-report`
-4. `publish-expert-report`
-5. `publish-council-decision`
-6. `materialize-final-publication`
-7. `materialize-history-context`
+2. `materialize-spatiotemporal-relation-evidence-packet`
+3. `draft-council-decision`
+4. `draft-expert-report`
+5. `publish-expert-report`
+6. `publish-council-decision`
+7. `materialize-final-publication`
+8. `materialize-history-context`
 
 职责：
 
@@ -223,8 +224,9 @@
    - 支持按 relation_id、relation_status、source_signal_id、target_signal_id、source_role、target_role 查询。
 3. `review-spatiotemporal-relation-alternatives`
    - 输出 objection candidates，由 challenge/probe/review comment 承接。
-4. `spatiotemporal-relation-evidence-packet`
-   - 把 relation cues、rejections、challenger objections、uncertainty 转成 finding/evidence bundle/report section 可引用 basis。
+4. `materialize-spatiotemporal-relation-evidence-packet`
+   - 默认写入 relation evidence packet artifact。
+   - 仅在显式 `--write-basis-objects` 下把 relation cues、rejections、challenger objections、uncertainty 转成 finding/evidence bundle/report section 可引用 basis。
 
 ### 6.2 Relation Canonical Objects
 

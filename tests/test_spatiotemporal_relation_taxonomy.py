@@ -775,6 +775,265 @@ class SpatiotemporalRelationTaxonomyTests(unittest.TestCase):
                 probe_query["objects"][0]["objection_code"],
             )
 
+    def test_relation_evidence_packet_defaults_to_artifact_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            detection_payload = run_structured_relation_detection(run_dir)
+            relation = detection_payload["spatiotemporal_relation_cues"][0]
+            relation_id = str(relation["relation_id"])
+
+            policy = resolve_skill_policy(
+                "materialize-spatiotemporal-relation-evidence-packet"
+            )
+            self.assertEqual("reporting", policy["skill_layer"])
+            self.assertTrue(policy["requires_operator_approval"])
+            self.assertIn("reporting", policy["db_write_planes"])
+
+            packet_payload = run_script(
+                script_path("materialize-spatiotemporal-relation-evidence-packet"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--relation-id",
+                relation_id,
+            )
+            self.assertEqual("completed", packet_payload["status"])
+            self.assertEqual(0, packet_payload["summary"]["basis_object_write_count"])
+            packet = load_json(Path(packet_payload["summary"]["output_path"]))
+            self.assertEqual(
+                "spatiotemporal-relation-evidence-packet-v1",
+                packet["schema_version"],
+            )
+            self.assertEqual([relation_id], packet["accepted_relation_cue_ids"])
+            self.assertFalse(packet["basis_handoff"]["write_basis_objects"])
+            self.assertEqual({}, packet["basis_handoff"]["written_records"])
+            self.assertIn(
+                "not as causal or attribution findings",
+                packet["relation_cues_summary"]["accepted_semantics"],
+            )
+
+            finding_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "finding",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-kind",
+                "spatiotemporal-relation-evidence-packet",
+                "--target-id",
+                packet["packet_id"],
+            )
+            bundle_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "evidence-bundle",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-kind",
+                "spatiotemporal-relation-evidence-packet",
+                "--target-id",
+                packet["packet_id"],
+            )
+            section_query = run_kernel(
+                "query-reporting-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "report-section-draft",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            self.assertEqual(0, finding_query["summary"]["matching_object_count"])
+            self.assertEqual(0, bundle_query["summary"]["matching_object_count"])
+            self.assertEqual(0, section_query["summary"]["matching_object_count"])
+
+    def test_relation_evidence_packet_writes_mediated_basis_objects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            detection_payload = run_structured_relation_detection(run_dir)
+            relation = detection_payload["spatiotemporal_relation_cues"][0]
+            relation_id = str(relation["relation_id"])
+
+            alternatives_payload = run_script(
+                script_path("review-spatiotemporal-relation-alternatives"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--relation-id",
+                relation_id,
+            )
+            candidate = next(
+                item
+                for item in alternatives_payload["objection_candidates"]
+                if item["objection_code"] == "report-overclaim-risk"
+            )
+            evidence_ref = candidate["evidence_refs"][0]["artifact_ref"]
+            challenge_payload = run_script(
+                script_path("open-challenge-ticket"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Review spatiotemporal relation overclaim risk",
+                "--challenge-statement",
+                "Candidate relation cue must not be used as causality or source attribution.",
+                "--priority",
+                "high",
+                "--owner-role",
+                "challenger",
+                "--linked-artifact-ref",
+                evidence_ref,
+                "--relation-id",
+                relation_id,
+                "--objection-code",
+                candidate["objection_code"],
+                "--challenged-rule",
+                candidate["challenged_rule"],
+                "--alternative-explanation",
+                candidate["alternative_explanation"],
+                "--required-followup-evidence",
+                candidate["required_followup_evidence"][0],
+                "--report-risk",
+                candidate["report_risk"],
+            )
+            self.assertEqual("completed", challenge_payload["status"])
+
+            packet_payload = run_script(
+                script_path("materialize-spatiotemporal-relation-evidence-packet"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--relation-id",
+                relation_id,
+                "--write-basis-objects",
+            )
+            self.assertEqual("completed", packet_payload["status"])
+            self.assertEqual(3, packet_payload["summary"]["basis_object_write_count"])
+            packet = load_json(Path(packet_payload["summary"]["output_path"]))
+            packet_id = packet["packet_id"]
+            packet_ref = packet["basis_handoff"]["packet_artifact_ref"]["artifact_ref"]
+            self.assertEqual([relation_id], packet["accepted_relation_cue_ids"])
+            self.assertIn(
+                "report-overclaim-risk",
+                [
+                    item["objection_code"]
+                    for item in packet["challenger_objections"]
+                ],
+            )
+            self.assertIn(
+                "challenger-objection",
+                [item["uncertainty_kind"] for item in packet["uncertainty_register"]],
+            )
+            self.assertIn(
+                "proves transport",
+                packet["report_use_constraints"]["prohibited_claims"],
+            )
+            self.assertIn(
+                "report-section-draft",
+                packet["report_use_constraints"]["required_mediation"],
+            )
+            self.assertIn(
+                candidate["required_followup_evidence"][0],
+                packet["board_handoff"]["gap_hints"],
+            )
+            self.assertIn(
+                candidate["report_risk"],
+                packet_payload["board_handoff"]["gap_hints"],
+            )
+            self.assertIn(
+                "report-overclaim-risk",
+                packet_payload["board_handoff"]["challenge_hints"],
+            )
+
+            finding_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "finding",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-kind",
+                "spatiotemporal-relation-evidence-packet",
+                "--target-id",
+                packet_id,
+            )
+            bundle_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "evidence-bundle",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-kind",
+                "spatiotemporal-relation-evidence-packet",
+                "--target-id",
+                packet_id,
+            )
+            section_query = run_kernel(
+                "query-reporting-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "report-section-draft",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--status",
+                "draft",
+            )
+            self.assertEqual(1, finding_query["summary"]["matching_object_count"])
+            self.assertEqual(1, bundle_query["summary"]["matching_object_count"])
+            self.assertEqual(1, section_query["summary"]["matching_object_count"])
+            finding = finding_query["objects"][0]
+            bundle = bundle_query["objects"][0]
+            section = section_query["objects"][0]
+            self.assertEqual(packet_id, finding["target_id"])
+            self.assertEqual(packet_id, bundle["target_id"])
+            self.assertIn(packet_id, finding["basis_object_ids"])
+            self.assertIn(packet_id, bundle["basis_object_ids"])
+            self.assertTrue(
+                any(
+                    isinstance(ref, dict) and ref.get("artifact_ref") == packet_ref
+                    for ref in finding["evidence_refs"]
+                )
+            )
+            self.assertIn(
+                "do not establish causality",
+                section["section_text"],
+            )
+            self.assertNotIn("proves transport", section["section_text"])
+            self.assertIn(packet_id, section["basis_object_ids"])
+            self.assertFalse((run_dir / "report_basis").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -87,7 +87,7 @@
 2. `signal_role` / `environment_signal_class` metadata。
 3. `detect-temporal-cooccurrence-cues` structured relation mode。
 4. relation-oriented challenger objection fields。
-5. `spatiotemporal-relation-evidence-packet`。
+5. `materialize-spatiotemporal-relation-evidence-packet`。
 
 可以暂缓：
 

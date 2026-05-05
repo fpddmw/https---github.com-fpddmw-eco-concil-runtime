@@ -272,7 +272,7 @@ challenger 应重点质疑：
 2. 继续硬化 `spatiotemporal-relation-cue` analysis plane result set。
 3. 继续硬化 `signal_role` / `environment_signal_class` metadata query basis。
 4. 继续硬化 relation-oriented query 和 challenger objection 字段。
-5. `spatiotemporal-relation-evidence-packet` 到 evidence bundle / report section draft 的显式承接。
+5. `materialize-spatiotemporal-relation-evidence-packet` 默认只写 artifact；显式 `--write-basis-objects` 时承接到 evidence bundle / report section draft。
 
 验收标准：
 

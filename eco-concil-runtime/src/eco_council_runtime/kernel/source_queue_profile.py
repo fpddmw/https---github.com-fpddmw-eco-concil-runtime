@@ -151,6 +151,7 @@ DELIBERATION_WRITE_SKILLS = {
 
 REPORTING_SKILLS = {
     "materialize-reporting-handoff",
+    "materialize-spatiotemporal-relation-evidence-packet",
     "draft-council-decision",
     "draft-expert-report",
     "publish-expert-report",
@@ -315,6 +316,7 @@ def source_queue_profile(skill_name: str) -> dict[str, object]:
             requires_explicit_approval=skill_name
             in {
                 "materialize-reporting-handoff",
+                "materialize-spatiotemporal-relation-evidence-packet",
                 "draft-council-decision",
                 "publish-expert-report",
                 "publish-council-decision",

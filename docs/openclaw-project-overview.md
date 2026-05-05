@@ -177,8 +177,9 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
    - `open-challenge-ticket`、`open-falsification-probe`、`post-review-comment` 支持 relation_id、objection_code、challenged_rule、alternative_explanation、required_followup_evidence、report_risk。
 6. `review-spatiotemporal-relation-alternatives`
    - 输出 relation objection candidates，必须经 challenge/probe/review comment 承接后才能进入后续报告链。
-7. `spatiotemporal-relation-evidence-packet`
-   - 后续把 relation cues、rejections、challenger objections 和 uncertainty register 转成 council/reporting 可引用材料。
+7. `materialize-spatiotemporal-relation-evidence-packet`
+   - 默认把 relation cues、rejections、challenger objections 和 uncertainty register 写成 packet artifact。
+   - 仅在显式 `--write-basis-objects` 下写入 finding/evidence bundle/report section draft 承接对象。
 
 ### 8.3 工程硬化
 

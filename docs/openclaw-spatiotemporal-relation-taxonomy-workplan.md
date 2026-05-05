@@ -458,6 +458,15 @@ artifact 只作为导出，不是唯一事实源。
 
 ### P4：Evidence Packet 与 Demo
 
+当前基础实现：
+
+1. `materialize-spatiotemporal-relation-evidence-packet` 已生成 `spatiotemporal-relation-evidence-packet-v1` artifact。
+2. packet 汇总 relation cues、accepted/rejected-or-weak cue ids、challenger objections、uncertainty register、report use constraints、evidence refs、lineage 和 `board_handoff.gap_hints`。
+3. 默认模式只写 artifact；显式 `--write-basis-objects` 时写入 finding、evidence bundle 和 report section draft。
+4. report section draft 文本只表述 candidate relation cue、weak/rejected cue、challenger objection 和不确定性约束，不写 causality、transport proof、source attribution 或 local source exclusion。
+
+原计划任务：
+
 1. 生成 relation evidence packet。
 2. 接入 finding/evidence bundle/report section basis。
 3. 准备烟气传输 demo 作为 benchmark case。
@@ -467,6 +476,17 @@ artifact 只作为导出，不是唯一事实源。
 1. 报告只表述候选关系和不确定性。
 2. helper artifact 不直通 report basis。
 3. 多轮调查能 carry over relation gap。
+
+### P5：验收准备
+
+本文档此前没有单独定义 P5 能力范围；本次 P5 只作为验收准备，不扩展第 14 节排除的专业模型能力。
+
+当前验收面：
+
+1. `tests/test_spatiotemporal_relation_taxonomy.py` 覆盖 structured relation cue、relation query、relation objection、relation probe、evidence packet artifact、显式 basis handoff。
+2. 验收命令：`python3 -m unittest tests.test_spatiotemporal_relation_taxonomy`。
+3. 全量回归命令：`python3 -m unittest discover -s tests`。
+4. `materialize-spatiotemporal-relation-evidence-packet` 可作为 demo/验收链路的最后一步；它不运行 HYSPLIT、WRF-Chem、Gaussian plume、化学传输模型、污染源解析、健康风险或合规裁决。
 
 ## 14. 与专业化模型的边界
 
