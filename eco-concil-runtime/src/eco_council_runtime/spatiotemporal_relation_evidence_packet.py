@@ -178,6 +178,8 @@ def collect_relation_deliberation_objects(
     relation_ids: list[str],
 ) -> list[dict[str, Any]]:
     relation_id_set = set(relation_ids)
+    if not relation_id_set:
+        return []
     results: list[dict[str, Any]] = []
     for object_kind in ("challenge", "review-comment", "probe"):
         payload = query_council_objects(

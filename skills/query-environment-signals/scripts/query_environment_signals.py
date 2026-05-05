@@ -77,6 +77,13 @@ def maybe_text(value: Any) -> str:
     return normalize_space(value)
 
 
+def decode_json(text: str, default: Any) -> Any:
+    try:
+        return json.loads(text or json.dumps(default, ensure_ascii=True))
+    except json.JSONDecodeError:
+        return default
+
+
 def unique_texts(values: list[Any]) -> list[str]:
     seen: set[str] = set()
     results: list[str] = []
@@ -219,7 +226,71 @@ def quality_match(row: sqlite3.Row, wanted: list[str]) -> bool:
     return bool(flags.intersection(wanted_flags))
 
 
+def metadata_payload(row: sqlite3.Row) -> dict[str, Any]:
+    payload = decode_json(row["metadata_json"], {})
+    return payload if isinstance(payload, dict) else {}
+
+
+def metric_family(metric: Any) -> str:
+    normalized = maybe_text(metric).casefold().replace(".", "_").replace("-", "_")
+    if normalized in {
+        "pm25",
+        "pm2_5",
+        "pm2_5_",
+        "pm2_5m",
+        "pm10",
+        "pm_10",
+        "ozone",
+        "o3",
+        "nitrogen_dioxide",
+        "sulfur_dioxide",
+        "sulphur_dioxide",
+        "carbon_monoxide",
+        "us_aqi",
+    }:
+        return "air-quality"
+    if normalized in {
+        "temperature_2m",
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "relative_humidity_2m",
+        "precipitation",
+        "precipitation_sum",
+        "rain",
+    }:
+        return "meteorology"
+    if normalized in {
+        "river_discharge",
+        "river_discharge_mean",
+        "river_discharge_max",
+        "river_discharge_min",
+        "gage_height",
+    }:
+        return "hydrology"
+    if normalized in {"fire_detection", "fire_detection_count"}:
+        return "fire-detection"
+    if normalized:
+        return "other"
+    return ""
+
+
+def timestamp_text(row: sqlite3.Row) -> str:
+    return maybe_text(
+        row["observed_at_utc"]
+        or row["window_start_utc"]
+        or row["window_end_utc"]
+        or row["published_at_utc"]
+        or row["captured_at_utc"]
+    )
+
+
+def has_coordinates(row: sqlite3.Row) -> bool:
+    return row["latitude"] is not None and row["longitude"] is not None
+
+
 def compact_result(row: sqlite3.Row) -> dict[str, Any]:
+    metadata = metadata_payload(row)
+    resolved_metric_family = metric_family(row["metric"])
     return with_signal_evidence_fields(
         {
             "signal_id": row["signal_id"],
@@ -233,11 +304,18 @@ def compact_result(row: sqlite3.Row) -> dict[str, Any]:
                 canonical_object_kind=maybe_text(row["canonical_object_kind"]),
             ),
             "metric": maybe_text(row["metric"]),
+            "metric_family": resolved_metric_family,
             "value": row["numeric_value"],
             "unit": maybe_text(row["unit"]),
             "observed_at_utc": maybe_text(row["observed_at_utc"]),
             "location": {"latitude": row["latitude"], "longitude": row["longitude"]},
-            "quality_flags": json.loads(row["quality_flags_json"] or "[]"),
+            "has_coordinates": has_coordinates(row),
+            "has_timestamp": bool(timestamp_text(row)),
+            "signal_role": maybe_text(metadata.get("signal_role")),
+            "environment_signal_class": maybe_text(
+                metadata.get("environment_signal_class")
+            ),
+            "quality_flags": decode_json(row["quality_flags_json"], []),
         },
         row,
         plane="environment",
@@ -256,6 +334,11 @@ def query_environment_signals_skill(
     db_path: str,
     source_skill: str,
     metric: str,
+    signal_role: str,
+    environment_signal_class: str,
+    metric_families: list[str],
+    has_coordinates_required: bool,
+    has_timestamp_required: bool,
     observed_after_utc: str,
     observed_before_utc: str,
     bbox: dict[str, float] | None,
@@ -282,7 +365,21 @@ def query_environment_signals_skill(
             continue
         if maybe_text(metric) and maybe_text(row["metric"]) != maybe_text(metric):
             continue
-        observed = maybe_text(row["observed_at_utc"] or row["window_start_utc"])
+        metadata = metadata_payload(row)
+        if maybe_text(signal_role) and maybe_text(metadata.get("signal_role")) != maybe_text(signal_role):
+            continue
+        if maybe_text(environment_signal_class) and maybe_text(metadata.get("environment_signal_class")) != maybe_text(environment_signal_class):
+            continue
+        wanted_metric_families = {
+            maybe_text(value) for value in metric_families if maybe_text(value)
+        }
+        if wanted_metric_families and metric_family(row["metric"]) not in wanted_metric_families:
+            continue
+        if has_coordinates_required and not has_coordinates(row):
+            continue
+        observed = timestamp_text(row)
+        if has_timestamp_required and not observed:
+            continue
         if maybe_text(observed_after_utc) and observed and observed < maybe_text(observed_after_utc):
             continue
         if maybe_text(observed_before_utc) and observed and observed > maybe_text(observed_before_utc):
@@ -306,6 +403,15 @@ def query_environment_signals_skill(
             "matched_round_ids": matched_round_ids,
             "result_count": len(limited),
             "db_path": str(db_file),
+            "filters": {
+                "source_skill": maybe_text(source_skill),
+                "metric": maybe_text(metric),
+                "signal_role": maybe_text(signal_role),
+                "environment_signal_class": maybe_text(environment_signal_class),
+                "metric_families": unique_texts(metric_families),
+                "has_coordinates": bool(has_coordinates_required),
+                "has_timestamp": bool(has_timestamp_required),
+            },
         },
         "result_count": len(limited),
         "results": [compact_result(row) for row in limited],
@@ -336,6 +442,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db-path", default="")
     parser.add_argument("--source-skill", default="")
     parser.add_argument("--metric", default="")
+    parser.add_argument("--signal-role", default="")
+    parser.add_argument("--environment-signal-class", default="")
+    parser.add_argument("--metric-family", action="append", default=[])
+    parser.add_argument("--has-coordinates", action="store_true")
+    parser.add_argument("--has-timestamp", action="store_true")
     parser.add_argument("--observed-after-utc", default="")
     parser.add_argument("--observed-before-utc", default="")
     parser.add_argument("--bbox", nargs=4, type=float, metavar=("WEST", "SOUTH", "EAST", "NORTH"))
@@ -358,6 +469,11 @@ def main() -> int:
         db_path=args.db_path,
         source_skill=args.source_skill,
         metric=args.metric,
+        signal_role=args.signal_role,
+        environment_signal_class=args.environment_signal_class,
+        metric_families=args.metric_family,
+        has_coordinates_required=args.has_coordinates,
+        has_timestamp_required=args.has_timestamp,
         observed_after_utc=args.observed_after_utc,
         observed_before_utc=args.observed_before_utc,
         bbox=bbox,

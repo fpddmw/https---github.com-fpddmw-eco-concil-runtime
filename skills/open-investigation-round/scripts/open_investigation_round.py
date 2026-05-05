@@ -308,6 +308,28 @@ def next_action_tasks(
         )
         task["carryover_from_action_id"] = maybe_text(action.get("action_id"))
         task["action_kind"] = maybe_text(action.get("action_kind"))
+        for field_name in (
+            "relation_id",
+            "objection_code",
+            "challenged_rule",
+            "alternative_explanation",
+            "report_risk",
+        ):
+            field_value = maybe_text(action.get(field_name))
+            if field_value:
+                task[field_name] = field_value
+        if isinstance(action.get("required_followup_evidence"), list):
+            task["required_followup_evidence"] = unique_texts(
+                action["required_followup_evidence"]
+            )
+        if isinstance(action.get("target"), dict):
+            target = {
+                key: maybe_text(value)
+                for key, value in action["target"].items()
+                if maybe_text(value)
+            }
+            if target:
+                task["target"] = target
         results.append(task)
     return results
 

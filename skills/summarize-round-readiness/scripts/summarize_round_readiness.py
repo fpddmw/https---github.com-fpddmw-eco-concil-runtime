@@ -234,6 +234,7 @@ def readiness_status(
     representation_gap_actions: int,
     formal_linkage_actions: int,
     issue_gap_actions: int,
+    relation_gap_actions: int,
 ) -> tuple[str, list[str]]:
     reasons: list[str] = []
     if active_hypotheses == 0 and issue_cluster_count == 0:
@@ -257,6 +258,8 @@ def readiness_status(
         reasons.append(f"{formal_linkage_actions} formal/public linkage actions remain unresolved.")
     if issue_gap_actions > 0:
         reasons.append(f"{issue_gap_actions} issue-structure or contestation actions remain unresolved.")
+    if relation_gap_actions > 0:
+        reasons.append(f"{relation_gap_actions} spatiotemporal relation gap actions remain unresolved.")
     if high_priority_actions > 0 and not reasons:
         reasons.append(f"{high_priority_actions} high-priority investigation actions remain unresolved.")
     if reasons:
@@ -445,6 +448,28 @@ def summarize_round_readiness_skill(
     issue_gap_actions = int(action_gap_counts.get("issue-structure-gap", 0)) + int(
         action_gap_counts.get("unresolved-contestation", 0)
     )
+    relation_gap_actions = len(
+        [
+            item
+            for item in blocking_actions
+            if maybe_text(item.get("relation_id"))
+            or maybe_text(item.get("action_kind"))
+            in {
+                "review-spatiotemporal-relation",
+                "review-spatiotemporal-relation-alternatives",
+            }
+            or maybe_text(item.get("controversy_gap"))
+            in {
+                "spatiotemporal-relation-gap",
+                "relation-overclaim-risk",
+            }
+            or (
+                isinstance(item.get("target"), dict)
+                and maybe_text(item["target"].get("object_kind"))
+                == "spatiotemporal-relation-cue"
+            )
+        ]
+    )
     diffusion_focus_count = int(agenda_counts.get("diffusion_focus_count") or 0)
 
     status_value, reasons = readiness_status(
@@ -467,6 +492,7 @@ def summarize_round_readiness_skill(
         representation_gap_actions=representation_gap_actions,
         formal_linkage_actions=formal_linkage_actions,
         issue_gap_actions=issue_gap_actions,
+        relation_gap_actions=relation_gap_actions,
     )
     decision_source = "policy-fallback"
     readiness_lineage = unique_texts(
@@ -563,7 +589,8 @@ def summarize_round_readiness_skill(
                 f"stakeholder_deliberation_issues={stakeholder_deliberation_issue_count}, "
                 f"representation_gap_actions={representation_gap_actions}, "
                 f"formal_linkage_actions={formal_linkage_actions}, "
-                f"issue_gap_actions={issue_gap_actions}"
+                f"issue_gap_actions={issue_gap_actions}, "
+                f"relation_gap_actions={relation_gap_actions}"
             ),
             "confidence": "medium",
         },
@@ -595,8 +622,12 @@ def summarize_round_readiness_skill(
             or representation_gap_actions > 0
             or formal_linkage_actions > 0
             or issue_gap_actions > 0
+            or relation_gap_actions > 0
         ):
             recommended_next_skills.append("open-falsification-probe")
+        if relation_gap_actions > 0:
+            recommended_next_skills.append("query-spatiotemporal-relations")
+            recommended_next_skills.append("review-spatiotemporal-relation-alternatives")
         if representation_gap_actions > 0 or formal_linkage_actions > 0:
             recommended_next_skills.append("compare-formal-public-footprints")
             recommended_next_skills.append("identify-representation-audit-cues")
@@ -613,8 +644,11 @@ def summarize_round_readiness_skill(
             "submit-council-proposal",
             "submit-readiness-opinion",
         ]
-        if open_probes > 0 or routing_actions > 0 or empirical_gap_actions > 0:
+        if open_probes > 0 or routing_actions > 0 or empirical_gap_actions > 0 or relation_gap_actions > 0:
             recommended_next_skills.append("open-falsification-probe")
+        if relation_gap_actions > 0:
+            recommended_next_skills.append("query-spatiotemporal-relations")
+            recommended_next_skills.append("review-spatiotemporal-relation-alternatives")
         if representation_gap_actions > 0 or formal_linkage_actions > 0:
             recommended_next_skills.append("compare-formal-public-footprints")
             recommended_next_skills.append("identify-representation-audit-cues")
@@ -689,6 +723,7 @@ def summarize_round_readiness_skill(
             "representation_gap_actions": representation_gap_actions,
             "formal_linkage_actions": formal_linkage_actions,
             "issue_gap_actions": issue_gap_actions,
+            "relation_gap_actions": relation_gap_actions,
             "diffusion_focus_count": diffusion_focus_count,
             "agent_readiness_opinions": len(council_opinions),
         },

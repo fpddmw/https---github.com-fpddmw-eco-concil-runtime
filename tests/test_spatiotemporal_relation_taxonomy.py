@@ -8,7 +8,9 @@ import unittest
 from pathlib import Path
 
 from _workflow_support import (
+    investigation_path,
     load_json,
+    request_and_approve_transition,
     run_kernel,
     run_script,
     runtime_src_path,
@@ -42,6 +44,7 @@ from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
     insert_signals,
 )
 from eco_council_runtime.kernel.skill_registry import resolve_skill_policy  # noqa: E402
+from eco_council_runtime.kernel.role_contracts import role_capabilities  # noqa: E402
 
 RUN_ID = "run-spatiotemporal-taxonomy-001"
 ROUND_ID = "round-spatiotemporal-taxonomy-001"
@@ -384,6 +387,61 @@ class SpatiotemporalRelationTaxonomyTests(unittest.TestCase):
             }
             self.assertIn(("signal_role", "receptor-observation"), indexed_pairs)
             self.assertIn(("environment_signal_class", "air-quality"), indexed_pairs)
+
+    def test_environment_and_normalized_queries_filter_relation_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            seed_structured_relation_signals(run_dir)
+
+            environment_query = run_script(
+                script_path("query-environment-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--signal-role",
+                "source-event",
+                "--environment-signal-class",
+                "fire-detection",
+                "--metric-family",
+                "fire-detection",
+                "--has-coordinates",
+                "--has-timestamp",
+            )
+            self.assertEqual(1, environment_query["result_count"])
+            self.assertEqual("signal-fire-001", environment_query["results"][0]["signal_id"])
+            self.assertEqual("source-event", environment_query["results"][0]["signal_role"])
+            self.assertEqual(
+                "fire-detection",
+                environment_query["results"][0]["environment_signal_class"],
+            )
+
+            normalized_query = run_script(
+                script_path("query-normalized-signal"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--plane",
+                "environment",
+                "--signal-role",
+                "receptor-observation",
+                "--environment-signal-class",
+                "air-quality",
+            )
+            self.assertEqual(
+                "normalized-signal-metadata-query-v1",
+                normalized_query["schema_version"],
+            )
+            self.assertEqual(1, normalized_query["result_count"])
+            self.assertEqual(
+                "signal-pm25-001",
+                normalized_query["results"][0]["signal_id"],
+            )
 
     def test_temporal_helper_freeze_line_carries_relation_taxonomy_version(self) -> None:
         policy = resolve_skill_policy("detect-temporal-cooccurrence-cues")
@@ -775,6 +833,152 @@ class SpatiotemporalRelationTaxonomyTests(unittest.TestCase):
                 probe_query["objects"][0]["objection_code"],
             )
 
+    def test_readiness_and_followup_round_carry_relation_gap_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            detection_payload = run_structured_relation_detection(run_dir)
+            relation = detection_payload["spatiotemporal_relation_cues"][0]
+            relation_id = str(relation["relation_id"])
+            evidence_ref = relation["evidence_refs"][0]["artifact_ref"]
+
+            hypothesis_payload = run_script(
+                script_path("update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Candidate relation needs follow-up",
+                "--statement",
+                "Candidate spatiotemporal relation should remain under review before report use.",
+                "--status",
+                "active",
+                "--owner-role",
+                "moderator",
+                "--linked-claim-id",
+                relation_id,
+                "--linked-artifact-ref",
+                evidence_ref,
+                "--confidence",
+                "0.5",
+            )
+            self.assertEqual("completed", hypothesis_payload["status"])
+
+            next_actions_path = investigation_path(run_dir, f"next_actions_{ROUND_ID}.json")
+            next_actions_payload = {
+                "schema_version": "moderator-next-actions-v1",
+                "skill": "summarize-round-readiness",
+                "run_id": RUN_ID,
+                "round_id": ROUND_ID,
+                "generated_at_utc": "2026-05-02T00:00:00Z",
+                "action_source": "unit-test",
+                "ranked_actions": [
+                    {
+                        "action_id": "action-relation-followup-001",
+                        "run_id": RUN_ID,
+                        "round_id": ROUND_ID,
+                        "action_kind": "review-spatiotemporal-relation",
+                        "assigned_role": "challenger",
+                        "priority": "high",
+                        "objective": "Carry relation gap into the follow-up round.",
+                        "reason": "Candidate relation cue is not ready for report use.",
+                        "controversy_gap": "spatiotemporal-relation-gap",
+                        "readiness_blocker": True,
+                        "relation_id": relation_id,
+                        "objection_code": "report-overclaim-risk",
+                        "challenged_rule": "spatiotemporal-window-candidate",
+                        "alternative_explanation": "Candidate relation may be coincidental.",
+                        "required_followup_evidence": [
+                            "Collect local alternative source checks before report use."
+                        ],
+                        "report_risk": "overclaim-if-used-as-causality",
+                        "target": {
+                            "object_kind": "spatiotemporal-relation-cue",
+                            "object_id": relation_id,
+                        },
+                        "evidence_refs": [evidence_ref],
+                        "source_ids": [relation_id],
+                        "lineage": [relation_id],
+                        "decision_source": "unit-test",
+                    }
+                ],
+            }
+            write_json(next_actions_path, next_actions_payload)
+            store_moderator_action_records(
+                run_dir,
+                action_snapshot=next_actions_payload,
+                artifact_path=str(next_actions_path),
+            )
+
+            readiness_payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            readiness_artifact = load_json(
+                run_dir / "reporting" / f"round_readiness_{ROUND_ID}.json"
+            )
+            self.assertEqual(
+                "needs-more-data",
+                readiness_payload["summary"]["readiness_status"],
+            )
+            self.assertEqual(1, readiness_artifact["counts"]["relation_gap_actions"])
+            self.assertTrue(
+                any("spatiotemporal relation gap" in reason for reason in readiness_artifact["gate_reasons"])
+            )
+            self.assertIn(
+                "review-spatiotemporal-relation-alternatives",
+                readiness_artifact["recommended_next_skills"],
+            )
+
+            followup_round_id = f"{ROUND_ID}-followup"
+            transition_request_id = request_and_approve_transition(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="open-investigation-round",
+                target_round_id=followup_round_id,
+                source_round_id=ROUND_ID,
+                rationale="Carry relation gap into a follow-up round.",
+            )
+            open_round_payload = run_script(
+                script_path("open-investigation-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                followup_round_id,
+                "--source-round-id",
+                ROUND_ID,
+                "--transition-request-id",
+                transition_request_id,
+            )
+            self.assertEqual("completed", open_round_payload["status"])
+            board = load_json(run_dir / "board" / "investigation_board.json")
+            carried_relation_tasks = [
+                task
+                for task in board["rounds"][followup_round_id]["tasks"]
+                if isinstance(task, dict) and task.get("relation_id") == relation_id
+            ]
+            self.assertEqual(1, len(carried_relation_tasks))
+            carried_task = carried_relation_tasks[0]
+            self.assertEqual("report-overclaim-risk", carried_task["objection_code"])
+            self.assertEqual(
+                ["Collect local alternative source checks before report use."],
+                carried_task["required_followup_evidence"],
+            )
+            self.assertEqual(
+                "spatiotemporal-relation-cue",
+                carried_task["target"]["object_kind"],
+            )
+
     def test_relation_evidence_packet_defaults_to_artifact_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -788,6 +992,16 @@ class SpatiotemporalRelationTaxonomyTests(unittest.TestCase):
             self.assertEqual("reporting", policy["skill_layer"])
             self.assertTrue(policy["requires_operator_approval"])
             self.assertIn("reporting", policy["db_write_planes"])
+            self.assertNotIn(
+                "environmental-investigator",
+                policy["allowed_roles"],
+            )
+            for role in policy["allowed_roles"]:
+                self.assertTrue(
+                    set(policy["required_capabilities"]).issubset(
+                        role_capabilities(role)
+                    )
+                )
 
             packet_payload = run_script(
                 script_path("materialize-spatiotemporal-relation-evidence-packet"),
@@ -859,6 +1073,81 @@ class SpatiotemporalRelationTaxonomyTests(unittest.TestCase):
             self.assertEqual(0, finding_query["summary"]["matching_object_count"])
             self.assertEqual(0, bundle_query["summary"]["matching_object_count"])
             self.assertEqual(0, section_query["summary"]["matching_object_count"])
+
+    def test_relation_evidence_packet_empty_relation_filter_does_not_collect_unmatched_objections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            detection_payload = run_structured_relation_detection(run_dir)
+            relation = detection_payload["spatiotemporal_relation_cues"][0]
+            relation_id = str(relation["relation_id"])
+
+            alternatives_payload = run_script(
+                script_path("review-spatiotemporal-relation-alternatives"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--relation-id",
+                relation_id,
+            )
+            candidate = next(
+                item
+                for item in alternatives_payload["objection_candidates"]
+                if item["objection_code"] == "report-overclaim-risk"
+            )
+            challenge_payload = run_script(
+                script_path("open-challenge-ticket"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Review existing relation only",
+                "--challenge-statement",
+                "This objection belongs to the existing relation cue.",
+                "--priority",
+                "high",
+                "--owner-role",
+                "challenger",
+                "--linked-artifact-ref",
+                candidate["evidence_refs"][0]["artifact_ref"],
+                "--relation-id",
+                relation_id,
+                "--objection-code",
+                candidate["objection_code"],
+                "--challenged-rule",
+                candidate["challenged_rule"],
+                "--alternative-explanation",
+                candidate["alternative_explanation"],
+                "--required-followup-evidence",
+                candidate["required_followup_evidence"][0],
+                "--report-risk",
+                candidate["report_risk"],
+            )
+            self.assertEqual("completed", challenge_payload["status"])
+
+            packet_payload = run_script(
+                script_path("materialize-spatiotemporal-relation-evidence-packet"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--relation-id",
+                "missing-relation-id",
+            )
+            self.assertEqual("insufficient-relation-basis", packet_payload["status"])
+            packet = load_json(Path(packet_payload["summary"]["output_path"]))
+            self.assertEqual([], packet["challenger_objections"])
+            self.assertEqual([], packet["uncertainty_register"])
+            self.assertEqual([], packet["evidence_refs"])
+            self.assertEqual(0, packet["relation_cues_summary"]["relation_count"])
+            self.assertEqual(0, packet["relation_cues_summary"]["challenger_objection_count"])
 
     def test_relation_evidence_packet_writes_mediated_basis_objects(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

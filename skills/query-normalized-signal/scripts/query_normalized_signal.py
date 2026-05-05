@@ -193,11 +193,182 @@ def lookup_normalized_signal_skill(run_dir: str, signal_id: str, db_path: str, i
     }
 
 
+def metadata_filter_pairs(
+    *,
+    signal_role: str,
+    environment_signal_class: str,
+    relation_candidate_role: str,
+    metadata_fields: list[str],
+    metadata_values: list[str],
+) -> list[tuple[str, str]]:
+    filters: list[tuple[str, str]] = []
+    for field_name, field_value in (
+        ("signal_role", signal_role),
+        ("environment_signal_class", environment_signal_class),
+        ("relation_candidate_role", relation_candidate_role),
+    ):
+        if maybe_text(field_value):
+            filters.append((field_name, maybe_text(field_value)))
+    for field_name, field_value in zip(metadata_fields, metadata_values):
+        if maybe_text(field_name) and maybe_text(field_value):
+            filters.append((maybe_text(field_name), maybe_text(field_value)))
+    return filters
+
+
+def query_normalized_signals_by_metadata_skill(
+    run_dir: str,
+    *,
+    run_id: str,
+    round_id: str,
+    plane: str,
+    db_path: str,
+    include_raw_json: bool,
+    signal_role: str,
+    environment_signal_class: str,
+    relation_candidate_role: str,
+    metadata_fields: list[str],
+    metadata_values: list[str],
+    limit: int,
+) -> dict[str, Any]:
+    run_dir_path = resolve_run_dir(run_dir)
+    connection, db_file = connect_db(run_dir_path, db_path)
+    filters = metadata_filter_pairs(
+        signal_role=signal_role,
+        environment_signal_class=environment_signal_class,
+        relation_candidate_role=relation_candidate_role,
+        metadata_fields=metadata_fields,
+        metadata_values=metadata_values,
+    )
+    if not filters:
+        connection.close()
+        return {
+            "schema_version": "normalized-signal-metadata-query-v1",
+            "status": "completed",
+            "summary": {
+                "skill": SKILL_NAME,
+                "result_count": 0,
+                "db_path": str(db_file),
+                "filters": {
+                    "run_id": maybe_text(run_id),
+                    "round_id": maybe_text(round_id),
+                    "plane": maybe_text(plane),
+                    "metadata": [],
+                },
+            },
+            "result_count": 0,
+            "results": [],
+            "artifact_refs": [],
+            "warnings": [
+                {
+                    "code": "metadata-filter-required",
+                    "message": "Provide --signal-id or at least one metadata index filter.",
+                }
+            ],
+            "board_handoff": {
+                "candidate_ids": [],
+                "evidence_refs": [],
+                "gap_hints": ["No metadata filter was supplied for normalized signal query."],
+                "challenge_hints": [],
+                "suggested_next_skills": ["query-public-signals", "query-environment-signals"],
+            },
+        }
+    clauses = ["1 = 1"]
+    params: list[Any] = []
+    if maybe_text(run_id):
+        clauses.append("s.run_id = ?")
+        params.append(maybe_text(run_id))
+    if maybe_text(round_id):
+        clauses.append("s.round_id = ?")
+        params.append(maybe_text(round_id))
+    if maybe_text(plane):
+        clauses.append("s.plane = ?")
+        params.append(maybe_text(plane))
+    for field_name, field_value in filters:
+        clauses.append(
+            """
+            EXISTS (
+                SELECT 1
+                FROM normalized_signal_index idx
+                WHERE idx.signal_id = s.signal_id
+                  AND idx.field_name = ?
+                  AND idx.field_value = ?
+            )
+            """
+        )
+        params.extend([field_name, field_value])
+    query = (
+        "SELECT s.* FROM normalized_signals s WHERE "
+        + " AND ".join(clauses)
+        + " ORDER BY s.round_id, s.signal_id LIMIT ?"
+    )
+    try:
+        rows = connection.execute(
+            query,
+            tuple([*params, max(1, int(limit or 20))]),
+        ).fetchall()
+    finally:
+        connection.close()
+    results = [row_to_result(row, include_raw_json) for row in rows]
+    refs = [signal_artifact_ref(row, plane=maybe_text(row["plane"])) for row in rows]
+    return {
+        "schema_version": "normalized-signal-metadata-query-v1",
+        "status": "completed",
+        "summary": {
+            "skill": SKILL_NAME,
+            "result_count": len(results),
+            "db_path": str(db_file),
+            "filters": {
+                "run_id": maybe_text(run_id),
+                "round_id": maybe_text(round_id),
+                "plane": maybe_text(plane),
+                "metadata": [
+                    {"field_name": field_name, "field_value": field_value}
+                    for field_name, field_value in filters
+                ],
+            },
+        },
+        "result_count": len(results),
+        "results": results,
+        "artifact_refs": refs,
+        "warnings": []
+        if results
+        else [
+            {
+                "code": "no-results",
+                "message": "No normalized signals matched the supplied metadata filters.",
+            }
+        ],
+        "board_handoff": {
+            "candidate_ids": [maybe_text(row["signal_id"]) for row in rows],
+            "evidence_refs": refs,
+            "gap_hints": [] if results else ["No normalized signals matched this metadata-index query."],
+            "challenge_hints": [],
+            "suggested_next_skills": [
+                "query-raw-record",
+                "submit-finding-record",
+                "submit-evidence-bundle",
+                "post-discussion-message",
+            ]
+            if results
+            else ["query-public-signals", "query-environment-signals"],
+        },
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Look up one normalized signal from a local signal-plane SQLite file.")
     parser.add_argument("--run-dir", required=True)
-    parser.add_argument("--signal-id", required=True)
+    parser.add_argument("--signal-id", default="")
+    parser.add_argument("--run-id", default="")
+    parser.add_argument("--round-id", default="")
+    parser.add_argument("--plane", default="")
     parser.add_argument("--db-path", default="")
+    parser.add_argument("--signal-role", default="")
+    parser.add_argument("--environment-signal-class", default="")
+    parser.add_argument("--relation-candidate-role", default="")
+    parser.add_argument("--metadata-field", action="append", default=[])
+    parser.add_argument("--metadata-value", action="append", default=[])
+    parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--include-raw-json", action="store_true")
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
@@ -205,12 +376,28 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    payload = lookup_normalized_signal_skill(
-        run_dir=args.run_dir,
-        signal_id=args.signal_id,
-        db_path=args.db_path,
-        include_raw_json=args.include_raw_json,
-    )
+    if args.signal_id:
+        payload = lookup_normalized_signal_skill(
+            run_dir=args.run_dir,
+            signal_id=args.signal_id,
+            db_path=args.db_path,
+            include_raw_json=args.include_raw_json,
+        )
+    else:
+        payload = query_normalized_signals_by_metadata_skill(
+            run_dir=args.run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+            plane=args.plane,
+            db_path=args.db_path,
+            include_raw_json=args.include_raw_json,
+            signal_role=args.signal_role,
+            environment_signal_class=args.environment_signal_class,
+            relation_candidate_role=args.relation_candidate_role,
+            metadata_fields=args.metadata_field,
+            metadata_values=args.metadata_value,
+            limit=args.limit,
+        )
     print(pretty_json(payload, args.pretty))
     return 0
 

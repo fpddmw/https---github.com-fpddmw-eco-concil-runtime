@@ -684,7 +684,6 @@ POLICIES.update(
             allowed_roles=[
                 ROLE_MODERATOR,
                 ROLE_REPORT_EDITOR,
-                ROLE_ENVIRONMENTAL_INVESTIGATOR,
             ],
             required_capabilities=[CAPABILITY_REPORT_DRAFT],
             side_effect_scope=[
