@@ -2052,7 +2052,7 @@ def query_spatiotemporal_relation_cues(
         round_id=round_id,
         analysis_kind=ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE,
         subject_id=relation_id,
-        latest_only=latest_only,
+        latest_only=latest_only and not maybe_text(relation_id),
         include_result_sets=include_result_sets,
         include_contract=include_contract,
         limit=0,
@@ -2165,6 +2165,7 @@ def sync_analysis_result_set(
     round_id: str = "",
     artifact_path: str | Path = "",
     db_path: str = "",
+    replace_scope: str = "round-kind",
 ) -> dict[str, Any]:
     config = analysis_config(analysis_kind)
     run_dir_path = resolve_run_dir(run_dir)
@@ -2240,27 +2241,41 @@ def sync_analysis_result_set(
     connection, resolved_db_file = connect_db(run_dir_path, db_path)
     try:
         with connection:
-            connection.execute(
-                """
-                DELETE FROM analysis_result_lineage
-                WHERE run_id = ? AND round_id = ? AND analysis_kind = ?
-                """,
-                (payload_run_id, payload_round_id, analysis_kind),
-            )
-            connection.execute(
-                """
-                DELETE FROM analysis_result_items
-                WHERE run_id = ? AND round_id = ? AND analysis_kind = ?
-                """,
-                (payload_run_id, payload_round_id, analysis_kind),
-            )
-            connection.execute(
-                """
-                DELETE FROM analysis_result_sets
-                WHERE run_id = ? AND round_id = ? AND analysis_kind = ?
-                """,
-                (payload_run_id, payload_round_id, analysis_kind),
-            )
+            if maybe_text(replace_scope) == "artifact":
+                connection.execute(
+                    "DELETE FROM analysis_result_lineage WHERE result_set_id = ?",
+                    (result_set_id,),
+                )
+                connection.execute(
+                    "DELETE FROM analysis_result_items WHERE result_set_id = ?",
+                    (result_set_id,),
+                )
+                connection.execute(
+                    "DELETE FROM analysis_result_sets WHERE result_set_id = ?",
+                    (result_set_id,),
+                )
+            else:
+                connection.execute(
+                    """
+                    DELETE FROM analysis_result_lineage
+                    WHERE run_id = ? AND round_id = ? AND analysis_kind = ?
+                    """,
+                    (payload_run_id, payload_round_id, analysis_kind),
+                )
+                connection.execute(
+                    """
+                    DELETE FROM analysis_result_items
+                    WHERE run_id = ? AND round_id = ? AND analysis_kind = ?
+                    """,
+                    (payload_run_id, payload_round_id, analysis_kind),
+                )
+                connection.execute(
+                    """
+                    DELETE FROM analysis_result_sets
+                    WHERE run_id = ? AND round_id = ? AND analysis_kind = ?
+                    """,
+                    (payload_run_id, payload_round_id, analysis_kind),
+                )
             result_contract, lineage_entries = build_result_contract(
                 payload,
                 config=config,
@@ -2752,6 +2767,7 @@ def sync_spatiotemporal_relation_cue_result_set(
         round_id=round_id,
         artifact_path=relation_cues_path,
         db_path=db_path,
+        replace_scope="artifact",
     )
     return {
         **result,

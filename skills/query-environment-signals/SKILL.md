@@ -32,6 +32,11 @@ description: Query compact environment-signal rows from the unified signal plane
 - Optional filters:
   - `source_skill`
   - `metric`
+  - `signal_role`
+  - `environment_signal_class`
+  - `metric_family`
+  - `has_coordinates`
+  - `has_timestamp`
   - `observed_after_utc`
   - `observed_before_utc`
   - `bbox`

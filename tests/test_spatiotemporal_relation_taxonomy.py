@@ -324,6 +324,75 @@ class SpatiotemporalRelationTaxonomyTests(unittest.TestCase):
                 sync["analysis_kind_governance"]["successor_skill"],
             )
 
+    def test_relation_sync_preserves_distinct_scope_result_sets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            first_path = run_dir / "analytics" / "spatiotemporal_relation_cues_scope_a.json"
+            second_path = run_dir / "analytics" / "spatiotemporal_relation_cues_scope_b.json"
+            first_relation = normalize_spatiotemporal_relation_cue_payload(
+                relation_payload(),
+                source_skill="detect-temporal-cooccurrence-cues",
+                artifact_path=str(first_path),
+            )
+            second_payload = dict(relation_payload())
+            second_payload["relation_id"] = "relation-cue-002"
+            second_payload["target_signal_id"] = "signal-target-002"
+            second_payload["lineage"] = ["signal-source-001", "signal-target-002"]
+            second_relation = normalize_spatiotemporal_relation_cue_payload(
+                second_payload,
+                source_skill="detect-temporal-cooccurrence-cues",
+                artifact_path=str(second_path),
+            )
+            for artifact_path, relation in (
+                (first_path, first_relation),
+                (second_path, second_relation),
+            ):
+                write_json(
+                    artifact_path,
+                    {
+                        "schema_version": "optional-analysis-spatiotemporal-relation-cues-v1",
+                        "skill": "detect-temporal-cooccurrence-cues",
+                        "run_id": RUN_ID,
+                        "round_id": ROUND_ID,
+                        "generated_at_utc": "2026-05-02T00:00:00Z",
+                        "spatiotemporal_relation_cues": [relation],
+                        "relation_cue_count": 1,
+                        "taxonomy_version": ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
+                    },
+                )
+                sync_spatiotemporal_relation_cue_result_set(
+                    run_dir,
+                    expected_run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    relation_cues_path=artifact_path,
+                )
+
+            all_relations = run_script(
+                script_path("query-spatiotemporal-relations"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            self.assertEqual(2, all_relations["summary"]["matching_relation_count"])
+
+            first_lookup = run_script(
+                script_path("query-spatiotemporal-relations"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--relation-id",
+                "relation-cue-001",
+                "--latest-only",
+            )
+            self.assertEqual(1, first_lookup["summary"]["matching_relation_count"])
+            self.assertEqual("relation-cue-001", first_lookup["relations"][0]["relation_id"])
+
     def test_environment_role_and_class_metadata_are_indexed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -442,6 +511,144 @@ class SpatiotemporalRelationTaxonomyTests(unittest.TestCase):
                 "signal-pm25-001",
                 normalized_query["results"][0]["signal_id"],
             )
+
+    def test_usgs_water_metadata_role_is_metric_sensitive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            usgs_path = root / "usgs.json"
+            write_json(
+                usgs_path,
+                {
+                    "payload": {
+                        "generated_at_utc": "2026-05-01T00:00:00Z",
+                        "records": [
+                            {
+                                "site_number": "01463500",
+                                "site_name": "Fixture River Gauge",
+                                "agency_code": "USGS",
+                                "parameter_code": "00060",
+                                "variable_name": "discharge",
+                                "variable_description": "Streamflow discharge.",
+                                "value": 420.0,
+                                "unit": "ft3/s",
+                                "observed_at_utc": "2026-05-01T00:00:00Z",
+                                "latitude": 40.0,
+                                "longitude": -75.0,
+                            },
+                            {
+                                "site_number": "01463500",
+                                "site_name": "Fixture River Gauge",
+                                "agency_code": "USGS",
+                                "parameter_code": "00300",
+                                "variable_name": "dissolved oxygen",
+                                "variable_description": "Dissolved oxygen.",
+                                "value": 8.2,
+                                "unit": "mg/L",
+                                "observed_at_utc": "2026-05-01T01:00:00Z",
+                                "latitude": 40.0,
+                                "longitude": -75.0,
+                            },
+                        ],
+                    }
+                },
+            )
+
+            normalize_payload = run_script(
+                script_path("normalize-usgs-water-observation-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(usgs_path),
+            )
+            self.assertEqual(2, len(normalize_payload["canonical_ids"]))
+
+            with sqlite3.connect(run_dir / "analytics" / "signal_plane.sqlite") as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    "SELECT metric, metadata_json FROM normalized_signals ORDER BY metric"
+                ).fetchall()
+
+            by_metric = {row["metric"]: json.loads(row["metadata_json"]) for row in rows}
+            self.assertEqual("context-observation", by_metric["00060"]["signal_role"])
+            self.assertEqual("hydrology", by_metric["00060"]["environment_signal_class"])
+            self.assertEqual("receptor-observation", by_metric["00300"]["signal_role"])
+            self.assertEqual("water-quality", by_metric["00300"]["environment_signal_class"])
+
+    def test_fact_check_scope_review_requires_structured_verification_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            seed_structured_relation_signals(run_dir)
+
+            missing_payload = run_script(
+                script_path("review-fact-check-evidence-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--verification-question",
+                "Is the receptor observation inside the candidate source window?",
+            )
+            self.assertEqual("scope-required", missing_payload["status"])
+            self.assertIn(
+                "receptor_scope",
+                missing_payload["review"]["missing_required_fields"],
+            )
+            self.assertIn(
+                "required_source_roles",
+                missing_payload["review"]["missing_required_fields"],
+            )
+
+            reviewed_payload = run_script(
+                script_path("review-fact-check-evidence-scope"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--verification-question",
+                "Is the receptor observation inside the candidate source window?",
+                "--receptor-scope",
+                '{"metric_family":"air-quality","place":"fixture receptor"}',
+                "--candidate-source-scope",
+                '{"environment_signal_class":"fire-detection","place":"candidate source area"}',
+                "--study-period",
+                '{"start":"2026-05-01T00:00:00Z","end":"2026-05-02T00:00:00Z"}',
+                "--evidence-window",
+                '{"start":"2026-05-01T00:00:00Z","end":"2026-05-01T12:00:00Z"}',
+                "--lag-window",
+                '{"min_hours":1,"max_hours":12}',
+                "--spatial-rule",
+                '{"rule":"max-distance-km","max_distance_km":200}',
+                "--required-source-role",
+                "source-event",
+                "--required-target-role",
+                "receptor-observation",
+                "--required-context-class",
+                "meteorology",
+                "--excluded-inference",
+                "causality",
+                "--excluded-inference",
+                "source-attribution-proof",
+            )
+            self.assertEqual("scope-reviewed-with-caveats", reviewed_payload["status"])
+            review = reviewed_payload["review"]
+            self.assertEqual("scope-reviewed-with-caveats", review["scope_status"])
+            self.assertEqual([], review["missing_required_fields"])
+            self.assertEqual(
+                ["source-event"],
+                review["verification_scope"]["required_source_roles"],
+            )
+            serialized = json.dumps(review, ensure_ascii=True, sort_keys=True)
+            self.assertNotIn("readiness_score", serialized)
+            self.assertNotIn("factual_outcome", serialized)
 
     def test_temporal_helper_freeze_line_carries_relation_taxonomy_version(self) -> None:
         policy = resolve_skill_policy("detect-temporal-cooccurrence-cues")

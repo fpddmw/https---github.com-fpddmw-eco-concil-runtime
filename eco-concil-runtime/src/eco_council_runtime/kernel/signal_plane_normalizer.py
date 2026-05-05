@@ -442,6 +442,16 @@ def environment_signal_taxonomy_defaults(
             "environment_signal_class": "meteorology",
         }
     if source == "fetch-usgs-water-iv":
+        if usgs_water_context_metric(metric_text):
+            return {
+                "signal_role": "context-observation",
+                "environment_signal_class": "hydrology",
+            }
+        if usgs_water_receptor_metric(metric_text):
+            return {
+                "signal_role": "receptor-observation",
+                "environment_signal_class": "water-quality",
+            }
         return {
             "signal_role": "unknown-environment-signal-role",
             "environment_signal_class": "hydrology",
@@ -450,6 +460,75 @@ def environment_signal_taxonomy_defaults(
         "signal_role": "unknown-environment-signal-role",
         "environment_signal_class": "unknown-environment-class",
     }
+
+
+def usgs_water_context_metric(metric_text: str) -> bool:
+    metric_tokens = metric_text.casefold().replace("-", "_").replace(" ", "_")
+    if metric_tokens in {
+        "00060",
+        "00065",
+        "river_discharge",
+        "river_discharge_mean",
+        "river_discharge_max",
+        "river_discharge_min",
+        "gage_height",
+        "gauge_height",
+        "streamflow",
+        "discharge",
+        "flow",
+        "stage",
+        "water_level",
+    }:
+        return True
+    return any(
+        token in metric_tokens
+        for token in (
+            "discharge",
+            "streamflow",
+            "gage_height",
+            "gauge_height",
+            "water_level",
+            "stage",
+        )
+    )
+
+
+def usgs_water_receptor_metric(metric_text: str) -> bool:
+    metric_tokens = metric_text.casefold().replace("-", "_").replace(" ", "_")
+    if metric_tokens in {
+        "00010",
+        "00095",
+        "00300",
+        "00400",
+        "00530",
+        "00618",
+        "00631",
+        "63680",
+        "99133",
+        "water_temperature",
+        "specific_conductance",
+        "dissolved_oxygen",
+        "ph",
+        "turbidity",
+        "nitrate",
+        "suspended_solids",
+        "salinity",
+    }:
+        return True
+    return any(
+        token in metric_tokens
+        for token in (
+            "temperature",
+            "conductance",
+            "oxygen",
+            "turbidity",
+            "nitrate",
+            "ph",
+            "salinity",
+            "solids",
+            "quality",
+        )
+    )
 
 
 def enrich_environment_taxonomy_metadata(

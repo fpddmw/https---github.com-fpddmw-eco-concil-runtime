@@ -1,12 +1,12 @@
 ---
 name: review-fact-check-evidence-scope
-description: Optional-analysis helper for explicit fact-check evidence scope review. It requires question, place, period, window, lag, metric, and source requirements and emits scope caveats only.
+description: Optional-analysis helper for structured verification scope review. It requires a verification question, receptor/source scope, study/evidence windows, lag/spatial rules, required roles/classes, and excluded inferences; it emits scope caveats only.
 ---
 
 # Review Fact Check Evidence Scope
 
 ## Core Goal
-- Require explicit verification scope before any environment-evidence review.
+- Require explicit structured `verification_scope` before any environment-evidence review.
 - Read DB-backed environment signals and emit scope coverage notes.
 - Avoid factual outcome labels, claim matching, route assignment, readiness scores, or report conclusions.
 
@@ -19,12 +19,20 @@ description: Optional-analysis helper for explicit fact-check evidence scope rev
 - `run_id`
 - `round_id`
 - `verification_question`
-- `geographic_scope`
+- `receptor_scope`
+- `candidate_source_scope`
 - `study_period`
 - `evidence_window`
-- `lag_assumptions`
-- `metric_requirements`
-- `source_requirements`
+- `lag_window`
+- `spatial_rule`
+- `required_source_roles`
+- `required_target_roles`
+- `required_context_classes`
+- `excluded_inferences`
+
+## Compatibility Inputs
+- `verification_scope_json` may provide the structured scope as a JSON object or path.
+- Legacy `geographic_scope`, `lag_assumptions`, `metric_requirements`, and `source_requirements` are accepted only as compatibility inputs and do not replace required role/class fields.
 
 ## References
 - `../../docs/openclaw-optional-analysis-skills-refactor-workplan.md`

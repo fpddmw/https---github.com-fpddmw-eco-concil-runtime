@@ -1,12 +1,12 @@
 ---
 name: query-normalized-signal
-description: Look up one normalized signal by signal_id from the unified signal plane and return compact details, item-level evidence refs, and evidence basis. Use when an investigator needs precise inspection of a single canonical signal before filing a finding, evidence bundle, challenge, or proposal.
+description: Look up normalized signals by signal_id or metadata index from the unified signal plane and return compact details, item-level evidence refs, and evidence basis. Use when an investigator needs precise inspection of canonical signals before filing a finding, evidence bundle, challenge, or proposal.
 ---
 
 # Query Normalized Signal
 
 ## Core Goal
-- Resolve one normalized signal by `signal_id`.
+- Resolve one normalized signal by `signal_id`, or query metadata-indexed signals by role/class fields.
 - Return compact canonical fields, `evidence_refs`, and `evidence_basis`.
 - Optionally include raw JSON only when explicitly requested.
 
@@ -22,9 +22,17 @@ description: Look up one normalized signal by signal_id from the unified signal 
 
 ## Required Input
 - `run_dir`
-- `signal_id`
+- Either `signal_id` or at least one metadata filter:
+  - `signal_role`
+  - `environment_signal_class`
+  - `relation_candidate_role`
+  - `metadata_field` plus `metadata_value`
 - Optional:
   - `db_path`
+  - `run_id`
+  - `round_id`
+  - `plane`
+  - `limit`
   - `include_raw_json`
 
 ## Output Contract
