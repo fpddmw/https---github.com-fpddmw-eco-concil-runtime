@@ -14,7 +14,7 @@ from .deliberation_plane import (
     payload_from_db_row,
 )
 from .role_contracts import ROLE_MODERATOR, ROLE_RUNTIME_OPERATOR, known_actor_role, normalize_actor_role
-from .skill_registry import SKILL_LAYER_OPTIONAL_ANALYSIS, resolve_skill_policy
+from .skill_registry import SKILL_LAYER_OPTIONAL_ANALYSIS, SKILL_LAYER_REPORTING, resolve_skill_policy
 
 OBJECT_KIND_SKILL_APPROVAL_REQUEST = "skill-approval-request"
 OBJECT_KIND_SKILL_APPROVAL = "skill-approval"
@@ -29,6 +29,7 @@ REQUEST_STATUS_CONSUMED = "consumed"
 DECISION_STATUS_APPROVED = "approved"
 DECISION_STATUS_REJECTED = "rejected"
 CONSUMPTION_STATUS_CONSUMED = "consumed"
+SKILL_APPROVAL_LAYERS = {SKILL_LAYER_OPTIONAL_ANALYSIS, SKILL_LAYER_REPORTING}
 
 
 def require_actor_role(
@@ -93,9 +94,10 @@ def _skill_policy_for_approval(skill_name: str) -> dict[str, Any]:
             f"Skill {skill_name} does not declare requires_operator_approval and cannot use skill approval requests."
         )
     skill_layer = maybe_text(policy.get("skill_layer"))
-    if skill_layer != SKILL_LAYER_OPTIONAL_ANALYSIS:
+    if skill_layer not in SKILL_APPROVAL_LAYERS:
         raise ValueError(
-            f"Skill approval requests currently support optional-analysis skills only, got layer `{skill_layer or '<empty>'}` for {skill_name}."
+            "Skill approval requests support optional-analysis and reporting skills. "
+            f"Skill {skill_name} uses layer `{skill_layer or '<empty>'}`; state-transition approvals should use phase transition requests."
         )
     return policy
 
@@ -253,7 +255,7 @@ def skill_approval_request_payload(
         "requested_actor_role": validated_requested_actor_role,
         "required_approval_role": ROLE_RUNTIME_OPERATOR,
         "requested_surface": "kernel-command",
-        "requested_action": "run-optional-analysis-skill",
+        "requested_action": f"run-{maybe_text(policy.get('skill_layer'))}-skill",
         "requested_command_name": "run-skill",
         "rationale": maybe_text(rationale),
         "requested_skill_args": unique_texts(requested_skill_args or []),
@@ -1316,6 +1318,7 @@ def resolve_skill_approval_for_execution(
     run_id: str,
     round_id: str,
     requested_actor_role: str,
+    execution_skill_args: list[Any] | None = None,
     db_path: str = "",
 ) -> dict[str, Any]:
     request = load_skill_approval_request(run_dir, request_id=request_id, db_path=db_path)
@@ -1353,6 +1356,19 @@ def resolve_skill_approval_for_execution(
         raise ValueError(
             "Skill approval request "
             f"{request_id} is for actor `{resolved_requested_actor_role}`, not `{expected_actor_role}`."
+        )
+    requested_skill_args = (
+        request.get("requested_skill_args", [])
+        if isinstance(request.get("requested_skill_args"), list)
+        else []
+    )
+    requested_args = [maybe_text(item) for item in requested_skill_args]
+    execution_args = [maybe_text(item) for item in (execution_skill_args or [])]
+    if requested_args and requested_args != execution_args:
+        raise ValueError(
+            "Skill approval request "
+            f"{request_id} is scoped to skill args `{json_text(requested_args)}`, "
+            f"not `{json_text(execution_args)}`."
         )
     return request
 

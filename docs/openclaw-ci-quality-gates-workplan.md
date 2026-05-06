@@ -61,8 +61,8 @@
 
 1. `syntax` 通过，覆盖 202 个 Python 文件，并确认无重复字面量 dict key。
 2. `db-recovery` targeted gate 通过，6 tests。
-3. `db-recovery runtime-governance reporting` targeted gate 通过，76 tests。
-4. `full` gate 通过，248 tests；当前耗时约 3 分 27 秒，后续应继续拆更快的 targeted jobs。
+3. `runtime-governance reporting` targeted gate 通过，76 tests。
+4. `full` gate 通过，254 tests；当前耗时约 6 分 43 秒，后续应继续拆更快的 targeted jobs。
 
 当前未闭环项：
 

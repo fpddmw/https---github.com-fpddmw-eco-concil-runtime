@@ -635,7 +635,35 @@ def run_skill(
         contract_mode=contract_mode,
     )
     receipt_id = maybe_text(payload.get("receipt_id")) or ("runtime-receipt-" + stable_hash(run_id, round_id, skill_name, event_id)[:20])
-    receipt_file = write_receipt(run_dir, receipt_id, payload)
+    receipt_write = write_receipt(
+        run_dir,
+        receipt_id,
+        payload,
+        runtime_context={
+            "run_id": run_id,
+            "round_id": round_id,
+            "skill_name": skill_name,
+            "event_id": event_id,
+            "event_type": "skill-execution",
+            "actor_role": actor_role,
+            "resolved_actor_role": preflight.get("resolved_actor_role", ""),
+            "contract_mode": contract_mode,
+            "execution_input_hash": execution_input_hash,
+            "payload_hash": json_hash(payload),
+            "lock_path": base_event.get("lock_path", ""),
+            "command_snapshot": command_snapshot,
+            "skill_args": skill_args,
+            "skill_options": skill_options,
+            "attempts": attempts,
+            "attempt_count": len(attempts),
+            "recovered_after_retry": len(attempts) > 1 and payload is not None,
+            "preflight": preflight,
+            "postflight": postflight,
+            "runtime_admission": runtime_admission,
+            "skill_approval": preflight.get("skill_approval", {}),
+        },
+    )
+    receipt_file = Path(maybe_text(receipt_write.get("receipt_path")))
     if bool(postflight.get("block_execution")):
         failure = structured_failure(
             error_code="contract-postflight-blocked",
@@ -656,6 +684,7 @@ def run_skill(
             "summary": payload.get("summary", {}),
             "payload_hash": json_hash(payload),
             "receipt_path": str(receipt_file),
+            "receipt_write": receipt_write,
             "postflight": postflight,
             "failure": failure,
         }
@@ -695,6 +724,7 @@ def run_skill(
             "runtime_admission": runtime_admission,
             "receipt_id": receipt_id,
             "receipt_path": str(receipt_file),
+            "receipt_write": receipt_write,
             "dead_letter": dead_letter,
             "operator_surface": operator_surface,
         }
@@ -740,6 +770,7 @@ def run_skill(
                     "summary": payload.get("summary", {}),
                     "payload_hash": json_hash(payload),
                     "receipt_path": str(receipt_file),
+                    "receipt_write": receipt_write,
                     "postflight": postflight,
                     "failure": failure,
                 }
@@ -779,6 +810,7 @@ def run_skill(
                     "runtime_admission": runtime_admission,
                     "receipt_id": receipt_id,
                     "receipt_path": str(receipt_file),
+                    "receipt_write": receipt_write,
                     "dead_letter": dead_letter,
                     "operator_surface": operator_surface,
                 }
@@ -796,6 +828,7 @@ def run_skill(
         "summary": payload.get("summary", {}),
         "payload_hash": json_hash(payload),
         "receipt_path": str(receipt_file),
+        "receipt_write": receipt_write,
         "postflight": postflight,
         "skill_approval_consumption": skill_approval_consumption,
     }
@@ -820,6 +853,7 @@ def run_skill(
             "skill_approval_request_id": maybe_text(skill_approval.get("request_id"))
             if isinstance(skill_approval, dict)
             else "",
+            "receipt_write_status": maybe_text(receipt_write.get("write_status")),
         },
         "event": event,
         "manifest": manifest,

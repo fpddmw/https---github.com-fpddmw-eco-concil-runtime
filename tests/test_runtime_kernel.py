@@ -802,6 +802,149 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertTrue(ledger_event["recovered_after_retry"])
             sleep_mock.assert_called_once()
 
+    def test_runtime_receipt_envelope_captures_governed_execution_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.executor import run_skill
+
+            fake_skill_entry = {
+                "skill_name": "summarize-board-state",
+                "script_path": str(root / "fake_receipt.py"),
+                "declared_contract": {"reads": [], "writes": []},
+                "declared_inputs": {"required": [], "optional": []},
+                "declared_side_effects": [],
+                "execution_policy": {},
+                "agent": {},
+            }
+            skill_payload = {
+                "status": "completed",
+                "summary": {"result": "ok"},
+                "receipt_id": "runtime-receipt-envelope-test",
+                "artifact_refs": [],
+                "canonical_ids": ["summary-1"],
+            }
+
+            with (
+                mock.patch("eco_council_runtime.kernel.governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch(
+                    "eco_council_runtime.kernel.executor.subprocess.run",
+                    return_value=subprocess.CompletedProcess(
+                        args=["python"],
+                        returncode=0,
+                        stdout=json.dumps(skill_payload),
+                        stderr="",
+                    ),
+                ),
+            ):
+                payload = run_skill(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    skill_name="summarize-board-state",
+                    actor_role="moderator",
+                    skill_args=[],
+                    contract_mode="warn",
+                )
+
+            receipt_path = run_dir / "runtime" / "receipts" / "runtime-receipt-envelope-test.json"
+            receipt = load_json(receipt_path)
+
+            self.assertEqual("created", payload["event"]["receipt_write"]["write_status"])
+            self.assertEqual("runtime-receipt-v2", receipt["schema_version"])
+            self.assertEqual("runtime-receipt-envelope-test", receipt["receipt_id"])
+            self.assertEqual(skill_payload, receipt["skill_payload"])
+            self.assertEqual(payload["event"]["payload_hash"], receipt["payload_hash"])
+            self.assertEqual(payload["event"]["event_id"], receipt["runtime"]["event_id"])
+            self.assertEqual(payload["event"]["execution_input_hash"], receipt["runtime"]["execution_input_hash"])
+            self.assertEqual(payload["event"]["lock_path"], receipt["runtime"]["lock_path"])
+            self.assertEqual("completed", receipt["runtime"]["postflight"]["status"])
+            self.assertFalse(receipt["runtime"]["runtime_admission"]["block_execution"])
+
+    def test_runtime_receipt_replay_marks_same_payload_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.executor import run_skill
+            from eco_council_runtime.kernel.ledger import load_ledger_tail
+
+            fake_skill_entry = {
+                "skill_name": "summarize-board-state",
+                "script_path": str(root / "fake_receipt_replay.py"),
+                "declared_contract": {"reads": [], "writes": []},
+                "declared_inputs": {"required": [], "optional": []},
+                "declared_side_effects": [],
+                "execution_policy": {},
+                "agent": {},
+            }
+            skill_payload = {
+                "status": "completed",
+                "summary": {"result": "same"},
+                "receipt_id": "runtime-receipt-replay-test",
+                "artifact_refs": [],
+                "canonical_ids": [],
+            }
+
+            with (
+                mock.patch("eco_council_runtime.kernel.governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch(
+                    "eco_council_runtime.kernel.executor.subprocess.run",
+                    side_effect=[
+                        subprocess.CompletedProcess(
+                            args=["python"],
+                            returncode=0,
+                            stdout=json.dumps(skill_payload),
+                            stderr="",
+                        ),
+                        subprocess.CompletedProcess(
+                            args=["python"],
+                            returncode=0,
+                            stdout=json.dumps(skill_payload),
+                            stderr="",
+                        ),
+                    ],
+                ),
+            ):
+                first = run_skill(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    skill_name="summarize-board-state",
+                    actor_role="moderator",
+                    skill_args=[],
+                    contract_mode="warn",
+                )
+                second = run_skill(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    skill_name="summarize-board-state",
+                    actor_role="moderator",
+                    skill_args=[],
+                    contract_mode="warn",
+                )
+
+            receipt = load_json(
+                run_dir / "runtime" / "receipts" / "runtime-receipt-replay-test.json"
+            )
+            latest_event = load_ledger_tail(run_dir, 1)[0]
+
+            self.assertEqual("created", first["event"]["receipt_write"]["write_status"])
+            self.assertEqual("unchanged", second["event"]["receipt_write"]["write_status"])
+            self.assertEqual("unchanged", latest_event["receipt_write"]["write_status"])
+            self.assertEqual(first["event"]["event_id"], receipt["runtime"]["event_id"])
+            self.assertEqual(first["event"]["payload_hash"], second["event"]["payload_hash"])
+            self.assertEqual(
+                first["event"]["receipt_write"]["payload_hash"],
+                second["event"]["receipt_write"]["previous_payload_hash"],
+            )
+
     def test_run_skill_timeout_returns_structured_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

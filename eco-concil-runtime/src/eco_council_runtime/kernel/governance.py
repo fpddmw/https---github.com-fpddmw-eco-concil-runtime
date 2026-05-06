@@ -7,7 +7,7 @@ from typing import Any
 from .access_policy import evaluate_skill_access
 from .registry import resolve_skill_entry, workspace_root
 from .skill_approvals import resolve_skill_approval_for_execution
-from .skill_registry import SKILL_LAYER_OPTIONAL_ANALYSIS
+from .skill_registry import SKILL_LAYER_OPTIONAL_ANALYSIS, SKILL_LAYER_REPORTING
 
 CONTRACT_MODES = ("off", "warn", "strict")
 BUILTIN_REQUIRED_INPUTS = {"run_dir", "run_id", "round_id"}
@@ -21,6 +21,7 @@ DEFAULT_ALLOWED_SIDE_EFFECTS = {
     "writes-shared-state",
 }
 APPROVAL_REQUIRED_SIDE_EFFECTS = {"network-external", "destructive-write"}
+SKILL_APPROVAL_LAYERS = {SKILL_LAYER_OPTIONAL_ANALYSIS, SKILL_LAYER_REPORTING}
 
 
 def maybe_text(value: Any) -> str:
@@ -269,6 +270,7 @@ def resolve_skill_approval_context(
     actor_role: str,
     access_policy: dict[str, Any],
     skill_approval_request_id: str,
+    execution_skill_args: list[Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     skill_policy = (
         access_policy.get("skill_policy", {})
@@ -278,11 +280,12 @@ def resolve_skill_approval_context(
     requires_operator_approval = bool(skill_policy.get("requires_operator_approval"))
     skill_layer = maybe_text(skill_policy.get("skill_layer"))
     normalized_request_id = maybe_text(skill_approval_request_id)
-    if not requires_operator_approval or skill_layer != SKILL_LAYER_OPTIONAL_ANALYSIS:
+    if not requires_operator_approval or skill_layer not in SKILL_APPROVAL_LAYERS:
         return [], {
             "required": False,
             "status": "not-required",
             "request_id": normalized_request_id,
+            "skill_layer": skill_layer,
         }
     resolved_actor_role = maybe_text(access_policy.get("resolved_actor_role")) or maybe_text(
         actor_role
@@ -291,7 +294,10 @@ def resolve_skill_approval_context(
         return [
             issue(
                 "missing-skill-approval-request-id",
-                "Optional-analysis execution requires --skill-approval-request-id for an operator-approved request.",
+                (
+                    "This skill declares requires_operator_approval and requires "
+                    "--skill-approval-request-id for an operator-approved request."
+                ),
                 field="skill_approval_request_id",
                 blocking=True,
             )
@@ -299,6 +305,7 @@ def resolve_skill_approval_context(
             "required": True,
             "status": "missing-request-id",
             "request_id": "",
+            "skill_layer": skill_layer,
         }
     try:
         request = resolve_skill_approval_for_execution(
@@ -308,6 +315,7 @@ def resolve_skill_approval_context(
             run_id=run_id,
             round_id=round_id,
             requested_actor_role=resolved_actor_role,
+            execution_skill_args=execution_skill_args,
         )
     except ValueError as exc:
         return [
@@ -321,15 +329,21 @@ def resolve_skill_approval_context(
             "required": True,
             "status": "invalid-request",
             "request_id": normalized_request_id,
+            "skill_layer": skill_layer,
             "message": str(exc),
         }
     return [], {
         "required": True,
         "status": "approved",
         "request_id": normalized_request_id,
+        "skill_layer": skill_layer,
         "request": request,
         "contract_mode": contract_mode,
     }
+
+
+def approval_satisfies_operator_gate(skill_approval: dict[str, Any]) -> bool:
+    return bool(skill_approval.get("required")) and maybe_text(skill_approval.get("status")) == "approved"
 
 
 def preflight_skill_execution(
@@ -434,8 +448,15 @@ def preflight_skill_execution(
         actor_role=context["actor_role"],
         access_policy=access_policy,
         skill_approval_request_id=context["skill_approval_request_id"],
+        execution_skill_args=skill_args,
     )
     issues.extend(approval_issues)
+    if approval_satisfies_operator_gate(skill_approval):
+        issues = [
+            item
+            for item in issues
+            if maybe_text(item.get("code")) != "operator-approval-required"
+        ]
 
     blocking_issue_count = len(
         [

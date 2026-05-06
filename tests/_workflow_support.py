@@ -287,7 +287,7 @@ def request_skill_approval(
     if requested_actor_role:
         args.extend(["--requested-actor-role", requested_actor_role])
     for requested_skill_arg in requested_skill_args or []:
-        args.extend(["--requested-skill-arg", requested_skill_arg])
+        args.append(f"--requested-skill-arg={requested_skill_arg}")
     for evidence_ref in evidence_refs or []:
         args.extend(["--evidence-ref", evidence_ref])
     for basis_object_id in basis_object_ids or []:

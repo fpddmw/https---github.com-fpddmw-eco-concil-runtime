@@ -24,9 +24,10 @@
 3. normalize 只归一化，不做事实判断。
 4. query 必须返回 item-level evidence basis。
 5. optional-analysis 默认是 approval-gated helper。
-6. deliberation-write 才能把调查判断写成议会对象。
-7. reporting 只能消费 frozen/reporting basis，不回写调查状态。
-8. state-transition 必须经 moderator request 和 runtime-operator approval。
+6. reporting draft/publish/finalize 中声明 `requires_operator_approval=True` 的 skill 必须经 skill approval request/approval 后由 runtime 执行。
+7. deliberation-write 才能把调查判断写成议会对象。
+8. reporting 只能消费 frozen/reporting basis，不回写调查状态。
+9. state-transition 必须经 moderator phase transition request 和 runtime-operator approval，不走 skill approval request。
 
 ## 3. Skill 分层
 
@@ -153,7 +154,7 @@
 1. 消费 frozen report basis。
 2. 生成 evidence packet、decision packet、report packet。
 3. 保留 uncertainty register、residual disputes、policy recommendations。
-4. 通过 operator approval 控制发布。
+4. 通过 skill approval request/approval 控制正式 runtime 发布。
 
 ### 3.7 State Transition / Runtime Admin
 
@@ -173,6 +174,7 @@
 3. 开启 follow-up investigation round。
 4. 冻结报告依据。
 5. 关闭轮次后归档。
+6. phase transition 类动作通过 transition request/approval 治理，不复用 skill approval。
 
 ## 4. 当前 Skills 的有效性判断
 

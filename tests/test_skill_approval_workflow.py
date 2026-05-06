@@ -22,6 +22,7 @@ if str(RUNTIME_SRC) not in sys.path:
 RUN_ID = "run-skill-approval-001"
 ROUND_ID = "round-skill-approval-001"
 OPTIONAL_SKILL = "discover-discourse-issues"
+REPORTING_PUBLISH_SKILL = "publish-expert-report"
 
 
 class SkillApprovalWorkflowTests(unittest.TestCase):
@@ -130,6 +131,162 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
             )
             self.assertEqual("completed", approved["status"])
             self.assertEqual("approved", approved["preflight"]["skill_approval"]["status"])
+
+    def test_preflight_blocks_reporting_publish_without_approved_request(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            completed = run_kernel_process(
+                "preflight-skill",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                REPORTING_PUBLISH_SKILL,
+                "--actor-role",
+                "report-editor",
+                "--contract-mode",
+                "warn",
+                "--",
+                "--role",
+                "sociologist",
+                auto_actor_role=False,
+            )
+
+            self.assertEqual(1, completed.returncode)
+            payload = json.loads(completed.stdout)
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "missing-skill-approval-request-id",
+                {item["code"] for item in payload["preflight"]["issues"]},
+            )
+
+    def test_preflight_accepts_reporting_publish_after_approval_record_in_strict_mode(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            request_id = request_and_approve_skill_approval(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                skill_name=REPORTING_PUBLISH_SKILL,
+                requested_actor_role="report-editor",
+                rationale="Approve report publication through governed runtime.",
+                approval_reason="Approved report publication for this round.",
+            )
+
+            approved = run_kernel(
+                "preflight-skill",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                REPORTING_PUBLISH_SKILL,
+                "--actor-role",
+                "report-editor",
+                "--contract-mode",
+                "strict",
+                "--skill-approval-request-id",
+                request_id,
+                "--",
+                "--role",
+                "sociologist",
+            )
+
+            self.assertEqual("completed", approved["status"])
+            self.assertFalse(approved["preflight"]["block_execution"])
+            self.assertEqual(
+                "approved",
+                approved["preflight"]["skill_approval"]["status"],
+            )
+            self.assertEqual(
+                request_id,
+                approved["preflight"]["skill_approval"]["request_id"],
+            )
+            self.assertNotIn(
+                "operator-approval-required",
+                {item["code"] for item in approved["preflight"]["issues"]},
+            )
+
+    def test_skill_approval_request_rejects_state_transition_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            completed = run_kernel_process(
+                "request-skill-approval",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                "freeze-report-basis",
+                "--requested-actor-role",
+                "moderator",
+                "--rationale",
+                "Wrong approval path should be rejected.",
+                "--actor-role",
+                "moderator",
+                auto_actor_role=False,
+            )
+
+            self.assertEqual(1, completed.returncode)
+            payload = json.loads(completed.stdout)
+            self.assertEqual("failed", payload["status"])
+            self.assertIn("phase transition requests", payload["message"])
+
+    def test_preflight_rejects_approved_reporting_request_with_different_args(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            request_id = request_and_approve_skill_approval(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                skill_name=REPORTING_PUBLISH_SKILL,
+                requested_actor_role="report-editor",
+                requested_skill_args=["--role", "environmentalist"],
+                rationale="Approve environmentalist report publication only.",
+                approval_reason="Approved the requested reporting argument scope.",
+            )
+
+            completed = run_kernel_process(
+                "preflight-skill",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                REPORTING_PUBLISH_SKILL,
+                "--actor-role",
+                "report-editor",
+                "--contract-mode",
+                "strict",
+                "--skill-approval-request-id",
+                request_id,
+                "--",
+                "--role",
+                "sociologist",
+                auto_actor_role=False,
+            )
+
+            self.assertEqual(1, completed.returncode)
+            payload = json.loads(completed.stdout)
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "invalid-skill-approval-request",
+                {item["code"] for item in payload["preflight"]["issues"]},
+            )
+            self.assertIn("scoped to skill args", payload["preflight"]["skill_approval"]["message"])
 
     def test_request_approve_and_query_skill_approval_objects(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
