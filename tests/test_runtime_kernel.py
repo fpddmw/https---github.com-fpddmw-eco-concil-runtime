@@ -497,6 +497,80 @@ class RuntimeKernelTests(unittest.TestCase):
                 str(raised.exception),
             )
 
+    def test_transition_request_commit_is_idempotent_and_rejects_retarget(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.transition_requests import (
+                REQUEST_STATUS_COMMITTED,
+                approve_transition_request,
+                load_transition_request,
+                mark_transition_request_committed,
+                store_transition_request,
+            )
+
+            request = store_transition_request(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="freeze-report-basis",
+                requested_by_role="moderator",
+                rationale="Moderator requests report-basis transition.",
+            )
+            approve_transition_request(
+                run_dir,
+                request_id=request["request_id"],
+                approved_by_role="runtime-operator",
+                decision_reason="Operator approved transition.",
+            )
+
+            first_commit = mark_transition_request_committed(
+                run_dir,
+                request_id=request["request_id"],
+                committed_by_role="runtime-operator",
+                committed_object_kind="report-basis-freeze",
+                committed_object_id="report-basis-freeze-001",
+            )
+            second_commit = mark_transition_request_committed(
+                run_dir,
+                request_id=request["request_id"],
+                committed_by_role="runtime-operator",
+                committed_object_kind="report-basis-freeze",
+                committed_object_id="report-basis-freeze-001",
+            )
+
+            self.assertEqual("committed", first_commit["commit_status"])
+            self.assertEqual("already-committed", second_commit["commit_status"])
+            self.assertEqual(
+                first_commit["committed_at_utc"],
+                second_commit["committed_at_utc"],
+            )
+
+            with self.assertRaises(ValueError) as raised:
+                mark_transition_request_committed(
+                    run_dir,
+                    request_id=request["request_id"],
+                    committed_by_role="runtime-operator",
+                    committed_object_kind="report-basis-freeze",
+                    committed_object_id="report-basis-freeze-002",
+                )
+
+            self.assertIn("already committed", str(raised.exception))
+            request_after = load_transition_request(
+                run_dir,
+                request_id=request["request_id"],
+            )
+            self.assertEqual(REQUEST_STATUS_COMMITTED, request_after["request_status"])
+            self.assertEqual(
+                "report-basis-freeze",
+                request_after["committed_object_kind"],
+            )
+            self.assertEqual(
+                "report-basis-freeze-001",
+                request_after["committed_object_id"],
+            )
+
     def test_preflight_blocks_unauthorized_actor_role_for_write_skill(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

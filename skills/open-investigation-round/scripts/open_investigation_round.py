@@ -24,6 +24,7 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     commit_board_mutation,
     load_round_snapshot,
+    load_round_transition_record,
     store_round_transition_record,
     store_round_task_snapshot,
 )
@@ -640,19 +641,95 @@ def open_investigation_round_skill(
                 f"Source round {source_round_id} does not exist on the board or deliberation plane: {board_file}"
             )
         if round_snapshot_has_state(target_snapshot):
+            transition_request_id = maybe_text(transition_request.get("request_id"))
             existing_output = load_json_if_exists(output_file)
-            if isinstance(existing_output, dict) and maybe_text(existing_output.get("transition_id")):
+            existing_transition: dict[str, Any] = {}
+            existing_transition_id = ""
+            committed_transition_id = (
+                maybe_text(transition_request.get("committed_object_id"))
+                if maybe_text(transition_request.get("committed_object_kind"))
+                == "round-transition"
+                else ""
+            )
+            if committed_transition_id:
+                existing_transition_id = committed_transition_id
+                loaded_transition = load_round_transition_record(
+                    run_dir_path,
+                    transition_id=committed_transition_id,
+                )
+                if isinstance(loaded_transition, dict):
+                    existing_transition = loaded_transition
+                if not isinstance(existing_output, dict):
+                    warnings.append(
+                        {
+                            "code": "missing-round-transition-artifact",
+                            "message": (
+                                f"No transition artifact was found at {output_file}; "
+                                "recovered the existing transition id from the committed transition request."
+                            ),
+                        }
+                    )
+            if not existing_transition_id and isinstance(existing_output, dict):
+                existing_transition = existing_output
+                existing_transition_id = maybe_text(existing_output.get("transition_id"))
+            if not existing_transition_id:
+                loaded_transition = load_round_transition_record(
+                    run_dir_path,
+                    run_id=run_id,
+                    round_id=round_id,
+                    source_round_id=source_round_id,
+                    transition_request_id=transition_request_id,
+                )
+                if isinstance(loaded_transition, dict):
+                    existing_transition = loaded_transition
+                    existing_transition_id = maybe_text(
+                        loaded_transition.get("transition_id")
+                    )
+                    if not isinstance(existing_output, dict):
+                        warnings.append(
+                            {
+                                "code": "missing-round-transition-artifact",
+                                "message": (
+                                    f"No transition artifact was found at {output_file}; "
+                                    "recovered the existing transition id from the deliberation plane."
+                                ),
+                            }
+                        )
+            existing_transition_request_id = maybe_text(
+                existing_transition.get("transition_request_id")
+            )
+            if existing_transition_id and (
+                not existing_transition_request_id
+                or existing_transition_request_id == transition_request_id
+                or existing_transition_id == committed_transition_id
+            ):
                 mark_transition_request_committed(
                     run_dir_path,
-                    request_id=maybe_text(transition_request.get("request_id")),
+                    request_id=transition_request_id,
                     committed_by_role=maybe_text(
                         transition_request.get("required_approval_role")
                     )
                     or maybe_text(transition_request.get("latest_decision_by_role"))
                     or "runtime-operator",
                     committed_object_kind="round-transition",
-                    committed_object_id=maybe_text(existing_output.get("transition_id")),
+                    committed_object_id=existing_transition_id,
                 )
+            elif existing_transition_id and existing_transition_request_id:
+                warnings.append(
+                    {
+                        "code": "target-round-owned-by-different-transition-request",
+                        "message": (
+                            f"Round {round_id} already exists from transition request "
+                            f"{existing_transition_request_id}; the current request was not recommitted."
+                        ),
+                    }
+                )
+            warnings.append(
+                {
+                    "code": "round-already-exists",
+                    "message": f"Round {round_id} already exists; no mutation was applied.",
+                }
+            )
             target_sync = (
                 target_snapshot.get("deliberation_sync")
                 if isinstance(target_snapshot.get("deliberation_sync"), dict)
@@ -672,7 +749,7 @@ def open_investigation_round_skill(
                     "write_surface": "deliberation-plane",
                     "output_path": str(output_file),
                     "task_path": str(target_task_file),
-                    "transition_request_id": maybe_text(transition_request.get("request_id")),
+                    "transition_request_id": transition_request_id,
                 },
                 "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, "noop")[:20],
                 "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, "noop")[:16],
@@ -680,8 +757,8 @@ def open_investigation_round_skill(
                     {"signal_id": "", "artifact_path": str(board_file), "record_locator": f"$.rounds.{round_id}", "artifact_ref": f"{board_file}:$.rounds.{round_id}"},
                     {"signal_id": "", "artifact_path": str(target_task_file), "record_locator": "$", "artifact_ref": f"{target_task_file}:$"},
                 ],
-                "canonical_ids": [maybe_text(existing_output.get("transition_id"))] if isinstance(existing_output, dict) and maybe_text(existing_output.get("transition_id")) else [],
-                "warnings": [{"code": "round-already-exists", "message": f"Round {round_id} already exists; no mutation was applied."}],
+                "canonical_ids": [existing_transition_id] if existing_transition_id else [],
+                "warnings": warnings,
                 "board_handoff": {
                     "candidate_ids": [round_id],
                     "evidence_refs": [{"signal_id": "", "artifact_path": str(board_file), "record_locator": f"$.rounds.{round_id}", "artifact_ref": f"{board_file}:$.rounds.{round_id}"}],

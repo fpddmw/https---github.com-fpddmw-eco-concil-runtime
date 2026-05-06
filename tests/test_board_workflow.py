@@ -1193,6 +1193,121 @@ class BoardWorkflowTests(unittest.TestCase):
                 transition_row[3],
             )
 
+    def test_open_investigation_round_replay_noops_after_transition_artifact_loss(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            context = seed_board_issue_context(run_dir, root)
+            coverage_ref = context["evidence_ref"]
+            issue_id = context["issue_id"]
+
+            run_script(
+                script_path("update-hypothesis-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--title",
+                "Smoke over NYC was materially significant",
+                "--statement",
+                "Public smoke reports are backed by elevated PM2.5 observations.",
+                "--status",
+                "active",
+                "--owner-role",
+                "moderator",
+                "--linked-claim-id",
+                issue_id,
+                "--linked-artifact-ref",
+                coverage_ref,
+                "--confidence",
+                "0.75",
+            )
+
+            transition_request_id = approve_open_round_transition(
+                run_dir,
+                source_round_id=ROUND_ID,
+                target_round_id=ROUND2_ID,
+            )
+            first_payload = run_script(
+                script_path("open-investigation-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND2_ID,
+                "--source-round-id",
+                ROUND_ID,
+                "--transition-request-id",
+                transition_request_id,
+            )
+            transition_id = first_payload["canonical_ids"][0]
+            transition_artifact_path = run_dir / "runtime" / f"round_transition_{ROUND2_ID}.json"
+            transition_artifact_path.unlink()
+
+            replay_payload = run_script(
+                script_path("open-investigation-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND2_ID,
+                "--source-round-id",
+                ROUND_ID,
+                "--transition-request-id",
+                transition_request_id,
+            )
+
+            warning_codes = {
+                warning["code"]
+                for warning in replay_payload["warnings"]
+                if isinstance(warning, dict)
+            }
+            connection = sqlite3.connect(run_dir / "analytics" / "signal_plane.sqlite")
+            try:
+                request_row = connection.execute(
+                    """
+                    SELECT request_status, committed_object_kind, committed_object_id
+                    FROM transition_requests
+                    WHERE request_id = ?
+                    """,
+                    (transition_request_id,),
+                ).fetchone()
+                transition_count = connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM round_transitions
+                    WHERE transition_id = ?
+                    """,
+                    (transition_id,),
+                ).fetchone()[0]
+                open_event_count = connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM board_events
+                    WHERE run_id = ? AND round_id = ? AND event_type = 'round-opened'
+                    """,
+                    (RUN_ID, ROUND2_ID),
+                ).fetchone()[0]
+            finally:
+                connection.close()
+
+            self.assertEqual("completed", replay_payload["status"])
+            self.assertEqual("noop", replay_payload["summary"]["operation"])
+            self.assertEqual([transition_id], replay_payload["canonical_ids"])
+            self.assertIn("round-already-exists", warning_codes)
+            self.assertIn("missing-round-transition-artifact", warning_codes)
+            self.assertIsNotNone(request_row)
+            assert request_row is not None
+            self.assertEqual("committed", request_row[0])
+            self.assertEqual("round-transition", request_row[1])
+            self.assertEqual(transition_id, request_row[2])
+            self.assertEqual(1, transition_count)
+            self.assertEqual(1, open_event_count)
+
     def test_open_investigation_round_fallback_uses_shared_source_role_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

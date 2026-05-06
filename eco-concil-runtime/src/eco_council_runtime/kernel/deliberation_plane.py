@@ -7614,6 +7614,58 @@ def store_round_transition_record(
     }
 
 
+def load_round_transition_record(
+    run_dir: str | Path,
+    *,
+    transition_id: str = "",
+    run_id: str = "",
+    round_id: str = "",
+    source_round_id: str = "",
+    transition_request_id: str = "",
+    db_path: str = "",
+) -> dict[str, Any] | None:
+    run_dir_path = resolve_run_dir(run_dir)
+    requested_transition_id = maybe_text(transition_id)
+    requested_run_id = maybe_text(run_id)
+    requested_round_id = maybe_text(round_id)
+    if not requested_transition_id and not (requested_run_id and requested_round_id):
+        return None
+
+    where_clauses: list[str] = []
+    params: list[Any] = []
+    if requested_transition_id:
+        where_clauses.append("transition_id = ?")
+        params.append(requested_transition_id)
+    else:
+        where_clauses.append("run_id = ?")
+        params.append(requested_run_id)
+        where_clauses.append("round_id = ?")
+        params.append(requested_round_id)
+        if maybe_text(source_round_id):
+            where_clauses.append("source_round_id = ?")
+            params.append(maybe_text(source_round_id))
+
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        query = (
+            "SELECT * FROM round_transitions WHERE "
+            + " AND ".join(where_clauses)
+            + " ORDER BY generated_at_utc DESC, transition_id DESC LIMIT ?"
+        )
+        rows = connection.execute(query, (*params, 200)).fetchall()
+        requested_request_id = maybe_text(transition_request_id)
+        for row in rows:
+            payload = payload_from_db_row(row)
+            if requested_request_id and maybe_text(
+                payload.get("transition_request_id")
+            ) != requested_request_id:
+                continue
+            return payload
+    finally:
+        connection.close()
+    return None
+
+
 def store_orchestration_plan_record(
     run_dir: str | Path,
     *,
@@ -7966,6 +8018,7 @@ __all__ = [
     "load_runtime_control_freeze_record",
     "load_raw_board_record",
     "load_reporting_handoff_record",
+    "load_round_transition_record",
     "load_round_readiness_assessment",
     "load_round_snapshot",
     "load_supervisor_snapshot_record",

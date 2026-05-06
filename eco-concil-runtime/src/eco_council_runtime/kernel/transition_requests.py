@@ -994,6 +994,12 @@ def mark_transition_request_committed(
     committed_object_id: str,
     db_path: str = "",
 ) -> dict[str, Any]:
+    requested_object_kind = maybe_text(committed_object_kind)
+    requested_object_id = maybe_text(committed_object_id)
+    if not requested_object_kind or not requested_object_id:
+        raise ValueError(
+            "mark_transition_request_committed requires a committed object kind and id."
+        )
     connection, db_file = connect_db(run_dir, db_path)
     try:
         with connection:
@@ -1019,12 +1025,23 @@ def mark_transition_request_committed(
                 raise ValueError(
                     f"Transition request {request_id} is not approved for commit; current status is {status or '<empty>'}."
                 )
-            if (
-                status == REQUEST_STATUS_COMMITTED
-                and maybe_text(request.get("committed_object_kind")) == maybe_text(committed_object_kind)
-                and maybe_text(request.get("committed_object_id")) == maybe_text(committed_object_id)
-            ):
-                return {**request, "db_path": str(db_file)}
+            if status == REQUEST_STATUS_COMMITTED:
+                current_object_kind = maybe_text(request.get("committed_object_kind"))
+                current_object_id = maybe_text(request.get("committed_object_id"))
+                if (
+                    current_object_kind == requested_object_kind
+                    and current_object_id == requested_object_id
+                ):
+                    return {
+                        **request,
+                        "commit_status": "already-committed",
+                        "db_path": str(db_file),
+                    }
+                raise ValueError(
+                    f"Transition request {request_id} is already committed to "
+                    f"`{current_object_kind}:{current_object_id}` and cannot be "
+                    f"recommitted to `{requested_object_kind}:{requested_object_id}`."
+                )
             committed_at = utc_now_iso()
             updated_request = transition_request_payload(
                 run_id=maybe_text(request.get("run_id")),
@@ -1065,8 +1082,8 @@ def mark_transition_request_committed(
                 rejected_at_utc=maybe_text(request.get("rejected_at_utc")),
                 committed_at_utc=committed_at,
                 committed_by_role=resolved_committed_by_role,
-                committed_object_kind=committed_object_kind,
-                committed_object_id=committed_object_id,
+                committed_object_kind=requested_object_kind,
+                committed_object_id=requested_object_id,
                 created_at_utc=maybe_text(request.get("created_at_utc")),
                 updated_at_utc=committed_at,
             )
@@ -1076,7 +1093,7 @@ def mark_transition_request_committed(
             )
     finally:
         connection.close()
-    return {**updated_request, "db_path": str(db_file)}
+    return {**updated_request, "commit_status": "committed", "db_path": str(db_file)}
 
 
 def resolve_transition_request_for_execution(

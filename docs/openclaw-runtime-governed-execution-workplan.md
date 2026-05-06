@@ -36,7 +36,7 @@
 
 ### 当前落地状态
 
-已落地 runtime-governed execution 的第一块代码：
+已落地 runtime-governed execution 的核心代码块：
 
 1. `eco-concil-runtime/src/eco_council_runtime/kernel/governance.py`
    - `preflight-skill` 现在对 `optional-analysis` 与 `reporting` 层中声明 `requires_operator_approval=True` 的 skill 强制要求 `--skill-approval-request-id`。
@@ -58,19 +58,34 @@
 5. `tests/test_runtime_kernel.py`
    - 覆盖 governed receipt envelope 的关键字段。
    - 覆盖同一 receipt payload 重放时 `receipt_write.write_status=unchanged`。
+   - 覆盖 transition request 首次提交、同对象重放和不同对象重定向失败。
+6. `eco-concil-runtime/src/eco_council_runtime/kernel/transition_requests.py`
+   - `mark_transition_request_committed` 现在要求 committed object kind/id。
+   - 首次提交返回 `commit_status=committed`。
+   - 同一 request 重放到同一 object 返回 `commit_status=already-committed`。
+   - 已 committed request 不能被重定向到另一个 round transition 或 report basis object。
+7. `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
+   - 新增 `load_round_transition_record`，支持按 `transition_id` 或 run/round/source/request 恢复 round transition 记录。
+8. `skills/open-investigation-round/scripts/open_investigation_round.py`
+   - target round 已存在时进入 no-op，不再产生重复 board event 或 round transition。
+   - no-op 分支优先使用 transition request 已 committed 的 round transition。
+   - transition artifact 丢失时可从 deliberation plane 恢复 canonical transition id。
+   - 如果 target round 属于另一个 transition request，当前 request 不会被静默 recommit。
+9. `tests/test_board_workflow.py`
+   - 覆盖 `open-investigation-round` 在 target 已存在且 transition artifact 丢失时的可重放 no-op 行为。
 
 当前未闭环项：
 
 1. 真实案例评测命令序列仍需改成优先通过 `run-skill`，direct scripts 只作为 dev/debug 兼容。
 2. 运行锁的 operator 可见状态仍需固定到 `show-run-state` / runtime health。
 3. receipt envelope 已落地；后续还需决定 payload hash 不同但 receipt_id 相同时是否应升级为阻断或 operator review。
-4. target 已存在和关键 state transition 幂等性仍需继续补测试。
 
 当前实测状态：
 
-1. `python3 tools/quality_gate.py test runtime-governance` 通过，53 tests。
-2. `python3 tools/quality_gate.py test runtime-governance reporting` 通过，76 tests。
-3. `python3 tools/quality_gate.py full` 通过，254 tests。
+1. `python3 -m unittest tests.test_board_workflow` 通过，16 tests。
+2. `python3 tools/quality_gate.py test runtime-governance` 通过，54 tests。
+3. `python3 tools/quality_gate.py test runtime-governance reporting` 通过，77 tests。
+4. `python3 tools/quality_gate.py full` 通过，256 tests。
 
 ### P0：入口分类
 

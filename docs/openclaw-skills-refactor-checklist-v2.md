@@ -175,6 +175,8 @@
 4. 冻结报告依据。
 5. 关闭轮次后归档。
 6. phase transition 类动作通过 transition request/approval 治理，不复用 skill approval。
+7. state-transition request 一旦 committed，只能重放到同一 committed object，不能复用到另一个 round transition 或 report basis。
+8. target 已存在时，state-transition skill 应优先 no-op 并保留 canonical id / warning，而不是再次写入业务对象。
 
 ## 4. 当前 Skills 的有效性判断
 
