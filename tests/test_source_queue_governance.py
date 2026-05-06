@@ -13,8 +13,8 @@ sys.path.insert(0, str(RUNTIME_SRC))
 
 
 def load_modules():
-    selection_module = importlib.import_module("eco_council_runtime.kernel.source_queue_selection")
-    contract_module = importlib.import_module("eco_council_runtime.kernel.source_queue_contract")
+    selection_module = importlib.import_module("eco_council_runtime.kernel.source_queue.source_queue_selection")
+    contract_module = importlib.import_module("eco_council_runtime.kernel.source_queue.source_queue_contract")
     return selection_module, contract_module
 
 
@@ -108,7 +108,7 @@ class SourceQueueGovernanceTests(unittest.TestCase):
 
     def test_build_fetch_plan_enforces_max_source_steps_per_round(self) -> None:
         selection_module, _ = load_modules()
-        planner_module = importlib.import_module("eco_council_runtime.kernel.source_queue_planner")
+        planner_module = importlib.import_module("eco_council_runtime.kernel.source_queue.source_queue_planner")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"

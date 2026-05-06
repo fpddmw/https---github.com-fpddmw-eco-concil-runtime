@@ -18,8 +18,8 @@ from .canonical_contracts import (
     ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
     SPATIOTEMPORAL_OBJECTION_CODE_VALUES,
 )
-from .council_objects import query_council_objects
-from .kernel.signal_plane_normalizer import ensure_signal_plane_schema
+from eco_council_runtime.council_objects import query_council_objects
+from eco_council_runtime.kernel.planes.signal_plane_normalizer import ensure_signal_plane_schema
 
 
 OPTIONAL_ANALYSIS_RULE_IDS: dict[str, str] = {
@@ -2329,7 +2329,7 @@ def run_detect_temporal_cooccurrence_cues(
             "warnings": relation_warnings,
         }
         write_json(relation_output_file, relation_payload)
-        from .kernel.analysis_plane import sync_spatiotemporal_relation_cue_result_set
+        from eco_council_runtime.kernel.planes.analysis_plane import sync_spatiotemporal_relation_cue_result_set
 
         relation_sync = sync_spatiotemporal_relation_cue_result_set(
             run_dir_path,
@@ -2577,7 +2577,7 @@ def run_review_spatiotemporal_relation_alternatives(
             "A challenge, probe, review comment, finding, or report basis object must explicitly carry any report-facing use.",
         ],
     )
-    from .kernel.analysis_plane import query_spatiotemporal_relation_cues
+    from eco_council_runtime.kernel.planes.analysis_plane import query_spatiotemporal_relation_cues
 
     relation_query = query_spatiotemporal_relation_cues(
         run_dir_path,

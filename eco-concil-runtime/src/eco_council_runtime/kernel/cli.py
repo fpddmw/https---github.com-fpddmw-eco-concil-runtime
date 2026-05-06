@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..canonical_contracts import (
+from eco_council_runtime.canonical_contracts import (
     PLANE_ANALYSIS,
     PLANE_DELIBERATION,
     PLANE_REPORTING,
@@ -14,11 +14,11 @@ from ..canonical_contracts import (
     SPATIOTEMPORAL_OBJECTION_CODE_VALUES,
     canonical_contracts_for_plane,
 )
-from ..control_objects import (
+from eco_council_runtime.control_objects import (
     control_queryable_object_kinds,
     query_control_objects,
 )
-from ..council_objects import (
+from eco_council_runtime.council_objects import (
     append_discussion_message_record,
     append_evidence_bundle_record,
     append_finding_record,
@@ -26,50 +26,50 @@ from ..council_objects import (
     council_queryable_object_kinds,
     query_council_objects,
 )
-from ..governed_execution_exports import materialize_governed_execution_exports
+from eco_council_runtime.kernel.reporting.governed_execution_exports import materialize_governed_execution_exports
 from ..reporting_objects import (
     query_reporting_objects,
     reporting_queryable_object_kinds,
     store_report_section_draft_record,
 )
 from ..reporting_exports import materialize_reporting_exports
-from ..agent_entry_handoff import EntryChainBuilder, HardGateCommandBuilder
-from ..runtime_command_hints import kernel_command, run_skill_command
-from .analysis_plane import (
+from eco_council_runtime.kernel.governance.agent_entry_handoff import EntryChainBuilder, HardGateCommandBuilder
+from eco_council_runtime.runtime_command_hints import kernel_command, run_skill_command
+from eco_council_runtime.kernel.planes.analysis_plane import (
     analysis_kind_names,
     query_analysis_result_items,
     query_analysis_result_sets,
     query_spatiotemporal_relation_cues,
 )
-from .agent_entry import agent_entry_state, materialize_agent_entry_gate
-from .access_policy import (
+from eco_council_runtime.kernel.governance.agent_entry import agent_entry_state, materialize_agent_entry_gate
+from eco_council_runtime.kernel.governance.access_policy import (
     command_requires_explicit_actor_role,
     evaluate_kernel_command_access,
 )
-from .benchmark import (
+from eco_council_runtime.kernel.archive.benchmark import (
     compare_benchmark_manifests,
     materialize_benchmark_manifest,
     materialize_scenario_fixture,
     replay_runtime_scenario,
 )
-from .controller import (
+from eco_council_runtime.kernel.execution.controller import (
     run_governed_execution_round_with_contract_mode,
 )
-from .deliberation_plane import (
+from eco_council_runtime.kernel.planes.deliberation_plane import (
     load_governed_execution_control_state,
     load_schema_status,
 )
-from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill
-from .gate import GateHandler
-from .governance import CONTRACT_MODES, preflight_skill_execution
-from .ledger import append_ledger_event, load_ledger_tail
-from .manifest import (
+from eco_council_runtime.kernel.execution.executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill
+from eco_council_runtime.kernel.execution.gate import GateHandler
+from eco_council_runtime.kernel.governance.runtime_governance import CONTRACT_MODES, preflight_skill_execution
+from eco_council_runtime.kernel.core.ledger import append_ledger_event, load_ledger_tail
+from eco_council_runtime.kernel.core.manifest import (
     init_round_cursor,
     init_run_manifest,
     load_json_if_exists,
     write_json,
 )
-from .operations import (
+from eco_council_runtime.kernel.operator.operations import (
     PERMISSION_PROFILES,
     load_admission_policy,
     load_dead_letters,
@@ -78,12 +78,12 @@ from .operations import (
     materialize_runtime_health,
     runtime_health_payload,
 )
-from .post_round import (
+from eco_council_runtime.kernel.archive.post_round import (
     ARCHIVE_FAILURE_POLICIES,
     bootstrap_history_context_with_contract_mode,
     close_round_with_contract_mode,
 )
-from .paths import (
+from eco_council_runtime.kernel.core.paths import (
     admission_policy_path,
     benchmark_compare_path,
     benchmark_manifest_path,
@@ -103,7 +103,7 @@ from .paths import (
     scenario_fixture_path,
     supervisor_state_path,
 )
-from .runtime_state_surfaces import (
+from eco_council_runtime.kernel.operator.runtime_state_surfaces import (
     build_reporting_surface,
     load_controller_state_wrapper,
     load_council_decision_wrapper,
@@ -114,7 +114,7 @@ from .runtime_state_surfaces import (
     load_reporting_handoff_wrapper,
     load_supervisor_state_wrapper,
 )
-from .skill_approvals import (
+from eco_council_runtime.kernel.governance.skill_approvals import (
     REQUEST_STATUS_APPROVED as SKILL_REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_CONSUMED as SKILL_REQUEST_STATUS_CONSUMED,
     REQUEST_STATUS_PENDING as SKILL_REQUEST_STATUS_PENDING,
@@ -124,9 +124,9 @@ from .skill_approvals import (
     reject_skill_approval_request,
     store_skill_approval_request,
 )
-from .registry import write_registry
-from .supervisor import supervise_round, supervise_round_with_contract_mode
-from .transition_requests import (
+from eco_council_runtime.kernel.core.registry import write_registry
+from eco_council_runtime.kernel.execution.supervisor import supervise_round, supervise_round_with_contract_mode
+from eco_council_runtime.kernel.governance.transition_requests import (
     DECISION_STATUS_APPROVED,
     DECISION_STATUS_REJECTED,
     REQUEST_STATUS_APPROVED,

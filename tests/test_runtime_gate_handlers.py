@@ -9,9 +9,9 @@ RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime import runtime_gate_handlers  # noqa: E402
-from eco_council_runtime.runtime_gate_profile import runtime_gate_handler_registry  # noqa: E402
-from eco_council_runtime.kernel.gate import gate_handler_registry  # noqa: E402
+from eco_council_runtime.kernel.execution import runtime_gate_handlers  # noqa: E402
+from eco_council_runtime.kernel.execution.runtime_gate_profile import runtime_gate_handler_registry  # noqa: E402
+from eco_council_runtime.kernel.execution.gate import gate_handler_registry  # noqa: E402
 
 
 class GovernedExecutionGateHandlerTests(unittest.TestCase):

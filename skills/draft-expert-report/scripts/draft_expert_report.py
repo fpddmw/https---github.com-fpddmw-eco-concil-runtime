@@ -18,13 +18,13 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
+from eco_council_runtime.kernel.reporting.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
-from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_expert_report_record,
 )
-from eco_council_runtime.kernel.runtime_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.operator.runtime_state_surfaces import (  # noqa: E402
     load_council_decision_wrapper,
     load_reporting_handoff_wrapper,
 )

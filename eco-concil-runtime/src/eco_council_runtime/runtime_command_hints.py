@@ -3,12 +3,12 @@ from __future__ import annotations
 import shlex
 from pathlib import Path
 
-from .kernel.access_policy import (
+from eco_council_runtime.kernel.governance.access_policy import (
     command_requires_explicit_actor_role,
     kernel_command_actor_role_hint,
 )
-from .kernel.executor import skill_command_hint
-from .kernel.skill_registry import default_actor_role_hint
+from eco_council_runtime.kernel.execution.executor import skill_command_hint
+from eco_council_runtime.kernel.governance.skill_registry import default_actor_role_hint
 
 
 def kernel_command(command_name: str, *args: str, actor_role: str = "") -> str:

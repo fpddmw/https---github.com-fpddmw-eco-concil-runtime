@@ -39,7 +39,7 @@ def ensure_runtime_src_on_path() -> None:
 def default_runtime_gate_handlers() -> dict[str, object]:
     ensure_runtime_src_on_path()
 
-    from eco_council_runtime.runtime_gate_profile import runtime_gate_handler_registry
+    from eco_council_runtime.kernel.execution.runtime_gate_profile import runtime_gate_handler_registry
 
     return runtime_gate_handler_registry()
 
@@ -47,7 +47,7 @@ def default_runtime_gate_handlers() -> dict[str, object]:
 def default_runtime_posture_profile_config() -> dict[str, object]:
     ensure_runtime_src_on_path()
 
-    from eco_council_runtime.runtime_posture_profile import default_runtime_posture_profile
+    from eco_council_runtime.kernel.execution.runtime_posture_profile import default_runtime_posture_profile
 
     return default_runtime_posture_profile()
 
@@ -399,7 +399,7 @@ class RuntimeKernelTests(unittest.TestCase):
             run_dir = Path(tmpdir) / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.transition_requests import (
+            from eco_council_runtime.kernel.governance.transition_requests import (
                 store_transition_request,
             )
 
@@ -423,7 +423,7 @@ class RuntimeKernelTests(unittest.TestCase):
             run_dir = Path(tmpdir) / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.transition_requests import (
+            from eco_council_runtime.kernel.governance.transition_requests import (
                 REQUEST_STATUS_PENDING,
                 approve_transition_request,
                 load_transition_request,
@@ -462,7 +462,7 @@ class RuntimeKernelTests(unittest.TestCase):
             run_dir = Path(tmpdir) / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.transition_requests import (
+            from eco_council_runtime.kernel.governance.transition_requests import (
                 approve_transition_request,
                 mark_transition_request_committed,
                 store_transition_request,
@@ -502,7 +502,7 @@ class RuntimeKernelTests(unittest.TestCase):
             run_dir = Path(tmpdir) / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.transition_requests import (
+            from eco_council_runtime.kernel.governance.transition_requests import (
                 REQUEST_STATUS_COMMITTED,
                 approve_transition_request,
                 load_transition_request,
@@ -724,7 +724,7 @@ class RuntimeKernelTests(unittest.TestCase):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.executor import SkillExecutionError, run_skill
+            from eco_council_runtime.kernel.execution.executor import SkillExecutionError, run_skill
 
             output_path = (run_dir / "board" / f"board_state_summary_{ROUND_ID}.json").resolve()
             fake_payload = {
@@ -751,7 +751,7 @@ class RuntimeKernelTests(unittest.TestCase):
             }
 
             with mock.patch(
-                "eco_council_runtime.kernel.executor.subprocess.run",
+                "eco_council_runtime.kernel.execution.executor.subprocess.run",
                 return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(fake_payload), stderr=""),
             ):
                 with self.assertRaises(SkillExecutionError) as raised:
@@ -775,7 +775,7 @@ class RuntimeKernelTests(unittest.TestCase):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.governance import preflight_skill_execution
+            from eco_council_runtime.kernel.governance.runtime_governance import preflight_skill_execution
 
             fake_skill_entry = {
                 "skill_name": "fetch-youtube-video-search",
@@ -787,7 +787,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "agent": {},
             }
 
-            with mock.patch("eco_council_runtime.kernel.governance.resolve_skill_entry", return_value=fake_skill_entry):
+            with mock.patch("eco_council_runtime.kernel.governance.runtime_governance.resolve_skill_entry", return_value=fake_skill_entry):
                 blocked = preflight_skill_execution(
                     run_dir,
                     run_id=RUN_ID,
@@ -820,8 +820,8 @@ class RuntimeKernelTests(unittest.TestCase):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.executor import run_skill
-            from eco_council_runtime.kernel.ledger import load_ledger_tail
+            from eco_council_runtime.kernel.execution.executor import run_skill
+            from eco_council_runtime.kernel.core.ledger import load_ledger_tail
 
             fake_skill_entry = {
                 "skill_name": "summarize-board-state",
@@ -841,16 +841,16 @@ class RuntimeKernelTests(unittest.TestCase):
             }
 
             with (
-                mock.patch("eco_council_runtime.kernel.governance.resolve_skill_entry", return_value=fake_skill_entry),
-                mock.patch("eco_council_runtime.kernel.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.governance.runtime_governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.execution.executor.resolve_skill_entry", return_value=fake_skill_entry),
                 mock.patch(
-                    "eco_council_runtime.kernel.executor.subprocess.run",
+                    "eco_council_runtime.kernel.execution.executor.subprocess.run",
                     side_effect=[
                         subprocess.CompletedProcess(args=["python"], returncode=3, stdout="", stderr="temporary upstream error"),
                         subprocess.CompletedProcess(args=["python"], returncode=0, stdout=json.dumps(recovered_payload), stderr=""),
                     ],
                 ),
-                mock.patch("eco_council_runtime.kernel.executor.time.sleep") as sleep_mock,
+                mock.patch("eco_council_runtime.kernel.execution.executor.time.sleep") as sleep_mock,
             ):
                 payload = run_skill(
                     run_dir,
@@ -882,7 +882,7 @@ class RuntimeKernelTests(unittest.TestCase):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.executor import run_skill
+            from eco_council_runtime.kernel.execution.executor import run_skill
 
             fake_skill_entry = {
                 "skill_name": "summarize-board-state",
@@ -902,10 +902,10 @@ class RuntimeKernelTests(unittest.TestCase):
             }
 
             with (
-                mock.patch("eco_council_runtime.kernel.governance.resolve_skill_entry", return_value=fake_skill_entry),
-                mock.patch("eco_council_runtime.kernel.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.governance.runtime_governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.execution.executor.resolve_skill_entry", return_value=fake_skill_entry),
                 mock.patch(
-                    "eco_council_runtime.kernel.executor.subprocess.run",
+                    "eco_council_runtime.kernel.execution.executor.subprocess.run",
                     return_value=subprocess.CompletedProcess(
                         args=["python"],
                         returncode=0,
@@ -944,8 +944,8 @@ class RuntimeKernelTests(unittest.TestCase):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.executor import run_skill
-            from eco_council_runtime.kernel.ledger import load_ledger_tail
+            from eco_council_runtime.kernel.execution.executor import run_skill
+            from eco_council_runtime.kernel.core.ledger import load_ledger_tail
 
             fake_skill_entry = {
                 "skill_name": "summarize-board-state",
@@ -965,10 +965,10 @@ class RuntimeKernelTests(unittest.TestCase):
             }
 
             with (
-                mock.patch("eco_council_runtime.kernel.governance.resolve_skill_entry", return_value=fake_skill_entry),
-                mock.patch("eco_council_runtime.kernel.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.governance.runtime_governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.execution.executor.resolve_skill_entry", return_value=fake_skill_entry),
                 mock.patch(
-                    "eco_council_runtime.kernel.executor.subprocess.run",
+                    "eco_council_runtime.kernel.execution.executor.subprocess.run",
                     side_effect=[
                         subprocess.CompletedProcess(
                             args=["python"],
@@ -1026,9 +1026,9 @@ class RuntimeKernelTests(unittest.TestCase):
             ensure_runtime_src_on_path()
 
             from eco_council_runtime.kernel.cli import show_run_state
-            from eco_council_runtime.kernel.executor import SkillExecutionError, run_skill
-            from eco_council_runtime.kernel.ledger import load_ledger_tail
-            from eco_council_runtime.agent_entry_profile import (
+            from eco_council_runtime.kernel.execution.executor import SkillExecutionError, run_skill
+            from eco_council_runtime.kernel.core.ledger import load_ledger_tail
+            from eco_council_runtime.kernel.governance.agent_entry_profile import (
                 default_agent_entry_profile,
             )
 
@@ -1057,10 +1057,10 @@ class RuntimeKernelTests(unittest.TestCase):
             }
 
             with (
-                mock.patch("eco_council_runtime.kernel.governance.resolve_skill_entry", return_value=fake_skill_entry),
-                mock.patch("eco_council_runtime.kernel.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.governance.runtime_governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.execution.executor.resolve_skill_entry", return_value=fake_skill_entry),
                 mock.patch(
-                    "eco_council_runtime.kernel.executor.subprocess.run",
+                    "eco_council_runtime.kernel.execution.executor.subprocess.run",
                     side_effect=[
                         subprocess.CompletedProcess(
                             args=["python"],
@@ -1145,7 +1145,7 @@ class RuntimeKernelTests(unittest.TestCase):
             ensure_runtime_src_on_path()
 
             from eco_council_runtime.kernel.cli import init_run, show_run_state
-            from eco_council_runtime.agent_entry_profile import (
+            from eco_council_runtime.kernel.governance.agent_entry_profile import (
                 default_agent_entry_profile,
             )
 
@@ -1157,7 +1157,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, sys.argv[2])
-from eco_council_runtime.kernel.locking import exclusive_runtime_lock
+from eco_council_runtime.kernel.core.locking import exclusive_runtime_lock
 
 metadata = {
     "run_id": sys.argv[3],
@@ -1229,8 +1229,8 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.executor import SkillExecutionError, run_skill
-            from eco_council_runtime.kernel.ledger import load_ledger_tail
+            from eco_council_runtime.kernel.execution.executor import SkillExecutionError, run_skill
+            from eco_council_runtime.kernel.core.ledger import load_ledger_tail
 
             fake_skill_entry = {
                 "skill_name": "summarize-board-state",
@@ -1243,10 +1243,10 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             }
 
             with (
-                mock.patch("eco_council_runtime.kernel.governance.resolve_skill_entry", return_value=fake_skill_entry),
-                mock.patch("eco_council_runtime.kernel.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.governance.runtime_governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.execution.executor.resolve_skill_entry", return_value=fake_skill_entry),
                 mock.patch(
-                    "eco_council_runtime.kernel.executor.subprocess.run",
+                    "eco_council_runtime.kernel.execution.executor.subprocess.run",
                     side_effect=subprocess.TimeoutExpired(cmd=["python"], timeout=0.01, output="partial", stderr="still running"),
                 ),
             ):
@@ -1278,9 +1278,9 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.executor import SkillExecutionError, run_skill
-            from eco_council_runtime.kernel.ledger import load_ledger_tail
-            from eco_council_runtime.kernel.operations import load_dead_letters, materialize_admission_policy
+            from eco_council_runtime.kernel.execution.executor import SkillExecutionError, run_skill
+            from eco_council_runtime.kernel.core.ledger import load_ledger_tail
+            from eco_council_runtime.kernel.operator.operations import load_dead_letters, materialize_admission_policy
 
             fake_skill_entry = {
                 "skill_name": "summarize-board-state",
@@ -1294,9 +1294,9 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             materialize_admission_policy(run_dir, run_id=RUN_ID, max_timeout_seconds=1.0)
 
             with (
-                mock.patch("eco_council_runtime.kernel.governance.resolve_skill_entry", return_value=fake_skill_entry),
-                mock.patch("eco_council_runtime.kernel.executor.resolve_skill_entry", return_value=fake_skill_entry),
-                mock.patch("eco_council_runtime.kernel.executor.subprocess.run") as subprocess_run_mock,
+                mock.patch("eco_council_runtime.kernel.governance.runtime_governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.execution.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.execution.executor.subprocess.run") as subprocess_run_mock,
             ):
                 with self.assertRaises(SkillExecutionError) as raised:
                     run_skill(
@@ -1330,8 +1330,8 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             ensure_runtime_src_on_path()
 
             from eco_council_runtime.kernel.cli import init_run, show_run_state
-            from eco_council_runtime.kernel.operations import materialize_dead_letter
-            from eco_council_runtime.agent_entry_profile import (
+            from eco_council_runtime.kernel.operator.operations import materialize_dead_letter
+            from eco_council_runtime.kernel.governance.agent_entry_profile import (
                 default_agent_entry_profile,
             )
 
@@ -1367,7 +1367,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.operations import default_admission_policy
+            from eco_council_runtime.kernel.operator.operations import default_admission_policy
 
             policy = default_admission_policy(run_dir, run_id=RUN_ID)
             sandbox = policy["sandbox_boundary"]
@@ -1391,8 +1391,8 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
-            from eco_council_runtime.runtime_planning_profile import runtime_planning_source
+            from eco_council_runtime.kernel.execution.controller import run_governed_execution_round_with_contract_mode
+            from eco_council_runtime.kernel.execution.runtime_planning_profile import runtime_planning_source
 
             planner_result = {
                 "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
@@ -1495,11 +1495,11 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             ]
 
             with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.execution.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.execution.controller.planning_bundle", return_value=planning),
+                mock.patch("eco_council_runtime.kernel.execution.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
+                    "eco_council_runtime.kernel.execution.controller.run_skill",
                     side_effect=[planner_result, board_summary_result, board_brief_result, next_actions_result, readiness_result, report_basis_result],
                 ) as run_skill_mock,
             ):
@@ -1540,8 +1540,8 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
-            from eco_council_runtime.runtime_planning_profile import runtime_planning_source
+            from eco_council_runtime.kernel.execution.controller import run_governed_execution_round_with_contract_mode
+            from eco_council_runtime.kernel.execution.runtime_planning_profile import runtime_planning_source
 
             planner_result = {
                 "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
@@ -1649,14 +1649,14 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             ]
 
             with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
+                mock.patch("eco_council_runtime.kernel.execution.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.execution.controller.planning_bundle", return_value=planning),
                 mock.patch(
-                    "eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate",
+                    "eco_council_runtime.kernel.execution.runtime_gate_handlers.apply_report_basis_gate",
                     return_value=gate_payload,
                 ) as gate_mock,
                 mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
+                    "eco_council_runtime.kernel.execution.controller.run_skill",
                     side_effect=[planner_result, readiness_result, report_basis_result],
                 ),
             ):
@@ -1704,11 +1704,11 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import (
+            from eco_council_runtime.kernel.execution.controller import (
                 run_governed_execution_round_with_contract_mode,
             )
-            from eco_council_runtime.kernel.executor import SkillExecutionError
-            from eco_council_runtime.runtime_planning_profile import runtime_planning_source
+            from eco_council_runtime.kernel.execution.executor import SkillExecutionError
+            from eco_council_runtime.kernel.execution.runtime_planning_profile import runtime_planning_source
 
             planner_result = {
                 "summary": {
@@ -1786,17 +1786,17 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             ]
 
             with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.execution.controller.write_registry"),
                 mock.patch(
-                    "eco_council_runtime.kernel.controller.planning_bundle",
+                    "eco_council_runtime.kernel.execution.controller.planning_bundle",
                     return_value=planning,
                 ),
                 mock.patch(
-                    "eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate",
+                    "eco_council_runtime.kernel.execution.runtime_gate_handlers.apply_report_basis_gate",
                     return_value=gate_payload,
                 ),
                 mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
+                    "eco_council_runtime.kernel.execution.controller.run_skill",
                     side_effect=[planner_result, readiness_result],
                 ) as run_skill_mock,
             ):
@@ -1827,7 +1827,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
     def test_gate_runtime_dispatches_custom_handler_registry(self) -> None:
         ensure_runtime_src_on_path()
 
-        from eco_council_runtime.kernel.gate import execute_gate_step
+        from eco_council_runtime.kernel.execution.gate import execute_gate_step
 
         run_dir = Path("/tmp/runtime-gate-registry")
         handler = mock.Mock(
@@ -1885,7 +1885,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
+            from eco_council_runtime.kernel.execution.controller import run_governed_execution_round_with_contract_mode
 
             report_basis_result = {
                 "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
@@ -1908,10 +1908,10 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             report_basis_request_id = approve_report_basis_transition(run_dir)
 
             with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.execution.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.execution.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
+                    "eco_council_runtime.kernel.execution.controller.run_skill",
                     return_value=report_basis_result,
                 ) as run_skill_mock,
             ):
@@ -1956,12 +1956,12 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = Path(tmpdir) / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
+            from eco_council_runtime.kernel.execution.controller import run_governed_execution_round_with_contract_mode
 
             with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.execution.controller.write_registry"),
                 mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
+                    "eco_council_runtime.kernel.execution.controller.run_skill",
                     side_effect=AssertionError("default controller path should not execute skills without an approved transition request"),
                 ) as run_skill_mock,
             ):
@@ -1994,7 +1994,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
+            from eco_council_runtime.kernel.execution.controller import run_governed_execution_round_with_contract_mode
 
             report_basis_result = {
                 "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
@@ -2017,10 +2017,10 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             report_basis_request_id = approve_report_basis_transition(run_dir)
 
             with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.execution.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.execution.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
+                    "eco_council_runtime.kernel.execution.controller.run_skill",
                     return_value=report_basis_result,
                 ) as run_skill_mock,
             ):
@@ -2054,9 +2054,9 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
-            from eco_council_runtime.kernel.executor import SkillExecutionError
-            from eco_council_runtime.runtime_planning_profile import runtime_planning_source
+            from eco_council_runtime.kernel.execution.controller import run_governed_execution_round_with_contract_mode
+            from eco_council_runtime.kernel.execution.executor import SkillExecutionError
+            from eco_council_runtime.kernel.execution.runtime_planning_profile import runtime_planning_source
 
             planner_result = {
                 "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
@@ -2144,11 +2144,11 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             ]
 
             with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.execution.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.execution.controller.planning_bundle", return_value=planning),
+                mock.patch("eco_council_runtime.kernel.execution.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
+                    "eco_council_runtime.kernel.execution.controller.run_skill",
                     side_effect=[planner_result, board_summary_result, board_brief_failure],
                 ),
             ):
@@ -2185,11 +2185,11 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             (run_dir / "runtime" / f"round_controller_{ROUND_ID}.json").unlink()
 
             with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.controller.planning_bundle") as planning_bundle_mock,
-                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.execution.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.execution.controller.planning_bundle") as planning_bundle_mock,
+                mock.patch("eco_council_runtime.kernel.execution.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
+                    "eco_council_runtime.kernel.execution.controller.run_skill",
                     side_effect=[board_brief_result, next_actions_result, readiness_result, report_basis_result],
                 ) as run_skill_mock,
             ):
@@ -2223,8 +2223,8 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
-            from eco_council_runtime.runtime_planning_profile import runtime_planning_source
+            from eco_council_runtime.kernel.execution.controller import run_governed_execution_round_with_contract_mode
+            from eco_council_runtime.kernel.execution.runtime_planning_profile import runtime_planning_source
 
             planner_result = {
                 "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
@@ -2299,11 +2299,11 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             report_basis_request_id = approve_report_basis_transition(run_dir)
 
             with (
-                mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.kernel.execution.controller.write_registry"),
+                mock.patch("eco_council_runtime.kernel.execution.controller.planning_bundle", return_value=planning),
+                mock.patch("eco_council_runtime.kernel.execution.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
-                    "eco_council_runtime.kernel.controller.run_skill",
+                    "eco_council_runtime.kernel.execution.controller.run_skill",
                     side_effect=[planner_result, readiness_result, report_basis_result],
                 ) as run_skill_mock,
             ):
@@ -2341,7 +2341,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.deliberation_plane import store_runtime_control_freeze_record
+            from eco_council_runtime.kernel.planes.deliberation_plane import store_runtime_control_freeze_record
 
             controller_path = run_dir / "runtime" / f"round_controller_{ROUND_ID}.json"
             gate_path = run_dir / "runtime" / f"report_basis_gate_{ROUND_ID}.json"
@@ -2498,7 +2498,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.supervisor import supervise_round_with_contract_mode
+            from eco_council_runtime.kernel.execution.supervisor import supervise_round_with_contract_mode
 
             controller_result = {
                 "controller": {
@@ -2526,7 +2526,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             }
 
             with mock.patch(
-                "eco_council_runtime.kernel.supervisor.run_governed_execution_round_with_contract_mode",
+                "eco_council_runtime.kernel.execution.supervisor.run_governed_execution_round_with_contract_mode",
                 return_value=controller_result,
             ) as controller_mock:
                 payload = supervise_round_with_contract_mode(
@@ -2567,7 +2567,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.supervisor import supervise_round_with_contract_mode
+            from eco_council_runtime.kernel.execution.supervisor import supervise_round_with_contract_mode
 
             posture_profile = default_runtime_posture_profile_config()
             posture_profile["supervisor_classification_builder"] = (
@@ -2645,7 +2645,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             }
 
             with mock.patch(
-                "eco_council_runtime.kernel.supervisor.run_governed_execution_round_with_contract_mode",
+                "eco_council_runtime.kernel.execution.supervisor.run_governed_execution_round_with_contract_mode",
                 return_value=controller_result,
             ) as controller_mock:
                 payload = supervise_round_with_contract_mode(
@@ -2704,8 +2704,8 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.executor import SkillExecutionError
-            from eco_council_runtime.kernel.supervisor import supervise_round_with_contract_mode
+            from eco_council_runtime.kernel.execution.executor import SkillExecutionError
+            from eco_council_runtime.kernel.execution.supervisor import supervise_round_with_contract_mode
 
             controller_failure = SkillExecutionError(
                 "governed-execution failed",
@@ -2735,7 +2735,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             )
 
             with mock.patch(
-                "eco_council_runtime.kernel.supervisor.run_governed_execution_round_with_contract_mode",
+                "eco_council_runtime.kernel.execution.supervisor.run_governed_execution_round_with_contract_mode",
                 side_effect=controller_failure,
             ):
                 with self.assertRaises(SkillExecutionError) as raised:
@@ -2760,11 +2760,11 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.executor import SkillExecutionError
-            from eco_council_runtime.kernel.deliberation_plane import (
+            from eco_council_runtime.kernel.execution.executor import SkillExecutionError
+            from eco_council_runtime.kernel.planes.deliberation_plane import (
                 store_runtime_control_freeze_record,
             )
-            from eco_council_runtime.kernel.post_round import close_round_with_contract_mode
+            from eco_council_runtime.kernel.archive.post_round import close_round_with_contract_mode
 
             runtime_dir = run_dir / "runtime"
             runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -2811,9 +2811,9 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             close_request_id = approve_close_round_transition(run_dir)
 
             with (
-                mock.patch("eco_council_runtime.kernel.post_round.write_registry"),
+                mock.patch("eco_council_runtime.kernel.archive.post_round.write_registry"),
                 mock.patch(
-                    "eco_council_runtime.kernel.post_round.run_skill",
+                    "eco_council_runtime.kernel.archive.post_round.run_skill",
                     side_effect=[signal_archive_result, case_archive_failure],
                 ),
             ):

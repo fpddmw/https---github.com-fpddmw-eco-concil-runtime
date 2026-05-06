@@ -9,17 +9,17 @@ from .canonical_contracts import (
     canonical_contract,
     canonical_contract_kinds,
 )
-from .kernel.deliberation_plane import (
+from eco_council_runtime.kernel.planes.deliberation_plane import (
     connect_db as connect_deliberation_db,
     maybe_text,
     payload_from_db_row,
 )
-from .kernel.transition_requests import (
+from eco_council_runtime.kernel.governance.transition_requests import (
     OBJECT_KIND_TRANSITION_APPROVAL,
     OBJECT_KIND_TRANSITION_REJECTION,
     OBJECT_KIND_TRANSITION_REQUEST,
 )
-from .kernel.skill_approvals import (
+from eco_council_runtime.kernel.governance.skill_approvals import (
     OBJECT_KIND_SKILL_APPROVAL,
     OBJECT_KIND_SKILL_APPROVAL_CONSUMPTION,
     OBJECT_KIND_SKILL_APPROVAL_REJECTION,

@@ -38,17 +38,17 @@
 
 已落地 schema migration 硬化第一块代码：
 
-1. `eco-concil-runtime/src/eco_council_runtime/kernel/schema_migrations.py`
+1. `eco-concil-runtime/src/eco_council_runtime/kernel/core/schema_migrations.py`
    - 新增通用 `schema_metadata` 与 `schema_migrations` ledger。
    - migration record 包含 `migration_id`、`schema_name`、`target_version`、`checksum`、`status`、`error_message`。
    - 已 applied 且 checksum 一致时幂等返回；checksum 不一致时阻断。
    - migration 失败会记录 `status=failed` 与错误信息，后续可重试并覆盖为 `applied`。
-2. `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
+2. `eco-concil-runtime/src/eco_council_runtime/kernel/planes/deliberation_plane.py`
    - `connect_db` 现在会写入 deliberation-plane schema baseline。
    - 既有 legacy column/index backfill 被纳入 migration ledger。
    - 增加 `load_schema_status` 查询接口。
    - 对已有旧表先做 preflight column backfill，再执行当前 `SCHEMA_SQL`，避免旧表缺列导致 index 创建失败。
-3. `eco-concil-runtime/src/eco_council_runtime/kernel/signal_plane_normalizer.py`
+3. `eco-concil-runtime/src/eco_council_runtime/kernel/planes/signal_plane_normalizer.py`
    - normalized signal schema baseline 与 `canonical_object_kind` / query indexes backfill 被纳入 migration ledger。
 4. `eco-concil-runtime/src/eco_council_runtime/kernel/cli.py`
    - 新增 `show-schema-status --run-dir <run_dir>`，输出 schema metadata 与 migration ledger。

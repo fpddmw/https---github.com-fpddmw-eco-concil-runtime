@@ -22,22 +22,22 @@ SKIP_PARTS = {
 }
 
 DECOMPOSITION_TARGETS: dict[str, str] = {
-    "eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py": "P1/P2 deliberation plane facade split",
+    "eco-concil-runtime/src/eco_council_runtime/kernel/planes/deliberation_plane.py": "P1/P2 deliberation plane facade split",
     "eco-concil-runtime/src/eco_council_runtime/kernel/cli.py": "P5 CLI command split",
-    "eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py": "P3 analysis plane split",
+    "eco-concil-runtime/src/eco_council_runtime/kernel/planes/analysis_plane.py": "P3 analysis plane split",
     "eco-concil-runtime/src/eco_council_runtime/optional_analysis_helpers.py": "P4 optional-analysis helper split",
     "eco-concil-runtime/src/eco_council_runtime/council_objects.py": "P6 council object split",
     "eco-concil-runtime/src/eco_council_runtime/analysis_objects.py": "P6 analysis object split",
     "eco-concil-runtime/src/eco_council_runtime/canonical_contracts.py": "P6 canonical contract registry split",
-    "eco-concil-runtime/src/eco_council_runtime/kernel/benchmark.py": "P8 benchmark split",
-    "eco-concil-runtime/src/eco_council_runtime/kernel/skill_approvals.py": "P7 skill approval split",
-    "eco-concil-runtime/src/eco_council_runtime/kernel/controller.py": "P7 controller split",
-    "eco-concil-runtime/src/eco_council_runtime/kernel/transition_requests.py": "P7 transition request split",
-    "eco-concil-runtime/src/eco_council_runtime/kernel/runtime_state_surfaces.py": "P7 operator state surface rename/consolidation",
-    "eco-concil-runtime/src/eco_council_runtime/kernel/signal_plane_normalizer.py": "P7 signal normalizer split",
-    "eco-concil-runtime/src/eco_council_runtime/kernel/operations.py": "P7 runtime operations split",
-    "eco-concil-runtime/src/eco_council_runtime/kernel/executor.py": "P7 runtime executor split",
-    "eco-concil-runtime/src/eco_council_runtime/kernel/post_round.py": "P8 post-round split",
+    "eco-concil-runtime/src/eco_council_runtime/kernel/archive/benchmark.py": "P8 benchmark split",
+    "eco-concil-runtime/src/eco_council_runtime/kernel/governance/skill_approvals.py": "P7 skill approval split",
+    "eco-concil-runtime/src/eco_council_runtime/kernel/execution/controller.py": "P7 controller split",
+    "eco-concil-runtime/src/eco_council_runtime/kernel/governance/transition_requests.py": "P7 transition request split",
+    "eco-concil-runtime/src/eco_council_runtime/kernel/operator/runtime_state_surfaces.py": "P7 operator state surface rename/consolidation",
+    "eco-concil-runtime/src/eco_council_runtime/kernel/planes/signal_plane_normalizer.py": "P7 signal normalizer split",
+    "eco-concil-runtime/src/eco_council_runtime/kernel/operator/operations.py": "P7 runtime operations split",
+    "eco-concil-runtime/src/eco_council_runtime/kernel/execution/executor.py": "P7 runtime executor split",
+    "eco-concil-runtime/src/eco_council_runtime/kernel/archive/post_round.py": "P8 post-round split",
 }
 
 

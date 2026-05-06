@@ -32,19 +32,19 @@ from eco_council_runtime.canonical_contracts import (  # noqa: E402
     canonical_contract_kinds,
     validate_canonical_payload,
 )
-from eco_council_runtime.kernel.analysis_plane import (  # noqa: E402
+from eco_council_runtime.kernel.planes.analysis_plane import (  # noqa: E402
     sync_spatiotemporal_relation_cue_result_set,
 )
-from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_moderator_action_records,
 )
-from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
+from eco_council_runtime.kernel.planes.signal_plane_normalizer import (  # noqa: E402
     base_signal,
     connect_db,
     insert_signals,
 )
-from eco_council_runtime.kernel.skill_registry import resolve_skill_policy  # noqa: E402
-from eco_council_runtime.kernel.role_contracts import role_capabilities  # noqa: E402
+from eco_council_runtime.kernel.governance.skill_registry import resolve_skill_policy  # noqa: E402
+from eco_council_runtime.kernel.governance.role_contracts import role_capabilities  # noqa: E402
 
 RUN_ID = "run-spatiotemporal-taxonomy-001"
 ROUND_ID = "round-spatiotemporal-taxonomy-001"

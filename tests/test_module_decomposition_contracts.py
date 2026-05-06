@@ -18,7 +18,7 @@ if str(RUNTIME_SRC) not in sys.path:
 
 
 FACADE_PUBLIC_SYMBOLS = {
-    "eco_council_runtime.kernel.deliberation_plane": (
+    "eco_council_runtime.kernel.planes.deliberation_plane": (
         "connect_db",
         "load_schema_status",
         "commit_board_mutation",
@@ -27,7 +27,7 @@ FACADE_PUBLIC_SYMBOLS = {
         "store_reporting_handoff_record",
         "store_round_transition_record",
     ),
-    "eco_council_runtime.kernel.analysis_plane": (
+    "eco_council_runtime.kernel.planes.analysis_plane": (
         "connect_db",
         "sync_analysis_result_set",
         "query_analysis_result_sets",
@@ -66,14 +66,14 @@ FACADE_PUBLIC_SYMBOLS = {
 
 
 SPLIT_MODULE_PUBLIC_SYMBOLS = {
-    "eco_council_runtime.kernel.deliberation_plane_schema": (
+    "eco_council_runtime.kernel.planes.deliberation_plane_schema": (
         "SCHEMA_SQL",
         "connect_db",
         "ensure_schema_migrations",
         "load_schema_status",
         "resolve_db_path",
     ),
-    "eco_council_runtime.kernel.deliberation_plane_rows": (
+    "eco_council_runtime.kernel.planes.deliberation_plane_rows": (
         "fetch_json_rows",
         "fetch_runtime_control_freeze",
         "latest_json_row",
@@ -84,7 +84,7 @@ SPLIT_MODULE_PUBLIC_SYMBOLS = {
         "event_row_from_payload",
         "round_transition_row_from_payload",
     ),
-    "eco_council_runtime.kernel.deliberation_board_state": (
+    "eco_council_runtime.kernel.planes.deliberation_board_state": (
         "bootstrap_board_state",
         "commit_board_mutation",
         "fetch_round_events",
@@ -94,14 +94,14 @@ SPLIT_MODULE_PUBLIC_SYMBOLS = {
         "store_round_transition_record",
         "sync_board_to_deliberation_plane",
     ),
-    "eco_council_runtime.kernel.deliberation_actions": (
+    "eco_council_runtime.kernel.planes.deliberation_actions": (
         "load_moderator_action_records",
         "load_round_readiness_assessment",
         "store_falsification_probe_records",
         "store_moderator_action_records",
         "store_round_readiness_assessment",
     ),
-    "eco_council_runtime.kernel.deliberation_reporting_records": (
+    "eco_council_runtime.kernel.planes.deliberation_reporting_records": (
         "REPORT_AGENT_ROLES",
         "apply_reporting_contract_defaults",
         "ensure_dict_fields",
@@ -114,7 +114,7 @@ SPLIT_MODULE_PUBLIC_SYMBOLS = {
         "store_report_basis_freeze_record",
         "store_reporting_handoff_record",
     ),
-    "eco_council_runtime.kernel.deliberation_runtime_control": (
+    "eco_council_runtime.kernel.planes.deliberation_runtime_control": (
         "load_controller_snapshot_record",
         "load_gate_snapshot_record",
         "load_governed_execution_control_state",
@@ -124,20 +124,20 @@ SPLIT_MODULE_PUBLIC_SYMBOLS = {
         "store_round_task_snapshot",
         "store_runtime_control_freeze_record",
     ),
-    "eco_council_runtime.kernel.analysis_plane_schema": (
+    "eco_council_runtime.kernel.planes.analysis_plane_schema": (
         "SCHEMA_SQL",
         "connect_db",
         "ensure_analysis_plane_schema",
         "resolve_db_path",
     ),
-    "eco_council_runtime.kernel.analysis_plane_contracts": (
+    "eco_council_runtime.kernel.planes.analysis_plane_contracts": (
         "ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE",
         "analysis_config",
         "analysis_kind_governance",
         "analysis_kind_names",
         "maybe_text",
     ),
-    "eco_council_runtime.kernel.analysis_plane_support": (
+    "eco_council_runtime.kernel.planes.analysis_plane_support": (
         "build_result_contract",
         "empty_result_contract",
         "load_json_if_exists",
@@ -147,16 +147,16 @@ SPLIT_MODULE_PUBLIC_SYMBOLS = {
         "resolve_artifact_path",
         "unique_artifact_refs",
     ),
-    "eco_council_runtime.kernel.analysis_plane_results": (
+    "eco_council_runtime.kernel.planes.analysis_plane_results": (
         "load_analysis_result_context",
         "sync_analysis_result_set",
     ),
-    "eco_council_runtime.kernel.analysis_plane_queries": (
+    "eco_council_runtime.kernel.planes.analysis_plane_queries": (
         "query_analysis_result_items",
         "query_analysis_result_sets",
         "query_spatiotemporal_relation_cues",
     ),
-    "eco_council_runtime.kernel.analysis_plane_contexts": (
+    "eco_council_runtime.kernel.planes.analysis_plane_contexts": (
         "load_spatiotemporal_relation_cue_context",
         "sync_spatiotemporal_relation_cue_result_set",
     ),
@@ -191,16 +191,16 @@ class ModuleDecompositionContractTests(unittest.TestCase):
         self.assertEqual([], missing)
 
     def test_deliberation_plane_all_exports_cover_critical_facade_symbols(self) -> None:
-        module = importlib.import_module("eco_council_runtime.kernel.deliberation_plane")
+        module = importlib.import_module("eco_council_runtime.kernel.planes.deliberation_plane")
         exported = set(getattr(module, "__all__", []))
-        required = set(FACADE_PUBLIC_SYMBOLS["eco_council_runtime.kernel.deliberation_plane"])
+        required = set(FACADE_PUBLIC_SYMBOLS["eco_council_runtime.kernel.planes.deliberation_plane"])
 
         self.assertTrue(required.issubset(exported))
 
     def test_analysis_plane_all_exports_cover_critical_facade_symbols(self) -> None:
-        module = importlib.import_module("eco_council_runtime.kernel.analysis_plane")
+        module = importlib.import_module("eco_council_runtime.kernel.planes.analysis_plane")
         exported = set(getattr(module, "__all__", []))
-        required = set(FACADE_PUBLIC_SYMBOLS["eco_council_runtime.kernel.analysis_plane"])
+        required = set(FACADE_PUBLIC_SYMBOLS["eco_council_runtime.kernel.planes.analysis_plane"])
 
         self.assertTrue(required.issubset(exported))
 
@@ -257,7 +257,7 @@ class ModuleDecompositionContractTests(unittest.TestCase):
 
         self.assertEqual("module-size-report-v1", report["schema_version"])
         self.assertIn(
-            "eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py",
+            "eco-concil-runtime/src/eco_council_runtime/kernel/planes/deliberation_plane.py",
             target_paths,
         )
         self.assertGreaterEqual(report["summary"]["decomposition_target_count"], 10)

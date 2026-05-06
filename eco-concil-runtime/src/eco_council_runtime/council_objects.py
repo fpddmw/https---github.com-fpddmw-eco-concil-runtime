@@ -10,12 +10,12 @@ from .canonical_contracts import (
     canonical_contract_kinds,
     validate_canonical_payload,
 )
-from .deliberation_target_semantics import (
+from eco_council_runtime.deliberation_target_semantics import (
     canonical_target_kind,
     normalized_deliberation_target,
     proposal_target_from_payload,
 )
-from .kernel.deliberation_plane import (
+from eco_council_runtime.kernel.planes.deliberation_plane import (
     connect_db as connect_deliberation_db,
     json_text,
     maybe_text,

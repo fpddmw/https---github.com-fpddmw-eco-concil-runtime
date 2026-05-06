@@ -13,7 +13,7 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.gdelt_export_normalizer import (  # noqa: E402
+from eco_council_runtime.kernel.planes.gdelt_export_normalizer import (  # noqa: E402
     cleanup_artifact_paths,
     domain_from_url,
     download_records,
@@ -23,7 +23,7 @@ from eco_council_runtime.kernel.gdelt_export_normalizer import (  # noqa: E402
     raw_row_record,
     record_locator,
 )
-from eco_council_runtime.kernel.signal_plane_normalizer import (  # noqa: E402
+from eco_council_runtime.kernel.planes.signal_plane_normalizer import (  # noqa: E402
     base_signal,
     file_sha256,
     finalize_normalization_streaming,

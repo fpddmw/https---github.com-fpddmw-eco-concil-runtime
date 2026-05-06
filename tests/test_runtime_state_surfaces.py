@@ -23,8 +23,8 @@ RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel import runtime_state_surfaces  # noqa: E402
-from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+from eco_council_runtime.kernel.operator import runtime_state_surfaces  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_falsification_probe_records,
     store_falsification_probe_snapshot,
     store_moderator_action_records,

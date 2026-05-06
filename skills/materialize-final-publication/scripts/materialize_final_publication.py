@@ -21,14 +21,14 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.council_objects import (  # noqa: E402
     query_council_objects,
 )
-from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
+from eco_council_runtime.kernel.reporting.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
-from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     normalized_final_publication_payload,
     store_final_publication_record,
 )
-from eco_council_runtime.kernel.runtime_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.operator.runtime_state_surfaces import (  # noqa: E402
     load_council_decision_wrapper,
     load_expert_report_wrapper,
     load_report_basis_freeze_wrapper,

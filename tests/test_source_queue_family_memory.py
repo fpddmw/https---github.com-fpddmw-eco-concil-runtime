@@ -15,8 +15,8 @@ sys.path.insert(0, str(RUNTIME_SRC))
 
 
 def load_modules():
-    selection_module = importlib.import_module("eco_council_runtime.kernel.source_queue_selection")
-    planner_module = importlib.import_module("eco_council_runtime.kernel.source_queue_planner")
+    selection_module = importlib.import_module("eco_council_runtime.kernel.source_queue.source_queue_selection")
+    planner_module = importlib.import_module("eco_council_runtime.kernel.source_queue.source_queue_planner")
     return selection_module, planner_module
 
 

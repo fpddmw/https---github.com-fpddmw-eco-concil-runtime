@@ -4,9 +4,9 @@
 
 本文是大模块拆分的持久化执行计划。它不是全局总计划，也不包含真实案例 case 工作。
 
-目标是在不改变外部行为、skill id、CLI 命令、canonical contract、DB schema 和 artifact shape 的前提下，把当前过大的 Python 模块拆成可维护、可测试、可逐步迁移的模块族。
+目标是在不改变 runtime 行为、skill id、CLI 命令、canonical contract、DB schema 和 artifact shape 的前提下，把当前过大的 Python 模块拆成可维护、可测试、可逐步迁移的模块族。Python import path 以本文记录的最新包结构为准，不保留旧 phase 或旧 flat kernel 路径。
 
-本计划以 2026-05-06 的仓库状态为基线。当前已验证：syntax 覆盖 219 个 Python 文件，P3 targeted gate 组合通过 34 tests，runtime/reporting 组合通过 95 tests，默认 targeted gates 通过 125 tests，full gate 通过 268 tests。schema migration 硬化已完成第一块代码，模块拆分 P0 保护网已落地，P1/P2 已完成 deliberation plane 的 facade 化拆分，P3 已完成 analysis plane 的 facade 化拆分，并已完成一轮拆分文件数量收敛。
+本计划以 2026-05-06 的仓库状态为基线。当前已验证：syntax 覆盖 227 个 Python 文件，module-decomposition gate 通过 7 tests，runtime/reporting/case targeted gate 组合通过 89 tests，full gate 通过 268 tests。schema migration 硬化已完成第一块代码，模块拆分 P0 保护网已落地，P1/P2 已完成 deliberation plane 的 facade 化拆分，P3 已完成 analysis plane 的 facade 化拆分，并已完成旧 phase 命名清理与 runtime/kernel 浅层包结构整理。
 
 ### 当前落地状态
 
@@ -26,55 +26,53 @@
    - 已纳入默认 targeted gates。
    - 已与 `schema-migration`、`runtime-governance` 组合验证通过。
 4. `.github/workflows/quality-gates.yml` 已把 `module-decomposition` 纳入 targeted CI 命令。
-5. 新增 `eco_concil_runtime/kernel/deliberation_plane_schema.py`。
+5. 新增 `eco_concil_runtime/kernel/planes/deliberation_plane_schema.py`。
    - 承载 `SCHEMA_SQL`、DB path resolution、`connect_db`、schema migration 与 schema status。
    - 不改变 SQLite 表、列、index 或 migration id。
-6. 新增 `eco_concil_runtime/kernel/deliberation_plane_rows.py`。
+6. 新增 `eco_concil_runtime/kernel/planes/deliberation_plane_rows.py`。
    - 承载通用 JSON/row helper、`payload_from_db_row`、基础 `write_*_row`、board/transition row conversion 与 DB-backed record query helpers。
-7. `eco_concil_runtime/kernel/deliberation_plane.py` 保持兼容入口。
+7. `eco_concil_runtime/kernel/planes/deliberation_plane.py` 保持兼容入口。
    - 继续 re-export 原 public names。
    - 当前约 285 行，已从 P0 基线约 8158 行下降。
-8. 新增 `eco_concil_runtime/kernel/deliberation_board_state.py`。
+8. 新增 `eco_concil_runtime/kernel/planes/deliberation_board_state.py`。
    - 承载 board path、JSON export、board bootstrap、board sync、round snapshot、board mutation 与 round transition store/load。
-9. 新增 `eco_concil_runtime/kernel/deliberation_actions.py`。
+9. 新增 `eco_concil_runtime/kernel/planes/deliberation_actions.py`。
    - 承载 moderator actions、falsification probes、round readiness 的 normalization、store/load 与 snapshot wrapper。
-10. 新增 `eco_concil_runtime/kernel/deliberation_reporting_records.py`。
+10. 新增 `eco_concil_runtime/kernel/planes/deliberation_reporting_records.py`。
    - 承载 report basis freeze、reporting handoff、council decision、expert report、final publication，以及 reporting record 共用 canonical default helper。
-11. 新增 `eco_concil_runtime/kernel/deliberation_runtime_control.py`。
+11. 新增 `eco_concil_runtime/kernel/planes/deliberation_runtime_control.py`。
    - 承载 runtime control freeze、controller/gate/supervisor snapshots、governed_execution control state、moderator work surface、orchestration plan/step 与 round task snapshot。
-12. 新增 `eco_concil_runtime/kernel/analysis_plane_schema.py`。
+12. 新增 `eco_concil_runtime/kernel/planes/analysis_plane_schema.py`。
    - 承载 analysis DB schema、path resolution、connect 与 legacy column ensure。
-13. 新增 `eco_concil_runtime/kernel/analysis_plane_contracts.py`。
+13. 新增 `eco_concil_runtime/kernel/planes/analysis_plane_contracts.py`。
    - 承载 analysis plane 共用 JSON/text/hash/time helper、analysis kind constants、kind config、governance metadata 与 kind registry。
-14. 新增 `eco_concil_runtime/kernel/analysis_plane_support.py`。
+14. 新增 `eco_concil_runtime/kernel/planes/analysis_plane_support.py`。
    - 承载 artifact path/ref normalization、dedupe、artifact presence helper、result contract、lineage、parent result set 与 parent artifact refs 的 build/load helper。
-15. 新增 `eco_concil_runtime/kernel/analysis_plane_results.py`。
+15. 新增 `eco_concil_runtime/kernel/planes/analysis_plane_results.py`。
    - 承载 generic sync/load result set persistence 与 context loading。
-16. 新增 `eco_concil_runtime/kernel/analysis_plane_queries.py`。
+16. 新增 `eco_concil_runtime/kernel/planes/analysis_plane_queries.py`。
    - 承载 result set/item 查询、分页、serialization 与 spatiotemporal relation cue 专用查询。
-17. 新增 `eco_concil_runtime/kernel/analysis_plane_contexts.py`。
+17. 新增 `eco_concil_runtime/kernel/planes/analysis_plane_contexts.py`。
    - 承载 typed `sync_*_result_set` 与 `load_*_context` compatibility wrappers。
-18. `eco_concil_runtime/kernel/analysis_plane.py` 保持兼容入口。
+18. `eco_concil_runtime/kernel/planes/analysis_plane.py` 保持兼容入口。
    - 继续 re-export 原 public names。
    - 当前约 242 行，已从 P0 基线约 3697 行下降。
 
 当前已验证命令：
 
-1. `python3 tools/quality_gate.py syntax`，219 个 Python 文件通过，无重复字面量 dict key。
+1. `python3 tools/quality_gate.py syntax`，227 个 Python 文件通过，无重复字面量 dict key。
 2. `python3 -m unittest tests.test_module_decomposition_contracts`，7 tests 通过。
-3. `python3 -m unittest tests.test_module_decomposition_contracts tests.test_optional_analysis_guardrails tests.test_spatiotemporal_relation_taxonomy`，33 tests 通过。
-4. `python3 -m unittest tests.test_runtime_kernel`，47 tests 通过。
-5. `python3 tools/quality_gate.py test relation-taxonomy optional-guardrails module-decomposition`，34 tests 通过。
-6. `python3 tools/quality_gate.py test module-decomposition schema-migration db-recovery runtime-governance reporting`，95 tests 通过。
-7. `python3 tools/quality_gate.py test relation-taxonomy optional-guardrails db-recovery schema-migration module-decomposition runtime-governance reporting case-study`，125 tests 通过。
-8. `python3 tools/quality_gate.py full`，268 tests 通过。
-9. `git diff --check` 通过。
+3. `python3 -m unittest tests.test_runtime_kernel`，47 tests 通过。
+4. `python3 tools/quality_gate.py test module-decomposition runtime-governance reporting case-study`，89 tests 通过。
+5. `python3 tools/quality_gate.py full`，268 tests 通过。
+6. `git diff --check` 通过。
 
 ## 2. 拆分原则
 
-1. 保留兼容入口。
-   - 现有 public import path 不立即删除。
-   - `kernel/deliberation_plane.py`、`kernel/analysis_plane.py`、`optional_analysis_helpers.py`、`kernel/cli.py` 等先变成 facade/re-export 层。
+1. 保留最新入口。
+   - 最新 public import path 以浅层包结构为准。
+   - 旧 phase 命名和旧 flat kernel 路径不再保留。
+   - `kernel/planes/deliberation_plane.py`、`kernel/planes/analysis_plane.py`、`optional_analysis_helpers.py`、`kernel/cli.py` 等作为当前 facade/re-export 层。
 2. 不混入语义重写。
    - 不改 canonical object 字段。
    - 不改 receipt、ledger、approval、transition、reporting、relation 等数据契约。
@@ -106,7 +104,7 @@
 
 这些文件体积大、调用面广、承载多个数据契约，是大模块拆分的 P0/P1 范围。
 
-1. `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
+1. `eco-concil-runtime/src/eco_council_runtime/kernel/planes/deliberation_plane.py`
    - P0 基线约 8158 行，P2 交付后当前约 285 行。
    - 原先同时承载 schema、migration、row conversion、board sync、governed_execution control、moderator actions、falsification probes、reporting records、round transitions、round snapshots。
    - 已拆为 facade/re-export 入口，后续只保留 compatibility glue。
@@ -114,7 +112,7 @@
    - 当前约 3864 行。
    - 同时承载 parser、command dispatch、run state view、operator views、analysis/council/reporting/control query commands。
    - 必须彻底拆分，但外部命令名必须保持不变。
-3. `eco-concil-runtime/src/eco_council_runtime/kernel/analysis_plane.py`
+3. `eco-concil-runtime/src/eco_council_runtime/kernel/planes/analysis_plane.py`
    - P0 基线约 3697 行，P3 交付后当前约 248 行。
    - 原先同时承载 analysis schema、result set persistence、artifact refs、query paging、relation query、typed sync/load wrappers。
    - 已拆为 facade/re-export 入口，后续只保留 compatibility glue。
@@ -139,31 +137,31 @@
 
 这些文件未必都超过 2000 行，但已经承担多个职责。它们应在核心 plane 拆分后继续拆。
 
-1. `eco-concil-runtime/src/eco_council_runtime/kernel/benchmark.py`
+1. `eco-concil-runtime/src/eco_council_runtime/kernel/archive/benchmark.py`
    - 当前约 1511 行。
    - 拆分 scenario fixture、benchmark manifest、compare、replay。
-2. `eco-concil-runtime/src/eco_council_runtime/kernel/skill_approvals.py`
+2. `eco-concil-runtime/src/eco_council_runtime/kernel/governance/skill_approvals.py`
    - 当前约 1395 行。
    - 拆分 payload、row conversion、request/approve/reject/consume store-load。
-3. `eco-concil-runtime/src/eco_council_runtime/kernel/controller.py`
+3. `eco-concil-runtime/src/eco_council_runtime/kernel/execution/controller.py`
    - 当前约 1316 行。
    - 拆分 controller state transitions、stage execution、controller event materialization。
-4. `eco-concil-runtime/src/eco_council_runtime/kernel/transition_requests.py`
+4. `eco-concil-runtime/src/eco_council_runtime/kernel/governance/transition_requests.py`
    - 当前约 1187 行。
    - 拆分 transition payloads、approval/rejection payloads、store-load、execution resolver。
-5. `eco-concil-runtime/src/eco_council_runtime/kernel/runtime_state_surfaces.py`
+5. `eco-concil-runtime/src/eco_council_runtime/kernel/operator/runtime_state_surfaces.py`
    - 当前约 1040 行。
    - 拆分 controller/gate/supervisor/reporting/fallback wrapper readers。
-6. `eco-concil-runtime/src/eco_council_runtime/kernel/signal_plane_normalizer.py`
+6. `eco-concil-runtime/src/eco_council_runtime/kernel/planes/signal_plane_normalizer.py`
    - 当前约 1032 行。
    - 拆分 schema/indexing、signal payload normalization、metadata indexing、row persistence。
-7. `eco-concil-runtime/src/eco_council_runtime/kernel/operations.py`
+7. `eco-concil-runtime/src/eco_council_runtime/kernel/operator/operations.py`
    - 当前约 1015 行。
    - 拆分 admission policy、dead letters、runtime health、operator runbook。
-8. `eco-concil-runtime/src/eco_council_runtime/kernel/executor.py`
+8. `eco-concil-runtime/src/eco_council_runtime/kernel/execution/executor.py`
    - 当前约 960 行。
    - 拆分 command building、attempt execution、structured failure, receipt/postflight handling。
-9. `eco-concil-runtime/src/eco_council_runtime/kernel/post_round.py`
+9. `eco-concil-runtime/src/eco_council_runtime/kernel/archive/post_round.py`
    - 当前约 926 行。
    - 拆分 close round、archive handling、history bootstrap。
 
@@ -187,7 +185,7 @@
 
 本轮命名清理后的最新命名基线：
 
-1. `kernel/runtime_state_surfaces.py`
+1. `kernel/operator/runtime_state_surfaces.py`
    - 原旧相位状态 surface 名称已替换为 runtime state surface。
 2. `agent_entry_profile.py`、`agent_entry_handoff.py`
    - agent entry 不再挂在旧相位名下。
@@ -200,7 +198,7 @@
 6. CLI 命令使用 `run-governed-execution-round`、`resume-governed-execution-round`、`restart-governed-execution-round`、`materialize-governed-execution-exports`。
 7. 旧 `phase2_*` import path、函数名、CLI 命令和测试 patch path 不再保留。
 
-后续 runtime 重组不再继续在 `kernel/` 根目录横向增加文件，而应逐步收敛为少数子包：
+本轮已完成 runtime/kernel 浅层包结构迁移，后续不再继续在 `kernel/` 根目录横向增加文件。当前包边界如下：
 
 1. `kernel/planes/`
    - 承载 signal、analysis、deliberation 等数据面 facade 和持久化模块。
@@ -218,10 +216,10 @@
 
 下一步目录重组时，优先把这些最新命名迁入更合适的包，而不是继续改名：
 
-1. `kernel/runtime_state_surfaces.py` 后续迁入 `kernel/operator/state_surfaces.py` 或 `kernel/operator/runtime_state_view.py`。
-2. `agent_entry_profile.py`、`agent_entry_handoff.py` 后续迁入 `kernel/governance/agent_entry_*` 或顶层 governance profile 区。
-3. `fallback_agenda.py`、`fallback_agenda_profile.py` 后续迁入 `kernel/governance/fallback_agenda.py` 或 runtime governance profile 区。
-4. controller、executor、gate、supervisor 后续迁入 `kernel/execution/`。
+1. `kernel/operator/runtime_state_surfaces.py` 可在后续 operator 视图拆分时改为 `kernel/operator/state_surfaces.py` 或 `kernel/operator/runtime_state_view.py`。
+2. `kernel/governance/agent_entry_profile.py`、`kernel/governance/agent_entry_handoff.py` 已纳入 governance 包。
+3. `kernel/governance/fallback_agenda.py`、`kernel/governance/fallback_agenda_profile.py` 已纳入 governance 包。
+4. controller、executor、gate、supervisor 已纳入 `kernel/execution/`。
 
 ### 3.5 Skill scripts 原子性审查
 
@@ -258,27 +256,27 @@
 
 保留兼容入口：
 
-1. `eco_concil_runtime/kernel/deliberation_plane.py`
+1. `eco_concil_runtime/kernel/planes/deliberation_plane.py`
    - 保留原 public API。
    - 只做 re-export / facade。
    - 暂不删除旧函数名。
 
 目标模块：
 
-1. `eco_concil_runtime/kernel/deliberation_plane_schema.py`
+1. `eco_concil_runtime/kernel/planes/deliberation_plane_schema.py`
    - `SCHEMA_SQL`
    - `connect_db`
    - `default_db_path`
    - `resolve_db_path`
    - `ensure_schema_migrations`
    - `load_schema_status`
-2. `eco_concil_runtime/kernel/deliberation_plane_rows.py`
+2. `eco_concil_runtime/kernel/planes/deliberation_plane_rows.py`
    - `payload_from_db_row`
    - `*_row_from_payload`
    - `write_*_row`
    - shared JSON/row conversion helpers。
    - shared DB-backed query helpers。
-3. `eco_concil_runtime/kernel/deliberation_board_state.py`
+3. `eco_concil_runtime/kernel/planes/deliberation_board_state.py`
    - board run/event/note/hypothesis/challenge/task store-load。
    - `sync_board_to_deliberation_plane`
    - `bootstrap_board_state`
@@ -288,18 +286,18 @@
    - `fetch_round_state`
    - `store_round_transition_record`
    - `load_round_transition_record`
-4. `eco_concil_runtime/kernel/deliberation_actions.py`
+4. `eco_concil_runtime/kernel/planes/deliberation_actions.py`
    - moderator action records。
    - falsification probe records。
    - readiness assessment records。
-5. `eco_concil_runtime/kernel/deliberation_runtime_control.py`
+5. `eco_concil_runtime/kernel/planes/deliberation_runtime_control.py`
    - runtime control freeze。
    - controller/gate/supervisor snapshots。
    - `load_governed_execution_control_state`。
    - orchestration plan/steps。
    - round task snapshot。
    - planner-backed governed_execution plan persistence。
-6. `eco_concil_runtime/kernel/deliberation_reporting_records.py`
+6. `eco_concil_runtime/kernel/planes/deliberation_reporting_records.py`
    - reporting roles。
    - shared reporting canonical default helpers。
    - nested evidence/text extraction。
@@ -320,36 +318,36 @@
 
 保留兼容入口：
 
-1. `eco_concil_runtime/kernel/analysis_plane.py`
+1. `eco_concil_runtime/kernel/planes/analysis_plane.py`
    - 保留 `sync_*_result_set`、`load_*_context`、`query_*` 等现有 public names。
 
 目标模块：
 
-1. `eco_concil_runtime/kernel/analysis_plane_schema.py`
+1. `eco_concil_runtime/kernel/planes/analysis_plane_schema.py`
    - analysis DB schema 和 connect/ensure。
-2. `eco_concil_runtime/kernel/analysis_plane_contracts.py`
+2. `eco_concil_runtime/kernel/planes/analysis_plane_contracts.py`
    - common JSON/text/hash/time helper。
    - `analysis_config`
    - governance metadata。
    - analysis kind registry。
-3. `eco_concil_runtime/kernel/analysis_plane_support.py`
+3. `eco_concil_runtime/kernel/planes/analysis_plane_support.py`
    - artifact refs。
    - path resolution。
    - artifact presence checks。
    - result contract building/loading。
    - lineage entries。
    - parent result set/artifact refs。
-4. `eco_concil_runtime/kernel/analysis_plane_results.py`
+4. `eco_concil_runtime/kernel/planes/analysis_plane_results.py`
    - result set and item persistence。
    - result wrapper loading。
    - generic sync/load wrapper shared implementation。
-5. `eco_concil_runtime/kernel/analysis_plane_queries.py`
+5. `eco_concil_runtime/kernel/planes/analysis_plane_queries.py`
    - result set query。
    - item query。
    - paging/serialization。
    - `query_spatiotemporal_relation_cues`
    - relation-specific filters and serialization。
-6. `eco_concil_runtime/kernel/analysis_plane_contexts.py`
+6. `eco_concil_runtime/kernel/planes/analysis_plane_contexts.py`
    - typed `sync_*_result_set` compatibility wrappers。
    - typed `load_*_context` compatibility wrappers。
 
@@ -554,27 +552,27 @@
 
 兼容入口继续保留：
 
-1. `kernel/skill_approvals.py`
-2. `kernel/transition_requests.py`
-3. `kernel/operations.py`
-4. `kernel/executor.py`
+1. `kernel/governance/skill_approvals.py`
+2. `kernel/governance/transition_requests.py`
+3. `kernel/operator/operations.py`
+4. `kernel/execution/executor.py`
 
 ### 4.9 Benchmark / Post-round
 
 目标模块：
 
-1. `kernel/benchmark_fixtures.py`
-2. `kernel/benchmark_manifests.py`
-3. `kernel/benchmark_compare.py`
-4. `kernel/benchmark_replay.py`
-5. `kernel/post_round_close.py`
-6. `kernel/post_round_archives.py`
-7. `kernel/post_round_history.py`
+1. `kernel/archive/benchmark_fixtures.py`
+2. `kernel/archive/benchmark_manifests.py`
+3. `kernel/archive/benchmark_compare.py`
+4. `kernel/archive/benchmark_replay.py`
+5. `kernel/archive/post_round_close.py`
+6. `kernel/archive/post_round_archives.py`
+7. `kernel/archive/post_round_history.py`
 
 兼容入口继续保留：
 
-1. `kernel/benchmark.py`
-2. `kernel/post_round.py`
+1. `kernel/archive/benchmark.py`
+2. `kernel/archive/post_round.py`
 
 ### 4.10 Skill Scripts
 

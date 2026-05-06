@@ -40,7 +40,7 @@ MIGRATED_SOURCE_SKILLS = [
 
 
 def load_contract_module():
-    return importlib.import_module("eco_council_runtime.kernel.source_queue_contract")
+    return importlib.import_module("eco_council_runtime.kernel.source_queue.source_queue_contract")
 
 
 def write_script(path: Path, body: str) -> Path:

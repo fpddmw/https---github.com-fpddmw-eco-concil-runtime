@@ -372,8 +372,8 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 requested_actor_role="moderator",
             )
 
-            from eco_council_runtime.kernel.executor import run_skill
-            from eco_council_runtime.kernel.skill_approvals import load_skill_approval_request
+            from eco_council_runtime.kernel.execution.executor import run_skill
+            from eco_council_runtime.kernel.governance.skill_approvals import load_skill_approval_request
 
             fake_skill_entry = {
                 "skill_name": OPTIONAL_SKILL,
@@ -398,15 +398,15 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
 
             with (
                 mock.patch(
-                    "eco_council_runtime.kernel.governance.resolve_skill_entry",
+                    "eco_council_runtime.kernel.governance.runtime_governance.resolve_skill_entry",
                     return_value=fake_skill_entry,
                 ),
                 mock.patch(
-                    "eco_council_runtime.kernel.executor.resolve_skill_entry",
+                    "eco_council_runtime.kernel.execution.executor.resolve_skill_entry",
                     return_value=fake_skill_entry,
                 ),
                 mock.patch(
-                    "eco_council_runtime.kernel.executor.subprocess.run",
+                    "eco_council_runtime.kernel.execution.executor.subprocess.run",
                     return_value=subprocess.CompletedProcess(
                         args=["python"],
                         returncode=0,
@@ -491,7 +491,7 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
 
-            from eco_council_runtime.kernel.skill_approvals import (
+            from eco_council_runtime.kernel.governance.skill_approvals import (
                 approve_skill_approval_request,
                 store_skill_approval_request,
             )

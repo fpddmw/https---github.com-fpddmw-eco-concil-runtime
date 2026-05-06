@@ -14,7 +14,7 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.progress_dashboard import render_dashboard_from_paths  # noqa: E402
+from eco_council_runtime.kernel.operator.progress_dashboard import render_dashboard_from_paths  # noqa: E402
 
 
 def maybe_text(value: Any) -> str:

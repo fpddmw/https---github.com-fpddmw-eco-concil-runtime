@@ -25,9 +25,9 @@ from eco_council_runtime.council_submission_support import (  # noqa: E402
     unique_texts,
     write_json_file,
 )
-from eco_council_runtime.kernel.deliberation_plane import stable_hash  # noqa: E402
-from eco_council_runtime.report_basis_resolution import proposal_explicit_signals  # noqa: E402
-from eco_council_runtime.proposal_actions import proposal_drives_governed_execution_action_queue  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import stable_hash  # noqa: E402
+from eco_council_runtime.kernel.governance.report_basis_resolution import proposal_explicit_signals  # noqa: E402
+from eco_council_runtime.kernel.governance.proposal_actions import proposal_drives_governed_execution_action_queue  # noqa: E402
 
 OPEN_CHALLENGE_KINDS = {
     "challenge-claim",

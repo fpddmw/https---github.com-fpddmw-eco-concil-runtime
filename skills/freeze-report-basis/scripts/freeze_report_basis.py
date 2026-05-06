@@ -17,26 +17,26 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.fallback_context import load_d1_shared_context  # noqa: E402
-from eco_council_runtime.report_basis_resolution import (  # noqa: E402
+from eco_council_runtime.kernel.governance.fallback_context import load_d1_shared_context  # noqa: E402
+from eco_council_runtime.kernel.governance.report_basis_resolution import (  # noqa: E402
     load_council_proposals,
     load_council_readiness_opinions,
     resolve_report_basis_council_inputs,
 )
-from eco_council_runtime.governed_execution_action_semantics import (  # noqa: E402
+from eco_council_runtime.kernel.execution.governed_execution_action_semantics import (  # noqa: E402
     action_is_readiness_blocker,
 )
-from eco_council_runtime.kernel.runtime_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.operator.runtime_state_surfaces import (  # noqa: E402
     load_next_actions_wrapper,
     load_round_readiness_wrapper,
 )
-from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_report_basis_freeze_record,
 )
-from eco_council_runtime.kernel.reporting_contracts import (  # noqa: E402
+from eco_council_runtime.kernel.reporting.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
-from eco_council_runtime.kernel.transition_requests import (  # noqa: E402
+from eco_council_runtime.kernel.governance.transition_requests import (  # noqa: E402
     TRANSITION_KIND_FREEZE_REPORT_BASIS,
     mark_transition_request_committed,
     request_payload_option,

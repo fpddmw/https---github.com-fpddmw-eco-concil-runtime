@@ -16,7 +16,7 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.source_queue_contract import (  # noqa: E402
+from eco_council_runtime.kernel.source_queue.source_queue_contract import (  # noqa: E402
     file_sha256,
     maybe_text,
     read_json_object,
@@ -26,13 +26,13 @@ from eco_council_runtime.kernel.source_queue_contract import (  # noqa: E402
     utc_now_iso,
     write_json_file,
 )
-from eco_council_runtime.kernel.source_queue_execution import (  # noqa: E402
+from eco_council_runtime.kernel.source_queue.source_queue_execution import (  # noqa: E402
     DetachedFetchExecutionError,
     copy_import_artifact,
     execute_detached_fetch_step,
     resolved_artifact_path,
 )
-from eco_council_runtime.kernel.source_queue_planner import ensure_fetch_plan_inputs_match  # noqa: E402
+from eco_council_runtime.kernel.source_queue.source_queue_planner import ensure_fetch_plan_inputs_match  # noqa: E402
 
 
 def pretty_json(data: Any, pretty: bool) -> str:

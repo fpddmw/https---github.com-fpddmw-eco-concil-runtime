@@ -149,11 +149,11 @@ class SchemaMigrationTests(unittest.TestCase):
             create_legacy_deliberation_tables(db_file)
             create_legacy_signal_table(db_file)
 
-            from eco_council_runtime.kernel.deliberation_plane import (
+            from eco_council_runtime.kernel.planes.deliberation_plane import (
                 connect_db as connect_deliberation_db,
                 load_schema_status,
             )
-            from eco_council_runtime.kernel.signal_plane_normalizer import (
+            from eco_council_runtime.kernel.planes.signal_plane_normalizer import (
                 connect_db as connect_signal_db,
             )
 
@@ -217,7 +217,7 @@ class SchemaMigrationTests(unittest.TestCase):
             self.assertEqual(second_statuses, third_statuses)
 
     def test_failed_schema_migration_records_failure_and_can_be_retried(self) -> None:
-        from eco_council_runtime.kernel.schema_migrations import (
+        from eco_council_runtime.kernel.core.schema_migrations import (
             apply_schema_migration,
             load_schema_status,
         )

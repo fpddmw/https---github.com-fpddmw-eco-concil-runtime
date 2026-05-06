@@ -21,19 +21,19 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     commit_board_mutation,
     load_round_snapshot,
     load_round_transition_record,
     store_round_transition_record,
     store_round_task_snapshot,
 )
-from eco_council_runtime.kernel.runtime_state_surfaces import load_next_actions_wrapper  # noqa: E402
-from eco_council_runtime.kernel.source_queue_contract import source_role  # noqa: E402
-from eco_council_runtime.kernel.source_queue_history import (  # noqa: E402
+from eco_council_runtime.kernel.operator.runtime_state_surfaces import load_next_actions_wrapper  # noqa: E402
+from eco_council_runtime.kernel.source_queue.source_queue_contract import source_role  # noqa: E402
+from eco_council_runtime.kernel.source_queue.source_queue_history import (  # noqa: E402
     load_round_tasks_wrapper,
 )
-from eco_council_runtime.kernel.transition_requests import (  # noqa: E402
+from eco_council_runtime.kernel.governance.transition_requests import (  # noqa: E402
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
     mark_transition_request_committed,
     request_payload_option,

@@ -60,7 +60,7 @@ def insert_signal(
     longitude: float | None = None,
     metadata: dict[str, object] | None = None,
 ) -> None:
-    from eco_council_runtime.kernel.signal_plane_normalizer import (
+    from eco_council_runtime.kernel.planes.signal_plane_normalizer import (
         INSERT_SQL,
         ensure_signal_plane_schema,
     )
@@ -113,7 +113,7 @@ def insert_signal(
 
 class OptionalAnalysisGuardrailTests(unittest.TestCase):
     def test_optional_analysis_registry_entries_have_freeze_metadata(self) -> None:
-        from eco_council_runtime.kernel.skill_registry import (
+        from eco_council_runtime.kernel.governance.skill_registry import (
             SKILL_LAYER_OPTIONAL_ANALYSIS,
             OPTIONAL_HELPER_ALLOWED_DECISION_SOURCES,
             skill_registry_snapshot,
@@ -144,7 +144,7 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
                 self.assertTrue(metadata.get("helper_destination"))
 
     def test_analysis_kind_governance_freezes_legacy_report_basis_paths(self) -> None:
-        from eco_council_runtime.kernel.analysis_plane import (
+        from eco_council_runtime.kernel.planes.analysis_plane import (
             ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
             analysis_kind_governance,
             query_analysis_result_sets,
@@ -196,7 +196,7 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
             build_formal_signal_semantics,
             formal_signal_semantics_taxonomy_metadata,
         )
-        from eco_council_runtime.kernel.skill_registry import resolve_skill_policy
+        from eco_council_runtime.kernel.governance.skill_registry import resolve_skill_policy
 
         metadata = formal_signal_semantics_taxonomy_metadata()
         self.assertEqual(FORMAL_PUBLIC_TAXONOMY_VERSION, metadata["taxonomy_version"])
@@ -240,7 +240,7 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
         self.assertIn("approval-required", helper_metadata["audit_status"])
 
     def test_removed_skill_entries_are_not_registered_or_executable(self) -> None:
-        from eco_council_runtime.kernel.skill_registry import skill_registry_snapshot
+        from eco_council_runtime.kernel.governance.skill_registry import skill_registry_snapshot
 
         snapshot = skill_registry_snapshot()
         registered = {skill["skill_name"] for skill in snapshot["skills"]}

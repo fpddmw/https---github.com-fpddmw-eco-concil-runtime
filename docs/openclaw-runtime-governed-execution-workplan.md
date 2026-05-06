@@ -41,7 +41,7 @@
 1. `eco-concil-runtime/src/eco_council_runtime/kernel/governance.py`
    - `preflight-skill` 现在对 `optional-analysis` 与 `reporting` 层中声明 `requires_operator_approval=True` 的 skill 强制要求 `--skill-approval-request-id`。
    - 已批准 request 会解除 strict 模式中的 `operator-approval-required` 阻断；未批准、已消费、actor 不匹配或参数作用域不匹配仍会阻断。
-2. `eco-concil-runtime/src/eco_council_runtime/kernel/skill_approvals.py`
+2. `eco-concil-runtime/src/eco_council_runtime/kernel/governance/skill_approvals.py`
    - skill approval request 不再限于 optional-analysis，现支持 reporting draft/publish/finalize 链路。
    - state-transition skill 不走 skill approval；`freeze-report-basis`、`open-investigation-round` 等仍应通过 phase transition request/approval。
    - 如果 request 写入了 `requested_skill_args`，执行时必须匹配同一组 skill args，避免复用审批执行另一个参数变体。
@@ -51,7 +51,7 @@
    - 覆盖 reporting publish 审批后 strict preflight 放行。
    - 覆盖 approval request 参数作用域不匹配时阻断。
    - 覆盖 state-transition skill 误走 skill approval 时被拒绝。
-4. `eco-concil-runtime/src/eco_council_runtime/kernel/ledger.py`
+4. `eco-concil-runtime/src/eco_council_runtime/kernel/core/ledger.py`
    - runtime receipt 现在写入 `runtime-receipt-v2` envelope，保留原始 `skill_payload`。
    - receipt envelope 直接携带 `event_id`、`execution_input_hash`、`payload_hash`、`lock_path`、preflight、postflight、runtime admission 和 attempt 信息。
    - 同一 `receipt_id` 且 payload hash 相同的重复写入会标记为 `unchanged`，不重写既有 receipt。
@@ -61,12 +61,12 @@
    - 覆盖同一 receipt payload 重放时 `receipt_write.write_status=unchanged`。
    - 覆盖同一 receipt id 不同 payload hash 的冲突阻断、dead letter 和 operator 可见状态。
    - 覆盖 transition request 首次提交、同对象重放和不同对象重定向失败。
-6. `eco-concil-runtime/src/eco_council_runtime/kernel/transition_requests.py`
+6. `eco-concil-runtime/src/eco_council_runtime/kernel/governance/transition_requests.py`
    - `mark_transition_request_committed` 现在要求 committed object kind/id。
    - 首次提交返回 `commit_status=committed`。
    - 同一 request 重放到同一 object 返回 `commit_status=already-committed`。
    - 已 committed request 不能被重定向到另一个 round transition 或 report basis object。
-7. `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
+7. `eco-concil-runtime/src/eco_council_runtime/kernel/planes/deliberation_plane.py`
    - 新增 `load_round_transition_record`，支持按 `transition_id` 或 run/round/source/request 恢复 round transition 记录。
 8. `skills/open-investigation-round/scripts/open_investigation_round.py`
    - target round 已存在时进入 no-op，不再产生重复 board event 或 round transition。
@@ -75,10 +75,10 @@
    - 如果 target round 属于另一个 transition request，当前 request 不会被静默 recommit。
 9. `tests/test_board_workflow.py`
    - 覆盖 `open-investigation-round` 在 target 已存在且 transition artifact 丢失时的可重放 no-op 行为。
-10. `eco-concil-runtime/src/eco_council_runtime/kernel/locking.py`
+10. `eco-concil-runtime/src/eco_council_runtime/kernel/core/locking.py`
     - runtime execution lock 现在写入 `execution_lock_state.json`。
     - lock state 暴露 `held`、`released`、`stale` 等状态，以及 holder pid、metadata、lock path。
-11. `eco-concil-runtime/src/eco_council_runtime/kernel/operations.py`
+11. `eco-concil-runtime/src/eco_council_runtime/kernel/operator/operations.py`
     - runtime health 现在暴露 `runtime_lock`、`receipt_conflict_count` 和 `latest_receipt_conflicts`。
     - receipt conflict 会触发 `receipt-conflicts-present` operator alert。
     - stale lock 会触发 `stale-runtime-lock` operator alert。

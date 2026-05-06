@@ -10,19 +10,19 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from eco_council_runtime.kernel.cli import main
-from eco_council_runtime.agent_entry_profile import (
+from eco_council_runtime.kernel.governance.agent_entry_profile import (
     default_agent_entry_profile,
 )
-from eco_council_runtime.agent_entry_handoff import (
+from eco_council_runtime.kernel.governance.agent_entry_handoff import (
     default_agent_entry_chain,
     default_agent_entry_hard_gate_commands,
 )
-from eco_council_runtime.runtime_posture_profile import (
+from eco_council_runtime.kernel.execution.runtime_posture_profile import (
     default_runtime_posture_profile,
 )
-from eco_council_runtime.runtime_planning_profile import default_runtime_planning_sources
-from eco_council_runtime.runtime_gate_profile import runtime_gate_handler_registry
-from eco_council_runtime.runtime_stage_profile import DEFAULT_RUNTIME_STAGE_DEFINITIONS
+from eco_council_runtime.kernel.execution.runtime_planning_profile import default_runtime_planning_sources
+from eco_council_runtime.kernel.execution.runtime_gate_profile import runtime_gate_handler_registry
+from eco_council_runtime.kernel.execution.runtime_stage_profile import DEFAULT_RUNTIME_STAGE_DEFINITIONS
 
 
 if __name__ == "__main__":

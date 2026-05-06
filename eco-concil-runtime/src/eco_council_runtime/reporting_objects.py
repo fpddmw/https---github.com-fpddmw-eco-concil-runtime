@@ -11,13 +11,13 @@ from .canonical_contracts import (
     canonical_contract_kinds,
     validate_canonical_payload,
 )
-from .kernel.deliberation_plane import (
+from eco_council_runtime.kernel.planes.deliberation_plane import (
     connect_db as connect_deliberation_db,
     decode_json,
     maybe_text,
     stable_hash,
 )
-from .kernel.executor import utc_now_iso
+from eco_council_runtime.kernel.execution.executor import utc_now_iso
 
 OBJECT_KIND_REPORTING_HANDOFF = "reporting-handoff"
 OBJECT_KIND_COUNCIL_DECISION = "council-decision"

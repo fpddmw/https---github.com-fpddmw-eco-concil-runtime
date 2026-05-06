@@ -206,7 +206,7 @@
    - 可 CLI 执行，stdout 输出 JSON object。
 3. `agents/openai.yaml`
    - 如果需要 agent prompt。
-4. `kernel/skill_registry.py` policy
+4. `kernel/governance/skill_registry.py` policy
    - skill layer、allowed roles、capabilities、write scope、approval requirement。
 5. canonical object 或 result shape
    - 对判断型输出必须有 evidence refs、lineage、provenance。

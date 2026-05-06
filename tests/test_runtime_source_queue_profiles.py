@@ -11,7 +11,7 @@ sys.path.insert(0, str(RUNTIME_SRC))
 
 
 def load_registry_snapshot():
-    registry_module = importlib.import_module("eco_council_runtime.kernel.registry")
+    registry_module = importlib.import_module("eco_council_runtime.kernel.core.registry")
 
     return registry_module.registry_snapshot
 

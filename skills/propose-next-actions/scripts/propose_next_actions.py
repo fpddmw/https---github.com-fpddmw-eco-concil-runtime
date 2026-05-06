@@ -20,14 +20,14 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.council_objects import (  # noqa: E402
     query_council_objects,
 )
-from eco_council_runtime.fallback_common import maybe_text  # noqa: E402
-from eco_council_runtime.fallback_context import (  # noqa: E402
+from eco_council_runtime.kernel.governance.fallback_common import maybe_text  # noqa: E402
+from eco_council_runtime.kernel.governance.fallback_context import (  # noqa: E402
     load_ranked_actions_context,
 )
-from eco_council_runtime.fallback_contracts import (  # noqa: E402
+from eco_council_runtime.kernel.governance.fallback_contracts import (  # noqa: E402
     d1_contract_fields_from_payload,
 )
-from eco_council_runtime.governed_council_execution import (  # noqa: E402
+from eco_council_runtime.kernel.execution.governed_council_execution import (  # noqa: E402
     COUNCIL_EXECUTION_MODE_FALLBACK_ONLY,
     COUNCIL_EXECUTION_MODE_PROPOSAL_AUGMENTED,
     COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
@@ -35,11 +35,11 @@ from eco_council_runtime.governed_council_execution import (  # noqa: E402
     normalize_council_execution_mode,
     resolve_council_action_queue,
 )
-from eco_council_runtime.proposal_actions import (  # noqa: E402
+from eco_council_runtime.kernel.governance.proposal_actions import (  # noqa: E402
     action_from_council_proposal,
     proposal_drives_governed_execution_action_queue,
 )
-from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_moderator_action_records,
     store_moderator_action_snapshot,
 )

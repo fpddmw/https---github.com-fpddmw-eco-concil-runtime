@@ -84,11 +84,11 @@ def _kernel_command_args_with_actor_role(args: tuple[str, ...]) -> list[str]:
     if str(runtime_src) not in sys.path:
         sys.path.insert(0, str(runtime_src))
 
-    from eco_council_runtime.kernel.access_policy import (
+    from eco_council_runtime.kernel.governance.access_policy import (
         command_requires_explicit_actor_role,
         kernel_command_actor_role_hint,
     )
-    from eco_council_runtime.kernel.skill_registry import default_actor_role_hint
+    from eco_council_runtime.kernel.governance.skill_registry import default_actor_role_hint
 
     if not command_requires_explicit_actor_role(command):
         return argv

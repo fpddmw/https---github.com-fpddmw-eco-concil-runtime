@@ -27,7 +27,7 @@ from eco_council_runtime.board_proposal_support import (  # noqa: E402
     proposal_target,
     select_council_proposal,
 )
-from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     bootstrap_board_state,
     commit_board_mutation,
     connect_db,

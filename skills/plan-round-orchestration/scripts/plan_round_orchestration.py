@@ -17,12 +17,12 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     load_round_snapshot,
     store_orchestration_plan_record,
 )
 from eco_council_runtime.council_objects import query_council_objects  # noqa: E402
-from eco_council_runtime.governed_council_execution import (  # noqa: E402
+from eco_council_runtime.kernel.execution.governed_council_execution import (  # noqa: E402
     COUNCIL_EXECUTION_MODE_FALLBACK_ONLY,
     COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
     VALID_COUNCIL_EXECUTION_MODES,
@@ -30,15 +30,15 @@ from eco_council_runtime.governed_council_execution import (  # noqa: E402
     normalize_council_execution_mode,
     resolve_council_action_queue,
 )
-from eco_council_runtime.governed_execution_action_semantics import (  # noqa: E402
+from eco_council_runtime.kernel.execution.governed_execution_action_semantics import (  # noqa: E402
     action_is_readiness_blocker,
 )
-from eco_council_runtime.fallback_context import load_d1_shared_context  # noqa: E402
-from eco_council_runtime.proposal_actions import (  # noqa: E402
+from eco_council_runtime.kernel.governance.fallback_context import load_d1_shared_context  # noqa: E402
+from eco_council_runtime.kernel.governance.proposal_actions import (  # noqa: E402
     action_from_council_proposal,
     proposal_drives_governed_execution_action_queue,
 )
-from eco_council_runtime.kernel.runtime_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.operator.runtime_state_surfaces import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
     load_round_readiness_wrapper,

@@ -27,7 +27,7 @@ from eco_council_runtime.council_objects import (  # noqa: E402
     store_council_proposal_records,
     store_readiness_opinion_records,
 )
-from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_moderator_action_records,
     store_moderator_action_snapshot,
 )

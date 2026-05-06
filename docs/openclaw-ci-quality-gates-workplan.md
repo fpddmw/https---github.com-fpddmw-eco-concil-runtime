@@ -53,6 +53,7 @@
    - 已新增 `module-decomposition` targeted suite。
    - 已覆盖大模块 facade public imports、deliberation schema/rows/board/action/reporting/runtime split modules、analysis schema/contracts/support/results/queries/context split modules、关键 CLI help smoke 与 module size report。
    - module size report 不再把 `skills/` 下脚本按行数列为拆分压力；skill 拆分以原子能力边界为准。
+   - module size report 已跟随 runtime/kernel 浅层包结构迁移，固定 `planes/`、`governance/`、`execution/`、`operator/`、`reporting/`、`archive/`、`source_queue/` 下的最新路径。
    - 已纳入默认 targeted gates 与 CI targeted 命令。
 
 当前可用命令：
@@ -64,7 +65,7 @@
 
 当前实测状态：
 
-1. `syntax` 通过，覆盖 219 个 Python 文件，并确认无重复字面量 dict key。
+1. `syntax` 通过，覆盖 227 个 Python 文件，并确认无重复字面量 dict key。
 2. `db-recovery` targeted gate 通过，6 tests。
 3. `schema-migration` targeted gate 通过，3 tests。
 4. `module-decomposition` targeted gate 通过，7 tests。
@@ -73,8 +74,9 @@
 7. `module-decomposition schema-migration runtime-governance` targeted gate 通过，65 tests。
 8. `module-decomposition schema-migration db-recovery runtime-governance reporting` targeted gate 通过，95 tests；当前耗时约 1 分 26 秒。
 9. `runtime-governance reporting` targeted gate 通过，79 tests。
-10. 默认 targeted gates 通过，125 tests；当前耗时约 1 分 53 秒。
-11. `full` gate 通过，268 tests；当前耗时约 3 分 54 秒，后续应继续拆更快的 targeted jobs。
+10. `module-decomposition runtime-governance reporting case-study` targeted gate 通过，89 tests。
+11. 默认 targeted gates 通过，125 tests；当前耗时约 1 分 53 秒。
+12. `full` gate 通过，268 tests；当前耗时约 3 分 54 秒，后续应继续拆更快的 targeted jobs。
 
 当前未闭环项：
 

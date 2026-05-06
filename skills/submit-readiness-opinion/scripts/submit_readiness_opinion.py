@@ -24,7 +24,7 @@ from eco_council_runtime.council_submission_support import (  # noqa: E402
     unique_texts,
     write_json_file,
 )
-from eco_council_runtime.kernel.deliberation_plane import stable_hash  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import stable_hash  # noqa: E402
 
 
 def pretty_json(data: Any, pretty: bool) -> str:

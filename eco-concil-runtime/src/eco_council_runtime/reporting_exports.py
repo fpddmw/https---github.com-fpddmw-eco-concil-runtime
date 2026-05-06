@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .kernel.deliberation_plane import (
+from eco_council_runtime.kernel.planes.deliberation_plane import (
     load_council_decision_record,
     load_expert_report_record,
     load_final_publication_record,
