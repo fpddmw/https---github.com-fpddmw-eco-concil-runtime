@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Any
 
 from .council_objects import query_council_objects
-from .phase2_fallback_common import maybe_text, unique_texts
-from .phase2_proposal_actions import proposal_target
+from .fallback_common import maybe_text, unique_texts
+from .proposal_actions import proposal_target
 
 REPORT_BASIS_PROPOSAL_DISPOSITION_SUPPORT = "support"
 REPORT_BASIS_PROPOSAL_DISPOSITION_REJECT = "reject"

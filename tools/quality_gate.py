@@ -19,6 +19,7 @@ SYNTAX_ROOTS = (
     RUNTIME_SRC,
     ROOT / "skills",
     ROOT / "tests",
+    ROOT / "tools",
 )
 
 SKIP_DIR_NAMES = {
@@ -34,6 +35,7 @@ TEST_SUITES: dict[str, tuple[str, ...]] = {
     "optional-guardrails": ("tests.test_optional_analysis_guardrails",),
     "db-recovery": ("tests.test_db_only_recovery",),
     "schema-migration": ("tests.test_schema_migrations",),
+    "module-decomposition": ("tests.test_module_decomposition_contracts",),
     "runtime-governance": (
         "tests.test_runtime_kernel",
         "tests.test_skill_approval_workflow",
@@ -55,6 +57,7 @@ DEFAULT_TARGETED_SUITES = (
     "optional-guardrails",
     "db-recovery",
     "schema-migration",
+    "module-decomposition",
     "runtime-governance",
     "reporting",
     "case-study",

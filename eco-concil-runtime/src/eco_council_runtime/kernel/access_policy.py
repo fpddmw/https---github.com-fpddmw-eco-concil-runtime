@@ -95,15 +95,15 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },
-    "run-phase2-round": {
+    "run-governed-execution-round": {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },
-    "resume-phase2-round": {
+    "resume-governed-execution-round": {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },
-    "restart-phase2-round": {
+    "restart-governed-execution-round": {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },
@@ -151,7 +151,7 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },
-    "materialize-phase2-exports": {
+    "materialize-governed-execution-exports": {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },

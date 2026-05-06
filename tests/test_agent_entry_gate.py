@@ -396,12 +396,12 @@ class AgentEntryGateTests(unittest.TestCase):
 
             from eco_council_runtime.council_objects import store_readiness_opinion_records
             from eco_council_runtime.kernel.agent_entry import materialize_agent_entry_gate
-            from eco_council_runtime.phase2_agent_entry_profile import (
-                default_phase2_agent_entry_profile,
+            from eco_council_runtime.agent_entry_profile import (
+                default_agent_entry_profile,
             )
-            from eco_council_runtime.phase2_agent_handoff import (
-                default_phase2_entry_chain,
-                default_phase2_hard_gate_commands,
+            from eco_council_runtime.agent_entry_handoff import (
+                default_agent_entry_chain,
+                default_agent_entry_hard_gate_commands,
             )
 
             store_readiness_opinion_records(
@@ -428,9 +428,9 @@ class AgentEntryGateTests(unittest.TestCase):
                 run_dir,
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
-                agent_entry_profile=default_phase2_agent_entry_profile(),
-                hard_gate_command_builder=default_phase2_hard_gate_commands,
-                entry_chain_builder=default_phase2_entry_chain,
+                agent_entry_profile=default_agent_entry_profile(),
+                hard_gate_command_builder=default_agent_entry_hard_gate_commands,
+                entry_chain_builder=default_agent_entry_chain,
                 contract_mode="warn",
             )
             self.assertEqual("completed", payload["status"])
@@ -462,8 +462,8 @@ class AgentEntryGateTests(unittest.TestCase):
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             from eco_council_runtime.kernel.agent_entry import materialize_agent_entry_gate
-            from eco_council_runtime.phase2_agent_entry_profile import (
-                default_phase2_agent_entry_profile,
+            from eco_council_runtime.agent_entry_profile import (
+                default_agent_entry_profile,
             )
 
             def custom_hard_gate_commands(**_: object) -> dict[str, str]:
@@ -489,7 +489,7 @@ class AgentEntryGateTests(unittest.TestCase):
                 run_dir,
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
-                agent_entry_profile=default_phase2_agent_entry_profile(),
+                agent_entry_profile=default_agent_entry_profile(),
                 hard_gate_command_builder=custom_hard_gate_commands,
                 entry_chain_builder=custom_entry_chain,
                 contract_mode="warn",
@@ -530,15 +530,15 @@ class AgentEntryGateTests(unittest.TestCase):
                 agent_entry_state,
                 materialize_agent_entry_gate,
             )
-            from eco_council_runtime.phase2_agent_entry_profile import (
-                default_phase2_agent_entry_profile,
+            from eco_council_runtime.agent_entry_profile import (
+                default_agent_entry_profile,
             )
-            from eco_council_runtime.phase2_agent_handoff import (
-                default_phase2_entry_chain,
-                default_phase2_hard_gate_commands,
+            from eco_council_runtime.agent_entry_handoff import (
+                default_agent_entry_chain,
+                default_agent_entry_hard_gate_commands,
             )
 
-            custom_profile = default_phase2_agent_entry_profile()
+            custom_profile = default_agent_entry_profile()
             custom_profile["role_definitions"] = [
                 {
                     "role": "auditor",
@@ -574,8 +574,8 @@ class AgentEntryGateTests(unittest.TestCase):
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
                 agent_entry_profile=custom_profile,
-                hard_gate_command_builder=default_phase2_hard_gate_commands,
-                entry_chain_builder=default_phase2_entry_chain,
+                hard_gate_command_builder=default_agent_entry_hard_gate_commands,
+                entry_chain_builder=default_agent_entry_chain,
                 contract_mode="warn",
             )
             state_payload = agent_entry_state(
@@ -583,7 +583,7 @@ class AgentEntryGateTests(unittest.TestCase):
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
                 agent_entry_profile=custom_profile,
-                hard_gate_command_builder=default_phase2_hard_gate_commands,
+                hard_gate_command_builder=default_agent_entry_hard_gate_commands,
             )
 
             self.assertEqual(["audit-round"], payload["agent_entry"]["recommended_entry_skills"])

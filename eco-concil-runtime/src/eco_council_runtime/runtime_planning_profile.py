@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .phase2_stage_profile import (
-    DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+from .runtime_stage_profile import (
+    DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
     default_gate_steps,
     default_post_gate_steps,
 )
@@ -211,7 +211,7 @@ def planning_bundle_from_payload(
     plan_path: str,
     plan_payload: dict[str, Any],
     *,
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+    planner_skill_name: str = DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
 ) -> dict[str, Any]:
     explicit_execution_queue = normalized_planned_steps(plan_payload.get("execution_queue"))
     explicit_gate_steps = normalized_planned_steps(
@@ -259,7 +259,7 @@ def planning_bundle(
     round_id: str,
     planner_result: dict[str, Any],
     *,
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+    planner_skill_name: str = DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
 ) -> dict[str, Any]:
     planner_wrapper = planner_result.get("skill_payload", {}) if isinstance(planner_result.get("skill_payload"), dict) else {}
     plan_path = resolve_plan_path(run_dir, round_id, planner_wrapper)
@@ -283,7 +283,7 @@ def planning_from_controller(
     round_id: str,
     controller_payload: dict[str, Any],
     *,
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+    planner_skill_name: str = DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
 ) -> dict[str, Any]:
     planning = controller_payload.get("planning", {}) if isinstance(controller_payload.get("planning"), dict) else {}
     execution_queue = normalized_planned_steps(planning.get("execution_queue"))
@@ -349,17 +349,17 @@ def ensure_executable_planning(planning: dict[str, Any]) -> None:
         return
     plan_path = maybe_text(planning.get("plan_path")) or "<unknown>"
     raise ValueError(
-        f"Planning artifact {plan_path} does not define any executable controller stages; runtime kernel will not synthesize phase-2 deliberation stages."
+        f"Planning artifact {plan_path} does not define any executable controller stages; runtime kernel will not synthesize governed-execution deliberation stages."
     )
 
 
-def phase2_planning_source(
+def runtime_planning_source(
     source_name: str,
     *,
     source_kind: str,
     output_path_key: str,
     planner_mode: str = "",
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+    planner_skill_name: str = DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
     requires_agent_orchestration: bool = False,
     adopted_message: str = "",
     materialized_message: str = "",
@@ -371,7 +371,7 @@ def phase2_planning_source(
         "source_kind": maybe_text(source_kind),
         "output_path_key": maybe_text(output_path_key),
         "planner_mode": maybe_text(planner_mode),
-        "planner_skill_name": maybe_text(planner_skill_name) or DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+        "planner_skill_name": maybe_text(planner_skill_name) or DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
         "requires_agent_orchestration": bool(requires_agent_orchestration),
         "adopted_message": maybe_text(adopted_message),
         "materialized_message": maybe_text(materialized_message),
@@ -380,22 +380,22 @@ def phase2_planning_source(
     }
 
 
-def default_phase2_planning_sources(
+def default_runtime_planning_sources(
     *,
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+    planner_skill_name: str = DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
 ) -> list[dict[str, Any]]:
     del planner_skill_name
     return []
 
 
-def resolve_phase2_planning_sources(
+def resolve_runtime_planning_sources(
     planning_sources: list[dict[str, Any]] | None = None,
     *,
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+    planner_skill_name: str = DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
 ) -> list[dict[str, Any]]:
     if isinstance(planning_sources, list) and planning_sources:
         return [item for item in planning_sources if isinstance(item, dict)]
-    return default_phase2_planning_sources(planner_skill_name=planner_skill_name)
+    return default_runtime_planning_sources(planner_skill_name=planner_skill_name)
 
 
 def planning_source_output_path(
@@ -434,7 +434,7 @@ def planning_bundle_for_source(
     source_spec: dict[str, Any],
     planner_result: dict[str, Any] | None = None,
     *,
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+    planner_skill_name: str = DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
 ) -> dict[str, Any]:
     del source_spec
     if planner_result is None:

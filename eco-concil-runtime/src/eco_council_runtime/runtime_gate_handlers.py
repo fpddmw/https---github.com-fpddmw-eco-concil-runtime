@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .phase2_report_basis_resolution import (
+from .report_basis_resolution import (
     load_council_proposals,
     load_council_readiness_opinions,
     resolve_report_basis_council_inputs,
@@ -11,7 +11,7 @@ from .phase2_report_basis_resolution import (
 from .kernel.deliberation_plane import store_runtime_control_freeze_record
 from .kernel.manifest import write_json
 from .kernel.paths import report_basis_gate_path
-from .kernel.phase2_state_surfaces import load_round_readiness_wrapper
+from .kernel.runtime_state_surfaces import load_round_readiness_wrapper
 
 REPORT_BASIS_GATE_STAGE_NAME = "report-basis-gate"
 

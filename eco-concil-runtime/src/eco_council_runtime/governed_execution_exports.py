@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .kernel.deliberation_plane import maybe_text
-from .kernel.phase2_state_surfaces import (
+from .kernel.runtime_state_surfaces import (
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
     load_orchestration_plan_wrapper,
@@ -81,7 +81,7 @@ def first_identifier(
     return ""
 
 
-def materialize_phase2_exports(
+def materialize_governed_execution_exports(
     run_dir: str | Path,
     *,
     run_id: str,
@@ -144,7 +144,7 @@ def materialize_phase2_exports(
         exports.append(export_entry)
 
     return {
-        "schema_version": "phase2-export-materialization-v1",
+        "schema_version": "governed-execution-export-materialization-v1",
         "status": "completed",
         "run_id": run_id,
         "round_id": round_id,
@@ -159,4 +159,4 @@ def materialize_phase2_exports(
     }
 
 
-__all__ = ["materialize_phase2_exports"]
+__all__ = ["materialize_governed_execution_exports"]

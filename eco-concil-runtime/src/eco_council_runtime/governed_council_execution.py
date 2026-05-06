@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .phase2_fallback_common import maybe_text
-from .phase2_proposal_actions import action_signature
+from .fallback_common import maybe_text
+from .proposal_actions import action_signature
 
 COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE = "proposal-authoritative"
 COUNCIL_EXECUTION_MODE_PROPOSAL_AUGMENTED = "proposal-augmented"

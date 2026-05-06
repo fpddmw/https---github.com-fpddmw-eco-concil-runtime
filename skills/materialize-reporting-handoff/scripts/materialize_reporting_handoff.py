@@ -24,7 +24,7 @@ from eco_council_runtime.council_objects import query_council_objects  # noqa: E
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_reporting_handoff_record,
 )
-from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.runtime_state_surfaces import (  # noqa: E402
     load_report_basis_freeze_wrapper,
     load_round_readiness_wrapper,
     load_supervisor_state_wrapper,
@@ -740,7 +740,7 @@ def materialize_reporting_handoff_skill(
                 "code": "missing-supervisor-state",
                 "message": (
                     "No supervisor DB snapshot was found for "
-                    f"{supervisor_file}; artifact exists but is orphaned from the phase-2 control plane."
+                    f"{supervisor_file}; artifact exists but is orphaned from the governed-execution control plane."
                     if bool(supervisor_context.get("artifact_present"))
                     else (
                         "No supervisor snapshot artifact or DB record was found "

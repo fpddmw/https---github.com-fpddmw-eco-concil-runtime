@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build one auditable orchestration plan for the phase-2 controller."""
+"""Build one auditable orchestration plan for the governed-execution controller."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_orchestration_plan_record,
 )
 from eco_council_runtime.council_objects import query_council_objects  # noqa: E402
-from eco_council_runtime.phase2_council_execution import (  # noqa: E402
+from eco_council_runtime.governed_council_execution import (  # noqa: E402
     COUNCIL_EXECUTION_MODE_FALLBACK_ONLY,
     COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
     VALID_COUNCIL_EXECUTION_MODES,
@@ -30,15 +30,15 @@ from eco_council_runtime.phase2_council_execution import (  # noqa: E402
     normalize_council_execution_mode,
     resolve_council_action_queue,
 )
-from eco_council_runtime.phase2_action_semantics import (  # noqa: E402
+from eco_council_runtime.governed_execution_action_semantics import (  # noqa: E402
     action_is_readiness_blocker,
 )
-from eco_council_runtime.phase2_fallback_context import load_d1_shared_context  # noqa: E402
-from eco_council_runtime.phase2_proposal_actions import (  # noqa: E402
+from eco_council_runtime.fallback_context import load_d1_shared_context  # noqa: E402
+from eco_council_runtime.proposal_actions import (  # noqa: E402
     action_from_council_proposal,
-    proposal_drives_phase2_action_queue,
+    proposal_drives_governed_execution_action_queue,
 )
-from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.runtime_state_surfaces import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
     load_round_readiness_wrapper,
@@ -275,7 +275,7 @@ def council_proposal_actions(proposals: list[dict[str, Any]]) -> list[dict[str, 
     return [
         action_from_council_proposal(proposal)
         for proposal in proposals
-        if proposal_drives_phase2_action_queue(proposal)
+        if proposal_drives_governed_execution_action_queue(proposal)
     ]
 
 
@@ -1060,7 +1060,7 @@ def plan_round_orchestration_skill(
     )
     plan_id = "orchestration-plan-" + stable_hash(run_id, round_id, posture, *(step["skill_name"] for step in execution_queue))[:12]
     planning_notes = [
-        "Planner artifact exists to make the phase-2 controller queue explicit and auditable.",
+        "Planner artifact exists to make the governed-execution controller queue explicit and auditable.",
         "Probe materialization is decided from DB council objects and agenda artifacts; missing derived artifacts must be recorded as caveats.",
         "Board summary and board brief are treated as derived exports rather than controller prerequisites.",
     ]
@@ -1079,7 +1079,7 @@ def plan_round_orchestration_skill(
         "plan_id": plan_id,
         "council_execution_mode": normalized_council_execution_mode,
         "planning_status": "ready-for-controller",
-        "planning_mode": "planner-backed-phase2",
+        "planning_mode": "planner-backed-governed-execution",
         "controller_authority": "queue-owner",
         "probe_stage_included": probe_stage_included,
         "downstream_posture": posture,
@@ -1209,7 +1209,7 @@ def plan_round_orchestration_skill(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build one auditable orchestration plan for the phase-2 controller.")
+    parser = argparse.ArgumentParser(description="Build one auditable orchestration plan for the governed-execution controller.")
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)

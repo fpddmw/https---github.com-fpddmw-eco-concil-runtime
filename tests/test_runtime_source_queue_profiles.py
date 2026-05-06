@@ -37,7 +37,7 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
         self.assertEqual(registry["skill_count"], registry["source_queue_profile_summary"]["skill_count"])
         self.assertEqual(registry["skill_count"], registry["source_queue_profile_summary"]["source_queue_ready_count"])
         self.assertIn(
-            "phase2_behavior_counts",
+            "governed_execution_behavior_counts",
             registry["source_queue_profile_summary"],
         )
 
@@ -48,7 +48,7 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
             self.assertTrue(profile["stage"])
             self.assertTrue(profile["queue_role"])
             self.assertTrue(profile["default_invocation"])
-            self.assertTrue(profile["phase2_behavior"])
+            self.assertTrue(profile["governed_execution_behavior"])
             self.assertIn("notes", profile)
             self.assertEqual([], profile["downstream_hints"])
             self.assertFalse(profile["default_chain_eligible"])
@@ -118,7 +118,7 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
         ]:
             self.assertEqual("advisory", profiles[skill_name]["queue_status"])
             self.assertEqual("operator-approved-on-demand", profiles[skill_name]["default_invocation"])
-            self.assertEqual("approval-gated-runtime-surface", profiles[skill_name]["phase2_behavior"])
+            self.assertEqual("approval-gated-runtime-surface", profiles[skill_name]["governed_execution_behavior"])
             self.assertTrue(profiles[skill_name]["requires_explicit_approval"])
             self.assertFalse(profiles[skill_name]["default_chain_eligible"])
 

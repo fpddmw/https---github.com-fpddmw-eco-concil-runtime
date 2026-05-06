@@ -24,18 +24,18 @@ from eco_council_runtime.deliberation_target_semantics import (  # noqa: E402
     normalized_deliberation_target,
     source_proposal_id_from_payload,
 )
-from eco_council_runtime.phase2_fallback_common import (  # noqa: E402
+from eco_council_runtime.fallback_common import (  # noqa: E402
     maybe_text,
     resolve_path,
     unique_texts,
 )
-from eco_council_runtime.phase2_fallback_context import (  # noqa: E402
+from eco_council_runtime.fallback_context import (  # noqa: E402
     load_ranked_actions_context,
 )
-from eco_council_runtime.phase2_fallback_contracts import (  # noqa: E402
+from eco_council_runtime.fallback_contracts import (  # noqa: E402
     d1_contract_fields_from_payload,
 )
-from eco_council_runtime.phase2_council_execution import (  # noqa: E402
+from eco_council_runtime.governed_council_execution import (  # noqa: E402
     COUNCIL_EXECUTION_MODE_FALLBACK_ONLY,
     COUNCIL_EXECUTION_MODE_PROPOSAL_AUGMENTED,
     COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
@@ -43,10 +43,10 @@ from eco_council_runtime.phase2_council_execution import (  # noqa: E402
     normalize_council_execution_mode,
     resolve_council_action_queue,
 )
-from eco_council_runtime.phase2_proposal_actions import (  # noqa: E402
+from eco_council_runtime.proposal_actions import (  # noqa: E402
     action_from_council_proposal,
 )
-from eco_council_runtime.kernel.phase2_state_surfaces import load_next_actions_wrapper  # noqa: E402
+from eco_council_runtime.kernel.runtime_state_surfaces import load_next_actions_wrapper  # noqa: E402
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_falsification_probe_records,
     store_falsification_probe_snapshot,

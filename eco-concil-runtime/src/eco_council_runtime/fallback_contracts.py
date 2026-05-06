@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .phase2_fallback_common import (
+from .fallback_common import (
     ARTIFACT_FALLBACK_PREFIXES,
     EXPLICIT_D1_INPUT_KEYS,
     OBSERVED_INPUT_PREFIXES,

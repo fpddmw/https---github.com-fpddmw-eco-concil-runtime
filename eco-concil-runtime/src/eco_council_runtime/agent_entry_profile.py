@@ -30,7 +30,7 @@ from .kernel.transition_requests import (
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
     TRANSITION_KIND_FREEZE_REPORT_BASIS,
 )
-from .phase2_round_profile import default_next_round_id_builder
+from .runtime_round_profile import default_next_round_id_builder
 from .runtime_command_hints import kernel_command, run_skill_command
 
 EntryStatusEvaluator = Callable[..., tuple[str, list[dict[str, str]]]]
@@ -1195,7 +1195,7 @@ def default_agent_entry_operator_commands(
     }
 
 
-def default_phase2_agent_entry_profile() -> dict[str, Any]:
+def default_agent_entry_profile() -> dict[str, Any]:
     return {
         "role_definitions": deepcopy(DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS),
         "status_evaluator": default_agent_entry_status,
@@ -1217,6 +1217,6 @@ __all__ = [
     "default_agent_entry_operator_notes",
     "default_agent_entry_recommended_skills",
     "default_agent_entry_status",
-    "default_phase2_agent_entry_profile",
+    "default_agent_entry_profile",
     "default_role_entry_points",
 ]

@@ -18,8 +18,8 @@ from _workflow_support import (
     submit_ready_council_support,
 )
 
-RUN_ID = "run-phase2-001"
-ROUND_ID = "round-phase2-001"
+RUN_ID = "run-governed-execution-001"
+ROUND_ID = "round-governed-execution-001"
 
 
 def approve_report_basis_transition(run_dir: Path) -> str:
@@ -33,7 +33,7 @@ def approve_report_basis_transition(run_dir: Path) -> str:
 
 
 class SupervisorSimulationRegressionTests(unittest.TestCase):
-    def test_phase2_round_controller_freezes_report_basis_ready_round(self) -> None:
+    def test_governed_execution_round_controller_freezes_report_basis_ready_round(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -90,8 +90,8 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             )
 
             approve_report_basis_transition(run_dir)
-            phase2_payload = run_kernel(
-                "run-phase2-round",
+            governed_execution_payload = run_kernel(
+                "run-governed-execution-round",
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -112,7 +112,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             controller_artifact = load_json(runtime_path(run_dir, f"round_controller_{ROUND_ID}.json"))
             report_basis_artifact = load_json(report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json"))
 
-            self.assertEqual("ready", phase2_payload["summary"]["readiness_status"])
+            self.assertEqual("ready", governed_execution_payload["summary"]["readiness_status"])
             self.assertEqual("report-basis-freeze-allowed", gate_artifact["gate_status"])
             self.assertTrue(gate_artifact["report_basis_freeze_allowed"])
             self.assertEqual("transition-executor", controller_artifact["planning_mode"])
@@ -125,7 +125,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             self.assertNotIn("board-brief", [item.get("stage") for item in controller_artifact["steps"]])
             self.assertEqual("frozen", controller_artifact["report_basis_status"])
             self.assertEqual("frozen", report_basis_artifact["report_basis_status"])
-            self.assertEqual("frozen", state_payload["phase2"]["controller"]["report_basis_status"])
+            self.assertEqual("frozen", state_payload["governed_execution"]["controller"]["report_basis_status"])
             event_types = [item.get("event_type") for item in state_payload["ledger_tail"]]
             self.assertIn("report-basis-gate", event_types)
             self.assertIn("round-controller", event_types)
@@ -216,15 +216,15 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
             self.assertNotIn("board-summary", [item.get("stage") for item in controller_artifact["steps"]])
             self.assertNotIn("board-brief", [item.get("stage") for item in controller_artifact["steps"]])
             self.assertEqual("hold-investigation-open", supervisor_artifact["supervisor_status"])
-            self.assertEqual("investigation-hold", supervisor_artifact["phase2_posture"])
+            self.assertEqual("investigation-hold", supervisor_artifact["governed_execution_posture"])
             self.assertEqual("continue-investigation", supervisor_artifact["operator_action"])
             self.assertEqual("withheld", supervisor_artifact["report_basis_status"])
             self.assertEqual(str(plan_path.resolve()), supervisor_artifact["orchestration_plan_path"])
             self.assertEqual("withheld", report_basis_artifact["report_basis_status"])
             self.assertIn("open-investigation-round", supervisor_artifact["recommended_next_skills"])
             self.assertEqual("open-investigation-round", supervisor_artifact["round_transition"]["skill_name"])
-            self.assertEqual("round-phase2-002", supervisor_artifact["round_transition"]["suggested_round_id"])
-            self.assertEqual("hold-investigation-open", state_payload["phase2"]["supervisor"]["supervisor_status"])
+            self.assertEqual("round-governed-execution-002", supervisor_artifact["round_transition"]["suggested_round_id"])
+            self.assertEqual("hold-investigation-open", state_payload["governed_execution"]["supervisor"]["supervisor_status"])
             event_types = [item.get("event_type") for item in state_payload["ledger_tail"]]
             self.assertIn("supervisor", event_types)
 

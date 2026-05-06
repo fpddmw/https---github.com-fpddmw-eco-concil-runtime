@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .phase2_fallback_common import maybe_text
+from .fallback_common import maybe_text
 
 LEGACY_NON_BLOCKING_ACTION_KINDS = {
     "prepare-report-basis-freeze",

@@ -6,7 +6,7 @@ from typing import Any, Callable
 from .kernel.executor import maybe_text
 from .kernel.transition_requests import TRANSITION_KIND_OPEN_INVESTIGATION_ROUND
 from .runtime_command_hints import kernel_command, run_skill_command
-from .phase2_round_profile import default_next_round_id_builder
+from .runtime_round_profile import default_next_round_id_builder
 from .reporting_status import SUPERVISOR_REPORTING_READY_STATUS
 
 PostureProfileCallable = Callable[..., Any]
@@ -24,11 +24,11 @@ def unique_texts(values: list[Any]) -> list[str]:
     return results
 
 
-def resolve_phase2_posture_profile(
+def resolve_runtime_posture_profile(
     posture_profile: dict[str, Any] | None,
 ) -> dict[str, Any]:
     if not isinstance(posture_profile, dict):
-        raise ValueError("No phase-2 posture profile was injected into runtime kernel.")
+        raise ValueError("No governed-execution posture profile was injected into runtime kernel.")
     return posture_profile
 
 
@@ -38,7 +38,7 @@ def posture_profile_callable(
 ) -> PostureProfileCallable:
     candidate = posture_profile.get(key)
     if not callable(candidate):
-        raise ValueError(f"Phase-2 posture profile is missing callable: {key}")
+        raise ValueError(f"Governed execution posture profile is missing callable: {key}")
     return candidate
 
 
@@ -82,17 +82,17 @@ def default_supervisor_classification(controller: dict[str, Any]) -> dict[str, s
     if controller_status == "failed":
         return {
             "supervisor_status": "controller-failed",
-            "supervisor_substatus": "phase2-recovery-required",
-            "phase2_posture": "controller-failed",
+            "supervisor_substatus": "governed-execution-recovery-required",
+            "governed_execution_posture": "controller-failed",
             "terminal_state": "recovery-required",
             "recovery_posture": "resume-controller",
-            "operator_action": "resume-phase2",
+            "operator_action": "resume-governed-execution",
         }
     if report_basis_status == "frozen":
         return {
             "supervisor_status": SUPERVISOR_REPORTING_READY_STATUS,
             "supervisor_substatus": "report-basis-complete",
-            "phase2_posture": "reporting-ready",
+            "governed_execution_posture": "reporting-ready",
             "terminal_state": "reporting-ready",
             "recovery_posture": "terminal",
             "operator_action": "handoff-reporting",
@@ -107,7 +107,7 @@ def default_supervisor_classification(controller: dict[str, Any]) -> dict[str, s
     return {
         "supervisor_status": "hold-investigation-open",
         "supervisor_substatus": substatus,
-        "phase2_posture": "investigation-hold",
+        "governed_execution_posture": "investigation-hold",
         "terminal_state": "investigation-open",
         "recovery_posture": "continue-investigation",
         "operator_action": "continue-investigation",
@@ -259,7 +259,7 @@ def default_supervisor_failure_notes(controller: dict[str, Any]) -> list[str]:
     ]
 
 
-def default_phase2_posture_profile() -> dict[str, Any]:
+def default_runtime_posture_profile() -> dict[str, Any]:
     return {
         "controller_completion_builder": default_controller_completion_updates,
         "supervisor_classification_builder": default_supervisor_classification,
@@ -274,7 +274,7 @@ def default_phase2_posture_profile() -> dict[str, Any]:
 
 __all__ = [
     "default_controller_completion_updates",
-    "default_phase2_posture_profile",
+    "default_runtime_posture_profile",
     "default_supervisor_classification",
     "default_supervisor_failure_notes",
     "default_supervisor_operator_notes",
@@ -282,5 +282,5 @@ __all__ = [
     "default_supervisor_round_transition",
     "default_supervisor_top_actions",
     "posture_profile_callable",
-    "resolve_phase2_posture_profile",
+    "resolve_runtime_posture_profile",
 ]

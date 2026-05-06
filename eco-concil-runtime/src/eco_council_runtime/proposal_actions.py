@@ -6,7 +6,7 @@ from .deliberation_target_semantics import (
     canonical_target_kind,
     proposal_target_from_payload,
 )
-from .phase2_fallback_common import maybe_number, maybe_text, stable_hash, unique_texts
+from .fallback_common import maybe_number, maybe_text, stable_hash, unique_texts
 
 COUNCIL_PROPOSAL_POLICY_PROFILE = "agent-council-proposal-v1"
 COUNCIL_PROPOSAL_POLICY_OWNER = "agent-council"
@@ -74,7 +74,7 @@ def action_signature(action: dict[str, Any]) -> str:
     )
 
 
-def proposal_drives_phase2_action_queue(
+def proposal_drives_governed_execution_action_queue(
     proposal: dict[str, Any],
     *,
     non_execution_proposal_kinds: set[str] | None = None,

@@ -3,18 +3,18 @@ from __future__ import annotations
 from typing import Any
 
 
-DEFAULT_PHASE2_PLANNER_SKILL_NAME = "plan-round-orchestration"
+DEFAULT_RUNTIME_PLANNER_SKILL_NAME = "plan-round-orchestration"
 
-DEFAULT_PHASE2_STAGE_DEFINITIONS: dict[str, dict[str, Any]] = {
+DEFAULT_RUNTIME_STAGE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "orchestration-planner": {
         "phase_group": "planning",
         "stage_kind": "skill",
-        "expected_skill_name": DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+        "expected_skill_name": DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
         "artifact_key": "orchestration_plan_path",
         "required_previous_stages": [],
         "blocking": True,
         "resume_policy": "skip-if-completed",
-        "operator_summary": "Materialize one auditable phase-2 plan before controller execution.",
+        "operator_summary": "Materialize one auditable governed-execution plan before controller execution.",
     },
     "board-summary": {
         "phase_group": "exports",
@@ -100,7 +100,7 @@ def resolve_stage_definitions(
 ) -> dict[str, dict[str, Any]]:
     if isinstance(stage_definitions, dict) and stage_definitions:
         return stage_definitions
-    return DEFAULT_PHASE2_STAGE_DEFINITIONS
+    return DEFAULT_RUNTIME_STAGE_DEFINITIONS
 
 
 def default_gate_steps() -> list[dict[str, Any]]:
@@ -159,7 +159,7 @@ def stage_contract(
 ) -> dict[str, Any]:
     definition = lookup_stage_contract(stage_name, stage_definitions=stage_definitions)
     if definition is None:
-        raise ValueError(f"Unknown phase-2 stage: {maybe_text(stage_name)}")
+        raise ValueError(f"Unknown governed-execution stage: {maybe_text(stage_name)}")
     return definition
 
 
@@ -213,9 +213,9 @@ def validate_stage_blueprints(
             continue
         stage_name = maybe_text(entry.get("stage") or entry.get("stage_name"))
         if not stage_name:
-            raise ValueError("Missing phase-2 stage name in planned controller sequence.")
+            raise ValueError("Missing governed-execution stage name in planned controller sequence.")
         if stage_name in seen:
-            raise ValueError(f"Duplicate phase-2 stage detected: {stage_name}")
+            raise ValueError(f"Duplicate governed-execution stage detected: {stage_name}")
         has_explicit_previous_stages = "required_previous_stages" in entry
         required_previous_stages = (
             normalized_required_previous_stages(entry.get("required_previous_stages"))

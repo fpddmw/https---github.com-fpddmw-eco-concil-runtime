@@ -4,7 +4,7 @@ from typing import Any
 from typing import Callable
 
 from .deliberation_target_semantics import normalized_deliberation_target
-from .phase2_fallback_common import (
+from .fallback_common import (
     grouped_by_issue_label,
     indexed_by_claim_id,
     issue_label_for_item,
@@ -15,7 +15,7 @@ from .phase2_fallback_common import (
     unique_texts,
     weakest_coverage_for_claim_ids,
 )
-from .phase2_fallback_policy import (
+from .fallback_policy import (
     coverage_policy,
     fallback_policy_annotation,
     formal_public_link_policy,
@@ -664,7 +664,7 @@ def default_fallback_agenda_profile(
     empty_action_builder: EmptyAgendaBuilder | None = None,
 ) -> dict[str, Any]:
     return {
-        "profile_name": "phase2-fallback-agenda-profile-v1",
+        "profile_name": "governed-execution-fallback-agenda-profile-v1",
         "source_specs": [
             fallback_agenda_source(
                 "open-challenges",

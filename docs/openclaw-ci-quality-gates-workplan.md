@@ -49,24 +49,32 @@
    - 当前执行 syntax gate、全部已定义 targeted gates 和 full unittest gate。
 3. 当前代码清理
    - 已清理 runtime/reporting 链路中暴露出的重复 `report_basis_*`、`report_basis_gate*` 与 reporting audit 字段。
+4. 模块拆分保护网
+   - 已新增 `module-decomposition` targeted suite。
+   - 已覆盖大模块 facade public imports、deliberation schema/rows/board/action/reporting/runtime split modules、analysis schema/contracts/support/results/queries/context split modules、关键 CLI help smoke 与 module size report。
+   - module size report 不再把 `skills/` 下脚本按行数列为拆分压力；skill 拆分以原子能力边界为准。
+   - 已纳入默认 targeted gates 与 CI targeted 命令。
 
 当前可用命令：
 
 1. `python3 tools/quality_gate.py syntax`
-2. `python3 tools/quality_gate.py test relation-taxonomy optional-guardrails db-recovery schema-migration runtime-governance reporting case-study`
+2. `python3 tools/quality_gate.py test relation-taxonomy optional-guardrails db-recovery schema-migration module-decomposition runtime-governance reporting case-study`
 3. `python3 tools/quality_gate.py full`
 4. `python3 tools/quality_gate.py ci`
 
 当前实测状态：
 
-1. `syntax` 通过，覆盖 204 个 Python 文件，并确认无重复字面量 dict key。
+1. `syntax` 通过，覆盖 219 个 Python 文件，并确认无重复字面量 dict key。
 2. `db-recovery` targeted gate 通过，6 tests。
 3. `schema-migration` targeted gate 通过，3 tests。
-4. `schema-migration db-recovery` targeted gate 通过，9 tests。
-5. `runtime-governance` targeted gate 通过，56 tests。
-6. `runtime-governance reporting` targeted gate 通过，79 tests。
-7. 默认 targeted gates 通过，118 tests。
-8. `full` gate 通过，261 tests；当前耗时约 7 分 18 秒，后续应继续拆更快的 targeted jobs。
+4. `module-decomposition` targeted gate 通过，7 tests。
+5. `schema-migration db-recovery` targeted gate 通过，9 tests。
+6. `relation-taxonomy optional-guardrails module-decomposition` targeted gate 通过，34 tests。
+7. `module-decomposition schema-migration runtime-governance` targeted gate 通过，65 tests。
+8. `module-decomposition schema-migration db-recovery runtime-governance reporting` targeted gate 通过，95 tests；当前耗时约 1 分 26 秒。
+9. `runtime-governance reporting` targeted gate 通过，79 tests。
+10. 默认 targeted gates 通过，125 tests；当前耗时约 1 分 53 秒。
+11. `full` gate 通过，268 tests；当前耗时约 3 分 54 秒，后续应继续拆更快的 targeted jobs。
 
 当前未闭环项：
 

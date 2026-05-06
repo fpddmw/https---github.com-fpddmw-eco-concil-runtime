@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..phase2_agent_handoff import EntryChainBuilder, HardGateCommandBuilder
+from ..agent_entry_handoff import EntryChainBuilder, HardGateCommandBuilder
 from .role_contracts import normalize_actor_role
 from .analysis_plane import query_analysis_result_sets
 from .deliberation_plane import load_round_snapshot

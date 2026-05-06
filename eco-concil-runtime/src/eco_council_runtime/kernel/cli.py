@@ -26,14 +26,14 @@ from ..council_objects import (
     council_queryable_object_kinds,
     query_council_objects,
 )
-from ..phase2_exports import materialize_phase2_exports
+from ..governed_execution_exports import materialize_governed_execution_exports
 from ..reporting_objects import (
     query_reporting_objects,
     reporting_queryable_object_kinds,
     store_report_section_draft_record,
 )
 from ..reporting_exports import materialize_reporting_exports
-from ..phase2_agent_handoff import EntryChainBuilder, HardGateCommandBuilder
+from ..agent_entry_handoff import EntryChainBuilder, HardGateCommandBuilder
 from ..runtime_command_hints import kernel_command, run_skill_command
 from .analysis_plane import (
     analysis_kind_names,
@@ -52,8 +52,13 @@ from .benchmark import (
     materialize_scenario_fixture,
     replay_runtime_scenario,
 )
-from .controller import run_phase2_round_with_contract_mode
-from .deliberation_plane import load_phase2_control_state, load_schema_status
+from .controller import (
+    run_governed_execution_round_with_contract_mode,
+)
+from .deliberation_plane import (
+    load_governed_execution_control_state,
+    load_schema_status,
+)
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill
 from .gate import GateHandler
 from .governance import CONTRACT_MODES, preflight_skill_execution
@@ -98,7 +103,7 @@ from .paths import (
     scenario_fixture_path,
     supervisor_state_path,
 )
-from .phase2_state_surfaces import (
+from .runtime_state_surfaces import (
     build_reporting_surface,
     load_controller_state_wrapper,
     load_council_decision_wrapper,
@@ -498,22 +503,22 @@ def transition_request_state(
     }
 
 
-def phase2_operator_view(
+def governed_execution_operator_view(
     run_dir: Path,
     round_id: str,
-    phase2_state: dict[str, Any],
+    governed_execution_state: dict[str, Any],
     reporting_surface: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    plan = phase2_state.get("plan", {}) if isinstance(phase2_state.get("plan"), dict) else {}
+    plan = governed_execution_state.get("plan", {}) if isinstance(governed_execution_state.get("plan"), dict) else {}
     gate = (
-        phase2_state.get("report_basis_gate", {})
-        if isinstance(phase2_state.get("report_basis_gate"), dict)
-        else phase2_state.get("report_basis_gate", {})
-        if isinstance(phase2_state.get("report_basis_gate"), dict)
+        governed_execution_state.get("report_basis_gate", {})
+        if isinstance(governed_execution_state.get("report_basis_gate"), dict)
+        else governed_execution_state.get("report_basis_gate", {})
+        if isinstance(governed_execution_state.get("report_basis_gate"), dict)
         else {}
     )
-    controller = phase2_state.get("controller", {}) if isinstance(phase2_state.get("controller"), dict) else {}
-    supervisor = phase2_state.get("supervisor", {}) if isinstance(phase2_state.get("supervisor"), dict) else {}
+    controller = governed_execution_state.get("controller", {}) if isinstance(governed_execution_state.get("controller"), dict) else {}
+    supervisor = governed_execution_state.get("supervisor", {}) if isinstance(governed_execution_state.get("supervisor"), dict) else {}
     reporting = reporting_surface if isinstance(reporting_surface, dict) else {}
     run_id = (
         maybe_text(supervisor.get("run_id"))
@@ -523,7 +528,7 @@ def phase2_operator_view(
     )
     resume_command = maybe_text(supervisor.get("resume_command")) or (
         kernel_command(
-            "resume-phase2-round",
+            "resume-governed-execution-round",
             "--run-dir",
             str(run_dir),
             "--run-id",
@@ -536,7 +541,7 @@ def phase2_operator_view(
     )
     restart_command = maybe_text(supervisor.get("restart_command")) or (
         kernel_command(
-            "restart-phase2-round",
+            "restart-governed-execution-round",
             "--run-dir",
             str(run_dir),
             "--run-id",
@@ -625,7 +630,7 @@ def phase2_operator_view(
         "controller_status": maybe_text(controller.get("controller_status")) or "missing",
         "supervisor_status": maybe_text(supervisor.get("supervisor_status")),
         "supervisor_substatus": maybe_text(supervisor.get("supervisor_substatus")),
-        "phase2_posture": maybe_text(supervisor.get("phase2_posture")),
+        "governed_execution_posture": maybe_text(supervisor.get("governed_execution_posture")),
         "terminal_state": maybe_text(supervisor.get("terminal_state")),
         "readiness_status": maybe_text(controller.get("readiness_status")) or maybe_text(supervisor.get("readiness_status")),
         "gate_status": maybe_text(controller.get("gate_status")) or maybe_text(gate.get("gate_status")),
@@ -685,9 +690,9 @@ def phase2_operator_view(
             if round_id and run_id
             else ""
         ),
-        "materialize_phase2_exports_command": (
+        "materialize_governed_execution_exports_command": (
             kernel_command(
-                "materialize-phase2-exports",
+                "materialize-governed-execution-exports",
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -1336,8 +1341,8 @@ def benchmark_operator_view(run_dir: Path, round_id: str, benchmark_state: dict[
         "scenario_fingerprint": maybe_text(manifest.get("scenario_fingerprint")) or maybe_text(fixture.get("scenario_fingerprint")),
         "fixture_materialized": bool(fixture),
         "benchmark_materialized": bool(manifest),
-        "reporting_ready": bool(manifest.get("phase2_summary", {}).get("reporting_ready"))
-        if isinstance(manifest.get("phase2_summary"), dict)
+        "reporting_ready": bool(manifest.get("governed_execution_summary", {}).get("reporting_ready"))
+        if isinstance(manifest.get("governed_execution_summary"), dict)
         else False,
         "compare_verdict": maybe_text(compare.get("verdict")),
         "replay_verdict": maybe_text(replay.get("replay_verdict")),
@@ -1445,13 +1450,13 @@ def show_run_state(
     current_round_id = str(cursor.get("current_round_id") or "")
     selected_round_id = maybe_text(round_id) or current_round_id
     resolved_run_id = maybe_text(manifest.get("run_id")) or maybe_text(cursor.get("run_id"))
-    phase2_state: dict[str, Any] = {}
+    governed_execution_state: dict[str, Any] = {}
     reporting_state: dict[str, Any] = {}
     post_round_state: dict[str, Any] = {}
     benchmark_state: dict[str, Any] = {}
     transition_state: dict[str, Any] = {}
     if selected_round_id:
-        control_state = load_phase2_control_state(
+        control_state = load_governed_execution_control_state(
             run_dir,
             run_id=resolved_run_id,
             round_id=selected_round_id,
@@ -1488,7 +1493,7 @@ def show_run_state(
                 (run_dir / "runtime" / f"orchestration_plan_{selected_round_id}.json").resolve()
             ),
         )
-        phase2_state = {
+        governed_execution_state = {
             "plan": plan_context.get("payload", {})
             if isinstance(plan_context.get("payload"), dict)
             else (
@@ -1527,10 +1532,10 @@ def show_run_state(
             resolved_run_id,
             selected_round_id,
         )
-        phase2_state["operator"] = phase2_operator_view(
+        governed_execution_state["operator"] = governed_execution_operator_view(
             run_dir,
             selected_round_id,
-            phase2_state,
+            governed_execution_state,
             reporting_state.get("surface", {})
             if isinstance(reporting_state.get("surface"), dict)
             else {},
@@ -1602,7 +1607,7 @@ def show_run_state(
             agent_entry_profile=agent_entry_profile,
             hard_gate_command_builder=hard_gate_command_builder,
         ),
-        "phase2": phase2_state,
+        "governed_execution": governed_execution_state,
         "reporting": reporting_state,
         "post_round": post_round_state,
         "benchmark": benchmark_state,
@@ -1714,7 +1719,7 @@ def add_control_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--gate-handler", default="")
     command.add_argument("--decision-source", default="")
     command.add_argument("--supervisor-substatus", default="")
-    command.add_argument("--phase2-posture", default="")
+    command.add_argument("--governed-execution-posture", default="")
     command.add_argument("--terminal-state", default="")
     command.add_argument("--reporting-handoff-status", default="")
     command.add_argument("--transition-kind", default="")
@@ -1981,32 +1986,32 @@ def build_parser() -> argparse.ArgumentParser:
     add_actor_role_arg(gate_cmd)
     gate_cmd.add_argument("--pretty", action="store_true")
 
-    phase2_cmd = sub.add_parser("run-phase2-round", help="Run the approved phase-2 report-basis chain in one command.")
-    phase2_cmd.add_argument("--run-dir", required=True)
-    phase2_cmd.add_argument("--run-id", required=True)
-    phase2_cmd.add_argument("--round-id", required=True)
-    add_actor_role_arg(phase2_cmd)
-    phase2_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
-    phase2_cmd.add_argument("--pretty", action="store_true")
-    add_execution_policy_args(phase2_cmd)
+    governed_execution_cmd = sub.add_parser("run-governed-execution-round", help="Run the approved governed-execution report-basis chain in one command.")
+    governed_execution_cmd.add_argument("--run-dir", required=True)
+    governed_execution_cmd.add_argument("--run-id", required=True)
+    governed_execution_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(governed_execution_cmd)
+    governed_execution_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    governed_execution_cmd.add_argument("--pretty", action="store_true")
+    add_execution_policy_args(governed_execution_cmd)
 
-    resume_phase2_cmd = sub.add_parser("resume-phase2-round", help="Resume one interrupted phase-2 round from the persisted controller state.")
-    resume_phase2_cmd.add_argument("--run-dir", required=True)
-    resume_phase2_cmd.add_argument("--run-id", required=True)
-    resume_phase2_cmd.add_argument("--round-id", required=True)
-    add_actor_role_arg(resume_phase2_cmd)
-    resume_phase2_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
-    resume_phase2_cmd.add_argument("--pretty", action="store_true")
-    add_execution_policy_args(resume_phase2_cmd)
+    resume_governed_execution_cmd = sub.add_parser("resume-governed-execution-round", help="Resume one interrupted governed-execution round from the persisted controller state.")
+    resume_governed_execution_cmd.add_argument("--run-dir", required=True)
+    resume_governed_execution_cmd.add_argument("--run-id", required=True)
+    resume_governed_execution_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(resume_governed_execution_cmd)
+    resume_governed_execution_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    resume_governed_execution_cmd.add_argument("--pretty", action="store_true")
+    add_execution_policy_args(resume_governed_execution_cmd)
 
-    restart_phase2_cmd = sub.add_parser("restart-phase2-round", help="Force a fresh phase-2 controller run and overwrite any resumable state.")
-    restart_phase2_cmd.add_argument("--run-dir", required=True)
-    restart_phase2_cmd.add_argument("--run-id", required=True)
-    restart_phase2_cmd.add_argument("--round-id", required=True)
-    add_actor_role_arg(restart_phase2_cmd)
-    restart_phase2_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
-    restart_phase2_cmd.add_argument("--pretty", action="store_true")
-    add_execution_policy_args(restart_phase2_cmd)
+    restart_governed_execution_cmd = sub.add_parser("restart-governed-execution-round", help="Force a fresh governed-execution controller run and overwrite any resumable state.")
+    restart_governed_execution_cmd.add_argument("--run-dir", required=True)
+    restart_governed_execution_cmd.add_argument("--run-id", required=True)
+    restart_governed_execution_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(restart_governed_execution_cmd)
+    restart_governed_execution_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    restart_governed_execution_cmd.add_argument("--pretty", action="store_true")
+    add_execution_policy_args(restart_governed_execution_cmd)
 
     close_round_cmd = sub.add_parser("close-round", help="Run the standard post-round archive closeout for one terminal round.")
     close_round_cmd.add_argument("--run-dir", required=True)
@@ -2062,7 +2067,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay_cmd.add_argument("--baseline-manifest-path", default="")
     replay_cmd.add_argument("--pretty", action="store_true")
 
-    supervisor_cmd = sub.add_parser("supervise-round", help="Run the phase-2 controller and materialize a compact supervisor state.")
+    supervisor_cmd = sub.add_parser("supervise-round", help="Run the governed-execution controller and materialize a compact supervisor state.")
     supervisor_cmd.add_argument("--run-dir", required=True)
     supervisor_cmd.add_argument("--run-id", required=True)
     supervisor_cmd.add_argument("--round-id", required=True)
@@ -2162,15 +2167,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_control_query_args(control_query_cmd)
 
-    phase2_export_cmd = sub.add_parser(
-        "materialize-phase2-exports",
-        help="Rebuild phase-2 investigation/report_basis/runtime exports from canonical DB state.",
+    governed_execution_export_cmd = sub.add_parser(
+        "materialize-governed-execution-exports",
+        help="Rebuild governed-execution investigation/report_basis/runtime exports from canonical DB state.",
     )
-    phase2_export_cmd.add_argument("--run-dir", required=True)
-    phase2_export_cmd.add_argument("--run-id", required=True)
-    phase2_export_cmd.add_argument("--round-id", required=True)
-    add_actor_role_arg(phase2_export_cmd)
-    phase2_export_cmd.add_argument("--pretty", action="store_true")
+    governed_execution_export_cmd.add_argument("--run-dir", required=True)
+    governed_execution_export_cmd.add_argument("--run-id", required=True)
+    governed_execution_export_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(governed_execution_export_cmd)
+    governed_execution_export_cmd.add_argument("--pretty", action="store_true")
 
     reporting_export_cmd = sub.add_parser(
         "materialize-reporting-exports",
@@ -3198,7 +3203,7 @@ def main(
             failure = {
                 "status": "failed",
                 "summary": {"run_id": args.run_id, "round_id": args.round_id},
-                "message": "No default phase-2 gate handler registry was injected into cli.main().",
+                "message": "No default governed-execution gate handler registry was injected into cli.main().",
             }
             print(pretty_json(failure, args.pretty))
             return 1
@@ -3228,17 +3233,17 @@ def main(
         print(pretty_json(payload, args.pretty))
         return 0
 
-    if args.command == "run-phase2-round":
+    if args.command == "run-governed-execution-round":
         if not isinstance(posture_profile, dict):
             failure = {
                 "status": "failed",
                 "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode},
-                "message": "No phase-2 posture profile was injected into cli.main().",
+                "message": "No governed-execution posture profile was injected into cli.main().",
             }
             print(pretty_json(failure, args.pretty))
             return 1
         try:
-            payload = run_phase2_round_with_contract_mode(
+            payload = run_governed_execution_round_with_contract_mode(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
@@ -3260,17 +3265,17 @@ def main(
         print(pretty_json(payload, args.pretty))
         return 0
 
-    if args.command == "resume-phase2-round":
+    if args.command == "resume-governed-execution-round":
         if not isinstance(posture_profile, dict):
             failure = {
                 "status": "failed",
                 "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode},
-                "message": "No phase-2 posture profile was injected into cli.main().",
+                "message": "No governed-execution posture profile was injected into cli.main().",
             }
             print(pretty_json(failure, args.pretty))
             return 1
         try:
-            payload = run_phase2_round_with_contract_mode(
+            payload = run_governed_execution_round_with_contract_mode(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
@@ -3293,17 +3298,17 @@ def main(
         print(pretty_json(payload, args.pretty))
         return 0
 
-    if args.command == "restart-phase2-round":
+    if args.command == "restart-governed-execution-round":
         if not isinstance(posture_profile, dict):
             failure = {
                 "status": "failed",
                 "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode},
-                "message": "No phase-2 posture profile was injected into cli.main().",
+                "message": "No governed-execution posture profile was injected into cli.main().",
             }
             print(pretty_json(failure, args.pretty))
             return 1
         try:
-            payload = run_phase2_round_with_contract_mode(
+            payload = run_governed_execution_round_with_contract_mode(
                 run_dir,
                 run_id=args.run_id,
                 round_id=args.round_id,
@@ -3435,7 +3440,7 @@ def main(
             failure = {
                 "status": "failed",
                 "summary": {"run_id": args.run_id, "round_id": args.round_id, "contract_mode": args.contract_mode},
-                "message": "No phase-2 posture profile was injected into cli.main().",
+                "message": "No governed-execution posture profile was injected into cli.main().",
             }
             print(pretty_json(failure, args.pretty))
             return 1
@@ -3757,7 +3762,7 @@ def main(
                 gate_handler=args.gate_handler,
                 decision_source=args.decision_source,
                 supervisor_substatus=args.supervisor_substatus,
-                phase2_posture=args.phase2_posture,
+                governed_execution_posture=args.governed_execution_posture,
                 terminal_state=args.terminal_state,
                 reporting_handoff_status=args.reporting_handoff_status,
                 transition_kind=args.transition_kind,
@@ -3790,8 +3795,8 @@ def main(
         print(pretty_json(payload, args.pretty))
         return 0
 
-    if args.command == "materialize-phase2-exports":
-        payload = materialize_phase2_exports(
+    if args.command == "materialize-governed-execution-exports":
+        payload = materialize_governed_execution_exports(
             run_dir,
             run_id=args.run_id,
             round_id=args.round_id,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..phase2_controller_state import (
+from ..governed_execution_controller_state import (
     adopted_planner_stage_summary,
     append_planning_attempt,
     base_controller_payload,
@@ -23,11 +23,11 @@ from ..phase2_controller_state import (
     step_index,
     unique_texts,
 )
-from ..phase2_posture_profile import (
+from ..runtime_posture_profile import (
     posture_profile_callable,
-    resolve_phase2_posture_profile,
+    resolve_runtime_posture_profile,
 )
-from ..phase2_planning_profile import (
+from ..runtime_planning_profile import (
     agent_orchestration_requested as agent_orchestration_requested_from_profile,
     ensure_executable_planning as ensure_executable_planning_from_profile,
     normalized_controller_planning_mode as normalized_controller_planning_mode_from_profile,
@@ -35,14 +35,14 @@ from ..phase2_planning_profile import (
     planning_bundle as planning_bundle_from_result,
     planning_from_controller as planning_from_controller_from_profile,
     planning_source_output_path,
-    resolve_phase2_planning_sources,
+    resolve_runtime_planning_sources,
 )
-from ..phase2_stage_profile import (
-    DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+from ..runtime_stage_profile import (
+    DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
     resolve_stage_definitions,
 )
 from .deliberation_plane import (
-    load_phase2_control_state,
+    load_governed_execution_control_state,
     store_orchestration_plan_record,
     store_runtime_control_freeze_record,
 )
@@ -69,7 +69,7 @@ from .transition_requests import (
     latest_transition_request,
 )
 
-PLANNER_SKILL_NAME = DEFAULT_PHASE2_PLANNER_SKILL_NAME
+PLANNER_SKILL_NAME = DEFAULT_RUNTIME_PLANNER_SKILL_NAME
 TRANSITION_EXECUTOR_PLANNING_MODE = "transition-executor"
 TRANSITION_EXECUTOR_AUTHORITY = "transition-executor"
 TRANSITION_EXECUTOR_PLAN_SOURCE = "approved-transition-request"
@@ -139,7 +139,7 @@ def transition_request_block_payload(
         )
     recovery_hints = [
         f"Moderator must request `{transition_kind}` for run `{run_id}` round `{round_id}` before this stage can execute.",
-        "Runtime operator must approve that transition request before rerunning phase-2 supervision.",
+        "Runtime operator must approve that transition request before rerunning governed-execution supervision.",
     ]
     if request_id and request_status == REQUEST_STATUS_COMMITTED:
         recovery_hints = [
@@ -219,7 +219,7 @@ def controller_stage_skill_args(
     ]
 
 
-def phase2_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
+def governed_execution_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
     return {
         "agent_entry_gate_path": str(agent_entry_gate_path(run_dir, round_id).resolve()),
         "board_summary_path": str((run_dir / "board" / f"board_state_summary_{round_id}.json").resolve()),
@@ -233,7 +233,6 @@ def phase2_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
         "report_basis_freeze_path": str((run_dir / "report_basis" / f"frozen_report_basis_{round_id}.json").resolve()),
         "controller_state_path": str(controller_state_path(run_dir, round_id).resolve()),
     }
-
 
 def normalized_controller_planning_mode(value: Any, *, default: str = "planner-backed") -> str:
     return normalized_controller_planning_mode_from_profile(value, default=default)
@@ -436,7 +435,7 @@ def persist_controller_state(
     *,
     gate_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    controller_payload["artifacts"] = phase2_artifact_paths(run_dir, round_id)
+    controller_payload["artifacts"] = governed_execution_artifact_paths(run_dir, round_id)
     refreshed_payload = refresh_controller_payload(controller_payload)
     write_json(controller_state_path(run_dir, round_id), refreshed_payload)
     store_runtime_control_freeze_record(
@@ -471,7 +470,7 @@ def execute_gate_step(
     )
 
 
-def run_phase2_round(
+def run_governed_execution_round(
     run_dir: Path,
     *,
     run_id: str,
@@ -482,7 +481,7 @@ def run_phase2_round(
     planning_sources: list[dict[str, Any]] | None = None,
     stage_definitions: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    return run_phase2_round_with_contract_mode(
+    return run_governed_execution_round_with_contract_mode(
         run_dir,
         run_id=run_id,
         round_id=round_id,
@@ -494,8 +493,7 @@ def run_phase2_round(
         stage_definitions=stage_definitions,
     )
 
-
-def run_phase2_round_with_contract_mode(
+def run_governed_execution_round_with_contract_mode(
     run_dir: Path,
     *,
     run_id: str,
@@ -512,7 +510,7 @@ def run_phase2_round_with_contract_mode(
     allow_side_effects: list[str] | None = None,
     force_restart: bool = False,
 ) -> dict[str, Any]:
-    profile = resolve_phase2_posture_profile(posture_profile)
+    profile = resolve_runtime_posture_profile(posture_profile)
     controller_completion_builder = posture_profile_callable(
         profile,
         "controller_completion_builder",
@@ -521,7 +519,7 @@ def run_phase2_round_with_contract_mode(
     write_registry(run_dir)
     init_run_manifest(run_dir, run_id)
     init_round_cursor(run_dir, run_id)
-    artifacts = phase2_artifact_paths(run_dir, round_id)
+    artifacts = governed_execution_artifact_paths(run_dir, round_id)
     execution_policy = {
         "timeout_seconds": timeout_seconds,
         "retry_budget": retry_budget,
@@ -534,25 +532,25 @@ def run_phase2_round_with_contract_mode(
         "retry_backoff_ms": retry_backoff_ms,
         "allow_side_effects": allow_side_effects,
     }
-    resolved_planning_sources = resolve_phase2_planning_sources(planning_sources)
+    resolved_planning_sources = resolve_runtime_planning_sources(planning_sources)
     default_transition_execution_mode = not bool(resolved_planning_sources)
     resolved_stage_definitions = resolve_stage_definitions(stage_definitions)
 
-    phase2_control_state = load_phase2_control_state(
+    governed_execution_control_state = load_governed_execution_control_state(
         run_dir,
         run_id=run_id,
         round_id=round_id,
     )
     existing_controller = (
-        phase2_control_state.get("controller", {})
-        if isinstance(phase2_control_state.get("controller"), dict)
+        governed_execution_control_state.get("controller", {})
+        if isinstance(governed_execution_control_state.get("controller"), dict)
         else {}
     ) or load_json_if_exists(controller_state_path(run_dir, round_id)) or {}
     existing_gate = (
-        phase2_control_state.get("report_basis_gate", {})
-        if isinstance(phase2_control_state.get("report_basis_gate"), dict)
-        else phase2_control_state.get("report_basis_gate", {})
-        if isinstance(phase2_control_state.get("report_basis_gate"), dict)
+        governed_execution_control_state.get("report_basis_gate", {})
+        if isinstance(governed_execution_control_state.get("report_basis_gate"), dict)
+        else governed_execution_control_state.get("report_basis_gate", {})
+        if isinstance(governed_execution_control_state.get("report_basis_gate"), dict)
         else {}
     ) or load_json_if_exists(Path(artifacts["report_basis_gate_path"])) or load_json_if_exists(Path(artifacts["report_basis_gate_path"])) or {}
     existing_status = maybe_text(existing_controller.get("controller_status"))
@@ -959,7 +957,7 @@ def run_phase2_round_with_contract_mode(
                     status="materialized",
                     message=(
                         maybe_text(source_spec.get("materialized_message"))
-                        or "Controller materialized a phase-2 planning source."
+                        or "Controller materialized a governed-execution planning source."
                     ),
                     planner_result=planner_result,
                 )
@@ -994,7 +992,7 @@ def run_phase2_round_with_contract_mode(
             round_id=round_id,
             contract_mode=contract_mode,
             stage_name="orchestration-planner",
-            message="No injected phase-2 planning source produced a usable execution_queue.",
+            message="No injected governed-execution planning source produced a usable execution_queue.",
             controller_payload=persist_controller_state(run_dir, round_id, controller_payload),
             stage_failure={
                 "status": "failed",
@@ -1253,16 +1251,16 @@ def run_phase2_round_with_contract_mode(
         )
         raise SkillExecutionError(failure_payload["message"], failure_payload)
 
-    phase2_control_state = load_phase2_control_state(
+    governed_execution_control_state = load_governed_execution_control_state(
         run_dir,
         run_id=run_id,
         round_id=round_id,
     )
     gate_payload = (
-        phase2_control_state.get("report_basis_gate", {})
-        if isinstance(phase2_control_state.get("report_basis_gate"), dict)
-        else phase2_control_state.get("report_basis_gate", {})
-        if isinstance(phase2_control_state.get("report_basis_gate"), dict)
+        governed_execution_control_state.get("report_basis_gate", {})
+        if isinstance(governed_execution_control_state.get("report_basis_gate"), dict)
+        else governed_execution_control_state.get("report_basis_gate", {})
+        if isinstance(governed_execution_control_state.get("report_basis_gate"), dict)
         else {}
     ) or load_json_if_exists(Path(artifacts["report_basis_gate_path"])) or load_json_if_exists(Path(artifacts["report_basis_gate_path"])) or {}
     controller_payload["controller_status"] = "completed"
@@ -1274,8 +1272,8 @@ def run_phase2_round_with_contract_mode(
     controller_payload["gate_status"] = maybe_text(gate_payload.get("gate_status")) or maybe_text(controller_payload.get("gate_status")) or "report-basis-freeze-withheld"
     if maybe_text(controller_payload.get("report_basis_status")) in {"", "not-evaluated"}:
         report_basis_freeze_payload = (
-            phase2_control_state.get("report_basis_freeze", {})
-            if isinstance(phase2_control_state.get("report_basis_freeze"), dict)
+            governed_execution_control_state.get("report_basis_freeze", {})
+            if isinstance(governed_execution_control_state.get("report_basis_freeze"), dict)
             else {}
         )
         controller_payload["report_basis_status"] = (

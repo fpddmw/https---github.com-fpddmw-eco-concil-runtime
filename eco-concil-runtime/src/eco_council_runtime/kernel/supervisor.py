@@ -3,27 +3,27 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..phase2_posture_profile import (
+from ..runtime_posture_profile import (
     posture_profile_callable,
-    resolve_phase2_posture_profile,
+    resolve_runtime_posture_profile,
 )
 from ..reporting_status import reporting_gate_state
 from ..runtime_command_hints import kernel_command
 from .deliberation_plane import store_runtime_control_freeze_record
 from .executor import SkillExecutionError
-from .controller import run_phase2_round_with_contract_mode
+from .controller import run_governed_execution_round_with_contract_mode
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
 from .gate import GateHandler
 from .ledger import append_ledger_event
 from .manifest import load_json_if_exists, write_json
-from .phase2_state_surfaces import load_next_actions_wrapper
+from .runtime_state_surfaces import load_next_actions_wrapper
 from .paths import supervisor_state_path
 
 
 def operator_commands(*, run_id: str, round_id: str, run_dir: Path) -> dict[str, str]:
     return {
         "resume_command": kernel_command(
-            "resume-phase2-round",
+            "resume-governed-execution-round",
             "--run-dir",
             str(run_dir),
             "--run-id",
@@ -32,7 +32,7 @@ def operator_commands(*, run_id: str, round_id: str, run_dir: Path) -> dict[str,
             round_id,
         ),
         "restart_command": kernel_command(
-            "restart-phase2-round",
+            "restart-governed-execution-round",
             "--run-dir",
             str(run_dir),
             "--run-id",
@@ -94,7 +94,7 @@ def supervise_round_with_contract_mode(
     retry_backoff_ms: int | None = None,
     allow_side_effects: list[str] | None = None,
 ) -> dict[str, Any]:
-    profile = resolve_phase2_posture_profile(posture_profile)
+    profile = resolve_runtime_posture_profile(posture_profile)
     classification_builder = posture_profile_callable(
         profile,
         "supervisor_classification_builder",
@@ -148,7 +148,7 @@ def supervise_round_with_contract_mode(
             controller_kwargs["planning_sources"] = planning_sources
         if stage_definitions is not None:
             controller_kwargs["stage_definitions"] = stage_definitions
-        controller_result = run_phase2_round_with_contract_mode(
+        controller_result = run_governed_execution_round_with_contract_mode(
             run_dir,
             **controller_kwargs,
         )
@@ -174,7 +174,7 @@ def supervise_round_with_contract_mode(
             "supervisor_path": "",
             "supervisor_status": classification["supervisor_status"],
             "supervisor_substatus": classification["supervisor_substatus"],
-            "phase2_posture": classification["phase2_posture"],
+            "governed_execution_posture": classification["governed_execution_posture"],
             "terminal_state": classification["terminal_state"],
             "recovery_posture": classification["recovery_posture"],
             "operator_action": classification["operator_action"],
@@ -345,7 +345,7 @@ def supervise_round_with_contract_mode(
         "supervisor_path": "",
         "supervisor_status": classification["supervisor_status"],
         "supervisor_substatus": classification["supervisor_substatus"],
-        "phase2_posture": classification["phase2_posture"],
+        "governed_execution_posture": classification["governed_execution_posture"],
         "terminal_state": classification["terminal_state"],
         "recovery_posture": classification["recovery_posture"],
         "operator_action": classification["operator_action"],

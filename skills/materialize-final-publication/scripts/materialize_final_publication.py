@@ -28,7 +28,7 @@ from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     normalized_final_publication_payload,
     store_final_publication_record,
 )
-from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.runtime_state_surfaces import (  # noqa: E402
     load_council_decision_wrapper,
     load_expert_report_wrapper,
     load_report_basis_freeze_wrapper,
@@ -494,7 +494,7 @@ def materialize_final_publication_skill(
     if not isinstance(supervisor_state_payload, dict):
         missing_message = (
             "No supervisor DB snapshot was found for "
-            f"{supervisor_file}; artifact exists but is orphaned from the phase-2 control plane."
+            f"{supervisor_file}; artifact exists but is orphaned from the governed-execution control plane."
             if bool(supervisor_context.get("artifact_present"))
             else (
                 "No supervisor snapshot artifact or DB record was found at "

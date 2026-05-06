@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .phase2_action_semantics import maybe_bool
-from .phase2_fallback_common import maybe_text, unique_texts
+from .governed_execution_action_semantics import maybe_bool
+from .fallback_common import maybe_text, unique_texts
 
 REPORTING_READY_STATUS = "reporting-ready"
 REPORTING_HOLD_STATUS = "investigation-open"

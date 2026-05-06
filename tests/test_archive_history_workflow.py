@@ -1072,7 +1072,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 ).exists()
             )
 
-    def test_close_round_uses_db_backed_phase2_snapshots_when_runtime_json_is_missing(self) -> None:
+    def test_close_round_uses_db_backed_governed_execution_snapshots_when_runtime_json_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "historical-run"

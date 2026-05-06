@@ -24,7 +24,7 @@ jobs:
         run: python tools/quality_gate.py syntax
 
       - name: Targeted gates
-        run: python tools/quality_gate.py test relation-taxonomy optional-guardrails db-recovery schema-migration runtime-governance reporting case-study
+        run: python tools/quality_gate.py test relation-taxonomy optional-guardrails db-recovery schema-migration module-decomposition runtime-governance reporting case-study
 
       - name: Full unittest gate
         run: python tools/quality_gate.py full

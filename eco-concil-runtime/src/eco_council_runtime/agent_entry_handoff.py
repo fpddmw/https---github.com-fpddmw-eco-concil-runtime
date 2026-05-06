@@ -14,7 +14,7 @@ HardGateCommandBuilder = Callable[..., dict[str, str]]
 EntryChainBuilder = Callable[..., list[dict[str, str]]]
 
 
-def default_phase2_hard_gate_commands(
+def default_agent_entry_hard_gate_commands(
     *,
     run_dir: Path,
     run_id: str,
@@ -146,7 +146,7 @@ def default_phase2_hard_gate_commands(
     }
 
 
-def default_phase2_entry_chain(
+def default_agent_entry_chain(
     *,
     run_dir: Path,
     run_id: str,

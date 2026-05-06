@@ -4,12 +4,12 @@ from pathlib import Path
 from typing import Any
 
 from .kernel.deliberation_plane import load_round_snapshot
-from .phase2_fallback_agenda import (
+from .fallback_agenda import (
     board_snapshot,
     build_actions,
     controversy_context_counts,
 )
-from .phase2_fallback_common import (
+from .fallback_common import (
     load_json_if_exists,
     load_text_if_exists,
     maybe_text,
@@ -17,7 +17,7 @@ from .phase2_fallback_common import (
     optional_context_present,
     resolve_path,
 )
-from .phase2_fallback_contracts import d1_contract_fields
+from .fallback_contracts import d1_contract_fields
 
 
 def primary_analysis_sync(

@@ -23,7 +23,7 @@ RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel import phase2_state_surfaces  # noqa: E402
+from eco_council_runtime.kernel import runtime_state_surfaces  # noqa: E402
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_falsification_probe_records,
     store_falsification_probe_snapshot,
@@ -48,8 +48,8 @@ WRAPPER_NAMES = (
     "load_final_publication_wrapper",
 )
 
-RUN_ID = "run-phase2-surface-001"
-ROUND_ID = "round-phase2-surface-001"
+RUN_ID = "run-governed-execution-surface-001"
+ROUND_ID = "round-governed-execution-surface-001"
 
 
 def fetch_raw_json(
@@ -81,7 +81,7 @@ def execute_db(
         connection.close()
 
 
-def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
+def seed_governed_execution_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
     next_actions = store_moderator_action_records(
         run_dir,
         action_snapshot={
@@ -190,7 +190,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
         "round_id": ROUND_ID,
         "plan_id": "orchestration-plan-surface-001",
         "planning_status": "ready-for-controller",
-        "planning_mode": "planner-backed-phase2",
+        "planning_mode": "planner-backed-governed-execution",
         "controller_authority": "queue-owner",
         "plan_source": "runtime-planner",
         "probe_stage_included": True,
@@ -334,7 +334,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
             }
         ],
         "planning_notes": [
-            "Planner output exists to keep the phase-2 queue auditable.",
+            "Planner output exists to keep the governed-execution queue auditable.",
         ],
         "deliberation_sync": {"status": "completed", "sync_mode": "unit-test"},
     }
@@ -350,7 +350,7 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
         "round_id": ROUND_ID,
         "supervisor_status": "hold-investigation-open",
         "supervisor_substatus": "probe-outstanding",
-        "phase2_posture": "hold-investigation-open",
+        "governed_execution_posture": "hold-investigation-open",
         "terminal_state": "investigation-hold",
         "controller_status": "completed",
         "resume_status": "fresh-run",
@@ -400,17 +400,17 @@ def seed_phase2_surface_state(run_dir: Path) -> dict[str, dict[str, object]]:
     }
 
 
-class Phase2StateSurfaceTests(unittest.TestCase):
-    def test_phase2_state_surfaces_exports_all_phase2_wrappers(self) -> None:
-        exported = set(phase2_state_surfaces.__all__)
+class GovernedExecutionStateSurfaceTests(unittest.TestCase):
+    def test_runtime_state_surfaces_exports_all_governed_execution_wrappers(self) -> None:
+        exported = set(runtime_state_surfaces.__all__)
         for name in WRAPPER_NAMES:
             self.assertIn(name, exported)
         self.assertIn("build_reporting_surface", exported)
 
-    def test_phase2_wrappers_flag_orphaned_artifacts_instead_of_reusing_them(self) -> None:
+    def test_governed_execution_wrappers_flag_orphaned_artifacts_instead_of_reusing_them(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
-            payloads = seed_phase2_surface_state(run_dir)
+            payloads = seed_governed_execution_surface_state(run_dir)
             db_path = analytics_path(run_dir, "signal_plane.sqlite")
 
             write_json(
@@ -456,32 +456,32 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 execute_db(db_path, query, (RUN_ID, ROUND_ID))
 
             contexts = {
-                "plan": phase2_state_surfaces.load_orchestration_plan_wrapper(
+                "plan": runtime_state_surfaces.load_orchestration_plan_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 ),
-                "next_actions": phase2_state_surfaces.load_next_actions_wrapper(
+                "next_actions": runtime_state_surfaces.load_next_actions_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 ),
-                "probes": phase2_state_surfaces.load_falsification_probe_wrapper(
+                "probes": runtime_state_surfaces.load_falsification_probe_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 ),
-                "readiness": phase2_state_surfaces.load_round_readiness_wrapper(
+                "readiness": runtime_state_surfaces.load_round_readiness_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 ),
-                "report_basis": phase2_state_surfaces.load_report_basis_freeze_wrapper(
+                "report_basis": runtime_state_surfaces.load_report_basis_freeze_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 ),
-                "supervisor": phase2_state_surfaces.load_supervisor_state_wrapper(
+                "supervisor": runtime_state_surfaces.load_supervisor_state_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -535,14 +535,14 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 contexts["supervisor"]["source"],
             )
 
-    def test_materialize_phase2_exports_rebuilds_phase2_files_from_db(self) -> None:
+    def test_materialize_governed_execution_exports_rebuilds_governed_execution_files_from_db(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
-            expected = seed_phase2_surface_state(run_dir)
+            expected = seed_governed_execution_surface_state(run_dir)
             db_path = analytics_path(run_dir, "signal_plane.sqlite")
 
             payload = run_kernel(
-                "materialize-phase2-exports",
+                "materialize-governed-execution-exports",
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
@@ -552,7 +552,7 @@ class Phase2StateSurfaceTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                "phase2-export-materialization-v1",
+                "governed-execution-export-materialization-v1",
                 payload["schema_version"],
             )
             self.assertEqual(6, payload["summary"]["materialized_export_count"])
@@ -561,7 +561,7 @@ class Phase2StateSurfaceTests(unittest.TestCase):
             self.assertEqual(6, payload["summary"]["target_export_count"])
 
             self.assertDictEqual(
-                phase2_state_surfaces.load_orchestration_plan_wrapper(
+                runtime_state_surfaces.load_orchestration_plan_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -570,7 +570,7 @@ class Phase2StateSurfaceTests(unittest.TestCase):
             )
 
             self.assertDictEqual(
-                phase2_state_surfaces.load_next_actions_wrapper(
+                runtime_state_surfaces.load_next_actions_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -578,7 +578,7 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 load_json(investigation_path(run_dir, f"next_actions_{ROUND_ID}.json")),
             )
             self.assertDictEqual(
-                phase2_state_surfaces.load_falsification_probe_wrapper(
+                runtime_state_surfaces.load_falsification_probe_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -588,7 +588,7 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 ),
             )
             self.assertDictEqual(
-                phase2_state_surfaces.load_round_readiness_wrapper(
+                runtime_state_surfaces.load_round_readiness_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -596,7 +596,7 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")),
             )
             self.assertDictEqual(
-                phase2_state_surfaces.load_report_basis_freeze_wrapper(
+                runtime_state_surfaces.load_report_basis_freeze_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -623,7 +623,7 @@ class Phase2StateSurfaceTests(unittest.TestCase):
             )
             self.assertEqual("investigation-open", supervisor_export["handoff_status"])
 
-    def test_show_run_state_exposes_phase2_export_and_query_commands(self) -> None:
+    def test_show_run_state_exposes_governed_execution_export_and_query_commands(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
             run_kernel(
@@ -633,7 +633,7 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 "--run-id",
                 RUN_ID,
             )
-            seed_phase2_surface_state(run_dir)
+            seed_governed_execution_surface_state(run_dir)
 
             payload = run_kernel(
                 "show-run-state",
@@ -643,10 +643,10 @@ class Phase2StateSurfaceTests(unittest.TestCase):
                 ROUND_ID,
             )
 
-            operator = payload["phase2"]["operator"]
+            operator = payload["governed_execution"]["operator"]
             self.assertIn(
-                "materialize-phase2-exports",
-                operator["materialize_phase2_exports_command"],
+                "materialize-governed-execution-exports",
+                operator["materialize_governed_execution_exports_command"],
             )
             self.assertIn(
                 "query-public-signals",

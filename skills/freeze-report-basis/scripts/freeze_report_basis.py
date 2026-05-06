@@ -17,16 +17,16 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.phase2_fallback_context import load_d1_shared_context  # noqa: E402
-from eco_council_runtime.phase2_report_basis_resolution import (  # noqa: E402
+from eco_council_runtime.fallback_context import load_d1_shared_context  # noqa: E402
+from eco_council_runtime.report_basis_resolution import (  # noqa: E402
     load_council_proposals,
     load_council_readiness_opinions,
     resolve_report_basis_council_inputs,
 )
-from eco_council_runtime.phase2_action_semantics import (  # noqa: E402
+from eco_council_runtime.governed_execution_action_semantics import (  # noqa: E402
     action_is_readiness_blocker,
 )
-from eco_council_runtime.kernel.phase2_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.runtime_state_surfaces import (  # noqa: E402
     load_next_actions_wrapper,
     load_round_readiness_wrapper,
 )

@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from ..runtime_command_hints import kernel_command
-from .deliberation_plane import load_phase2_control_state
+from .deliberation_plane import load_governed_execution_control_state
 from .executor import maybe_text, new_runtime_event_id, utc_now_iso
-from .phase2_state_surfaces import (
+from .runtime_state_surfaces import (
     build_reporting_surface,
     load_council_decision_wrapper,
     load_falsification_probe_wrapper,
@@ -518,13 +518,13 @@ def comparison_step_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return comparison_rows
 
 
-def phase2_state_snapshot(
+def governed_execution_state_snapshot(
     run_dir: Path,
     run_id: str,
     round_id: str,
     artifact_hashes: dict[str, str],
 ) -> dict[str, Any]:
-    control_state = load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id)
+    control_state = load_governed_execution_control_state(run_dir, run_id=run_id, round_id=round_id)
     plan_context = load_orchestration_plan_wrapper(
         run_dir,
         run_id=run_id,
@@ -602,7 +602,7 @@ def phase2_state_snapshot(
         "controller_status": maybe_text(controller.get("controller_status")) or "missing",
         "supervisor_status": maybe_text(supervisor.get("supervisor_status")) or "missing",
         "supervisor_substatus": maybe_text(supervisor.get("supervisor_substatus")),
-        "phase2_posture": maybe_text(supervisor.get("phase2_posture")),
+        "governed_execution_posture": maybe_text(supervisor.get("governed_execution_posture")),
         "terminal_state": maybe_text(supervisor.get("terminal_state")),
         "readiness_status": maybe_text(supervisor.get("readiness_status")) or maybe_text(controller.get("readiness_status")) or maybe_text(gate.get("readiness_status")) or "unknown",
         "gate_status": maybe_text(supervisor.get("gate_status")) or maybe_text(controller.get("gate_status")) or maybe_text(gate.get("gate_status")) or "unknown",
@@ -642,7 +642,7 @@ def phase2_state_snapshot(
         "controller_status": summary["controller_status"],
         "supervisor_status": summary["supervisor_status"],
         "supervisor_substatus": summary["supervisor_substatus"],
-        "phase2_posture": summary["phase2_posture"],
+        "governed_execution_posture": summary["governed_execution_posture"],
         "terminal_state": summary["terminal_state"],
         "readiness_status": summary["readiness_status"],
         "gate_status": summary["gate_status"],
@@ -835,7 +835,7 @@ def round_event_summary(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def failure_summary(
     events: list[dict[str, Any]],
     *,
-    phase2: dict[str, Any],
+    governed_execution: dict[str, Any],
     post_round: dict[str, Any],
 ) -> dict[str, Any]:
     event_failures: list[dict[str, Any]] = []
@@ -870,7 +870,7 @@ def failure_summary(
             }
         )
     failed_stage_names = unique_texts(
-        [phase2.get("summary", {}).get("failed_stage"), post_round.get("summary", {}).get("failed_stage")]
+        [governed_execution.get("summary", {}).get("failed_stage"), post_round.get("summary", {}).get("failed_stage")]
         + [event.get("failed_stage") for event in event_failures]
     )
     return {
@@ -900,15 +900,15 @@ def benchmark_manifest_payload(run_dir: Path, run_id: str, round_id: str) -> dic
         category="output",
     )
     output_hashes = artifact_hash_lookup(output_artifacts)
-    phase2 = phase2_state_snapshot(run_dir, run_id, round_id, output_hashes)
+    governed_execution = governed_execution_state_snapshot(run_dir, run_id, round_id, output_hashes)
     post_round = post_round_state_snapshot(run_dir, round_id, output_hashes)
     events = core_ledger_events(run_dir, round_id)
-    failure = failure_summary(events, phase2=phase2, post_round=post_round)
+    failure = failure_summary(events, governed_execution=governed_execution, post_round=post_round)
     comparison_inputs = comparison_artifact_rows(input_artifacts)
     comparison_outputs = comparison_artifact_rows(output_artifacts)
     comparison_basis = {
         "scenario_fingerprint": json_hash(comparison_inputs),
-        "phase2": phase2["comparison"],
+        "governed_execution": governed_execution["comparison"],
         "post_round": post_round["comparison"],
         "artifact_outputs": comparison_outputs,
     }
@@ -920,9 +920,9 @@ def benchmark_manifest_payload(run_dir: Path, run_id: str, round_id: str) -> dic
         "artifact_file_output_count": len([row for row in output_artifacts if bool(row.get("artifact_present"))]),
         "failed_event_count": failure["failed_event_count"],
         "blocked_event_count": failure["blocked_event_count"],
-        "controller_status": phase2["summary"]["controller_status"],
-        "supervisor_status": phase2["summary"]["supervisor_status"],
-        "reporting_ready": phase2["summary"]["reporting_ready"],
+        "controller_status": governed_execution["summary"]["controller_status"],
+        "supervisor_status": governed_execution["summary"]["supervisor_status"],
+        "reporting_ready": governed_execution["summary"]["reporting_ready"],
         "close_status": post_round["summary"]["close_status"],
         "bootstrap_status": post_round["summary"]["bootstrap_status"],
     }
@@ -936,10 +936,10 @@ def benchmark_manifest_payload(run_dir: Path, run_id: str, round_id: str) -> dic
         "summary": summary,
         "scenario_inputs": input_artifacts,
         "artifact_outputs": output_artifacts,
-        "phase2_summary": phase2["summary"],
+        "governed_execution_summary": governed_execution["summary"],
         "post_round_summary": post_round["summary"],
         "round_step_summary": {
-            "phase2": phase2["steps"],
+            "governed_execution": governed_execution["steps"],
             "post_round": post_round["steps"],
         },
         "skill_timing_summary": skill_timing_summary(events),
@@ -1070,7 +1070,7 @@ def materialize_scenario_fixture(
         },
         "scenario_inputs": baseline_payload.get("scenario_inputs", []),
         "expected_terminal_posture": {
-            "phase2": baseline_payload.get("phase2_summary", {}),
+            "governed_execution": baseline_payload.get("governed_execution_summary", {}),
             "post_round": baseline_payload.get("post_round_summary", {}),
         },
         "expected_artifacts": baseline_payload.get("comparison_basis", {}).get("artifact_outputs", []),
@@ -1308,9 +1308,9 @@ def compare_benchmark_manifests(
         left_basis.get("artifact_outputs", []) if isinstance(left_basis.get("artifact_outputs"), list) else [],
         right_basis.get("artifact_outputs", []) if isinstance(right_basis.get("artifact_outputs"), list) else [],
     )
-    phase2_step_drift = compare_named_rows(
-        left_basis.get("phase2", {}).get("steps", []) if isinstance(left_basis.get("phase2"), dict) else [],
-        right_basis.get("phase2", {}).get("steps", []) if isinstance(right_basis.get("phase2"), dict) else [],
+    governed_execution_step_drift = compare_named_rows(
+        left_basis.get("governed_execution", {}).get("steps", []) if isinstance(left_basis.get("governed_execution"), dict) else [],
+        right_basis.get("governed_execution", {}).get("steps", []) if isinstance(right_basis.get("governed_execution"), dict) else [],
         key_field="stage",
     )
     post_round_step_drift = compare_named_rows(
@@ -1362,7 +1362,7 @@ def compare_benchmark_manifests(
         "changed_field_count": len(changed_fields),
         "timing_delta_count": len(timing_deltas),
         "artifact_drift": artifact_drift,
-        "phase2_step_drift": phase2_step_drift,
+        "governed_execution_step_drift": governed_execution_step_drift,
         "post_round_step_drift": post_round_step_drift,
         "failure_delta": failure_delta,
         "timing_deltas": timing_deltas,

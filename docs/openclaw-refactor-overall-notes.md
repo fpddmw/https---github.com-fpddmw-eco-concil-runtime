@@ -97,7 +97,7 @@
 
 1. `report_basis_*` 字段/CLI 全面改名。
 2. legacy analysis kind DB/query schema 物理迁移。
-3. `phase2_fallback_*` 模块命名迁移。
+3. `governed_execution_fallback_*` 模块命名迁移。
 4. 全部 artifact trace 字段重命名。
 5. 全部 optional helper 人工审计完成。
 

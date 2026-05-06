@@ -320,7 +320,7 @@ class BenchmarkReplayWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(0, candidate_manifest["summary"]["failed_event_count"])
             self.assertEqual(
-                candidate_manifest["phase2_summary"]["reporting_ready"],
+                candidate_manifest["governed_execution_summary"]["reporting_ready"],
                 state_payload["benchmark"]["operator"]["reporting_ready"],
             )
             self.assertTrue(any(item["skill_name"] == "archive-case-library" for item in candidate_manifest["skill_timing_summary"]))

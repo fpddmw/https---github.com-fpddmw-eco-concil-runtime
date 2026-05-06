@@ -36,20 +36,20 @@ def ensure_runtime_src_on_path() -> None:
         sys.path.insert(0, str(runtime_src))
 
 
-def default_phase2_gate_handlers() -> dict[str, object]:
+def default_runtime_gate_handlers() -> dict[str, object]:
     ensure_runtime_src_on_path()
 
-    from eco_council_runtime.phase2_gate_profile import phase2_gate_handler_registry
+    from eco_council_runtime.runtime_gate_profile import runtime_gate_handler_registry
 
-    return phase2_gate_handler_registry()
+    return runtime_gate_handler_registry()
 
 
-def default_phase2_posture_profile_config() -> dict[str, object]:
+def default_runtime_posture_profile_config() -> dict[str, object]:
     ensure_runtime_src_on_path()
 
-    from eco_council_runtime.phase2_posture_profile import default_phase2_posture_profile
+    from eco_council_runtime.runtime_posture_profile import default_runtime_posture_profile
 
-    return default_phase2_posture_profile()
+    return default_runtime_posture_profile()
 
 
 def approve_report_basis_transition(run_dir: Path) -> str:
@@ -58,7 +58,7 @@ def approve_report_basis_transition(run_dir: Path) -> str:
         run_id=RUN_ID,
         round_id=ROUND_ID,
         transition_kind="freeze-report-basis",
-        rationale="Approve report_basis for runtime-kernel phase-2 coverage.",
+        rationale="Approve report_basis for runtime-kernel governed-execution coverage.",
     )
 
 
@@ -1028,8 +1028,8 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.kernel.cli import show_run_state
             from eco_council_runtime.kernel.executor import SkillExecutionError, run_skill
             from eco_council_runtime.kernel.ledger import load_ledger_tail
-            from eco_council_runtime.phase2_agent_entry_profile import (
-                default_phase2_agent_entry_profile,
+            from eco_council_runtime.agent_entry_profile import (
+                default_agent_entry_profile,
             )
 
             fake_skill_entry = {
@@ -1105,7 +1105,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 run_dir,
                 tail=5,
                 round_id=ROUND_ID,
-                agent_entry_profile=default_phase2_agent_entry_profile(),
+                agent_entry_profile=default_agent_entry_profile(),
             )
 
             self.assertEqual("created", first["event"]["receipt_write"]["write_status"])
@@ -1145,8 +1145,8 @@ class RuntimeKernelTests(unittest.TestCase):
             ensure_runtime_src_on_path()
 
             from eco_council_runtime.kernel.cli import init_run, show_run_state
-            from eco_council_runtime.phase2_agent_entry_profile import (
-                default_phase2_agent_entry_profile,
+            from eco_council_runtime.agent_entry_profile import (
+                default_agent_entry_profile,
             )
 
             init_run(run_dir, RUN_ID)
@@ -1192,7 +1192,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                     run_dir,
                     tail=5,
                     round_id=ROUND_ID,
-                    agent_entry_profile=default_phase2_agent_entry_profile(),
+                    agent_entry_profile=default_agent_entry_profile(),
                 )
 
                 runtime_lock = state_payload["operations"]["runtime_lock"]
@@ -1331,8 +1331,8 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
 
             from eco_council_runtime.kernel.cli import init_run, show_run_state
             from eco_council_runtime.kernel.operations import materialize_dead_letter
-            from eco_council_runtime.phase2_agent_entry_profile import (
-                default_phase2_agent_entry_profile,
+            from eco_council_runtime.agent_entry_profile import (
+                default_agent_entry_profile,
             )
 
             init_run(run_dir, RUN_ID)
@@ -1351,7 +1351,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 run_dir,
                 tail=5,
                 round_id=ROUND_ID,
-                agent_entry_profile=default_phase2_agent_entry_profile(),
+                agent_entry_profile=default_agent_entry_profile(),
             )
 
             self.assertIn("operations", payload)
@@ -1391,8 +1391,8 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
-            from eco_council_runtime.phase2_planning_profile import phase2_planning_source
+            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
+            from eco_council_runtime.runtime_planning_profile import runtime_planning_source
 
             planner_result = {
                 "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
@@ -1484,7 +1484,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             }
             report_basis_request_id = approve_report_basis_transition(run_dir)
             runtime_only_sources = [
-                phase2_planning_source(
+                runtime_planning_source(
                     "runtime-planner-only",
                     source_kind="planner-skill",
                     output_path_key="orchestration_plan_path",
@@ -1497,19 +1497,19 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[planner_result, board_summary_result, board_brief_result, next_actions_result, readiness_result, report_basis_result],
                 ) as run_skill_mock,
             ):
-                payload = run_phase2_round_with_contract_mode(
+                payload = run_governed_execution_round_with_contract_mode(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
-                    gate_handlers=default_phase2_gate_handlers(),
-                    posture_profile=default_phase2_posture_profile_config(),
+                    gate_handlers=default_runtime_gate_handlers(),
+                    posture_profile=default_runtime_posture_profile_config(),
                     planning_sources=runtime_only_sources,
                     timeout_seconds=12.5,
                     retry_budget=2,
@@ -1540,8 +1540,8 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
-            from eco_council_runtime.phase2_planning_profile import phase2_planning_source
+            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
+            from eco_council_runtime.runtime_planning_profile import runtime_planning_source
 
             planner_result = {
                 "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
@@ -1638,7 +1638,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             }
             report_basis_request_id = approve_report_basis_transition(run_dir)
             runtime_only_sources = [
-                phase2_planning_source(
+                runtime_planning_source(
                     "runtime-planner-only",
                     source_kind="planner-skill",
                     output_path_key="orchestration_plan_path",
@@ -1652,7 +1652,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
                 mock.patch(
-                    "eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate",
+                    "eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate",
                     return_value=gate_payload,
                 ) as gate_mock,
                 mock.patch(
@@ -1660,13 +1660,13 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                     side_effect=[planner_result, readiness_result, report_basis_result],
                 ),
             ):
-                payload = run_phase2_round_with_contract_mode(
+                payload = run_governed_execution_round_with_contract_mode(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
-                    gate_handlers=default_phase2_gate_handlers(),
-                    posture_profile=default_phase2_posture_profile_config(),
+                    gate_handlers=default_runtime_gate_handlers(),
+                    posture_profile=default_runtime_posture_profile_config(),
                     planning_sources=runtime_only_sources,
                 )
 
@@ -1705,10 +1705,10 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             ensure_runtime_src_on_path()
 
             from eco_council_runtime.kernel.controller import (
-                run_phase2_round_with_contract_mode,
+                run_governed_execution_round_with_contract_mode,
             )
             from eco_council_runtime.kernel.executor import SkillExecutionError
-            from eco_council_runtime.phase2_planning_profile import phase2_planning_source
+            from eco_council_runtime.runtime_planning_profile import runtime_planning_source
 
             planner_result = {
                 "summary": {
@@ -1775,7 +1775,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 "recommended_next_skills": [],
             }
             runtime_only_sources = [
-                phase2_planning_source(
+                runtime_planning_source(
                     "runtime-planner-only",
                     source_kind="planner-skill",
                     output_path_key="orchestration_plan_path",
@@ -1792,7 +1792,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                     return_value=planning,
                 ),
                 mock.patch(
-                    "eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate",
+                    "eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate",
                     return_value=gate_payload,
                 ),
                 mock.patch(
@@ -1801,13 +1801,13 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 ) as run_skill_mock,
             ):
                 with self.assertRaises(SkillExecutionError) as raised:
-                    run_phase2_round_with_contract_mode(
+                    run_governed_execution_round_with_contract_mode(
                         run_dir,
                         run_id=RUN_ID,
                         round_id=ROUND_ID,
                         contract_mode="strict",
-                        gate_handlers=default_phase2_gate_handlers(),
-                        posture_profile=default_phase2_posture_profile_config(),
+                        gate_handlers=default_runtime_gate_handlers(),
+                        posture_profile=default_runtime_posture_profile_config(),
                         planning_sources=runtime_only_sources,
                     )
 
@@ -1885,7 +1885,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
 
             report_basis_result = {
                 "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
@@ -1909,19 +1909,19 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     return_value=report_basis_result,
                 ) as run_skill_mock,
             ):
-                payload = run_phase2_round_with_contract_mode(
+                payload = run_governed_execution_round_with_contract_mode(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
-                    gate_handlers=default_phase2_gate_handlers(),
-                    posture_profile=default_phase2_posture_profile_config(),
+                    gate_handlers=default_runtime_gate_handlers(),
+                    posture_profile=default_runtime_posture_profile_config(),
                 )
 
             self.assertEqual(
@@ -1956,7 +1956,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = Path(tmpdir) / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
@@ -1965,13 +1965,13 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                     side_effect=AssertionError("default controller path should not execute skills without an approved transition request"),
                 ) as run_skill_mock,
             ):
-                payload = run_phase2_round_with_contract_mode(
+                payload = run_governed_execution_round_with_contract_mode(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
-                    gate_handlers=default_phase2_gate_handlers(),
-                    posture_profile=default_phase2_posture_profile_config(),
+                    gate_handlers=default_runtime_gate_handlers(),
+                    posture_profile=default_runtime_posture_profile_config(),
                 )
 
             run_skill_mock.assert_not_called()
@@ -1994,7 +1994,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
 
             report_basis_result = {
                 "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
@@ -2018,19 +2018,19 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     return_value=report_basis_result,
                 ) as run_skill_mock,
             ):
-                payload = run_phase2_round_with_contract_mode(
+                payload = run_governed_execution_round_with_contract_mode(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
-                    gate_handlers=default_phase2_gate_handlers(),
-                    posture_profile=default_phase2_posture_profile_config(),
+                    gate_handlers=default_runtime_gate_handlers(),
+                    posture_profile=default_runtime_posture_profile_config(),
                 )
 
             self.assertEqual(
@@ -2054,9 +2054,9 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
+            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
             from eco_council_runtime.kernel.executor import SkillExecutionError
-            from eco_council_runtime.phase2_planning_profile import phase2_planning_source
+            from eco_council_runtime.runtime_planning_profile import runtime_planning_source
 
             planner_result = {
                 "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
@@ -2133,7 +2133,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             )
             report_basis_request_id = approve_report_basis_transition(run_dir)
             runtime_only_sources = [
-                phase2_planning_source(
+                runtime_planning_source(
                     "runtime-planner-only",
                     source_kind="planner-skill",
                     output_path_key="orchestration_plan_path",
@@ -2146,20 +2146,20 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[planner_result, board_summary_result, board_brief_failure],
                 ),
             ):
                 with self.assertRaises(SkillExecutionError):
-                    run_phase2_round_with_contract_mode(
+                    run_governed_execution_round_with_contract_mode(
                         run_dir,
                         run_id=RUN_ID,
                         round_id=ROUND_ID,
                         contract_mode="warn",
-                        gate_handlers=default_phase2_gate_handlers(),
-                        posture_profile=default_phase2_posture_profile_config(),
+                        gate_handlers=default_runtime_gate_handlers(),
+                        posture_profile=default_runtime_posture_profile_config(),
                         planning_sources=runtime_only_sources,
                     )
 
@@ -2179,27 +2179,27 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 "--tail",
                 "5",
             )
-            self.assertEqual("failed", state_payload["phase2"]["operator"]["controller_status"])
-            self.assertEqual("board-brief", state_payload["phase2"]["operator"]["failed_stage"])
-            self.assertIn("resume-phase2-round", state_payload["phase2"]["operator"]["resume_command"])
+            self.assertEqual("failed", state_payload["governed_execution"]["operator"]["controller_status"])
+            self.assertEqual("board-brief", state_payload["governed_execution"]["operator"]["failed_stage"])
+            self.assertIn("resume-governed-execution-round", state_payload["governed_execution"]["operator"]["resume_command"])
             (run_dir / "runtime" / f"round_controller_{ROUND_ID}.json").unlink()
 
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle") as planning_bundle_mock,
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[board_brief_result, next_actions_result, readiness_result, report_basis_result],
                 ) as run_skill_mock,
             ):
-                payload = run_phase2_round_with_contract_mode(
+                payload = run_governed_execution_round_with_contract_mode(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="warn",
-                    gate_handlers=default_phase2_gate_handlers(),
-                    posture_profile=default_phase2_posture_profile_config(),
+                    gate_handlers=default_runtime_gate_handlers(),
+                    posture_profile=default_runtime_posture_profile_config(),
                     planning_sources=runtime_only_sources,
                 )
 
@@ -2223,8 +2223,8 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             run_dir = root / "run"
             ensure_runtime_src_on_path()
 
-            from eco_council_runtime.kernel.controller import run_phase2_round_with_contract_mode
-            from eco_council_runtime.phase2_planning_profile import phase2_planning_source
+            from eco_council_runtime.kernel.controller import run_governed_execution_round_with_contract_mode
+            from eco_council_runtime.runtime_planning_profile import runtime_planning_source
 
             planner_result = {
                 "summary": {"skill_name": "plan-round-orchestration", "event_id": "evt-plan", "receipt_id": "receipt-plan"},
@@ -2287,7 +2287,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 "recommended_next_skills": [],
             }
             runtime_only_sources = [
-                phase2_planning_source(
+                runtime_planning_source(
                     "runtime-planner-only",
                     source_kind="planner-skill",
                     output_path_key="orchestration_plan_path",
@@ -2301,19 +2301,19 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             with (
                 mock.patch("eco_council_runtime.kernel.controller.write_registry"),
                 mock.patch("eco_council_runtime.kernel.controller.planning_bundle", return_value=planning),
-                mock.patch("eco_council_runtime.phase2_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
+                mock.patch("eco_council_runtime.runtime_gate_handlers.apply_report_basis_gate", return_value=gate_payload),
                 mock.patch(
                     "eco_council_runtime.kernel.controller.run_skill",
                     side_effect=[planner_result, readiness_result, report_basis_result],
                 ) as run_skill_mock,
             ):
-                payload = run_phase2_round_with_contract_mode(
+                payload = run_governed_execution_round_with_contract_mode(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="strict",
-                    gate_handlers=default_phase2_gate_handlers(),
-                    posture_profile=default_phase2_posture_profile_config(),
+                    gate_handlers=default_runtime_gate_handlers(),
+                    posture_profile=default_runtime_posture_profile_config(),
                     planning_sources=runtime_only_sources,
                 )
 
@@ -2335,7 +2335,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 ],
             )
 
-    def test_show_run_state_uses_deliberation_control_snapshots_when_phase2_json_is_missing(self) -> None:
+    def test_show_run_state_uses_deliberation_control_snapshots_when_governed_execution_json_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -2395,7 +2395,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 "supervisor_path": str(supervisor_path.resolve()),
                 "supervisor_status": "reporting-ready",
                 "supervisor_substatus": "report-basis-complete",
-                "phase2_posture": "reporting-ready",
+                "governed_execution_posture": "reporting-ready",
                 "terminal_state": "reporting-ready",
                 "recovery_posture": "terminal",
                 "operator_action": "handoff-reporting",
@@ -2447,50 +2447,50 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 "5",
             )
 
-            self.assertEqual("completed", state_payload["phase2"]["operator"]["controller_status"])
-            self.assertEqual("reporting-ready", state_payload["phase2"]["operator"]["supervisor_status"])
-            self.assertEqual("report-basis-freeze-allowed", state_payload["phase2"]["operator"]["gate_status"])
-            self.assertEqual("frozen", state_payload["phase2"]["operator"]["report_basis_status"])
-            self.assertTrue(state_payload["phase2"]["operator"]["reporting_ready"])
+            self.assertEqual("completed", state_payload["governed_execution"]["operator"]["controller_status"])
+            self.assertEqual("reporting-ready", state_payload["governed_execution"]["operator"]["supervisor_status"])
+            self.assertEqual("report-basis-freeze-allowed", state_payload["governed_execution"]["operator"]["gate_status"])
+            self.assertEqual("frozen", state_payload["governed_execution"]["operator"]["report_basis_status"])
+            self.assertTrue(state_payload["governed_execution"]["operator"]["reporting_ready"])
             self.assertEqual(
                 "reporting-ready",
-                state_payload["phase2"]["operator"]["reporting_handoff_status"],
+                state_payload["governed_execution"]["operator"]["reporting_handoff_status"],
             )
             self.assertIn(
                 "show-reporting-state",
-                state_payload["phase2"]["operator"]["show_reporting_state_command"],
+                state_payload["governed_execution"]["operator"]["show_reporting_state_command"],
             )
             self.assertIn(
                 "query-control-objects",
-                state_payload["phase2"]["operator"]["query_controller_state_command"],
+                state_payload["governed_execution"]["operator"]["query_controller_state_command"],
             )
             self.assertIn(
                 "--object-kind gate-state",
-                state_payload["phase2"]["operator"]["query_gate_state_command"],
+                state_payload["governed_execution"]["operator"]["query_gate_state_command"],
             )
             self.assertIn(
                 "--object-kind supervisor-state",
-                state_payload["phase2"]["operator"]["query_supervisor_state_command"],
+                state_payload["governed_execution"]["operator"]["query_supervisor_state_command"],
             )
             self.assertIn(
                 "--object-kind runtime-control-freeze",
-                state_payload["phase2"]["operator"]["query_runtime_control_freeze_command"],
+                state_payload["governed_execution"]["operator"]["query_runtime_control_freeze_command"],
             )
             self.assertIn(
                 "--object-kind report-basis-freeze",
-                state_payload["phase2"]["operator"]["query_report_basis_freeze_command"],
+                state_payload["governed_execution"]["operator"]["query_report_basis_freeze_command"],
             )
             self.assertIn(
                 "--readiness-blocker-only",
-                state_payload["phase2"]["operator"]["query_readiness_blockers_command"],
+                state_payload["governed_execution"]["operator"]["query_readiness_blockers_command"],
             )
             self.assertTrue(state_payload["reporting"]["surface"]["reporting_ready"])
             self.assertEqual(
                 "supervisor",
                 state_payload["reporting"]["surface"]["surface_source"],
             )
-            self.assertEqual(str(controller_path.resolve()), state_payload["phase2"]["operator"]["inspection_paths"]["controller_path"])
-            self.assertEqual(str(supervisor_path.resolve()), state_payload["phase2"]["operator"]["inspection_paths"]["supervisor_path"])
+            self.assertEqual(str(controller_path.resolve()), state_payload["governed_execution"]["operator"]["inspection_paths"]["controller_path"])
+            self.assertEqual(str(supervisor_path.resolve()), state_payload["governed_execution"]["operator"]["inspection_paths"]["supervisor_path"])
 
     def test_supervisor_forwards_execution_policy_and_records_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2526,7 +2526,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             }
 
             with mock.patch(
-                "eco_council_runtime.kernel.supervisor.run_phase2_round_with_contract_mode",
+                "eco_council_runtime.kernel.supervisor.run_governed_execution_round_with_contract_mode",
                 return_value=controller_result,
             ) as controller_mock:
                 payload = supervise_round_with_contract_mode(
@@ -2534,7 +2534,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     contract_mode="warn",
-                    posture_profile=default_phase2_posture_profile_config(),
+                    posture_profile=default_runtime_posture_profile_config(),
                     timeout_seconds=8.0,
                     retry_budget=1,
                     retry_backoff_ms=40,
@@ -2557,9 +2557,9 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             self.assertEqual(8.0, payload["supervisor"]["execution_policy"]["timeout_seconds"])
             self.assertEqual(1, payload["supervisor"]["execution_policy"]["retry_budget"])
             self.assertEqual(["destructive-write"], payload["supervisor"]["execution_policy"]["allow_side_effects"])
-            self.assertEqual("reporting-ready", payload["supervisor"]["phase2_posture"])
+            self.assertEqual("reporting-ready", payload["supervisor"]["governed_execution_posture"])
             self.assertEqual("handoff-reporting", payload["supervisor"]["operator_action"])
-            self.assertIn("resume-phase2-round", payload["supervisor"]["resume_command"])
+            self.assertIn("resume-governed-execution-round", payload["supervisor"]["resume_command"])
 
     def test_supervisor_respects_injected_posture_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2569,12 +2569,12 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
 
             from eco_council_runtime.kernel.supervisor import supervise_round_with_contract_mode
 
-            posture_profile = default_phase2_posture_profile_config()
+            posture_profile = default_runtime_posture_profile_config()
             posture_profile["supervisor_classification_builder"] = (
                 lambda controller: {
                     "supervisor_status": "custom-supervisor-status",
                     "supervisor_substatus": "custom-substatus",
-                    "phase2_posture": "custom-posture",
+                    "governed_execution_posture": "custom-posture",
                     "terminal_state": "custom-terminal-state",
                     "recovery_posture": "custom-recovery-posture",
                     "operator_action": "custom-operator-action",
@@ -2645,7 +2645,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             }
 
             with mock.patch(
-                "eco_council_runtime.kernel.supervisor.run_phase2_round_with_contract_mode",
+                "eco_council_runtime.kernel.supervisor.run_governed_execution_round_with_contract_mode",
                 return_value=controller_result,
             ) as controller_mock:
                 payload = supervise_round_with_contract_mode(
@@ -2708,10 +2708,10 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             from eco_council_runtime.kernel.supervisor import supervise_round_with_contract_mode
 
             controller_failure = SkillExecutionError(
-                "phase-2 failed",
+                "governed-execution failed",
                 {
                     "status": "failed",
-                    "message": "phase-2 failed",
+                    "message": "governed-execution failed",
                     "controller": {
                         "planning_mode": "planner-backed",
                         "controller_status": "failed",
@@ -2735,7 +2735,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             )
 
             with mock.patch(
-                "eco_council_runtime.kernel.supervisor.run_phase2_round_with_contract_mode",
+                "eco_council_runtime.kernel.supervisor.run_governed_execution_round_with_contract_mode",
                 side_effect=controller_failure,
             ):
                 with self.assertRaises(SkillExecutionError) as raised:
@@ -2744,14 +2744,14 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                         run_id=RUN_ID,
                         round_id=ROUND_ID,
                         contract_mode="warn",
-                        posture_profile=default_phase2_posture_profile_config(),
+                        posture_profile=default_runtime_posture_profile_config(),
                     )
 
             supervisor_artifact = load_json(run_dir / "runtime" / f"supervisor_state_{ROUND_ID}.json")
             self.assertEqual("controller-failed", supervisor_artifact["supervisor_status"])
             self.assertEqual("board-brief", supervisor_artifact["failed_stage"])
             self.assertTrue(supervisor_artifact["resume_recommended"])
-            self.assertIn("resume-phase2-round", supervisor_artifact["resume_command"])
+            self.assertIn("resume-governed-execution-round", supervisor_artifact["resume_command"])
             self.assertEqual("controller-failed", raised.exception.payload["supervisor"]["supervisor_status"])
 
     def test_close_round_blocks_on_archive_failure_by_default_and_persists_state(self) -> None:
@@ -3091,7 +3091,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             self.assertEqual(str(root / "baseline.json"), replay_mock.call_args.kwargs["baseline_manifest_override"])
             self.assertEqual("completed", json.loads(stdout.getvalue())["status"])
 
-    def test_cli_resume_and_restart_phase2_round_forward_flags(self) -> None:
+    def test_cli_resume_and_restart_governed_execution_round_forward_flags(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -3102,14 +3102,14 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             stdout = io.StringIO()
             with (
                 mock.patch(
-                    "eco_council_runtime.kernel.cli.run_phase2_round_with_contract_mode",
+                    "eco_council_runtime.kernel.cli.run_governed_execution_round_with_contract_mode",
                     return_value={"status": "completed", "summary": {"round_id": ROUND_ID}},
                 ) as controller_mock,
                 redirect_stdout(stdout),
             ):
                 exit_code = main(
                     [
-                        "resume-phase2-round",
+                        "resume-governed-execution-round",
                         "--run-dir",
                         str(run_dir),
                         "--run-id",
@@ -3123,7 +3123,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                         "--retry-budget",
                         "1",
                     ],
-                    default_posture_profile=default_phase2_posture_profile_config(),
+                    default_posture_profile=default_runtime_posture_profile_config(),
                 )
 
             self.assertEqual(0, exit_code)
@@ -3136,14 +3136,14 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             stdout = io.StringIO()
             with (
                 mock.patch(
-                    "eco_council_runtime.kernel.cli.run_phase2_round_with_contract_mode",
+                    "eco_council_runtime.kernel.cli.run_governed_execution_round_with_contract_mode",
                     return_value={"status": "completed", "summary": {"round_id": ROUND_ID}},
                 ) as controller_mock,
                 redirect_stdout(stdout),
             ):
                 exit_code = main(
                     [
-                        "restart-phase2-round",
+                        "restart-governed-execution-round",
                         "--run-dir",
                         str(run_dir),
                         "--run-id",
@@ -3153,7 +3153,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                         "--actor-role",
                         "runtime-operator",
                     ],
-                    default_posture_profile=default_phase2_posture_profile_config(),
+                    default_posture_profile=default_runtime_posture_profile_config(),
                 )
 
             self.assertEqual(0, exit_code)

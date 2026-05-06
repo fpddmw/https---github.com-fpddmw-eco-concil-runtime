@@ -1159,7 +1159,7 @@ CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
             "generated_at_utc",
             "supervisor_status",
             "supervisor_substatus",
-            "phase2_posture",
+            "governed_execution_posture",
             "terminal_state",
             "recovery_posture",
             "operator_action",

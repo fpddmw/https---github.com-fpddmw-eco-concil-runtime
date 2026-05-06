@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .phase2_fallback_common import (
+from .fallback_common import (
     maybe_number,
     maybe_text,
     priority_from_score,
@@ -10,9 +10,9 @@ from .phase2_fallback_common import (
     role_from_lane,
 )
 
-DEFAULT_FALLBACK_POLICY_PROFILE = "phase2-fallback-policy-v1"
+DEFAULT_FALLBACK_POLICY_PROFILE = "governed-execution-fallback-policy-v1"
 DEFAULT_FALLBACK_POLICY_SOURCE = "runtime-fallback-policy"
-DEFAULT_FALLBACK_POLICY_OWNER = "phase2-fallback"
+DEFAULT_FALLBACK_POLICY_OWNER = "governed-execution-fallback"
 DIFFUSION_FOCUS_EDGE_TYPES = {
     "public-to-formal-spillover",
     "formal-to-public-spillover",

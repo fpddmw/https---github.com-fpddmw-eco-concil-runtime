@@ -3,11 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .deliberation_plane import load_phase2_control_state
+from .deliberation_plane import load_governed_execution_control_state
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill, utc_now_iso
 from .ledger import append_ledger_event
 from .manifest import init_round_cursor, init_run_manifest, load_json_if_exists, write_json
-from .phase2_state_surfaces import (
+from .runtime_state_surfaces import (
     build_reporting_surface,
     load_council_decision_wrapper,
     load_final_publication_wrapper,
@@ -140,7 +140,7 @@ def round_terminal_state(
     round_id: str,
     artifacts: dict[str, str],
 ) -> dict[str, Any]:
-    control_state = load_phase2_control_state(run_dir, run_id=run_id, round_id=round_id)
+    control_state = load_governed_execution_control_state(run_dir, run_id=run_id, round_id=round_id)
     controller = (
         control_state.get("controller", {})
         if isinstance(control_state.get("controller"), dict)
@@ -248,7 +248,7 @@ def round_terminal_state(
     elif supervisor_status == "controller-failed" or controller_status == "failed":
         block_close = True
         block_reason = "controller-failed"
-        block_message = "Round close is blocked because the phase-2 controller did not finish successfully."
+        block_message = "Round close is blocked because the governed-execution controller did not finish successfully."
     close_posture = infer_close_posture(
         reporting_ready=bool(reporting_surface.get("reporting_ready")),
         publication_posture=publication_posture,

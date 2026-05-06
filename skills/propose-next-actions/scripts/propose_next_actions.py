@@ -20,14 +20,14 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.council_objects import (  # noqa: E402
     query_council_objects,
 )
-from eco_council_runtime.phase2_fallback_common import maybe_text  # noqa: E402
-from eco_council_runtime.phase2_fallback_context import (  # noqa: E402
+from eco_council_runtime.fallback_common import maybe_text  # noqa: E402
+from eco_council_runtime.fallback_context import (  # noqa: E402
     load_ranked_actions_context,
 )
-from eco_council_runtime.phase2_fallback_contracts import (  # noqa: E402
+from eco_council_runtime.fallback_contracts import (  # noqa: E402
     d1_contract_fields_from_payload,
 )
-from eco_council_runtime.phase2_council_execution import (  # noqa: E402
+from eco_council_runtime.governed_council_execution import (  # noqa: E402
     COUNCIL_EXECUTION_MODE_FALLBACK_ONLY,
     COUNCIL_EXECUTION_MODE_PROPOSAL_AUGMENTED,
     COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,
@@ -35,9 +35,9 @@ from eco_council_runtime.phase2_council_execution import (  # noqa: E402
     normalize_council_execution_mode,
     resolve_council_action_queue,
 )
-from eco_council_runtime.phase2_proposal_actions import (  # noqa: E402
+from eco_council_runtime.proposal_actions import (  # noqa: E402
     action_from_council_proposal,
-    proposal_drives_phase2_action_queue,
+    proposal_drives_governed_execution_action_queue,
 )
 from eco_council_runtime.kernel.deliberation_plane import (  # noqa: E402
     store_moderator_action_records,
@@ -148,7 +148,7 @@ def load_council_proposal_actions(
         status = maybe_text(proposal.get("status"))
         if status in {"rejected", "withdrawn", "closed"}:
             continue
-        if not proposal_drives_phase2_action_queue(proposal):
+        if not proposal_drives_governed_execution_action_queue(proposal):
             continue
         results.append(action_from_council_proposal(proposal))
     return results

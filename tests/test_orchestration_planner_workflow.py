@@ -152,8 +152,8 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             )
             plan = load_json(runtime_path(run_dir, f"orchestration_plan_{ROUND_ID}.json"))
 
-            self.assertEqual("planner-backed-phase2", payload["summary"]["planning_mode"])
-            self.assertEqual("planner-backed-phase2", plan["planning_mode"])
+            self.assertEqual("planner-backed-governed-execution", payload["summary"]["planning_mode"])
+            self.assertEqual("planner-backed-governed-execution", plan["planning_mode"])
             self.assertEqual("queue-owner", plan["controller_authority"])
             self.assertIn("recommended_skill_sequence", plan["agent_turn_hints"])
 
@@ -307,7 +307,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                 plan["phase_decision_basis"]["probe_stage_reason_codes"],
             )
 
-    def test_runtime_phase2_plan_defaults_to_council_proposal_queue_when_proposals_exist(
+    def test_runtime_governed_execution_plan_defaults_to_council_proposal_queue_when_proposals_exist(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -355,7 +355,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             stage_names = [item["stage_name"] for item in plan["execution_queue"]]
 
             self.assertEqual("completed", payload["status"])
-            self.assertEqual("planner-backed-phase2", plan["planning_mode"])
+            self.assertEqual("planner-backed-governed-execution", plan["planning_mode"])
             self.assertTrue(plan["observed_state"]["council_proposal_queue"])
             self.assertTrue(plan["observed_state"]["next_actions_stage_skipped"])
             self.assertEqual(
@@ -393,7 +393,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
             gate_stage_names = [item["stage_name"] for item in plan["gate_steps"]]
 
             self.assertEqual("completed", payload["status"])
-            self.assertEqual("planner-backed-phase2", plan["planning_mode"])
+            self.assertEqual("planner-backed-governed-execution", plan["planning_mode"])
             self.assertFalse(plan["probe_stage_included"])
             self.assertEqual("report-basis-candidate", plan["downstream_posture"])
             self.assertEqual(["next-actions", "round-readiness"], stage_names)

@@ -26,8 +26,8 @@ from eco_council_runtime.council_submission_support import (  # noqa: E402
     write_json_file,
 )
 from eco_council_runtime.kernel.deliberation_plane import stable_hash  # noqa: E402
-from eco_council_runtime.phase2_report_basis_resolution import proposal_explicit_signals  # noqa: E402
-from eco_council_runtime.phase2_proposal_actions import proposal_drives_phase2_action_queue  # noqa: E402
+from eco_council_runtime.report_basis_resolution import proposal_explicit_signals  # noqa: E402
+from eco_council_runtime.proposal_actions import proposal_drives_governed_execution_action_queue  # noqa: E402
 
 OPEN_CHALLENGE_KINDS = {
     "challenge-claim",
@@ -72,7 +72,7 @@ def proposal_follow_up_skills(proposal: dict[str, Any]) -> list[str]:
     target_kind = maybe_text(proposal.get("target_kind"))
     operation_kinds = {proposal_kind, action_kind}
     suggestions = ["query-board-delta"]
-    if proposal_drives_phase2_action_queue(proposal):
+    if proposal_drives_governed_execution_action_queue(proposal):
         suggestions.append("propose-next-actions")
     if bool(proposal.get("probe_candidate")):
         suggestions.append("open-falsification-probe")

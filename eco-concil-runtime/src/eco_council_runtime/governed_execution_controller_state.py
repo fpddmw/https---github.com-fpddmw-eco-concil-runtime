@@ -3,12 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from .kernel.executor import maybe_text, new_runtime_event_id, utc_now_iso
-from .phase2_planning_profile import (
+from .runtime_planning_profile import (
     normalized_stage_list as normalized_stage_list_from_profile,
     planning_source_from_payload,
 )
-from .phase2_stage_profile import (
-    DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+from .runtime_stage_profile import (
+    DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
     default_gate_steps,
     default_post_gate_steps,
     expected_output_path as resolve_expected_output_path,
@@ -150,7 +150,7 @@ def stage_blueprints(
     planning: dict[str, Any],
     artifacts: dict[str, Any],
     *,
-    planner_skill_name: str = DEFAULT_PHASE2_PLANNER_SKILL_NAME,
+    planner_skill_name: str = DEFAULT_RUNTIME_PLANNER_SKILL_NAME,
     stage_definitions: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     blueprints: list[dict[str, Any]] = []
@@ -372,7 +372,7 @@ def step_index(steps: list[dict[str, Any]], stage_name: str) -> int:
     for index, item in enumerate(steps):
         if maybe_text(item.get("stage")) == stage_name:
             return index
-    raise ValueError(f"Missing phase-2 stage in controller state: {stage_name}")
+    raise ValueError(f"Missing governed-execution stage in controller state: {stage_name}")
 
 
 def refresh_controller_payload(controller_payload: dict[str, Any]) -> dict[str, Any]:
