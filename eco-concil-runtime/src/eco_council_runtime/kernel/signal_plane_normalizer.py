@@ -15,6 +15,14 @@ from ..canonical_contracts import (
     ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
     SIGNAL_ROLE_VALUES,
 )
+from .schema_migrations import (
+    apply_schema_migration,
+    ensure_schema_migration_tables,
+    set_schema_version,
+)
+
+SIGNAL_PLANE_SCHEMA_NAME = "signal-plane"
+SIGNAL_PLANE_SCHEMA_VERSION = "2026.05.06.1"
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS normalized_signals (
@@ -308,6 +316,31 @@ def resolved_canonical_object_kind(
 
 
 def ensure_signal_plane_schema(connection: sqlite3.Connection) -> None:
+    ensure_schema_migration_tables(connection)
+    apply_schema_migration(
+        connection,
+        schema_name=SIGNAL_PLANE_SCHEMA_NAME,
+        migration_id="0001-signal-plane-schema-baseline",
+        target_version=SIGNAL_PLANE_SCHEMA_VERSION,
+        description="Record the current normalized signal-plane schema baseline.",
+        operation=lambda: None,
+    )
+    apply_schema_migration(
+        connection,
+        schema_name=SIGNAL_PLANE_SCHEMA_NAME,
+        migration_id="0002-signal-plane-normalized-indexes-and-kind",
+        target_version=SIGNAL_PLANE_SCHEMA_VERSION,
+        description="Backfill normalized signal canonical object kind support and query indexes.",
+        operation=lambda: apply_signal_plane_legacy_schema_migrations(connection),
+    )
+    set_schema_version(
+        connection,
+        schema_name=SIGNAL_PLANE_SCHEMA_NAME,
+        current_version=SIGNAL_PLANE_SCHEMA_VERSION,
+    )
+
+
+def apply_signal_plane_legacy_schema_migrations(connection: sqlite3.Connection) -> None:
     connection.execute(TABLE_SQL)
     connection.execute(INDEX_TABLE_SQL)
     columns = table_columns(connection, "normalized_signals")
@@ -338,6 +371,7 @@ def connect_db(run_dir: Path, db_path: str) -> tuple[sqlite3.Connection, Path]:
     connection = sqlite3.connect(file_path)
     connection.row_factory = sqlite3.Row
     ensure_signal_plane_schema(connection)
+    connection.commit()
     return connection, file_path
 
 

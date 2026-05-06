@@ -240,7 +240,19 @@ def run_skill(
         workspace=root,
     )
     started_at = utc_now_iso()
-    with exclusive_runtime_lock(run_dir) as lock_path:
+    with exclusive_runtime_lock(
+        run_dir,
+        metadata={
+            "run_id": run_id,
+            "round_id": round_id,
+            "skill_name": skill_name,
+            "actor_role": actor_role,
+            "contract_mode": contract_mode,
+            "execution_input_hash": execution_input_hash,
+            "started_at_utc": started_at,
+            "skill_approval_request_id": maybe_text(skill_approval_request_id),
+        },
+    ) as lock_path:
         if bool(preflight.get("block_execution")):
             finished_at = utc_now_iso()
             event_id = new_runtime_event_id("runtimeevt", run_id, round_id, skill_name, execution_input_hash, started_at, finished_at, "preflight")
@@ -664,6 +676,85 @@ def run_skill(
         },
     )
     receipt_file = Path(maybe_text(receipt_write.get("receipt_path")))
+    if maybe_text(receipt_write.get("write_status")) == "conflict":
+        failure = structured_failure(
+            error_code=maybe_text(receipt_write.get("error_code"))
+            or "receipt-payload-hash-conflict",
+            message=(
+                f"Runtime receipt conflict for {skill_name}: receipt `{receipt_id}` "
+                "already exists with a different payload hash."
+            ),
+            retryable=False,
+            attempts=attempts,
+            execution_policy=execution_policy,
+            recovery_hints=[
+                "Inspect the existing receipt and emitted payload before retrying.",
+                "Use a new receipt_id only when this is an intentional new execution result.",
+            ],
+        )
+        event = {
+            **base_event,
+            "exit_code": completed.returncode,
+            "status": "failed",
+            "receipt_id": receipt_id,
+            "batch_id": maybe_text(payload.get("batch_id")),
+            "artifact_refs": payload.get("artifact_refs", []),
+            "canonical_ids": payload.get("canonical_ids", []),
+            "summary": payload.get("summary", {}),
+            "payload_hash": json_hash(payload),
+            "receipt_path": str(receipt_file),
+            "receipt_write": receipt_write,
+            "postflight": postflight,
+            "failure": failure,
+        }
+        dead_letter = materialize_dead_letter(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            source_type="receipt-conflict",
+            source_name=skill_name,
+            message=failure["message"],
+            failure={**failure, "receipt_write": receipt_write},
+            summary={
+                "skill_name": skill_name,
+                "run_id": run_id,
+                "round_id": round_id,
+                "contract_mode": contract_mode,
+                "receipt_id": receipt_id,
+            },
+            related_paths={
+                "policy_path": runtime_admission.get("policy_path", ""),
+                "receipt_path": str(receipt_file),
+                "script_path": str(script_path),
+                "workspace_root": str(root),
+            },
+            command_hint=run_command_hint,
+        )
+        event["dead_letter_id"] = dead_letter["dead_letter_id"]
+        append_ledger_event(run_dir, event)
+        operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
+        failure_payload = {
+            "status": "failed",
+            "summary": {
+                "skill_name": skill_name,
+                "run_id": run_id,
+                "round_id": round_id,
+                "contract_mode": contract_mode,
+                "actor_role": actor_role,
+                "receipt_id": receipt_id,
+            },
+            "message": failure["message"],
+            "failure": failure,
+            "preflight": preflight,
+            "postflight": postflight,
+            "runtime_admission": runtime_admission,
+            "receipt_id": receipt_id,
+            "receipt_path": str(receipt_file),
+            "receipt_write": receipt_write,
+            "dead_letter": dead_letter,
+            "operator_surface": operator_surface,
+        }
+        raise SkillExecutionError(failure_payload["message"], failure_payload)
     if bool(postflight.get("block_execution")):
         failure = structured_failure(
             error_code="contract-postflight-blocked",

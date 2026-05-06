@@ -55,9 +55,11 @@
    - runtime receipt 现在写入 `runtime-receipt-v2` envelope，保留原始 `skill_payload`。
    - receipt envelope 直接携带 `event_id`、`execution_input_hash`、`payload_hash`、`lock_path`、preflight、postflight、runtime admission 和 attempt 信息。
    - 同一 `receipt_id` 且 payload hash 相同的重复写入会标记为 `unchanged`，不重写既有 receipt。
+   - 同一 `receipt_id` 但 payload hash 不同会标记为 `conflict`，不覆盖既有 receipt。
 5. `tests/test_runtime_kernel.py`
    - 覆盖 governed receipt envelope 的关键字段。
    - 覆盖同一 receipt payload 重放时 `receipt_write.write_status=unchanged`。
+   - 覆盖同一 receipt id 不同 payload hash 的冲突阻断、dead letter 和 operator 可见状态。
    - 覆盖 transition request 首次提交、同对象重放和不同对象重定向失败。
 6. `eco-concil-runtime/src/eco_council_runtime/kernel/transition_requests.py`
    - `mark_transition_request_committed` 现在要求 committed object kind/id。
@@ -73,19 +75,27 @@
    - 如果 target round 属于另一个 transition request，当前 request 不会被静默 recommit。
 9. `tests/test_board_workflow.py`
    - 覆盖 `open-investigation-round` 在 target 已存在且 transition artifact 丢失时的可重放 no-op 行为。
+10. `eco-concil-runtime/src/eco_council_runtime/kernel/locking.py`
+    - runtime execution lock 现在写入 `execution_lock_state.json`。
+    - lock state 暴露 `held`、`released`、`stale` 等状态，以及 holder pid、metadata、lock path。
+11. `eco-concil-runtime/src/eco_council_runtime/kernel/operations.py`
+    - runtime health 现在暴露 `runtime_lock`、`receipt_conflict_count` 和 `latest_receipt_conflicts`。
+    - receipt conflict 会触发 `receipt-conflicts-present` operator alert。
+    - stale lock 会触发 `stale-runtime-lock` operator alert。
+12. `eco-concil-runtime/src/eco_council_runtime/kernel/cli.py`
+    - `show-run-state` 的 `operations` 与 `summary` 现在暴露 runtime lock state 和 receipt conflict count。
 
 当前未闭环项：
 
 1. 真实案例评测命令序列仍需改成优先通过 `run-skill`，direct scripts 只作为 dev/debug 兼容。
-2. 运行锁的 operator 可见状态仍需固定到 `show-run-state` / runtime health。
-3. receipt envelope 已落地；后续还需决定 payload hash 不同但 receipt_id 相同时是否应升级为阻断或 operator review。
+2. runtime lock 与 receipt conflict 已进入 operator surface；后续还需决定是否增加 operator 手工解除 stale lock 的显式命令。
 
 当前实测状态：
 
 1. `python3 -m unittest tests.test_board_workflow` 通过，16 tests。
-2. `python3 tools/quality_gate.py test runtime-governance` 通过，54 tests。
-3. `python3 tools/quality_gate.py test runtime-governance reporting` 通过，77 tests。
-4. `python3 tools/quality_gate.py full` 通过，256 tests。
+2. `python3 tools/quality_gate.py test runtime-governance` 通过，56 tests。
+3. `python3 tools/quality_gate.py test runtime-governance reporting` 通过，79 tests。
+4. `python3 tools/quality_gate.py full` 通过，261 tests。
 
 ### P0：入口分类
 

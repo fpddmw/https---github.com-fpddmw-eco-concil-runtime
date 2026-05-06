@@ -53,7 +53,7 @@ from .benchmark import (
     replay_runtime_scenario,
 )
 from .controller import run_phase2_round_with_contract_mode
-from .deliberation_plane import load_phase2_control_state
+from .deliberation_plane import load_phase2_control_state, load_schema_status
 from .executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill
 from .gate import GateHandler
 from .governance import CONTRACT_MODES, preflight_skill_execution
@@ -1379,6 +1379,11 @@ def benchmark_operator_view(run_dir: Path, round_id: str, benchmark_state: dict[
 def operations_state(run_dir: Path, selected_round_id: str) -> dict[str, Any]:
     admission_policy = load_admission_policy(run_dir)
     runtime_health = runtime_health_payload(run_dir, round_id=selected_round_id)
+    runtime_lock = (
+        runtime_health.get("runtime_lock", {})
+        if isinstance(runtime_health.get("runtime_lock"), dict)
+        else {}
+    )
     dead_letters = load_dead_letters(run_dir, round_id=selected_round_id, limit=20)
     runbook_path = operator_runbook_path(run_dir, selected_round_id) if selected_round_id else operator_runbook_path(run_dir)
     run_id = maybe_text(admission_policy.get("run_id"))
@@ -1396,10 +1401,14 @@ def operations_state(run_dir: Path, selected_round_id: str) -> dict[str, Any]:
     return {
         "admission_policy": admission_policy,
         "runtime_health": runtime_health,
+        "runtime_lock": runtime_lock,
         "dead_letters": dead_letters,
         "operator": {
             "permission_profile": maybe_text(admission_policy.get("permission_profile")) or "standard",
             "alert_status": maybe_text(runtime_health.get("alert_status")) or "green",
+            "runtime_lock_state": maybe_text(runtime_lock.get("lock_state")),
+            "runtime_lock_path": maybe_text(runtime_lock.get("lock_path")),
+            "runtime_lock_state_path": maybe_text(runtime_lock.get("lock_state_path")),
             "admission_policy_path": str(admission_policy_path(run_dir).resolve()),
             "runtime_health_path": str(runtime_health_path(run_dir).resolve()),
             "operator_runbook_path": str(runbook_path.resolve()),
@@ -1558,6 +1567,15 @@ def show_run_state(
             "selected_round_id": selected_round_id,
             "ledger_events": len(load_ledger_tail(run_dir, 1000000)) if ledger_path(run_dir).exists() else 0,
             "alert_status": maybe_text(operations.get("runtime_health", {}).get("alert_status")) if isinstance(operations.get("runtime_health"), dict) else "",
+            "runtime_lock_state": maybe_text(operations.get("runtime_lock", {}).get("lock_state"))
+            if isinstance(operations.get("runtime_lock"), dict)
+            else "",
+            "receipt_conflict_count": int(
+                operations.get("runtime_health", {}).get("summary", {}).get("receipt_conflict_count")
+                or 0
+            )
+            if isinstance(operations.get("runtime_health"), dict)
+            else 0,
             "open_dead_letter_count": int(operations.get("runtime_health", {}).get("summary", {}).get("open_dead_letter_count") or 0)
             if isinstance(operations.get("runtime_health"), dict)
             else 0,
@@ -2182,6 +2200,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     contract_list_cmd.add_argument("--pretty", action="store_true")
 
+    schema_status_cmd = sub.add_parser(
+        "show-schema-status",
+        help="Show SQLite schema version metadata and migration ledger status.",
+    )
+    schema_status_cmd.add_argument("--run-dir", required=True)
+    schema_status_cmd.add_argument("--db-path", default="")
+    schema_status_cmd.add_argument("--pretty", action="store_true")
+
     show_cmd = sub.add_parser("show-run-state", help="Show manifest, cursor, registry, and a tail of runtime ledger events.")
     show_cmd.add_argument("--run-dir", required=True)
     show_cmd.add_argument("--round-id", default="")
@@ -2246,6 +2272,12 @@ def main(
                 "contract_count": len(contracts),
             },
         }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "show-schema-status":
+        run_dir = resolve_run_dir(args.run_dir)
+        payload = load_schema_status(run_dir, db_path=args.db_path)
         print(pretty_json(payload, args.pretty))
         return 0
 

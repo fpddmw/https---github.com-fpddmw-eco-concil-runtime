@@ -33,6 +33,7 @@ TEST_SUITES: dict[str, tuple[str, ...]] = {
     "relation-taxonomy": ("tests.test_spatiotemporal_relation_taxonomy",),
     "optional-guardrails": ("tests.test_optional_analysis_guardrails",),
     "db-recovery": ("tests.test_db_only_recovery",),
+    "schema-migration": ("tests.test_schema_migrations",),
     "runtime-governance": (
         "tests.test_runtime_kernel",
         "tests.test_skill_approval_workflow",
@@ -53,6 +54,7 @@ DEFAULT_TARGETED_SUITES = (
     "relation-taxonomy",
     "optional-guardrails",
     "db-recovery",
+    "schema-migration",
     "runtime-governance",
     "reporting",
     "case-study",

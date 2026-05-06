@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .ledger import load_ledger_tail
+from .locking import runtime_lock_state_payload
 from .manifest import load_json_if_exists, write_json
 from .paths import (
     admission_policy_path,
@@ -613,6 +614,7 @@ def runtime_health_payload(run_dir: Path, *, round_id: str = "") -> dict[str, An
     ensure_runtime_dirs(run_dir)
     policy = load_admission_policy(run_dir)
     alert_policy = policy.get("alert_policy", {}) if isinstance(policy.get("alert_policy"), dict) else {}
+    runtime_lock = runtime_lock_state_payload(run_dir)
     events = load_ledger_tail(run_dir, 1_000_000)
     filtered_events = [
         event for event in events if isinstance(event, dict) and (not round_id or maybe_text(event.get("round_id")) == round_id)
@@ -621,6 +623,13 @@ def runtime_health_payload(run_dir: Path, *, round_id: str = "") -> dict[str, An
     blocked_events = [event for event in filtered_events if maybe_text(event.get("status")) == "blocked"]
     degraded_events = [
         event for event in filtered_events if maybe_text(event.get("status")) in {"completed-with-warnings", "degraded"}
+    ]
+    receipt_conflict_events = [
+        event
+        for event in filtered_events
+        if isinstance(event.get("failure"), dict)
+        and maybe_text(event["failure"].get("error_code"))
+        == "receipt-payload-hash-conflict"
     ]
     recovered_events = [event for event in filtered_events if bool(event.get("recovered_after_retry"))]
     dead_letters = load_dead_letters(run_dir, round_id=round_id, limit=50)
@@ -652,6 +661,22 @@ def runtime_health_payload(run_dir: Path, *, round_id: str = "") -> dict[str, An
                 "severity": "critical",
                 "code": "open-dead-letters-present",
                 "message": f"{len(open_dead_letters)} dead letters still require operator review.",
+            }
+        )
+    if receipt_conflict_events:
+        alerts.append(
+            {
+                "severity": "critical",
+                "code": "receipt-conflicts-present",
+                "message": f"{len(receipt_conflict_events)} runtime receipt conflicts require operator review.",
+            }
+        )
+    if maybe_text(runtime_lock.get("lock_state")) == "stale":
+        alerts.append(
+            {
+                "severity": "critical",
+                "code": "stale-runtime-lock",
+                "message": "Runtime execution lock state is stale; verify no execution is still active before clearing it.",
             }
         )
     if len(degraded_events) >= degraded_threshold:
@@ -687,10 +712,13 @@ def runtime_health_payload(run_dir: Path, *, round_id: str = "") -> dict[str, An
             "failed_event_count": len(failed_events),
             "blocked_event_count": len(blocked_events),
             "degraded_event_count": len(degraded_events),
+            "receipt_conflict_count": len(receipt_conflict_events),
             "recovered_after_retry_count": len(recovered_events),
             "open_dead_letter_count": len(open_dead_letters),
+            "runtime_lock_state": maybe_text(runtime_lock.get("lock_state")),
         },
         "alerts": alerts,
+        "runtime_lock": runtime_lock,
         "latest_failed_events": [
             {
                 "event_type": maybe_text(item.get("event_type")),
@@ -707,6 +735,21 @@ def runtime_health_payload(run_dir: Path, *, round_id: str = "") -> dict[str, An
                 "status": maybe_text(item.get("status")),
             }
             for item in blocked_events[-5:]
+        ],
+        "latest_receipt_conflicts": [
+            {
+                "event_id": maybe_text(item.get("event_id")),
+                "event_type": maybe_text(item.get("event_type")),
+                "skill_name": maybe_text(item.get("skill_name")),
+                "receipt_id": maybe_text(item.get("receipt_id")),
+                "receipt_path": maybe_text(item.get("receipt_path")),
+                "payload_hash": maybe_text(item.get("payload_hash")),
+                "previous_payload_hash": maybe_text(
+                    item.get("receipt_write", {}).get("previous_payload_hash")
+                ),
+                "dead_letter_id": maybe_text(item.get("dead_letter_id")),
+            }
+            for item in receipt_conflict_events[-5:]
         ],
         "open_dead_letters": open_dead_letters[:10],
     }
@@ -751,6 +794,11 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
     policy = load_admission_policy(run_dir)
     manifest = load_json_if_exists(manifest_path(run_dir)) or {}
     health = runtime_health_payload(run_dir, round_id=round_id)
+    runtime_lock = (
+        health.get("runtime_lock", {})
+        if isinstance(health.get("runtime_lock"), dict)
+        else {}
+    )
     dead_letters = health.get("open_dead_letters", []) if isinstance(health.get("open_dead_letters"), list) else []
     rollback_policy = policy.get("rollback_policy", {}) if isinstance(policy.get("rollback_policy"), dict) else {}
     run_id = maybe_text(manifest.get("run_id"))
@@ -799,7 +847,10 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
         f"- Alert status: `{maybe_text(health.get('alert_status')) or 'green'}`",
         f"- Failed events: `{int(health.get('summary', {}).get('failed_event_count') or 0)}`",
         f"- Blocked events: `{int(health.get('summary', {}).get('blocked_event_count') or 0)}`",
+        f"- Receipt conflicts: `{int(health.get('summary', {}).get('receipt_conflict_count') or 0)}`",
         f"- Open dead letters: `{int(health.get('summary', {}).get('open_dead_letter_count') or 0)}`",
+        f"- Runtime lock: `{maybe_text(runtime_lock.get('lock_state')) or 'not-created'}`",
+        f"- Runtime lock state path: `{maybe_text(runtime_lock.get('lock_state_path'))}`",
         f"- Pending transition requests: `{transition_counts[REQUEST_STATUS_PENDING]}`",
         f"- Approved transition requests: `{transition_counts[REQUEST_STATUS_APPROVED]}`",
         f"- Pending skill approval requests: `{skill_approval_counts[SKILL_REQUEST_STATUS_PENDING]}`",

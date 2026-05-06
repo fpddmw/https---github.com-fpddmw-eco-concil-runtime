@@ -35,6 +35,10 @@ def execution_lock_path(run_dir: Path) -> Path:
     return runtime_dir(run_dir) / "execution.lock"
 
 
+def execution_lock_state_path(run_dir: Path) -> Path:
+    return runtime_dir(run_dir) / "execution_lock_state.json"
+
+
 def registry_path(run_dir: Path) -> Path:
     return runtime_dir(run_dir) / "skill_registry.json"
 

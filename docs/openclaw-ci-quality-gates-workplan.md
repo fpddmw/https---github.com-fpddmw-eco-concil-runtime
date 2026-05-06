@@ -53,17 +53,20 @@
 当前可用命令：
 
 1. `python3 tools/quality_gate.py syntax`
-2. `python3 tools/quality_gate.py test relation-taxonomy optional-guardrails db-recovery runtime-governance reporting case-study`
+2. `python3 tools/quality_gate.py test relation-taxonomy optional-guardrails db-recovery schema-migration runtime-governance reporting case-study`
 3. `python3 tools/quality_gate.py full`
 4. `python3 tools/quality_gate.py ci`
 
 当前实测状态：
 
-1. `syntax` 通过，覆盖 202 个 Python 文件，并确认无重复字面量 dict key。
+1. `syntax` 通过，覆盖 204 个 Python 文件，并确认无重复字面量 dict key。
 2. `db-recovery` targeted gate 通过，6 tests。
-3. `runtime-governance` targeted gate 通过，54 tests。
-4. `runtime-governance reporting` targeted gate 通过，77 tests。
-5. `full` gate 通过，256 tests；当前耗时约 6 分 21 秒，后续应继续拆更快的 targeted jobs。
+3. `schema-migration` targeted gate 通过，3 tests。
+4. `schema-migration db-recovery` targeted gate 通过，9 tests。
+5. `runtime-governance` targeted gate 通过，56 tests。
+6. `runtime-governance reporting` targeted gate 通过，79 tests。
+7. 默认 targeted gates 通过，118 tests。
+8. `full` gate 通过，261 tests；当前耗时约 7 分 18 秒，后续应继续拆更快的 targeted jobs。
 
 当前未闭环项：
 

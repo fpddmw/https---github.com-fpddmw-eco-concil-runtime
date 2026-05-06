@@ -34,6 +34,47 @@
 
 ## 5. 工作阶段
 
+### 当前落地状态
+
+已落地 schema migration 硬化第一块代码：
+
+1. `eco-concil-runtime/src/eco_council_runtime/kernel/schema_migrations.py`
+   - 新增通用 `schema_metadata` 与 `schema_migrations` ledger。
+   - migration record 包含 `migration_id`、`schema_name`、`target_version`、`checksum`、`status`、`error_message`。
+   - 已 applied 且 checksum 一致时幂等返回；checksum 不一致时阻断。
+   - migration 失败会记录 `status=failed` 与错误信息，后续可重试并覆盖为 `applied`。
+2. `eco-concil-runtime/src/eco_council_runtime/kernel/deliberation_plane.py`
+   - `connect_db` 现在会写入 deliberation-plane schema baseline。
+   - 既有 legacy column/index backfill 被纳入 migration ledger。
+   - 增加 `load_schema_status` 查询接口。
+   - 对已有旧表先做 preflight column backfill，再执行当前 `SCHEMA_SQL`，避免旧表缺列导致 index 创建失败。
+3. `eco-concil-runtime/src/eco_council_runtime/kernel/signal_plane_normalizer.py`
+   - normalized signal schema baseline 与 `canonical_object_kind` / query indexes backfill 被纳入 migration ledger。
+4. `eco-concil-runtime/src/eco_council_runtime/kernel/cli.py`
+   - 新增 `show-schema-status --run-dir <run_dir>`，输出 schema metadata 与 migration ledger。
+5. `tests/test_schema_migrations.py`
+   - 覆盖旧 run-local DB 缺少 `board_events.event_index`、`report_basis_freezes.reporting_*` 和 `normalized_signals.canonical_object_kind` 时自动升级。
+   - 覆盖 schema migration ledger 幂等记录。
+   - 覆盖失败 migration 记录为 failed，重试成功后恢复为 completed。
+   - 覆盖 `show-schema-status` CLI 查询入口。
+6. `tools/quality_gate.py` 与 `.github/workflows/quality-gates.yml`
+   - 新增 `schema-migration` targeted gate 并纳入默认 CI targeted gates。
+
+当前未闭环项：
+
+1. 当前 ledger 已覆盖 run-local `signal_plane.sqlite` 中的 deliberation/signal schema；还未给 council-only legacy tables 单独定义独立 schema name。
+2. 旧库 fixture 已覆盖缺列与 index 创建前置升级；还未扩展到每一张 runtime/reporting snapshot 表的历史版本矩阵。
+3. schema 失败状态已有 ledger 记录；还未接入 operator runbook 或 runtime health。
+
+当前实测状态：
+
+1. `python3 -m unittest tests.test_schema_migrations` 通过，3 tests。
+2. `python3 tools/quality_gate.py test schema-migration db-recovery` 通过，9 tests。
+3. `python3 tools/quality_gate.py test runtime-governance` 通过，56 tests。
+4. `python3 tools/quality_gate.py syntax` 通过，204 Python files。
+5. `python3 tools/quality_gate.py test relation-taxonomy optional-guardrails db-recovery schema-migration runtime-governance reporting case-study` 通过，118 tests。
+6. `python3 tools/quality_gate.py full` 通过，261 tests。
+
 ### P0：版本策略
 
 1. 选择当前 baseline schema version。

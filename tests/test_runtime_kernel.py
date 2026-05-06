@@ -1019,6 +1019,210 @@ class RuntimeKernelTests(unittest.TestCase):
                 second["event"]["receipt_write"]["previous_payload_hash"],
             )
 
+    def test_runtime_receipt_conflict_blocks_without_replacing_existing_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.cli import show_run_state
+            from eco_council_runtime.kernel.executor import SkillExecutionError, run_skill
+            from eco_council_runtime.kernel.ledger import load_ledger_tail
+            from eco_council_runtime.phase2_agent_entry_profile import (
+                default_phase2_agent_entry_profile,
+            )
+
+            fake_skill_entry = {
+                "skill_name": "summarize-board-state",
+                "script_path": str(root / "fake_receipt_conflict.py"),
+                "declared_contract": {"reads": [], "writes": []},
+                "declared_inputs": {"required": [], "optional": []},
+                "declared_side_effects": [],
+                "execution_policy": {},
+                "agent": {},
+            }
+            first_skill_payload = {
+                "status": "completed",
+                "summary": {"result": "first"},
+                "receipt_id": "runtime-receipt-conflict-test",
+                "artifact_refs": [],
+                "canonical_ids": ["first-id"],
+            }
+            second_skill_payload = {
+                "status": "completed",
+                "summary": {"result": "second"},
+                "receipt_id": "runtime-receipt-conflict-test",
+                "artifact_refs": [],
+                "canonical_ids": ["second-id"],
+            }
+
+            with (
+                mock.patch("eco_council_runtime.kernel.governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch(
+                    "eco_council_runtime.kernel.executor.subprocess.run",
+                    side_effect=[
+                        subprocess.CompletedProcess(
+                            args=["python"],
+                            returncode=0,
+                            stdout=json.dumps(first_skill_payload),
+                            stderr="",
+                        ),
+                        subprocess.CompletedProcess(
+                            args=["python"],
+                            returncode=0,
+                            stdout=json.dumps(second_skill_payload),
+                            stderr="",
+                        ),
+                    ],
+                ),
+            ):
+                first = run_skill(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    skill_name="summarize-board-state",
+                    actor_role="moderator",
+                    skill_args=[],
+                    contract_mode="warn",
+                )
+                with self.assertRaises(SkillExecutionError) as raised:
+                    run_skill(
+                        run_dir,
+                        run_id=RUN_ID,
+                        round_id=ROUND_ID,
+                        skill_name="summarize-board-state",
+                        actor_role="moderator",
+                        skill_args=[],
+                        contract_mode="warn",
+                    )
+
+            receipt = load_json(
+                run_dir / "runtime" / "receipts" / "runtime-receipt-conflict-test.json"
+            )
+            latest_event = load_ledger_tail(run_dir, 1)[0]
+            state_payload = show_run_state(
+                run_dir,
+                tail=5,
+                round_id=ROUND_ID,
+                agent_entry_profile=default_phase2_agent_entry_profile(),
+            )
+
+            self.assertEqual("created", first["event"]["receipt_write"]["write_status"])
+            self.assertEqual(first_skill_payload, receipt["skill_payload"])
+            self.assertEqual(
+                "receipt-payload-hash-conflict",
+                raised.exception.payload["failure"]["error_code"],
+            )
+            self.assertEqual(
+                "conflict",
+                raised.exception.payload["receipt_write"]["write_status"],
+            )
+            self.assertTrue(raised.exception.payload["receipt_write"]["conflict"])
+            self.assertEqual("failed", latest_event["status"])
+            self.assertEqual(
+                "receipt-payload-hash-conflict",
+                latest_event["failure"]["error_code"],
+            )
+            self.assertEqual("conflict", latest_event["receipt_write"]["write_status"])
+            self.assertTrue(latest_event["dead_letter_id"].startswith("deadletter-"))
+            self.assertEqual(1, state_payload["summary"]["receipt_conflict_count"])
+            self.assertEqual(
+                1,
+                state_payload["operations"]["runtime_health"]["summary"][
+                    "receipt_conflict_count"
+                ],
+            )
+            self.assertEqual(
+                "receipt-conflicts-present",
+                state_payload["operations"]["runtime_health"]["alerts"][-1]["code"],
+            )
+
+    def test_show_run_state_surfaces_current_runtime_lock_holder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.cli import init_run, show_run_state
+            from eco_council_runtime.phase2_agent_entry_profile import (
+                default_phase2_agent_entry_profile,
+            )
+
+            init_run(run_dir, RUN_ID)
+            child_code = """
+import json
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[2])
+from eco_council_runtime.kernel.locking import exclusive_runtime_lock
+
+metadata = {
+    "run_id": sys.argv[3],
+    "round_id": sys.argv[4],
+    "skill_name": "summarize-board-state",
+    "actor_role": "moderator",
+    "execution_input_hash": "lock-test-input-hash",
+}
+with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
+    print("ready", flush=True)
+    time.sleep(10)
+"""
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    child_code,
+                    str(run_dir),
+                    str(runtime_src_path()),
+                    RUN_ID,
+                    ROUND_ID,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                assert process.stdout is not None
+                self.assertEqual("ready", process.stdout.readline().strip())
+
+                state_payload = show_run_state(
+                    run_dir,
+                    tail=5,
+                    round_id=ROUND_ID,
+                    agent_entry_profile=default_phase2_agent_entry_profile(),
+                )
+
+                runtime_lock = state_payload["operations"]["runtime_lock"]
+                self.assertEqual("held", runtime_lock["lock_state"])
+                self.assertEqual(
+                    "summarize-board-state",
+                    runtime_lock["metadata"]["skill_name"],
+                )
+                self.assertEqual("held", state_payload["summary"]["runtime_lock_state"])
+                self.assertEqual(
+                    "held",
+                    state_payload["operations"]["operator"]["runtime_lock_state"],
+                )
+                self.assertTrue(
+                    state_payload["operations"]["operator"][
+                        "runtime_lock_state_path"
+                    ].endswith("execution_lock_state.json")
+                )
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+                if process.stdout is not None:
+                    process.stdout.close()
+                if process.stderr is not None:
+                    process.stderr.close()
+
     def test_run_skill_timeout_returns_structured_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

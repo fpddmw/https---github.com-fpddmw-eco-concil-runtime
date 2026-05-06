@@ -99,11 +99,11 @@ def write_receipt(
     if previous_payload_hash == payload_hash:
         write_status = "unchanged"
     elif previous_payload_hash:
-        write_status = "replaced"
+        write_status = "conflict"
     else:
         write_status = "created"
 
-    if write_status != "unchanged":
+    if write_status == "created":
         path.write_text(
             json.dumps(envelope, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
@@ -117,6 +117,8 @@ def write_receipt(
         "payload_hash": payload_hash,
         "previous_payload_hash": previous_payload_hash,
         "receipt_hash": receipt_hash,
+        "conflict": write_status == "conflict",
+        "error_code": "receipt-payload-hash-conflict" if write_status == "conflict" else "",
     }
 
 

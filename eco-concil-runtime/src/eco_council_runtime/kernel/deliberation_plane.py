@@ -18,6 +18,15 @@ from ..reporting_status import (
     normalize_reporting_handoff_status,
     reporting_gate_state,
 )
+from .schema_migrations import (
+    apply_schema_migration,
+    ensure_schema_migration_tables,
+    load_schema_status as load_connection_schema_status,
+    set_schema_version,
+)
+
+DELIBERATION_SCHEMA_NAME = "deliberation-plane"
+DELIBERATION_SCHEMA_VERSION = "2026.05.06.1"
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS board_runs (
@@ -1220,12 +1229,101 @@ def connect_db(run_dir: Path, db_path: str = "") -> tuple[sqlite3.Connection, Pa
     file_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(file_path)
     connection.row_factory = sqlite3.Row
+    ensure_schema_migration_tables(connection)
+    preflight_existing_tables_for_schema_sql(connection)
     connection.executescript(SCHEMA_SQL)
     ensure_schema_migrations(connection)
+    connection.commit()
     return connection, file_path
 
 
+def table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
+    row = connection.execute(
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table' AND name = ?
+        """,
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def ensure_existing_table_column(
+    connection: sqlite3.Connection,
+    table_name: str,
+    column_name: str,
+    column_sql: str,
+) -> None:
+    if table_exists(connection, table_name):
+        ensure_column(connection, table_name, column_name, column_sql)
+
+
+def preflight_existing_tables_for_schema_sql(connection: sqlite3.Connection) -> None:
+    ensure_existing_table_column(
+        connection,
+        "board_events",
+        "event_index",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    for table_name in ("moderator_actions", "falsification_probes"):
+        for column_name in (
+            "target_object_kind",
+            "target_object_id",
+            "issue_label",
+            "target_route_id",
+            "target_actor_id",
+            "target_assessment_id",
+            "target_linkage_id",
+            "target_gap_id",
+            "target_proposal_id",
+            "source_proposal_id",
+        ):
+            ensure_existing_table_column(
+                connection,
+                table_name,
+                column_name,
+                "TEXT NOT NULL DEFAULT ''",
+            )
+    for column_name, column_sql in (
+        ("reporting_ready", "INTEGER NOT NULL DEFAULT 0"),
+        ("reporting_handoff_status", "TEXT NOT NULL DEFAULT ''"),
+        ("reporting_blockers_json", "TEXT NOT NULL DEFAULT '[]'"),
+    ):
+        ensure_existing_table_column(
+            connection,
+            "report_basis_freezes",
+            column_name,
+            column_sql,
+        )
+
+
 def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
+    ensure_schema_migration_tables(connection)
+    apply_schema_migration(
+        connection,
+        schema_name=DELIBERATION_SCHEMA_NAME,
+        migration_id="0001-deliberation-schema-baseline",
+        target_version=DELIBERATION_SCHEMA_VERSION,
+        description="Record the current deliberation-plane schema baseline.",
+        operation=lambda: None,
+    )
+    apply_schema_migration(
+        connection,
+        schema_name=DELIBERATION_SCHEMA_NAME,
+        migration_id="0002-deliberation-legacy-columns-and-indexes",
+        target_version=DELIBERATION_SCHEMA_VERSION,
+        description="Backfill legacy deliberation columns and indexes used by runtime governance, reporting, and phase-2 control surfaces.",
+        operation=lambda: apply_deliberation_legacy_schema_migrations(connection),
+    )
+    set_schema_version(
+        connection,
+        schema_name=DELIBERATION_SCHEMA_NAME,
+        current_version=DELIBERATION_SCHEMA_VERSION,
+    )
+
+
+def apply_deliberation_legacy_schema_migrations(connection: sqlite3.Connection) -> None:
     ensure_column(
         connection,
         "board_events",
@@ -1391,6 +1489,22 @@ def ensure_schema_migrations(connection: sqlite3.Connection) -> None:
         )
         """
     )
+
+
+def load_schema_status(
+    run_dir: str | Path,
+    *,
+    db_path: str = "",
+) -> dict[str, Any]:
+    connection, db_file = connect_db(resolve_run_dir(run_dir), db_path)
+    try:
+        payload = load_connection_schema_status(connection)
+    finally:
+        connection.close()
+    return {
+        **payload,
+        "db_path": str(db_file),
+    }
 
 
 def ensure_column(
@@ -8020,6 +8134,7 @@ __all__ = [
     "load_reporting_handoff_record",
     "load_round_transition_record",
     "load_round_readiness_assessment",
+    "load_schema_status",
     "load_round_snapshot",
     "load_supervisor_snapshot_record",
     "maybe_text",
