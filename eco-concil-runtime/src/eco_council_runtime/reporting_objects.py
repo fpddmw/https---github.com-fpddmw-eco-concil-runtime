@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from .canonical_contracts import (
+from .contracts import (
     PLANE_REPORTING,
     canonical_contract,
     canonical_contract_kinds,

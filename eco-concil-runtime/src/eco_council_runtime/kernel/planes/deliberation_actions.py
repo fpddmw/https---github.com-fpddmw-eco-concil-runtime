@@ -10,7 +10,7 @@ from eco_council_runtime.deliberation_target_semantics import (
     source_proposal_id_from_payload,
 )
 from eco_council_runtime.kernel.execution.governed_execution_action_semantics import action_is_readiness_blocker
-from eco_council_runtime.canonical_contracts import validate_canonical_payload
+from eco_council_runtime.contracts import validate_canonical_payload
 from eco_council_runtime.kernel.planes.deliberation_plane_rows import (
     cleaned_wrapper_record,
     coerce_int,

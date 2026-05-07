@@ -250,7 +250,7 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
                 self.assertFalse((script_path(skill_name)).exists())
 
     def test_review_evidence_sufficiency_reads_db_objects_without_gate_scores(self) -> None:
-        from eco_council_runtime.council_objects import (
+        from eco_council_runtime.objects.council import (
             append_evidence_bundle_record,
             append_finding_record,
             append_review_comment_record,

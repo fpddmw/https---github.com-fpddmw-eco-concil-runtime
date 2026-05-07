@@ -13,7 +13,7 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.optional_analysis_helpers import pretty_json, run_export_research_issue_map  # noqa: E402
+from eco_council_runtime.optional_analysis import pretty_json, run_export_research_issue_map  # noqa: E402
 
 
 def main() -> int:

@@ -33,7 +33,7 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     connect_db,
     fetch_round_state,
 )
-from eco_council_runtime.canonical_contracts import SPATIOTEMPORAL_OBJECTION_CODE_VALUES  # noqa: E402
+from eco_council_runtime.contracts import SPATIOTEMPORAL_OBJECTION_CODE_VALUES  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:

@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.canonical_contracts import canonical_contract, validate_canonical_payload
+from eco_council_runtime.contracts import canonical_contract, validate_canonical_payload
 from eco_council_runtime.deliberation_target_semantics import (
     deliberation_anchor_fields,
     normalized_deliberation_target,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.canonical_contracts import ENVIRONMENT_SIGNAL_TAXONOMY_VERSION
+from eco_council_runtime.contracts import ENVIRONMENT_SIGNAL_TAXONOMY_VERSION
 from eco_council_runtime.kernel.governance.role_contracts import (
     CAPABILITY_ANALYSIS,
     CAPABILITY_ARCHIVE_WRITE,

@@ -1,138 +1,43 @@
 from __future__ import annotations
 
 import json
-import re
-import shlex
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.kernel.governance.runtime_governance import CONTRACT_MODES, postflight_skill_execution, preflight_skill_execution
 from eco_council_runtime.kernel.core.ledger import append_ledger_event, write_receipt
 from eco_council_runtime.kernel.core.locking import exclusive_runtime_lock
 from eco_council_runtime.kernel.core.manifest import update_after_run
-from eco_council_runtime.kernel.operator.operations import admission_error_code, evaluate_execution_admission, materialize_dead_letter, refresh_runtime_surfaces
 from eco_council_runtime.kernel.core.registry import resolve_skill_entry, workspace_root
+from eco_council_runtime.kernel.execution.executor_command_hints import skill_command_hint
+from eco_council_runtime.kernel.execution.executor_common import (
+    SkillExecutionError,
+    backoff_delay_seconds,
+    json_hash,
+    maybe_text,
+    new_runtime_event_id,
+    retryable_return_code,
+    stable_hash,
+    utc_now_iso,
+)
+from eco_council_runtime.kernel.execution.executor_failures import (
+    extract_dead_letter_id,
+    refresh_runtime_surfaces_safely,
+    structured_failure,
+)
+from eco_council_runtime.kernel.governance.runtime_governance import (
+    CONTRACT_MODES,
+    postflight_skill_execution,
+    preflight_skill_execution,
+)
 from eco_council_runtime.kernel.governance.skill_approvals import mark_skill_approval_consumed
-
-
-class SkillExecutionError(RuntimeError):
-    def __init__(self, message: str, payload: dict[str, Any] | None = None):
-        super().__init__(message)
-        self.payload = payload or {}
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def maybe_text(value: Any) -> str:
-    if value is None:
-        return ""
-    return " ".join(str(value).split())
-
-
-def stable_hash(*parts: Any) -> str:
-    import hashlib
-
-    joined = "||".join(maybe_text(part) for part in parts)
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
-
-
-def json_hash(payload: Any) -> str:
-    return stable_hash(json.dumps(payload, ensure_ascii=True, sort_keys=True))
-
-
-def new_runtime_event_id(prefix: str, *parts: Any) -> str:
-    import uuid
-
-    return prefix + "-" + stable_hash(uuid.uuid4().hex, *parts)[:20]
-
-
-def backoff_delay_seconds(retry_backoff_ms: int, attempt_number: int) -> float:
-    if retry_backoff_ms <= 0:
-        return 0.0
-    return max(0.0, (retry_backoff_ms * max(1, attempt_number)) / 1000.0)
-
-
-def retryable_return_code(return_code: int) -> bool:
-    return return_code != 0
-
-
-def structured_failure(
-    *,
-    error_code: str,
-    message: str,
-    retryable: bool,
-    attempts: list[dict[str, Any]],
-    execution_policy: dict[str, Any],
-    recovery_hints: list[str],
-) -> dict[str, Any]:
-    return {
-        "error_code": error_code,
-        "message": message,
-        "retryable": retryable,
-        "attempt_count": len(attempts),
-        "last_attempt": attempts[-1] if attempts else {},
-        "execution_policy": execution_policy,
-        "recovery_hints": recovery_hints,
-    }
-
-
-DEAD_LETTER_ID_PATTERN = re.compile(r"(deadletter-[0-9a-f]{20})")
-
-
-def skill_command_hint(
-    command_name: str,
-    *,
-    run_dir: Path,
-    run_id: str,
-    round_id: str,
-    skill_name: str,
-    actor_role: str,
-    contract_mode: str,
-    skill_args: list[str],
-    skill_approval_request_id: str = "",
-) -> str:
-    command = [
-        command_name,
-        "--run-dir",
-        str(run_dir),
-        "--run-id",
-        run_id,
-        "--round-id",
-        round_id,
-        "--skill-name",
-        skill_name,
-        "--actor-role",
-        actor_role,
-        "--contract-mode",
-        contract_mode,
-    ]
-    if maybe_text(skill_approval_request_id):
-        command.extend(["--skill-approval-request-id", maybe_text(skill_approval_request_id)])
-    if skill_args:
-        command.extend(["--", *skill_args])
-    return shlex.join(command)
-
-
-def extract_dead_letter_id(*texts: str) -> str:
-    for text in texts:
-        match = DEAD_LETTER_ID_PATTERN.search(maybe_text(text))
-        if match:
-            return match.group(1)
-    return ""
-
-
-def refresh_runtime_surfaces_safely(run_dir: Path, *, round_id: str) -> dict[str, Any]:
-    try:
-        return refresh_runtime_surfaces(run_dir, round_id=round_id)
-    except Exception:  # noqa: BLE001
-        return {}
-
+from eco_council_runtime.kernel.operator.operations import (
+    admission_error_code,
+    evaluate_execution_admission,
+    materialize_dead_letter,
+)
 
 def run_skill(
     run_dir: Path,
@@ -958,3 +863,20 @@ def run_skill(
         },
         "operator_surface": operator_surface,
     }
+
+
+__all__ = (
+    "SkillExecutionError",
+    "backoff_delay_seconds",
+    "extract_dead_letter_id",
+    "json_hash",
+    "maybe_text",
+    "new_runtime_event_id",
+    "refresh_runtime_surfaces_safely",
+    "retryable_return_code",
+    "run_skill",
+    "skill_command_hint",
+    "stable_hash",
+    "structured_failure",
+    "utc_now_iso",
+)

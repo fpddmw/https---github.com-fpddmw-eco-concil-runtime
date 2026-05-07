@@ -35,32 +35,48 @@ FACADE_PUBLIC_SYMBOLS = {
         "query_spatiotemporal_relation_cues",
         "sync_spatiotemporal_relation_cue_result_set",
     ),
-    "eco_council_runtime.optional_analysis_helpers": (
+    "eco_council_runtime.optional_analysis": (
         "run_aggregate_environment_evidence",
         "run_review_fact_check_evidence_scope",
         "run_detect_temporal_cooccurrence_cues",
         "run_review_spatiotemporal_relation_alternatives",
     ),
-    "eco_council_runtime.council_objects": (
+    "eco_council_runtime.objects.council": (
         "connect_db",
         "append_finding_record",
         "append_evidence_bundle_record",
         "store_council_proposal_records",
         "query_council_objects",
     ),
-    "eco_council_runtime.analysis_objects": (
+    "eco_council_runtime.objects.analysis": (
         "canonical_evidence_refs",
         "build_heuristic_wrapper_provenance",
     ),
-    "eco_council_runtime.canonical_contracts": (
+    "eco_council_runtime.contracts": (
         "canonical_contract",
         "canonical_contracts_for_plane",
         "validate_canonical_payload",
     ),
     "eco_council_runtime.kernel.cli": (
         "build_parser",
+        "init_run",
         "main",
         "show_run_state",
+    ),
+    "eco_council_runtime.kernel.operator.runtime_state_surfaces": (
+        "build_reporting_surface",
+        "load_controller_state_wrapper",
+        "load_reporting_handoff_wrapper",
+    ),
+    "eco_council_runtime.kernel.planes.signal_plane_normalizer": (
+        "connect_db",
+        "finalize_normalization",
+        "resolved_canonical_object_kind",
+    ),
+    "eco_council_runtime.kernel.execution.controller": (
+        "controller_stage_skill_args",
+        "run_governed_execution_round",
+        "run_governed_execution_round_with_contract_mode",
     ),
 }
 
@@ -159,6 +175,316 @@ SPLIT_MODULE_PUBLIC_SYMBOLS = {
     "eco_council_runtime.kernel.planes.analysis_plane_contexts": (
         "load_spatiotemporal_relation_cue_context",
         "sync_spatiotemporal_relation_cue_result_set",
+    ),
+    "eco_council_runtime.kernel.operator.run_state_view": (
+        "benchmark_operator_view",
+        "governed_execution_operator_view",
+        "operations_state",
+        "post_round_operator_view",
+        "reporting_operator_view",
+        "reporting_state_for_round",
+        "show_run_state",
+        "transition_request_state",
+    ),
+    "eco_council_runtime.kernel.operator.cli_parser": (
+        "add_actor_role_arg",
+        "add_admission_policy_args",
+        "add_analysis_query_args",
+        "add_control_query_args",
+        "add_council_query_args",
+        "add_execution_policy_args",
+        "add_reporting_query_args",
+        "build_parser",
+    ),
+    "eco_council_runtime.kernel.operator.cli_runtime_commands": (
+        "command_access_failure",
+        "handle_early_runtime_command",
+        "handle_runtime_command",
+        "init_run",
+        "parse_json_object_arg",
+        "pretty_json",
+        "write_command_artifact",
+    ),
+    "eco_council_runtime.objects.analysis.common": (
+        "build_heuristic_wrapper_provenance",
+        "canonical_evidence_refs",
+        "helper_governance_metadata",
+        "maybe_text",
+        "merged_lineage",
+        "unique_artifact_refs",
+    ),
+    "eco_council_runtime.objects.analysis.signals": (
+        "normalize_claim_candidate_payload",
+        "normalize_claim_cluster_payload",
+        "normalize_claim_scope_payload",
+    ),
+    "eco_council_runtime.objects.analysis.issues": (
+        "normalize_actor_profile_payload",
+        "normalize_concern_facet_payload",
+        "normalize_controversy_map_payload",
+        "normalize_evidence_citation_type_payload",
+        "normalize_issue_cluster_payload",
+        "normalize_stance_group_payload",
+    ),
+    "eco_council_runtime.objects.analysis.verification": (
+        "normalize_verifiability_assessment_payload",
+        "normalize_verification_route_payload",
+    ),
+    "eco_council_runtime.objects.analysis.relations": (
+        "normalize_diffusion_edge_payload",
+        "normalize_formal_public_link_payload",
+        "normalize_representation_gap_payload",
+        "normalize_spatiotemporal_relation_cue_payload",
+    ),
+    "eco_council_runtime.objects.council.schema": (
+        "SCHEMA_SQL",
+        "connect_db",
+    ),
+    "eco_council_runtime.objects.council.payloads": (
+        "normalized_discussion_message_payload",
+        "normalized_evidence_bundle_payload",
+        "normalized_finding_payload",
+        "normalized_proposal_payload",
+        "normalized_readiness_opinion_payload",
+    ),
+    "eco_council_runtime.objects.council.rows": (
+        "finding_row_from_payload",
+        "proposal_row_from_payload",
+        "write_council_proposal_row",
+        "write_finding_row",
+    ),
+    "eco_council_runtime.objects.council.store": (
+        "append_finding_record",
+        "append_review_comment_record",
+        "store_council_proposal_records",
+        "store_readiness_opinion_records",
+    ),
+    "eco_council_runtime.objects.council.decision_traces": (
+        "decision_trace_row_from_payload",
+        "normalized_decision_trace_payload",
+        "store_decision_trace_records",
+    ),
+    "eco_council_runtime.objects.council.query": (
+        "QUERY_CONFIGS",
+        "council_queryable_object_kinds",
+        "query_council_objects",
+    ),
+    "eco_council_runtime.contracts.types": (
+        "CanonicalContract",
+        "PLANE_ANALYSIS",
+        "PLANE_DELIBERATION",
+        "PLANE_REPORTING",
+        "PLANE_RUNTIME",
+        "PLANE_SIGNAL",
+    ),
+    "eco_council_runtime.contracts.signal": (
+        "ENVIRONMENT_SIGNAL_TAXONOMY_VERSION",
+        "SIGNAL_CONTRACTS",
+        "environment_signal_taxonomy_metadata",
+    ),
+    "eco_council_runtime.contracts.analysis": (
+        "ANALYSIS_CONTRACTS",
+    ),
+    "eco_council_runtime.contracts.deliberation": (
+        "DELIBERATION_CONTRACTS",
+    ),
+    "eco_council_runtime.contracts.runtime": (
+        "RUNTIME_CONTRACTS",
+    ),
+    "eco_council_runtime.contracts.reporting": (
+        "REPORTING_CONTRACTS",
+    ),
+    "eco_council_runtime.contracts.registry": (
+        "CANONICAL_CONTRACTS",
+        "canonical_contract",
+        "canonical_contracts_for_plane",
+        "validate_canonical_payload",
+    ),
+    "eco_council_runtime.kernel.governance.transition_request_common": (
+        "TRANSITION_KIND_CLOSE_ROUND",
+        "TRANSITION_KIND_FREEZE_REPORT_BASIS",
+        "TRANSITION_KIND_OPEN_INVESTIGATION_ROUND",
+        "normalize_transition_kind",
+        "transition_kind_spec",
+    ),
+    "eco_council_runtime.kernel.governance.transition_request_payloads": (
+        "transition_approval_payload",
+        "transition_rejection_payload",
+        "transition_request_payload",
+    ),
+    "eco_council_runtime.kernel.governance.transition_request_rows": (
+        "transition_approval_row_from_payload",
+        "transition_request_row_from_payload",
+        "write_transition_request_row",
+    ),
+    "eco_council_runtime.kernel.governance.transition_request_store": (
+        "approve_transition_request",
+        "load_transition_request",
+        "mark_transition_request_committed",
+        "resolve_transition_request_for_execution",
+        "store_transition_request",
+    ),
+    "eco_council_runtime.kernel.governance.skill_approval_common": (
+        "OBJECT_KIND_SKILL_APPROVAL_REQUEST",
+        "REQUEST_STATUS_APPROVED",
+        "REQUEST_STATUS_CONSUMED",
+        "REQUEST_STATUS_PENDING",
+    ),
+    "eco_council_runtime.kernel.governance.skill_approval_payloads": (
+        "skill_approval_consumption_payload",
+        "skill_approval_payload",
+        "skill_approval_rejection_payload",
+        "skill_approval_request_payload",
+    ),
+    "eco_council_runtime.kernel.governance.skill_approval_rows": (
+        "skill_approval_request_row_from_payload",
+        "skill_approval_row_from_payload",
+        "write_skill_approval_request_row",
+    ),
+    "eco_council_runtime.kernel.governance.skill_approval_store": (
+        "approve_skill_approval_request",
+        "load_skill_approval_request",
+        "mark_skill_approval_consumed",
+        "resolve_skill_approval_for_execution",
+        "store_skill_approval_request",
+    ),
+    "eco_council_runtime.kernel.operator.admission_policy": (
+        "admission_error_code",
+        "evaluate_execution_admission",
+        "load_admission_policy",
+        "materialize_admission_policy",
+    ),
+    "eco_council_runtime.kernel.operator.dead_letters": (
+        "classify_failure",
+        "load_dead_letters",
+        "materialize_dead_letter",
+        "operator_resolution_steps",
+    ),
+    "eco_council_runtime.kernel.operator.runtime_health": (
+        "materialize_runtime_health",
+        "refresh_runtime_surfaces",
+        "runtime_health_payload",
+    ),
+    "eco_council_runtime.kernel.operator.runbook": (
+        "materialize_operator_runbook",
+        "operator_runbook_markdown",
+    ),
+    "eco_council_runtime.kernel.execution.executor_common": (
+        "SkillExecutionError",
+        "json_hash",
+        "new_runtime_event_id",
+        "retryable_return_code",
+    ),
+    "eco_council_runtime.kernel.execution.executor_command_hints": (
+        "skill_command_hint",
+    ),
+    "eco_council_runtime.kernel.execution.executor_failures": (
+        "extract_dead_letter_id",
+        "refresh_runtime_surfaces_safely",
+        "structured_failure",
+    ),
+    "eco_council_runtime.kernel.operator.runtime_surface_common": (
+        "maybe_text",
+        "orphaned_artifact_wrapper",
+        "resolve_path",
+    ),
+    "eco_council_runtime.kernel.operator.runtime_reporting_surfaces": (
+        "build_reporting_surface",
+        "enrich_reporting_record_payload",
+        "enrich_supervisor_reporting_payload",
+    ),
+    "eco_council_runtime.kernel.operator.runtime_investigation_surfaces": (
+        "load_falsification_probe_wrapper",
+        "load_next_actions_wrapper",
+        "load_report_basis_freeze_wrapper",
+        "load_round_readiness_wrapper",
+    ),
+    "eco_council_runtime.kernel.operator.runtime_execution_surfaces": (
+        "load_controller_state_wrapper",
+        "load_orchestration_plan_wrapper",
+        "load_report_basis_gate_wrapper",
+        "load_supervisor_state_wrapper",
+    ),
+    "eco_council_runtime.kernel.operator.runtime_publication_surfaces": (
+        "load_council_decision_wrapper",
+        "load_expert_report_wrapper",
+        "load_final_publication_wrapper",
+        "load_reporting_handoff_wrapper",
+    ),
+    "eco_council_runtime.kernel.planes.signal_normalizer_common": (
+        "file_sha256",
+        "json_text",
+        "maybe_text",
+        "stable_hash",
+    ),
+    "eco_council_runtime.kernel.planes.signal_plane_schema": (
+        "SCHEMA_SQL",
+        "connect_db",
+        "ensure_signal_plane_schema",
+        "resolve_db_path",
+    ),
+    "eco_council_runtime.kernel.planes.signal_normalizer_metadata": (
+        "default_canonical_object_kind",
+        "enrich_signal_metadata_fields",
+        "resolved_canonical_object_kind",
+    ),
+    "eco_council_runtime.kernel.planes.signal_normalizer_store": (
+        "delete_existing_rows",
+        "insert_signals",
+        "replace_signal_index_rows",
+    ),
+    "eco_council_runtime.kernel.planes.signal_normalizer_finalize": (
+        "base_signal",
+        "finalize_normalization",
+        "finalize_normalization_streaming",
+    ),
+    "eco_council_runtime.kernel.execution.controller_artifacts": (
+        "governed_execution_artifact_paths",
+        "persist_controller_state",
+    ),
+    "eco_council_runtime.kernel.execution.controller_planning_adapters": (
+        "agent_orchestration_requested",
+        "execute_gate_step",
+        "planning_bundle",
+    ),
+    "eco_council_runtime.kernel.execution.controller_transition_planning": (
+        "approved_transition_request_planning",
+        "controller_stage_skill_args",
+        "inspection_only_planning",
+    ),
+    "eco_council_runtime.optional_analysis.support": (
+        "helper_metadata",
+        "lineage_from_signals",
+        "query_signals",
+        "refs_from_signals",
+        "safe_board_handoff",
+    ),
+    "eco_council_runtime.optional_analysis.environment_evidence": (
+        "run_aggregate_environment_evidence",
+    ),
+    "eco_council_runtime.optional_analysis.scope_review": (
+        "STRUCTURED_VERIFICATION_SCOPE_FIELDS",
+        "build_structured_verification_scope",
+        "run_review_fact_check_evidence_scope",
+    ),
+    "eco_council_runtime.optional_analysis.research_issues": (
+        "run_discover_discourse_issues",
+        "run_export_research_issue_map",
+        "run_materialize_research_issue_surface",
+        "run_project_research_issue_views",
+        "run_suggest_evidence_lanes",
+    ),
+    "eco_council_runtime.optional_analysis.formal_public": (
+        "run_apply_approved_formal_public_taxonomy",
+        "run_compare_formal_public_footprints",
+        "run_identify_representation_audit_cues",
+        "taxonomy_labels",
+    ),
+    "eco_council_runtime.optional_analysis.relations": (
+        "build_spatiotemporal_relation_cues",
+        "relation_objection_candidates",
+        "run_detect_temporal_cooccurrence_cues",
+        "run_review_spatiotemporal_relation_alternatives",
     ),
 }
 

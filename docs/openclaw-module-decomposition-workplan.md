@@ -6,7 +6,7 @@
 
 目标是在不改变 runtime 行为、skill id、CLI 命令、canonical contract、DB schema 和 artifact shape 的前提下，把当前过大的 Python 模块拆成可维护、可测试、可逐步迁移的模块族。Python import path 以本文记录的最新包结构为准，不保留旧 phase 或旧 flat kernel 路径。
 
-本计划以 2026-05-06 的仓库状态为基线。当前已验证：syntax 覆盖 227 个 Python 文件，module-decomposition gate 通过 7 tests，runtime/reporting/case targeted gate 组合通过 89 tests，full gate 通过 268 tests。schema migration 硬化已完成第一块代码，模块拆分 P0 保护网已落地，P1/P2 已完成 deliberation plane 的 facade 化拆分，P3 已完成 analysis plane 的 facade 化拆分，并已完成旧 phase 命名清理与 runtime/kernel 浅层包结构整理。
+本计划以 2026-05-06 的仓库状态为基线。当前已验证：syntax 覆盖 283 个 Python 文件，module-decomposition gate 通过，P6 相关 canonical/council/reporting/relation/optional 组合测试通过，P7 runtime governance/reporting/signal targeted gate 通过 113 tests，full gate 通过 268 tests。schema migration 硬化已完成第一块代码，模块拆分 P0 保护网已落地，P1/P2 已完成 deliberation plane 的 facade 化拆分，P3 已完成 analysis plane 的 facade 化拆分，P4 已完成 optional analysis helper family 全量 facade 化拆分，并已完成旧 phase 命名清理、runtime/kernel 浅层包结构整理，P5 CLI/operator view、CLI parser 与 runtime command handler 拆分，P6 council/analysis/canonical object registry 拆分，以及 P7 runtime governance 两轮支撑模块拆分。
 
 ### 当前落地状态
 
@@ -57,15 +57,78 @@
 18. `eco_concil_runtime/kernel/planes/analysis_plane.py` 保持兼容入口。
    - 继续 re-export 原 public names。
    - 当前约 242 行，已从 P0 基线约 3697 行下降。
+19. 新增 `eco_concil_runtime/kernel/operator/run_state_view.py`。
+   - 承载 `show_run_state`、transition state、operations state、reporting state composition，以及 governed/reporting/post-round/benchmark operator views。
+   - `eco_concil_runtime/kernel/cli.py` 保留 `build_parser`、`main` 与上述状态视图符号的 public import。
+   - `cli.py` 已从约 3869 行下降到约 2469 行。
+20. 新增 `eco_concil_runtime/kernel/operator/cli_parser.py`。
+   - 承载 subcommand parser construction 与 shared arg helpers。
+   - `eco_concil_runtime/kernel/cli.py` 继续导出 `build_parser`。
+   - `cli.py` 已继续下降到约 1815 行。
+21. 新增 `eco_concil_runtime/kernel/operator/cli_runtime_commands.py`。
+   - 承载 CLI JSON/output helper、`init_run`、early runtime commands、`run-skill`、`preflight-skill`、admission policy、runtime health、operator runbook 和 dead-letter command handlers。
+   - `eco_concil_runtime/kernel/cli.py` 继续导出 `init_run`、`pretty_json` 等既有 helper symbols。
+   - `cli.py` 已继续下降到约 1575 行。
+22. 新增 `eco_concil_runtime/optional_analysis_support.py`。
+   - 承载 optional-analysis 共用 helper governance metadata、signal DB query、时间/空间过滤、artifact refs、lineage 与 board handoff helper。
+   - `eco_concil_runtime/optional_analysis_helpers.py` 继续 re-export 原 helper names。
+23. 新增 `eco_concil_runtime/optional_analysis_relations.py`。
+   - 承载 spatiotemporal relation cue construction 与 relation alternative review helper family。
+   - `run_detect_temporal_cooccurrence_cues`、`run_review_spatiotemporal_relation_alternatives` 继续从 `optional_analysis_helpers.py` 导出。
+24. 新增 `eco_concil_runtime/optional_analysis_environment_evidence.py`。
+   - 承载 environment evidence aggregation helper family。
+25. 新增 `eco_concil_runtime/optional_analysis_scope_review.py`。
+   - 承载 structured verification scope 与 fact-check evidence scope review helper family。
+26. 新增 `eco_concil_runtime/optional_analysis_research_issues.py`。
+   - 承载 discourse issue discovery、evidence lanes、research issue surface/views/map helper family。
+27. 新增 `eco_concil_runtime/optional_analysis_formal_public.py`。
+   - 承载 approved formal/public taxonomy labels、formal/public footprints、representation audit helper family。
+   - `optional_analysis_helpers.py` 已从约 2671 行下降到约 164 行。
+28. 新增 `eco_concil_runtime/analysis_object_common.py`、`analysis_signal_objects.py`、`analysis_issue_objects.py`、`analysis_verification_objects.py`、`analysis_relation_objects.py`。
+   - `analysis_objects.py` 保留 facade/re-export，当前约 49 行。
+   - signal/issue/verification/relation family 分别承载对应 canonical analysis object normalization。
+29. 新增 `eco_concil_runtime/council_objects_schema.py`、`council_object_payloads.py`、`council_object_rows.py`、`council_object_store.py`、`council_object_query.py`、`council_decision_traces.py`。
+   - `council_objects.py` 保留 plural facade/re-export，当前约 82 行。
+   - 不改变 council SQLite schema、append/store/query result shape 或 decision trace contract。
+30. 新增 `eco_concil_runtime/canonical_contract_types.py`、`canonical_signal_contracts.py`、`canonical_analysis_contracts.py`、`canonical_deliberation_contracts.py`、`canonical_runtime_contracts.py`、`canonical_reporting_contracts.py`、`canonical_contract_registry.py`。
+   - `canonical_contracts.py` 保留 facade/re-export，当前约 39 行。
+   - canonical definitions 按 plane 分组，registry 继续合并为 50 个 canonical contracts。
+31. 新增 `eco_concil_runtime/kernel/governance/transition_request_common.py`、`transition_request_payloads.py`、`transition_request_rows.py`、`transition_request_store.py`。
+   - `transition_requests.py` 保留 facade/re-export，当前约 59 行。
+   - transition kind/spec、payload、row conversion/write、store/load/approve/reject/commit/resolve 已分离。
+32. 新增 `eco_concil_runtime/kernel/governance/skill_approval_common.py`、`skill_approval_payloads.py`、`skill_approval_rows.py`、`skill_approval_store.py`。
+   - `skill_approvals.py` 保留 facade/re-export，当前约 59 行。
+   - skill approval request/approval/rejection/consumption 的 payload、row conversion/write、store/load/approve/reject/consume/resolve 已分离。
+33. 新增 `eco_concil_runtime/kernel/operator/operations_common.py`、`admission_policy.py`、`dead_letters.py`、`runtime_health.py`、`runbook.py`。
+   - `operator/operations.py` 保留 facade/re-export，当前约 43 行。
+   - admission policy、dead letter、runtime health 与 operator runbook 已分离。
+34. 新增 `eco_concil_runtime/kernel/execution/executor_common.py`、`executor_command_hints.py`、`executor_failures.py`。
+   - `execution/executor.py` 保留 `run_skill` 主流程，当前约 882 行。
+   - common hashing/time/error、command hints、structured failure/dead-letter extraction/health refresh helper 已分离；attempt loop 和 receipt/postflight 主流程后续视风险继续拆。
+35. 新增 `eco_concil_runtime/kernel/operator/runtime_surface_common.py`、`runtime_reporting_surfaces.py`、`runtime_investigation_surfaces.py`、`runtime_execution_surfaces.py`、`runtime_publication_surfaces.py`。
+   - `operator/runtime_state_surfaces.py` 保留 facade/re-export，当前约 39 行。
+   - runtime surface common helper、reporting gate enrichment、investigation wrappers、controller/gate/supervisor/orchestration wrappers、reporting publication wrappers 已分离。
+36. 新增 `eco_concil_runtime/kernel/planes/signal_normalizer_common.py`、`signal_plane_schema.py`、`signal_normalizer_metadata.py`、`signal_normalizer_store.py`、`signal_normalizer_finalize.py`。
+   - `planes/signal_plane_normalizer.py` 保留 facade/re-export，当前约 74 行。
+   - signal normalizer 的 common helper、schema migration/connect、taxonomy metadata enrichment、store/index write、streaming finalize 已分离。
+37. 新增 `eco_concil_runtime/kernel/execution/controller_artifacts.py`、`controller_planning_adapters.py`、`controller_transition_planning.py`。
+   - `execution/controller.py` 当前约 937 行。
+   - artifact path/state persistence、planning adapter wrappers、transition-executor planning 与 stage approval guard 已分离；controller 主执行循环仍保留在入口模块。
 
 当前已验证命令：
 
-1. `python3 tools/quality_gate.py syntax`，227 个 Python 文件通过，无重复字面量 dict key。
-2. `python3 -m unittest tests.test_module_decomposition_contracts`，7 tests 通过。
-3. `python3 -m unittest tests.test_runtime_kernel`，47 tests 通过。
-4. `python3 tools/quality_gate.py test module-decomposition runtime-governance reporting case-study`，89 tests 通过。
-5. `python3 tools/quality_gate.py full`，268 tests 通过。
-6. `git diff --check` 通过。
+1. `python3 tools/quality_gate.py syntax`，283 个 Python 文件通过，无重复字面量 dict key。
+2. `python3 -m unittest tests.test_module_decomposition_contracts tests.test_spatiotemporal_relation_taxonomy tests.test_canonical_contracts`，32 tests 通过。
+3. `python3 -m unittest tests.test_module_decomposition_contracts tests.test_council_query_surface tests.test_council_submission_workflow tests.test_canonical_contracts tests.test_reporting_query_surface`，26 tests 通过。
+4. `python3 -m unittest tests.test_module_decomposition_contracts tests.test_canonical_contracts tests.test_council_query_surface tests.test_reporting_query_surface tests.test_spatiotemporal_relation_taxonomy tests.test_optional_analysis_guardrails`，47 tests 通过。
+5. `python3 tools/quality_gate.py test module-decomposition runtime-governance reporting case-study`，89 tests 通过。
+6. `python3 tools/quality_gate.py test relation-taxonomy reporting module-decomposition optional-guardrails`，57 tests 通过。
+7. `python3 tools/quality_gate.py test module-decomposition runtime-governance reporting`，86 tests 通过。
+8. `python3 tools/quality_gate.py full`，268 tests 通过。
+9. `git diff --check` 通过。
+10. `python3 -m unittest tests.test_optional_analysis_guardrails tests.test_spatiotemporal_relation_taxonomy`，27 tests 通过。
+11. `python3 -m unittest tests.test_module_decomposition_contracts tests.test_runtime_kernel`，54 tests 通过。
+12. `python3 tools/quality_gate.py test module-decomposition runtime-governance reporting relation-taxonomy optional-guardrails`，113 tests 通过。
 
 ## 2. 拆分原则
 
@@ -216,7 +279,7 @@
 
 下一步目录重组时，优先把这些最新命名迁入更合适的包，而不是继续改名：
 
-1. `kernel/operator/runtime_state_surfaces.py` 可在后续 operator 视图拆分时改为 `kernel/operator/state_surfaces.py` 或 `kernel/operator/runtime_state_view.py`。
+1. `kernel/operator/runtime_state_surfaces.py` 当前保留原名；它负责读取/构造 runtime surface wrapper，不与 `kernel/operator/run_state_view.py` 的 operator-facing 汇总视图混淆。
 2. `kernel/governance/agent_entry_profile.py`、`kernel/governance/agent_entry_handoff.py` 已纳入 governance 包。
 3. `kernel/governance/fallback_agenda.py`、`kernel/governance/fallback_agenda_profile.py` 已纳入 governance 包。
 4. controller、executor、gate、supervisor 已纳入 `kernel/execution/`。
@@ -367,29 +430,27 @@
 
 目标模块：
 
-1. `eco_concil_runtime/optional_analysis_common.py`
+1. `eco_concil_runtime/optional_analysis_support.py`
    - JSON/path/text/hash/common helper。
    - helper metadata。
    - board handoff helper。
-2. `eco_concil_runtime/optional_analysis_signal_queries.py`
-   - signal DB connect/query。
-   - row-to-signal。
-   - evidence refs。
-3. `eco_concil_runtime/optional_analysis_environment_evidence.py`
+   - signal DB connect/query、row-to-signal、evidence refs。
+   - relation/time/space filter support。
+2. `eco_concil_runtime/optional_analysis_environment_evidence.py`
    - `run_aggregate_environment_evidence`
    - source/metric distribution。
-4. `eco_concil_runtime/optional_analysis_scope_review.py`
+3. `eco_concil_runtime/optional_analysis_scope_review.py`
    - fact-check evidence scope。
    - structured verification scope。
-5. `eco_concil_runtime/optional_analysis_research_issues.py`
+4. `eco_concil_runtime/optional_analysis_research_issues.py`
    - discourse issue discovery。
    - evidence lanes。
    - research issue surface/views/map。
-6. `eco_concil_runtime/optional_analysis_formal_public.py`
+5. `eco_concil_runtime/optional_analysis_formal_public.py`
    - approved taxonomy labels。
    - formal/public footprints。
    - representation audit cues。
-7. `eco_concil_runtime/optional_analysis_relations.py`
+6. `eco_concil_runtime/optional_analysis_relations.py`
    - temporal cooccurrence。
    - structured spatiotemporal relation cues。
    - relation alternative review。
@@ -405,57 +466,53 @@
 
 1. `eco_concil_runtime/kernel/cli.py`
    - 保留 `build_parser` 和 `main`。
+   - 继续 re-export `show_run_state`、`reporting_state_for_round` 等状态视图 public symbols。
    - 可继续作为 console script 入口。
 
-目标模块：
+已落地模块：
 
-1. `eco_concil_runtime/kernel/cli_parser.py`
-   - subcommand parser construction。
-   - shared arg helpers。
-2. `eco_concil_runtime/kernel/cli_runtime_commands.py`
-   - `init-run`
-   - `run-skill`
-   - `preflight-skill`
-   - admission/health/runbook/dead-letter/schema-status commands。
-3. `eco_concil_runtime/kernel/cli_control_commands.py`
-   - phase transition request/approve/reject。
-   - skill approval request/approve/reject。
-   - control object queries。
-4. `eco_concil_runtime/kernel/cli_council_commands.py`
-   - finding/discussion/review/evidence/report-section commands。
-   - council object queries。
-5. `eco_concil_runtime/kernel/cli_analysis_commands.py`
-   - analysis result set/item queries。
-   - relation query。
-   - canonical contracts list。
-6. `eco_concil_runtime/kernel/cli_reporting_commands.py`
-   - reporting object query。
-   - reporting exports。
-   - show reporting state。
-7. `eco_concil_runtime/kernel/cli_execution_commands.py`
-   - gate/apply。
-   - run/resume/restart governed execution。
-   - supervisor/controller execution commands。
-8. `eco_concil_runtime/kernel/cli_post_round_commands.py`
-   - close round。
-   - history bootstrap。
-   - benchmark fixture/manifest/compare/replay。
-9. `eco_concil_runtime/kernel/run_state_view.py`
+1. `eco_concil_runtime/kernel/operator/run_state_view.py`
    - `show_run_state`
    - operations state。
    - transition state。
    - benchmark/post-round/reporting/governed execution state composition。
-10. `eco_concil_runtime/kernel/operator_views.py`
    - governed execution operator view。
    - `reporting_operator_view`
    - `post_round_operator_view`
    - `benchmark_operator_view`
+2. `eco_concil_runtime/kernel/operator/cli_parser.py`
+   - subcommand parser construction。
+   - shared arg helpers。
+3. `eco_concil_runtime/kernel/operator/cli_runtime_commands.py`
+   - CLI JSON/output helper。
+   - `init-run`、`run-skill`、`preflight-skill`。
+   - admission/health/runbook/dead-letter/schema-status commands。
+
+后续候选模块：
+
+1. `eco_concil_runtime/kernel/governance/cli_approval_commands.py`
+   - transition request/approve/reject。
+   - skill approval request/approve/reject。
+2. `eco_concil_runtime/kernel/planes/cli_query_commands.py`
+   - analysis/council/reporting/control object query commands。
+   - canonical contracts list。
+3. `eco_concil_runtime/kernel/execution/cli_execution_commands.py`
+   - gate/apply。
+   - run/resume/restart governed execution。
+   - supervisor/controller execution commands。
+4. `eco_concil_runtime/kernel/reporting/cli_reporting_commands.py`
+   - reporting exports。
+   - show reporting state。
+5. `eco_concil_runtime/kernel/archive/cli_archive_commands.py`
+   - close round。
+   - history bootstrap。
+   - benchmark fixture/manifest/compare/replay。
 
 命名说明：
 
-1. `cli_*_commands.py` 保持现有 `kernel/cli.py` 的命令语义。
+1. 后续 CLI command handler 不再放入 `kernel/` 根目录，优先放入命令所属的浅层包。
 2. CLI 执行链命名以 governed execution 为准，不再保留旧 phase 命令。
-3. 中长期可把 command handlers 迁入 `kernel/operator/`、`kernel/governance/`、`kernel/execution/` 子包，`kernel/cli.py` 仍作为入口 facade。
+3. `cli_*_commands.py` 保持现有 `kernel/cli.py` 的命令语义，`kernel/cli.py` 仍作为入口 facade。
 
 ### 4.5 Council Objects
 
@@ -718,13 +775,15 @@
 2. `python3 -m unittest tests.test_spatiotemporal_relation_taxonomy`
 3. `python3 tools/quality_gate.py full`
 
+当前状态：已完成。`optional_analysis_support.py` 已承载共用 helper/signal/lineage 支撑逻辑；`optional_analysis_environment_evidence.py`、`optional_analysis_scope_review.py`、`optional_analysis_research_issues.py`、`optional_analysis_formal_public.py`、`optional_analysis_relations.py` 已按 helper family 承载实现；`optional_analysis_helpers.py` 保留 facade/re-export。
+
 ### P5：CLI 和 Operator Views
 
 目标：
 
 1. 抽 parser 与 command handlers。
-2. 抽 `show_run_state` 到 `run_state_view.py`。
-3. 抽 operator views。
+2. 抽 `show_run_state` 到 `kernel/operator/run_state_view.py`。
+3. 抽 operator views 到同一状态视图模块，避免为 view 逻辑继续增加细碎文件。
 4. 保留 `kernel/cli.py main`。
 
 验收：
@@ -732,6 +791,8 @@
 1. CLI smoke tests 覆盖 `--help`、`show-run-state`、`show-schema-status`、`query-*`、approval commands。
 2. `python3 tools/quality_gate.py test runtime-governance reporting schema-migration`
 3. `python3 tools/quality_gate.py full`
+
+当前状态：已完成第三块代码交付。`kernel/operator/run_state_view.py` 已承载运行状态与 operator view；`kernel/operator/cli_parser.py` 已承载 parser construction 与 shared arg helpers；`kernel/operator/cli_runtime_commands.py` 已承载 runtime command handlers；`kernel/cli.py` 保留 main 和 public import。
 
 ### P6：Council / Analysis Object Registries
 
@@ -741,11 +802,27 @@
 2. 拆 `analysis_objects.py`。
 3. 拆 `canonical_contracts.py` 为 plane-scoped definitions + registry。
 
+当前状态：已完成。
+
+当前结果：
+
+1. `analysis_objects.py` 已收缩为 facade；`analysis_object_common.py` 承载共用 constants/helper/provenance/evidence refs/confidence helpers；`analysis_signal_objects.py`、`analysis_issue_objects.py`、`analysis_verification_objects.py`、`analysis_relation_objects.py` 按 canonical analysis object family 承载 normalization。
+2. `council_objects.py` 已收缩为 plural facade；schema/connect、payload normalization、row conversion/write、append/store、query surface 与 decision trace family 已分别落入 `council_objects_schema.py`、`council_object_payloads.py`、`council_object_rows.py`、`council_object_store.py`、`council_object_query.py`、`council_decision_traces.py`。
+3. `canonical_contracts.py` 已收缩为 facade；`canonical_contract_types.py` 承载 dataclass、plane constants 与 `_contract` helper；signal/analysis/deliberation/runtime/reporting contract definitions 已按 plane 拆分；`canonical_contract_registry.py` 继续提供 merged registry、lookup、plane query 与 payload validation。
+4. 本阶段不改变 canonical object 字段、contract schema_version、council DB schema、append/store/query result shape。
+
 验收：
 
 1. `python3 -m unittest tests.test_canonical_contracts tests.test_council_query_surface tests.test_reporting_query_surface`
 2. `python3 tools/quality_gate.py test relation-taxonomy reporting`
 3. `python3 tools/quality_gate.py full`
+
+本阶段实测：
+
+1. `python3 tools/quality_gate.py syntax`，254 个 Python 文件通过。
+2. `python3 -m unittest tests.test_module_decomposition_contracts tests.test_canonical_contracts tests.test_council_query_surface tests.test_reporting_query_surface tests.test_spatiotemporal_relation_taxonomy tests.test_optional_analysis_guardrails`，47 tests 通过。
+3. `python3 tools/quality_gate.py test relation-taxonomy reporting module-decomposition optional-guardrails`，57 tests 通过。
+4. `python3 tools/quality_gate.py full`，268 tests 通过。
 
 ### P7：Runtime Governance 支撑模块
 
@@ -755,11 +832,34 @@
 2. 拆 operations/executor。
 3. 保留原模块 facade。
 
+当前状态：第二轮已完成，controller/executor 主循环未继续硬拆。
+
+当前结果：
+
+1. `transition_requests.py` 已收缩为 facade；common、payloads、rows、store 分别承载 transition kind/spec、canonical payload、row conversion/write、store/load/approve/reject/commit/resolve。
+2. `skill_approvals.py` 已收缩为 facade；common、payloads、rows、store 分别承载 approval constants/policy/id、canonical payload、row conversion/write、store/load/approve/reject/consume/resolve。
+3. `operator/operations.py` 已收缩为 facade；admission policy、dead letters、runtime health、operator runbook 和 common helper 已分离。
+4. `execution/executor.py` 已抽出 common、command hints 与 failure helpers；`run_skill` 主流程仍保留在 executor 入口，后续若继续拆，应以 attempt loop、receipt/postflight、skill approval consumption 为边界，不按行数拆。
+5. `operator/runtime_state_surfaces.py` 已收缩为 facade；runtime surface common/reporting/investigation/execution/publication wrappers 已按 operator-facing surface 边界拆分。
+6. `planes/signal_plane_normalizer.py` 已收缩为 facade；schema、metadata enrichment、store/index、finalize streaming 已按 signal plane normalize pipeline 边界拆分。
+7. `execution/controller.py` 已抽出 artifact/state persistence、planning adapters、transition-executor planning 与 stage approval guard；主执行循环仍留在 controller 入口。
+8. 本阶段不改变 approval status、transition kind、runtime admission decision、dead letter payload、health surface、runbook markdown、signal normalized row/index shape 或 skill execution result shape。
+
 验收：
 
 1. `python3 tools/quality_gate.py test runtime-governance`
 2. `python3 tools/quality_gate.py test runtime-governance reporting`
 3. `python3 tools/quality_gate.py full`
+
+本阶段当前实测：
+
+1. `python3 tools/quality_gate.py syntax`，283 个 Python 文件通过。
+2. `python3 -m unittest tests.test_module_decomposition_contracts`，7 tests 通过。
+3. `python3 tools/quality_gate.py test module-decomposition runtime-governance reporting`，86 tests 通过。
+4. `python3 tools/quality_gate.py full`，268 tests 通过。
+5. `python3 -m unittest tests.test_optional_analysis_guardrails tests.test_spatiotemporal_relation_taxonomy`，27 tests 通过。
+6. `python3 -m unittest tests.test_module_decomposition_contracts tests.test_runtime_kernel`，54 tests 通过。
+7. `python3 tools/quality_gate.py test module-decomposition runtime-governance reporting relation-taxonomy optional-guardrails`，113 tests 通过。
 
 ### P8：Benchmark / Post-round
 

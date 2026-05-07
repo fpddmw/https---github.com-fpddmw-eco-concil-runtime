@@ -394,7 +394,7 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
-            from eco_council_runtime.council_objects import store_readiness_opinion_records
+            from eco_council_runtime.objects.council import store_readiness_opinion_records
             from eco_council_runtime.kernel.governance.agent_entry import materialize_agent_entry_gate
             from eco_council_runtime.kernel.governance.agent_entry_profile import (
                 default_agent_entry_profile,

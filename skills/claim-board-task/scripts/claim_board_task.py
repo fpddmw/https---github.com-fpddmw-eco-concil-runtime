@@ -27,7 +27,7 @@ from eco_council_runtime.board_proposal_support import (  # noqa: E402
     resolved_task_id_from_proposal,
     select_council_proposal,
 )
-from eco_council_runtime.canonical_contracts import (  # noqa: E402
+from eco_council_runtime.contracts import (  # noqa: E402
     validate_canonical_payload,
 )
 from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402

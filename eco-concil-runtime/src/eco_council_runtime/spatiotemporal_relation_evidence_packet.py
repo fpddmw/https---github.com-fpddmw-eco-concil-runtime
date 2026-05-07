@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.council_objects import (
+from eco_council_runtime.objects.council import (
     append_evidence_bundle_record,
     append_finding_record,
     query_council_objects,

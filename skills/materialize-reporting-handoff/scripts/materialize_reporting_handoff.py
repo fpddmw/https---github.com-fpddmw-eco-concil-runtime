@@ -20,7 +20,7 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.reporting.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
-from eco_council_runtime.council_objects import query_council_objects  # noqa: E402
+from eco_council_runtime.objects.council import query_council_objects  # noqa: E402
 from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_reporting_handoff_record,
 )

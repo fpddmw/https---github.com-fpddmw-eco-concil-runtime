@@ -9,7 +9,7 @@ RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.canonical_contracts import (  # noqa: E402
+from eco_council_runtime.contracts import (  # noqa: E402
     PLANE_ANALYSIS,
     PLANE_DELIBERATION,
     PLANE_REPORTING,

@@ -12,7 +12,7 @@ RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.council_objects import (  # noqa: E402
+from eco_council_runtime.objects.council import (  # noqa: E402
     store_council_proposal_records,
     store_decision_trace_records,
     store_readiness_opinion_records,

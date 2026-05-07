@@ -21,7 +21,7 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     load_round_snapshot,
     store_orchestration_plan_record,
 )
-from eco_council_runtime.council_objects import query_council_objects  # noqa: E402
+from eco_council_runtime.objects.council import query_council_objects  # noqa: E402
 from eco_council_runtime.kernel.execution.governed_council_execution import (  # noqa: E402
     COUNCIL_EXECUTION_MODE_FALLBACK_ONLY,
     COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE,

@@ -51,7 +51,7 @@
    - 已清理 runtime/reporting 链路中暴露出的重复 `report_basis_*`、`report_basis_gate*` 与 reporting audit 字段。
 4. 模块拆分保护网
    - 已新增 `module-decomposition` targeted suite。
-   - 已覆盖大模块 facade public imports、deliberation schema/rows/board/action/reporting/runtime split modules、analysis schema/contracts/support/results/queries/context split modules、关键 CLI help smoke 与 module size report。
+   - 已覆盖大模块 facade public imports、deliberation schema/rows/board/action/reporting/runtime split modules、analysis schema/contracts/support/results/queries/context split modules、optional-analysis helper family split modules、operator run state view、operator CLI parser、operator runtime command handlers、analysis/council/canonical object registry split modules、runtime governance transition/skill approval split modules、operator operations split modules、executor support split modules、runtime state surface split modules、signal normalizer split modules、controller support split modules、关键 CLI help smoke 与 module size report。
    - module size report 不再把 `skills/` 下脚本按行数列为拆分压力；skill 拆分以原子能力边界为准。
    - module size report 已跟随 runtime/kernel 浅层包结构迁移，固定 `planes/`、`governance/`、`execution/`、`operator/`、`reporting/`、`archive/`、`source_queue/` 下的最新路径。
    - 已纳入默认 targeted gates 与 CI targeted 命令。
@@ -65,7 +65,7 @@
 
 当前实测状态：
 
-1. `syntax` 通过，覆盖 227 个 Python 文件，并确认无重复字面量 dict key。
+1. `syntax` 通过，覆盖 283 个 Python 文件，并确认无重复字面量 dict key。
 2. `db-recovery` targeted gate 通过，6 tests。
 3. `schema-migration` targeted gate 通过，3 tests。
 4. `module-decomposition` targeted gate 通过，7 tests。
@@ -76,7 +76,8 @@
 9. `runtime-governance reporting` targeted gate 通过，79 tests。
 10. `module-decomposition runtime-governance reporting case-study` targeted gate 通过，89 tests。
 11. 默认 targeted gates 通过，125 tests；当前耗时约 1 分 53 秒。
-12. `full` gate 通过，268 tests；当前耗时约 3 分 54 秒，后续应继续拆更快的 targeted jobs。
+12. `full` gate 通过，268 tests；P7 第二轮 runtime surface / signal normalizer / controller support 拆分后当前耗时约 8 分 47 秒，后续应继续拆更快的 targeted jobs。
+13. `module-decomposition runtime-governance reporting relation-taxonomy optional-guardrails` targeted gate 通过，113 tests；覆盖 P7 第二轮 runtime surface、signal normalizer 与 controller support 拆分。
 
 当前未闭环项：
 

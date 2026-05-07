@@ -2843,9 +2843,9 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
 
             stdout = io.StringIO()
             with (
-                mock.patch("eco_council_runtime.kernel.cli.init_run", return_value={"status": "completed"}),
+                mock.patch("eco_council_runtime.kernel.operator.cli_runtime_commands.init_run", return_value={"status": "completed"}),
                 mock.patch(
-                    "eco_council_runtime.kernel.cli.run_skill",
+                    "eco_council_runtime.kernel.operator.cli_runtime_commands.run_skill",
                     return_value={"status": "completed", "summary": {"skill_name": "post-board-note"}},
                 ) as run_skill_mock,
                 redirect_stdout(stdout),
@@ -3172,7 +3172,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             stdout = io.StringIO()
             with (
                 mock.patch(
-                    "eco_council_runtime.kernel.cli.materialize_admission_policy",
+                    "eco_council_runtime.kernel.operator.cli_runtime_commands.materialize_admission_policy",
                     return_value={"schema_version": "runtime-admission-policy-v1", "permission_profile": "restricted"},
                 ) as policy_mock,
                 redirect_stdout(stdout),
@@ -3207,7 +3207,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             stdout = io.StringIO()
             with (
                 mock.patch(
-                    "eco_council_runtime.kernel.cli.materialize_runtime_health",
+                    "eco_council_runtime.kernel.operator.cli_runtime_commands.materialize_runtime_health",
                     return_value={"schema_version": "runtime-health-v1", "alert_status": "green"},
                 ) as health_mock,
                 redirect_stdout(stdout),
@@ -3231,7 +3231,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             stdout = io.StringIO()
             with (
                 mock.patch(
-                    "eco_council_runtime.kernel.cli.materialize_operator_runbook",
+                    "eco_council_runtime.kernel.operator.cli_runtime_commands.materialize_operator_runbook",
                     return_value=str(run_dir / "runtime" / "operator_runbook.md"),
                 ) as runbook_mock,
                 redirect_stdout(stdout),
@@ -3255,7 +3255,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             stdout = io.StringIO()
             with (
                 mock.patch(
-                    "eco_council_runtime.kernel.cli.load_dead_letters",
+                    "eco_council_runtime.kernel.operator.cli_runtime_commands.load_dead_letters",
                     return_value=[{"dead_letter_id": "deadletter-1234567890abcdef1234"}],
                 ) as dead_letters_mock,
                 redirect_stdout(stdout),

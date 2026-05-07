@@ -17,11 +17,11 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.analysis_objects import (  # noqa: E402
+from eco_council_runtime.objects.analysis import (  # noqa: E402
     HELPER_DECISION_SOURCE_APPROVED_VIEW,
     helper_governance_metadata,
 )
-from eco_council_runtime.council_objects import query_council_objects  # noqa: E402
+from eco_council_runtime.objects.council import query_council_objects  # noqa: E402
 from eco_council_runtime.reporting_objects import query_reporting_objects  # noqa: E402
 
 

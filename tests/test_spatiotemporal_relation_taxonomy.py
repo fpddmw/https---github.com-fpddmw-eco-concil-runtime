@@ -22,10 +22,10 @@ RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.analysis_objects import (  # noqa: E402
+from eco_council_runtime.objects.analysis import (  # noqa: E402
     normalize_spatiotemporal_relation_cue_payload,
 )
-from eco_council_runtime.canonical_contracts import (  # noqa: E402
+from eco_council_runtime.contracts import (  # noqa: E402
     ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
     PLANE_ANALYSIS,
     canonical_contract,

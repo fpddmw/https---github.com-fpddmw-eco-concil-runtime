@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.canonical_contracts import canonical_contract, validate_canonical_payload
+from eco_council_runtime.contracts import canonical_contract, validate_canonical_payload
 from eco_council_runtime.kernel.execution.governed_execution_action_semantics import maybe_bool
 from eco_council_runtime.reporting_status import (
     normalize_reporting_handoff_status,

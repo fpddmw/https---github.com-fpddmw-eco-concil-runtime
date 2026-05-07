@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.canonical_contracts import validate_canonical_payload
+from eco_council_runtime.contracts import validate_canonical_payload
 from eco_council_runtime.kernel.planes.analysis_plane_contracts import (
     analysis_config,
     analysis_kind_governance,
