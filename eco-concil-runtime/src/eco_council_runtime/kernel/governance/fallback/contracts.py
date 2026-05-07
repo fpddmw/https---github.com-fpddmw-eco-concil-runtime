@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from eco_council_runtime.kernel.governance.fallback_common import (
+from eco_council_runtime.kernel.governance.fallback.common import (
     ARTIFACT_FALLBACK_PREFIXES,
     EXPLICIT_D1_INPUT_KEYS,
     OBSERVED_INPUT_PREFIXES,

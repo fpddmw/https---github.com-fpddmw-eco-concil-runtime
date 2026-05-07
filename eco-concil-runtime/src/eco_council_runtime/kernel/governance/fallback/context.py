@@ -4,12 +4,12 @@ from pathlib import Path
 from typing import Any
 
 from eco_council_runtime.kernel.planes.deliberation_plane import load_round_snapshot
-from eco_council_runtime.kernel.governance.fallback_agenda import (
+from eco_council_runtime.kernel.governance.fallback.agenda import (
     board_snapshot,
     build_actions,
     controversy_context_counts,
 )
-from eco_council_runtime.kernel.governance.fallback_common import (
+from eco_council_runtime.kernel.governance.fallback.common import (
     load_json_if_exists,
     load_text_if_exists,
     maybe_text,
@@ -17,7 +17,7 @@ from eco_council_runtime.kernel.governance.fallback_common import (
     optional_context_present,
     resolve_path,
 )
-from eco_council_runtime.kernel.governance.fallback_contracts import d1_contract_fields
+from eco_council_runtime.kernel.governance.fallback.contracts import d1_contract_fields
 
 
 def primary_analysis_sync(

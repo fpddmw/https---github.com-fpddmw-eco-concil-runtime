@@ -65,7 +65,7 @@
 
 当前实测状态：
 
-1. `syntax` 通过，覆盖 284 个 Python 文件，并确认无重复字面量 dict key。
+1. `syntax` 通过，覆盖 285 个 Python 文件，并确认无重复字面量 dict key。
 2. `db-recovery` targeted gate 通过，6 tests。
 3. `schema-migration` targeted gate 通过，3 tests。
 4. `module-decomposition` targeted gate 通过，7 tests。
@@ -76,8 +76,9 @@
 9. `runtime-governance reporting` targeted gate 通过，79 tests。
 10. `module-decomposition runtime-governance reporting case-study` targeted gate 通过，89 tests。
 11. 默认 targeted gates 通过，125 tests；当前耗时约 1 分 53 秒。
-12. `full` gate 通过，268 tests；P7.6 kernel package encapsulation 第一轮后当前耗时约 8 分 23 秒。
+12. `full` gate 通过，268 tests；P7.7 governance package encapsulation 后当前耗时约 7 分 58 秒。
 13. `module-decomposition runtime-governance reporting relation-taxonomy optional-guardrails` targeted gate 通过，113 tests；覆盖 P7 第二轮 runtime surface、signal normalizer、controller support、P7.5 package encapsulation 与 P7.6 kernel package encapsulation 第一轮。
+14. `module-decomposition runtime-governance reporting` targeted gate 通过，86 tests；覆盖 P7.7 governance package encapsulation。
 
 当前未闭环项：
 

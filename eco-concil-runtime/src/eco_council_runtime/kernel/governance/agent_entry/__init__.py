@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.kernel.governance.agent_entry_handoff import EntryChainBuilder, HardGateCommandBuilder
+from eco_council_runtime.kernel.governance.agent_entry.handoff import EntryChainBuilder, HardGateCommandBuilder
 from eco_council_runtime.kernel.governance.role_contracts import normalize_actor_role
 from eco_council_runtime.kernel.planes.analysis_plane import query_analysis_result_sets
 from eco_council_runtime.kernel.planes.deliberation_plane import load_round_snapshot

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from eco_council_runtime.kernel.governance.fallback_common import maybe_text
+from eco_council_runtime.kernel.governance.fallback.common import maybe_text
 
 CLAIM_TARGET_KINDS = {"claim", "claim-candidate", "claim-cluster"}
 HYPOTHESIS_TARGET_KINDS = {"hypothesis", "hypothesis-card"}

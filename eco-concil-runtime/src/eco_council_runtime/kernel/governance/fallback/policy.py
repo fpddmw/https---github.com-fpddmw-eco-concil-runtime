@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from eco_council_runtime.kernel.governance.fallback_common import (
+from eco_council_runtime.kernel.governance.fallback.common import (
     maybe_number,
     maybe_text,
     priority_from_score,

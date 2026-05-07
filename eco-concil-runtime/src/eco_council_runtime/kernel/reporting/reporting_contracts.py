@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from eco_council_runtime.kernel.governance.fallback_common import maybe_text  # noqa: F401
-from eco_council_runtime.kernel.governance.fallback_contracts import (  # noqa: F401
+from eco_council_runtime.kernel.governance.fallback.common import maybe_text  # noqa: F401
+from eco_council_runtime.kernel.governance.fallback.contracts import (  # noqa: F401
     d1_contract_fields,
     normalize_d1_observed_inputs,
 )

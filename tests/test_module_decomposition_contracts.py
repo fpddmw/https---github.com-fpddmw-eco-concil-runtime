@@ -300,48 +300,48 @@ SPLIT_MODULE_PUBLIC_SYMBOLS = {
         "canonical_contracts_for_plane",
         "validate_canonical_payload",
     ),
-    "eco_council_runtime.kernel.governance.transition_request_common": (
+    "eco_council_runtime.kernel.governance.transition_requests.common": (
         "TRANSITION_KIND_CLOSE_ROUND",
         "TRANSITION_KIND_FREEZE_REPORT_BASIS",
         "TRANSITION_KIND_OPEN_INVESTIGATION_ROUND",
         "normalize_transition_kind",
         "transition_kind_spec",
     ),
-    "eco_council_runtime.kernel.governance.transition_request_payloads": (
+    "eco_council_runtime.kernel.governance.transition_requests.payloads": (
         "transition_approval_payload",
         "transition_rejection_payload",
         "transition_request_payload",
     ),
-    "eco_council_runtime.kernel.governance.transition_request_rows": (
+    "eco_council_runtime.kernel.governance.transition_requests.rows": (
         "transition_approval_row_from_payload",
         "transition_request_row_from_payload",
         "write_transition_request_row",
     ),
-    "eco_council_runtime.kernel.governance.transition_request_store": (
+    "eco_council_runtime.kernel.governance.transition_requests.store": (
         "approve_transition_request",
         "load_transition_request",
         "mark_transition_request_committed",
         "resolve_transition_request_for_execution",
         "store_transition_request",
     ),
-    "eco_council_runtime.kernel.governance.skill_approval_common": (
+    "eco_council_runtime.kernel.governance.skill_approvals.common": (
         "OBJECT_KIND_SKILL_APPROVAL_REQUEST",
         "REQUEST_STATUS_APPROVED",
         "REQUEST_STATUS_CONSUMED",
         "REQUEST_STATUS_PENDING",
     ),
-    "eco_council_runtime.kernel.governance.skill_approval_payloads": (
+    "eco_council_runtime.kernel.governance.skill_approvals.payloads": (
         "skill_approval_consumption_payload",
         "skill_approval_payload",
         "skill_approval_rejection_payload",
         "skill_approval_request_payload",
     ),
-    "eco_council_runtime.kernel.governance.skill_approval_rows": (
+    "eco_council_runtime.kernel.governance.skill_approvals.rows": (
         "skill_approval_request_row_from_payload",
         "skill_approval_row_from_payload",
         "write_skill_approval_request_row",
     ),
-    "eco_council_runtime.kernel.governance.skill_approval_store": (
+    "eco_council_runtime.kernel.governance.skill_approvals.store": (
         "approve_skill_approval_request",
         "load_skill_approval_request",
         "mark_skill_approval_consumed",

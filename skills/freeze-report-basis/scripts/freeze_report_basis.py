@@ -17,7 +17,7 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.governance.fallback_context import load_d1_shared_context  # noqa: E402
+from eco_council_runtime.kernel.governance.fallback.context import load_d1_shared_context  # noqa: E402
 from eco_council_runtime.kernel.governance.report_basis_resolution import (  # noqa: E402
     load_council_proposals,
     load_council_readiness_opinions,

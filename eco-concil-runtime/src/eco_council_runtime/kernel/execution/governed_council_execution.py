@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from eco_council_runtime.kernel.governance.fallback_common import maybe_text
+from eco_council_runtime.kernel.governance.fallback.common import maybe_text
 from eco_council_runtime.kernel.governance.proposal_actions import action_signature
 
 COUNCIL_EXECUTION_MODE_PROPOSAL_AUTHORITATIVE = "proposal-authoritative"

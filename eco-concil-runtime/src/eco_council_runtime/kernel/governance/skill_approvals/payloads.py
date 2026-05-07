@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from eco_council_runtime.contracts import canonical_contract, validate_canonical_payload
-from eco_council_runtime.kernel.governance.skill_approval_common import (
+from eco_council_runtime.kernel.governance.skill_approvals.common import (
     CONSUMPTION_STATUS_CONSUMED,
     DECISION_STATUS_APPROVED,
     DECISION_STATUS_REJECTED,

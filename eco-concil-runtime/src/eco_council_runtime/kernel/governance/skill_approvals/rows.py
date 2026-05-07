@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from eco_council_runtime.kernel.governance.skill_approval_common import json_text, maybe_text
+from eco_council_runtime.kernel.governance.skill_approvals.common import json_text, maybe_text
 
 def skill_approval_request_row_from_payload(
     payload: dict[str, Any],

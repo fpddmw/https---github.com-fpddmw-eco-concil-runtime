@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from eco_council_runtime.kernel.governance.skill_approval_common import *
-from eco_council_runtime.kernel.governance.skill_approval_payloads import *
-from eco_council_runtime.kernel.governance.skill_approval_rows import *
-from eco_council_runtime.kernel.governance.skill_approval_store import *
+from eco_council_runtime.kernel.governance.skill_approvals.common import *
+from eco_council_runtime.kernel.governance.skill_approvals.payloads import *
+from eco_council_runtime.kernel.governance.skill_approvals.rows import *
+from eco_council_runtime.kernel.governance.skill_approvals.store import *
 
 __all__ = (
     "OBJECT_KIND_SKILL_APPROVAL_REQUEST",

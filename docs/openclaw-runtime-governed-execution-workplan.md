@@ -38,10 +38,10 @@
 
 已落地 runtime-governed execution 的核心代码块：
 
-1. `eco-concil-runtime/src/eco_council_runtime/kernel/governance.py`
+1. `eco-concil-runtime/src/eco_council_runtime/kernel/governance/runtime_governance.py`
    - `preflight-skill` 现在对 `optional-analysis` 与 `reporting` 层中声明 `requires_operator_approval=True` 的 skill 强制要求 `--skill-approval-request-id`。
    - 已批准 request 会解除 strict 模式中的 `operator-approval-required` 阻断；未批准、已消费、actor 不匹配或参数作用域不匹配仍会阻断。
-2. `eco-concil-runtime/src/eco_council_runtime/kernel/governance/skill_approvals.py`
+2. `eco-concil-runtime/src/eco_council_runtime/kernel/governance/skill_approvals/__init__.py`
    - skill approval request 不再限于 optional-analysis，现支持 reporting draft/publish/finalize 链路。
    - state-transition skill 不走 skill approval；`freeze-report-basis`、`open-investigation-round` 等仍应通过 phase transition request/approval。
    - 如果 request 写入了 `requested_skill_args`，执行时必须匹配同一组 skill args，避免复用审批执行另一个参数变体。
@@ -61,7 +61,7 @@
    - 覆盖同一 receipt payload 重放时 `receipt_write.write_status=unchanged`。
    - 覆盖同一 receipt id 不同 payload hash 的冲突阻断、dead letter 和 operator 可见状态。
    - 覆盖 transition request 首次提交、同对象重放和不同对象重定向失败。
-6. `eco-concil-runtime/src/eco_council_runtime/kernel/governance/transition_requests.py`
+6. `eco-concil-runtime/src/eco_council_runtime/kernel/governance/transition_requests/__init__.py`
    - `mark_transition_request_committed` 现在要求 committed object kind/id。
    - 首次提交返回 `commit_status=committed`。
    - 同一 request 重放到同一 object 返回 `commit_status=already-committed`。
@@ -87,7 +87,7 @@
 
 当前未闭环项：
 
-1. 真实案例评测命令序列仍需改成优先通过 `run-skill`，direct scripts 只作为 dev/debug 兼容。
+1. 真实案例评测命令序列仍需改成优先通过 `run-skill`，direct scripts 只作为 dev/debug fallback。
 2. runtime lock 与 receipt conflict 已进入 operator surface；后续还需决定是否增加 operator 手工解除 stale lock 的显式命令。
 
 当前实测状态：
@@ -101,7 +101,7 @@
 
 1. 梳理正式入口、debug 入口和测试入口。
 2. 标注哪些 skill 必须 approval-gated。
-3. 标注哪些命令可继续直接运行但只作为开发兼容。
+3. 标注哪些命令可继续直接运行但只作为开发 fallback。
 
 验收：
 

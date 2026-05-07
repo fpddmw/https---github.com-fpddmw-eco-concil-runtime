@@ -24,15 +24,15 @@ from eco_council_runtime.deliberation_target_semantics import (  # noqa: E402
     normalized_deliberation_target,
     source_proposal_id_from_payload,
 )
-from eco_council_runtime.kernel.governance.fallback_common import (  # noqa: E402
+from eco_council_runtime.kernel.governance.fallback.common import (  # noqa: E402
     maybe_text,
     resolve_path,
     unique_texts,
 )
-from eco_council_runtime.kernel.governance.fallback_context import (  # noqa: E402
+from eco_council_runtime.kernel.governance.fallback.context import (  # noqa: E402
     load_ranked_actions_context,
 )
-from eco_council_runtime.kernel.governance.fallback_contracts import (  # noqa: E402
+from eco_council_runtime.kernel.governance.fallback.contracts import (  # noqa: E402
     d1_contract_fields_from_payload,
 )
 from eco_council_runtime.kernel.execution.governed_council_execution import (  # noqa: E402

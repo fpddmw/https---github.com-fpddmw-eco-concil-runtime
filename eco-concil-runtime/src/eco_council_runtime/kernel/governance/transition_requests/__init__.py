@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from eco_council_runtime.kernel.governance.transition_request_common import *
-from eco_council_runtime.kernel.governance.transition_request_payloads import *
-from eco_council_runtime.kernel.governance.transition_request_rows import *
-from eco_council_runtime.kernel.governance.transition_request_store import *
+from eco_council_runtime.kernel.governance.transition_requests.common import *
+from eco_council_runtime.kernel.governance.transition_requests.payloads import *
+from eco_council_runtime.kernel.governance.transition_requests.rows import *
+from eco_council_runtime.kernel.governance.transition_requests.store import *
 
 __all__ = (
     "OBJECT_KIND_TRANSITION_REQUEST",

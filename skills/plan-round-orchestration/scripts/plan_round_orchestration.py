@@ -33,7 +33,7 @@ from eco_council_runtime.kernel.execution.governed_council_execution import (  #
 from eco_council_runtime.kernel.execution.governed_execution_action_semantics import (  # noqa: E402
     action_is_readiness_blocker,
 )
-from eco_council_runtime.kernel.governance.fallback_context import load_d1_shared_context  # noqa: E402
+from eco_council_runtime.kernel.governance.fallback.context import load_d1_shared_context  # noqa: E402
 from eco_council_runtime.kernel.governance.proposal_actions import (  # noqa: E402
     action_from_council_proposal,
     proposal_drives_governed_execution_action_queue,

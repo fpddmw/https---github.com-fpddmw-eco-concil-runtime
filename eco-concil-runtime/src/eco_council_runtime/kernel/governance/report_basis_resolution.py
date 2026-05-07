@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from eco_council_runtime.objects.council import query_council_objects
-from eco_council_runtime.kernel.governance.fallback_common import maybe_text, unique_texts
+from eco_council_runtime.kernel.governance.fallback.common import maybe_text, unique_texts
 from eco_council_runtime.kernel.governance.proposal_actions import proposal_target
 
 REPORT_BASIS_PROPOSAL_DISPOSITION_SUPPORT = "support"

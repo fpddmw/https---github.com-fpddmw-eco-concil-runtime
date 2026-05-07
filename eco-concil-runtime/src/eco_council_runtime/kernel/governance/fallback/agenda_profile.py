@@ -4,7 +4,7 @@ from typing import Any
 from typing import Callable
 
 from eco_council_runtime.deliberation_target_semantics import normalized_deliberation_target
-from eco_council_runtime.kernel.governance.fallback_common import (
+from eco_council_runtime.kernel.governance.fallback.common import (
     grouped_by_issue_label,
     indexed_by_claim_id,
     issue_label_for_item,
@@ -15,7 +15,7 @@ from eco_council_runtime.kernel.governance.fallback_common import (
     unique_texts,
     weakest_coverage_for_claim_ids,
 )
-from eco_council_runtime.kernel.governance.fallback_policy import (
+from eco_council_runtime.kernel.governance.fallback.policy import (
     coverage_policy,
     fallback_policy_annotation,
     formal_public_link_policy,

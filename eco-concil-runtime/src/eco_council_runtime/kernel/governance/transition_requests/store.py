@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.kernel.governance.transition_request_common import (
+from eco_council_runtime.kernel.governance.transition_requests.common import (
     DECISION_STATUS_APPROVED,
     DECISION_STATUS_REJECTED,
     REQUEST_STATUS_APPROVED,
@@ -23,12 +23,12 @@ from eco_council_runtime.kernel.governance.transition_request_common import (
     utc_now_iso,
 )
 from eco_council_runtime.kernel.planes.deliberation_plane import payload_from_db_row
-from eco_council_runtime.kernel.governance.transition_request_payloads import (
+from eco_council_runtime.kernel.governance.transition_requests.payloads import (
     transition_approval_payload,
     transition_rejection_payload,
     transition_request_payload,
 )
-from eco_council_runtime.kernel.governance.transition_request_rows import (
+from eco_council_runtime.kernel.governance.transition_requests.rows import (
     transition_approval_row_from_payload,
     transition_rejection_row_from_payload,
     transition_request_row_from_payload,

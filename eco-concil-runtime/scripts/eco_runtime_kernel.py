@@ -10,10 +10,10 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from eco_council_runtime.kernel.cli import main
-from eco_council_runtime.kernel.governance.agent_entry_profile import (
+from eco_council_runtime.kernel.governance.agent_entry.profile import (
     default_agent_entry_profile,
 )
-from eco_council_runtime.kernel.governance.agent_entry_handoff import (
+from eco_council_runtime.kernel.governance.agent_entry.handoff import (
     default_agent_entry_chain,
     default_agent_entry_hard_gate_commands,
 )

@@ -18,7 +18,7 @@ from ..reporting_objects import (
     store_report_section_draft_record,
 )
 from ..reporting_exports import materialize_reporting_exports
-from eco_council_runtime.kernel.governance.agent_entry_handoff import EntryChainBuilder, HardGateCommandBuilder
+from eco_council_runtime.kernel.governance.agent_entry.handoff import EntryChainBuilder, HardGateCommandBuilder
 from eco_council_runtime.kernel.planes.analysis_plane import (
     query_analysis_result_items,
     query_analysis_result_sets,

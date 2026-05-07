@@ -396,10 +396,10 @@ class AgentEntryGateTests(unittest.TestCase):
 
             from eco_council_runtime.objects.council import store_readiness_opinion_records
             from eco_council_runtime.kernel.governance.agent_entry import materialize_agent_entry_gate
-            from eco_council_runtime.kernel.governance.agent_entry_profile import (
+            from eco_council_runtime.kernel.governance.agent_entry.profile import (
                 default_agent_entry_profile,
             )
-            from eco_council_runtime.kernel.governance.agent_entry_handoff import (
+            from eco_council_runtime.kernel.governance.agent_entry.handoff import (
                 default_agent_entry_chain,
                 default_agent_entry_hard_gate_commands,
             )
@@ -462,7 +462,7 @@ class AgentEntryGateTests(unittest.TestCase):
             seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
 
             from eco_council_runtime.kernel.governance.agent_entry import materialize_agent_entry_gate
-            from eco_council_runtime.kernel.governance.agent_entry_profile import (
+            from eco_council_runtime.kernel.governance.agent_entry.profile import (
                 default_agent_entry_profile,
             )
 
@@ -530,10 +530,10 @@ class AgentEntryGateTests(unittest.TestCase):
                 agent_entry_state,
                 materialize_agent_entry_gate,
             )
-            from eco_council_runtime.kernel.governance.agent_entry_profile import (
+            from eco_council_runtime.kernel.governance.agent_entry.profile import (
                 default_agent_entry_profile,
             )
-            from eco_council_runtime.kernel.governance.agent_entry_handoff import (
+            from eco_council_runtime.kernel.governance.agent_entry.handoff import (
                 default_agent_entry_chain,
                 default_agent_entry_hard_gate_commands,
             )

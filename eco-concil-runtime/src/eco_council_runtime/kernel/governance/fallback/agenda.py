@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from eco_council_runtime.kernel.governance.fallback_agenda_profile import (
+from eco_council_runtime.kernel.governance.fallback.agenda_profile import (
     action_from_claim_assessment,
     action_from_coverage,
     action_from_diffusion_edge,
@@ -19,7 +19,7 @@ from eco_council_runtime.kernel.governance.fallback_agenda_profile import (
     fallback_agenda_source,
     prepare_report_basis_action,
 )
-from eco_council_runtime.kernel.governance.fallback_common import (
+from eco_council_runtime.kernel.governance.fallback.common import (
     excerpt_text,
     indexed_by_claim_id,
     list_field,
@@ -28,7 +28,7 @@ from eco_council_runtime.kernel.governance.fallback_common import (
     unique_texts,
     weakest_coverage_for_claim_ids,
 )
-from eco_council_runtime.kernel.governance.fallback_policy import (
+from eco_council_runtime.kernel.governance.fallback.policy import (
     diffusion_edge_is_focus,
     empirical_issue_requires_followup,
     role_from_coverage,

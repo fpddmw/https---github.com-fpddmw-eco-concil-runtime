@@ -25,7 +25,7 @@ from eco_council_runtime.kernel.core.paths import (
 )
 from eco_council_runtime.kernel.execution.executor import maybe_text
 from eco_council_runtime.kernel.governance.agent_entry import agent_entry_state
-from eco_council_runtime.kernel.governance.agent_entry_handoff import HardGateCommandBuilder
+from eco_council_runtime.kernel.governance.agent_entry.handoff import HardGateCommandBuilder
 from eco_council_runtime.kernel.governance.skill_approvals import (
     REQUEST_STATUS_APPROVED as SKILL_REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_CONSUMED as SKILL_REQUEST_STATUS_CONSUMED,

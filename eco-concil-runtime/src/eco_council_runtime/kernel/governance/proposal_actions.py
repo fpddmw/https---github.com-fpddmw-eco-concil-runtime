@@ -6,7 +6,7 @@ from eco_council_runtime.deliberation_target_semantics import (
     canonical_target_kind,
     proposal_target_from_payload,
 )
-from eco_council_runtime.kernel.governance.fallback_common import maybe_number, maybe_text, stable_hash, unique_texts
+from eco_council_runtime.kernel.governance.fallback.common import maybe_number, maybe_text, stable_hash, unique_texts
 
 COUNCIL_PROPOSAL_POLICY_PROFILE = "agent-council-proposal-v1"
 COUNCIL_PROPOSAL_POLICY_OWNER = "agent-council"

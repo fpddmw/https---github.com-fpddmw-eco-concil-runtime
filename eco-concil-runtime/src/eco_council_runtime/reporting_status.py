@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from eco_council_runtime.kernel.execution.governed_execution_action_semantics import maybe_bool
-from eco_council_runtime.kernel.governance.fallback_common import maybe_text, unique_texts
+from eco_council_runtime.kernel.governance.fallback.common import maybe_text, unique_texts
 
 REPORTING_READY_STATUS = "reporting-ready"
 REPORTING_HOLD_STATUS = "investigation-open"

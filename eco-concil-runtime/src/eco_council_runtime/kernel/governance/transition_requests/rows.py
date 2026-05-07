@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from eco_council_runtime.kernel.governance.transition_request_common import json_text, maybe_text
+from eco_council_runtime.kernel.governance.transition_requests.common import json_text, maybe_text
 
 def transition_request_row_from_payload(
     payload: dict[str, Any],

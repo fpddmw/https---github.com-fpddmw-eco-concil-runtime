@@ -1028,7 +1028,7 @@ class RuntimeKernelTests(unittest.TestCase):
             from eco_council_runtime.kernel.cli import show_run_state
             from eco_council_runtime.kernel.execution.executor import SkillExecutionError, run_skill
             from eco_council_runtime.kernel.core.ledger import load_ledger_tail
-            from eco_council_runtime.kernel.governance.agent_entry_profile import (
+            from eco_council_runtime.kernel.governance.agent_entry.profile import (
                 default_agent_entry_profile,
             )
 
@@ -1145,7 +1145,7 @@ class RuntimeKernelTests(unittest.TestCase):
             ensure_runtime_src_on_path()
 
             from eco_council_runtime.kernel.cli import init_run, show_run_state
-            from eco_council_runtime.kernel.governance.agent_entry_profile import (
+            from eco_council_runtime.kernel.governance.agent_entry.profile import (
                 default_agent_entry_profile,
             )
 
@@ -1331,7 +1331,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
 
             from eco_council_runtime.kernel.cli import init_run, show_run_state
             from eco_council_runtime.kernel.operator.operations import materialize_dead_letter
-            from eco_council_runtime.kernel.governance.agent_entry_profile import (
+            from eco_council_runtime.kernel.governance.agent_entry.profile import (
                 default_agent_entry_profile,
             )
 
@@ -2811,9 +2811,9 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             close_request_id = approve_close_round_transition(run_dir)
 
             with (
-                mock.patch("eco_council_runtime.kernel.archive.post_round.write_registry"),
+                mock.patch("eco_council_runtime.kernel.archive.post_round.close.write_registry"),
                 mock.patch(
-                    "eco_council_runtime.kernel.archive.post_round.run_skill",
+                    "eco_council_runtime.kernel.archive.post_round.close.run_skill",
                     side_effect=[signal_archive_result, case_archive_failure],
                 ),
             ):

@@ -4,9 +4,8 @@ from pathlib import Path
 from typing import Any
 
 from eco_council_runtime.kernel.planes.deliberation_plane import load_governed_execution_control_state
-from eco_council_runtime.kernel.execution.executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill, utc_now_iso
-from eco_council_runtime.kernel.core.ledger import append_ledger_event
-from eco_council_runtime.kernel.core.manifest import init_round_cursor, init_run_manifest, load_json_if_exists, write_json
+from eco_council_runtime.kernel.execution.executor import SkillExecutionError, maybe_text, new_runtime_event_id, utc_now_iso
+from eco_council_runtime.kernel.core.manifest import load_json_if_exists, write_json
 from eco_council_runtime.kernel.operator.surfaces import (
     build_reporting_surface,
     load_council_decision_wrapper,
@@ -17,24 +16,15 @@ from eco_council_runtime.kernel.operator.surfaces import (
 )
 from eco_council_runtime.kernel.core.paths import (
     controller_state_path,
-    ensure_runtime_dirs,
     history_bootstrap_state_path,
     round_close_state_path,
     supervisor_state_path,
-)
-from eco_council_runtime.kernel.core.registry import write_registry
-from eco_council_runtime.kernel.governance.transition_requests import (
-    TRANSITION_KIND_CLOSE_ROUND,
-    mark_transition_request_committed,
-    request_payload_option,
-    resolve_transition_request_for_execution,
 )
 
 ARCHIVE_SIGNAL_SKILL_NAME = "archive-signal-corpus"
 ARCHIVE_CASE_SKILL_NAME = "archive-case-library"
 HISTORY_BOOTSTRAP_SKILL_NAME = "materialize-history-context"
 ARCHIVE_FAILURE_POLICIES = ("block", "warn")
-
 
 def unique_texts(values: list[Any]) -> list[str]:
     seen: set[str] = set()
@@ -46,7 +36,6 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
-
 
 def round_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
     return {
@@ -68,7 +57,6 @@ def round_artifact_paths(run_dir: Path, round_id: str) -> dict[str, str]:
         "council_decision_path": str((run_dir / "reporting" / f"council_decision_{round_id}.json").resolve()),
         "final_publication_path": str((run_dir / "reporting" / f"final_publication_{round_id}.json").resolve()),
     }
-
 
 def selected_decision_artifact(
     run_dir: Path,
@@ -98,7 +86,6 @@ def selected_decision_artifact(
         return draft
     return {}
 
-
 def infer_publication_status(final_publication: dict[str, Any], decision: dict[str, Any]) -> tuple[str, str]:
     publication_status = maybe_text(final_publication.get("publication_status"))
     publication_posture = maybe_text(final_publication.get("publication_posture"))
@@ -110,7 +97,6 @@ def infer_publication_status(final_publication: dict[str, Any], decision: dict[s
     if readiness:
         return "hold-release", "withhold"
     return "", ""
-
 
 def infer_close_posture(
     *,
@@ -132,7 +118,6 @@ def infer_close_posture(
     ):
         return "investigation-hold"
     return "post-round-pending"
-
 
 def round_terminal_state(
     run_dir: Path,
@@ -287,7 +272,6 @@ def round_terminal_state(
         "block_message": block_message,
     }
 
-
 def close_step_blueprints(artifacts: dict[str, str]) -> list[dict[str, Any]]:
     return [
         {
@@ -304,7 +288,6 @@ def close_step_blueprints(artifacts: dict[str, str]) -> list[dict[str, Any]]:
         },
     ]
 
-
 def history_step_blueprint(artifacts: dict[str, str]) -> dict[str, Any]:
     return {
         "stage": "history-context-bootstrap",
@@ -313,13 +296,11 @@ def history_step_blueprint(artifacts: dict[str, str]) -> dict[str, Any]:
         "operator_summary": "Query archived cases and signals, then materialize one retrieval-ready history context bundle.",
     }
 
-
 def step_index(steps: list[dict[str, Any]], stage_name: str) -> int:
     for index, item in enumerate(steps):
         if maybe_text(item.get("stage")) == stage_name:
             return index
     raise ValueError(f"Missing post-round stage: {stage_name}")
-
 
 def refresh_round_close_payload(payload: dict[str, Any]) -> dict[str, Any]:
     steps = payload.get("steps", []) if isinstance(payload.get("steps"), list) else []
@@ -340,7 +321,6 @@ def refresh_round_close_payload(payload: dict[str, Any]) -> dict[str, Any]:
     payload["current_stage"] = current_stage
     payload["history_bootstrap_recommended"] = maybe_text(payload.get("close_status")) in {"completed", "completed-with-warnings"}
     return payload
-
 
 def refresh_history_bootstrap_payload(payload: dict[str, Any]) -> dict[str, Any]:
     steps = payload.get("steps", []) if isinstance(payload.get("steps"), list) else []
@@ -365,18 +345,15 @@ def refresh_history_bootstrap_payload(payload: dict[str, Any]) -> dict[str, Any]
     payload["current_stage"] = current_stage
     return payload
 
-
 def persist_round_close_state(run_dir: Path, round_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     payload["artifacts"] = round_artifact_paths(run_dir, round_id)
     write_json(round_close_state_path(run_dir, round_id), refresh_round_close_payload(payload))
     return payload
 
-
 def persist_history_bootstrap_state(run_dir: Path, round_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     payload["artifacts"] = round_artifact_paths(run_dir, round_id)
     write_json(history_bootstrap_state_path(run_dir, round_id), refresh_history_bootstrap_payload(payload))
     return payload
-
 
 def summarized_skill_step(blueprint: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
     summary = result.get("summary", {}) if isinstance(result.get("summary"), dict) else {}
@@ -396,7 +373,6 @@ def summarized_skill_step(blueprint: dict[str, Any], result: dict[str, Any]) -> 
         "warnings": skill_payload.get("warnings", []) if isinstance(skill_payload.get("warnings"), list) else [],
     }
 
-
 def failed_skill_step(blueprint: dict[str, Any], exc: SkillExecutionError) -> dict[str, Any]:
     payload = exc.payload if isinstance(exc.payload, dict) else {}
     failure = payload.get("failure", {}) if isinstance(payload.get("failure"), dict) else {}
@@ -414,7 +390,6 @@ def failed_skill_step(blueprint: dict[str, Any], exc: SkillExecutionError) -> di
         "warnings": payload.get("warnings", []) if isinstance(payload.get("warnings"), list) else [],
         "failure": failure or {"message": payload.get("message", str(exc))},
     }
-
 
 def round_close_event(
     *,
@@ -449,7 +424,6 @@ def round_close_event(
         else "",
     }
 
-
 def history_bootstrap_event(
     *,
     run_id: str,
@@ -474,453 +448,4 @@ def history_bootstrap_event(
         "history_bootstrap_path": payload.get("artifacts", {}).get("history_bootstrap_state_path", "")
         if isinstance(payload.get("artifacts"), dict)
         else "",
-    }
-
-
-def close_round(
-    run_dir: Path,
-    *,
-    run_id: str,
-    round_id: str,
-    transition_request_id: str,
-) -> dict[str, Any]:
-    return close_round_with_contract_mode(
-        run_dir,
-        run_id=run_id,
-        round_id=round_id,
-        transition_request_id=transition_request_id,
-        actor_role="runtime-operator",
-        contract_mode="warn",
-    )
-
-
-def close_round_with_contract_mode(
-    run_dir: Path,
-    *,
-    run_id: str,
-    round_id: str,
-    transition_request_id: str,
-    actor_role: str = "runtime-operator",
-    contract_mode: str,
-    timeout_seconds: float | None = None,
-    retry_budget: int | None = None,
-    retry_backoff_ms: int | None = None,
-    allow_side_effects: list[str] | None = None,
-    archive_failure_policy: str = "block",
-) -> dict[str, Any]:
-    if archive_failure_policy not in ARCHIVE_FAILURE_POLICIES:
-        raise ValueError(f"Unsupported archive_failure_policy: {archive_failure_policy}")
-    ensure_runtime_dirs(run_dir)
-    write_registry(run_dir)
-    init_run_manifest(run_dir, run_id)
-    init_round_cursor(run_dir, run_id)
-    transition_request = resolve_transition_request_for_execution(
-        run_dir,
-        request_id=transition_request_id,
-        transition_kind=TRANSITION_KIND_CLOSE_ROUND,
-        run_id=run_id,
-        round_id=round_id,
-    )
-    requested_archive_failure_policy = maybe_text(
-        request_payload_option(
-            transition_request,
-            "archive_failure_policy",
-            "",
-        )
-    )
-    if (
-        archive_failure_policy == "block"
-        and requested_archive_failure_policy in ARCHIVE_FAILURE_POLICIES
-    ):
-        archive_failure_policy = requested_archive_failure_policy
-    artifacts = round_artifact_paths(run_dir, round_id)
-    existing = load_json_if_exists(round_close_state_path(run_dir, round_id)) or {}
-    if maybe_text(existing.get("close_status")) in {"completed", "completed-with-warnings"}:
-        mark_transition_request_committed(
-            run_dir,
-            request_id=maybe_text(transition_request.get("request_id")),
-            committed_by_role=actor_role,
-            committed_object_kind="round-close",
-            committed_object_id=round_id,
-        )
-        return {
-            "status": "completed",
-            "summary": {
-                "run_id": run_id,
-                "round_id": round_id,
-                "round_close_path": artifacts["round_close_state_path"],
-                "close_status": existing.get("close_status", ""),
-                "archive_status": existing.get("archive_status", ""),
-                "close_posture": existing.get("close_posture", ""),
-                "transition_request_id": maybe_text(
-                    transition_request.get("request_id")
-                ),
-            },
-            "round_close": existing,
-        }
-
-    execution_policy = {
-        "timeout_seconds": timeout_seconds,
-        "retry_budget": retry_budget,
-        "retry_backoff_ms": retry_backoff_ms,
-        "allow_side_effects": allow_side_effects or [],
-    }
-    execution_kwargs = {
-        "timeout_seconds": timeout_seconds,
-        "retry_budget": retry_budget,
-        "retry_backoff_ms": retry_backoff_ms,
-        "allow_side_effects": allow_side_effects,
-    }
-    started_at = utc_now_iso()
-    terminal_state = round_terminal_state(run_dir, run_id, round_id, artifacts)
-    payload = {
-        "schema_version": "runtime-round-close-v1",
-        "generated_at_utc": started_at,
-        "started_at_utc": started_at,
-        "run_id": run_id,
-        "round_id": round_id,
-        "contract_mode": contract_mode,
-        "execution_policy": execution_policy,
-        "archive_failure_policy": archive_failure_policy,
-        "archive_compaction_policy": "replace-per-run-snapshot",
-        "close_status": "running",
-        "archive_status": "pending",
-        "close_posture": terminal_state["close_posture"],
-        "controller_status": terminal_state["controller_status"],
-        "supervisor_status": terminal_state["supervisor_status"],
-        "readiness_status": terminal_state["readiness_status"],
-        "report_basis_status": terminal_state["report_basis_status"],
-        "reporting_ready": terminal_state["reporting_ready"],
-        "reporting_blockers": terminal_state["reporting_blockers"],
-        "reporting_handoff_status": terminal_state["reporting_handoff_status"],
-        "reporting_surface_source": terminal_state["reporting_surface_source"],
-        "publication_status": terminal_state["publication_status"],
-        "publication_posture": terminal_state["publication_posture"],
-        "recommended_next_skills": [],
-        "warnings": [],
-        "failure": {},
-        "steps": [{**step, "status": "pending", "artifact_refs": [], "canonical_ids": [], "warnings": []} for step in close_step_blueprints(artifacts)],
-        "artifacts": artifacts,
-    }
-    persist_round_close_state(run_dir, round_id, payload)
-
-    if terminal_state["block_close"]:
-        payload["close_status"] = "blocked"
-        payload["archive_status"] = "blocked"
-        payload["failure"] = {
-            "error_code": terminal_state["block_reason"] or "round-close-blocked",
-            "message": terminal_state["block_message"] or "Round close is blocked.",
-            "retryable": False,
-            "recovery_hints": ["Finish the supervisor phase successfully before closing the round."],
-        }
-        persist_round_close_state(run_dir, round_id, payload)
-        append_ledger_event(
-            run_dir,
-            round_close_event(
-                run_id=run_id,
-                round_id=round_id,
-                started_at=started_at,
-                completed_at=utc_now_iso(),
-                payload=payload,
-            ),
-        )
-        raise SkillExecutionError(
-            payload["failure"]["message"],
-            {
-                "status": "failed",
-                "summary": {
-                    "run_id": run_id,
-                    "round_id": round_id,
-                    "round_close_path": artifacts["round_close_state_path"],
-                    "close_status": payload["close_status"],
-                },
-                "message": payload["failure"]["message"],
-                "failure": payload["failure"],
-                "round_close": payload,
-            },
-        )
-
-    step_failures: list[dict[str, Any]] = []
-    for blueprint in close_step_blueprints(artifacts):
-        pos = step_index(payload["steps"], maybe_text(blueprint.get("stage")))
-        payload["steps"][pos]["status"] = "running"
-        payload["steps"][pos]["started_at_utc"] = utc_now_iso()
-        persist_round_close_state(run_dir, round_id, payload)
-        try:
-            result = run_skill(
-                run_dir,
-                run_id=run_id,
-                round_id=round_id,
-                skill_name=maybe_text(blueprint.get("skill_name")),
-                actor_role=actor_role,
-                skill_args=[],
-                contract_mode=contract_mode,
-                **execution_kwargs,
-            )
-            payload["steps"][pos] = summarized_skill_step(blueprint, result)
-        except SkillExecutionError as exc:
-            payload["steps"][pos] = failed_skill_step(blueprint, exc)
-            failure = {
-                "stage": maybe_text(blueprint.get("stage")),
-                "skill_name": maybe_text(blueprint.get("skill_name")),
-                "message": exc.payload.get("message", str(exc)),
-                "failure": exc.payload.get("failure", {}) if isinstance(exc.payload.get("failure"), dict) else {},
-            }
-            step_failures.append(failure)
-            payload["warnings"].append(
-                {"code": "archive-step-failed", "message": f"{failure['stage']} failed: {failure['message']}"}
-            )
-            if archive_failure_policy == "block":
-                payload["close_status"] = "failed"
-                payload["archive_status"] = "failed"
-                payload["failure"] = {
-                    "error_code": "archive-step-failed",
-                    "message": failure["message"],
-                    "retryable": bool(failure["failure"].get("retryable")) if isinstance(failure["failure"], dict) else False,
-                    "stage": failure["stage"],
-                    "skill_name": failure["skill_name"],
-                    "recovery_hints": [
-                        f"Re-run close-round after fixing {failure['skill_name']}.",
-                        "Inspect the archive output paths and runtime ledger before retrying.",
-                    ],
-                }
-                persist_round_close_state(run_dir, round_id, payload)
-                append_ledger_event(
-                    run_dir,
-                    round_close_event(
-                        run_id=run_id,
-                        round_id=round_id,
-                        started_at=started_at,
-                        completed_at=utc_now_iso(),
-                        payload=payload,
-                    ),
-                )
-                raise SkillExecutionError(
-                    payload["failure"]["message"],
-                    {
-                        "status": "failed",
-                        "summary": {
-                            "run_id": run_id,
-                            "round_id": round_id,
-                            "round_close_path": artifacts["round_close_state_path"],
-                            "close_status": payload["close_status"],
-                            "failed_stage": failure["stage"],
-                        },
-                        "message": payload["failure"]["message"],
-                        "failure": payload["failure"],
-                        "round_close": payload,
-                    },
-                )
-        persist_round_close_state(run_dir, round_id, payload)
-
-    payload["close_status"] = "completed-with-warnings" if step_failures else "completed"
-    payload["archive_status"] = "degraded" if step_failures else "completed"
-    payload["completed_at_utc"] = utc_now_iso()
-    payload["recommended_next_skills"] = (
-        unique_texts([failure["skill_name"] for failure in step_failures]) if step_failures else ["materialize-history-context"]
-    )
-    persist_round_close_state(run_dir, round_id, payload)
-    mark_transition_request_committed(
-        run_dir,
-        request_id=maybe_text(transition_request.get("request_id")),
-        committed_by_role=actor_role,
-        committed_object_kind="round-close",
-        committed_object_id=round_id,
-    )
-    append_ledger_event(
-        run_dir,
-        round_close_event(
-            run_id=run_id,
-            round_id=round_id,
-            started_at=started_at,
-            completed_at=maybe_text(payload.get("completed_at_utc")) or utc_now_iso(),
-            payload=payload,
-        ),
-    )
-    return {
-        "status": "completed",
-        "summary": {
-            "run_id": run_id,
-            "round_id": round_id,
-            "round_close_path": artifacts["round_close_state_path"],
-            "close_status": payload["close_status"],
-            "archive_status": payload["archive_status"],
-            "close_posture": payload["close_posture"],
-            "transition_request_id": maybe_text(
-                transition_request.get("request_id")
-            ),
-        },
-        "round_close": payload,
-    }
-
-
-def bootstrap_history_context(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any]:
-    return bootstrap_history_context_with_contract_mode(
-        run_dir,
-        run_id=run_id,
-        round_id=round_id,
-        actor_role="runtime-operator",
-        contract_mode="warn",
-    )
-
-
-def bootstrap_history_context_with_contract_mode(
-    run_dir: Path,
-    *,
-    run_id: str,
-    round_id: str,
-    actor_role: str = "runtime-operator",
-    contract_mode: str,
-    timeout_seconds: float | None = None,
-    retry_budget: int | None = None,
-    retry_backoff_ms: int | None = None,
-    allow_side_effects: list[str] | None = None,
-) -> dict[str, Any]:
-    ensure_runtime_dirs(run_dir)
-    write_registry(run_dir)
-    init_run_manifest(run_dir, run_id)
-    init_round_cursor(run_dir, run_id)
-    artifacts = round_artifact_paths(run_dir, round_id)
-    existing = load_json_if_exists(history_bootstrap_state_path(run_dir, round_id)) or {}
-    if maybe_text(existing.get("bootstrap_status")) == "completed":
-        return {
-            "status": "completed",
-            "summary": {
-                "run_id": run_id,
-                "round_id": round_id,
-                "history_bootstrap_path": artifacts["history_bootstrap_state_path"],
-                "bootstrap_status": existing.get("bootstrap_status", ""),
-                "selected_case_count": int(existing.get("selected_case_count") or 0),
-                "selected_signal_count": int(existing.get("selected_signal_count") or 0),
-            },
-            "history_bootstrap": existing,
-        }
-
-    close_state = load_json_if_exists(round_close_state_path(run_dir, round_id)) or {}
-    execution_policy = {
-        "timeout_seconds": timeout_seconds,
-        "retry_budget": retry_budget,
-        "retry_backoff_ms": retry_backoff_ms,
-        "allow_side_effects": allow_side_effects or [],
-    }
-    execution_kwargs = {
-        "timeout_seconds": timeout_seconds,
-        "retry_budget": retry_budget,
-        "retry_backoff_ms": retry_backoff_ms,
-        "allow_side_effects": allow_side_effects,
-    }
-    started_at = utc_now_iso()
-    blueprint = history_step_blueprint(artifacts)
-    payload = {
-        "schema_version": "runtime-history-bootstrap-v1",
-        "generated_at_utc": started_at,
-        "started_at_utc": started_at,
-        "run_id": run_id,
-        "round_id": round_id,
-        "contract_mode": contract_mode,
-        "execution_policy": execution_policy,
-        "bootstrap_status": "running",
-        "bootstrap_mode": "archive-query",
-        "close_status": maybe_text(close_state.get("close_status")),
-        "archive_status": maybe_text(close_state.get("archive_status")),
-        "selected_case_count": 0,
-        "selected_signal_count": 0,
-        "recommended_next_skills": [],
-        "warnings": [],
-        "failure": {},
-        "steps": [{**blueprint, "status": "pending", "artifact_refs": [], "canonical_ids": [], "warnings": []}],
-        "artifacts": artifacts,
-    }
-    persist_history_bootstrap_state(run_dir, round_id, payload)
-    payload["steps"][0]["status"] = "running"
-    payload["steps"][0]["started_at_utc"] = utc_now_iso()
-    persist_history_bootstrap_state(run_dir, round_id, payload)
-
-    try:
-        result = run_skill(
-            run_dir,
-            run_id=run_id,
-            round_id=round_id,
-            skill_name=HISTORY_BOOTSTRAP_SKILL_NAME,
-            actor_role=actor_role,
-            skill_args=[],
-            contract_mode=contract_mode,
-            **execution_kwargs,
-        )
-    except SkillExecutionError as exc:
-        payload["steps"][0] = failed_skill_step(blueprint, exc)
-        payload["bootstrap_status"] = "failed"
-        payload["failure"] = {
-            "error_code": "history-bootstrap-failed",
-            "message": exc.payload.get("message", str(exc)),
-            "retryable": bool(exc.payload.get("failure", {}).get("retryable")) if isinstance(exc.payload.get("failure"), dict) else False,
-            "stage": maybe_text(blueprint.get("stage")),
-            "recovery_hints": [
-                "Inspect archive databases and query artifacts before retrying history bootstrap.",
-                "Re-run bootstrap-history-context after restoring archive accessibility.",
-            ],
-        }
-        persist_history_bootstrap_state(run_dir, round_id, payload)
-        append_ledger_event(
-            run_dir,
-            history_bootstrap_event(
-                run_id=run_id,
-                round_id=round_id,
-                started_at=started_at,
-                completed_at=utc_now_iso(),
-                payload=payload,
-            ),
-        )
-        raise SkillExecutionError(
-            payload["failure"]["message"],
-            {
-                "status": "failed",
-                "summary": {
-                    "run_id": run_id,
-                    "round_id": round_id,
-                    "history_bootstrap_path": artifacts["history_bootstrap_state_path"],
-                    "bootstrap_status": payload["bootstrap_status"],
-                },
-                "message": payload["failure"]["message"],
-                "failure": payload["failure"],
-                "history_bootstrap": payload,
-            },
-        )
-
-    payload["steps"][0] = summarized_skill_step(blueprint, result)
-    skill_payload = result.get("skill_payload", {}) if isinstance(result.get("skill_payload"), dict) else {}
-    payload_summary = skill_payload.get("summary", {}) if isinstance(skill_payload.get("summary"), dict) else {}
-    payload["bootstrap_status"] = "completed"
-    payload["selected_case_count"] = int(payload_summary.get("selected_case_count") or 0)
-    payload["selected_signal_count"] = int(payload_summary.get("selected_signal_count") or 0)
-    payload["recommended_next_skills"] = (
-        skill_payload.get("board_handoff", {}).get("suggested_next_skills", [])
-        if isinstance(skill_payload.get("board_handoff"), dict)
-        and isinstance(skill_payload.get("board_handoff", {}).get("suggested_next_skills"), list)
-        else []
-    )
-    payload["warnings"] = skill_payload.get("warnings", []) if isinstance(skill_payload.get("warnings"), list) else []
-    payload["completed_at_utc"] = utc_now_iso()
-    persist_history_bootstrap_state(run_dir, round_id, payload)
-    append_ledger_event(
-        run_dir,
-        history_bootstrap_event(
-            run_id=run_id,
-            round_id=round_id,
-            started_at=started_at,
-            completed_at=maybe_text(payload.get("completed_at_utc")) or utc_now_iso(),
-            payload=payload,
-        ),
-    )
-    return {
-        "status": "completed",
-        "summary": {
-            "run_id": run_id,
-            "round_id": round_id,
-            "history_bootstrap_path": artifacts["history_bootstrap_state_path"],
-            "bootstrap_status": payload["bootstrap_status"],
-            "selected_case_count": payload["selected_case_count"],
-            "selected_signal_count": payload["selected_signal_count"],
-        },
-        "history_bootstrap": payload,
     }
