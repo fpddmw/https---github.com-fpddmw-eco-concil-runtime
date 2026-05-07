@@ -11,7 +11,6 @@ from eco_council_runtime.kernel.governance.fallback.contracts import (  # noqa: 
 EXPLICIT_REPORTING_INPUT_NAMES = (
     "readiness",
     "report_basis",
-    "report_basis",
     "supervisor_state",
     "reporting_handoff",
     "decision",
@@ -27,7 +26,6 @@ MERGED_TEXT_FIELDS = (
     "readiness_source",
     "board_brief_source",
     "next_actions_source",
-    "report_basis_source",
     "report_basis_source",
     "supervisor_state_source",
     "reporting_handoff_source",
@@ -47,14 +45,6 @@ def normalize_reporting_observed_inputs(
         source.update(observed_inputs)
     source.update(overrides)
     normalized = normalize_d1_observed_inputs(source)
-    if "report_basis_artifact_present" in source and "report_basis_artifact_present" not in source:
-        source["report_basis_artifact_present"] = source.get("report_basis_artifact_present")
-    if "report_basis_present" in source and "report_basis_present" not in source:
-        source["report_basis_present"] = source.get("report_basis_present")
-    if "report_basis_artifact_present" in source and "report_basis_artifact_present" not in source:
-        source["report_basis_artifact_present"] = source.get("report_basis_artifact_present")
-    if "report_basis_present" in source and "report_basis_present" not in source:
-        source["report_basis_present"] = source.get("report_basis_present")
     for input_name in EXPLICIT_REPORTING_INPUT_NAMES:
         artifact_key = f"{input_name}_artifact_present"
         present_key = f"{input_name}_present"

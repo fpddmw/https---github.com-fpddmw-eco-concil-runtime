@@ -7,6 +7,7 @@ from typing import Any
 from eco_council_runtime.kernel.source_queue.source_queue_contract import (
     SOURCE_SELECTION_ROLES,
     allowed_sources_for_role,
+    intent_selected_sources,
     maybe_text,
     normalize_artifact_imports,
     normalize_source_requests,
@@ -70,6 +71,7 @@ def infer_selected_sources(mission: dict[str, Any], role: str) -> list[str]:
     for item in normalize_source_requests(mission):
         if maybe_text(item.get("role")) == role:
             values.append(item.get("source_skill"))
+    values.extend(intent_selected_sources(mission, role))
     return unique_texts(values)
 
 

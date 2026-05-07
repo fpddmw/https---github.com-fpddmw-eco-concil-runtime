@@ -13,6 +13,11 @@ from typing import Any
 
 SKILL_NAME = "materialize-final-publication"
 ROLE_VALUES = ("sociologist", "environmentalist")
+RELEASE_BLOCKING_SECTION_STATUSES = {
+    "basis-required",
+    "basis-gap",
+    "needs-explicit-moderator-text",
+}
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
@@ -126,7 +131,14 @@ def report_summary(role: str, report_payload: dict[str, Any], path: Path) -> dic
     }
 
 
-def release_summary(*, decision: dict[str, Any], handoff: dict[str, Any], publication_posture: str, report_rows: list[dict[str, Any]]) -> str:
+def release_summary(
+    *,
+    decision: dict[str, Any],
+    handoff: dict[str, Any],
+    publication_posture: str,
+    report_rows: list[dict[str, Any]],
+    release_blockers: list[str] | None = None,
+) -> str:
     decision_summary = maybe_text(decision.get("decision_summary"))
     if publication_posture == "release":
         return decision_summary or f"Round {maybe_text(decision.get('round_id'))} is ready for final publication with {len(report_rows)} role reports."
@@ -134,6 +146,9 @@ def release_summary(*, decision: dict[str, Any], handoff: dict[str, Any], public
     reasons = "; ".join(maybe_text(item.get("summary")) for item in open_risks[:3] if isinstance(item, dict) and maybe_text(item.get("summary")))
     if reasons:
         return f"Release is withheld for this round because {reasons}."
+    blockers = unique_texts(release_blockers or [])
+    if blockers:
+        return f"Release is withheld for this round because {', '.join(blockers[:3])}."
     return decision_summary or f"Release is withheld for round {maybe_text(decision.get('round_id')) or 'current'} pending another investigation pass."
 
 
@@ -147,6 +162,57 @@ def published_sections(publication_posture: str, report_rows: list[dict[str, Any
         sections.insert(1, "release-hold")
         sections.insert(2 if report_rows else 2, "open-risks")
     return unique_texts(sections)
+
+
+def section_release_blockers(decision_report: dict[str, Any]) -> list[str]:
+    blockers: list[str] = []
+    for section in list_items(decision_report.get("sections")):
+        if not isinstance(section, dict):
+            continue
+        status = maybe_text(section.get("status"))
+        if status not in RELEASE_BLOCKING_SECTION_STATUSES:
+            continue
+        section_key = maybe_text(section.get("section_key")) or "unknown-section"
+        blockers.append(f"section-{section_key}-{status}")
+    return unique_texts(blockers)
+
+
+def publication_release_blockers(
+    *,
+    publication_readiness: str,
+    handoff: dict[str, Any],
+    supervisor_state: dict[str, Any],
+    report_rows: list[dict[str, Any]],
+    decision_report: dict[str, Any],
+) -> list[str]:
+    blockers: list[str] = []
+    if publication_readiness != "ready":
+        blockers.append(f"decision-publication-{publication_readiness or 'missing'}")
+    if handoff.get("reporting_ready") is not True:
+        blockers.append("reporting-handoff-not-ready")
+    for blocker in list_items(handoff.get("reporting_blockers")):
+        text = maybe_text(blocker)
+        if text:
+            blockers.append(f"reporting-blocker-{text}")
+    for risk in list_items(handoff.get("open_risks")):
+        if not isinstance(risk, dict):
+            continue
+        summary = maybe_text(risk.get("summary"))
+        if summary:
+            blockers.append("open-risk-" + stable_hash(summary)[:12])
+    supervisor_status = (
+        maybe_text(handoff.get("supervisor_status"))
+        or maybe_text(supervisor_state.get("supervisor_status"))
+    )
+    if supervisor_status and supervisor_status != "reporting-ready":
+        blockers.append(f"supervisor-{supervisor_status}")
+    for row in report_rows:
+        status = maybe_text(row.get("status"))
+        role = maybe_text(row.get("role")) or "expert"
+        if status != "ready-to-publish":
+            blockers.append(f"report-{role}-{status or 'missing'}")
+    blockers.extend(section_release_blockers(decision_report))
+    return unique_texts(blockers)
 
 
 def operator_review_hints(supervisor_state: dict[str, Any], handoff: dict[str, Any], publication_posture: str) -> list[str]:
@@ -259,6 +325,10 @@ def decision_maker_report(
     residual_disputes = list_items(report_packet.get("residual_disputes")) or list_items(handoff.get("residual_disputes"))
     policy_recommendations = list_items(report_packet.get("policy_recommendations")) or list_items(handoff.get("policy_recommendations"))
     key_findings = list_items(handoff.get("key_findings"))
+    decision_question = (
+        maybe_text(decision.get("decision_question"))
+        or maybe_text(decision.get("decision_summary"))
+    )
     sections = [
         {
             "section_key": "executive-summary",
@@ -269,8 +339,8 @@ def decision_maker_report(
         {
             "section_key": "decision-question-and-boundary",
             "title": "Decision Question And Boundary",
-            "status": "needs-explicit-moderator-text" if not maybe_text(decision.get("decision_question")) else "included",
-            "summary": maybe_text(decision.get("decision_question")) or "Decision boundary must be taken from moderator-defined mission context or decision memo.",
+            "status": "included" if decision_question else "needs-explicit-moderator-text",
+            "summary": decision_question or "Decision boundary must be taken from moderator-defined mission context or decision memo.",
         },
         {
             "section_key": "evidence-sources-and-scope",
@@ -281,14 +351,20 @@ def decision_maker_report(
         {
             "section_key": "key-findings",
             "title": "Key Findings",
-            "status": "included" if key_findings else "basis-gap",
-            "summary": f"{len(key_findings)} DB finding records are included." if key_findings else "No DB finding records were included as final report findings.",
+            "status": "included" if key_findings or evidence_index else "basis-gap",
+            "summary": (
+                f"{len(key_findings)} DB finding records are included."
+                if key_findings
+                else "No separate key finding rows are included; the section is bounded by the DB evidence index and decision trace."
+                if evidence_index
+                else "No DB finding records were included as final report findings."
+            ),
         },
         {
             "section_key": "options-and-tradeoffs",
             "title": "Options And Tradeoffs",
-            "status": "basis-required",
-            "summary": "Policy options require proposal or report-section-draft basis before they can be stated as recommendations.",
+            "status": "included" if policy_recommendations else "not-in-scope",
+            "summary": "Policy options are limited to DB-backed recommendation cues." if policy_recommendations else "No DB-backed options or tradeoff basis is present for this publication.",
         },
         {
             "section_key": "risks-and-uncertainties",
@@ -305,7 +381,7 @@ def decision_maker_report(
         {
             "section_key": "recommendations",
             "title": "Recommendations",
-            "status": "included" if policy_recommendations else "basis-gap",
+            "status": "included" if policy_recommendations else "not-in-scope",
             "summary": f"{len(policy_recommendations)} DB-backed recommendation cues are included.",
         },
         {
@@ -690,6 +766,70 @@ def materialize_final_publication_skill(
         evidence_index=evidence_index,
         selected_evidence_refs=selected_evidence_refs,
     )
+    release_blockers = publication_release_blockers(
+        publication_readiness=publication_readiness,
+        handoff=handoff,
+        supervisor_state=supervisor_state,
+        report_rows=report_rows,
+        decision_report=decision_report,
+    )
+    if publication_posture == "release" and release_blockers:
+        warnings.append(
+            {
+                "code": "publication-release-held",
+                "message": (
+                    "Final publication was held because release blockers remain: "
+                    + ", ".join(release_blockers[:6])
+                ),
+            }
+        )
+        publication_posture = "withhold"
+        publication_summary = release_summary(
+            decision=decision,
+            handoff=handoff,
+            publication_posture=publication_posture,
+            report_rows=report_rows,
+            release_blockers=release_blockers,
+        )
+        decision_report = decision_maker_report(
+            publication_posture=publication_posture,
+            publication_summary=publication_summary,
+            handoff=handoff,
+            decision=decision,
+            report_rows=report_rows,
+            evidence_index=evidence_index,
+            selected_evidence_refs=selected_evidence_refs,
+        )
+        release_blockers = publication_release_blockers(
+            publication_readiness=publication_readiness,
+            handoff=handoff,
+            supervisor_state=supervisor_state,
+            report_rows=report_rows,
+            decision_report=decision_report,
+        )
+    elif publication_posture != "release" and release_blockers:
+        publication_summary = release_summary(
+            decision=decision,
+            handoff=handoff,
+            publication_posture=publication_posture,
+            report_rows=report_rows,
+            release_blockers=release_blockers,
+        )
+        decision_report = decision_maker_report(
+            publication_posture=publication_posture,
+            publication_summary=publication_summary,
+            handoff=handoff,
+            decision=decision,
+            report_rows=report_rows,
+            evidence_index=evidence_index,
+            selected_evidence_refs=selected_evidence_refs,
+        )
+    publication_id = "final-publication-" + stable_hash(
+        run_id,
+        round_id,
+        publication_posture,
+        maybe_text(decision.get("decision_id")),
+    )[:12]
 
     publication_payload = normalized_final_publication_payload(
         {
@@ -730,6 +870,7 @@ def materialize_final_publication_skill(
             "open_risks": handoff.get("open_risks", [])
             if isinstance(handoff.get("open_risks"), list)
             else [],
+            "release_blockers": release_blockers,
             "recommended_next_actions": handoff.get(
                 "recommended_next_actions", []
             )
@@ -807,6 +948,7 @@ def materialize_final_publication_skill(
             "publication_id": publication_id,
             "publication_status": publication_payload["publication_status"],
             "publication_posture": publication_posture,
+            "release_blocker_count": len(release_blockers),
             "decision_trace_count": len(decision_traces),
             "evidence_index_count": len(evidence_index),
             "report_section_count": len(list_items(decision_report.get("sections"))),

@@ -14,12 +14,12 @@ description: Fetch Regulations.gov v4 comment detail resources by comment IDs wi
 
 ## Required Environment
 - Configure runtime with environment variables (see `references/env.md`).
-- Start from `assets/config.example.env`.
+- Start from `assets/config.example.env` and keep the real API key in `assets/config.env`.
 - Load env values before running commands:
 
 ```bash
 set -a
-source assets/config.example.env
+source assets/config.env
 set +a
 ```
 

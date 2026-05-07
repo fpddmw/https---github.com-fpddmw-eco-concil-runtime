@@ -20,7 +20,11 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_round_task_snapshot,
 )
-from eco_council_runtime.kernel.source_queue.source_queue_contract import source_role  # noqa: E402
+from eco_council_runtime.kernel.source_queue.source_queue_contract import (  # noqa: E402
+    intent_selected_sources,
+    lane_evidence_requirements,
+    source_role,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -191,6 +195,8 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
     for item in [*imports, *requests]:
         source_skill = maybe_text(item.get("source_skill"))
         by_role[role_for_source_skill(source_skill)].append(source_skill)
+    for role in by_role:
+        by_role[role].extend(intent_selected_sources(mission, role))
 
     window = mission.get("window") if isinstance(mission.get("window"), dict) else {}
     region = mission.get("region") if isinstance(mission.get("region"), dict) else {}
@@ -218,7 +224,8 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
                             "summary": "Normalize public-discussion artifacts so investigators can query item-level evidence and submit DB-backed findings.",
                             "priority": "high",
                         }
-                    ],
+                    ]
+                    + lane_evidence_requirements(mission, round_id=round_id, role="sociologist"),
                 },
             }
         )
@@ -244,7 +251,8 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
                             "summary": "Normalize environmental artifacts so investigators can cite provider, time, location, quality, and limitation fields from the signal plane.",
                             "priority": "high",
                         }
-                    ],
+                    ]
+                    + lane_evidence_requirements(mission, round_id=round_id, role="environmentalist"),
                 },
             }
         )

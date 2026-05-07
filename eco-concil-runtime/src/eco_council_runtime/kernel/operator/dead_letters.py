@@ -149,9 +149,41 @@ def load_dead_letters(run_dir: Path, *, round_id: str = "", limit: int = 20) -> 
     return rows[: max(1, limit)]
 
 
+def resolve_dead_letter(
+    run_dir: Path,
+    *,
+    dead_letter_id: str,
+    resolved_by_role: str,
+    resolution_reason: str,
+    resolution_note: str = "",
+) -> dict[str, Any]:
+    ensure_runtime_dirs(run_dir)
+    normalized_id = maybe_text(dead_letter_id)
+    if not normalized_id:
+        raise ValueError("dead_letter_id is required.")
+    path = dead_letter_path(run_dir, normalized_id)
+    payload = load_json_if_exists(path)
+    if not payload:
+        raise ValueError(f"Dead letter `{normalized_id}` was not found.")
+    if maybe_text(payload.get("resolution_status")) == "closed":
+        return payload
+    resolved_at_utc = utc_now_iso()
+    updated = {
+        **payload,
+        "resolution_status": "closed",
+        "resolved_at_utc": resolved_at_utc,
+        "resolved_by_role": maybe_text(resolved_by_role),
+        "resolution_reason": maybe_text(resolution_reason) or "Resolved by runtime operator.",
+        "resolution_note": maybe_text(resolution_note),
+    }
+    write_json(path, updated)
+    return updated
+
+
 __all__ = (
     "classify_failure",
     "operator_resolution_steps",
     "materialize_dead_letter",
     "load_dead_letters",
+    "resolve_dead_letter",
 )

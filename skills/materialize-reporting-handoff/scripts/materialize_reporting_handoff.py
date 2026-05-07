@@ -297,6 +297,8 @@ def build_open_risks(
     readiness: dict[str, Any],
 ) -> list[dict[str, str]]:
     results: list[dict[str, str]] = []
+    readiness_status = maybe_text(readiness.get("readiness_status"))
+    supervisor_status = maybe_text(supervisor_state.get("supervisor_status"))
     remaining_risks = report_basis_freeze.get("remaining_risks", []) if isinstance(report_basis_freeze.get("remaining_risks"), list) else []
     for index, risk in enumerate(remaining_risks, start=1):
         if not isinstance(risk, dict):
@@ -309,32 +311,34 @@ def build_open_risks(
                 "summary": maybe_text(risk.get("reason")) or "Promotion basis still carries unresolved risk.",
             }
         )
-    operator_notes = supervisor_state.get("operator_notes", []) if isinstance(supervisor_state.get("operator_notes"), list) else []
-    for index, note in enumerate(operator_notes, start=1):
-        text = maybe_text(note)
-        if not text:
-            continue
-        results.append(
-            {
-                "risk_id": f"operator-note-{index:03d}",
-                "risk_type": "operator-note",
-                "priority": "medium",
-                "summary": text,
-            }
-        )
-    gate_reasons = readiness.get("gate_reasons", []) if isinstance(readiness.get("gate_reasons"), list) else []
-    for index, reason in enumerate(gate_reasons, start=1):
-        text = maybe_text(reason)
-        if not text:
-            continue
-        results.append(
-            {
-                "risk_id": f"gate-reason-{index:03d}",
-                "risk_type": "gate",
-                "priority": "high",
-                "summary": text,
-            }
-        )
+    if supervisor_status and supervisor_status != "reporting-ready":
+        operator_notes = supervisor_state.get("operator_notes", []) if isinstance(supervisor_state.get("operator_notes"), list) else []
+        for index, note in enumerate(operator_notes, start=1):
+            text = maybe_text(note)
+            if not text:
+                continue
+            results.append(
+                {
+                    "risk_id": f"operator-note-{index:03d}",
+                    "risk_type": "operator-note",
+                    "priority": "medium",
+                    "summary": text,
+                }
+            )
+    if readiness_status != "ready":
+        gate_reasons = readiness.get("gate_reasons", []) if isinstance(readiness.get("gate_reasons"), list) else []
+        for index, reason in enumerate(gate_reasons, start=1):
+            text = maybe_text(reason)
+            if not text:
+                continue
+            results.append(
+                {
+                    "risk_id": f"gate-reason-{index:03d}",
+                    "risk_type": "gate",
+                    "priority": "high",
+                    "summary": text,
+                }
+            )
     deduped: dict[str, dict[str, str]] = {}
     for item in results:
         key = "|".join([item.get("risk_type", ""), item.get("summary", "")])

@@ -75,6 +75,8 @@ def resolve_contract_paths(patterns: list[Any], run_dir: Path, substitutions: di
             resolved = str((run_dir / resolved.removeprefix("run_dir/")).resolve())
         for key, value in substitutions.items():
             resolved = resolved.replace(f"<{key}>", option_scalar(value))
+        if "<role>" in resolved:
+            resolved = resolved.replace("<role>", "*")
         results.append(resolved)
     return results
 
@@ -119,6 +121,8 @@ def path_option_entries(skill_options: dict[str, Any], run_dir: Path) -> list[di
 def collect_summary_paths(summary: dict[str, Any], run_dir: Path) -> list[dict[str, str]]:
     results: list[dict[str, str]] = []
     for key, value in summary.items():
+        if key == "db_path":
+            continue
         if not key.endswith("_path"):
             continue
         text = maybe_text(value)

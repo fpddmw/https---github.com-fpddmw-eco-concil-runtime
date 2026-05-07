@@ -35,6 +35,7 @@ __all__ = (
     "operator_resolution_steps",
     "materialize_dead_letter",
     "load_dead_letters",
+    "resolve_dead_letter",
     "runtime_health_payload",
     "materialize_runtime_health",
     "refresh_runtime_surfaces",

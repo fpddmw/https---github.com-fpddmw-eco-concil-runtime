@@ -18,6 +18,14 @@ description: Retrieve OpenAQ raw artifacts through explicit metadata discovery, 
 - `OPENAQ_REGION` (optional for S3 endpoint selection, defaults to `us-east-1` when unset).
 - Optional:
   - `OPENAQ_S3_BUCKET` (defaults to `openaq-data-archive`).
+- Start from `assets/config.example.env` and keep the real API key in `assets/config.env`.
+- Load env values before running commands:
+
+```bash
+set -a
+source assets/config.env
+set +a
+```
 
 Reference:
 - `references/env.md`

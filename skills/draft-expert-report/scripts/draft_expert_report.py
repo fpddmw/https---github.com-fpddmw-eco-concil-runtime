@@ -127,10 +127,47 @@ def role_profile(role: str) -> dict[str, Any]:
     }
 
 
+def finding_matches_role(role: str, finding: dict[str, Any]) -> bool:
+    agent_role = maybe_text(finding.get("agent_role"))
+    finding_kind = maybe_text(finding.get("finding_kind")).casefold()
+    combined = f"{agent_role} {finding_kind}".casefold()
+    if role == "sociologist":
+        return any(
+            token in combined
+            for token in (
+                "sociologist",
+                "public-discourse",
+                "community",
+                "public",
+                "formal",
+                "policy",
+            )
+        )
+    return any(
+        token in combined
+        for token in (
+            "environment",
+            "environmentalist",
+            "air",
+            "weather",
+            "physical",
+            "observation",
+        )
+    )
+
+
 def role_findings(role: str, key_findings: list[dict[str, Any]], max_findings: int, board_excerpt: str) -> list[dict[str, Any]]:
     profile = role_profile(role)
     findings: list[dict[str, Any]] = []
-    for index, finding in enumerate(key_findings[: max(1, max_findings)], start=1):
+    typed_findings = [
+        finding
+        for finding in key_findings
+        if isinstance(finding, dict) and finding_matches_role(role, finding)
+    ]
+    source_findings = typed_findings or [
+        finding for finding in key_findings if isinstance(finding, dict)
+    ]
+    for index, finding in enumerate(source_findings[: max(1, max_findings)], start=1):
         if not isinstance(finding, dict):
             continue
         title = maybe_text(finding.get("title")) or f"{profile['summary_prefix']} {index}"
@@ -364,8 +401,6 @@ def draft_expert_report_skill(
 
     gate_state = reporting_gate_state(
         report_basis_status=maybe_text(handoff.get("report_basis_status"))
-        or maybe_text(handoff.get("report_basis_status"))
-        or maybe_text(decision.get("report_basis_status"))
         or maybe_text(decision.get("report_basis_status"))
         or "withheld",
         readiness_status=maybe_text(handoff.get("readiness_status")) or "blocked",
@@ -381,6 +416,8 @@ def draft_expert_report_skill(
     )
     handoff_status = maybe_text(gate_state.get("handoff_status")) or "investigation-open"
     report_basis_status = maybe_text(gate_state.get("report_basis_status")) or "withheld"
+    readiness_status = maybe_text(gate_state.get("readiness_status")) or "blocked"
+    supervisor_status = maybe_text(gate_state.get("supervisor_status"))
     reporting_ready = bool(gate_state.get("reporting_ready"))
     reporting_blockers = unique_texts(
         gate_state.get("reporting_blockers", [])
@@ -419,6 +456,8 @@ def draft_expert_report_skill(
         "status": report_status,
         "handoff_status": handoff_status,
         "report_basis_status": report_basis_status,
+        "readiness_status": readiness_status,
+        "supervisor_status": supervisor_status,
         "reporting_ready": reporting_ready,
         "reporting_blockers": reporting_blockers,
         "publication_readiness": publication_readiness,

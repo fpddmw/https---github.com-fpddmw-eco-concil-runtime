@@ -170,6 +170,48 @@ class SourceQueueGovernanceTests(unittest.TestCase):
                     selections=selections,
                 )
 
+    def test_smoke_episode_intent_adds_origin_and_transport_sources(self) -> None:
+        selection_module, contract_module = load_modules()
+        mission = {
+            "topic": "June 2023 New York City smoke episode",
+            "objective": (
+                "Investigate the smoke episode, candidate source regions, "
+                "possible transport pathway, community impacts, and evidence-bounded recommendations."
+            ),
+            "source_governance": {"max_selected_sources_per_role": 4},
+        }
+
+        environmental = selection_module.build_source_selection(
+            mission=mission,
+            tasks=[],
+            run_id="run-governance-004",
+            round_id="round-governance-004",
+            role="environmentalist",
+        )
+        sociologist = selection_module.build_source_selection(
+            mission=mission,
+            tasks=[],
+            run_id="run-governance-004",
+            round_id="round-governance-004",
+            role="sociologist",
+        )
+
+        self.assertIn("fetch-nasa-firms-fire", environmental["selected_sources"])
+        self.assertIn("fetch-open-meteo-air-quality", environmental["selected_sources"])
+        self.assertIn("fetch-open-meteo-historical", environmental["selected_sources"])
+        self.assertIn("fetch-gdelt-doc-search", sociologist["selected_sources"])
+        self.assertIn(
+            "spatiotemporal-relation-review",
+            {
+                item["requirement_type"]
+                for item in contract_module.lane_evidence_requirements(
+                    mission,
+                    round_id="round-governance-004",
+                    role="environmentalist",
+                )
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

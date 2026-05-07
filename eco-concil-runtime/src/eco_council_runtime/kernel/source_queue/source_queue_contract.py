@@ -248,6 +248,27 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
     ),
 }
 
+SMOKE_SOURCE_INTENT_TOKENS = (
+    "wildfire",
+    "wild fire",
+    "smoke episode",
+    "smoke transport",
+    "plume",
+    "haze",
+)
+SOURCE_ORIGIN_INTENT_TOKENS = (
+    "source region",
+    "origin",
+    "source attribution",
+)
+TRANSPORT_INTENT_TOKENS = (
+    "transport",
+    "pathway",
+    "trajectory",
+    "spatiotemporal",
+    "source attribution",
+)
+
 
 def normalize_space(value: Any) -> str:
     return " ".join(str(value).split())
@@ -405,6 +426,136 @@ def source_anchor_argument(source_skill: str) -> str:
 
 def source_auto_selectable(source_skill: str) -> bool:
     return coerce_bool(source_config(source_skill).get("auto_selectable"))
+
+
+def mission_intent_text(mission: dict[str, Any]) -> str:
+    parts: list[str] = [
+        maybe_text(mission.get("topic")),
+        maybe_text(mission.get("objective")),
+    ]
+    for item in mission.get("hypotheses", []) if isinstance(mission.get("hypotheses"), list) else []:
+        if isinstance(item, dict):
+            parts.extend(
+                [
+                    maybe_text(item.get("title")),
+                    maybe_text(item.get("statement")),
+                    maybe_text(item.get("hypothesis")),
+                ]
+            )
+        else:
+            parts.append(maybe_text(item))
+    return " ".join(part for part in parts if part).casefold()
+
+
+def derive_evidence_lanes(mission: dict[str, Any]) -> list[dict[str, str]]:
+    text = mission_intent_text(mission)
+    lanes: list[dict[str, str]] = []
+
+    def add(lane_id: str, role: str, requirement_type: str, summary: str, priority: str = "high") -> None:
+        if any(item["lane_id"] == lane_id for item in lanes):
+            return
+        lanes.append(
+            {
+                "lane_id": lane_id,
+                "role": role,
+                "requirement_type": requirement_type,
+                "summary": summary,
+                "priority": priority,
+            }
+        )
+
+    smoke_context = "smoke" in text or any(token in text for token in SMOKE_SOURCE_INTENT_TOKENS)
+    smoke_source_intent = any(token in text for token in SMOKE_SOURCE_INTENT_TOKENS) or (
+        smoke_context and any(token in text for token in SOURCE_ORIGIN_INTENT_TOKENS)
+    )
+    transport_intent = any(token in text for token in TRANSPORT_INTENT_TOKENS)
+    if smoke_source_intent:
+        add(
+            "receptor-air-quality",
+            "environmentalist",
+            "receptor-air-quality",
+            "Establish local receptor air-quality anomaly before any attribution claim.",
+        )
+        add(
+            "fire-origin",
+            "environmentalist",
+            "fire-origin-candidate",
+            "Collect candidate active-fire evidence for possible wildfire source regions.",
+        )
+        add(
+            "public-discourse",
+            "sociologist",
+            "public-discourse-signal",
+            "Collect public/reporting signals about the smoke episode and affected communities.",
+        )
+    if smoke_source_intent or transport_intent:
+        add(
+            "local-weather-context",
+            "environmentalist",
+            "weather-transport-context",
+            "Collect local weather context needed to evaluate transport plausibility.",
+        )
+        add(
+            "spatiotemporal-relation-review",
+            "environmentalist",
+            "spatiotemporal-relation-review",
+            "Require governed spatiotemporal relation review before source or transport claims are used in reporting.",
+        )
+    if any(token in text for token in ("health", "asthma", "community", "impact", "public health")):
+        add(
+            "community-impact",
+            "sociologist",
+            "community-impact-signal",
+            "Collect public/community impact signals and keep them separate from physical attribution.",
+            priority="medium",
+        )
+    if any(token in text for token in ("recommendation", "response", "handling", "处理", "建议")):
+        add(
+            "response-recommendation-boundary",
+            "sociologist",
+            "response-record-signal",
+            "Collect public response records and constrain recommendations to cited evidence.",
+            priority="medium",
+        )
+    return lanes
+
+
+def intent_selected_sources(mission: dict[str, Any], role: str) -> list[str]:
+    lanes = [lane for lane in derive_evidence_lanes(mission) if lane.get("role") == role]
+    lane_ids = {maybe_text(lane.get("lane_id")) for lane in lanes}
+    values: list[str] = []
+    if role == "environmentalist":
+        if "receptor-air-quality" in lane_ids:
+            values.append("fetch-open-meteo-air-quality")
+        if "local-weather-context" in lane_ids or "spatiotemporal-relation-review" in lane_ids:
+            values.append("fetch-open-meteo-historical")
+        if "fire-origin" in lane_ids:
+            values.append("fetch-nasa-firms-fire")
+    if role == "sociologist":
+        if lane_ids & {"public-discourse", "community-impact", "response-recommendation-boundary"}:
+            values.append("fetch-gdelt-doc-search")
+    allowed_lookup = {item.casefold() for item in allowed_sources_for_role(mission, role)}
+    return unique_texts([value for value in values if value.casefold() in allowed_lookup])
+
+
+def lane_evidence_requirements(mission: dict[str, Any], *, round_id: str, role: str) -> list[dict[str, str]]:
+    requirements: list[dict[str, str]] = []
+    for lane in derive_evidence_lanes(mission):
+        if maybe_text(lane.get("role")) != role:
+            continue
+        lane_id = maybe_text(lane.get("lane_id"))
+        if not lane_id:
+            continue
+        requirements.append(
+            {
+                "requirement_id": f"req-{role}-{round_id}-{lane_id}",
+                "requirement_type": maybe_text(lane.get("requirement_type")),
+                "summary": maybe_text(lane.get("summary")),
+                "priority": maybe_text(lane.get("priority")) or "high",
+                "evidence_lane": lane_id,
+            }
+        )
+    return requirements
 
 
 def normalize_text_list(values: Any) -> list[str]:
@@ -653,6 +804,7 @@ __all__ = [
     "SOURCE_SELECTION_ROLES",
     "SUPPORTED_ARTIFACT_CAPTURE_MODES",
     "allowed_sources_for_role",
+    "derive_evidence_lanes",
     "effective_constraints",
     "file_sha256",
     "file_snapshot",
@@ -664,6 +816,9 @@ __all__ = [
     "normalize_fetch_requested_side_effect_approvals",
     "normalize_source_requests",
     "normalize_text_list",
+    "intent_selected_sources",
+    "lane_evidence_requirements",
+    "mission_intent_text",
     "policy_profile_summary",
     "read_json_list",
     "read_json_object",

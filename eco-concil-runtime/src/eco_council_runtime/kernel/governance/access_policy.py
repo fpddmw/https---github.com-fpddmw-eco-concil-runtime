@@ -151,6 +151,10 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },
+    "resolve-dead-letter": {
+        "allowed_roles": [ROLE_RUNTIME_OPERATOR],
+        "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
+    },
     "materialize-governed-execution-exports": {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,

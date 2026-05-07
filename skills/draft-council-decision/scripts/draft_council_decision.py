@@ -107,8 +107,22 @@ def decision_summary(
 ) -> str:
     if reporting_ready:
         if key_findings:
-            lead = maybe_text(key_findings[0].get("summary"))
-            return f"Round is ready for formal reporting and decision finalization. Lead basis: {lead}"
+            titles = unique_texts(
+                [
+                    maybe_text(item.get("title")) or maybe_text(item.get("finding_kind"))
+                    for item in key_findings[:3]
+                    if isinstance(item, dict)
+                ]
+            )
+            basis_summary = (
+                "; ".join(titles)
+                if titles
+                else f"{len(key_findings)} DB-backed finding records"
+            )
+            return (
+                "Round is ready for formal reporting and decision finalization. "
+                f"Evidence basis covers {basis_summary}."
+            )
         return "Round is ready for formal reporting and decision finalization."
     if open_risks:
         reasons = "; ".join(maybe_text(item.get("summary")) for item in open_risks[:3] if maybe_text(item.get("summary")))

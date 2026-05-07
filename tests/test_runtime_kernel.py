@@ -347,6 +347,11 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("materialize-reporting-handoff", handoff_entry["skill_access"]["skill_name"])
             self.assertIn("report-editor", handoff_entry["skill_access"]["allowed_roles"])
 
+            proposal_entry = next(item for item in registry["skills"] if item["skill_name"] == "submit-council-proposal")
+            self.assertIn("evidence_ref", proposal_entry["declared_inputs"]["required"])
+            self.assertNotIn("Recommended", proposal_entry["declared_inputs"]["required"])
+            self.assertIn("response_to_id", proposal_entry["declared_inputs"]["optional"])
+
             payload = run_kernel(
                 "run-skill",
                 "--run-dir",
@@ -813,6 +818,44 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual(["network-external"], approved["declared_side_effects"])
             self.assertIn("network-external", approved["allowed_side_effects"])
             self.assertFalse(approved["block_execution"])
+
+    def test_registered_skill_allowed_roles_have_required_capabilities(self) -> None:
+        ensure_runtime_src_on_path()
+
+        from eco_council_runtime.kernel.governance.role_contracts import role_capabilities
+        from eco_council_runtime.kernel.governance.skill_registry import POLICIES
+
+        mismatches: list[tuple[str, str, list[str]]] = []
+        for skill_name, policy in POLICIES.items():
+            required = set(policy.get("required_capabilities") or [])
+            for role in policy.get("allowed_roles") or []:
+                missing = sorted(required - role_capabilities(role))
+                if missing:
+                    mismatches.append((skill_name, role, missing))
+
+        self.assertEqual([], mismatches)
+
+    def test_prepare_round_contract_role_placeholder_is_fanout_safe(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.governance.runtime_governance import preflight_skill_execution
+
+            payload = preflight_skill_execution(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                skill_name="prepare-round",
+                actor_role="moderator",
+                skill_args=[],
+                contract_mode="strict",
+            )
+
+            self.assertNotIn(
+                "unresolved-contract-placeholder",
+                {item["code"] for item in payload["issues"]},
+            )
 
     def test_run_skill_retries_and_recovers_after_transient_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1360,6 +1403,43 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             self.assertTrue(payload["operations"]["operator"]["admission_policy_path"].endswith("admission_policy.json"))
             self.assertTrue(payload["operations"]["operator"]["operator_runbook_path"].endswith(f"operator_runbook_{ROUND_ID}.md"))
             self.assertEqual("test-skill", payload["operations"]["dead_letters"][0]["source_name"])
+
+    def test_resolve_dead_letter_closes_operator_health_alert(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.operator.operations import (
+                materialize_dead_letter,
+                resolve_dead_letter,
+                runtime_health_payload,
+            )
+
+            dead_letter = materialize_dead_letter(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                source_type="skill-execution",
+                source_name="test-skill",
+                message="Synthetic runtime failure for operator close coverage.",
+                failure={"error_code": "skill-timeout", "message": "timed out", "retryable": False},
+                summary={"skill_name": "test-skill", "run_id": RUN_ID, "round_id": ROUND_ID},
+            )
+
+            before = runtime_health_payload(run_dir, round_id=ROUND_ID)
+            closed = resolve_dead_letter(
+                run_dir,
+                dead_letter_id=dead_letter["dead_letter_id"],
+                resolved_by_role="runtime-operator",
+                resolution_reason="Fixed input and replayed the failed operation.",
+            )
+            after = runtime_health_payload(run_dir, round_id=ROUND_ID)
+
+            self.assertEqual("open", dead_letter["resolution_status"])
+            self.assertEqual("closed", closed["resolution_status"])
+            self.assertEqual(1, before["summary"]["open_dead_letter_count"])
+            self.assertEqual(0, after["summary"]["open_dead_letter_count"])
 
     def test_default_admission_policy_keeps_writes_inside_run_surface(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

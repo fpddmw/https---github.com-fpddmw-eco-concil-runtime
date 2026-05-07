@@ -37,6 +37,7 @@ from eco_council_runtime.kernel.operator.operations import (
     materialize_admission_policy,
     materialize_operator_runbook,
     materialize_runtime_health,
+    resolve_dead_letter,
 )
 from eco_council_runtime.kernel.planes.deliberation_plane import load_schema_status
 
@@ -285,6 +286,52 @@ def handle_runtime_command(args: Any, run_dir: Path) -> int | None:
                 "dead_letter_count": len(dead_letters),
             },
             "dead_letters": dead_letters,
+        }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "resolve-dead-letter":
+        try:
+            dead_letter = resolve_dead_letter(
+                run_dir,
+                dead_letter_id=args.dead_letter_id,
+                resolved_by_role=args.actor_role,
+                resolution_reason=args.resolution_reason,
+                resolution_note=args.resolution_note,
+            )
+        except ValueError as exc:
+            failure = {
+                "status": "failed",
+                "summary": {"dead_letter_id": args.dead_letter_id},
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        append_ledger_event(
+            run_dir,
+            {
+                "schema_version": "runtime-event-v3",
+                "event_id": new_runtime_event_id("runtimeevt", dead_letter.get("run_id"), dead_letter.get("round_id"), "dead-letter-resolved", args.dead_letter_id),
+                "event_type": "dead-letter-resolved",
+                "run_id": dead_letter.get("run_id"),
+                "round_id": dead_letter.get("round_id"),
+                "actor_role": args.actor_role,
+                "status": "completed",
+                "dead_letter_id": dead_letter.get("dead_letter_id"),
+                "resolution_status": dead_letter.get("resolution_status"),
+            },
+        )
+        health = materialize_runtime_health(run_dir, round_id=maybe_text(dead_letter.get("round_id")))
+        payload = {
+            "status": "completed",
+            "summary": {
+                "run_dir": str(run_dir),
+                "dead_letter_id": dead_letter.get("dead_letter_id"),
+                "resolution_status": dead_letter.get("resolution_status"),
+                "open_dead_letter_count": health.get("summary", {}).get("open_dead_letter_count"),
+            },
+            "dead_letter": dead_letter,
+            "runtime_health": health,
         }
         print(pretty_json(payload, args.pretty))
         return 0

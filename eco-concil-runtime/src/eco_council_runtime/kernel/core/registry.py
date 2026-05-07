@@ -156,10 +156,19 @@ def parse_required_inputs(markdown_text: str) -> dict[str, list[str]]:
         if not stripped.startswith("-"):
             continue
         value = stripped[1:].strip()
-        if value.lower().startswith("optional"):
+        lowered = value.casefold()
+        if lowered.startswith("optional") or lowered.startswith("recommended"):
             target = optional
             continue
-        target.append(value.strip("`").rstrip(":"))
+        backtick_match = re.search(r"`([A-Za-z_][A-Za-z0-9_]*)`", value)
+        if backtick_match:
+            input_name = backtick_match.group(1)
+        else:
+            input_name = value.strip("`").rstrip(":")
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", input_name):
+                continue
+        if input_name not in target:
+            target.append(input_name)
     return {"required": required, "optional": optional}
 
 

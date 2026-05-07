@@ -38,6 +38,27 @@ def pretty_json(data: Any, pretty: bool) -> str:
     return json.dumps(data, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
 
 
+def suggested_next_skills_for_selections(selections: dict[str, dict[str, Any]]) -> list[str]:
+    suggestions = ["normalize-fetch-execution"]
+    requirement_types = {
+        maybe_text(requirement.get("requirement_type"))
+        for selection in selections.values()
+        if isinstance(selection, dict)
+        for requirement in selection.get("evidence_requirements", [])
+        if isinstance(requirement, dict)
+    }
+    if "spatiotemporal-relation-review" in requirement_types:
+        suggestions.extend(
+            [
+                "detect-temporal-cooccurrence-cues",
+                "query-spatiotemporal-relations",
+                "review-spatiotemporal-relation-alternatives",
+                "materialize-spatiotemporal-relation-evidence-packet",
+            ]
+        )
+    return list(dict.fromkeys(suggestions))
+
+
 def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     mission_path = (run_dir_path / "mission.json").resolve()
@@ -102,6 +123,7 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
         for source_skill in role_payload.get("selected_sources", [])
         if maybe_text(source_skill)
     ]
+    suggested_next_skills = suggested_next_skills_for_selections(selections)
     return {
         "status": "completed",
         "summary": {
@@ -129,7 +151,7 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
             "evidence_refs": artifact_refs,
             "gap_hints": [item["message"] for item in warnings],
             "challenge_hints": [],
-            "suggested_next_skills": ["normalize-fetch-execution"],
+            "suggested_next_skills": suggested_next_skills,
         },
     }
 

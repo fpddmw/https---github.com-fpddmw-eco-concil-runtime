@@ -552,6 +552,14 @@ def build_parser() -> argparse.ArgumentParser:
     dead_letters_cmd.add_argument("--limit", type=int, default=20)
     dead_letters_cmd.add_argument("--pretty", action="store_true")
 
+    resolve_dead_letter_cmd = sub.add_parser("resolve-dead-letter", help="Close one runtime dead letter after the operator has addressed it.")
+    resolve_dead_letter_cmd.add_argument("--run-dir", required=True)
+    resolve_dead_letter_cmd.add_argument("--dead-letter-id", required=True)
+    resolve_dead_letter_cmd.add_argument("--resolution-reason", required=True)
+    resolve_dead_letter_cmd.add_argument("--resolution-note", default="")
+    add_actor_role_arg(resolve_dead_letter_cmd)
+    resolve_dead_letter_cmd.add_argument("--pretty", action="store_true")
+
     list_analysis_cmd = sub.add_parser(
         "list-analysis-result-sets",
         help="List analysis-plane result sets from the shared SQLite query surface.",
