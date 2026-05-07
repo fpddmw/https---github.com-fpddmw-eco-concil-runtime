@@ -45,7 +45,6 @@ description: Read compact round-scoped investigation board deltas, return event 
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/query_board_delta.py`

@@ -72,24 +72,22 @@
 
 案例评测计划见 `docs/openclaw-case-study-evaluation-workplan.md`。该议题不应先被写成机械化展示流程；应先真实运行、暴露问题、完成修复，再抽取一条可回放轨迹用于论文展示。
 
-## 7. 独立后续工作面
+## 7. 重构收口摘要
 
-本文不维护统一的近期优先级。`spatiotemporal-relation` 基础设施已进入 baseline，后续按下列独立计划分别推进。
+本轮重构已经收口，除真实案例评测外不再保留阶段性 workplan。完成项：
 
-建议的代码重构顺序是：质量门 -> DB-only recovery -> runtime-governed execution -> schema migration -> 大模块拆分 -> 真实案例评测 -> 可回放轨迹。这个顺序用于降低回归风险，不把各计划合并为一个总计划。
+1. 质量门：`syntax`、targeted suites、full unittest gate 均已稳定运行。
+2. DB/recovery/schema：DB-first recovery、schema migration hardening 和旧库升级测试已进入基线。
+3. runtime governance：approval、transition request、receipt、ledger、dead letter、operator surface 和 runtime-admin 入口完成第一轮硬化。
+4. module decomposition：顶层 `src`、`kernel/operator`、`kernel/planes`、`kernel/execution/controller`、`kernel/governance`、`kernel/archive` 已完成 package 化收敛。
+5. skills：当前 82 个 active skills 保持原子能力边界，不进入拆分；后续只在能力混杂时重新评估。
+6. spatiotemporal relation：relation cue/query/alternatives/evidence packet 已进入 skills baseline。
 
-1. `docs/openclaw-ci-quality-gates-workplan.md`
-   - unittest CI、targeted jobs、compile/lint 和文档命令检查。
-2. `docs/openclaw-db-only-recovery-hardening-workplan.md`
-   - artifact 删除、orphan artifact 和 DB-first 恢复测试。
-3. `docs/openclaw-runtime-governed-execution-workplan.md`
-   - 正式运行入口、approval、receipt、ledger、lock 和权限阻断。
-4. `docs/openclaw-schema-migration-hardening-workplan.md`
-   - schema version、migration ledger、旧库升级 fixture。
-5. `docs/openclaw-module-decomposition-workplan.md`
-   - `deliberation_plane.py`、`optional_analysis/__init__.py`、`analysis_plane.py`、`cli.py` 拆分。
-6. `docs/openclaw-case-study-evaluation-workplan.md`
-   - 真实案例探索运行、问题归类、修复后复跑和可回放轨迹沉淀。
+当前主要验收线：
+
+1. `python3 tools/quality_gate.py syntax`
+2. `python3 tools/quality_gate.py test module-decomposition runtime-governance reporting case-study`
+3. `python3 tools/quality_gate.py full`
 
 ## 8. 后续工程债
 
@@ -97,7 +95,7 @@
 
 1. `report_basis_*` 字段/CLI 全面改名。
 2. legacy analysis kind DB/query schema 物理迁移。
-3. `governed_execution_fallback_*` 模块命名迁移。
+3. `kernel/cli.py`、`kernel/execution/controller/__init__.py`、`kernel/execution/executor.py` 仍偏大，但目前职责边界清楚，暂不继续硬拆。
 4. 全部 artifact trace 字段重命名。
 5. 全部 optional helper 人工审计完成。
 
@@ -107,7 +105,17 @@
 2. 容易引入破坏性回归。
 3. 当前默认链已经被治理约束，不需要为论文展示强行清空所有历史命名。
 
-## 9. 验收清单
+## 9. 留存文档
+
+最终保留 5 个文档：
+
+1. `docs/openclaw-project-overview.md`
+2. `docs/openclaw-refactor-overall-notes.md`
+3. `docs/openclaw-ci-quality-gates-workplan.md`
+4. `docs/openclaw-skills-refactor-checklist-v2.md`
+5. `docs/openclaw-case-study-evaluation-workplan.md`
+
+## 10. 验收清单
 
 真实案例评测和后续论文展示建议至少满足；具体实施由 `docs/openclaw-case-study-evaluation-workplan.md` 独立跟踪：
 

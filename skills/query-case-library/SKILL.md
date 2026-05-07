@@ -48,7 +48,6 @@ description: Query archived historical cases from the shared case library so cur
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/query_case_library.py`

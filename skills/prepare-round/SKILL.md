@@ -39,7 +39,6 @@ description: Build one governed fetch plan from mission.json, round tasks, and s
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/prepare_round.py`

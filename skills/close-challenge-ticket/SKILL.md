@@ -46,7 +46,6 @@ description: Close a challenge ticket on the local investigation board, preserve
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/close_challenge_ticket.py`

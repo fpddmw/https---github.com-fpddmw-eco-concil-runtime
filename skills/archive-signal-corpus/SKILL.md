@@ -42,7 +42,6 @@ description: Archive one run's normalized signal-plane rows into a cross-run sig
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/archive_signal_corpus.py`

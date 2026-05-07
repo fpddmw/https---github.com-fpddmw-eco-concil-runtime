@@ -49,7 +49,6 @@ description: Open compact falsification probes from the next-action queue so con
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/open_falsification_probe.py`

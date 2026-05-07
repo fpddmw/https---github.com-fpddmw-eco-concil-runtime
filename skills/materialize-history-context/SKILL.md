@@ -60,7 +60,6 @@ description: Build retrieval-ready history context for the current round by quer
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/materialize_history_context.py`

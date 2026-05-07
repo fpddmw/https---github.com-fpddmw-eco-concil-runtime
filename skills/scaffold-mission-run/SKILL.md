@@ -44,7 +44,6 @@ description: Scaffold one mission-driven run by materializing mission.json, firs
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/scaffold_mission_run.py`

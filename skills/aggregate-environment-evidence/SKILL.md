@@ -30,7 +30,7 @@ description: Optional-analysis helper for DB-backed environment signal aggregati
 - `limit`
 
 ## References
-- `../../docs/openclaw-optional-analysis-skills-refactor-workplan.md`
+- `../../docs/openclaw-skills-refactor-checklist-v2.md`
 
 ## Scripts
 - `scripts/aggregate_environment_evidence.py`

@@ -42,7 +42,6 @@ description: Summarize the current round's investigation board into a compact JS
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/summarize_board_state.py`

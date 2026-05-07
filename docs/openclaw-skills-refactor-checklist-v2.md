@@ -250,15 +250,16 @@
 13. `freeze-report-basis` 只能消费被承接过的 DB basis。
 14. reporting handoff / decision / expert reports / final publication 能保留 evidence index 和 residual disputes。
 
-## 8. 后续清理入口
+## 8. 当前结论
 
-后续清理不在本文维护成总计划，按独立工作面跟踪：
+skills 当前形态可以接受，不进入批量拆分。
 
-1. `docs/openclaw-module-decomposition-workplan.md`
-   - 拆分大模块，保留现有 skill ids 和 CLI 兼容。
-2. `docs/openclaw-schema-migration-hardening-workplan.md`
-   - 将 schema 变更纳入 version 和 migration ledger。
-3. `docs/openclaw-ci-quality-gates-workplan.md`
-   - 固定 skills 与 runtime 的 targeted 回归门。
-4. `docs/openclaw-runtime-governed-execution-workplan.md`
-   - 将正式运行入口收束到 runtime-governed execution。
+后续判断标准：
+
+1. 不按行数拆 skill。
+2. 不因 provider 脚本较长而拆 skill。
+3. 只有当一个 skill 混入多个独立用户能力、多个输入契约、多个输出 artifact 家族，或跨越 fetch/normalize/query/write/reporting 层边界时，才考虑拆成多个 skill。
+4. skill 内部可以继续整理 helper，但优先保持 skill-local，避免把 provider 细节扩散到 runtime shared dependency。
+5. optional-analysis helper 继续保持 advisory/audit 定位；报告正文必须由 finding、evidence bundle、proposal、review comment、report basis 或 reporting object 显式承接。
+
+质量门入口保留在 `docs/openclaw-ci-quality-gates-workplan.md`。

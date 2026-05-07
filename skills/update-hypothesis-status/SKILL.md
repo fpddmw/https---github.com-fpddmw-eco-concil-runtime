@@ -53,7 +53,6 @@ Calls without evidence refs return `status=blocked` and do not mutate the board.
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/update_hypothesis_status.py`

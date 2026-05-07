@@ -35,7 +35,7 @@ description: Optional-analysis helper for structured verification scope review. 
 - Legacy `geographic_scope`, `lag_assumptions`, `metric_requirements`, and `source_requirements` are accepted only as compatibility inputs and do not replace required role/class fields.
 
 ## References
-- `../../docs/openclaw-optional-analysis-skills-refactor-workplan.md`
+- `../../docs/openclaw-skills-refactor-checklist-v2.md`
 
 ## Scripts
 - `scripts/review_fact_check_evidence_scope.py`

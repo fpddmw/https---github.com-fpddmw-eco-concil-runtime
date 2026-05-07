@@ -48,7 +48,6 @@ description: Append a compact human-readable investigation note to the local boa
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/post_board_note.py`

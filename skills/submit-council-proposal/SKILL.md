@@ -69,7 +69,6 @@ description: Submit one structured council proposal directly into the deliberati
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-investigator-role-runbook.md`
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`
 
 ## Scripts

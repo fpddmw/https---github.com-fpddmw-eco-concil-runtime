@@ -114,20 +114,18 @@
 2. replay 失败能暴露 runtime、DB、relation、reporting 的真实回归。
 3. 文档明确说明 replay 不是系统默认调查剧本。
 
-## 6. 与其他计划的关系
+## 6. 与当前基线的关系
 
-本计划依赖其他修复计划提供稳定基础，但不要求它们同时完成：
+本计划现在建立在已收口的 runtime/DB/schema/module 重构基线上。执行真实案例时应参考：
 
-1. `docs/openclaw-ci-quality-gates-workplan.md`
-   - 先提供最小质量门，防止修复过程失控。
-2. `docs/openclaw-db-only-recovery-hardening-workplan.md`
-   - 保障真实案例运行后可从 DB 恢复状态。
-3. `docs/openclaw-runtime-governed-execution-workplan.md`
-   - 保障正式评测不绕过治理入口。
-4. `docs/openclaw-schema-migration-hardening-workplan.md`
-   - 保障真实案例和 fixture 可跨 schema 演进。
-5. `docs/openclaw-module-decomposition-workplan.md`
-   - 在行为稳定后降低维护和继续修复成本。
+1. `docs/openclaw-project-overview.md`
+   - 确认系统定位、DB-first 工作流和能力边界。
+2. `docs/openclaw-refactor-overall-notes.md`
+   - 确认工程护栏、helper 降权和论文展示口径。
+3. `docs/openclaw-ci-quality-gates-workplan.md`
+   - 使用现有 targeted gate 和 full gate 防止回归。
+4. `docs/openclaw-skills-refactor-checklist-v2.md`
+   - 确认 skill 分层、原子能力边界和 optional-analysis 降权原则。
 
 ## 7. 最终产物
 

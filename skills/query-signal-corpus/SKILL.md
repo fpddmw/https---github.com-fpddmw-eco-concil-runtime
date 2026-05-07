@@ -46,7 +46,6 @@ description: Query archived cross-run public and environment signals from the si
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/query_signal_corpus.py`

@@ -195,7 +195,7 @@ def helper_metadata(
         taxonomy_version=taxonomy_version,
         rubric_version=rubric_version,
         approval_ref=approval_ref,
-        audit_ref="docs/openclaw-optional-analysis-skills-refactor-workplan.md#8",
+        audit_ref="docs/openclaw-skills-refactor-checklist-v2.md#34-optional-analysis",
         rule_trace=list(rule_trace or []),
         caveats=list(caveats or []),
         audit_status="default-frozen; approval-required; audit-pending",

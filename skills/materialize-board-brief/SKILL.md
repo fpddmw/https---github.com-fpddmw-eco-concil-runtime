@@ -44,7 +44,6 @@ description: Materialize the current round's investigation board into a compact 
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/materialize_board_brief.py`

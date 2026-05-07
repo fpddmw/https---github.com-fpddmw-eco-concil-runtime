@@ -56,7 +56,6 @@ description: Archive one run's canonical board, reporting, and report basis arti
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/archive_case_library.py`

@@ -54,7 +54,6 @@ description: Submit one structured readiness opinion directly into the deliberat
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/submit_readiness_opinion.py`

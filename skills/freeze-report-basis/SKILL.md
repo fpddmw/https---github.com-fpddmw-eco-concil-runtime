@@ -54,7 +54,6 @@ description: Freeze the current round into a DB-backed report evidence basis aft
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/freeze_report_basis.py`

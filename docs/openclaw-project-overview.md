@@ -143,50 +143,29 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 3. source queue 的 family memory 和 prior-round anchor 仍依赖部分 runtime artifact。
 4. optional-analysis helper 多为启发式视图，默认 `audit-pending`，不是专业结论模型。
 
-## 8. 独立后续工作面
+## 8. 当前收口状态
 
-`spatiotemporal-relation` 基础设施已作为当前 baseline：canonical contract、environment signal role/class、structured relation cue、relation query、relation-oriented challenger inputs、relation alternatives review 和 relation evidence packet 均已有基础实现与测试覆盖。
+本轮重构已收口。已完成的工程面包括：
 
-后续工作不再整理成一个全局修改计划，而拆成彼此独立的工作计划。每个计划都可单独排期、验收和暂停。
+1. CI/quality gate 基线、targeted suites 和 full gate。
+2. DB-only recovery、schema migration hardening 和 runtime-governed execution 的第一轮硬化。
+3. runtime/kernel 命名清理、浅层包结构整理和大模块 package 化。
+4. optional-analysis、spatiotemporal relation、canonical contracts、council/analysis objects 的 baseline 化。
+5. archive/benchmark/replay 与 post-round/history bootstrap 的 package 化。
 
-推荐执行顺序不是依赖关系，而是风险控制顺序：先建立质量门，再修状态恢复和治理入口，然后处理 schema 与大模块维护性，最后使用真实案例评测系统能力。
-
-1. `docs/openclaw-ci-quality-gates-workplan.md`
-   - 建立最小 CI、targeted tests 和轻量质量门。
-2. `docs/openclaw-db-only-recovery-hardening-workplan.md`
-   - 硬化 artifact 缺失和 orphan artifact 场景下的 DB-first 恢复。
-3. `docs/openclaw-runtime-governed-execution-workplan.md`
-   - 将真实案例评测和常规运行收束到 runtime-governed `run-skill` 路径。
-4. `docs/openclaw-schema-migration-hardening-workplan.md`
-   - 为 SQLite schema 增加版本、幂等迁移和旧库升级测试。
-5. `docs/openclaw-module-decomposition-workplan.md`
-   - 在不改变行为的前提下拆分过大的 runtime/kernel 模块。
-6. `docs/openclaw-case-study-evaluation-workplan.md`
-   - 以跨区域烟霾 / PM2.5 议题评测议会能力；真实运行和修复完成后再沉淀可回放轨迹。
+skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 skill 混入多个独立能力、输入契约或 artifact 家族时，才重新评估是否拆分；不会按行数拆 skill。
 
 ## 9. 文档地图
 
+最终保留 5 个文档：
+
 1. `docs/openclaw-project-overview.md`
-   - 项目总览、主工作流、能力边界、独立后续工作面入口。
-2. `docs/openclaw-runtime-kernel-agent-refactor-checklist.md`
-   - runtime kernel 与 agent council 架构。
-3. `docs/openclaw-skills-refactor-checklist-v2.md`
-   - skills 分层、能力矩阵和扩展规范。
-4. `docs/openclaw-optional-analysis-skills-refactor-workplan.md`
-   - optional-analysis helper 治理与可靠性边界。
-5. `docs/openclaw-refactor-overall-notes.md`
-   - 工程原则、运行护栏和论文展示建议。
-6. `docs/openclaw-spatiotemporal-relation-taxonomy-workplan.md`
-   - 时空关系 taxonomy 基础设施的设计、落地状态和验收记录。
-7. `docs/openclaw-ci-quality-gates-workplan.md`
-   - CI 与质量门的独立计划。
-8. `docs/openclaw-db-only-recovery-hardening-workplan.md`
-   - DB-only recovery 的独立计划。
-9. `docs/openclaw-runtime-governed-execution-workplan.md`
-   - runtime-governed execution 的独立计划。
-10. `docs/openclaw-schema-migration-hardening-workplan.md`
-   - schema version 和 migration 的独立计划。
-11. `docs/openclaw-module-decomposition-workplan.md`
-   - 大模块拆分的独立计划。
-12. `docs/openclaw-case-study-evaluation-workplan.md`
-   - 真实案例议会能力评测和可回放轨迹沉淀的独立计划。
+   - 项目总览、主工作流、能力边界和当前收口状态。
+2. `docs/openclaw-refactor-overall-notes.md`
+   - 工程原则、重构收口摘要、剩余风险和论文展示建议。
+3. `docs/openclaw-ci-quality-gates-workplan.md`
+   - CI 与质量门的当前状态、命令和未闭环项。
+4. `docs/openclaw-skills-refactor-checklist-v2.md`
+   - skills 分层、原子能力边界、optional-analysis 降权和 relation baseline。
+5. `docs/openclaw-case-study-evaluation-workplan.md`
+   - 真实案例议会能力评测和可回放轨迹沉淀。

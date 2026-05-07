@@ -52,7 +52,6 @@ description: Claim or upsert a board follow-up task on the local investigation b
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-next-phase-development-plan.md`
 
 ## Scripts
 - `scripts/claim_board_task.py`
