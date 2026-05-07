@@ -38,7 +38,7 @@ from eco_council_runtime.kernel.planes.analysis_plane import (  # noqa: E402
 from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_moderator_action_records,
 )
-from eco_council_runtime.kernel.planes.signal_plane_normalizer import (  # noqa: E402
+from eco_council_runtime.kernel.planes.signal import (  # noqa: E402
     base_signal,
     connect_db,
     insert_signals,

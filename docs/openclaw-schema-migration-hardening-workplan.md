@@ -48,7 +48,7 @@
    - 既有 legacy column/index backfill 被纳入 migration ledger。
    - 增加 `load_schema_status` 查询接口。
    - 对已有旧表先做 preflight column backfill，再执行当前 `SCHEMA_SQL`，避免旧表缺列导致 index 创建失败。
-3. `eco-concil-runtime/src/eco_council_runtime/kernel/planes/signal_plane_normalizer.py`
+3. `eco-concil-runtime/src/eco_council_runtime/kernel/planes/signal/__init__.py`
    - normalized signal schema baseline 与 `canonical_object_kind` / query indexes backfill 被纳入 migration ledger。
 4. `eco-concil-runtime/src/eco_council_runtime/kernel/cli.py`
    - 新增 `show-schema-status --run-dir <run_dir>`，输出 schema metadata 与 migration ledger。

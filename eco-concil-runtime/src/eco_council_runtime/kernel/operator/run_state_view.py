@@ -49,7 +49,7 @@ from eco_council_runtime.kernel.operator.operations import (
     load_dead_letters,
     runtime_health_payload,
 )
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import (
+from eco_council_runtime.kernel.operator.surfaces import (
     build_reporting_surface,
     load_controller_state_wrapper,
     load_council_decision_wrapper,

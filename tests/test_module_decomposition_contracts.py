@@ -63,12 +63,12 @@ FACADE_PUBLIC_SYMBOLS = {
         "main",
         "show_run_state",
     ),
-    "eco_council_runtime.kernel.operator.runtime_state_surfaces": (
+    "eco_council_runtime.kernel.operator.surfaces": (
         "build_reporting_surface",
         "load_controller_state_wrapper",
         "load_reporting_handoff_wrapper",
     ),
-    "eco_council_runtime.kernel.planes.signal_plane_normalizer": (
+    "eco_council_runtime.kernel.planes.signal": (
         "connect_db",
         "finalize_normalization",
         "resolved_canonical_object_kind",
@@ -383,71 +383,71 @@ SPLIT_MODULE_PUBLIC_SYMBOLS = {
         "refresh_runtime_surfaces_safely",
         "structured_failure",
     ),
-    "eco_council_runtime.kernel.operator.runtime_surface_common": (
+    "eco_council_runtime.kernel.operator.surfaces.common": (
         "maybe_text",
         "orphaned_artifact_wrapper",
         "resolve_path",
     ),
-    "eco_council_runtime.kernel.operator.runtime_reporting_surfaces": (
+    "eco_council_runtime.kernel.operator.surfaces.reporting": (
         "build_reporting_surface",
         "enrich_reporting_record_payload",
         "enrich_supervisor_reporting_payload",
     ),
-    "eco_council_runtime.kernel.operator.runtime_investigation_surfaces": (
+    "eco_council_runtime.kernel.operator.surfaces.investigation": (
         "load_falsification_probe_wrapper",
         "load_next_actions_wrapper",
         "load_report_basis_freeze_wrapper",
         "load_round_readiness_wrapper",
     ),
-    "eco_council_runtime.kernel.operator.runtime_execution_surfaces": (
+    "eco_council_runtime.kernel.operator.surfaces.execution": (
         "load_controller_state_wrapper",
         "load_orchestration_plan_wrapper",
         "load_report_basis_gate_wrapper",
         "load_supervisor_state_wrapper",
     ),
-    "eco_council_runtime.kernel.operator.runtime_publication_surfaces": (
+    "eco_council_runtime.kernel.operator.surfaces.publication": (
         "load_council_decision_wrapper",
         "load_expert_report_wrapper",
         "load_final_publication_wrapper",
         "load_reporting_handoff_wrapper",
     ),
-    "eco_council_runtime.kernel.planes.signal_normalizer_common": (
+    "eco_council_runtime.kernel.planes.signal.common": (
         "file_sha256",
         "json_text",
         "maybe_text",
         "stable_hash",
     ),
-    "eco_council_runtime.kernel.planes.signal_plane_schema": (
+    "eco_council_runtime.kernel.planes.signal.schema": (
         "SCHEMA_SQL",
         "connect_db",
         "ensure_signal_plane_schema",
         "resolve_db_path",
     ),
-    "eco_council_runtime.kernel.planes.signal_normalizer_metadata": (
+    "eco_council_runtime.kernel.planes.signal.metadata": (
         "default_canonical_object_kind",
         "enrich_signal_metadata_fields",
         "resolved_canonical_object_kind",
     ),
-    "eco_council_runtime.kernel.planes.signal_normalizer_store": (
+    "eco_council_runtime.kernel.planes.signal.store": (
         "delete_existing_rows",
         "insert_signals",
         "replace_signal_index_rows",
     ),
-    "eco_council_runtime.kernel.planes.signal_normalizer_finalize": (
+    "eco_council_runtime.kernel.planes.signal.finalize": (
         "base_signal",
         "finalize_normalization",
         "finalize_normalization_streaming",
     ),
-    "eco_council_runtime.kernel.execution.controller_artifacts": (
+    "eco_council_runtime.kernel.execution.controller.artifacts": (
         "governed_execution_artifact_paths",
         "persist_controller_state",
     ),
-    "eco_council_runtime.kernel.execution.controller_planning_adapters": (
+    "eco_council_runtime.kernel.execution.controller.planning_adapters": (
         "agent_orchestration_requested",
         "execute_gate_step",
         "planning_bundle",
     ),
-    "eco_council_runtime.kernel.execution.controller_transition_planning": (
+    "eco_council_runtime.kernel.execution.controller.transition_planning": (
         "approved_transition_request_planning",
         "controller_stage_skill_args",
         "inspection_only_planning",

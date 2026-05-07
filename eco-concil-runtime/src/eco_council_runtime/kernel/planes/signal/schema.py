@@ -8,7 +8,7 @@ from eco_council_runtime.kernel.core.schema_migrations import (
     ensure_schema_migration_tables,
     set_schema_version,
 )
-from eco_council_runtime.kernel.planes.signal_normalizer_common import maybe_text
+from eco_council_runtime.kernel.planes.signal.common import maybe_text
 
 SIGNAL_PLANE_SCHEMA_NAME = "signal-plane"
 SIGNAL_PLANE_SCHEMA_VERSION = "2026.05.06.1"

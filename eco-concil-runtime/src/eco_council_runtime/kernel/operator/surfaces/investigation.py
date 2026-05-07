@@ -13,7 +13,7 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (
     load_report_basis_freeze_record,
     load_round_readiness_assessment,
 )
-from eco_council_runtime.kernel.operator.runtime_surface_common import (
+from eco_council_runtime.kernel.operator.surfaces.common import (
     maybe_text,
     orphaned_artifact_wrapper,
     resolve_path,

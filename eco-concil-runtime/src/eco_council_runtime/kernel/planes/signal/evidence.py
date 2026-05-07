@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from eco_council_runtime.kernel.planes.signal_plane_normalizer import resolved_canonical_object_kind
+from eco_council_runtime.kernel.planes.signal import resolved_canonical_object_kind
 
 
 def maybe_text(value: Any) -> str:

@@ -5,21 +5,21 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from eco_council_runtime.kernel.planes.signal_normalizer_common import (
+from eco_council_runtime.kernel.planes.signal.common import (
     json_text,
     maybe_text,
     resolve_run_dir,
     stable_hash,
     utc_now_iso,
 )
-from eco_council_runtime.kernel.planes.signal_normalizer_metadata import (
+from eco_council_runtime.kernel.planes.signal.metadata import (
     resolved_canonical_object_kind,
 )
-from eco_council_runtime.kernel.planes.signal_normalizer_store import (
+from eco_council_runtime.kernel.planes.signal.store import (
     delete_existing_rows_for_artifacts,
     insert_signals,
 )
-from eco_council_runtime.kernel.planes.signal_plane_schema import connect_db
+from eco_council_runtime.kernel.planes.signal.schema import connect_db
 
 
 def base_signal(

@@ -9,10 +9,10 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (
     load_final_publication_record,
     load_reporting_handoff_record,
 )
-from eco_council_runtime.kernel.operator.runtime_reporting_surfaces import (
+from eco_council_runtime.kernel.operator.surfaces.reporting import (
     enrich_reporting_record_payload,
 )
-from eco_council_runtime.kernel.operator.runtime_surface_common import (
+from eco_council_runtime.kernel.operator.surfaces.common import (
     maybe_text,
     orphaned_artifact_wrapper,
     resolve_path,

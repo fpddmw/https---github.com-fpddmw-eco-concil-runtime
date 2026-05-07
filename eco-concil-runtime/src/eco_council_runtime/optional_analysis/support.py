@@ -13,7 +13,7 @@ from eco_council_runtime.objects.analysis import (
     HELPER_DECISION_SOURCE_APPROVED_VIEW,
     helper_governance_metadata,
 )
-from eco_council_runtime.kernel.planes.signal_plane_normalizer import ensure_signal_plane_schema
+from eco_council_runtime.kernel.planes.signal import ensure_signal_plane_schema
 
 
 __all__ = (

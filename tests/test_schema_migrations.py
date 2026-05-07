@@ -153,7 +153,7 @@ class SchemaMigrationTests(unittest.TestCase):
                 connect_db as connect_deliberation_db,
                 load_schema_status,
             )
-            from eco_council_runtime.kernel.planes.signal_plane_normalizer import (
+            from eco_council_runtime.kernel.planes.signal import (
                 connect_db as connect_signal_db,
             )
 

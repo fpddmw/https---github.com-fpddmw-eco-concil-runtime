@@ -70,11 +70,11 @@ from eco_council_runtime.kernel.governance.transition_requests import (
 )
 
 
-from eco_council_runtime.kernel.execution.controller_artifacts import (
+from eco_council_runtime.kernel.execution.controller.artifacts import (
     governed_execution_artifact_paths,
     persist_controller_state,
 )
-from eco_council_runtime.kernel.execution.controller_planning_adapters import (
+from eco_council_runtime.kernel.execution.controller.planning_adapters import (
     agent_orchestration_requested,
     ensure_executable_planning,
     execute_gate_step,
@@ -82,7 +82,7 @@ from eco_council_runtime.kernel.execution.controller_planning_adapters import (
     planning_bundle,
     planning_from_controller,
 )
-from eco_council_runtime.kernel.execution.controller_transition_planning import (
+from eco_council_runtime.kernel.execution.controller.transition_planning import (
     PLANNER_SKILL_NAME,
     TRANSITION_EXECUTOR_AUTHORITY,
     TRANSITION_EXECUTOR_INSPECTION_SOURCE,

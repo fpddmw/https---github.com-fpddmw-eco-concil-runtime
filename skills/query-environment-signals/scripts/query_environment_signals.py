@@ -18,11 +18,11 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.source_queue.source_queue_history import discovered_round_ids  # noqa: E402
-from eco_council_runtime.kernel.planes.signal_plane_normalizer import (  # noqa: E402
+from eco_council_runtime.kernel.planes.signal import (  # noqa: E402
     ensure_signal_plane_schema,
     resolved_canonical_object_kind,
 )
-from eco_council_runtime.kernel.planes.signal_evidence import (  # noqa: E402
+from eco_council_runtime.kernel.planes.signal.evidence import (  # noqa: E402
     signal_artifact_ref,
     with_signal_evidence_fields,
 )

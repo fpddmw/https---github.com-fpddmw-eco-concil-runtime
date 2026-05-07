@@ -9,7 +9,7 @@ from typing import Any
 from eco_council_runtime.runtime_command_hints import kernel_command
 from eco_council_runtime.kernel.planes.deliberation_plane import load_governed_execution_control_state
 from eco_council_runtime.kernel.execution.executor import maybe_text, new_runtime_event_id, utc_now_iso
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import (
+from eco_council_runtime.kernel.operator.surfaces import (
     build_reporting_surface,
     load_council_decision_wrapper,
     load_falsification_probe_wrapper,

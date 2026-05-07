@@ -23,7 +23,7 @@ RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.operator import runtime_state_surfaces  # noqa: E402
+from eco_council_runtime.kernel.operator import surfaces as operator_surfaces  # noqa: E402
 from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_falsification_probe_records,
     store_falsification_probe_snapshot,
@@ -401,8 +401,8 @@ def seed_governed_execution_surface_state(run_dir: Path) -> dict[str, dict[str, 
 
 
 class GovernedExecutionStateSurfaceTests(unittest.TestCase):
-    def test_runtime_state_surfaces_exports_all_governed_execution_wrappers(self) -> None:
-        exported = set(runtime_state_surfaces.__all__)
+    def test_operator_surfaces_exports_all_governed_execution_wrappers(self) -> None:
+        exported = set(operator_surfaces.__all__)
         for name in WRAPPER_NAMES:
             self.assertIn(name, exported)
         self.assertIn("build_reporting_surface", exported)
@@ -456,32 +456,32 @@ class GovernedExecutionStateSurfaceTests(unittest.TestCase):
                 execute_db(db_path, query, (RUN_ID, ROUND_ID))
 
             contexts = {
-                "plan": runtime_state_surfaces.load_orchestration_plan_wrapper(
+                "plan": operator_surfaces.load_orchestration_plan_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 ),
-                "next_actions": runtime_state_surfaces.load_next_actions_wrapper(
+                "next_actions": operator_surfaces.load_next_actions_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 ),
-                "probes": runtime_state_surfaces.load_falsification_probe_wrapper(
+                "probes": operator_surfaces.load_falsification_probe_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 ),
-                "readiness": runtime_state_surfaces.load_round_readiness_wrapper(
+                "readiness": operator_surfaces.load_round_readiness_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 ),
-                "report_basis": runtime_state_surfaces.load_report_basis_freeze_wrapper(
+                "report_basis": operator_surfaces.load_report_basis_freeze_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                 ),
-                "supervisor": runtime_state_surfaces.load_supervisor_state_wrapper(
+                "supervisor": operator_surfaces.load_supervisor_state_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -561,7 +561,7 @@ class GovernedExecutionStateSurfaceTests(unittest.TestCase):
             self.assertEqual(6, payload["summary"]["target_export_count"])
 
             self.assertDictEqual(
-                runtime_state_surfaces.load_orchestration_plan_wrapper(
+                operator_surfaces.load_orchestration_plan_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -570,7 +570,7 @@ class GovernedExecutionStateSurfaceTests(unittest.TestCase):
             )
 
             self.assertDictEqual(
-                runtime_state_surfaces.load_next_actions_wrapper(
+                operator_surfaces.load_next_actions_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -578,7 +578,7 @@ class GovernedExecutionStateSurfaceTests(unittest.TestCase):
                 load_json(investigation_path(run_dir, f"next_actions_{ROUND_ID}.json")),
             )
             self.assertDictEqual(
-                runtime_state_surfaces.load_falsification_probe_wrapper(
+                operator_surfaces.load_falsification_probe_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -588,7 +588,7 @@ class GovernedExecutionStateSurfaceTests(unittest.TestCase):
                 ),
             )
             self.assertDictEqual(
-                runtime_state_surfaces.load_round_readiness_wrapper(
+                operator_surfaces.load_round_readiness_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
@@ -596,7 +596,7 @@ class GovernedExecutionStateSurfaceTests(unittest.TestCase):
                 load_json(reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")),
             )
             self.assertDictEqual(
-                runtime_state_surfaces.load_report_basis_freeze_wrapper(
+                operator_surfaces.load_report_basis_freeze_wrapper(
                     run_dir,
                     run_id=RUN_ID,
                     round_id=ROUND_ID,

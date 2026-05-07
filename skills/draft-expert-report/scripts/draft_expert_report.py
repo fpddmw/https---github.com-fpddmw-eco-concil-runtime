@@ -24,7 +24,7 @@ from eco_council_runtime.kernel.reporting.reporting_contracts import (  # noqa: 
 from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_expert_report_record,
 )
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.operator.surfaces import (  # noqa: E402
     load_council_decision_wrapper,
     load_reporting_handoff_wrapper,
 )

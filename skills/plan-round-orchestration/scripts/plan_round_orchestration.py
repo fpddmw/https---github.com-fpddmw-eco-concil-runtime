@@ -38,7 +38,7 @@ from eco_council_runtime.kernel.governance.proposal_actions import (  # noqa: E4
     action_from_council_proposal,
     proposal_drives_governed_execution_action_queue,
 )
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.operator.surfaces import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
     load_round_readiness_wrapper,

@@ -3,12 +3,12 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from eco_council_runtime.kernel.planes.signal_normalizer_common import maybe_text
-from eco_council_runtime.kernel.planes.signal_normalizer_metadata import (
+from eco_council_runtime.kernel.planes.signal.common import maybe_text
+from eco_council_runtime.kernel.planes.signal.metadata import (
     enrich_signal_metadata_fields,
     indexed_signal_rows,
 )
-from eco_council_runtime.kernel.planes.signal_plane_schema import (
+from eco_council_runtime.kernel.planes.signal.schema import (
     INDEX_INSERT_SQL,
     INSERT_SQL,
 )

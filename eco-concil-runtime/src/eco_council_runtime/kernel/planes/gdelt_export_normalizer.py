@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from eco_council_runtime.kernel.planes.signal_plane_normalizer import file_sha256, maybe_number, maybe_text
+from eco_council_runtime.kernel.planes.signal import file_sha256, maybe_number, maybe_text
 
 
 @dataclass(frozen=True)

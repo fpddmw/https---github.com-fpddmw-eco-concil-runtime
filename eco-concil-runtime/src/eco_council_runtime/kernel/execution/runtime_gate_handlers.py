@@ -11,7 +11,7 @@ from eco_council_runtime.kernel.governance.report_basis_resolution import (
 from eco_council_runtime.kernel.planes.deliberation_plane import store_runtime_control_freeze_record
 from eco_council_runtime.kernel.core.manifest import write_json
 from eco_council_runtime.kernel.core.paths import report_basis_gate_path
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import load_round_readiness_wrapper
+from eco_council_runtime.kernel.operator.surfaces import load_round_readiness_wrapper
 
 REPORT_BASIS_GATE_STAGE_NAME = "report-basis-gate"
 

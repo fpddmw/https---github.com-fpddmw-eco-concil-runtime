@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from eco_council_runtime.reporting_status import reporting_gate_state
-from eco_council_runtime.kernel.operator.runtime_surface_common import (
+from eco_council_runtime.kernel.operator.surfaces.common import (
     list_items,
     maybe_text,
 )

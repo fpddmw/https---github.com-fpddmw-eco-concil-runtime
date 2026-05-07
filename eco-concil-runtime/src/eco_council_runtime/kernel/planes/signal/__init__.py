@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from eco_council_runtime.kernel.planes.signal_normalizer_common import (
+from eco_council_runtime.kernel.planes.signal.common import (
     file_sha256,
     json_list,
     json_text,
@@ -14,7 +14,7 @@ from eco_council_runtime.kernel.planes.signal_normalizer_common import (
     unique_texts,
     utc_now_iso,
 )
-from eco_council_runtime.kernel.planes.signal_normalizer_finalize import (
+from eco_council_runtime.kernel.planes.signal.finalize import (
     artifact_ref,
     base_signal,
     finalize_normalization,
@@ -24,18 +24,18 @@ from eco_council_runtime.kernel.planes.signal_normalizer_finalize import (
     plane_gap_hints,
     suggested_next_skills_for_plane,
 )
-from eco_council_runtime.kernel.planes.signal_normalizer_metadata import (
+from eco_council_runtime.kernel.planes.signal.metadata import (
     default_canonical_object_kind,
     enrich_signal_metadata_fields,
     resolved_canonical_object_kind,
 )
-from eco_council_runtime.kernel.planes.signal_normalizer_store import (
+from eco_council_runtime.kernel.planes.signal.store import (
     delete_existing_rows,
     delete_existing_rows_for_artifacts,
     insert_signals,
     replace_signal_index_rows,
 )
-from eco_council_runtime.kernel.planes.signal_plane_schema import (
+from eco_council_runtime.kernel.planes.signal.schema import (
     INSERT_SQL,
     connect_db,
     default_db_path,

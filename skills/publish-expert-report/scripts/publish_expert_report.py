@@ -24,7 +24,7 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     normalized_expert_report_payload,
     store_expert_report_record,
 )
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.operator.surfaces import (  # noqa: E402
     load_expert_report_wrapper,
 )
 

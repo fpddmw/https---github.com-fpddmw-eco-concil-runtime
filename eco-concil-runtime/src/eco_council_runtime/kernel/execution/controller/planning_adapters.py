@@ -14,7 +14,7 @@ from eco_council_runtime.kernel.execution.runtime_planning_profile import (
     planning_bundle as planning_bundle_from_result,
     planning_from_controller as planning_from_controller_from_profile,
 )
-from eco_council_runtime.kernel.execution.controller_transition_planning import (
+from eco_council_runtime.kernel.execution.controller.transition_planning import (
     PLANNER_SKILL_NAME,
 )
 

@@ -11,10 +11,10 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (
     load_runtime_control_freeze_record,
     load_supervisor_snapshot_record,
 )
-from eco_council_runtime.kernel.operator.runtime_reporting_surfaces import (
+from eco_council_runtime.kernel.operator.surfaces.reporting import (
     enrich_supervisor_reporting_payload,
 )
-from eco_council_runtime.kernel.operator.runtime_surface_common import (
+from eco_council_runtime.kernel.operator.surfaces.common import (
     maybe_text,
     orphaned_artifact_wrapper,
     resolve_path,

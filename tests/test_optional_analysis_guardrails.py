@@ -60,7 +60,7 @@ def insert_signal(
     longitude: float | None = None,
     metadata: dict[str, object] | None = None,
 ) -> None:
-    from eco_council_runtime.kernel.planes.signal_plane_normalizer import (
+    from eco_council_runtime.kernel.planes.signal import (
         INSERT_SQL,
         ensure_signal_plane_schema,
     )

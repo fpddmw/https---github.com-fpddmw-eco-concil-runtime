@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from eco_council_runtime.kernel.planes.deliberation_plane import maybe_text
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import (
+from eco_council_runtime.kernel.operator.surfaces import (
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
     load_orchestration_plan_wrapper,

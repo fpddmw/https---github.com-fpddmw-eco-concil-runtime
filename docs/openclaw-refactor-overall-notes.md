@@ -87,7 +87,7 @@
 4. `docs/openclaw-schema-migration-hardening-workplan.md`
    - schema version、migration ledger、旧库升级 fixture。
 5. `docs/openclaw-module-decomposition-workplan.md`
-   - `deliberation_plane.py`、`optional_analysis_helpers.py`、`analysis_plane.py`、`cli.py` 拆分。
+   - `deliberation_plane.py`、`optional_analysis/__init__.py`、`analysis_plane.py`、`cli.py` 拆分。
 6. `docs/openclaw-case-study-evaluation-workplan.md`
    - 真实案例探索运行、问题归类、修复后复跑和可回放轨迹沉淀。
 

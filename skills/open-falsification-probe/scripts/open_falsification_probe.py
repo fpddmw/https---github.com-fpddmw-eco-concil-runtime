@@ -46,7 +46,7 @@ from eco_council_runtime.kernel.execution.governed_council_execution import (  #
 from eco_council_runtime.kernel.governance.proposal_actions import (  # noqa: E402
     action_from_council_proposal,
 )
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import load_next_actions_wrapper  # noqa: E402
+from eco_council_runtime.kernel.operator.surfaces import load_next_actions_wrapper  # noqa: E402
 from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_falsification_probe_records,
     store_falsification_probe_snapshot,

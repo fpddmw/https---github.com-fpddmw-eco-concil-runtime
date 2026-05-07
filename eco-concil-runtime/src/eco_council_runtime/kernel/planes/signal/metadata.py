@@ -10,7 +10,7 @@ from eco_council_runtime.contracts import (
     ENVIRONMENT_SIGNAL_TAXONOMY_VERSION,
     SIGNAL_ROLE_VALUES,
 )
-from eco_council_runtime.kernel.planes.signal_normalizer_common import (
+from eco_council_runtime.kernel.planes.signal.common import (
     json_list,
     json_text,
     maybe_text,

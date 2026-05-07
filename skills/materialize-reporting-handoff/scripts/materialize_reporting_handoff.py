@@ -24,7 +24,7 @@ from eco_council_runtime.objects.council import query_council_objects  # noqa: E
 from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_reporting_handoff_record,
 )
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.operator.surfaces import (  # noqa: E402
     load_report_basis_freeze_wrapper,
     load_round_readiness_wrapper,
     load_supervisor_state_wrapper,

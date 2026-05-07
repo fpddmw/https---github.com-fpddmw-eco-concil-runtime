@@ -16,7 +16,7 @@ from eco_council_runtime.kernel.execution.executor import maybe_text, new_runtim
 from eco_council_runtime.kernel.execution.gate import GateHandler
 from eco_council_runtime.kernel.core.ledger import append_ledger_event
 from eco_council_runtime.kernel.core.manifest import load_json_if_exists, write_json
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import load_next_actions_wrapper
+from eco_council_runtime.kernel.operator.surfaces import load_next_actions_wrapper
 from eco_council_runtime.kernel.core.paths import supervisor_state_path
 
 

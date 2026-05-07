@@ -17,7 +17,7 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
-from eco_council_runtime.kernel.planes.signal_plane_normalizer import (  # noqa: E402
+from eco_council_runtime.kernel.planes.signal import (  # noqa: E402
     enrich_signal_metadata_fields,
     ensure_signal_plane_schema,
     replace_signal_index_rows,

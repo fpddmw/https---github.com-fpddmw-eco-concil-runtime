@@ -26,7 +26,7 @@ from eco_council_runtime.kernel.governance.report_basis_resolution import (  # n
 from eco_council_runtime.kernel.execution.governed_execution_action_semantics import (  # noqa: E402
     action_is_readiness_blocker,
 )
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.operator.surfaces import (  # noqa: E402
     load_next_actions_wrapper,
     load_round_readiness_wrapper,
 )

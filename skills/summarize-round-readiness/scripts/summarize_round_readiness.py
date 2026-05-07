@@ -42,7 +42,7 @@ from eco_council_runtime.kernel.execution.governed_execution_action_semantics im
 from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_round_readiness_assessment,
 )
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.operator.surfaces import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
 )

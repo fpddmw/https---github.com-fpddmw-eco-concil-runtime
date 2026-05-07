@@ -7,7 +7,7 @@ from eco_council_runtime.kernel.planes.deliberation_plane import load_governed_e
 from eco_council_runtime.kernel.execution.executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill, utc_now_iso
 from eco_council_runtime.kernel.core.ledger import append_ledger_event
 from eco_council_runtime.kernel.core.manifest import init_round_cursor, init_run_manifest, load_json_if_exists, write_json
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import (
+from eco_council_runtime.kernel.operator.surfaces import (
     build_reporting_surface,
     load_council_decision_wrapper,
     load_final_publication_wrapper,

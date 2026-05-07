@@ -28,7 +28,7 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     normalized_final_publication_payload,
     store_final_publication_record,
 )
-from eco_council_runtime.kernel.operator.runtime_state_surfaces import (  # noqa: E402
+from eco_council_runtime.kernel.operator.surfaces import (  # noqa: E402
     load_council_decision_wrapper,
     load_expert_report_wrapper,
     load_report_basis_freeze_wrapper,
