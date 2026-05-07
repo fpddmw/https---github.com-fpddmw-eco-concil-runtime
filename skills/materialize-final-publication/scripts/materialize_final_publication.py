@@ -18,6 +18,11 @@ RELEASE_BLOCKING_SECTION_STATUSES = {
     "basis-gap",
     "needs-explicit-moderator-text",
 }
+PUBLICATION_READY_REPORT_STATUSES = {
+    "canonical-published",
+    "published",
+    "ready-to-publish",
+}
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
@@ -209,7 +214,7 @@ def publication_release_blockers(
     for row in report_rows:
         status = maybe_text(row.get("status"))
         role = maybe_text(row.get("role")) or "expert"
-        if status != "ready-to-publish":
+        if status not in PUBLICATION_READY_REPORT_STATUSES:
             blockers.append(f"report-{role}-{status or 'missing'}")
     blockers.extend(section_release_blockers(decision_report))
     return unique_texts(blockers)
@@ -322,6 +327,18 @@ def decision_maker_report(
 ) -> dict[str, Any]:
     report_packet = dict_items(handoff.get("report_packet"))
     uncertainty_register = list_items(report_packet.get("uncertainty_register")) or list_items(handoff.get("uncertainty_register"))
+    open_risks = [risk for risk in list_items(handoff.get("open_risks")) if isinstance(risk, dict)]
+    if not uncertainty_register and open_risks:
+        uncertainty_register = [
+            {
+                "uncertainty_id": maybe_text(risk.get("risk_id")) or "open-risk-" + stable_hash(risk.get("summary"), index)[:12],
+                "summary": maybe_text(risk.get("summary")),
+                "priority": maybe_text(risk.get("priority")),
+                "source": "reporting-handoff-open-risk",
+            }
+            for index, risk in enumerate(open_risks, start=1)
+            if maybe_text(risk.get("summary"))
+        ]
     residual_disputes = list_items(report_packet.get("residual_disputes")) or list_items(handoff.get("residual_disputes"))
     policy_recommendations = list_items(report_packet.get("policy_recommendations")) or list_items(handoff.get("policy_recommendations"))
     key_findings = list_items(handoff.get("key_findings"))
@@ -369,8 +386,12 @@ def decision_maker_report(
         {
             "section_key": "risks-and-uncertainties",
             "title": "Risks And Uncertainties",
-            "status": "included" if uncertainty_register else "basis-gap",
-            "summary": f"{len(uncertainty_register)} uncertainty rows are carried into the report.",
+            "status": "included" if uncertainty_register else "no-open-risks-recorded",
+            "summary": (
+                f"{len(uncertainty_register)} uncertainty rows are carried into the report."
+                if uncertainty_register
+                else "No open risks or uncertainty rows are recorded for this publication."
+            ),
         },
         {
             "section_key": "remaining-disputes",

@@ -520,6 +520,60 @@ def derive_evidence_lanes(mission: dict[str, Any]) -> list[dict[str, str]]:
     return lanes
 
 
+def derive_verification_scope(mission: dict[str, Any]) -> dict[str, Any]:
+    window = mission.get("window") if isinstance(mission.get("window"), dict) else {}
+    region = mission.get("region") if isinstance(mission.get("region"), dict) else {}
+    geometry = region.get("geometry") if isinstance(region.get("geometry"), dict) else {}
+    lanes = derive_evidence_lanes(mission)
+    lane_ids = {maybe_text(lane.get("lane_id")) for lane in lanes}
+    source_required = "fire-origin" in lane_ids
+    transport_required = "spatiotemporal-relation-review" in lane_ids
+    required_source_skills: list[str] = []
+    for role in SOURCE_SELECTION_ROLES:
+        required_source_skills.extend(intent_selected_sources(mission, role))
+    return {
+        "scope_id": "verification-scope-"
+        + stable_hash(
+            mission.get("run_id"),
+            mission.get("topic"),
+            mission.get("objective"),
+            window.get("start_utc"),
+            window.get("end_utc"),
+            region.get("label"),
+        )[:12],
+        "receptor_region": {
+            "label": maybe_text(region.get("label")),
+            "geometry": geometry,
+        },
+        "study_window": {
+            "start_utc": maybe_text(window.get("start_utc")),
+            "end_utc": maybe_text(window.get("end_utc")),
+        },
+        "required_evidence_lanes": lanes,
+        "candidate_source_region_policy": (
+            "candidate-source-regions-required" if source_required else "not-required"
+        ),
+        "transport_verification_policy": (
+            "required-before-source-or-transport-claim" if transport_required else "not-required"
+        ),
+        "lag_window": {
+            "mode": "mission-derived",
+            "minimum_hours": 0,
+            "maximum_hours": 72 if source_required or transport_required else 0,
+        },
+        "required_source_skills": unique_texts(required_source_skills),
+        "excluded_inferences": [
+            "Do not assert source attribution without fire-origin, timing, spatial, and transport evidence.",
+            "Do not treat local weather context alone as proof of transport direction.",
+            "Do not turn public-discourse records into exposure, health-impact, or representativeness conclusions without separate support.",
+        ],
+        "reportable_claim_boundary": (
+            "Report receptor observations, candidate source evidence, transport plausibility, impacts, "
+            "recommendations, and uncertainty only to the extent each claim is supported by its required evidence lane."
+        ),
+    }
+
+
 def intent_selected_sources(mission: dict[str, Any], role: str) -> list[str]:
     lanes = [lane for lane in derive_evidence_lanes(mission) if lane.get("role") == role]
     lane_ids = {maybe_text(lane.get("lane_id")) for lane in lanes}
@@ -805,6 +859,7 @@ __all__ = [
     "SUPPORTED_ARTIFACT_CAPTURE_MODES",
     "allowed_sources_for_role",
     "derive_evidence_lanes",
+    "derive_verification_scope",
     "effective_constraints",
     "file_sha256",
     "file_snapshot",

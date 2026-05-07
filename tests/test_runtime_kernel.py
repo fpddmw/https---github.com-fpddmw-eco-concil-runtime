@@ -4,6 +4,7 @@ import json
 import io
 import subprocess
 import sys
+import time
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -2026,6 +2027,113 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 [
                     {"source": item["source"], "status": item["status"]}
                     for item in payload["controller"]["planning_attempts"]
+                ],
+            )
+
+    def test_controller_restarts_completed_default_path_for_newer_approved_transition_request(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.execution.controller import run_governed_execution_round_with_contract_mode
+
+            report_basis_result = {
+                "summary": {"skill_name": "freeze-report-basis", "event_id": "evt-promo", "receipt_id": "receipt-promo"},
+                "event": {"status": "completed"},
+                "skill_payload": {
+                    "artifact_refs": [],
+                    "canonical_ids": [],
+                    "summary": {"output_path": str(root / "basis.json"), "report_basis_status": "frozen"},
+                },
+            }
+            gate_payload = {
+                "generated_at_utc": "2024-01-01T00:00:00Z",
+                "gate_status": "report-basis-freeze-allowed",
+                "readiness_status": "ready",
+                "report_basis_freeze_allowed": True,
+                "output_path": str(root / "report_basis_gate.json"),
+                "gate_reasons": [],
+                "recommended_next_skills": [],
+            }
+            first_request_id = request_and_approve_transition(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="freeze-report-basis",
+                rationale="Approve first report_basis freeze request for stale-controller coverage.",
+            )
+
+            with (
+                mock.patch("eco_council_runtime.kernel.execution.controller.write_registry"),
+                mock.patch(
+                    "eco_council_runtime.kernel.execution.runtime_gate_handlers.apply_report_basis_gate",
+                    return_value=gate_payload,
+                ),
+                mock.patch(
+                    "eco_council_runtime.kernel.execution.controller.run_skill",
+                    return_value=report_basis_result,
+                ) as first_run_skill_mock,
+            ):
+                first_payload = run_governed_execution_round_with_contract_mode(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    contract_mode="strict",
+                    gate_handlers=default_runtime_gate_handlers(),
+                    posture_profile=default_runtime_posture_profile_config(),
+                )
+
+            time.sleep(1.1)
+            second_request_id = request_and_approve_transition(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="freeze-report-basis",
+                rationale="Approve second report_basis freeze request for stale-controller coverage.",
+            )
+            self.assertNotEqual(first_request_id, second_request_id)
+
+            with (
+                mock.patch("eco_council_runtime.kernel.execution.controller.write_registry"),
+                mock.patch(
+                    "eco_council_runtime.kernel.execution.runtime_gate_handlers.apply_report_basis_gate",
+                    return_value=gate_payload,
+                ),
+                mock.patch(
+                    "eco_council_runtime.kernel.execution.controller.run_skill",
+                    return_value=report_basis_result,
+                ) as second_run_skill_mock,
+            ):
+                second_payload = run_governed_execution_round_with_contract_mode(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    contract_mode="strict",
+                    gate_handlers=default_runtime_gate_handlers(),
+                    posture_profile=default_runtime_posture_profile_config(),
+                )
+
+            self.assertEqual(first_request_id, first_payload["controller"]["adopted_transition_request_id"])
+            self.assertEqual(second_request_id, second_payload["controller"]["adopted_transition_request_id"])
+            self.assertEqual("restart-stale-transition", second_payload["controller"]["resume_status"])
+            self.assertEqual(
+                "newer-approved-transition-request",
+                second_payload["controller"]["stale_controller"]["reason"],
+            )
+            self.assertEqual(
+                second_request_id,
+                second_payload["controller"]["stale_controller"]["latest_approved_transition_request_id"],
+            )
+            self.assertEqual(1, first_run_skill_mock.call_count)
+            self.assertEqual(1, second_run_skill_mock.call_count)
+            self.assertEqual(
+                ["controller-freshness", "approved-transition-request"],
+                [
+                    item["source"]
+                    for item in second_payload["controller"]["planning_attempts"]
                 ],
             )
 

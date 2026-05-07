@@ -93,6 +93,64 @@ from eco_council_runtime.kernel.execution.controller.transition_planning import 
     inspection_only_planning,
     skill_actor_role_hint,
 )
+
+
+def adopted_transition_request_id(controller_payload: dict[str, Any]) -> str:
+    direct = maybe_text(controller_payload.get("adopted_transition_request_id"))
+    if direct:
+        return direct
+    planning = controller_payload.get("planning") if isinstance(controller_payload.get("planning"), dict) else {}
+    for key in ("transition_request_id", "adopted_transition_request_id"):
+        value = maybe_text(planning.get(key))
+        if value:
+            return value
+    phase_decision_basis = planning.get("phase_decision_basis") if isinstance(planning.get("phase_decision_basis"), dict) else {}
+    value = maybe_text(phase_decision_basis.get("transition_request_id"))
+    if value:
+        return value
+    plan_id = maybe_text(planning.get("plan_id"))
+    prefix = "transition-executor-"
+    if plan_id.startswith(prefix):
+        return plan_id[len(prefix):]
+    return ""
+
+
+def latest_approved_transition_request(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any] | None:
+    return latest_transition_request(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        transition_kind=TRANSITION_KIND_FREEZE_REPORT_BASIS,
+        request_status=REQUEST_STATUS_APPROVED,
+    )
+
+
+def stale_completed_controller_reason(
+    existing_controller: dict[str, Any],
+    latest_approved_request: dict[str, Any] | None,
+) -> dict[str, str]:
+    if not isinstance(latest_approved_request, dict):
+        return {}
+    latest_request_id = maybe_text(latest_approved_request.get("request_id"))
+    if not latest_request_id:
+        return {}
+    adopted_request_id = adopted_transition_request_id(existing_controller)
+    if not adopted_request_id:
+        return {}
+    if adopted_request_id == latest_request_id:
+        return {}
+    return {
+        "reason": "newer-approved-transition-request",
+        "adopted_transition_request_id": adopted_request_id,
+        "latest_approved_transition_request_id": latest_request_id,
+    }
+
+
 def run_governed_execution_round(
     run_dir: Path,
     *,
@@ -177,11 +235,31 @@ def run_governed_execution_round_with_contract_mode(
         else {}
     ) or load_json_if_exists(Path(artifacts["report_basis_gate_path"])) or load_json_if_exists(Path(artifacts["report_basis_gate_path"])) or {}
     existing_status = maybe_text(existing_controller.get("controller_status"))
-    if not force_restart and existing_status == "completed":
+    latest_approved_request = (
+        latest_approved_transition_request(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+        )
+        if default_transition_execution_mode
+        else None
+    )
+    stale_controller = (
+        stale_completed_controller_reason(existing_controller, latest_approved_request)
+        if default_transition_execution_mode
+        else {}
+    )
+    if not force_restart and existing_status == "completed" and not stale_controller:
         return controller_result_payload(existing_controller, existing_gate)
 
     started_at = utc_now_iso()
-    resume_status = "restart-forced" if force_restart else "fresh-run"
+    resume_status = (
+        "restart-forced"
+        if force_restart
+        else "restart-stale-transition"
+        if stale_controller
+        else "fresh-run"
+    )
     resume_count = 0
     planning: dict[str, Any] = {}
     blueprints: list[dict[str, Any]] = []
@@ -201,8 +279,25 @@ def run_governed_execution_round_with_contract_mode(
         if default_transition_execution_mode
         else "planner-pending"
     )
+    if stale_controller:
+        controller_payload["stale_controller"] = stale_controller
+        append_planning_attempt(
+            controller_payload,
+            planning_attempt_record(
+                source="controller-freshness",
+                status="stale-restart",
+                planning_mode=TRANSITION_EXECUTOR_PLANNING_MODE,
+                controller_authority=TRANSITION_EXECUTOR_AUTHORITY,
+                message=(
+                    "Existing completed controller adopted transition request "
+                    f"`{stale_controller.get('adopted_transition_request_id') or '<none>'}`, "
+                    "but a newer approved freeze-report-basis request "
+                    f"`{stale_controller.get('latest_approved_transition_request_id')}` is available."
+                ),
+            ),
+        )
 
-    if not force_restart and existing_status in {"running", "failed"}:
+    if not force_restart and not stale_controller and existing_status in {"running", "failed"}:
         recovered_planning = planning_from_controller(run_dir, round_id, existing_controller)
         if recovered_planning:
             ensure_executable_planning(recovered_planning)
@@ -328,6 +423,25 @@ def run_governed_execution_round_with_contract_mode(
             selected_planning,
             blueprints,
         )
+        phase_decision_basis = (
+            selected_planning.get("phase_decision_basis")
+            if isinstance(selected_planning.get("phase_decision_basis"), dict)
+            else {}
+        )
+        transition_request = (
+            selected_planning.get("transition_request")
+            if isinstance(selected_planning.get("transition_request"), dict)
+            else {}
+        )
+        adopted_request_id = maybe_text(phase_decision_basis.get("transition_request_id")) or maybe_text(transition_request.get("request_id"))
+        if adopted_request_id:
+            controller_payload["adopted_transition_request_id"] = adopted_request_id
+            controller_payload["adopted_transition_request_status"] = maybe_text(
+                phase_decision_basis.get("transition_request_status")
+            ) or maybe_text(transition_request.get("request_status"))
+            controller_payload["adopted_transition_kind"] = maybe_text(
+                phase_decision_basis.get("transition_kind")
+            ) or maybe_text(transition_request.get("transition_kind"))
         controller_payload["stage_contracts"] = stage_contracts_from_blueprints(
             blueprints
         )

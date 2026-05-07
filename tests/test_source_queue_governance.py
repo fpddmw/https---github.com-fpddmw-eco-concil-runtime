@@ -212,6 +212,97 @@ class SourceQueueGovernanceTests(unittest.TestCase):
             },
         )
 
+    def test_smoke_episode_verification_scope_requires_origin_and_transport_lanes(self) -> None:
+        _, contract_module = load_modules()
+        mission = {
+            "run_id": "run-governance-005",
+            "topic": "June 2023 New York City smoke episode",
+            "objective": "Investigate candidate source regions, transport pathway, public impacts, and handling recommendations.",
+            "window": {"start_utc": "2023-06-07T00:00:00Z", "end_utc": "2023-06-10T00:00:00Z"},
+            "region": {
+                "label": "New York City, NY, United States",
+                "geometry": {"type": "Point", "latitude": 40.7128, "longitude": -74.006},
+            },
+        }
+
+        scope = contract_module.derive_verification_scope(mission)
+        lane_ids = {item["lane_id"] for item in scope["required_evidence_lanes"]}
+
+        self.assertEqual("candidate-source-regions-required", scope["candidate_source_region_policy"])
+        self.assertEqual("required-before-source-or-transport-claim", scope["transport_verification_policy"])
+        self.assertIn("fire-origin", lane_ids)
+        self.assertIn("spatiotemporal-relation-review", lane_ids)
+        self.assertIn("fetch-nasa-firms-fire", scope["required_source_skills"])
+
+    def test_lane_required_sources_raise_effective_step_budget(self) -> None:
+        selection_module, _ = load_modules()
+        planner_module = importlib.import_module("eco_council_runtime.kernel.source_queue.source_queue_planner")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            round_id = "round-governance-006"
+            mission = {
+                "run_id": "run-governance-006",
+                "topic": "June 2023 New York City smoke episode",
+                "objective": "Investigate candidate source regions, transport pathway, public impacts, and handling recommendations.",
+                "window": {"start_utc": "2023-06-07T00:00:00Z", "end_utc": "2023-06-10T00:00:00Z"},
+                "region": {
+                    "label": "New York City, NY, United States",
+                    "geometry": {"type": "Point", "latitude": 40.7128, "longitude": -74.006},
+                },
+                "source_governance": {
+                    "max_selected_sources_per_role": 4,
+                    "max_source_steps_per_round": 1,
+                },
+                "source_requests": [
+                    {"source_skill": "fetch-gdelt-doc-search", "fetch_argv": ["echo", "{}"]},
+                    {"source_skill": "fetch-open-meteo-air-quality", "fetch_argv": ["echo", "{}"]},
+                    {"source_skill": "fetch-open-meteo-historical", "fetch_argv": ["echo", "{}"]},
+                    {"source_skill": "fetch-nasa-firms-fire", "fetch_argv": ["echo", "{}"]},
+                ],
+            }
+            tasks = [
+                *sociologist_tasks(round_id),
+                {
+                    "task_id": f"task-environmentalist-{round_id}-01",
+                    "assigned_role": "environmentalist",
+                    "inputs": {"evidence_requirements": []},
+                },
+            ]
+            (run_dir / "investigation").mkdir(parents=True, exist_ok=True)
+            (run_dir / "mission.json").write_text(
+                json.dumps(mission, ensure_ascii=True, sort_keys=True),
+                encoding="utf-8",
+            )
+            (run_dir / "investigation" / f"round_tasks_{round_id}.json").write_text(
+                json.dumps(tasks, ensure_ascii=True, sort_keys=True),
+                encoding="utf-8",
+            )
+
+            selections = selection_module.build_source_selections(
+                run_dir=run_dir,
+                mission=mission,
+                tasks=tasks,
+                run_id="run-governance-006",
+                round_id=round_id,
+            )
+            planner_module.write_source_selections(run_dir, round_id, selections)
+            plan, warnings = planner_module.build_fetch_plan(
+                run_dir=run_dir,
+                run_id="run-governance-006",
+                round_id=round_id,
+                mission=mission,
+                tasks=tasks,
+                selections=selections,
+            )
+
+        self.assertEqual(4, len(plan["steps"]))
+        self.assertEqual("candidate-source-regions-required", plan["verification_scope"]["candidate_source_region_policy"])
+        self.assertEqual(1, plan["source_step_budget"]["configured_max_source_steps_per_round"])
+        self.assertEqual(4, plan["source_step_budget"]["effective_max_source_steps_per_round"])
+        self.assertTrue(any(item["code"] == "source-step-budget-raised-for-required-lanes" for item in warnings))
+
 
 if __name__ == "__main__":
     unittest.main()

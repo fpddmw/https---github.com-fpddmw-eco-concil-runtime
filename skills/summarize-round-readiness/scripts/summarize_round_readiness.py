@@ -42,6 +42,9 @@ from eco_council_runtime.kernel.execution.governed_execution_action_semantics im
 from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_round_readiness_assessment,
 )
+from eco_council_runtime.kernel.source_queue.source_queue_contract import (  # noqa: E402
+    derive_verification_scope,
+)
 from eco_council_runtime.kernel.operator.surfaces import (  # noqa: E402
     load_falsification_probe_wrapper,
     load_next_actions_wrapper,
@@ -70,6 +73,13 @@ def resolve_run_dir(run_dir: str) -> Path:
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def read_json_object_if_exists(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload if isinstance(payload, dict) else {}
 
 
 def list_items(value: Any) -> list[Any]:
@@ -109,6 +119,132 @@ def collected_evidence_refs(items: list[dict[str, Any]]) -> list[str]:
     return unique_texts(values)
 
 
+def load_mission_payload(run_dir: Path) -> dict[str, Any]:
+    for candidate in (run_dir / "mission.json", run_dir / "inputs" / "mission.json"):
+        payload = read_json_object_if_exists(candidate)
+        if payload:
+            return payload
+    return {}
+
+
+def selected_source_skills_from_mission(mission: dict[str, Any]) -> list[str]:
+    values: list[Any] = []
+    selections = (
+        mission.get("source_selections")
+        if isinstance(mission.get("source_selections"), dict)
+        else {}
+    )
+    for selection in selections.values():
+        if isinstance(selection, dict):
+            values.extend(list_items(selection.get("selected_sources")))
+    return unique_texts(values)
+
+
+def completed_source_skills_for_round(run_dir: Path, *, round_id: str) -> list[str]:
+    execution = read_json_object_if_exists(
+        run_dir / "runtime" / f"import_execution_{round_id}.json"
+    )
+    values: list[Any] = []
+    statuses = execution.get("statuses", []) if isinstance(execution.get("statuses"), list) else []
+    for status in statuses:
+        if not isinstance(status, dict):
+            continue
+        if maybe_text(status.get("status")) != "completed":
+            continue
+        values.append(status.get("source_skill"))
+    return unique_texts(values)
+
+
+SOURCE_SKILL_EQUIVALENTS = {
+    "fetch-open-meteo-air-quality": {
+        "fetch-open-meteo-air-quality",
+        "fetch-openaq",
+        "fetch-airnow-hourly-observations",
+    },
+    "fetch-gdelt-doc-search": {
+        "fetch-gdelt-doc-search",
+        "fetch-youtube-video-search",
+        "fetch-youtube-comments",
+        "fetch-regulationsgov-comments",
+        "fetch-regulationsgov-comment-detail",
+    },
+}
+
+
+def source_skill_satisfied_by(required_source_skill: str, observed_source_skills: list[str]) -> bool:
+    allowed = SOURCE_SKILL_EQUIVALENTS.get(
+        required_source_skill,
+        {required_source_skill},
+    )
+    observed_lookup = {maybe_text(source).casefold() for source in observed_source_skills}
+    return any(source.casefold() in observed_lookup for source in allowed)
+
+
+def verification_scope_source_gate(
+    *,
+    mission: dict[str, Any],
+    run_dir: Path,
+    round_id: str,
+) -> dict[str, Any]:
+    if not mission:
+        return {
+            "status": "not-applicable",
+            "required_source_skills": [],
+            "selected_source_skills": [],
+            "completed_source_skills": [],
+            "missing_required_source_skills": [],
+            "missing_selected_source_skills": [],
+            "gate_reason": "",
+            "verification_scope": {},
+        }
+    verification_scope = (
+        mission.get("verification_scope")
+        if isinstance(mission.get("verification_scope"), dict)
+        else derive_verification_scope(mission)
+    )
+    required_source_skills = unique_texts(
+        list_items(verification_scope.get("required_source_skills"))
+    )
+    selected_source_skills = selected_source_skills_from_mission(mission)
+    completed_source_skills = completed_source_skills_for_round(
+        run_dir,
+        round_id=round_id,
+    )
+    missing_required = [
+        source
+        for source in required_source_skills
+        if not source_skill_satisfied_by(source, completed_source_skills)
+    ]
+    missing_selected = [
+        source
+        for source in required_source_skills
+        if not source_skill_satisfied_by(source, selected_source_skills)
+    ]
+    if not required_source_skills:
+        status = "not-required"
+    elif missing_required:
+        status = "missing-required-source-imports"
+    else:
+        status = "satisfied"
+    reason = ""
+    if missing_required:
+        reason = (
+            "Verification scope requires completed source imports before report-basis freeze: "
+            + ", ".join(missing_required)
+            + "."
+        )
+    return {
+        "status": status,
+        "required_source_skills": required_source_skills,
+        "selected_source_skills": selected_source_skills,
+        "completed_source_skills": completed_source_skills,
+        "missing_required_source_skills": missing_required,
+        "missing_selected_source_skills": missing_selected,
+        "gate_reason": reason,
+        "verification_scope": verification_scope,
+    }
+
+
 def load_council_readiness_opinions(
     run_dir: Path,
     *,
@@ -135,6 +271,27 @@ def load_council_readiness_opinions(
     ]
 
 
+def load_round_review_comments(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    payload = query_council_objects(
+        run_dir,
+        object_kind="review-comment",
+        run_id=run_id,
+        round_id=round_id,
+        limit=200,
+    )
+    comments = (
+        payload.get("objects", [])
+        if isinstance(payload.get("objects"), list)
+        else []
+    )
+    return [comment for comment in comments if isinstance(comment, dict)]
+
+
 def readiness_bucket(opinion: dict[str, Any]) -> str:
     readiness_value = maybe_text(opinion.get("readiness_status"))
     if bool(opinion.get("sufficient_for_report_basis")) or readiness_value in {
@@ -146,6 +303,66 @@ def readiness_bucket(opinion: dict[str, Any]) -> str:
     if readiness_value in {"blocked", "reject", "rejected"}:
         return "blocked"
     return "needs-more-data"
+
+
+OPEN_REVIEW_COMMENT_STATUSES = {"", "open", "submitted"}
+NON_BLOCKING_REPORT_RISKS = {"", "none", "no-risk", "no-report-risk", "informational"}
+
+
+def review_comment_is_open(comment: dict[str, Any]) -> bool:
+    return maybe_text(comment.get("status")).casefold() in OPEN_REVIEW_COMMENT_STATUSES
+
+
+def review_comment_requires_followup(comment: dict[str, Any]) -> bool:
+    if not review_comment_is_open(comment):
+        return False
+    report_risk = maybe_text(comment.get("report_risk")).casefold()
+    if report_risk and report_risk not in NON_BLOCKING_REPORT_RISKS:
+        return True
+    required_followup = comment.get("required_followup_evidence", [])
+    if isinstance(required_followup, list) and any(maybe_text(item) for item in required_followup):
+        return True
+    return False
+
+
+def readiness_opinion_references_comment(
+    opinion: dict[str, Any],
+    comment_id: str,
+) -> bool:
+    referenced_values: list[Any] = []
+    for field_name in ("basis_object_ids", "lineage", "evidence_refs"):
+        referenced_values.extend(list_items(opinion.get(field_name)))
+    return comment_id in {maybe_text(value) for value in referenced_values}
+
+
+def review_comment_is_waived_by_council(
+    comment: dict[str, Any],
+    opinions: list[dict[str, Any]],
+) -> bool:
+    comment_id = maybe_text(comment.get("comment_id"))
+    if not comment_id:
+        return False
+    for opinion in opinions:
+        if readiness_bucket(opinion) != "ready":
+            continue
+        if maybe_text(opinion.get("agent_role")) != "challenger":
+            continue
+        if readiness_opinion_references_comment(opinion, comment_id):
+            return True
+    return False
+
+
+def blocking_review_comments(
+    comments: list[dict[str, Any]],
+    *,
+    opinions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        comment
+        for comment in comments
+        if review_comment_requires_followup(comment)
+        and not review_comment_is_waived_by_council(comment, opinions)
+    ]
 
 
 def aggregate_council_readiness_opinions(
@@ -345,6 +562,17 @@ def summarize_round_readiness_skill(
     council_opinions = load_council_readiness_opinions(
         run_dir_path,
         run_id=run_id,
+        round_id=round_id,
+    )
+    review_comments = load_round_review_comments(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    mission_payload = load_mission_payload(run_dir_path)
+    verification_source_gate = verification_scope_source_gate(
+        mission=mission_payload,
+        run_dir=run_dir_path,
         round_id=round_id,
     )
     normalized_council_execution_mode = normalize_council_execution_mode(
@@ -557,6 +785,41 @@ def summarize_round_readiness_skill(
                 "message": "Council readiness opinions were present but ignored because council_execution_mode=fallback-only.",
             }
         )
+    open_review_comments = [
+        comment for comment in review_comments if review_comment_is_open(comment)
+    ]
+    unresolved_blocking_review_comments = blocking_review_comments(
+        review_comments,
+        opinions=council_opinions
+        if normalized_council_execution_mode != COUNCIL_EXECUTION_MODE_FALLBACK_ONLY
+        else [],
+    )
+    blocking_review_comment_ids = unique_texts(
+        [comment.get("comment_id") for comment in unresolved_blocking_review_comments]
+    )
+    if unresolved_blocking_review_comments:
+        review_reason = (
+            f"{len(unresolved_blocking_review_comments)} unresolved report-risk review comments "
+            "require challenger follow-up or an explicit challenger readiness waiver before report-basis freeze."
+        )
+        if status_value == "ready":
+            status_value = "needs-more-data"
+        if review_reason not in reasons:
+            reasons = [review_reason, *reasons]
+        readiness_lineage = unique_texts(readiness_lineage + blocking_review_comment_ids)
+        readiness_evidence_refs = unique_texts(
+            readiness_evidence_refs
+            + collected_evidence_refs(unresolved_blocking_review_comments)
+        )
+    missing_required_source_skills = list_items(
+        verification_source_gate.get("missing_required_source_skills")
+    )
+    if missing_required_source_skills:
+        gate_reason = maybe_text(verification_source_gate.get("gate_reason"))
+        if status_value == "ready":
+            status_value = "needs-more-data"
+        if gate_reason and gate_reason not in reasons:
+            reasons = [gate_reason, *reasons]
     findings = [
         {
             "finding_id": "readiness-route-gating",
@@ -590,7 +853,8 @@ def summarize_round_readiness_skill(
                 f"representation_gap_actions={representation_gap_actions}, "
                 f"formal_linkage_actions={formal_linkage_actions}, "
                 f"issue_gap_actions={issue_gap_actions}, "
-                f"relation_gap_actions={relation_gap_actions}"
+                f"relation_gap_actions={relation_gap_actions}, "
+                f"blocking_review_comments={len(unresolved_blocking_review_comments)}"
             ),
             "confidence": "medium",
         },
@@ -659,6 +923,39 @@ def summarize_round_readiness_skill(
             if skill_name not in deduped:
                 deduped.append(skill_name)
         recommended_next_skills = deduped
+    if unresolved_blocking_review_comments:
+        followup_skills = [
+            "open-followup-from-review-comment",
+            "open-challenge-ticket",
+            "claim-board-task",
+            "submit-readiness-opinion",
+        ]
+        if any(
+            maybe_text(comment.get("relation_id"))
+            or maybe_text(comment.get("target_kind")) == "spatiotemporal-relation-cue"
+            or "transport" in maybe_text(comment.get("comment_text")).casefold()
+            or "causality" in maybe_text(comment.get("report_risk")).casefold()
+            or "causality" in maybe_text(comment.get("comment_text")).casefold()
+            for comment in unresolved_blocking_review_comments
+        ):
+            followup_skills.extend(
+                [
+                    "query-spatiotemporal-relations",
+                    "review-spatiotemporal-relation-alternatives",
+                ]
+            )
+        recommended_next_skills = unique_texts(
+            followup_skills + recommended_next_skills
+        )
+    if missing_required_source_skills:
+        recommended_next_skills = unique_texts(
+            [
+                "prepare-round",
+                "normalize-fetch-execution",
+                *missing_required_source_skills,
+            ]
+            + recommended_next_skills
+        )
     wrapper = {
         "schema_version": "d2.1",
         "skill": SKILL_NAME,
@@ -696,6 +993,28 @@ def summarize_round_readiness_skill(
         "selected_basis_object_ids": selected_basis_object_ids,
         "readiness_opinion_count": len(council_opinions),
         "readiness_opinion_status_counts": opinion_status_counts,
+        "review_comment_count": len(review_comments),
+        "open_review_comment_count": len(open_review_comments),
+        "blocking_review_comment_count": len(unresolved_blocking_review_comments),
+        "blocking_review_comment_ids": blocking_review_comment_ids,
+        "verification_scope": verification_source_gate.get("verification_scope", {}),
+        "verification_scope_gate": {
+            "status": maybe_text(verification_source_gate.get("status")),
+            "required_source_skills": list_items(
+                verification_source_gate.get("required_source_skills")
+            ),
+            "selected_source_skills": list_items(
+                verification_source_gate.get("selected_source_skills")
+            ),
+            "completed_source_skills": list_items(
+                verification_source_gate.get("completed_source_skills")
+            ),
+            "missing_required_source_skills": missing_required_source_skills,
+            "missing_selected_source_skills": list_items(
+                verification_source_gate.get("missing_selected_source_skills")
+            ),
+            "gate_reason": maybe_text(verification_source_gate.get("gate_reason")),
+        },
         "agenda_counts": agenda_counts,
         "counts": {
             "active_hypotheses": active_hypotheses,
@@ -726,6 +1045,12 @@ def summarize_round_readiness_skill(
             "relation_gap_actions": relation_gap_actions,
             "diffusion_focus_count": diffusion_focus_count,
             "agent_readiness_opinions": len(council_opinions),
+            "open_review_comments": len(open_review_comments),
+            "blocking_review_comments": len(unresolved_blocking_review_comments),
+            "required_source_skills": len(
+                list_items(verification_source_gate.get("required_source_skills"))
+            ),
+            "missing_required_source_skills": len(missing_required_source_skills),
         },
         "controversy_gap_counts": action_gap_counts,
         "probe_type_counts": probe_type_counts,

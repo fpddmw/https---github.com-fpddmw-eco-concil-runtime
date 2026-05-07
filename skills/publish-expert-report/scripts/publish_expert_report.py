@@ -12,6 +12,9 @@ from typing import Any
 
 SKILL_NAME = "publish-expert-report"
 ROLE_VALUES = ("sociologist", "environmentalist")
+READY_DRAFT_REPORT_STATUS = "ready-to-publish"
+CANONICAL_PUBLISHED_STATUS = "canonical-published"
+CANONICAL_WITHHELD_STATUS = "canonical-needs-more-evidence"
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
@@ -71,6 +74,14 @@ def load_json_if_exists(path: Path) -> dict[str, Any] | None:
     if isinstance(payload, dict):
         return payload
     return None
+
+
+def canonical_report_status(draft_status: str) -> str:
+    return (
+        CANONICAL_PUBLISHED_STATUS
+        if maybe_text(draft_status) == READY_DRAFT_REPORT_STATUS
+        else CANONICAL_WITHHELD_STATUS
+    )
 
 
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
@@ -168,6 +179,8 @@ def publish_expert_report_skill(
             "record_id": "",
             "provenance": {},
             "report_stage": "canonical",
+            "source_report_status": maybe_text(draft_payload.get("status")),
+            "status": canonical_report_status(maybe_text(draft_payload.get("status"))),
             "canonical_artifact": "expert-report",
             "canonical_role": role,
         },
@@ -217,6 +230,8 @@ def publish_expert_report_skill(
             "overwrote_existing": overwrote_existing,
             "output_path": str(output_file),
             "report_id": report_id,
+            "source_report_status": maybe_text(draft_payload.get("status")),
+            "canonical_report_status": maybe_text(stored_payload.get("status")),
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
             "reporting_handoff_source": maybe_text(
@@ -240,7 +255,7 @@ def publish_expert_report_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [],
             "challenge_hints": [],
-            "suggested_next_skills": ["publish-council-decision"] if maybe_text(draft_payload.get("status")) == "ready-to-publish" else ["submit-finding-record", "submit-evidence-bundle", "submit-council-proposal", "submit-readiness-opinion"],
+            "suggested_next_skills": ["publish-council-decision"] if maybe_text(draft_payload.get("status")) == READY_DRAFT_REPORT_STATUS else ["submit-finding-record", "submit-evidence-bundle", "submit-council-proposal", "submit-readiness-opinion"],
         },
     }
 

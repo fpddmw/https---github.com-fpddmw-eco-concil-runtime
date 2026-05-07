@@ -6,9 +6,11 @@ from typing import Any
 
 from eco_council_runtime.kernel.source_queue.source_queue_contract import (
     SOURCE_SELECTION_ROLES,
+    derive_verification_scope,
     effective_constraints,
     file_sha256,
     file_snapshot,
+    intent_selected_sources,
     maybe_text,
     normalize_artifact_imports,
     normalize_source_requests,
@@ -175,6 +177,28 @@ def selected_source_sequence(selection: dict[str, Any] | None) -> list[dict[str,
                     }
                 )
     return sequence
+
+
+def required_lane_source_skills(mission: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for role in SOURCE_SELECTION_ROLES:
+        values.extend(intent_selected_sources(mission, role))
+    return unique_texts(values)
+
+
+def source_step_budget(mission: dict[str, Any]) -> dict[str, Any]:
+    constraints = effective_constraints(mission)
+    configured_max = int(constraints.get("max_source_steps_per_round") or 0)
+    required_sources = required_lane_source_skills(mission)
+    effective_max = configured_max
+    if configured_max > 0:
+        effective_max = max(configured_max, len(required_sources))
+    return {
+        "configured_max_source_steps_per_round": configured_max,
+        "effective_max_source_steps_per_round": effective_max,
+        "required_lane_source_count": len(required_sources),
+        "required_lane_source_skills": required_sources,
+    }
 
 
 def latest_completed_status_for_source(
@@ -383,9 +407,27 @@ def build_fetch_plan(
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
     imports = normalize_artifact_imports(mission)
     requests = normalize_source_requests(mission)
+    verification_scope = (
+        mission.get("verification_scope")
+        if isinstance(mission.get("verification_scope"), dict)
+        else derive_verification_scope(mission)
+    )
     constraints = effective_constraints(mission)
-    max_source_steps_per_round = int(constraints.get("max_source_steps_per_round") or 0)
+    budget = source_step_budget(mission)
+    max_source_steps_per_round = int(budget.get("effective_max_source_steps_per_round") or 0)
     warnings: list[dict[str, str]] = []
+    configured_max = int(budget.get("configured_max_source_steps_per_round") or 0)
+    if configured_max > 0 and max_source_steps_per_round > configured_max:
+        warnings.append(
+            {
+                "code": "source-step-budget-raised-for-required-lanes",
+                "message": (
+                    "Raised effective max_source_steps_per_round from "
+                    f"{configured_max} to {max_source_steps_per_round} so required evidence-lane sources "
+                    "are not suppressed by the global per-round budget."
+                ),
+            }
+        )
     steps: list[dict[str, Any]] = []
     step_index = 0
     planned_steps_by_source: dict[str, list[dict[str, Any]]] = {}
@@ -549,6 +591,8 @@ def build_fetch_plan(
         "generated_at_utc": utc_now_iso(),
         "policy_profile": policy_profile_summary(mission),
         "effective_constraints": constraints,
+        "verification_scope": verification_scope,
+        "source_step_budget": budget,
         "run": {
             "run_id": run_id,
             "round_id": round_id,
@@ -588,5 +632,7 @@ __all__ = [
     "build_fetch_plan",
     "ensure_fetch_plan_inputs_match",
     "fetch_plan_input_snapshot",
+    "required_lane_source_skills",
+    "source_step_budget",
     "write_source_selections",
 ]

@@ -516,20 +516,7 @@ def build_policy_recommendations(
     uncertainty_register: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     if reporting_ready:
-        return [
-            {
-                "recommendation_id": "reporting-action-001",
-                "recommendation_type": "reporting",
-                "summary": "Draft the decision-maker report from frozen DB evidence basis and submitted report section drafts.",
-                "basis": "report-basis-freeze",
-            },
-            {
-                "recommendation_id": "reporting-action-002",
-                "recommendation_type": "audit",
-                "summary": "Carry uncertainty register and residual disputes into the final report rather than turning them into settled conclusions.",
-                "basis": "uncertainty-register" if uncertainty_register else "reporting-gate",
-            },
-        ]
+        return []
     recommendations: list[dict[str, Any]] = []
     for index, action in enumerate(recommended_next_actions, start=1):
         recommendations.append(
@@ -756,6 +743,47 @@ def materialize_reporting_handoff_skill(
         supervisor_state = {"supervisor_status": "unavailable", "top_actions": [], "operator_notes": []}
     else:
         supervisor_state = supervisor_state_payload
+    report_basis_transition_request_id = maybe_text(
+        report_basis_freeze.get("transition_request_id")
+    )
+    supervisor_transition_request_id = maybe_text(
+        supervisor_state.get("adopted_transition_request_id")
+    )
+    supervisor_freshness_status = (
+        "fresh"
+        if (
+            report_basis_transition_request_id
+            and supervisor_transition_request_id
+            and report_basis_transition_request_id == supervisor_transition_request_id
+        )
+        else "stale"
+        if report_basis_transition_request_id and supervisor_transition_request_id
+        else "untracked"
+    )
+    if supervisor_freshness_status == "stale":
+        stale_warning = {
+            "code": "stale-supervisor-state",
+            "message": (
+                "Supervisor snapshot adopted transition request "
+                f"`{supervisor_transition_request_id}`, but report-basis freeze uses "
+                f"`{report_basis_transition_request_id}`. Rerun supervise-round before "
+                "materializing reporting handoff."
+            ),
+        }
+        warnings.append(stale_warning)
+        operator_notes = (
+            list(supervisor_state.get("operator_notes", []))
+            if isinstance(supervisor_state.get("operator_notes"), list)
+            else []
+        )
+        operator_notes.append(stale_warning["message"])
+        supervisor_state = {
+            **supervisor_state,
+            "supervisor_status": "stale-controller",
+            "reporting_ready": False,
+            "reporting_handoff_status": "investigation-open",
+            "operator_notes": operator_notes,
+        }
     board_brief_text = load_text_if_exists(board_brief_file)
     contract_fields = reporting_contract_fields_from_payload(
         report_basis_payload,
@@ -908,6 +936,9 @@ def materialize_reporting_handoff_skill(
         "report_basis_path": str(report_basis_file),
         "readiness_status": readiness_status,
         "supervisor_status": supervisor_status,
+        "report_basis_transition_request_id": report_basis_transition_request_id,
+        "supervisor_transition_request_id": supervisor_transition_request_id,
+        "supervisor_freshness_status": supervisor_freshness_status,
         "readiness_path": str(readiness_file),
         "board_brief_path": str(board_brief_file),
         "supervisor_state_path": str(supervisor_file),

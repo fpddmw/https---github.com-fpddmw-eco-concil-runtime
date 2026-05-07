@@ -363,6 +363,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_actor_role_arg(post_review_cmd)
     post_review_cmd.add_argument("--author-role", default="")
     post_review_cmd.add_argument("--review-kind", default="review")
+    post_review_cmd.add_argument("--status", default="")
     post_review_cmd.add_argument("--thread-id", default="")
     post_review_cmd.add_argument("--comment-text", required=True)
     post_review_cmd.add_argument("--target-kind", default="round")

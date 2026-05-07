@@ -518,6 +518,21 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_DELIBERATION,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
+        "open-followup-from-review-comment": _policy(
+            skill_name="open-followup-from-review-comment",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[ROLE_MODERATOR],
+            required_capabilities=[
+                CAPABILITY_CHALLENGE_WRITE,
+                CAPABILITY_BOARD_TASK_WRITE,
+            ],
+            side_effect_scope=["artifact-write", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=["review-comment"],
+            output_object_kinds=["challenge", "board-task"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+            default_actor_role_hint=ROLE_MODERATOR,
+        ),
         "submit-council-proposal": _policy(
             skill_name="submit-council-proposal",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,

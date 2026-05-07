@@ -114,6 +114,10 @@ def prepare_hold_round(run_dir: Path, root: Path) -> None:
         "--target-hypothesis-id", hypothesis_payload["canonical_ids"][0],
         "--priority", "high", "--owner-role", "challenger", "--linked-artifact-ref", evidence_ref,
     )
+    run_script(
+        script_path("summarize-round-readiness"),
+        "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID,
+    )
     approve_report_basis_transition(run_dir)
     run_kernel("supervise-round", "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
     run_script(script_path("materialize-reporting-handoff"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
@@ -177,8 +181,13 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("published", soc_publish["summary"]["operation"])
             self.assertEqual("published", env_publish["summary"]["operation"])
             self.assertEqual("published", decision_publish["summary"]["operation"])
+            self.assertEqual("ready-to-publish", soc_publish["summary"]["source_report_status"])
+            self.assertEqual("canonical-published", soc_publish["summary"]["canonical_report_status"])
             self.assertEqual("sociologist", soc_report["agent_role"])
             self.assertEqual("environmentalist", env_report["agent_role"])
+            self.assertEqual("canonical-published", soc_report["status"])
+            self.assertEqual("ready-to-publish", soc_report["source_report_status"])
+            self.assertEqual("canonical-published", env_report["status"])
             self.assertEqual("expert-report", soc_report["canonical_artifact"])
             self.assertEqual(
                 "deliberation-plane-expert-report-draft",
@@ -422,6 +431,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
 
             self.assertEqual("needs-more-evidence", draft_payload["summary"]["report_status"])
             self.assertEqual("published", first_publish["summary"]["operation"])
+            self.assertEqual("canonical-needs-more-evidence", first_publish["summary"]["canonical_report_status"])
             self.assertEqual("completed", decision_publish["status"])
             self.assertEqual("hold", decision_publish["summary"]["publication_readiness"])
             self.assertIn(
@@ -502,6 +512,13 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 publication["decision_maker_report"]["evidence_index"],
                 publication["evidence_index"],
             )
+            recommendation_section = next(
+                section
+                for section in publication["decision_maker_report"]["sections"]
+                if section["section_key"] == "recommendations"
+            )
+            self.assertEqual("not-in-scope", recommendation_section["status"])
+            self.assertEqual([], publication["decision_maker_report"]["policy_recommendations"])
             self.assertIn("citation-index", publication["published_sections"])
             self.assertIn("uncertainty-register", publication["published_sections"])
             self.assertIn("remaining-disputes", publication["published_sections"])
@@ -541,6 +558,10 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 ]
             )
             self.assertEqual(2, len(publication["role_reports"]))
+            self.assertEqual(
+                {"canonical-published"},
+                {row["status"] for row in publication["role_reports"]},
+            )
             self.assertIn("role-reports", publication["published_sections"])
             self.assertEqual(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json").resolve().as_posix(), Path(publication["audit_refs"]["decision_path"]).resolve().as_posix())
 

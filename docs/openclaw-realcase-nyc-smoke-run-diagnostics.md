@@ -21,6 +21,67 @@
 4. 引入 mission-to-lane 编译：把 broad mission 自动展开为 receptor、fire-origin、smoke-plume、transport、impact、response、uncertainty lanes。
 5. 为 wildfire smoke 类任务补齐 source-attribution/transport 相关 skill 和 CI fixture。
 
+## 0. 修复进度快照（2026-05-07）
+
+状态说明：
+
+1. `done`: 已有代码修复和定向回归验证。
+2. `partial`: 已修住本轮暴露的一部分失败面，但仍有架构或能力缺口。
+3. `pending`: 仍未落地。
+4. `deferred`: 建议保留为后续能力建设。
+
+| 问题/阶段 | 当前状态 | 已落地修复 | 剩余验收点 |
+| --- | --- | --- | --- |
+| Config: split skill API key inheritance | done | `fetch-regulationsgov-comments`、`fetch-regulationsgov-comment-detail`、`fetch-openaq` 的 skill 文档改为加载真实 `assets/config.env`；配置检查已通过。 | 不暴露密钥；后续 CI 可加 no-config-env-doc-mismatch 检查。 |
+| G-001 runtime-operator capability mismatch | done | `runtime-operator` 补齐 `normalize`、`round-bootstrap` 能力；moderator 补齐 challenge/probe 写入能力；新增角色/skill 策略一致性测试。 | 若未来引入独立 executor role，再回收 operator 的 normalize 能力。 |
+| G-002 dead-letter lifecycle | done | 新增 `resolve-dead-letter` 命令、访问策略、CLI 解析、ledger 事件和 health 刷新；测试覆盖 dead letter 关闭后 health 消警。 | 后续可补 superseded/accepted-risk 的更细状态。 |
+| C-001 contract prose parsing | done | required input 解析不再把 `Optional:`/`Recommended:` 当硬要求；能从 prose 中提取 backtick identifier；测试覆盖 proposal 输入解析。 | 仍建议把 skill I/O contract 迁到机器可读 schema。 |
+| C-002/C-003 reporting contract cleanup | partial | 去重 `report_basis`，移除 no-op condition，过滤 `db_path` 类 summary 噪声。 | 仍缺完整机器可读 reporting contract 和 contract fixture。 |
+| R-001 false open risks | done | reporting handoff 不再把正向 gate reason / operator note 全部转成风险；仅在 readiness/supervisor 非 ready 时转为风险。 | 需要用真实 run fixture 防回归。 |
+| R-002 arbitrary decision lead basis | partial | council decision 不再直接拿 `key_findings[0]` 作为任意 lead basis，改为汇总标题和数量。 | 语义排序和 evidence strength ranking 仍未完成。 |
+| R-003 role-specific expert reports | partial | expert report 增加基于 role 的 finding 过滤，减少 sociologist 直接继承环境证据的问题。 | 仍需 role-specific synthesis 模板和 cross-role evidence 引用规则。 |
+| R-004 draft/canonical/publication status split | done | `publish-expert-report` 不再把 draft 的 `ready-to-publish` 原样带入 canonical；ready draft 发布后为 `canonical-published`，hold draft 发布后为 `canonical-needs-more-evidence`；final publication gate 接受 canonical published 状态。 | 后续可把状态枚举抽到共享 reporting status module。 |
+| R-005 report status propagation | done | expert report payload 写入 `readiness_status` 和 `supervisor_status`。 | 后续应与 publication gate 共用同一状态枚举。 |
+| R-006 final publication hard gate | partial | final publication 增加 release blockers；readiness、handoff、open risk、supervisor、report status 和 required section 状态可阻断 release；空风险/不确定性不再被误判为 `basis-gap`，open risks 会进入 uncertainty rows。 | recommendation 支撑和真实 fixture 重放验收仍需补齐。 |
+| M-002/S-001/T-001 mission-to-lane trigger | partial | mission intent 可派生 receptor-air-quality、fire-origin、public-discourse、local-weather-context、spatiotemporal-relation-review、impact、response lanes；source selection 会把 FIRMS、Open-Meteo、GDELT 纳入候选；prepare-round 会建议 spatiotemporal relation helper。 | 自动 fetch 参数生成、候选源区发现、烟羽/轨迹数据源仍缺；不能标为完整 source attribution。 |
+| M-003 verification scope | done | scaffold 阶段写入 `verification_scope`，包含 receptor region、study window、candidate source region policy、lag window、required evidence lanes、excluded inferences、reportable claim boundary；round task 和 scaffold summary 均携带该对象；`summarize-round-readiness` 现在会消费 `required_source_skills`，缺失完成导入时把 ready 降为 `needs-more-data`。 | final report 对 reportable claim boundary 的逐声明消费仍需补齐。 |
+| S-003 lane-aware source budget | partial | fetch planner 增加 `source_step_budget`：当 required evidence-lane sources 多于全局 `max_source_steps_per_round` 时，提升 effective budget 并写出 warning，避免关键 lane 被全局步数压掉；readiness 已有 required source import gate 和公共/空气质量 source 等价类判断。 | 仍需真正的 per-lane min/max budget、must-select lane 对象化，以及烟羽/轨迹类 source lane。 |
+| G-003 readiness-before-freeze | done | `freeze-report-basis` 在没有 DB-backed readiness assessment 时返回 `blocked`，不写 withheld freeze artifact，也不提交 transition；handoff 建议先运行 `summarize-round-readiness`。同时修复 `publish-council-decision` 在缺 report-basis payload 时的空值崩溃。 | controller plan 仍应在更上游自动提示 readiness materialization。 |
+| G-004 governance freshness | done | Controller 记录 adopted transition request；completed controller 遇到更新的 approved freeze-report-basis request 会自动 stale restart；supervisor 传播 adopted transition 字段；reporting handoff 比对 frozen report-basis 与 supervisor transition id，不一致时以 `stale-controller` 阻断 reporting-ready。 | 后续可把 freshness 检查推广到 close-round / open-next-round 等其它 transition kind。 |
+| G-005 challenger follow-up | done | `summarize-round-readiness` 现在读取 DB-backed `review-comment`；未关闭且带 `report_risk` 或 required follow-up evidence 的 review comment 会把 readiness 从 `ready` 降为 `needs-more-data`，并建议 `open-followup-from-review-comment`、`open-challenge-ticket`、`claim-board-task`、`submit-readiness-opinion`。新增 `open-followup-from-review-comment`，可把严重 review comment 显式转成 challenge ticket 和 claimed board task。若 challenger readiness opinion 显式引用该 comment，则视为 waiver。 | 更强的 transport/plume mandatory lane 仍归 T 类能力继续补。 |
+| R-007 selected evidence expansion | done | `freeze-report-basis` 现在会从已选中/支持的 evidence bundle 展开全部 bundle evidence refs，并记录 `expanded_evidence_bundle_ids` 与 ref count。 | 后续可补显式 exclusion/weighting 规则。 |
+| R-008 evidence-bound recommendations | partial | reporting-ready handoff 不再把 generic reporting/audit actions 写成 `policy_recommendations`；没有证据绑定的 recommendations section 会保持 `not-in-scope`。 | 仍需新增 formal response/public health/emergency response evidence lane，才能生成处理建议。 |
+| T-002 smoke/transport model capability | deferred | 当前仅触发 spatiotemporal relation helper 建议。 | 仍需 NOAA HMS smoke、trajectory/lag cue、transport alternatives 等能力。 |
+| Phase 0 regression fixture | done | 新增 `tests/fixtures/openclaw-realcase-nyc-smoke-phase0.json` 和 `tests.test_realcase_nyc_smoke_phase0_fixture`，以离线方式冻结本轮 run 的 mission/source/execution/reporting 关键问题签名。 | 后续真实重跑仍需更宽 mission 和 source/transport 能力。 |
+
+当前判断：
+
+1. 已完成的多为治理硬 bug、报告门禁 bug、配置 bug，以及 mission-to-lane 的第一层编排。
+2. 仍不能宣布“真实烟霾调查流程完整可用”，因为 source-origin 只有 required-source import gate，transport/plume 的数据能力仍未闭环。
+3. 下一阶段应优先补烟羽/轨迹数据能力、逐声明 reportable-claim-boundary gate 和响应建议证据绑定。
+
+最新验收记录：
+
+1. 2026-05-07: `tests.test_runtime_kernel` 通过，覆盖 controller transition freshness 重启和既有 runtime kernel 回归。
+2. 2026-05-07: `tests.test_reporting_workflow` 通过，覆盖 stale supervisor handoff 阻断和 reporting handoff/decision 主路径。
+3. 2026-05-07: `tests.test_reporting_publish_workflow`、`tests.test_decision_trace_workflow`、`tests.test_investigation_workflow`、`tests.test_reporting_query_surface`、`tests.test_control_query_surface` 通过。
+4. 2026-05-07: `tests.test_source_queue_governance`、`tests.test_orchestration_ingress_workflow`、`tests.test_db_only_recovery` 通过。
+5. 2026-05-07: 修改文件语法检查和 `git diff --check` 通过。
+6. 2026-05-07: `tests.test_council_autonomy_flow` 通过，覆盖 report-risk review comment 阻断 readiness 以及 challenger waiver。
+7. 2026-05-07: `tests.test_council_submission_workflow`、`tests.test_spatiotemporal_relation_taxonomy` 通过，确认 review-comment 写入与 relation objection 字段未回归。
+8. 2026-05-07: `tests.test_council_autonomy_flow.CouncilAutonomyFlowTests.test_open_followup_from_review_comment_creates_challenge_and_task` 通过，覆盖严重 review comment 到 challenge/task 的显式 follow-up。
+9. 2026-05-07: `tests.test_runtime_source_queue_profiles`、`tests.test_optional_analysis_guardrails` 和 runtime skill policy capability 检查通过，确认新增 skill 注册、角色能力和 source-queue profile 未破坏全局契约。
+10. 2026-05-07: follow-up skill 合入后重跑 `tests.test_council_submission_workflow`、`tests.test_spatiotemporal_relation_taxonomy`，24 tests OK。
+11. 2026-05-07: follow-up skill 合入后重跑 `tests.test_investigation_workflow`、`tests.test_reporting_workflow`、`tests.test_decision_trace_workflow`，20 tests OK。
+12. 2026-05-07: `tests.test_realcase_nyc_smoke_phase0_fixture` 通过，5 tests OK；确认 NYC smoke Phase 0 fixture 可离线锁定原始问题签名。
+13. 2026-05-07: `tests.test_council_autonomy_flow.CouncilAutonomyFlowTests.test_verification_scope_required_sources_hold_ready_opinion` 通过，确认 verification scope 缺失 required source import 时会覆盖 ready opinion。
+14. 2026-05-07: `tests.test_policy_research_case_fixtures` 通过，确认 source 等价类和 final publication 空风险语义未误伤通用 policy fixture。
+15. 2026-05-07: 重跑 `tests.test_reporting_publish_workflow`、`tests.test_reporting_workflow`、`tests.test_orchestration_ingress_workflow`、`tests.test_runtime_source_queue_profiles`、`tests.test_source_queue_governance`，34 tests OK。
+16. 2026-05-07: required-source readiness gate 合入后重跑 `tests.test_council_submission_workflow`、`tests.test_spatiotemporal_relation_taxonomy`，24 tests OK；重跑 `tests.test_investigation_workflow`、`tests.test_decision_trace_workflow`，14 tests OK；`git diff --check` 通过。
+17. 2026-05-07: R-007 合入后 `tests.test_policy_research_case_fixtures` 通过，确认 frozen report basis 会从 cross-plane evidence bundle 展开 public/formal/environment evidence refs。
+18. 2026-05-07: R-007 合入后重跑 `tests.test_reporting_workflow`、`tests.test_decision_trace_workflow`、`tests.test_reporting_publish_workflow`，23 tests OK；重跑 `tests.test_council_submission_workflow`、`tests.test_council_autonomy_flow`，16 tests OK。
+19. 2026-05-07: R-008 保守修复后重跑 `tests.test_reporting_workflow`、`tests.test_reporting_publish_workflow`、`tests.test_policy_research_case_fixtures`，19 tests OK；确认未证据绑定的 generic reporting/audit actions 不再进入 policy recommendations。
+
 ## 1. Scope
 
 This document reviews run `openclaw-realcase-nyc-smoke-20230607` after the first real-case council execution.
@@ -195,6 +256,19 @@ Add a `define-verification-scope` or `derive-investigation-lanes` step before so
 5. `required_evidence_lanes`
 6. `excluded_inferences`
 7. `reportable_claim_boundary`
+
+Implemented fix:
+
+1. `scaffold-mission-run` writes a structured `verification_scope` into the mission artifact and round tasks.
+2. `prepare-round` carries the same scope into fetch planning and records required lane source skills.
+3. `summarize-round-readiness` now consumes `verification_scope.required_source_skills`.
+4. If required source imports are not completed, readiness is downgraded from `ready` to `needs-more-data`, even when council readiness opinions are ready.
+5. The readiness payload records `verification_scope_gate`, including required, selected, completed, missing-required, and missing-selected source skills.
+6. Source equivalence is handled for common source families: OpenAQ/AirNow can satisfy receptor air-quality default source requirements, and YouTube/Regulations.gov can satisfy public/formal response signal requirements when the default lane source is GDELT.
+
+Residual risk:
+
+This is a source-import gate, not full evidence-lane adjudication. It does not yet prove that imported fire-origin or weather data supports a transport claim, and it does not yet enforce the reportable claim boundary sentence by sentence.
 
 ### S-001: Fire-Origin Lane Was Available But Not Activated
 
@@ -394,6 +468,20 @@ Add freshness checks:
 3. If stale, it should replan/restart automatically or return an explicit `stale-controller` blocker.
 4. `materialize-reporting-handoff` should require a supervisor snapshot whose input controller/gate/freeze ids match the current latest records.
 
+Implemented fix:
+
+1. `run_governed_execution_round_with_contract_mode` now records `adopted_transition_request_id`, `adopted_transition_request_status`, and `adopted_transition_kind` on controller payloads.
+2. In default transition-executor mode, a completed controller is not blindly reused if a newer approved `freeze-report-basis` request exists; it restarts with `resume_status=restart-stale-transition` and records a `controller-freshness` planning attempt.
+3. `supervise-round` copies the controller's adopted transition fields into the supervisor snapshot, so downstream reporting can audit which approved transition was supervised.
+4. `materialize-reporting-handoff` compares `frozen_report_basis.transition_request_id` with `supervisor.adopted_transition_request_id`; a mismatch adds `stale-supervisor-state`, sets `supervisor_status=stale-controller`, and keeps `handoff_status=investigation-open`.
+5. Regression coverage:
+   - `tests.test_runtime_kernel.RuntimeKernelTests.test_controller_restarts_completed_default_path_for_newer_approved_transition_request`
+   - `tests.test_reporting_workflow.ReportingWorkflowTests.test_reporting_handoff_blocks_stale_supervisor_transition_request`
+
+Residual risk:
+
+This fix covers the freeze-report-basis path exposed by the NYC smoke run. Other phase transitions, especially round close and next-round opening, should use the same adopted-transition freshness pattern before being treated as unattended-safe.
+
 ### G-005: Challenger Review Did Not Force Follow-Up Or Readiness Hold
 
 Severity: high
@@ -413,6 +501,23 @@ Add a bridge from serious review comments to action/readiness:
 1. `review_comment.report_risk=source-limitations` plus mission requiring source/transport should create a `needs-more-data` default unless explicitly waived.
 2. Provide `open-followup-from-review-comment`.
 3. Let readiness summarizer count unresolved review comments by severity and target kind.
+
+Implemented fix:
+
+1. `summarize-round-readiness` now queries DB-backed `review-comment` objects for the round.
+2. Open/submitted review comments with a non-empty `report_risk` or required follow-up evidence are treated as readiness blockers unless explicitly waived.
+3. Explicit waiver is currently represented by a challenger `readiness-opinion` with `ready` status that references the review comment id in `basis_object_ids`, `lineage`, or `evidence_refs`.
+4. Blocked readiness now records `review_comment_count`, `open_review_comment_count`, `blocking_review_comment_count`, and `blocking_review_comment_ids`, and prepends a gate reason requiring challenger follow-up or waiver.
+5. Blocked readiness recommends `open-followup-from-review-comment`, `open-challenge-ticket`, `claim-board-task`, and `submit-readiness-opinion`; relation/transport/causality comments also add relation helper recommendations.
+6. `post-review-comment` now accepts a `--status` field so future operators can post resolved/waived comments without direct DB edits.
+7. `open-followup-from-review-comment` now turns one report-risk review comment into a linked challenge ticket and claimed board task, preserving comment id, target, report risk, evidence refs, and relation objection fields in lineage/provenance.
+8. Regression coverage:
+   - `tests.test_council_autonomy_flow.CouncilAutonomyFlowTests.test_report_risk_review_comment_blocks_readiness_until_challenger_waives`
+   - `tests.test_council_autonomy_flow.CouncilAutonomyFlowTests.test_open_followup_from_review_comment_creates_challenge_and_task`
+
+Residual risk:
+
+This closes the readiness gate hole from the NYC smoke run and makes the review-comment-to-board-work bridge explicit. Broader source/transport mandatory-lane checks still belong in the mission/verification-scope and transport-evidence workstreams.
 
 ### R-001: Final Open Risks Were False Positives
 
@@ -548,6 +653,16 @@ Add publication quality gate:
 1. Release may proceed only if required sections are `included`, `explicitly-scoped-out`, or `appendix-only`.
 2. `basis-required` and `needs-explicit-moderator-text` should either block release or downgrade posture to `hold-release`.
 
+Implemented fix:
+
+1. `materialize-final-publication` now computes `release_blockers` from decision readiness, handoff readiness, open risks, supervisor status, role report status, and required section statuses.
+2. If `open_risks` exist and no uncertainty register was materialized, final publication converts those open risks into uncertainty rows.
+3. If no open risks or uncertainty rows exist, the risks/uncertainties section is marked `no-open-risks-recorded` rather than `basis-gap`, so an empty risk set does not falsely block release.
+
+Residual risk:
+
+Recommendations and options/tradeoffs still need stronger evidence binding before this can be treated as a complete decision-support report gate.
+
 ### R-007: Frozen Selected Evidence Was Too Narrow
 
 Severity: medium
@@ -563,6 +678,18 @@ The freeze transition and proposal evidence refs centered on PM2.5, and `freeze-
 Fix direction:
 
 When a report-basis proposal targets an evidence bundle, freeze should include all accepted bundle evidence refs unless explicitly excluded.
+
+Implemented fix:
+
+1. `freeze-report-basis` now queries DB-backed `evidence-bundle` objects for the round.
+2. It identifies selected/supported bundle ids from selected basis object ids, supporting proposals, and supporting readiness opinions.
+3. It expands `selected_evidence_refs` with all evidence refs from those selected bundles.
+4. The freeze artifact records `expanded_evidence_bundle_ids` and `expanded_evidence_bundle_ref_count`.
+5. Regression coverage asserts that a policy fixture cross-plane bundle carries public, formal, and environmental evidence refs into frozen report basis.
+
+Residual risk:
+
+The expansion is inclusive. A later refinement should add explicit exclusion and ranking semantics when a bundle contains evidence that council deliberately wants to omit from the report basis.
 
 ### R-008: Report Recommendations Were Generic
 
@@ -586,6 +713,16 @@ Add a response lane only when mission asks for recommendations:
 4. `recommended-response-options`
 
 Keep recommendations evidence-bounded and explicitly uncertain.
+
+Implemented fix:
+
+1. `materialize-reporting-handoff` no longer emits generic reporting/audit actions as `policy_recommendations` when the round is reporting-ready.
+2. `materialize-final-publication` therefore marks recommendations as `not-in-scope` unless DB-backed policy recommendations are present.
+3. Regression coverage asserts that generic report-writing actions do not appear in the final decision-maker report as policy recommendations.
+
+Residual risk:
+
+This prevents unsupported recommendations but does not yet create useful response recommendations. A future response lane still needs formal response records, public-health guidance, emergency action records, and explicit evidence-bound option drafting.
 
 ### C-001: Contract Parsing Produces False Missing Inputs
 
@@ -661,6 +798,19 @@ Acceptance:
 
 1. The fixture can be used without network calls.
 2. Each issue has at least one failing or diagnostic assertion before code fixes.
+
+Implemented fix:
+
+1. Added `tests/fixtures/openclaw-realcase-nyc-smoke-phase0.json`.
+2. The fixture freezes a minimal subset of the real run's mission, source selections, execution/dead-letter state, reporting handoff, expert reports, and final publication posture.
+3. Added `tests.test_realcase_nyc_smoke_phase0_fixture`.
+4. The test suite asserts that the fixture is offline, points to local run artifacts, and preserves the original issue signatures:
+   - no fire-origin source selection;
+   - no smoke plume or transport source selection;
+   - successful import with an open dead letter;
+   - positive readiness/gate notes carried as open risks;
+   - expert reports marked `ready-to-publish` while carrying blocked readiness/unavailable supervisor status;
+   - final publication released with `missing-coverage`.
 
 ### Phase 1: Fix Runtime/Governance Bugs
 

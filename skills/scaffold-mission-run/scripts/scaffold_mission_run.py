@@ -21,6 +21,7 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_round_task_snapshot,
 )
 from eco_council_runtime.kernel.source_queue.source_queue_contract import (  # noqa: E402
+    derive_verification_scope,
     intent_selected_sources,
     lane_evidence_requirements,
     source_role,
@@ -141,6 +142,8 @@ def normalize_mission_payload(mission: dict[str, Any], mission_file: Path, run_i
     requests = payload.get("source_requests")
     if requests is None:
         payload["source_requests"] = []
+        existing_scope = payload.get("verification_scope") if isinstance(payload.get("verification_scope"), dict) else None
+        payload["verification_scope"] = existing_scope or derive_verification_scope(payload)
         return payload
     if not isinstance(requests, list):
         raise ValueError("Mission source_requests must be a JSON list when present.")
@@ -166,6 +169,8 @@ def normalize_mission_payload(mission: dict[str, Any], mission_file: Path, run_i
             }
         )
     payload["source_requests"] = normalized_requests
+    existing_scope = payload.get("verification_scope") if isinstance(payload.get("verification_scope"), dict) else None
+    payload["verification_scope"] = existing_scope or derive_verification_scope(payload)
     return payload
 
 
@@ -191,6 +196,11 @@ def source_requests(mission: dict[str, Any]) -> list[dict[str, Any]]:
 def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) -> list[dict[str, Any]]:
     imports = artifact_imports(mission)
     requests = source_requests(mission)
+    verification_scope = (
+        mission.get("verification_scope")
+        if isinstance(mission.get("verification_scope"), dict)
+        else derive_verification_scope(mission)
+    )
     by_role = {"sociologist": [], "environmentalist": []}
     for item in [*imports, *requests]:
         source_skill = maybe_text(item.get("source_skill"))
@@ -216,6 +226,7 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
                 "inputs": {
                     "mission_window": window,
                     "mission_geometry": geometry,
+                    "verification_scope": verification_scope,
                     "source_skills": sorted(set(by_role["sociologist"])),
                     "evidence_requirements": [
                         {
@@ -243,6 +254,7 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
                 "inputs": {
                     "mission_window": window,
                     "mission_geometry": geometry,
+                    "verification_scope": verification_scope,
                     "source_skills": sorted(set(by_role["environmentalist"])),
                     "evidence_requirements": [
                         {
@@ -318,6 +330,11 @@ def build_board(*, mission: dict[str, Any], run_id: str, round_id: str, hypothes
                     "topic": maybe_text(mission.get("topic")),
                     "artifact_import_count": len(artifact_imports(mission)),
                     "source_request_count": len(source_requests(mission)),
+                    "evidence_lane_count": len(
+                        mission.get("verification_scope", {}).get("required_evidence_lanes", [])
+                        if isinstance(mission.get("verification_scope"), dict)
+                        else []
+                    ),
                     "seeded_hypothesis_count": len(hypotheses),
                 },
             }
@@ -379,9 +396,32 @@ def scaffold_mission_run_skill(
     scaffold_id = "mission-scaffold-" + stable_hash(run_id, round_id, mission_output_path, task_output_path)[:12]
     imports = artifact_imports(mission)
     requests = source_requests(mission)
+    verification_scope = (
+        mission.get("verification_scope")
+        if isinstance(mission.get("verification_scope"), dict)
+        else derive_verification_scope(mission)
+    )
+    evidence_lanes = (
+        verification_scope.get("required_evidence_lanes")
+        if isinstance(verification_scope.get("required_evidence_lanes"), list)
+        else []
+    )
+    intent_sources_by_role = {
+        role: intent_selected_sources(mission, role)
+        for role in ("sociologist", "environmentalist")
+    }
     role_source_counts = {
-        "sociologist": len([item for item in [*imports, *requests] if role_for_source_skill(maybe_text(item.get("source_skill"))) == "sociologist"]),
-        "environmentalist": len([item for item in [*imports, *requests] if role_for_source_skill(maybe_text(item.get("source_skill"))) == "environmentalist"]),
+        role: len(
+            {
+                *[
+                    maybe_text(item.get("source_skill"))
+                    for item in [*imports, *requests]
+                    if role_for_source_skill(maybe_text(item.get("source_skill"))) == role
+                ],
+                *intent_sources_by_role[role],
+            }
+        )
+        for role in ("sociologist", "environmentalist")
     }
     summary_payload = {
         "schema_version": "ingress-scaffold-v1",
@@ -398,11 +438,19 @@ def scaffold_mission_run_skill(
         "task_count": len(task_payload),
         "seeded_hypothesis_ids": seeded_hypothesis_ids,
         "role_source_counts": role_source_counts,
+        "verification_scope": verification_scope,
+        "evidence_lane_count": len(evidence_lanes),
+        "verification_scope_required_lane_ids": [
+            maybe_text(item.get("lane_id"))
+            for item in evidence_lanes
+            if isinstance(item, dict) and maybe_text(item.get("lane_id"))
+        ],
+        "intent_sources_by_role": intent_sources_by_role,
     }
     write_json_file(summary_output_path, summary_payload)
 
     warnings: list[dict[str, str]] = []
-    if not imports and not requests:
+    if not imports and not requests and not any(intent_sources_by_role.values()):
         warnings.append(
             {
                 "code": "no-source-inputs",

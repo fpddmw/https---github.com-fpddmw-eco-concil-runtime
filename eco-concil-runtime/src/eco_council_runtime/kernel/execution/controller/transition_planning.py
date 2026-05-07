@@ -304,6 +304,9 @@ def approved_transition_request_planning(
         "stop_conditions": plan_payload.get("stop_conditions", []),
         "fallback_path": [],
         "fallback_suggested_next_skills": [],
+        "phase_decision_basis": plan_payload.get("phase_decision_basis", {})
+        if isinstance(plan_payload.get("phase_decision_basis"), dict)
+        else {},
         "plan_payload": plan_payload,
         "transition_request": latest_request,
     }, latest_request

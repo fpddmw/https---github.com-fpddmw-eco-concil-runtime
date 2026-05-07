@@ -739,6 +739,7 @@ def main(
                 "round_id": args.round_id,
                 "author_role": maybe_text(args.author_role) or maybe_text(args.actor_role) or "challenger",
                 "review_kind": args.review_kind,
+                "status": maybe_text(args.status),
                 "thread_id": args.thread_id,
                 "comment_text": args.comment_text,
                 "target_kind": target_kind,

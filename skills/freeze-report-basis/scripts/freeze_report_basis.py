@@ -18,6 +18,7 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.governance.fallback.context import load_d1_shared_context  # noqa: E402
+from eco_council_runtime.objects.council import query_council_objects  # noqa: E402
 from eco_council_runtime.kernel.governance.report_basis_resolution import (  # noqa: E402
     load_council_proposals,
     load_council_readiness_opinions,
@@ -158,6 +159,87 @@ def unique_artifact_ref_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def normalized_object_id_values(values: list[Any]) -> list[str]:
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text:
+            continue
+        results.append(text)
+        if ":" in text:
+            prefix, suffix = text.split(":", 1)
+            if prefix in {"evidence-bundle", "finding-record", "proposal", "readiness-opinion"} and suffix:
+                results.append(suffix)
+    return unique_texts(results)
+
+
+def load_round_evidence_bundles(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    payload = query_council_objects(
+        run_dir,
+        object_kind="evidence-bundle",
+        run_id=run_id,
+        round_id=round_id,
+        limit=500,
+    )
+    objects = payload.get("objects", []) if isinstance(payload.get("objects"), list) else []
+    return [item for item in objects if isinstance(item, dict)]
+
+
+def evidence_bundle_ids_from_objects(objects: list[dict[str, Any]]) -> list[str]:
+    values: list[Any] = []
+    for item in objects:
+        if not isinstance(item, dict):
+            continue
+        values.extend(list_items(item.get("basis_object_ids")))
+        values.extend(list_items(item.get("evidence_bundle_ids")))
+        values.extend(list_items(item.get("response_to_ids")))
+        values.extend(list_items(item.get("lineage")))
+        target_kind = maybe_text(item.get("target_kind"))
+        target_id = maybe_text(item.get("target_id"))
+        if target_kind == "evidence-bundle" and target_id:
+            values.append(target_id)
+        target = item.get("target") if isinstance(item.get("target"), dict) else {}
+        if maybe_text(target.get("object_kind")) == "evidence-bundle":
+            values.append(target.get("object_id"))
+    return normalized_object_id_values(values)
+
+
+def expanded_evidence_refs_from_selected_bundles(
+    *,
+    evidence_bundles: list[dict[str, Any]],
+    selected_basis_object_ids: list[str],
+    supporting_proposals: list[dict[str, Any]],
+    supporting_opinions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    selected_bundle_ids = set(
+        normalized_object_id_values(
+            selected_basis_object_ids
+            + evidence_bundle_ids_from_objects(supporting_proposals)
+            + evidence_bundle_ids_from_objects(supporting_opinions)
+        )
+    )
+    expanded_refs: list[Any] = []
+    expanded_bundle_ids: list[str] = []
+    for bundle in evidence_bundles:
+        bundle_id = maybe_text(bundle.get("bundle_id")) or maybe_text(bundle.get("object_id"))
+        if not bundle_id or bundle_id not in selected_bundle_ids:
+            continue
+        refs = list_items(bundle.get("evidence_refs"))
+        if not refs:
+            continue
+        expanded_bundle_ids.append(bundle_id)
+        expanded_refs.extend(refs)
+    return {
+        "expanded_evidence_bundle_ids": unique_texts(expanded_bundle_ids),
+        "expanded_evidence_refs": unique_artifact_ref_texts(expanded_refs),
+    }
 
 
 def normalize_issue_cluster(item: dict[str, Any]) -> dict[str, Any]:
@@ -536,6 +618,36 @@ def freeze_report_basis_skill(
                 ),
             }
         )
+        if not allow_non_ready:
+            return {
+                "status": "blocked",
+                "summary": {
+                    "skill": SKILL_NAME,
+                    "run_id": run_id,
+                    "round_id": round_id,
+                    "operation": "blocked",
+                    "blocked_reason": "missing-readiness",
+                    "output_path": str(output_file),
+                    "readiness_path": str(readiness_file),
+                    "transition_request_id": maybe_text(transition_request.get("request_id")),
+                },
+                "receipt_id": "report-basis-freeze-receipt-"
+                + stable_hash(SKILL_NAME, run_id, round_id, "missing-readiness")[:20],
+                "batch_id": "reportbasisfreeze-"
+                + stable_hash(SKILL_NAME, run_id, round_id, output_file.name, "blocked")[:16],
+                "artifact_refs": [],
+                "canonical_ids": [],
+                "warnings": warnings,
+                "deliberation_sync": {"status": "not-synced", "reason": "missing-readiness"},
+                "analysis_sync": {"status": "not-synced", "reason": "missing-readiness"},
+                "board_handoff": {
+                    "candidate_ids": [],
+                    "evidence_refs": [],
+                    "gap_hints": [warnings[0]["message"]],
+                    "challenge_hints": [],
+                    "suggested_next_skills": ["summarize-round-readiness"],
+                },
+            }
         readiness = {
             "readiness_status": "blocked",
             "gate_reasons": ["Missing round readiness artifact or DB assessment."],
@@ -777,10 +889,20 @@ def freeze_report_basis_skill(
         for proposal in council_proposals
         if maybe_text(proposal.get("proposal_id")) in rejected_proposal_ids
     ]
+    supporting_proposals = [
+        proposal
+        for proposal in council_proposals
+        if maybe_text(proposal.get("proposal_id")) in supporting_proposal_ids
+    ]
     rejected_opinions = [
         opinion
         for opinion in council_opinions
         if maybe_text(opinion.get("opinion_id")) in rejected_opinion_ids
+    ]
+    supporting_opinions = [
+        opinion
+        for opinion in council_opinions
+        if maybe_text(opinion.get("opinion_id")) in supporting_opinion_ids
     ]
     selected_evidence_refs = unique_artifact_ref_texts(
         [
@@ -814,6 +936,21 @@ def freeze_report_basis_skill(
             for proposal in council_proposals
             for ref in list_items(proposal.get("evidence_refs"))
         ]
+    )
+    bundle_expansion = expanded_evidence_refs_from_selected_bundles(
+        evidence_bundles=load_round_evidence_bundles(
+            run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+        ),
+        selected_basis_object_ids=selected_basis_object_ids,
+        supporting_proposals=supporting_proposals,
+        supporting_opinions=supporting_opinions,
+    )
+    expanded_bundle_ids = list_items(bundle_expansion.get("expanded_evidence_bundle_ids"))
+    expanded_bundle_evidence_refs = list_items(bundle_expansion.get("expanded_evidence_refs"))
+    selected_evidence_refs = unique_artifact_ref_texts(
+        selected_evidence_refs + expanded_bundle_evidence_refs
     )
     fallback_remaining_risks = [
         {
@@ -928,6 +1065,8 @@ def freeze_report_basis_skill(
         "selected_coverages": selected_coverages,
         "selected_evidence_refs": selected_evidence_refs,
         "evidence_refs": selected_evidence_refs,
+        "expanded_evidence_bundle_ids": expanded_bundle_ids,
+        "expanded_evidence_bundle_ref_count": len(expanded_bundle_evidence_refs),
         "lineage": lineage,
         "provenance": {
             "source_skill": SKILL_NAME,

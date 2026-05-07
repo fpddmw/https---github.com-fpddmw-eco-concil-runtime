@@ -1,0 +1,2 @@
+actor_role: moderator
+prompt: Convert a report-risk review comment into explicit challenge and board-task follow-up without deciding the issue outcome.

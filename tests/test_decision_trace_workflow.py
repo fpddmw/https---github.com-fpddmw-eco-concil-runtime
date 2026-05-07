@@ -134,6 +134,43 @@ def prepare_reporting_chain(run_dir: Path) -> None:
 
 
 class DecisionTraceWorkflowTests(unittest.TestCase):
+    def test_freeze_report_basis_blocks_when_readiness_is_not_materialized(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prepare_round_base(run_dir, root)
+
+            report_basis_request_id = approve_report_basis_transition(run_dir)
+            report_basis_payload = run_script(
+                script_path("freeze-report-basis"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--transition-request-id",
+                report_basis_request_id,
+            )
+
+            self.assertEqual("blocked", report_basis_payload["status"])
+            self.assertEqual("missing-readiness", report_basis_payload["summary"]["blocked_reason"])
+            self.assertTrue(
+                any(
+                    warning["code"] == "missing-readiness"
+                    for warning in report_basis_payload["warnings"]
+                )
+            )
+            self.assertIn(
+                "summarize-round-readiness",
+                report_basis_payload["board_handoff"]["suggested_next_skills"],
+            )
+            self.assertFalse(
+                report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json").exists()
+            )
+
     def test_ready_round_persists_supporting_council_inputs_into_trace_and_publication(
         self,
     ) -> None:

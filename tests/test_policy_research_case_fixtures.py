@@ -9,6 +9,7 @@ from typing import Any
 
 from _workflow_support import (
     load_json,
+    report_basis_path,
     reporting_path,
     request_and_approve_skill_approval,
     request_and_approve_transition,
@@ -624,6 +625,7 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
         "--round-id",
         round_id,
     )
+    frozen_report_basis = load_json(report_basis_path(run_dir, f"frozen_report_basis_{round_id}.json"))
 
     for artifact_name in (
         f"reporting_handoff_{round_id}.json",
@@ -657,6 +659,8 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
         "finding_ids": finding_ids,
         "bundle_id": bundle_id,
         "report_basis": report_basis,
+        "frozen_report_basis": frozen_report_basis,
+        "cross_plane_evidence_refs": [public_ref, formal_ref, environment_ref],
         "readiness_request_id": readiness_request_id,
         "readiness_consumption": readiness_consumption,
     }
@@ -695,14 +699,14 @@ POLICY_RESEARCH_CASES = [
     },
     {
         "case_id": "empirical-event",
-        "case_label": "Smoke episode response review",
-        "topic": "Wildfire smoke response",
-        "objective": "Assess a smoke episode response using public reports, formal notice, and observed air quality.",
-        "decision_question": "What response actions should decision-makers consider after the smoke episode?",
+        "case_label": "Air quality advisory response review",
+        "topic": "Air quality advisory response",
+        "objective": "Assess an air quality advisory response using public reports, formal notice, and observed air quality.",
+        "decision_question": "What response actions should decision-makers consider after the air quality advisory?",
         "region": "Fixture Metro Area",
-        "public_keyword": "smoke",
-        "public_title": "Residents report heavy wildfire smoke",
-        "public_body": "Residents report smoke, visibility loss, and requests for clearer public-health guidance.",
+        "public_keyword": "air quality",
+        "public_title": "Residents ask for clearer air quality guidance",
+        "public_body": "Residents report poor air quality and request clearer public-health guidance.",
         "formal_keyword": "health",
         "formal_title": "Comment requests clearer health guidance",
         "formal_body": "The response record should document health guidance, school closure criteria, and monitoring coverage.",
@@ -745,6 +749,15 @@ class PolicyResearchCaseFixtureTests(unittest.TestCase):
                     self.assertIn("citation-index", publication["published_sections"])
                     self.assertIn("uncertainty-register", publication["published_sections"])
                     self.assertIn("remaining-disputes", publication["published_sections"])
+                    self.assertEqual(
+                        {result["bundle_id"]},
+                        set(result["frozen_report_basis"]["expanded_evidence_bundle_ids"]),
+                    )
+                    self.assertTrue(
+                        set(result["cross_plane_evidence_refs"]).issubset(
+                            set(result["frozen_report_basis"]["selected_evidence_refs"])
+                        )
+                    )
                     self.assertTrue(
                         any(
                             item.get("object_kind") == "finding-record"

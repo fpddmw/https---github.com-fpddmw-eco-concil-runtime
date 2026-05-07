@@ -231,6 +231,7 @@ def controller_planning_state(planning: dict[str, Any], blueprints: list[dict[st
     execution_queue = planning.get("execution_queue", []) if isinstance(planning.get("execution_queue"), list) else []
     gate_steps = planning.get("gate_steps", []) if isinstance(planning.get("gate_steps"), list) else default_gate_steps()
     post_gate_steps = planning.get("post_gate_steps", []) if isinstance(planning.get("post_gate_steps"), list) else default_post_gate_steps()
+    phase_decision_basis = planning.get("phase_decision_basis") if isinstance(planning.get("phase_decision_basis"), dict) else {}
     return {
         "plan_id": planning.get("plan_id", ""),
         "plan_path": planning.get("plan_path", ""),
@@ -247,6 +248,10 @@ def controller_planning_state(planning: dict[str, Any], blueprints: list[dict[st
         "planned_stage_count": len(execution_queue) + len(gate_steps) + len(post_gate_steps),
         "stop_conditions": planning.get("stop_conditions", []),
         "fallback_path": planning.get("fallback_path", []),
+        "phase_decision_basis": phase_decision_basis,
+        "transition_request_id": maybe_text(phase_decision_basis.get("transition_request_id")),
+        "transition_request_status": maybe_text(phase_decision_basis.get("transition_request_status")),
+        "transition_kind": maybe_text(phase_decision_basis.get("transition_kind")),
         "execution_queue": execution_queue,
         "gate_steps": gate_steps,
         "post_gate_steps": post_gate_steps,

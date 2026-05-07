@@ -180,6 +180,64 @@ def build_mission_file(root: Path, artifacts: dict[str, Path]) -> Path:
 
 
 class OrchestrationIngressWorkflowTests(unittest.TestCase):
+    def test_scaffold_materializes_verification_scope_for_broad_smoke_mission(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            mission_path = root / "broad-smoke-mission.json"
+            write_json(
+                mission_path,
+                {
+                    "schema_version": "1.0.0",
+                    "run_id": RUN_ID,
+                    "topic": "June 2023 New York City smoke episode",
+                    "objective": "Investigate candidate source regions, transport pathway, public impacts, and handling recommendations.",
+                    "window": {
+                        "start_utc": "2023-06-07T00:00:00Z",
+                        "end_utc": "2023-06-10T00:00:00Z",
+                    },
+                    "region": {
+                        "label": "New York City, NY, United States",
+                        "geometry": {"type": "Point", "latitude": 40.7128, "longitude": -74.006},
+                    },
+                    "hypotheses": [
+                        {
+                            "title": "Smoke episode requires source and transport verification",
+                            "statement": "The report should separate receptor observations from source and transport claims.",
+                            "confidence": 0.45,
+                        }
+                    ],
+                    "source_governance": {"max_selected_sources_per_role": 4},
+                },
+            )
+
+            scaffold_payload = run_script(
+                script_path("scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+            )
+
+            mission_artifact = load_json(run_dir / "mission.json")
+            scaffold_artifact = load_json(runtime_path(run_dir, f"mission_scaffold_{ROUND_ID}.json"))
+            tasks_payload = json.loads((run_dir / "investigation" / f"round_tasks_{ROUND_ID}.json").read_text(encoding="utf-8"))
+            scope = mission_artifact["verification_scope"]
+            lane_ids = {item["lane_id"] for item in scope["required_evidence_lanes"]}
+
+            self.assertEqual("candidate-source-regions-required", scope["candidate_source_region_policy"])
+            self.assertEqual("required-before-source-or-transport-claim", scope["transport_verification_policy"])
+            self.assertIn("fire-origin", lane_ids)
+            self.assertIn("spatiotemporal-relation-review", lane_ids)
+            self.assertIn("fetch-nasa-firms-fire", scaffold_artifact["intent_sources_by_role"]["environmentalist"])
+            self.assertIn("fire-origin", scaffold_artifact["verification_scope_required_lane_ids"])
+            self.assertTrue(all(task["inputs"]["verification_scope"]["scope_id"] == scope["scope_id"] for task in tasks_payload))
+            self.assertFalse(scaffold_payload["warnings"])
+
     def test_scaffold_agent_mode_updates_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -15,9 +16,11 @@ from _workflow_support import (
     request_and_approve_transition,
     run_kernel,
     run_script,
+    runtime_path,
     script_path,
     seed_analysis_chain,
     submit_ready_council_support,
+    write_json,
 )
 
 RUN_ID = "run-reporting-001"
@@ -213,6 +216,7 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "decision-maker-policy-report-packet",
                 handoff_artifact["report_packet"]["packet_kind"],
             )
+            self.assertEqual([], handoff_artifact["report_packet"]["policy_recommendations"])
             self.assertEqual(
                 handoff_artifact["evidence_packet"]["evidence_index"],
                 handoff_artifact["evidence_index"],
@@ -461,6 +465,89 @@ class ReportingWorkflowTests(unittest.TestCase):
             )
             self.assertEqual("finalize", decision_payload["summary"]["moderator_status"])
             self.assertTrue(decision_artifact["reporting_ready"])
+
+    def test_reporting_handoff_blocks_stale_supervisor_transition_request(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            seed_ready_reporting_context(
+                run_dir,
+                root,
+                note_text="Reporting handoff should reject a supervisor snapshot from an older transition request.",
+            )
+
+            prepare_optional_analysis_for_supervision(run_dir)
+            approve_report_basis_transition(run_dir)
+            run_kernel(
+                "supervise-round",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            supervisor_file = runtime_path(run_dir, f"supervisor_state_{ROUND_ID}.json")
+            supervisor_payload = load_json(supervisor_file)
+            supervisor_payload["adopted_transition_request_id"] = "older-transition-request"
+            write_json(supervisor_file, supervisor_payload)
+            connection = sqlite3.connect(
+                (run_dir / "analytics" / "signal_plane.sqlite").resolve()
+            )
+            connection.row_factory = sqlite3.Row
+            try:
+                with connection:
+                    supervisor_row = connection.execute(
+                        """
+                        SELECT snapshot_id, raw_json
+                        FROM supervisor_snapshots
+                        WHERE run_id = ? AND round_id = ?
+                        ORDER BY generated_at_utc DESC, snapshot_id DESC
+                        LIMIT 1
+                        """,
+                        (RUN_ID, ROUND_ID),
+                    ).fetchone()
+                    self.assertIsNotNone(supervisor_row)
+                    db_supervisor = json.loads(supervisor_row["raw_json"])
+                    db_supervisor["adopted_transition_request_id"] = "older-transition-request"
+                    connection.execute(
+                        "UPDATE supervisor_snapshots SET raw_json = ? WHERE snapshot_id = ?",
+                        (
+                            json.dumps(
+                                db_supervisor,
+                                ensure_ascii=True,
+                                sort_keys=True,
+                            ),
+                            supervisor_row["snapshot_id"],
+                        ),
+                    )
+            finally:
+                connection.close()
+
+            handoff_payload = run_script(
+                script_path("materialize-reporting-handoff"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            handoff_artifact = load_json(
+                reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("investigation-open", handoff_payload["summary"]["handoff_status"])
+            self.assertFalse(handoff_payload["summary"]["reporting_ready"])
+            self.assertEqual("stale", handoff_artifact["supervisor_freshness_status"])
+            self.assertEqual("older-transition-request", handoff_artifact["supervisor_transition_request_id"])
+            self.assertEqual("stale-controller", handoff_artifact["supervisor_status"])
+            self.assertIn("supervisor-stale-controller", handoff_artifact["reporting_blockers"])
+            self.assertIn(
+                "stale-supervisor-state",
+                [warning["code"] for warning in handoff_artifact["warnings"]],
+            )
 
     def test_decision_draft_recovers_from_db_when_handoff_artifact_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -16,6 +16,7 @@ from _workflow_support import (
     runtime_src_path,
     seed_analysis_chain,
     script_path,
+    write_json,
 )
 
 RUNTIME_SRC = runtime_src_path()
@@ -368,6 +369,103 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 query_payload["objects"][0]["decision_source"],
             )
 
+    def test_verification_scope_required_sources_hold_ready_opinion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            write_json(
+                run_dir / "mission.json",
+                {
+                    "schema_version": "1.0.0",
+                    "run_id": RUN_ID,
+                    "topic": "June 2023 New York City smoke episode",
+                    "objective": "Investigate candidate source regions, transport pathway, public impacts, and handling recommendations.",
+                    "window": {
+                        "start_utc": "2023-06-07T00:00:00Z",
+                        "end_utc": "2023-06-10T00:00:00Z",
+                    },
+                    "region": {
+                        "label": "New York City, NY, United States",
+                        "geometry": {
+                            "type": "Point",
+                            "latitude": 40.7128,
+                            "longitude": -74.006,
+                        },
+                    },
+                    "verification_scope": {
+                        "required_evidence_lanes": [
+                            {"lane_id": "receptor-air-quality", "priority": "high"},
+                            {"lane_id": "fire-origin", "priority": "high"},
+                            {
+                                "lane_id": "spatiotemporal-relation-review",
+                                "priority": "high",
+                            },
+                        ],
+                        "required_source_skills": [
+                            "fetch-open-meteo-air-quality",
+                            "fetch-nasa-firms-fire",
+                        ],
+                        "candidate_source_region_policy": "candidate-source-regions-required",
+                        "transport_verification_policy": "required-before-source-or-transport-claim",
+                    },
+                    "source_selections": {
+                        "environmentalist": {
+                            "status": "complete",
+                            "selected_sources": ["fetch-open-meteo-air-quality"],
+                        }
+                    },
+                },
+            )
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The report can proceed with bounded caveats.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["evidence-bundle-001"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://bundle-001"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+
+            payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+            gate = artifact["verification_scope_gate"]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("needs-more-data", artifact["readiness_status"])
+            self.assertFalse(artifact["sufficient_for_report_basis"])
+            self.assertEqual("missing-required-source-imports", gate["status"])
+            self.assertEqual(
+                ["fetch-open-meteo-air-quality", "fetch-nasa-firms-fire"],
+                gate["missing_required_source_skills"],
+            )
+            self.assertEqual(["fetch-nasa-firms-fire"], gate["missing_selected_source_skills"])
+            self.assertIn("fetch-nasa-firms-fire", artifact["recommended_next_skills"])
+            self.assertIn("normalize-fetch-execution", artifact["recommended_next_skills"])
+            self.assertIn(
+                "Verification scope requires completed source imports",
+                artifact["gate_reasons"][0],
+            )
+
     def test_readiness_with_council_opinions_stops_recommending_next_actions_recompute(
         self,
     ) -> None:
@@ -423,6 +521,196 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             self.assertNotIn("propose-next-actions", artifact["recommended_next_skills"])
             self.assertIn("submit-council-proposal", artifact["recommended_next_skills"])
             self.assertIn("submit-readiness-opinion", artifact["recommended_next_skills"])
+
+    def test_report_risk_review_comment_blocks_readiness_until_challenger_waives(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The bounded report can proceed if source limitations are carried as caveats.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["evidence-bundle-001"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://bundle-001"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+            review_payload = run_kernel(
+                "post-review-comment",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "challenger",
+                "--author-role",
+                "challenger",
+                "--review-kind",
+                "evidence-bundle-review",
+                "--comment-text",
+                "Carry source limitations before report use; this evidence cannot support source attribution.",
+                "--target-kind",
+                "evidence-bundle",
+                "--target-id",
+                "evidence-bundle-001",
+                "--report-risk",
+                "source-limitations",
+                "--evidence-ref",
+                "evidence://bundle-001",
+            )
+            comment_id = review_payload["canonical_ids"][0]
+
+            blocked_payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            blocked_artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("needs-more-data", blocked_payload["summary"]["readiness_status"])
+            self.assertEqual(1, blocked_artifact["blocking_review_comment_count"])
+            self.assertIn(comment_id, blocked_artifact["blocking_review_comment_ids"])
+            self.assertIn("open-followup-from-review-comment", blocked_artifact["recommended_next_skills"])
+            self.assertIn("open-challenge-ticket", blocked_artifact["recommended_next_skills"])
+            self.assertIn("submit-readiness-opinion", blocked_artifact["recommended_next_skills"])
+
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "challenger",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The comment is explicitly waived for a bounded report that states no source attribution.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": [comment_id],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://bundle-001"],
+                            "lineage": [comment_id],
+                        }
+                    ],
+                },
+            )
+            waived_payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            waived_artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("ready", waived_payload["summary"]["readiness_status"])
+            self.assertEqual(0, waived_artifact["blocking_review_comment_count"])
+            self.assertEqual(1, waived_artifact["open_review_comment_count"])
+            self.assertIn("freeze-report-basis", waived_artifact["recommended_next_skills"])
+
+    def test_open_followup_from_review_comment_creates_challenge_and_task(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            review_payload = run_kernel(
+                "post-review-comment",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "challenger",
+                "--author-role",
+                "challenger",
+                "--review-kind",
+                "evidence-bundle-review",
+                "--comment-text",
+                "The current bundle cannot support transport attribution without plume or trajectory evidence.",
+                "--target-kind",
+                "evidence-bundle",
+                "--target-id",
+                "evidence-bundle-transport-001",
+                "--report-risk",
+                "source-limitations",
+                "--required-followup-evidence",
+                "smoke plume or trajectory evidence",
+                "--evidence-ref",
+                "evidence://bundle-transport-001",
+            )
+            comment_id = review_payload["canonical_ids"][0]
+
+            followup_payload = run_script(
+                script_path("open-followup-from-review-comment"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--review-comment-id",
+                comment_id,
+            )
+            challenge_id, task_id = followup_payload["canonical_ids"]
+            challenge_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "challenge",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--status",
+                "open",
+            )
+            task_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "board-task",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--status",
+                "claimed",
+            )
+
+            self.assertEqual("completed", followup_payload["status"])
+            self.assertEqual(comment_id, followup_payload["summary"]["review_comment_id"])
+            self.assertEqual(2, len(followup_payload["canonical_ids"]))
+            self.assertEqual(challenge_id, challenge_query["objects"][0]["ticket_id"])
+            self.assertEqual(task_id, task_query["objects"][0]["task_id"])
+            self.assertEqual(comment_id, challenge_query["objects"][0]["source_review_comment_id"])
+            self.assertEqual(challenge_id, task_query["objects"][0]["source_ticket_id"])
+            self.assertIn(comment_id, task_query["objects"][0]["lineage"])
 
     def test_probe_opening_can_execute_directly_from_council_proposal(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -234,6 +234,7 @@ def publish_council_decision_skill(
         if isinstance(report_basis_context.get("payload"), dict)
         else None
     )
+    report_basis = report_basis_payload if isinstance(report_basis_payload, dict) else {}
     report_refs: list[str] = []
     report_payloads: dict[str, dict[str, Any]] = {}
     sociologist_context = load_expert_report_wrapper(
@@ -368,7 +369,7 @@ def publish_council_decision_skill(
         all_opinions,
         readiness_status=(
             maybe_text(draft_payload.get("readiness_status"))
-            or maybe_text(report_basis_payload.get("readiness_status"))
+            or maybe_text(report_basis.get("readiness_status"))
             or ("ready" if publication_readiness == "ready" else "needs-more-data")
         ),
         allow_non_ready=bool(

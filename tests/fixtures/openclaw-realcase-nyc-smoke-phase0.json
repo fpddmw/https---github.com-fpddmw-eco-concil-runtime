@@ -1,0 +1,94 @@
+{
+  "schema_version": "openclaw-realcase-diagnostic-fixture-v1",
+  "case_id": "nyc-smoke-20230607",
+  "description": "Minimal offline diagnostic fixture derived from the first real-case NYC smoke council run.",
+  "network_free": true,
+  "source_run_id": "openclaw-realcase-nyc-smoke-20230607",
+  "source_round_id": "round-001",
+  "source_paths": {
+    "mission": "runs/openclaw-realcase-nyc-smoke-20230607/mission.json",
+    "fetch_plan": "runs/openclaw-realcase-nyc-smoke-20230607/runtime/fetch_plan_round-001.json",
+    "import_execution": "runs/openclaw-realcase-nyc-smoke-20230607/runtime/import_execution_round-001.json",
+    "dead_letter": "runs/openclaw-realcase-nyc-smoke-20230607/runtime/dead_letters/deadletter-f6db1d1237f8dd8b0713.json",
+    "round_readiness": "runs/openclaw-realcase-nyc-smoke-20230607/reporting/round_readiness_round-001.json",
+    "reporting_handoff": "runs/openclaw-realcase-nyc-smoke-20230607/reporting/reporting_handoff_round-001.json",
+    "expert_report_environmentalist": "runs/openclaw-realcase-nyc-smoke-20230607/reporting/expert_report_environmentalist_round-001.json",
+    "expert_report_sociologist": "runs/openclaw-realcase-nyc-smoke-20230607/reporting/expert_report_sociologist_round-001.json",
+    "final_publication": "runs/openclaw-realcase-nyc-smoke-20230607/reporting/final_publication_round-001.json",
+    "audit_ledger": "runs/openclaw-realcase-nyc-smoke-20230607/runtime/audit_ledger.jsonl"
+  },
+  "mission_snapshot": {
+    "topic": "New York City wildfire smoke episode, June 2023",
+    "objective": "Run a governed council investigation over public-report and environmental observation records for the June 2023 New York City smoke episode, and produce a DB-backed report without pre-assigning causal conclusions or policy direction.",
+    "policy_profile": "real-case-runtime-test",
+    "source_governance": {
+      "max_non_entry_layers_per_role": 0,
+      "max_selected_sources_per_role": 3,
+      "max_source_steps_per_round": 3
+    },
+    "source_request_skills": [
+      "fetch-gdelt-doc-search",
+      "fetch-open-meteo-air-quality",
+      "fetch-open-meteo-historical"
+    ],
+    "selected_sources_by_role": {
+      "environmentalist": [
+        "fetch-open-meteo-air-quality",
+        "fetch-open-meteo-historical"
+      ],
+      "sociologist": [
+        "fetch-gdelt-doc-search"
+      ]
+    },
+    "selected_source_count": 3
+  },
+  "execution_snapshot": {
+    "completed_count": 3,
+    "failed_count": 0,
+    "dead_letters": [
+      {
+        "source_name": "normalize-fetch-execution",
+        "failure_class": "admission",
+        "error_code": "contract-preflight-blocked",
+        "resolution_status": "open"
+      }
+    ]
+  },
+  "reporting_snapshot": {
+    "round_readiness_status": "ready",
+    "handoff_status": "reporting-ready",
+    "final_publication_status": "ready-for-release",
+    "final_publication_posture": "release",
+    "coverage_source": "missing-coverage",
+    "handoff_open_risk_summaries": [
+      "The round is now explicitly ready for downstream reporting handoff.",
+      "No blocking board or probe objects remain in the current controller snapshot.",
+      "Council submitted 1 readiness opinions and all support report-basis freeze.",
+      "moderator: The report basis can be frozen for a bounded report because the evidence bundle, source-limitation challenger review, and report-basis proposal are present; readiness is limited to reporting these records with caveats."
+    ],
+    "expert_reports": [
+      {
+        "role": "environmentalist",
+        "status": "ready-to-publish",
+        "readiness_status": "blocked",
+        "supervisor_status": "unavailable",
+        "coverage_source": "missing-coverage"
+      },
+      {
+        "role": "sociologist",
+        "status": "ready-to-publish",
+        "readiness_status": "blocked",
+        "supervisor_status": "unavailable",
+        "coverage_source": "missing-coverage"
+      }
+    ]
+  },
+  "diagnostic_assertions": {
+    "missing_fire_origin_selection": true,
+    "missing_transport_or_plume_source_selection": true,
+    "open_dead_letter_after_successful_import": true,
+    "positive_gate_reasons_carried_as_open_risks": true,
+    "expert_reports_ready_despite_blocked_readiness_status": true,
+    "final_publication_released_with_missing_coverage": true
+  }
+}
