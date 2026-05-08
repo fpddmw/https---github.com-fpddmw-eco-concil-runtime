@@ -29,6 +29,10 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "allowed_roles": [],
         "default_actor_role_hint": "<actor_role>",
     },
+    "start-council-run": {
+        "allowed_roles": [ROLE_RUNTIME_OPERATOR],
+        "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
+    },
     "request-phase-transition": {
         "allowed_roles": ["moderator"],
         "default_actor_role_hint": "moderator",
@@ -36,8 +40,7 @@ WRITE_KERNEL_COMMAND_POLICIES = {
     "submit-finding-record": {
         "allowed_roles": [
             "environmental-investigator",
-            "public-discourse-investigator",
-            "formal-record-investigator",
+            "social-investigator",
             "challenger",
         ],
         "default_actor_role_hint": "<actor_role>",
@@ -46,8 +49,7 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "allowed_roles": [
             "moderator",
             "environmental-investigator",
-            "public-discourse-investigator",
-            "formal-record-investigator",
+            "social-investigator",
             "challenger",
             "report-editor",
         ],
@@ -57,8 +59,7 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "allowed_roles": [
             "moderator",
             "environmental-investigator",
-            "public-discourse-investigator",
-            "formal-record-investigator",
+            "social-investigator",
             "challenger",
         ],
         "default_actor_role_hint": "<actor_role>",
@@ -148,6 +149,10 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },
     "materialize-agent-entry-gate": {
+        "allowed_roles": [ROLE_RUNTIME_OPERATOR],
+        "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
+    },
+    "materialize-openclaw-agent-registration": {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },

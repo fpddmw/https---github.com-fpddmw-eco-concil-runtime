@@ -134,11 +134,12 @@ def load_expert_report_wrapper(
 ) -> dict[str, Any]:
     run_dir_path = Path(run_dir).expanduser().resolve()
     normalized_role = maybe_text(agent_role)
+    role_slug = normalized_role.replace("-", "_")
     normalized_stage = "draft" if maybe_text(report_stage) == "draft" else "canonical"
     default_relative = (
-        f"reporting/expert_report_draft_{normalized_role}_{round_id}.json"
+        f"reporting/expert_report_draft_{role_slug}_{round_id}.json"
         if normalized_stage == "draft"
-        else f"reporting/expert_report_{normalized_role}_{round_id}.json"
+        else f"reporting/expert_report_{role_slug}_{round_id}.json"
     )
     report_file = resolve_path(
         run_dir_path,

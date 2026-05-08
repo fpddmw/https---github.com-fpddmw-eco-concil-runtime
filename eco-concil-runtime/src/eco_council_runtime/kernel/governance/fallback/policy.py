@@ -99,8 +99,8 @@ def role_from_coverage(coverage: dict[str, Any]) -> str:
     if int(coverage.get("contradiction_link_count") or 0) > 0:
         return "challenger"
     if int(coverage.get("linked_observation_count") or 0) > 0:
-        return "environmentalist"
-    return "sociologist"
+        return "environmental-investigator"
+    return "social-investigator"
 
 
 def empirical_issue_requires_followup(weakest_coverage: dict[str, Any]) -> bool:
@@ -332,7 +332,7 @@ def issue_cluster_policy(
                 "priority": "high" if pressure_score >= 0.8 else "medium",
                 "assigned_role": role_from_coverage(weakest_coverage)
                 if weakest_coverage
-                else "environmentalist",
+                else "environmental-investigator",
                 "objective": f"Advance empirical verification for {issue_label}.",
                 "reason": reason,
                 "controversy_gap": controversy_gap,
@@ -352,7 +352,7 @@ def issue_cluster_policy(
         return {
             "action_kind": "review-formal-record",
             "priority": "high",
-            "assigned_role": "moderator",
+            "assigned_role": "social-investigator",
             "objective": f"Check whether the formal record sufficiently represents {issue_label}.",
             "reason": f"Issue {issue_label} is routed into formal record review but the current linkage posture is {link_status}.",
             "controversy_gap": "formal-record-gap",
@@ -369,7 +369,7 @@ def issue_cluster_policy(
         return {
             "action_kind": "analyze-public-discourse",
             "priority": "high",
-            "assigned_role": "sociologist",
+            "assigned_role": "social-investigator",
             "objective": f"Check whether public discourse around {issue_label} is adequately represented and interpretable.",
             "reason": f"Issue {issue_label} stays in discourse analysis but the current linkage posture is {link_status}.",
             "controversy_gap": "public-discourse-gap",
@@ -386,7 +386,7 @@ def issue_cluster_policy(
         return {
             "action_kind": "analyze-stakeholder-deliberation",
             "priority": "medium",
-            "assigned_role": "sociologist",
+            "assigned_role": "social-investigator",
             "objective": f"Check whether stakeholder positions around {issue_label} remain underrepresented.",
             "reason": f"Issue {issue_label} is staying in stakeholder-deliberation analysis while linkage posture is {link_status}.",
             "controversy_gap": "stakeholder-deliberation-gap",
@@ -441,7 +441,7 @@ def verification_route_policy(
                 "priority": "high",
                 "assigned_role": role_from_coverage(weakest_coverage)
                 if weakest_coverage
-                else "environmentalist",
+                else "environmental-investigator",
                 "objective": f"Advance empirical verification for {issue_label}.",
                 "reason": maybe_text(route.get("route_reason"))
                 or f"Claim {claim_id or issue_label} is routed to environmental observation but its evidence basis is not yet stable.",
@@ -466,7 +466,7 @@ def verification_route_policy(
         return {
             "action_kind": "review-formal-record",
             "priority": "high",
-            "assigned_role": "moderator",
+            "assigned_role": "social-investigator",
             "objective": f"Review the formal record posture for {issue_label}.",
             "reason": maybe_text(route.get("route_reason"))
             or f"Claim {claim_id or issue_label} is routed to formal record review but linkage posture is {link_status}.",
@@ -494,7 +494,7 @@ def verification_route_policy(
         return {
             "action_kind": action_kind,
             "priority": "high",
-            "assigned_role": "sociologist",
+            "assigned_role": "social-investigator",
             "objective": f"Review the discourse-side representation posture for {issue_label}.",
             "reason": maybe_text(route.get("route_reason"))
             or f"Claim {claim_id or issue_label} stays in discourse-side review but linkage posture is {link_status}.",
@@ -550,7 +550,7 @@ def claim_assessment_policy(
                 "priority": "high",
                 "assigned_role": role_from_coverage(weakest_coverage)
                 if weakest_coverage
-                else "environmentalist",
+                else "environmental-investigator",
                 "objective": f"Advance empirical verification for {issue_label}.",
                 "reason": maybe_text(assessment.get("assessment_summary"))
                 or f"Claim {claim_id or issue_label} is empirical but its evidence basis is not yet stable.",
@@ -572,15 +572,15 @@ def claim_assessment_policy(
             }
         return None
     action_kind = "review-formal-record"
-    assigned_role = "moderator"
+    assigned_role = "social-investigator"
     controversy_gap = "formal-record-gap"
     if lane == "public-discourse-analysis":
         action_kind = "analyze-public-discourse"
-        assigned_role = "sociologist"
+        assigned_role = "social-investigator"
         controversy_gap = "public-discourse-gap"
     elif lane == "stakeholder-deliberation-analysis":
         action_kind = "analyze-stakeholder-deliberation"
-        assigned_role = "sociologist"
+        assigned_role = "social-investigator"
         controversy_gap = "stakeholder-deliberation-gap"
     return {
         "action_kind": action_kind,
@@ -639,7 +639,7 @@ def representation_gap_policy(
     return {
         "action_kind": "address-representation-gap",
         "priority": maybe_text(gap.get("severity")) or priority_from_score(severity_score),
-        "assigned_role": "sociologist",
+        "assigned_role": "social-investigator",
         "objective": f"Address the representation gap around {issue_label}.",
         "reason": maybe_text(gap.get("gap_summary"))
         or maybe_text(gap.get("recommended_action"))
@@ -675,7 +675,7 @@ def diffusion_edge_policy(
     return {
         "action_kind": "trace-cross-platform-diffusion",
         "priority": priority,
-        "assigned_role": "sociologist",
+        "assigned_role": "social-investigator",
         "objective": f"Trace how {issue_label} is moving across platforms.",
         "reason": maybe_text(edge.get("edge_summary"))
         or f"Issue {issue_label} shows a {edge_type} pattern that may affect how the controversy is represented.",

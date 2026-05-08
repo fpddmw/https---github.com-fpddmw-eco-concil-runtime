@@ -228,17 +228,69 @@ class AgentEntryGateTests(unittest.TestCase):
                     if isinstance(entry, dict)
                 )
             )
+
+    def test_start_council_run_scaffolds_prepare_and_registration_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            artifacts = build_raw_artifacts(root)
+            mission_path = build_mission_file(root, artifacts)
+            mission_input_path = run_dir / "input" / "mission.json"
+            mission_input_path.parent.mkdir(parents=True, exist_ok=True)
+            mission_input_path.write_text(mission_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+            payload = run_kernel(
+                "start-council-run",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_input_path),
+                "--pretty",
+            )
+
+            registration = payload["openclaw_agent_registration"]
+            entry_gate = payload["agent_entry_gate"]["agent_entry"]
+            gate_artifact = load_json(runtime_path(run_dir, f"agent_entry_gate_{ROUND_ID}.json"))
+            state_payload = run_kernel(
+                "show-run-state",
+                "--run-dir",
+                str(run_dir),
+                "--round-id",
+                ROUND_ID,
+                "--pretty",
+            )
+            roles = {
+                item["role"]
+                for item in registration["registrations"]
+                if isinstance(item, dict)
+            }
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("openclaw-agent", payload["summary"]["orchestration_mode"])
+            self.assertEqual("ready", payload["summary"]["entry_status"])
+            self.assertIn("social-investigator", roles)
+            self.assertIn("environmental-investigator", roles)
+            self.assertNotIn("social_investigator", roles)
+            self.assertNotIn("public-discourse-investigator", roles)
+            self.assertTrue((run_dir / "supervisor" / "openclaw-workspaces" / "social-investigator").exists())
+            self.assertIn("openclaw agents add", registration["register_all_command"])
+            self.assertTrue(runtime_path(run_dir, f"source_selection_social-investigator_{ROUND_ID}.json").exists())
+            self.assertTrue(runtime_path(run_dir, f"agent_entry_gate_{ROUND_ID}.json").exists())
             self.assertTrue(
                 all(
                     entry.get("analysis_commands") == []
-                    for entry in payload["agent_entry"]["capability_surface"]
+                    for entry in entry_gate["capability_surface"]
                     if isinstance(entry, dict)
                 )
             )
             self.assertTrue(
                 any(
                     "submit-council-proposal" in command
-                    for entry in payload["agent_entry"]["capability_surface"]
+                    for entry in entry_gate["capability_surface"]
                     if isinstance(entry, dict)
                     for command in entry.get("write_commands", [])
                     if isinstance(entry.get("write_commands"), list)
@@ -247,7 +299,7 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertTrue(
                 any(
                     "submit-readiness-opinion" in command
-                    for entry in payload["agent_entry"]["capability_surface"]
+                    for entry in entry_gate["capability_surface"]
                     if isinstance(entry, dict)
                     for command in entry.get("write_commands", [])
                     if isinstance(entry.get("write_commands"), list)
@@ -255,7 +307,7 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             environmental_entries = [
                 entry
-                for entry in payload["agent_entry"]["role_entry_points"]
+                for entry in entry_gate["role_entry_points"]
                 if isinstance(entry, dict) and entry.get("role") == "environmental-investigator"
             ]
             self.assertEqual(1, len(environmental_entries))
@@ -269,7 +321,7 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("--actor-role environmental-investigator", environmental_normalize_surface)
             challenger_entries = [
                 entry
-                for entry in payload["agent_entry"]["role_entry_points"]
+                for entry in entry_gate["role_entry_points"]
                 if isinstance(entry, dict) and entry.get("role") == "challenger"
             ]
             self.assertEqual(1, len(challenger_entries))
@@ -289,11 +341,11 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("open-challenge-ticket", challenger_write_surface)
             self.assertIn("open-falsification-probe", challenger_write_surface)
             self.assertNotIn("request-phase-transition", challenger_write_surface)
-            self.assertTrue(any(item["step_id"] == "submit-council-proposal" for item in payload["agent_entry"]["entry_chain"]))
-            self.assertTrue(any(item["step_id"] == "submit-readiness-opinion" for item in payload["agent_entry"]["entry_chain"]))
-            self.assertTrue(any(item["step_id"] == "request-report-basis-transition" for item in payload["agent_entry"]["entry_chain"]))
-            self.assertTrue(any(item["step_id"] == "approve-transition-request" for item in payload["agent_entry"]["entry_chain"]))
-            self.assertTrue(any(item["step_id"] == "return-to-runtime-gate" for item in payload["agent_entry"]["entry_chain"]))
+            self.assertTrue(any(item["step_id"] == "submit-council-proposal" for item in entry_gate["entry_chain"]))
+            self.assertTrue(any(item["step_id"] == "submit-readiness-opinion" for item in entry_gate["entry_chain"]))
+            self.assertTrue(any(item["step_id"] == "request-report-basis-transition" for item in entry_gate["entry_chain"]))
+            self.assertTrue(any(item["step_id"] == "approve-transition-request" for item in entry_gate["entry_chain"]))
+            self.assertTrue(any(item["step_id"] == "return-to-runtime-gate" for item in entry_gate["entry_chain"]))
             self.assertEqual("runtime-agent-entry-gate-v1", gate_artifact["schema_version"])
             self.assertTrue(state_payload["agent_entry"]["operator"]["entry_gate_present"])
             self.assertIn(

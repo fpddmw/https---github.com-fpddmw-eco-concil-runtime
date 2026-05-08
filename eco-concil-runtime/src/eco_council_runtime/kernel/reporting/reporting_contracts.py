@@ -15,8 +15,8 @@ EXPLICIT_REPORTING_INPUT_NAMES = (
     "reporting_handoff",
     "decision",
     "expert_report_draft",
-    "sociologist_report",
-    "environmentalist_report",
+    "social_investigator_report",
+    "environmental_investigator_report",
 )
 
 MERGED_TEXT_FIELDS = (
@@ -31,8 +31,8 @@ MERGED_TEXT_FIELDS = (
     "reporting_handoff_source",
     "decision_source",
     "expert_report_draft_source",
-    "sociologist_report_source",
-    "environmentalist_report_source",
+    "social_investigator_report_source",
+    "environmental_investigator_report_source",
 )
 
 
@@ -107,8 +107,8 @@ def reporting_contract_fields(
     reporting_handoff_source: Any = "",
     decision_source: Any = "",
     expert_report_draft_source: Any = "",
-    sociologist_report_source: Any = "",
-    environmentalist_report_source: Any = "",
+    social_investigator_report_source: Any = "",
+    environmental_investigator_report_source: Any = "",
     observed_inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = d1_contract_fields(
@@ -129,8 +129,8 @@ def reporting_contract_fields(
         "reporting_handoff_source": reporting_handoff_source,
         "decision_source": decision_source,
         "expert_report_draft_source": expert_report_draft_source,
-        "sociologist_report_source": sociologist_report_source,
-        "environmentalist_report_source": environmentalist_report_source,
+        "social_investigator_report_source": social_investigator_report_source,
+        "environmental_investigator_report_source": environmental_investigator_report_source,
     }
     for field_name, value in optional_sources.items():
         text = maybe_text(value)
@@ -182,9 +182,9 @@ def reporting_contract_fields_from_payload(
         reporting_handoff_source=merged_fields.get("reporting_handoff_source"),
         decision_source=merged_fields.get("decision_source"),
         expert_report_draft_source=merged_fields.get("expert_report_draft_source"),
-        sociologist_report_source=merged_fields.get("sociologist_report_source"),
-        environmentalist_report_source=merged_fields.get(
-            "environmentalist_report_source"
+        social_investigator_report_source=merged_fields.get("social_investigator_report_source"),
+        environmental_investigator_report_source=merged_fields.get(
+            "environmental_investigator_report_source"
         ),
         observed_inputs=observed_inputs,
     )

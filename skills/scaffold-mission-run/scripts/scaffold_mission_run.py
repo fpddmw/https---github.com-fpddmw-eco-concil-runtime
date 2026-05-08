@@ -201,7 +201,7 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
         if isinstance(mission.get("verification_scope"), dict)
         else derive_verification_scope(mission)
     )
-    by_role = {"sociologist": [], "environmentalist": []}
+    by_role = {"social-investigator": [], "environmental-investigator": []}
     for item in [*imports, *requests]:
         source_skill = maybe_text(item.get("source_skill"))
         by_role[role_for_source_skill(source_skill)].append(source_skill)
@@ -213,13 +213,13 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
     geometry = region.get("geometry") if isinstance(region.get("geometry"), dict) else {}
     tasks: list[dict[str, Any]] = []
 
-    if by_role["sociologist"]:
+    if by_role["social-investigator"]:
         tasks.append(
             {
-                "task_id": f"task-sociologist-{round_id}-01",
+                "task_id": f"task-social-investigator-{round_id}-01",
                 "run_id": run_id,
                 "round_id": round_id,
-                "assigned_role": "sociologist",
+                "assigned_role": "social-investigator",
                 "status": "planned",
                 "objective": "Import and normalize public-discussion artifacts for investigator query, finding, and evidence-bundle submission.",
                 "expected_output_kinds": ["normalized-public-signals", "public-discourse-evidence"],
@@ -227,27 +227,27 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
                     "mission_window": window,
                     "mission_geometry": geometry,
                     "verification_scope": verification_scope,
-                    "source_skills": sorted(set(by_role["sociologist"])),
+                    "source_skills": sorted(set(by_role["social-investigator"])),
                     "evidence_requirements": [
                         {
-                            "requirement_id": f"req-sociologist-{round_id}-public-import",
+                            "requirement_id": f"req-social-investigator-{round_id}-public-import",
                             "requirement_type": "public-signal-import",
                             "summary": "Normalize public-discussion artifacts so investigators can query item-level evidence and submit DB-backed findings.",
                             "priority": "high",
                         }
                     ]
-                    + lane_evidence_requirements(mission, round_id=round_id, role="sociologist"),
+                    + lane_evidence_requirements(mission, round_id=round_id, role="social-investigator"),
                 },
             }
         )
 
-    if by_role["environmentalist"]:
+    if by_role["environmental-investigator"]:
         tasks.append(
             {
-                "task_id": f"task-environmentalist-{round_id}-01",
+                "task_id": f"task-environmental-investigator-{round_id}-01",
                 "run_id": run_id,
                 "round_id": round_id,
-                "assigned_role": "environmentalist",
+                "assigned_role": "environmental-investigator",
                 "status": "planned",
                 "objective": "Import and normalize environmental observation artifacts for investigator query, quality review, and evidence-bundle submission.",
                 "expected_output_kinds": ["normalized-environment-signals", "environment-evidence"],
@@ -255,16 +255,16 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
                     "mission_window": window,
                     "mission_geometry": geometry,
                     "verification_scope": verification_scope,
-                    "source_skills": sorted(set(by_role["environmentalist"])),
+                    "source_skills": sorted(set(by_role["environmental-investigator"])),
                     "evidence_requirements": [
                         {
-                            "requirement_id": f"req-environmentalist-{round_id}-environment-import",
+                            "requirement_id": f"req-environmental-investigator-{round_id}-environment-import",
                             "requirement_type": "environment-signal-import",
                             "summary": "Normalize environmental artifacts so investigators can cite provider, time, location, quality, and limitation fields from the signal plane.",
                             "priority": "high",
                         }
                     ]
-                    + lane_evidence_requirements(mission, round_id=round_id, role="environmentalist"),
+                    + lane_evidence_requirements(mission, round_id=round_id, role="environmental-investigator"),
                 },
             }
         )
@@ -408,7 +408,7 @@ def scaffold_mission_run_skill(
     )
     intent_sources_by_role = {
         role: intent_selected_sources(mission, role)
-        for role in ("sociologist", "environmentalist")
+        for role in ("social-investigator", "environmental-investigator")
     }
     role_source_counts = {
         role: len(
@@ -421,7 +421,7 @@ def scaffold_mission_run_skill(
                 *intent_sources_by_role[role],
             }
         )
-        for role in ("sociologist", "environmentalist")
+        for role in ("social-investigator", "environmental-investigator")
     }
     summary_payload = {
         "schema_version": "ingress-scaffold-v1",

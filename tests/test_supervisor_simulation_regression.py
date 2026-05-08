@@ -80,7 +80,7 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 "--status",
                 "active",
                 "--owner-role",
-                "environmentalist",
+                "environmental-investigator",
                 "--linked-claim-id",
                 issue_id,
                 "--linked-artifact-ref",

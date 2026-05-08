@@ -191,6 +191,26 @@ def build_parser() -> argparse.ArgumentParser:
     add_actor_role_arg(init_cmd)
     init_cmd.add_argument("--pretty", action="store_true")
 
+    start_council_cmd = sub.add_parser(
+        "start-council-run",
+        help="Initialize a mission run, scaffold the first council round, prepare sources, and materialize agent entry surfaces.",
+    )
+    start_council_cmd.add_argument("--run-dir", required=True)
+    start_council_cmd.add_argument("--run-id", required=True)
+    start_council_cmd.add_argument("--round-id", required=True)
+    start_council_cmd.add_argument("--mission-path", required=True)
+    add_actor_role_arg(start_council_cmd)
+    start_council_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
+    start_council_cmd.add_argument("--agent-name-prefix", default="")
+    start_council_cmd.add_argument("--agent-workspace-root", default="")
+    start_council_cmd.add_argument(
+        "--materialize-agent-registration",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    start_council_cmd.add_argument("--pretty", action="store_true")
+    add_execution_policy_args(start_council_cmd)
+
     run_cmd = sub.add_parser("run-skill", help="Execute one skill through the runtime kernel and append a ledger event.")
     run_cmd.add_argument("--run-dir", required=True)
     run_cmd.add_argument("--run-id", required=True)
@@ -552,6 +572,23 @@ def build_parser() -> argparse.ArgumentParser:
     add_actor_role_arg(agent_entry_cmd)
     agent_entry_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     agent_entry_cmd.add_argument("--pretty", action="store_true")
+
+    agent_registration_cmd = sub.add_parser(
+        "materialize-openclaw-agent-registration",
+        help="Write one openclaw agents registration plan from the current agent entry gate.",
+    )
+    agent_registration_cmd.add_argument("--run-dir", required=True)
+    agent_registration_cmd.add_argument("--run-id", required=True)
+    agent_registration_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(agent_registration_cmd)
+    agent_registration_cmd.add_argument("--agent-name-prefix", default="")
+    agent_registration_cmd.add_argument("--agent-workspace-root", default="")
+    agent_registration_cmd.add_argument(
+        "--create-workspaces",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    agent_registration_cmd.add_argument("--pretty", action="store_true")
 
     dead_letters_cmd = sub.add_parser("show-dead-letters", help="Show open runtime dead letters for the selected run or round.")
     dead_letters_cmd.add_argument("--run-dir", required=True)

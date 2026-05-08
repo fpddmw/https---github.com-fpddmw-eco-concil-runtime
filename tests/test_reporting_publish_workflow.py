@@ -71,7 +71,7 @@ def prepare_ready_round(run_dir: Path, root: Path) -> None:
         "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID,
         "--title", "Smoke over NYC was materially significant",
         "--statement", "Public smoke reports are backed by elevated PM2.5 observations.",
-        "--status", "active", "--owner-role", "environmentalist",
+        "--status", "active", "--owner-role", "environmental-investigator",
         "--linked-claim-id", issue_id,
         "--linked-artifact-ref", evidence_ref,
         "--confidence", "0.93",
@@ -165,26 +165,26 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            sociologist_draft = run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            environmentalist_draft = run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            soc_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            env_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            social_investigator_draft = run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
+            environmental_investigator_draft = run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmental-investigator")
+            soc_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
+            env_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmental-investigator")
             decision_publish = run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
-            soc_report = load_json(reporting_path(run_dir, f"expert_report_sociologist_{ROUND_ID}.json"))
-            env_report = load_json(reporting_path(run_dir, f"expert_report_environmentalist_{ROUND_ID}.json"))
-            soc_draft = load_json(reporting_path(run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json"))
+            soc_report = load_json(reporting_path(run_dir, f"expert_report_social_investigator_{ROUND_ID}.json"))
+            env_report = load_json(reporting_path(run_dir, f"expert_report_environmental_investigator_{ROUND_ID}.json"))
+            soc_draft = load_json(reporting_path(run_dir, f"expert_report_draft_social_investigator_{ROUND_ID}.json"))
             decision = load_json(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json"))
 
-            self.assertEqual("ready-to-publish", sociologist_draft["summary"]["report_status"])
-            self.assertEqual("ready-to-publish", environmentalist_draft["summary"]["report_status"])
+            self.assertEqual("ready-to-publish", social_investigator_draft["summary"]["report_status"])
+            self.assertEqual("ready-to-publish", environmental_investigator_draft["summary"]["report_status"])
             self.assertEqual("published", soc_publish["summary"]["operation"])
             self.assertEqual("published", env_publish["summary"]["operation"])
             self.assertEqual("published", decision_publish["summary"]["operation"])
             self.assertEqual("ready-to-publish", soc_publish["summary"]["source_report_status"])
             self.assertEqual("canonical-published", soc_publish["summary"]["canonical_report_status"])
-            self.assertEqual("sociologist", soc_report["agent_role"])
-            self.assertEqual("environmentalist", env_report["agent_role"])
+            self.assertEqual("social-investigator", soc_report["agent_role"])
+            self.assertEqual("environmental-investigator", env_report["agent_role"])
             self.assertEqual("canonical-published", soc_report["status"])
             self.assertEqual("ready-to-publish", soc_report["source_report_status"])
             self.assertEqual("canonical-published", env_report["status"])
@@ -236,27 +236,27 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(
                 "deliberation-plane-expert-report",
-                decision["sociologist_report_source"],
+                decision["social_investigator_report_source"],
             )
             self.assertEqual(
                 "deliberation-plane-expert-report",
-                decision["environmentalist_report_source"],
+                decision["environmental_investigator_report_source"],
             )
             self.assertTrue(decision["observed_inputs"]["decision_artifact_present"])
             self.assertTrue(decision["observed_inputs"]["decision_present"])
             self.assertTrue(
-                decision["observed_inputs"]["sociologist_report_artifact_present"]
+                decision["observed_inputs"]["social_investigator_report_artifact_present"]
             )
             self.assertTrue(
-                decision["observed_inputs"]["sociologist_report_present"]
+                decision["observed_inputs"]["social_investigator_report_present"]
             )
             self.assertTrue(
                 decision["observed_inputs"][
-                    "environmentalist_report_artifact_present"
+                    "environmental_investigator_report_artifact_present"
                 ]
             )
             self.assertTrue(
-                decision["observed_inputs"]["environmentalist_report_present"]
+                decision["observed_inputs"]["environmental_investigator_report_present"]
             )
             self.assertEqual(2, len(decision["published_report_refs"]))
 
@@ -290,10 +290,10 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--role",
-                "sociologist",
+                "social-investigator",
             )
             draft_artifact = load_json(
-                reporting_path(run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json")
+                reporting_path(run_dir, f"expert_report_draft_social_investigator_{ROUND_ID}.json")
             )
 
             self.assertEqual("ready-to-publish", draft_payload["summary"]["report_status"])
@@ -331,9 +331,9 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--role",
-                "sociologist",
+                "social-investigator",
             )
-            reporting_path(run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json").unlink()
+            reporting_path(run_dir, f"expert_report_draft_social_investigator_{ROUND_ID}.json").unlink()
 
             publish_payload = run_script(
                 script_path("publish-expert-report"),
@@ -344,10 +344,10 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--role",
-                "sociologist",
+                "social-investigator",
             )
             report_artifact = load_json(
-                reporting_path(run_dir, f"expert_report_sociologist_{ROUND_ID}.json")
+                reporting_path(run_dir, f"expert_report_social_investigator_{ROUND_ID}.json")
             )
 
             self.assertEqual("published", publish_payload["summary"]["operation"])
@@ -380,7 +380,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--role",
-                "sociologist",
+                "social-investigator",
             )
             execute_db(
                 db_path,
@@ -388,7 +388,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 DELETE FROM expert_report_records
                 WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
                 """,
-                (RUN_ID, ROUND_ID, "draft", "sociologist"),
+                (RUN_ID, ROUND_ID, "draft", "social-investigator"),
             )
 
             publish_payload = run_script(
@@ -400,7 +400,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--role",
-                "sociologist",
+                "social-investigator",
             )
 
             self.assertEqual("blocked", publish_payload["status"])
@@ -418,15 +418,15 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_hold_round(run_dir, root)
 
-            draft_payload = run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            first_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            draft_payload = run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
+            first_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
             decision_publish = run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
-            draft_path = reporting_path(run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json")
+            draft_path = reporting_path(run_dir, f"expert_report_draft_social_investigator_{ROUND_ID}.json")
             modified = load_json(draft_path)
             modified["summary"] = modified["summary"] + " Changed after first publish."
             write_json(draft_path, modified)
-            second_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
+            second_publish = run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
             decision = load_json(reporting_path(run_dir, f"council_decision_{ROUND_ID}.json"))
 
             self.assertEqual("needs-more-evidence", draft_payload["summary"]["report_status"])
@@ -460,25 +460,25 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(
                 "deliberation-plane-expert-report",
-                decision["sociologist_report_source"],
+                decision["social_investigator_report_source"],
             )
             self.assertEqual(
-                "missing-environmentalist-report",
-                decision["environmentalist_report_source"],
+                "missing-environmental-investigator-report",
+                decision["environmental_investigator_report_source"],
             )
             self.assertTrue(
-                decision["observed_inputs"]["sociologist_report_artifact_present"]
+                decision["observed_inputs"]["social_investigator_report_artifact_present"]
             )
             self.assertTrue(
-                decision["observed_inputs"]["sociologist_report_present"]
+                decision["observed_inputs"]["social_investigator_report_present"]
             )
             self.assertFalse(
                 decision["observed_inputs"][
-                    "environmentalist_report_artifact_present"
+                    "environmental_investigator_report_artifact_present"
                 ]
             )
             self.assertFalse(
-                decision["observed_inputs"]["environmentalist_report_present"]
+                decision["observed_inputs"]["environmental_investigator_report_present"]
             )
             self.assertEqual("completed", second_publish["status"])
             self.assertEqual("noop", second_publish["summary"]["operation"])
@@ -489,10 +489,10 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmental-investigator")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmental-investigator")
             run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
             publication_payload = run_script(script_path("materialize-final-publication"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
@@ -539,22 +539,22 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(
                 "deliberation-plane-expert-report",
-                publication["sociologist_report_source"],
+                publication["social_investigator_report_source"],
             )
             self.assertEqual(
                 "deliberation-plane-expert-report",
-                publication["environmentalist_report_source"],
+                publication["environmental_investigator_report_source"],
             )
             self.assertTrue(
                 publication["observed_inputs"]["reporting_handoff_artifact_present"]
             )
             self.assertTrue(publication["observed_inputs"]["decision_artifact_present"])
             self.assertTrue(
-                publication["observed_inputs"]["sociologist_report_artifact_present"]
+                publication["observed_inputs"]["social_investigator_report_artifact_present"]
             )
             self.assertTrue(
                 publication["observed_inputs"][
-                    "environmentalist_report_artifact_present"
+                    "environmental_investigator_report_artifact_present"
                 ]
             )
             self.assertEqual(2, len(publication["role_reports"]))
@@ -571,10 +571,10 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmental-investigator")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmental-investigator")
             run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json").unlink()
 
@@ -605,10 +605,10 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmental-investigator")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmental-investigator")
             run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
             (run_dir / "runtime" / f"supervisor_state_{ROUND_ID}.json").unlink()
 
@@ -639,16 +639,16 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
-            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "sociologist")
-            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmentalist")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
+            run_script(script_path("draft-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmental-investigator")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "social-investigator")
+            run_script(script_path("publish-expert-report"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID, "--role", "environmental-investigator")
             run_script(script_path("publish-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
             reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json").unlink()
             reporting_path(run_dir, f"council_decision_{ROUND_ID}.json").unlink()
-            reporting_path(run_dir, f"expert_report_sociologist_{ROUND_ID}.json").unlink()
-            reporting_path(run_dir, f"expert_report_environmentalist_{ROUND_ID}.json").unlink()
+            reporting_path(run_dir, f"expert_report_social_investigator_{ROUND_ID}.json").unlink()
+            reporting_path(run_dir, f"expert_report_environmental_investigator_{ROUND_ID}.json").unlink()
 
             publication_payload = run_script(
                 script_path("materialize-final-publication"),
@@ -672,29 +672,29 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(
                 "deliberation-plane-expert-report",
-                publication["sociologist_report_source"],
+                publication["social_investigator_report_source"],
             )
             self.assertEqual(
                 "deliberation-plane-expert-report",
-                publication["environmentalist_report_source"],
+                publication["environmental_investigator_report_source"],
             )
             self.assertFalse(
                 publication["observed_inputs"]["reporting_handoff_artifact_present"]
             )
             self.assertFalse(publication["observed_inputs"]["decision_artifact_present"])
             self.assertFalse(
-                publication["observed_inputs"]["sociologist_report_artifact_present"]
+                publication["observed_inputs"]["social_investigator_report_artifact_present"]
             )
             self.assertFalse(
                 publication["observed_inputs"][
-                    "environmentalist_report_artifact_present"
+                    "environmental_investigator_report_artifact_present"
                 ]
             )
             self.assertTrue(publication["observed_inputs"]["reporting_handoff_present"])
             self.assertTrue(publication["observed_inputs"]["decision_present"])
-            self.assertTrue(publication["observed_inputs"]["sociologist_report_present"])
+            self.assertTrue(publication["observed_inputs"]["social_investigator_report_present"])
             self.assertTrue(
-                publication["observed_inputs"]["environmentalist_report_present"]
+                publication["observed_inputs"]["environmental_investigator_report_present"]
             )
 
     def test_final_publication_hold_round_materializes_hold_artifact_and_guards_overwrite(self) -> None:
@@ -716,19 +716,19 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("hold-release", first_publication["summary"]["publication_status"])
             self.assertEqual("withhold", first_payload["publication_posture"])
             self.assertEqual(
-                "missing-sociologist-report",
-                first_payload["sociologist_report_source"],
+                "missing-social-investigator-report",
+                first_payload["social_investigator_report_source"],
             )
             self.assertEqual(
-                "missing-environmentalist-report",
-                first_payload["environmentalist_report_source"],
+                "missing-environmental-investigator-report",
+                first_payload["environmental_investigator_report_source"],
             )
             self.assertFalse(
-                first_payload["observed_inputs"]["sociologist_report_artifact_present"]
+                first_payload["observed_inputs"]["social_investigator_report_artifact_present"]
             )
             self.assertFalse(
                 first_payload["observed_inputs"][
-                    "environmentalist_report_artifact_present"
+                    "environmental_investigator_report_artifact_present"
                 ]
             )
             self.assertEqual("blocked", second_publication["status"])

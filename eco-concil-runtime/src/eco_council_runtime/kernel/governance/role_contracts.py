@@ -4,11 +4,13 @@ from typing import Any
 
 ROLE_MODERATOR = "moderator"
 ROLE_ENVIRONMENTAL_INVESTIGATOR = "environmental-investigator"
-ROLE_PUBLIC_DISCOURSE_INVESTIGATOR = "public-discourse-investigator"
-ROLE_FORMAL_RECORD_INVESTIGATOR = "formal-record-investigator"
+ROLE_SOCIAL_INVESTIGATOR = "social-investigator"
 ROLE_CHALLENGER = "challenger"
 ROLE_REPORT_EDITOR = "report-editor"
 ROLE_RUNTIME_OPERATOR = "runtime-operator"
+
+ROLE_KIND_COUNCIL_AGENT = "council-agent"
+ROLE_KIND_RUNTIME_PRINCIPAL = "runtime-principal"
 
 CAPABILITY_FETCH = "fetch"
 CAPABILITY_NORMALIZE = "normalize"
@@ -54,15 +56,8 @@ def unique_texts(values: list[Any]) -> list[str]:
 
 ROLE_ALIASES = {
     "moderator": ROLE_MODERATOR,
-    "environmentalist": ROLE_ENVIRONMENTAL_INVESTIGATOR,
     "environmental-investigator": ROLE_ENVIRONMENTAL_INVESTIGATOR,
-    "hydrology-analyst": ROLE_ENVIRONMENTAL_INVESTIGATOR,
-    "ecology-analyst": ROLE_ENVIRONMENTAL_INVESTIGATOR,
-    "sociologist": ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
-    "public-discourse-investigator": ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
-    "community-impact-analyst": ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
-    "formal-record-investigator": ROLE_FORMAL_RECORD_INVESTIGATOR,
-    "policy-analyst": ROLE_FORMAL_RECORD_INVESTIGATOR,
+    "social-investigator": ROLE_SOCIAL_INVESTIGATOR,
     "challenger": ROLE_CHALLENGER,
     "report-editor": ROLE_REPORT_EDITOR,
     "runtime-operator": ROLE_RUNTIME_OPERATOR,
@@ -71,6 +66,8 @@ ROLE_ALIASES = {
 ROLE_CONTRACTS = {
     ROLE_MODERATOR: {
         "canonical_role": ROLE_MODERATOR,
+        "role_kind": ROLE_KIND_COUNCIL_AGENT,
+        "conceptual_role": "moderator",
         "aliases": ["moderator"],
         "description": "Owns agenda framing, board coordination, structured proposal submission, and stage-transition requests.",
         "capabilities": [
@@ -94,12 +91,9 @@ ROLE_CONTRACTS = {
     },
     ROLE_ENVIRONMENTAL_INVESTIGATOR: {
         "canonical_role": ROLE_ENVIRONMENTAL_INVESTIGATOR,
-        "aliases": [
-            "environmentalist",
-            "environmental-investigator",
-            "hydrology-analyst",
-            "ecology-analyst",
-        ],
+        "role_kind": ROLE_KIND_COUNCIL_AGENT,
+        "conceptual_role": "environmental-investigator",
+        "aliases": ["environmental-investigator"],
         "description": "Fetches, normalizes, queries, and analyzes environmental or physical evidence, then writes findings/proposals.",
         "capabilities": [
             CAPABILITY_FETCH,
@@ -116,36 +110,12 @@ ROLE_CONTRACTS = {
             CAPABILITY_BOARD_NOTE_WRITE,
         ],
     },
-    ROLE_PUBLIC_DISCOURSE_INVESTIGATOR: {
-        "canonical_role": ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
-        "aliases": [
-            "sociologist",
-            "public-discourse-investigator",
-            "community-impact-analyst",
-        ],
-        "description": "Fetches, normalizes, queries, and analyzes discourse/community evidence, then writes findings/proposals.",
-        "capabilities": [
-            CAPABILITY_FETCH,
-            CAPABILITY_NORMALIZE,
-            CAPABILITY_QUERY,
-            CAPABILITY_ANALYSIS,
-            CAPABILITY_DERIVED_EXPORT,
-            CAPABILITY_FINDING_WRITE,
-            CAPABILITY_DISCUSSION_WRITE,
-            CAPABILITY_EVIDENCE_BUNDLE_WRITE,
-            CAPABILITY_PROPOSAL_WRITE,
-            CAPABILITY_READINESS_WRITE,
-            CAPABILITY_HYPOTHESIS_WRITE,
-            CAPABILITY_BOARD_NOTE_WRITE,
-        ],
-    },
-    ROLE_FORMAL_RECORD_INVESTIGATOR: {
-        "canonical_role": ROLE_FORMAL_RECORD_INVESTIGATOR,
-        "aliases": [
-            "formal-record-investigator",
-            "policy-analyst",
-        ],
-        "description": "Fetches, normalizes, queries, and analyzes formal/policy record evidence, then writes findings/proposals.",
+    ROLE_SOCIAL_INVESTIGATOR: {
+        "canonical_role": ROLE_SOCIAL_INVESTIGATOR,
+        "role_kind": ROLE_KIND_COUNCIL_AGENT,
+        "conceptual_role": "social-investigator",
+        "aliases": ["social-investigator"],
+        "description": "Fetches, normalizes, queries, and analyzes public discourse, community, formal record, and policy evidence, then writes findings/proposals.",
         "capabilities": [
             CAPABILITY_FETCH,
             CAPABILITY_NORMALIZE,
@@ -163,6 +133,8 @@ ROLE_CONTRACTS = {
     },
     ROLE_CHALLENGER: {
         "canonical_role": ROLE_CHALLENGER,
+        "role_kind": ROLE_KIND_COUNCIL_AGENT,
+        "conceptual_role": "challenger",
         "aliases": ["challenger"],
         "description": "Tests competing explanations, opens/closes challenges, and pushes contradiction or falsification work.",
         "capabilities": [
@@ -184,6 +156,8 @@ ROLE_CONTRACTS = {
     },
     ROLE_REPORT_EDITOR: {
         "canonical_role": ROLE_REPORT_EDITOR,
+        "role_kind": ROLE_KIND_COUNCIL_AGENT,
+        "conceptual_role": "report-editor",
         "aliases": ["report-editor"],
         "description": "Builds evidence-backed report artifacts and publication-ready reporting outputs without changing investigation state.",
         "capabilities": [
@@ -196,8 +170,11 @@ ROLE_CONTRACTS = {
     },
     ROLE_RUNTIME_OPERATOR: {
         "canonical_role": ROLE_RUNTIME_OPERATOR,
+        "role_kind": ROLE_KIND_RUNTIME_PRINCIPAL,
+        "conceptual_role": "runtime",
+        "conceptual_note": "Runtime/control-plane principal for authorization and audit, not a council agent or substantive deliberation role.",
         "aliases": ["runtime-operator"],
-        "description": "Owns runtime governance, audit, replay, export rebuild, admission policy, and operational write surfaces.",
+        "description": "Owns runtime governance, audit, replay, export rebuild, admission policy, and operational write surfaces without joining council deliberation.",
         "capabilities": [
             CAPABILITY_QUERY,
             CAPABILITY_DERIVED_EXPORT,
@@ -234,6 +211,9 @@ def role_contract(actor_role: Any) -> dict[str, Any]:
         return {}
     return {
         "canonical_role": normalized,
+        "role_kind": maybe_text(contract.get("role_kind")),
+        "conceptual_role": maybe_text(contract.get("conceptual_role")),
+        "conceptual_note": maybe_text(contract.get("conceptual_note")),
         "aliases": unique_texts(contract.get("aliases", [])),
         "description": maybe_text(contract.get("description")),
         "capabilities": unique_texts(contract.get("capabilities", [])),
@@ -282,11 +262,12 @@ __all__ = [
     "ROLE_ALIASES",
     "ROLE_CHALLENGER",
     "ROLE_ENVIRONMENTAL_INVESTIGATOR",
-    "ROLE_FORMAL_RECORD_INVESTIGATOR",
+    "ROLE_KIND_COUNCIL_AGENT",
+    "ROLE_KIND_RUNTIME_PRINCIPAL",
     "ROLE_MODERATOR",
-    "ROLE_PUBLIC_DISCOURSE_INVESTIGATOR",
     "ROLE_REPORT_EDITOR",
     "ROLE_RUNTIME_OPERATOR",
+    "ROLE_SOCIAL_INVESTIGATOR",
     "known_actor_role",
     "normalize_actor_role",
     "preferred_role_label",

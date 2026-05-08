@@ -31,7 +31,7 @@ def mission_payload(raw_artifact_path: Path) -> dict[str, object]:
             "geometry": {"type": "Point", "latitude": 40.7128, "longitude": -74.0060},
         },
         "allowed_sources_by_role": {
-            "sociologist": ["fetch-youtube-video-search", "fetch-gdelt-doc-search", "fetch-bluesky-cascade"],
+            "social-investigator": ["fetch-youtube-video-search", "fetch-gdelt-doc-search", "fetch-bluesky-cascade"],
         },
         "artifact_imports": [
             {
@@ -43,19 +43,19 @@ def mission_payload(raw_artifact_path: Path) -> dict[str, object]:
     }
 
 
-def sociologist_tasks(round_id: str) -> list[dict[str, object]]:
+def social_investigator_tasks(round_id: str) -> list[dict[str, object]]:
     return [
         {
-            "task_id": f"task-sociologist-{round_id}-01",
+            "task_id": f"task-social-investigator-{round_id}-01",
             "run_id": "run-family-memory-001",
             "round_id": round_id,
-            "assigned_role": "sociologist",
+            "assigned_role": "social-investigator",
             "status": "planned",
             "objective": "Collect public-signal evidence for the current round.",
             "inputs": {
                 "evidence_requirements": [
                     {
-                        "requirement_id": f"req-sociologist-{round_id}-01",
+                        "requirement_id": f"req-social-investigator-{round_id}-01",
                         "summary": "Need public signal evidence.",
                     }
                 ]
@@ -65,18 +65,18 @@ def sociologist_tasks(round_id: str) -> list[dict[str, object]]:
 
 
 def write_prior_round_artifacts(run_dir: Path, round_id: str) -> None:
-    write_json(run_dir / "investigation" / f"round_tasks_{round_id}.json", sociologist_tasks(round_id))
+    write_json(run_dir / "investigation" / f"round_tasks_{round_id}.json", social_investigator_tasks(round_id))
     write_json(
-        run_dir / "runtime" / f"source_selection_sociologist_{round_id}.json",
+        run_dir / "runtime" / f"source_selection_social-investigator_{round_id}.json",
         {
             "schema_version": "1.0.0",
-            "selection_id": f"source-selection-sociologist-{round_id}",
+            "selection_id": f"source-selection-social-investigator-{round_id}",
             "run_id": "run-family-memory-001",
             "round_id": round_id,
-            "agent_role": "sociologist",
+            "agent_role": "social-investigator",
             "status": "complete",
             "summary": "Prior round selected YouTube public signals.",
-            "task_ids": [f"task-sociologist-{round_id}-01"],
+            "task_ids": [f"task-social-investigator-{round_id}-01"],
             "allowed_sources": ["fetch-youtube-video-search", "fetch-gdelt-doc-search", "fetch-bluesky-cascade"],
             "selected_sources": ["fetch-youtube-video-search"],
             "override_requests": [],
@@ -106,7 +106,7 @@ def write_prior_round_artifacts(run_dir: Path, round_id: str) -> None:
                 {
                     "source_skill": "fetch-youtube-video-search",
                     "selected": True,
-                    "reason": "Selected for sociologist.",
+                    "reason": "Selected for social_investigator.",
                 }
             ],
         },
@@ -116,10 +116,10 @@ def write_prior_round_artifacts(run_dir: Path, round_id: str) -> None:
         {
             "statuses": [
                 {
-                    "step_id": f"step-sociologist-01-{round_id}",
+                    "step_id": f"step-social-investigator-01-{round_id}",
                     "step_kind": "import",
                     "status": "completed",
-                    "role": "sociologist",
+                    "role": "social-investigator",
                     "source_skill": "fetch-youtube-video-search",
                 }
             ]
@@ -143,10 +143,10 @@ class SourceQueueFamilyMemoryTests(unittest.TestCase):
 
             write_prior_round_artifacts(run_dir, "round-001")
             current_tasks_path = run_dir / "investigation" / "round_tasks_round-002.json"
-            write_json(current_tasks_path, sociologist_tasks("round-002"))
+            write_json(current_tasks_path, social_investigator_tasks("round-002"))
             set_ordered_times(
                 run_dir / "investigation" / "round_tasks_round-001.json",
-                run_dir / "runtime" / "source_selection_sociologist_round-001.json",
+                run_dir / "runtime" / "source_selection_social-investigator_round-001.json",
                 run_dir / "runtime" / "import_execution_round-001.json",
                 current_tasks_path,
             )
@@ -154,10 +154,10 @@ class SourceQueueFamilyMemoryTests(unittest.TestCase):
             payload = selection_module.build_source_selection(
                 run_dir=run_dir,
                 mission=mission_payload(raw_artifact_path),
-                tasks=sociologist_tasks("round-002"),
+                tasks=social_investigator_tasks("round-002"),
                 run_id="run-family-memory-001",
                 round_id="round-002",
-                role="sociologist",
+                role="social-investigator",
             )
 
             youtube_family = next(item for item in payload["family_memory"] if item["family_id"] == "youtube")
@@ -174,19 +174,19 @@ class SourceQueueFamilyMemoryTests(unittest.TestCase):
 
             write_prior_round_artifacts(run_dir, "round-001")
             current_tasks_path = run_dir / "investigation" / "round_tasks_round-002.json"
-            write_json(current_tasks_path, sociologist_tasks("round-002"))
+            write_json(current_tasks_path, social_investigator_tasks("round-002"))
             mission_path = run_dir / "mission.json"
             write_json(mission_path, mission_payload(raw_artifact_path))
             set_ordered_times(
                 run_dir / "investigation" / "round_tasks_round-001.json",
-                run_dir / "runtime" / "source_selection_sociologist_round-001.json",
+                run_dir / "runtime" / "source_selection_social-investigator_round-001.json",
                 run_dir / "runtime" / "import_execution_round-001.json",
                 current_tasks_path,
                 mission_path,
             )
 
             mission = mission_payload(raw_artifact_path)
-            tasks = sociologist_tasks("round-002")
+            tasks = social_investigator_tasks("round-002")
             selections = selection_module.build_source_selections(
                 run_dir=run_dir,
                 mission=mission,
@@ -205,7 +205,7 @@ class SourceQueueFamilyMemoryTests(unittest.TestCase):
             )
 
             self.assertEqual([], warnings)
-            youtube_family = next(item for item in plan["roles"]["sociologist"]["family_memory"] if item["family_id"] == "youtube")
+            youtube_family = next(item for item in plan["roles"]["social-investigator"]["family_memory"] if item["family_id"] == "youtube")
             self.assertEqual(["fetch-youtube-video-search"], youtube_family["completed_sources"])
             self.assertEqual("round-001", youtube_family["prior_rounds"][0]["round_id"])
 

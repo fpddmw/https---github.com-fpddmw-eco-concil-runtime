@@ -12,7 +12,11 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (
     maybe_text,
 )
 
-ROLE_VALUES = ("sociologist", "environmentalist")
+ROLE_VALUES = ("social-investigator", "environmental-investigator")
+
+
+def role_artifact_slug(role: str) -> str:
+    return maybe_text(role).replace("-", "_")
 
 
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
@@ -59,7 +63,7 @@ def export_specs(round_id: str) -> list[dict[str, Any]]:
                 "agent_role": role,
                 "id_field": "report_id",
                 "output_relative": (
-                    f"reporting/expert_report_draft_{role}_{round_id}.json"
+                    f"reporting/expert_report_draft_{role_artifact_slug(role)}_{round_id}.json"
                 ),
                 "loader": load_expert_report_record,
                 "loader_kwargs": {"report_stage": "draft", "agent_role": role},
@@ -72,7 +76,7 @@ def export_specs(round_id: str) -> list[dict[str, Any]]:
                 "stage": "canonical",
                 "agent_role": role,
                 "id_field": "report_id",
-                "output_relative": f"reporting/expert_report_{role}_{round_id}.json",
+                "output_relative": f"reporting/expert_report_{role_artifact_slug(role)}_{round_id}.json",
                 "loader": load_expert_report_record,
                 "loader_kwargs": {
                     "report_stage": "canonical",

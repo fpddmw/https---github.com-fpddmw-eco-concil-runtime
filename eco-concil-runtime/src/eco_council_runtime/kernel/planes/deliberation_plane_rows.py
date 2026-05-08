@@ -707,8 +707,8 @@ def write_council_decision_record_row(
             publication_readiness, decision_gating_json,
             next_round_required, canonical_artifact, board_state_source,
             coverage_source, reporting_handoff_source, report_basis_source,
-            decision_source, sociologist_report_source,
-            environmentalist_report_source, selected_evidence_refs_json,
+            decision_source, social_investigator_report_source,
+            environmental_investigator_report_source, selected_evidence_refs_json,
             published_report_refs_json, artifact_path, record_locator, raw_json
         ) VALUES (
             :record_id, :decision_id, :run_id, :round_id, :generated_at_utc,
@@ -716,8 +716,8 @@ def write_council_decision_record_row(
             :publication_readiness, :decision_gating_json,
             :next_round_required, :canonical_artifact, :board_state_source,
             :coverage_source, :reporting_handoff_source, :report_basis_source,
-            :decision_source, :sociologist_report_source,
-            :environmentalist_report_source, :selected_evidence_refs_json,
+            :decision_source, :social_investigator_report_source,
+            :environmental_investigator_report_source, :selected_evidence_refs_json,
             :published_report_refs_json, :artifact_path, :record_locator, :raw_json
         )
         """,
@@ -764,7 +764,7 @@ def write_final_publication_row(
             publication_status, publication_posture, board_state_source,
             coverage_source, reporting_handoff_source, decision_source,
             report_basis_source, supervisor_state_source,
-            sociologist_report_source, environmentalist_report_source,
+            social_investigator_report_source, environmental_investigator_report_source,
             selected_evidence_refs_json, published_report_refs_json,
             artifact_path, record_locator, raw_json
         ) VALUES (
@@ -772,7 +772,7 @@ def write_final_publication_row(
             :publication_status, :publication_posture, :board_state_source,
             :coverage_source, :reporting_handoff_source, :decision_source,
             :report_basis_source, :supervisor_state_source,
-            :sociologist_report_source, :environmentalist_report_source,
+            :social_investigator_report_source, :environmental_investigator_report_source,
             :selected_evidence_refs_json, :published_report_refs_json,
             :artifact_path, :record_locator, :raw_json
         )

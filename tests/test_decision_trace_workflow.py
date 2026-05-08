@@ -69,7 +69,7 @@ def prepare_round_base(run_dir: Path, root: Path) -> dict[str, str]:
         "--status",
         "active",
         "--owner-role",
-        "environmentalist",
+        "environmental-investigator",
         "--linked-claim-id",
         claim_id,
         "--linked-artifact-ref",
@@ -279,7 +279,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--role",
-                "sociologist",
+                "social-investigator",
             )
             run_script(
                 script_path("draft-expert-report"),
@@ -290,7 +290,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--role",
-                "environmentalist",
+                "environmental-investigator",
             )
             run_script(
                 script_path("publish-expert-report"),
@@ -301,7 +301,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--role",
-                "sociologist",
+                "social-investigator",
             )
             run_script(
                 script_path("publish-expert-report"),
@@ -312,7 +312,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--role",
-                "environmentalist",
+                "environmental-investigator",
             )
             decision_publish = run_script(
                 script_path("publish-council-decision"),
@@ -565,7 +565,7 @@ class DecisionTraceWorkflowTests(unittest.TestCase):
                             "lineage": [seeded["claim_id"]],
                         },
                         {
-                            "agent_role": "environmentalist",
+                            "agent_role": "environmental-investigator",
                             "readiness_status": "ready",
                             "sufficient_for_report_basis": True,
                             "rationale": "No empirical blocker remains at the evidence layer.",

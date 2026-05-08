@@ -78,7 +78,7 @@ def round_tasks(*, role: str, source_skills: list[str]) -> list[dict[str, object
             "round_id": ROUND_ID,
             "assigned_role": role,
             "status": "planned",
-            "objective": f"Process {'public' if role == 'sociologist' else 'environment'} source inputs for runtime ingress.",
+            "objective": f"Process {'public' if role == 'social_investigator' else 'environment'} source inputs for runtime ingress.",
             "inputs": {
                 "source_skills": source_skills,
                 "evidence_requirements": [
@@ -243,7 +243,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             write_prepare_inputs(
                 run_dir,
                 mission=mission,
-                tasks=round_tasks(role="sociologist", source_skills=["fetch-youtube-video-search", "fetch-youtube-comments"]),
+                tasks=round_tasks(role="social-investigator", source_skills=["fetch-youtube-video-search", "fetch-youtube-comments"]),
             )
 
             prepare_payload = run_script(
@@ -259,7 +259,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
 
             self.assertEqual("1.3.0", plan["schema_version"])
             self.assertEqual(2, prepare_payload["summary"]["step_count"])
-            self.assertEqual(["fetch-youtube-video-search", "fetch-youtube-comments"], plan["roles"]["sociologist"]["selected_sources"])
+            self.assertEqual(["fetch-youtube-video-search", "fetch-youtube-comments"], plan["roles"]["social-investigator"]["selected_sources"])
 
             video_step, comments_step = plan["steps"]
             self.assertEqual("fetch-youtube-video-search", video_step["source_skill"])
@@ -281,7 +281,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--actor-role",
-                "public-discourse-investigator",
+                "social-investigator",
             )
             execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
             counts = normalized_counts_by_source(run_dir)
@@ -347,7 +347,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 run_dir,
                 mission=mission,
                 tasks=round_tasks(
-                    role="sociologist",
+                    role="social-investigator",
                     source_skills=["fetch-regulationsgov-comments", "fetch-regulationsgov-comment-detail"],
                 ),
             )
@@ -381,7 +381,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--actor-role",
-                "public-discourse-investigator",
+                "social-investigator",
             )
             execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
             counts = normalized_counts_by_source(run_dir)
@@ -446,7 +446,7 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             write_prepare_inputs(
                 run_dir,
                 mission=mission,
-                tasks=round_tasks(role="environmentalist", source_skills=["fetch-openaq"]),
+                tasks=round_tasks(role="environmental-investigator", source_skills=["fetch-openaq"]),
             )
 
             run_script(

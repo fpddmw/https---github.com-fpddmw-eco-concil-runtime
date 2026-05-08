@@ -437,7 +437,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 {
                     **load_json(run_dir / "mission.json"),
                     "source_selections": {
-                        "environmentalist": {
+                        "environmental-investigator": {
                             "status": "complete",
                             "selected_sources": ["fetch-open-meteo-air-quality"],
                         }

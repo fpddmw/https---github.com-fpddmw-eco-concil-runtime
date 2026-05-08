@@ -247,12 +247,12 @@ class DbOnlyRecoveryTests(unittest.TestCase):
                 "--round-id",
                 REPORTING_ROUND_ID,
                 "--role",
-                "sociologist",
+                "social-investigator",
             )
             draft = load_json(
                 reporting_path(
                     run_dir,
-                    f"expert_report_draft_sociologist_{REPORTING_ROUND_ID}.json",
+                    f"expert_report_draft_social_investigator_{REPORTING_ROUND_ID}.json",
                 )
             )
 
@@ -284,7 +284,7 @@ class DbOnlyRecoveryTests(unittest.TestCase):
             run_dir = root / "run"
             prepare_ready_round(run_dir, root)
 
-            for role in ("sociologist", "environmentalist"):
+            for role in ("social-investigator", "environmental-investigator"):
                 run_script(
                     script_path("draft-expert-report"),
                     "--run-dir",
@@ -296,7 +296,7 @@ class DbOnlyRecoveryTests(unittest.TestCase):
                     "--role",
                     role,
                 )
-            for role in ("sociologist", "environmentalist"):
+            for role in ("social-investigator", "environmental-investigator"):
                 run_script(
                     script_path("publish-expert-report"),
                     "--run-dir",
@@ -321,8 +321,8 @@ class DbOnlyRecoveryTests(unittest.TestCase):
             for file_name in (
                 f"reporting_handoff_{REPORTING_ROUND_ID}.json",
                 f"council_decision_{REPORTING_ROUND_ID}.json",
-                f"expert_report_sociologist_{REPORTING_ROUND_ID}.json",
-                f"expert_report_environmentalist_{REPORTING_ROUND_ID}.json",
+                f"expert_report_social_investigator_{REPORTING_ROUND_ID}.json",
+                f"expert_report_environmental_investigator_{REPORTING_ROUND_ID}.json",
             ):
                 reporting_path(run_dir, file_name).unlink()
 
@@ -350,29 +350,29 @@ class DbOnlyRecoveryTests(unittest.TestCase):
             )
             self.assertEqual(
                 "deliberation-plane-expert-report",
-                publication["sociologist_report_source"],
+                publication["social_investigator_report_source"],
             )
             self.assertEqual(
                 "deliberation-plane-expert-report",
-                publication["environmentalist_report_source"],
+                publication["environmental_investigator_report_source"],
             )
             self.assertFalse(
                 publication["observed_inputs"]["reporting_handoff_artifact_present"]
             )
             self.assertFalse(publication["observed_inputs"]["decision_artifact_present"])
             self.assertFalse(
-                publication["observed_inputs"]["sociologist_report_artifact_present"]
+                publication["observed_inputs"]["social_investigator_report_artifact_present"]
             )
             self.assertFalse(
                 publication["observed_inputs"][
-                    "environmentalist_report_artifact_present"
+                    "environmental_investigator_report_artifact_present"
                 ]
             )
             self.assertTrue(publication["observed_inputs"]["reporting_handoff_present"])
             self.assertTrue(publication["observed_inputs"]["decision_present"])
-            self.assertTrue(publication["observed_inputs"]["sociologist_report_present"])
+            self.assertTrue(publication["observed_inputs"]["social_investigator_report_present"])
             self.assertTrue(
-                publication["observed_inputs"]["environmentalist_report_present"]
+                publication["observed_inputs"]["environmental_investigator_report_present"]
             )
 
     def test_reporting_orphaned_draft_artifact_is_blocked_not_reused(self) -> None:
@@ -391,7 +391,7 @@ class DbOnlyRecoveryTests(unittest.TestCase):
                 "--round-id",
                 REPORTING_ROUND_ID,
                 "--role",
-                "sociologist",
+                "social-investigator",
             )
             execute_db(
                 db_path,
@@ -399,7 +399,7 @@ class DbOnlyRecoveryTests(unittest.TestCase):
                 DELETE FROM expert_report_records
                 WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
                 """,
-                (REPORTING_RUN_ID, REPORTING_ROUND_ID, "draft", "sociologist"),
+                (REPORTING_RUN_ID, REPORTING_ROUND_ID, "draft", "social-investigator"),
             )
 
             publish_payload = run_script(
@@ -411,7 +411,7 @@ class DbOnlyRecoveryTests(unittest.TestCase):
                 "--round-id",
                 REPORTING_ROUND_ID,
                 "--role",
-                "sociologist",
+                "social-investigator",
             )
 
             self.assertEqual("blocked", publish_payload["status"])

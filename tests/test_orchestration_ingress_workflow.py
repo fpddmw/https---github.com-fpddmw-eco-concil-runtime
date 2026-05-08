@@ -233,7 +233,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             self.assertEqual("mission-derived-relation-review", scope["transport_verification_policy"])
             self.assertIn("fire-origin", lane_ids)
             self.assertIn("spatiotemporal-relation-review", lane_ids)
-            self.assertIn("fetch-nasa-firms-fire", scaffold_artifact["intent_sources_by_role"]["environmentalist"])
+            self.assertIn("fetch-nasa-firms-fire", scaffold_artifact["intent_sources_by_role"]["environmental-investigator"])
             self.assertIn("fire-origin", scaffold_artifact["verification_scope_required_lane_ids"])
             self.assertTrue(all(task["inputs"]["verification_scope"]["scope_id"] == scope["scope_id"] for task in tasks_payload))
             self.assertFalse(scaffold_payload["warnings"])
@@ -304,8 +304,8 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             self.assertEqual(2, len(tasks_payload))
             self.assertEqual(4, prepare_payload["summary"]["step_count"])
             self.assertEqual(4, len(plan_artifact["steps"]))
-            self.assertEqual(["fetch-youtube-video-search", "fetch-bluesky-cascade"], plan_artifact["roles"]["sociologist"]["selected_sources"])
-            self.assertEqual(["fetch-openaq", "fetch-airnow-hourly-observations"], plan_artifact["roles"]["environmentalist"]["selected_sources"])
+            self.assertEqual(["fetch-youtube-video-search", "fetch-bluesky-cascade"], plan_artifact["roles"]["social-investigator"]["selected_sources"])
+            self.assertEqual(["fetch-openaq", "fetch-airnow-hourly-observations"], plan_artifact["roles"]["environmental-investigator"]["selected_sources"])
             self.assertEqual("active", board_artifact["rounds"][ROUND_ID]["hypotheses"][0]["status"])
 
     def test_prepare_round_reads_db_backed_round_tasks_when_export_is_missing(self) -> None:
@@ -393,7 +393,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--actor-role",
-                "public-discourse-investigator",
+                "social-investigator",
             )
             import_payload = run_script(
                 script_path("normalize-fetch-execution"),
@@ -474,7 +474,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 "--status",
                 "active",
                 "--owner-role",
-                "environmentalist",
+                "environmental-investigator",
                 "--linked-claim-id",
                 issue_id,
                 "--linked-artifact-ref",

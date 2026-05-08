@@ -18,8 +18,8 @@ description: Publish a canonical council decision from the current decision draf
 
 ## Read/Write Contract
 - Reads `run_dir/reporting/council_decision_draft_<round_id>.json` by default.
-- Reads `run_dir/reporting/expert_report_sociologist_<round_id>.json` by default when decision publication_readiness is `ready`.
-- Reads `run_dir/reporting/expert_report_environmentalist_<round_id>.json` by default when decision publication_readiness is `ready`.
+- Reads `run_dir/reporting/expert_report_social_investigator_<round_id>.json` by default when decision publication_readiness is `ready`.
+- Reads `run_dir/reporting/expert_report_environmental_investigator_<round_id>.json` by default when decision publication_readiness is `ready`.
 - Writes `run_dir/reporting/council_decision_<round_id>.json` by default.
 
 ## Required Input
@@ -28,8 +28,8 @@ description: Publish a canonical council decision from the current decision draf
 - `round_id`
 - Optional:
   - `draft_path`
-  - `sociologist_report_path`
-  - `environmentalist_report_path`
+  - `social_investigator_report_path`
+  - `environmental_investigator_report_path`
   - `output_path`
   - `allow_overwrite`
   - `skip_report_check`
@@ -45,7 +45,7 @@ description: Publish a canonical council decision from the current decision draf
 - `deliberation_sync`
 - `analysis_sync`
 - `board_handoff`
-- The emitted canonical decision preserves normalized reporting-chain trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `report_basis_source`, `decision_source`, `sociologist_report_source`, `environmentalist_report_source`, `db_path`, and `observed_inputs`.
+- The emitted canonical decision preserves normalized reporting-chain trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `report_basis_source`, `decision_source`, `social_investigator_report_source`, `environmental_investigator_report_source`, `db_path`, and `observed_inputs`.
 - The canonical decision preserves `decision_packet`, memo sections, report refs, evidence refs, and decision trace ids for final report assembly.
 
 ## References

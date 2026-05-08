@@ -251,7 +251,7 @@ class CanonicalContractTests(unittest.TestCase):
                 "run_id": "run-001",
                 "round_id": "round-001",
                 "claim_id": "claim-001",
-                "agent_role": "sociologist",
+                "agent_role": "social-investigator",
                 "claim_type": "hazard-impact",
                 "status": "candidate",
                 "summary": "Smoke is worsening.",

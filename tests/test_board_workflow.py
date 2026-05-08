@@ -212,7 +212,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--status",
                 "active",
                 "--owner-role",
-                "environmentalist",
+                "environmental-investigator",
                 "--linked-claim-id",
                 issue_id,
                 "--linked-artifact-ref",
@@ -296,7 +296,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--status",
                 "active",
                 "--owner-role",
-                "environmentalist",
+                "environmental-investigator",
                 "--linked-claim-id",
                 issue_id,
                 "--linked-artifact-ref",
@@ -531,8 +531,8 @@ class BoardWorkflowTests(unittest.TestCase):
                         {
                             "proposal_kind": "create-hypothesis",
                             "action_kind": "create-hypothesis",
-                            "agent_role": "environmentalist",
-                            "assigned_role": "environmentalist",
+                            "agent_role": "environmental-investigator",
+                            "assigned_role": "environmental-investigator",
                             "target_kind": "hypothesis",
                             "target_id": "hypothesis-proposal-001",
                             "target_claim_id": claim_id,
@@ -579,7 +579,7 @@ class BoardWorkflowTests(unittest.TestCase):
             self.assertEqual("agent-council", payload["summary"]["decision_source"])
             self.assertEqual(proposal_id, payload["summary"]["proposal_id"])
             self.assertEqual("active", hypothesis["status"])
-            self.assertEqual("environmentalist", hypothesis["owner_role"])
+            self.assertEqual("environmental-investigator", hypothesis["owner_role"])
             self.assertEqual("agent-council", hypothesis["decision_source"])
             self.assertIn(claim_id, hypothesis["linked_claim_ids"])
             self.assertIn(coverage_ref, hypothesis["evidence_refs"])
@@ -623,7 +623,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--status",
                 "active",
                 "--owner-role",
-                "environmentalist",
+                "environmental-investigator",
                 "--linked-claim-id",
                 claim_id,
                 "--linked-artifact-ref",
@@ -734,7 +734,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--status",
                 "active",
                 "--owner-role",
-                "environmentalist",
+                "environmental-investigator",
                 "--linked-claim-id",
                 claim_id,
                 "--linked-artifact-ref",
@@ -898,7 +898,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 "--status",
                 "active",
                 "--owner-role",
-                "environmentalist",
+                "environmental-investigator",
                 "--linked-claim-id",
                 claim_id,
                 "--linked-artifact-ref",
@@ -1107,7 +1107,7 @@ class BoardWorkflowTests(unittest.TestCase):
                         {
                             "action_id": "action-followup-public-001",
                             "action_kind": "expand-public-evidence",
-                            "assigned_role": "sociologist",
+                            "assigned_role": "social-investigator",
                             "priority": "high",
                             "objective": "Broaden public evidence around smoke timing and intensity.",
                             "reason": "Current public evidence is still narrow in timing coverage.",
@@ -1410,19 +1410,19 @@ class BoardWorkflowTests(unittest.TestCase):
 
             self.assertEqual(
                 ["fetch-regulationsgov-comments"],
-                role_to_sources["sociologist"],
+                role_to_sources["social-investigator"],
             )
             self.assertEqual(
                 ["fetch-open-meteo-flood"],
-                role_to_sources["environmentalist"],
+                role_to_sources["environmental-investigator"],
             )
             self.assertEqual(
                 ["normalized-public-signals", "public-discourse-evidence"],
-                role_to_outputs["sociologist"],
+                role_to_outputs["social-investigator"],
             )
             self.assertEqual(
                 ["normalized-environment-signals", "environment-evidence"],
-                role_to_outputs["environmentalist"],
+                role_to_outputs["environmental-investigator"],
             )
             self.assertEqual(
                 "deliberation-plane-round-tasks",

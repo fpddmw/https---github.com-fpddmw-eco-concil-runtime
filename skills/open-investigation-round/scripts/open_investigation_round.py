@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "open-investigation-round"
-SOURCE_SELECTION_ROLES = ("sociologist", "environmentalist")
+SOURCE_SELECTION_ROLES = ("social-investigator", "environmental-investigator")
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
@@ -80,7 +80,7 @@ def expected_output_kinds_for_role(role: str, existing: list[Any] | None = None)
     values = [replacements.get(maybe_text(value), maybe_text(value)) for value in existing or []]
     defaults = (
         ["normalized-public-signals", "public-discourse-evidence"]
-        if maybe_text(role) == "sociologist"
+        if maybe_text(role) == "social-investigator"
         else ["normalized-environment-signals", "environment-evidence"]
     )
     return unique_texts(values or defaults)
@@ -470,7 +470,7 @@ def build_followup_round_tasks(
                 "source_round_id": source_round_id,
                 "objective": (
                     "Continue public-discussion evidence collection for investigator query, finding, and evidence-bundle submission."
-                    if role == "sociologist"
+                    if role == "social-investigator"
                     else "Continue environmental evidence collection for investigator query, quality review, and evidence-bundle submission."
                 ),
                 "expected_output_kinds": expected_output_kinds,

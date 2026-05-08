@@ -8,7 +8,7 @@ description: Execute the current actor's slice of one prepared fetch-plan throug
 ## Core Goal
 - Read the prepared fetch plan for the current round.
 - Resolve the executing actor role from `--actor-role` or the runtime-injected `OPENCLAW_ACTOR_ROLE`.
-- Run only fetch-plan steps owned by that actor's role, for example `public-discourse-investigator` for `sociologist` steps and `environmental-investigator` for `environmentalist` steps.
+- Run only fetch-plan steps owned by that actor's role, for example `social-investigator` for `social_investigator` steps and `environmental-investigator` for `environmental_investigator` steps.
 - Run the `queue_runner` component for owned steps: copy local imports or execute approved detached-fetch steps into the current run raw store.
 - Run the `normalizer_runner` component for owned steps: invoke mapped normalizer skills or keep a raw-only receipt when no normalizer exists.
 - Run the `execution_receipt` component: write one auditable execution snapshot with step status, raw artifact refs, normalizer receipts, and warnings.

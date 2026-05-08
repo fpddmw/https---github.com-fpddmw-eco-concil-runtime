@@ -12,7 +12,7 @@ import sys
 from typing import Any
 
 SKILL_NAME = "draft-expert-report"
-ROLE_VALUES = ("sociologist", "environmentalist")
+ROLE_VALUES = ("social-investigator", "environmental-investigator")
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
@@ -93,6 +93,10 @@ def resolve_path(run_dir: Path, override: str, default_relative: str) -> Path:
     return candidate.resolve()
 
 
+def role_artifact_slug(role: str) -> str:
+    return maybe_text(role).replace("-", "_")
+
+
 def load_json_if_exists(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
@@ -114,7 +118,7 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
 
 
 def role_profile(role: str) -> dict[str, Any]:
-    if role == "sociologist":
+    if role == "social-investigator":
         return {
             "label": "public-discourse-and-community-impact",
             "summary_prefix": "Public discourse and community impact section",
@@ -131,11 +135,11 @@ def finding_matches_role(role: str, finding: dict[str, Any]) -> bool:
     agent_role = maybe_text(finding.get("agent_role"))
     finding_kind = maybe_text(finding.get("finding_kind")).casefold()
     combined = f"{agent_role} {finding_kind}".casefold()
-    if role == "sociologist":
+    if role == "social-investigator":
         return any(
             token in combined
             for token in (
-                "sociologist",
+                "social-investigator",
                 "public-discourse",
                 "community",
                 "public",
@@ -147,7 +151,7 @@ def finding_matches_role(role: str, finding: dict[str, Any]) -> bool:
         token in combined
         for token in (
             "environment",
-            "environmentalist",
+            "environmental-investigator",
             "air",
             "weather",
             "physical",
@@ -172,7 +176,7 @@ def role_findings(role: str, key_findings: list[dict[str, Any]], max_findings: i
             continue
         title = maybe_text(finding.get("title")) or f"{profile['summary_prefix']} {index}"
         summary = maybe_text(finding.get("summary"))
-        if role == "sociologist" and board_excerpt:
+        if role == "social-investigator" and board_excerpt:
             summary = f"{summary} Board context: {board_excerpt}".strip()
         findings.append(
             {
@@ -316,7 +320,8 @@ def draft_expert_report_skill(
     handoff_file = resolve_path(run_dir_path, reporting_handoff_path, f"reporting/reporting_handoff_{round_id}.json")
     decision_file = resolve_path(run_dir_path, decision_path, f"reporting/council_decision_draft_{round_id}.json")
     board_brief_file = resolve_path(run_dir_path, board_brief_path, f"board/board_brief_{round_id}.md")
-    output_file = resolve_path(run_dir_path, output_path, f"reporting/expert_report_draft_{role}_{round_id}.json")
+    role_slug = role_artifact_slug(role)
+    output_file = resolve_path(run_dir_path, output_path, f"reporting/expert_report_draft_{role_slug}_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
     handoff_context = load_reporting_handoff_wrapper(

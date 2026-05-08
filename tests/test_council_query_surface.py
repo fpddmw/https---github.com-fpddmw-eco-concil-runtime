@@ -39,7 +39,7 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
                 {
                     "action_kind": "advance-empirical-verification",
                     "priority": "high",
-                    "assigned_role": "environmentalist",
+                    "assigned_role": "environmental-investigator",
                     "objective": "Advance smoke verification.",
                     "reason": "Coverage is still incomplete.",
                     "readiness_blocker": True,

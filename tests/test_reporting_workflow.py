@@ -91,7 +91,7 @@ def seed_ready_reporting_context(
     hypothesis_title: str = "Smoke over NYC was materially significant",
     hypothesis_statement: str = "Public smoke reports are backed by elevated PM2.5 observations.",
     hypothesis_status: str = "active",
-    owner_role: str = "environmentalist",
+    owner_role: str = "environmental-investigator",
     confidence: str = "0.93",
 ) -> dict[str, object]:
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)

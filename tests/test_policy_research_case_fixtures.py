@@ -192,14 +192,14 @@ def mission_file(root: Path, *, run_id: str, round_id: str, case: dict[str, str]
                 }
             ],
             "source_selections": {
-                "sociologist": {
+                "social-investigator": {
                     "status": "complete",
                     "selected_sources": [
                         "fetch-youtube-video-search",
                         "fetch-regulationsgov-comments",
                     ],
                 },
-                "environmentalist": {
+                "environmental-investigator": {
                     "status": "complete",
                     "selected_sources": [case["environment_source"]],
                 },
@@ -310,7 +310,7 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
         "--round-id",
         round_id,
         "--actor-role",
-        "public-discourse-investigator",
+        "social-investigator",
     )
     import_payload = run_script(
         script_path("normalize-fetch-execution"),
@@ -369,7 +369,7 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
             run_id=run_id,
             round_id=round_id,
             case_label=case["case_label"],
-            role="public-discourse-investigator",
+            role="social-investigator",
             finding_kind="public-discourse-finding",
             signal_id=public_signal_id,
             evidence_ref=public_ref,
@@ -379,7 +379,7 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
             run_id=run_id,
             round_id=round_id,
             case_label=case["case_label"],
-            role="formal-record-investigator",
+            role="social-investigator",
             finding_kind="formal-record-finding",
             signal_id=formal_signal_id,
             evidence_ref=formal_ref,
@@ -664,7 +664,7 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
         "--round-id",
         round_id,
     )
-    for role in ("sociologist", "environmentalist"):
+    for role in ("social-investigator", "environmental-investigator"):
         run_script(
             script_path("draft-expert-report"),
             "--run-dir",
@@ -701,8 +701,8 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
     for artifact_name in (
         f"reporting_handoff_{round_id}.json",
         f"council_decision_{round_id}.json",
-        f"expert_report_sociologist_{round_id}.json",
-        f"expert_report_environmentalist_{round_id}.json",
+        f"expert_report_social_investigator_{round_id}.json",
+        f"expert_report_environmental_investigator_{round_id}.json",
     ):
         reporting_path(run_dir, artifact_name).unlink()
     (run_dir / "runtime" / f"supervisor_state_{round_id}.json").unlink()

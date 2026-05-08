@@ -25,6 +25,9 @@ from eco_council_runtime.kernel.planes.analysis_plane import (
     query_spatiotemporal_relation_cues,
 )
 from eco_council_runtime.kernel.governance.agent_entry import materialize_agent_entry_gate
+from eco_council_runtime.kernel.governance.agent_entry.registration import (
+    materialize_openclaw_agent_registration_plan,
+)
 from eco_council_runtime.kernel.governance.access_policy import (
     command_requires_explicit_actor_role,
     evaluate_kernel_command_access,
@@ -38,7 +41,7 @@ from eco_council_runtime.kernel.archive.benchmark import (
 from eco_council_runtime.kernel.execution.controller import (
     run_governed_execution_round_with_contract_mode,
 )
-from eco_council_runtime.kernel.execution.executor import SkillExecutionError, maybe_text, new_runtime_event_id
+from eco_council_runtime.kernel.execution.executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill
 from eco_council_runtime.kernel.execution.gate import GateHandler
 from eco_council_runtime.kernel.core.ledger import append_ledger_event
 from eco_council_runtime.kernel.core.manifest import load_json_if_exists
@@ -47,6 +50,7 @@ from eco_council_runtime.kernel.archive.post_round import (
     close_round_with_contract_mode,
 )
 from eco_council_runtime.kernel.core.paths import (
+    agent_entry_gate_path,
     cursor_path,
     manifest_path,
     resolve_run_dir,
@@ -142,6 +146,126 @@ def main(
     runtime_status = handle_runtime_command(args, run_dir)
     if runtime_status is not None:
         return runtime_status
+
+    if args.command == "start-council-run":
+        init_run(run_dir, args.run_id)
+        if (
+            not isinstance(agent_entry_profile, dict)
+            or not callable(hard_gate_command_builder)
+            or not callable(entry_chain_builder)
+        ):
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "contract_mode": args.contract_mode,
+                },
+                "message": "No agent entry profile or agent handoff profile was injected into cli.main().",
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        try:
+            scaffold = run_skill(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                skill_name="scaffold-mission-run",
+                actor_role="moderator",
+                skill_args=[
+                    "--mission-path",
+                    args.mission_path,
+                    "--orchestration-mode",
+                    "openclaw-agent",
+                ],
+                contract_mode=args.contract_mode,
+                timeout_seconds=args.timeout_seconds,
+                retry_budget=args.retry_budget,
+                retry_backoff_ms=args.retry_backoff_ms,
+                allow_side_effects=args.allow_side_effect,
+            )
+            prepare = run_skill(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                skill_name="prepare-round",
+                actor_role="moderator",
+                skill_args=[],
+                contract_mode=args.contract_mode,
+                timeout_seconds=args.timeout_seconds,
+                retry_budget=args.retry_budget,
+                retry_backoff_ms=args.retry_backoff_ms,
+                allow_side_effects=args.allow_side_effect,
+            )
+            entry_gate = materialize_agent_entry_gate(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                actor_role=args.actor_role,
+                agent_entry_profile=agent_entry_profile,
+                hard_gate_command_builder=hard_gate_command_builder,
+                entry_chain_builder=entry_chain_builder,
+                contract_mode=args.contract_mode,
+            )
+            registration = (
+                materialize_openclaw_agent_registration_plan(
+                    run_dir,
+                    run_id=args.run_id,
+                    round_id=args.round_id,
+                    actor_role=args.actor_role,
+                    agent_entry_gate=entry_gate.get("agent_entry", {}),
+                    agent_name_prefix=args.agent_name_prefix,
+                    workspace_root=args.agent_workspace_root,
+                    create_workspaces=True,
+                )
+                if bool(args.materialize_agent_registration)
+                else {}
+            )
+        except SkillExecutionError as exc:
+            failure = exc.payload or {
+                "status": "failed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "contract_mode": args.contract_mode,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        except Exception as exc:
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "contract_mode": args.contract_mode,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        payload = {
+            "status": "completed",
+            "summary": {
+                "run_id": args.run_id,
+                "round_id": args.round_id,
+                "contract_mode": args.contract_mode,
+                "orchestration_mode": "openclaw-agent",
+                "entry_status": entry_gate.get("summary", {}).get("entry_status")
+                if isinstance(entry_gate.get("summary"), dict)
+                else "",
+                "registration_count": registration.get("registration_count", 0)
+                if isinstance(registration, dict)
+                else 0,
+            },
+            "scaffold": scaffold,
+            "prepare_round": prepare,
+            "agent_entry_gate": entry_gate,
+            "openclaw_agent_registration": registration,
+        }
+        print(pretty_json(payload, args.pretty))
+        return 0
 
     if args.command == "request-phase-transition":
         init_run(run_dir, args.run_id)
@@ -1266,6 +1390,34 @@ def main(
                     "run_id": args.run_id,
                     "round_id": args.round_id,
                     "contract_mode": args.contract_mode,
+                },
+                "message": str(exc),
+            }
+            print(pretty_json(failure, args.pretty))
+            return 1
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "materialize-openclaw-agent-registration":
+        init_run(run_dir, args.run_id)
+        gate_payload = load_json_if_exists(agent_entry_gate_path(run_dir, args.round_id)) or {}
+        try:
+            payload = materialize_openclaw_agent_registration_plan(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                actor_role=args.actor_role,
+                agent_entry_gate=gate_payload,
+                agent_name_prefix=args.agent_name_prefix,
+                workspace_root=args.agent_workspace_root,
+                create_workspaces=args.create_workspaces,
+            )
+        except Exception as exc:
+            failure = {
+                "status": "failed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
                 },
                 "message": str(exc),
             }

@@ -30,8 +30,8 @@ description: Archive one run's canonical board, reporting, and report basis arti
 - Reads `run_dir/reporting/council_decision_<round_id>.json` by default when present.
 - Reads `run_dir/reporting/council_decision_draft_<round_id>.json` by default when present.
 - Reads `run_dir/reporting/final_publication_<round_id>.json` by default when present.
-- Reads `run_dir/reporting/expert_report_sociologist_<round_id>.json` by default when present.
-- Reads `run_dir/reporting/expert_report_environmentalist_<round_id>.json` by default when present.
+- Reads `run_dir/reporting/expert_report_social_investigator_<round_id>.json` by default when present.
+- Reads `run_dir/reporting/expert_report_environmental_investigator_<round_id>.json` by default when present.
 - Reads `run_dir/analytics/signal_plane.sqlite` by default when present.
 - Writes `run_dir/../archives/eco_case_library.sqlite` by default.
 - Writes `run_dir/archive/case_library_import_<round_id>.json` by default.

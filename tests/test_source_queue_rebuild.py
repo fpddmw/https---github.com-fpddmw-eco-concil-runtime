@@ -124,11 +124,11 @@ def build_mixed_queue_mission(root: Path, openaq_path: Path, fetch_script: Path,
                 source_request
             ],
             "source_selections": {
-                "sociologist": {
+                "social-investigator": {
                     "status": "complete",
                     "selected_sources": ["fetch-youtube-video-search"],
                 },
-                "environmentalist": {
+                "environmental-investigator": {
                     "status": "complete",
                     "selected_sources": ["fetch-openaq"],
                 },
@@ -262,16 +262,16 @@ class SourceQueueRebuildTests(unittest.TestCase):
             )
 
             plan = load_json(runtime_path(run_dir, f"fetch_plan_{ROUND_ID}.json"))
-            sociologist_selection = load_json(runtime_path(run_dir, f"source_selection_sociologist_{ROUND_ID}.json"))
-            environmentalist_selection = load_json(runtime_path(run_dir, f"source_selection_environmentalist_{ROUND_ID}.json"))
+            social_investigator_selection = load_json(runtime_path(run_dir, f"source_selection_social-investigator_{ROUND_ID}.json"))
+            environmental_investigator_selection = load_json(runtime_path(run_dir, f"source_selection_environmental-investigator_{ROUND_ID}.json"))
 
             self.assertEqual(2, payload["summary"]["step_count"])
             self.assertEqual({"import", "detached-fetch"}, {step["step_kind"] for step in plan["steps"]})
-            self.assertEqual(["fetch-youtube-video-search"], plan["roles"]["sociologist"]["selected_sources"])
-            self.assertEqual(["fetch-openaq"], plan["roles"]["environmentalist"]["selected_sources"])
-            self.assertEqual("complete", plan["input_snapshot"]["source_selections"]["sociologist"]["status"])
-            self.assertEqual(["fetch-youtube-video-search"], sociologist_selection["selected_sources"])
-            self.assertEqual(["fetch-openaq"], environmentalist_selection["selected_sources"])
+            self.assertEqual(["fetch-youtube-video-search"], plan["roles"]["social-investigator"]["selected_sources"])
+            self.assertEqual(["fetch-openaq"], plan["roles"]["environmental-investigator"]["selected_sources"])
+            self.assertEqual("complete", plan["input_snapshot"]["source_selections"]["social-investigator"]["status"])
+            self.assertEqual(["fetch-youtube-video-search"], social_investigator_selection["selected_sources"])
+            self.assertEqual(["fetch-openaq"], environmental_investigator_selection["selected_sources"])
 
     def test_import_execution_runs_mixed_import_and_detached_fetch_steps(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -308,7 +308,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--actor-role",
-                "public-discourse-investigator",
+                "social-investigator",
             )
             payload = run_script(
                 script_path("normalize-fetch-execution"),
@@ -330,8 +330,8 @@ class SourceQueueRebuildTests(unittest.TestCase):
             self.assertEqual({"import", "detached-fetch"}, {status["step_kind"] for status in execution["statuses"]})
             self.assertEqual(
                 {
-                    "step-sociologist-01-fetch-youtube-video-search": "public-discourse-investigator",
-                    "step-environmentalist-02-fetch-openaq": "environmental-investigator",
+                    "step-social-investigator-01-fetch-youtube-video-search": "social-investigator",
+                    "step-environmental-investigator-02-fetch-openaq": "environmental-investigator",
                 },
                 {status["step_id"]: status["resolved_actor_role"] for status in execution["statuses"]},
             )
@@ -465,7 +465,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--actor-role",
-                "public-discourse-investigator",
+                "social-investigator",
             )
 
             execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
@@ -474,7 +474,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
 
             self.assertEqual(2, detached_meta["attempt_count"])
             self.assertTrue(detached_meta["recovered_after_retry"])
-            self.assertEqual("public-discourse-investigator", detached_meta["resolved_actor_role"])
+            self.assertEqual("social-investigator", detached_meta["resolved_actor_role"])
             self.assertEqual(5.0, detached_meta["execution_policy"]["timeout_seconds"])
             self.assertEqual(1, detached_meta["execution_policy"]["retry_budget"])
             self.assertEqual(["writes-artifacts", "reads-shared-state"], detached_meta["declared_side_effects"])
@@ -527,7 +527,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                     "--round-id",
                     ROUND_ID,
                     "--actor-role",
-                    "public-discourse-investigator",
+                    "social-investigator",
                 ],
                 capture_output=True,
                 text=True,
@@ -579,7 +579,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 ROUND_ID,
             )
 
-            changed_selection_path = runtime_path(run_dir, f"source_selection_sociologist_{ROUND_ID}.json")
+            changed_selection_path = runtime_path(run_dir, f"source_selection_social-investigator_{ROUND_ID}.json")
             changed_selection = load_json(changed_selection_path)
             changed_selection["selected_sources"] = []
             changed_selection_path.write_text(json.dumps(changed_selection, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -595,7 +595,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
                     "--round-id",
                     ROUND_ID,
                     "--actor-role",
-                    "public-discourse-investigator",
+                    "social-investigator",
                 ],
                 capture_output=True,
                 text=True,

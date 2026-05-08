@@ -728,7 +728,7 @@ def archive_case_library_skill(
         else {}
     )
     role_reports = []
-    for role in ("sociologist", "environmentalist"):
+    for role in ("social-investigator", "environmental-investigator"):
         report_wrapper = load_expert_report_wrapper(
             run_dir_path,
             run_id=run_id,

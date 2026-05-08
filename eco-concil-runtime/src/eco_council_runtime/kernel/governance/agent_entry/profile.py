@@ -8,10 +8,9 @@ from eco_council_runtime.kernel.execution.executor import maybe_text
 from eco_council_runtime.kernel.governance.role_contracts import (
     ROLE_CHALLENGER,
     ROLE_ENVIRONMENTAL_INVESTIGATOR,
-    ROLE_FORMAL_RECORD_INVESTIGATOR,
     ROLE_MODERATOR,
-    ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
     ROLE_REPORT_EDITOR,
+    ROLE_SOCIAL_INVESTIGATOR,
     role_contract,
 )
 from eco_council_runtime.kernel.governance.skill_registry import (
@@ -79,27 +78,12 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "analysis_kinds": [],
     },
     {
-        "role": ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
-        "focus": "Fetch, normalize, query, and analyze discourse, media, and community signals, then return evidence-backed findings or proposals.",
+        "role": ROLE_SOCIAL_INVESTIGATOR,
+        "focus": "Fetch, normalize, query, and analyze public discourse, community, formal record, and policy evidence, then return evidence-backed findings or proposals.",
         "read_skills": [
             "query-board-delta",
             "query-public-signals",
             "query-formal-signals",
-        ],
-        "write_skills": [
-            "submit-council-proposal",
-            "submit-readiness-opinion",
-            "post-board-note",
-        ],
-        "analysis_kinds": [],
-    },
-    {
-        "role": ROLE_FORMAL_RECORD_INVESTIGATOR,
-        "focus": "Fetch, normalize, query, and analyze formal records, approvals, and policy evidence before submitting structured findings to the moderator.",
-        "read_skills": [
-            "query-board-delta",
-            "query-formal-signals",
-            "query-public-signals",
         ],
         "write_skills": [
             "submit-council-proposal",
@@ -568,8 +552,7 @@ def default_role_entry_points(
         if role in {
             ROLE_MODERATOR,
             ROLE_ENVIRONMENTAL_INVESTIGATOR,
-            ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
-            ROLE_FORMAL_RECORD_INVESTIGATOR,
+            ROLE_SOCIAL_INVESTIGATOR,
             ROLE_CHALLENGER,
         }:
             role_write_commands.append(
@@ -768,6 +751,9 @@ def default_role_entry_points(
             {
                 "role": role,
                 "focus": maybe_text(definition.get("focus")),
+                "role_kind": maybe_text(role_metadata.get("role_kind")),
+                "conceptual_role": maybe_text(role_metadata.get("conceptual_role")),
+                "conceptual_note": maybe_text(role_metadata.get("conceptual_note")),
                 "role_description": maybe_text(role_metadata.get("description")),
                 "capabilities": (
                     role_metadata.get("capabilities", [])
@@ -845,6 +831,30 @@ def default_agent_entry_operator_commands(
             run_id,
             "--round-id",
             round_id,
+            "--pretty",
+        ),
+        "materialize_openclaw_agent_registration_command": kernel_command(
+            "materialize-openclaw-agent-registration",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--pretty",
+        ),
+        "start_council_run_command_template": kernel_command(
+            "start-council-run",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--mission-path",
+            "<mission_path>",
+            "--contract-mode",
+            contract_mode,
             "--pretty",
         ),
         "read_board_delta_command": run_skill_command(

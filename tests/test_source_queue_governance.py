@@ -18,15 +18,15 @@ def load_modules():
     return selection_module, contract_module
 
 
-def sociologist_tasks(round_id: str) -> list[dict[str, object]]:
+def social_investigator_tasks(round_id: str) -> list[dict[str, object]]:
     return [
         {
-            "task_id": f"task-sociologist-{round_id}-01",
-            "assigned_role": "sociologist",
+            "task_id": f"task-social-investigator-{round_id}-01",
+            "assigned_role": "social-investigator",
             "inputs": {
                 "evidence_requirements": [
                     {
-                        "requirement_id": f"req-sociologist-{round_id}-01",
+                        "requirement_id": f"req-social-investigator-{round_id}-01",
                         "summary": "Collect public-signal evidence for the current round.",
                     }
                 ]
@@ -38,7 +38,7 @@ def sociologist_tasks(round_id: str) -> list[dict[str, object]]:
 def mission_with_public_import() -> dict[str, object]:
     return {
         "allowed_sources_by_role": {
-            "sociologist": [
+            "social-investigator": [
                 "fetch-youtube-video-search",
                 "fetch-gdelt-doc-search",
                 "fetch-bluesky-cascade",
@@ -62,7 +62,7 @@ def mission_with_public_import() -> dict[str, object]:
 class SourceQueueGovernanceTests(unittest.TestCase):
     def test_role_source_governance_surfaces_family_limits(self) -> None:
         _, contract_module = load_modules()
-        governance = contract_module.role_source_governance(mission_with_public_import(), "sociologist")
+        governance = contract_module.role_source_governance(mission_with_public_import(), "social-investigator")
 
         self.assertEqual(2, governance["max_selected_sources_per_role"])
         self.assertEqual(1, governance["max_active_families_per_role"])
@@ -74,26 +74,26 @@ class SourceQueueGovernanceTests(unittest.TestCase):
         mission = mission_with_public_import()
         payload = selection_module.build_source_selection(
             mission=mission,
-            tasks=sociologist_tasks("round-governance-001"),
+            tasks=social_investigator_tasks("round-governance-001"),
             run_id="run-governance-001",
             round_id="round-governance-001",
-            role="sociologist",
+            role="social-investigator",
         )
 
         payload["selected_sources"] = ["fetch-gdelt-doc-search"]
 
         with self.assertRaisesRegex(ValueError, "selected_sources does not match selected family layers"):
-            selection_module.validate_source_selection_payload(mission=mission, role="sociologist", source_selection=payload)
+            selection_module.validate_source_selection_payload(mission=mission, role="social-investigator", source_selection=payload)
 
     def test_validate_source_selection_rejects_family_selected_flag_mismatch(self) -> None:
         selection_module, _ = load_modules()
         mission = mission_with_public_import()
         payload = selection_module.build_source_selection(
             mission=mission,
-            tasks=sociologist_tasks("round-governance-002"),
+            tasks=social_investigator_tasks("round-governance-002"),
             run_id="run-governance-002",
             round_id="round-governance-002",
-            role="sociologist",
+            role="social-investigator",
         )
 
         youtube_family = next(
@@ -104,7 +104,7 @@ class SourceQueueGovernanceTests(unittest.TestCase):
         youtube_family["selected"] = False
 
         with self.assertRaisesRegex(ValueError, "selected flag must match selected layers"):
-            selection_module.validate_source_selection_payload(mission=mission, role="sociologist", source_selection=payload)
+            selection_module.validate_source_selection_payload(mission=mission, role="social-investigator", source_selection=payload)
 
     def test_build_fetch_plan_enforces_max_source_steps_per_round(self) -> None:
         selection_module, _ = load_modules()
@@ -119,7 +119,7 @@ class SourceQueueGovernanceTests(unittest.TestCase):
 
             mission = {
                 "allowed_sources_by_role": {
-                    "sociologist": ["fetch-youtube-video-search", "fetch-bluesky-cascade"],
+                    "social-investigator": ["fetch-youtube-video-search", "fetch-bluesky-cascade"],
                 },
                 "artifact_imports": [
                     {
@@ -141,7 +141,7 @@ class SourceQueueGovernanceTests(unittest.TestCase):
                     "max_source_steps_per_round": 1,
                 },
             }
-            tasks = sociologist_tasks("round-governance-003")
+            tasks = social_investigator_tasks("round-governance-003")
             (run_dir / "investigation").mkdir(parents=True, exist_ok=True)
             (run_dir / "mission.json").write_text(
                 json.dumps(mission, ensure_ascii=True, sort_keys=True),
@@ -186,20 +186,20 @@ class SourceQueueGovernanceTests(unittest.TestCase):
             tasks=[],
             run_id="run-governance-004",
             round_id="round-governance-004",
-            role="environmentalist",
+            role="environmental-investigator",
         )
-        sociologist = selection_module.build_source_selection(
+        social_investigator = selection_module.build_source_selection(
             mission=mission,
             tasks=[],
             run_id="run-governance-004",
             round_id="round-governance-004",
-            role="sociologist",
+            role="social-investigator",
         )
 
         self.assertIn("fetch-nasa-firms-fire", environmental["selected_sources"])
         self.assertIn("fetch-open-meteo-air-quality", environmental["selected_sources"])
         self.assertIn("fetch-open-meteo-historical", environmental["selected_sources"])
-        self.assertIn("fetch-gdelt-doc-search", sociologist["selected_sources"])
+        self.assertIn("fetch-gdelt-doc-search", social_investigator["selected_sources"])
         self.assertIn(
             "spatiotemporal-relation-review",
             {
@@ -207,7 +207,7 @@ class SourceQueueGovernanceTests(unittest.TestCase):
                 for item in contract_module.lane_evidence_requirements(
                     mission,
                     round_id="round-governance-004",
-                    role="environmentalist",
+                    role="environmental-investigator",
                 )
             },
         )
@@ -264,10 +264,10 @@ class SourceQueueGovernanceTests(unittest.TestCase):
                 ],
             }
             tasks = [
-                *sociologist_tasks(round_id),
+                *social_investigator_tasks(round_id),
                 {
-                    "task_id": f"task-environmentalist-{round_id}-01",
-                    "assigned_role": "environmentalist",
+                    "task_id": f"task-environmental-investigator-{round_id}-01",
+                    "assigned_role": "environmental-investigator",
                     "inputs": {"evidence_requirements": []},
                 },
             ]

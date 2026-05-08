@@ -151,14 +151,13 @@ def priority_from_score(score: float) -> str:
 def role_from_lane(lane: str, *, default_role: str = "moderator") -> str:
     lane_text = maybe_text(lane)
     if lane_text == "environmental-observation":
-        return "environmentalist"
+        return "environmental-investigator"
     if lane_text in {
         "public-discourse-analysis",
         "stakeholder-deliberation-analysis",
+        "formal-comment-and-policy-record",
     }:
-        return "sociologist"
-    if lane_text == "formal-comment-and-policy-record":
-        return "moderator"
+        return "social-investigator"
     return default_role
 
 

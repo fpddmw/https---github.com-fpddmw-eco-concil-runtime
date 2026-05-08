@@ -34,7 +34,7 @@ from eco_council_runtime.kernel.planes.deliberation_plane_rows import (
     latest_raw_json_row,
     latest_raw_json_row_where,
 )
-REPORT_AGENT_ROLES = ("sociologist", "environmentalist")
+REPORT_AGENT_ROLES = ("social-investigator", "environmental-investigator")
 
 def nested_evidence_refs(items: Any) -> list[str]:
     values: list[Any] = []
@@ -916,11 +916,11 @@ def council_decision_record_row_from_payload(
         ),
         "report_basis_source": maybe_text(decision_payload.get("report_basis_source")),
         "decision_source": maybe_text(decision_payload.get("decision_source")),
-        "sociologist_report_source": maybe_text(
-            decision_payload.get("sociologist_report_source")
+        "social_investigator_report_source": maybe_text(
+            decision_payload.get("social_investigator_report_source")
         ),
-        "environmentalist_report_source": maybe_text(
-            decision_payload.get("environmentalist_report_source")
+        "environmental_investigator_report_source": maybe_text(
+            decision_payload.get("environmental_investigator_report_source")
         ),
         "selected_evidence_refs_json": json_text(
             decision_payload.get("selected_evidence_refs", [])
@@ -1001,11 +1001,11 @@ def final_publication_row_from_payload(
         "supervisor_state_source": maybe_text(
             publication_payload.get("supervisor_state_source")
         ),
-        "sociologist_report_source": maybe_text(
-            publication_payload.get("sociologist_report_source")
+        "social_investigator_report_source": maybe_text(
+            publication_payload.get("social_investigator_report_source")
         ),
-        "environmentalist_report_source": maybe_text(
-            publication_payload.get("environmentalist_report_source")
+        "environmental_investigator_report_source": maybe_text(
+            publication_payload.get("environmental_investigator_report_source")
         ),
         "selected_evidence_refs_json": json_text(
             publication_payload.get("selected_evidence_refs", [])

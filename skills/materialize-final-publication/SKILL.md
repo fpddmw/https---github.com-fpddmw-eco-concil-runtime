@@ -18,8 +18,8 @@ description: Assemble one decision-maker final report from canonical reporting p
 ## Read/Write Contract
 - Reads `run_dir/reporting/reporting_handoff_<round_id>.json` by default.
 - Reads `run_dir/reporting/council_decision_<round_id>.json` by default.
-- Reads `run_dir/reporting/expert_report_sociologist_<round_id>.json` by default when present.
-- Reads `run_dir/reporting/expert_report_environmentalist_<round_id>.json` by default when present.
+- Reads `run_dir/reporting/expert_report_social_investigator_<round_id>.json` by default when present.
+- Reads `run_dir/reporting/expert_report_environmental_investigator_<round_id>.json` by default when present.
 - Reads `run_dir/report_basis/frozen_report_basis_<round_id>.json` by default.
 - Reads `run_dir/runtime/supervisor_state_<round_id>.json` by default when present.
 - Writes `run_dir/reporting/final_publication_<round_id>.json` by default.
@@ -32,8 +32,8 @@ description: Assemble one decision-maker final report from canonical reporting p
 - Optional:
   - `reporting_handoff_path`
   - `decision_path`
-  - `sociologist_report_path`
-  - `environmentalist_report_path`
+  - `social_investigator_report_path`
+  - `environmental_investigator_report_path`
   - `report_basis_path`
   - `supervisor_state_path`
   - `output_path`

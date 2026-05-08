@@ -151,7 +151,7 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 "warn",
                 "--",
                 "--role",
-                "sociologist",
+                "social-investigator",
                 auto_actor_role=False,
             )
 
@@ -196,7 +196,7 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 request_id,
                 "--",
                 "--role",
-                "sociologist",
+                "social-investigator",
             )
 
             self.assertEqual("completed", approved["status"])
@@ -252,8 +252,8 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 round_id=ROUND_ID,
                 skill_name=REPORTING_PUBLISH_SKILL,
                 requested_actor_role="report-editor",
-                requested_skill_args=["--role", "environmentalist"],
-                rationale="Approve environmentalist report publication only.",
+                requested_skill_args=["--role", "environmental-investigator"],
+                rationale="Approve environmental_investigator report publication only.",
                 approval_reason="Approved the requested reporting argument scope.",
             )
 
@@ -275,7 +275,7 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
                 request_id,
                 "--",
                 "--role",
-                "sociologist",
+                "social-investigator",
                 auto_actor_role=False,
             )
 

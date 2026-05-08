@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SOURCE_SELECTION_ROLES = ("sociologist", "environmentalist")
+SOURCE_SELECTION_ROLES = ("social-investigator", "environmental-investigator")
 SUPPORTED_ARTIFACT_CAPTURE_MODES = ("stdout-json", "stdout-text", "direct-file")
 KNOWN_FETCH_SIDE_EFFECTS = (
     "reads-artifacts",
@@ -58,7 +58,7 @@ def _source(
 
 SOURCE_CATALOG: dict[str, dict[str, Any]] = {
     "fetch-bluesky-cascade": _source(
-        role="sociologist",
+        role="social-investigator",
         family_id="bluesky",
         family_label="Bluesky",
         layer_id="posts",
@@ -70,7 +70,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_output_arg="--output",
     ),
     "fetch-gdelt-doc-search": _source(
-        role="sociologist",
+        role="social-investigator",
         family_id="gdelt",
         family_label="GDELT",
         layer_id="doc-search",
@@ -82,7 +82,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_output_arg="--output",
     ),
     "fetch-gdelt-events": _source(
-        role="sociologist",
+        role="social-investigator",
         family_id="gdelt",
         family_label="GDELT",
         layer_id="events",
@@ -94,7 +94,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_output_arg="--output-dir",
     ),
     "fetch-gdelt-mentions": _source(
-        role="sociologist",
+        role="social-investigator",
         family_id="gdelt",
         family_label="GDELT",
         layer_id="mentions",
@@ -106,7 +106,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_output_arg="--output-dir",
     ),
     "fetch-gdelt-gkg": _source(
-        role="sociologist",
+        role="social-investigator",
         family_id="gdelt",
         family_label="GDELT",
         layer_id="gkg",
@@ -118,7 +118,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_output_arg="--output-dir",
     ),
     "fetch-youtube-video-search": _source(
-        role="sociologist",
+        role="social-investigator",
         family_id="youtube",
         family_label="YouTube",
         layer_id="video-search",
@@ -128,7 +128,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_default_args=["--include-records", "--no-save-records"],
     ),
     "fetch-youtube-comments": _source(
-        role="sociologist",
+        role="social-investigator",
         family_id="youtube",
         family_label="YouTube",
         layer_id="comments",
@@ -142,7 +142,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         auto_selectable=False,
     ),
     "fetch-regulationsgov-comments": _source(
-        role="sociologist",
+        role="social-investigator",
         family_id="regulationsgov",
         family_label="Regulations.gov",
         layer_id="comments",
@@ -152,7 +152,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_default_args=["--include-records", "--no-save-response"],
     ),
     "fetch-regulationsgov-comment-detail": _source(
-        role="sociologist",
+        role="social-investigator",
         family_id="regulationsgov",
         family_label="Regulations.gov",
         layer_id="comment-detail",
@@ -166,7 +166,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         auto_selectable=False,
     ),
     "fetch-airnow-hourly-observations": _source(
-        role="environmentalist",
+        role="environmental-investigator",
         family_id="airnow",
         family_label="AirNow",
         layer_id="hourly-observations",
@@ -178,7 +178,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_output_arg="--output",
     ),
     "fetch-openaq": _source(
-        role="environmentalist",
+        role="environmental-investigator",
         family_id="openaq",
         family_label="OpenAQ",
         layer_id="stations",
@@ -187,7 +187,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         normalizer_skill="normalize-openaq-observation-signals",
     ),
     "fetch-open-meteo-historical": _source(
-        role="environmentalist",
+        role="environmental-investigator",
         family_id="open-meteo",
         family_label="Open-Meteo",
         layer_id="historical",
@@ -199,7 +199,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_output_arg="--output",
     ),
     "fetch-open-meteo-air-quality": _source(
-        role="environmentalist",
+        role="environmental-investigator",
         family_id="open-meteo",
         family_label="Open-Meteo",
         layer_id="air-quality",
@@ -211,7 +211,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_output_arg="--output",
     ),
     "fetch-open-meteo-flood": _source(
-        role="environmentalist",
+        role="environmental-investigator",
         family_id="open-meteo",
         family_label="Open-Meteo",
         layer_id="flood",
@@ -223,7 +223,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_output_arg="--output",
     ),
     "fetch-usgs-water-iv": _source(
-        role="environmentalist",
+        role="environmental-investigator",
         family_id="usgs-water",
         family_label="USGS Water",
         layer_id="instantaneous-values",
@@ -235,7 +235,7 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         runtime_output_arg="--output",
     ),
     "fetch-nasa-firms-fire": _source(
-        role="environmentalist",
+        role="environmental-investigator",
         family_id="nasa-firms",
         family_label="NASA FIRMS",
         layer_id="active-fire",
@@ -476,39 +476,39 @@ def derive_evidence_lanes(mission: dict[str, Any]) -> list[dict[str, str]]:
     if smoke_source_intent:
         add(
             "receptor-air-quality",
-            "environmentalist",
+            "environmental-investigator",
             "receptor-air-quality",
             "Record local receptor air-quality anomaly evidence as a candidate review lane.",
         )
         add(
             "fire-origin",
-            "environmentalist",
+            "environmental-investigator",
             "fire-origin-candidate",
             "Record active-fire evidence sources for candidate wildfire source-region review.",
         )
         add(
             "public-discourse",
-            "sociologist",
+            "social-investigator",
             "public-discourse-signal",
             "Collect public/reporting signals about the smoke episode and affected communities.",
         )
     if smoke_source_intent or transport_intent:
         add(
             "local-weather-context",
-            "environmentalist",
+            "environmental-investigator",
             "weather-transport-context",
             "Record local weather context for later council or agent transport review.",
         )
         add(
             "spatiotemporal-relation-review",
-            "environmentalist",
+            "environmental-investigator",
             "spatiotemporal-relation-review",
             "Record a spatiotemporal relation review lane when source or transport questions are in scope.",
         )
     if any(token in text for token in ("health", "asthma", "community", "impact", "public health")):
         add(
             "community-impact",
-            "sociologist",
+            "social-investigator",
             "community-impact-signal",
             "Record public/community impact signals as a separate evidence lane.",
             priority="medium",
@@ -516,7 +516,7 @@ def derive_evidence_lanes(mission: dict[str, Any]) -> list[dict[str, str]]:
     if any(token in text for token in ("recommendation", "response", "handling", "处理", "建议")):
         add(
             "response-recommendation-boundary",
-            "sociologist",
+            "social-investigator",
             "response-record-signal",
             "Record response or recommendation evidence when handling recommendations are in scope.",
             priority="medium",
@@ -586,14 +586,14 @@ def intent_selected_sources(mission: dict[str, Any], role: str) -> list[str]:
     lanes = [lane for lane in derive_evidence_lanes(mission) if lane.get("role") == role]
     lane_ids = {maybe_text(lane.get("lane_id")) for lane in lanes}
     values: list[str] = []
-    if role == "environmentalist":
+    if role == "environmental-investigator":
         if "receptor-air-quality" in lane_ids:
             values.append("fetch-open-meteo-air-quality")
         if "local-weather-context" in lane_ids or "spatiotemporal-relation-review" in lane_ids:
             values.append("fetch-open-meteo-historical")
         if "fire-origin" in lane_ids:
             values.append("fetch-nasa-firms-fire")
-    if role == "sociologist":
+    if role == "social-investigator":
         if lane_ids & {"public-discourse", "community-impact", "response-recommendation-boundary"}:
             values.append("fetch-gdelt-doc-search")
     allowed_lookup = {item.casefold() for item in allowed_sources_for_role(mission, role)}

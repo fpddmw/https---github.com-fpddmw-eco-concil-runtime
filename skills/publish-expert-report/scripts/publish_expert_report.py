@@ -11,7 +11,7 @@ import sys
 from typing import Any
 
 SKILL_NAME = "publish-expert-report"
-ROLE_VALUES = ("sociologist", "environmentalist")
+ROLE_VALUES = ("social-investigator", "environmental-investigator")
 READY_DRAFT_REPORT_STATUS = "ready-to-publish"
 CANONICAL_PUBLISHED_STATUS = "canonical-published"
 CANONICAL_WITHHELD_STATUS = "canonical-needs-more-evidence"
@@ -67,6 +67,10 @@ def resolve_path(run_dir: Path, override: str, default_relative: str) -> Path:
     return candidate.resolve()
 
 
+def role_artifact_slug(role: str) -> str:
+    return maybe_text(role).replace("-", "_")
+
+
 def load_json_if_exists(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
@@ -99,8 +103,9 @@ def publish_expert_report_skill(
     allow_overwrite: bool,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
-    draft_file = resolve_path(run_dir_path, draft_path, f"reporting/expert_report_draft_{role}_{round_id}.json")
-    output_file = resolve_path(run_dir_path, output_path, f"reporting/expert_report_{role}_{round_id}.json")
+    role_slug = role_artifact_slug(role)
+    draft_file = resolve_path(run_dir_path, draft_path, f"reporting/expert_report_draft_{role_slug}_{round_id}.json")
+    output_file = resolve_path(run_dir_path, output_path, f"reporting/expert_report_{role_slug}_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
     draft_context = load_expert_report_wrapper(

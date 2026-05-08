@@ -824,7 +824,7 @@ def reporting_operator_view(
             if round_id and run_id
             else ""
         ),
-        "draft_sociologist_report_command": (
+        "draft_social_investigator_report_command": (
             run_skill_command(
                 run_dir=run_dir,
                 run_id=run_id,
@@ -832,12 +832,12 @@ def reporting_operator_view(
                 skill_name="draft-expert-report",
                 actor_role="report-editor",
                 contract_mode="warn",
-                skill_args=["--role", "sociologist"],
+                skill_args=["--role", "social-investigator"],
             )
             if round_id and run_id
             else ""
         ),
-        "draft_environmentalist_report_command": (
+        "draft_environmental_investigator_report_command": (
             run_skill_command(
                 run_dir=run_dir,
                 run_id=run_id,
@@ -845,7 +845,7 @@ def reporting_operator_view(
                 skill_name="draft-expert-report",
                 actor_role="report-editor",
                 contract_mode="warn",
-                skill_args=["--role", "environmentalist"],
+                skill_args=["--role", "environmental-investigator"],
             )
             if round_id and run_id
             else ""
@@ -862,7 +862,7 @@ def reporting_operator_view(
             if round_id and run_id
             else ""
         ),
-        "publish_sociologist_report_command": (
+        "publish_social_investigator_report_command": (
             run_skill_command(
                 run_dir=run_dir,
                 run_id=run_id,
@@ -870,12 +870,12 @@ def reporting_operator_view(
                 skill_name="publish-expert-report",
                 actor_role="report-editor",
                 contract_mode="warn",
-                skill_args=["--role", "sociologist"],
+                skill_args=["--role", "social-investigator"],
             )
             if round_id and run_id
             else ""
         ),
-        "publish_environmentalist_report_command": (
+        "publish_environmental_investigator_report_command": (
             run_skill_command(
                 run_dir=run_dir,
                 run_id=run_id,
@@ -883,7 +883,7 @@ def reporting_operator_view(
                 skill_name="publish-expert-report",
                 actor_role="report-editor",
                 contract_mode="warn",
-                skill_args=["--role", "environmentalist"],
+                skill_args=["--role", "environmental-investigator"],
             )
             if round_id and run_id
             else ""
@@ -940,7 +940,7 @@ def reporting_state_for_round(run_dir: Path, run_id: str, round_id: str) -> dict
                 report_stage="draft",
             ).get("payload", {})
         )
-        for role in ("sociologist", "environmentalist")
+        for role in ("social-investigator", "environmental-investigator")
     }
     expert_reports = {
         role: (
@@ -952,7 +952,7 @@ def reporting_state_for_round(run_dir: Path, run_id: str, round_id: str) -> dict
                 report_stage="canonical",
             ).get("payload", {})
         )
-        for role in ("sociologist", "environmentalist")
+        for role in ("social-investigator", "environmental-investigator")
     }
     final_publication_context = load_final_publication_wrapper(
         run_dir,

@@ -120,7 +120,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "--status",
         "active",
         "--owner-role",
-        "environmentalist",
+        "environmental-investigator",
         "--linked-claim-id",
         issue_id,
         "--linked-artifact-ref",
@@ -175,7 +175,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "--round-id",
         round_id,
         "--role",
-        "sociologist",
+        "social-investigator",
     )
     run_script(
         script_path("draft-expert-report"),
@@ -186,7 +186,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "--round-id",
         round_id,
         "--role",
-        "environmentalist",
+        "environmental-investigator",
     )
     run_script(
         script_path("publish-expert-report"),
@@ -197,7 +197,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "--round-id",
         round_id,
         "--role",
-        "sociologist",
+        "social-investigator",
     )
     run_script(
         script_path("publish-expert-report"),
@@ -208,7 +208,7 @@ def prepare_ready_round(run_dir: Path, fixture_root: Path, run_id: str, round_id
         "--round-id",
         round_id,
         "--role",
-        "environmentalist",
+        "environmental-investigator",
     )
     run_script(
         script_path("publish-council-decision"),

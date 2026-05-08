@@ -72,7 +72,7 @@ def prepare_ready_board_state(run_dir: Path, root: Path) -> None:
         "--status",
         "active",
         "--owner-role",
-        "environmentalist",
+        "environmental-investigator",
         "--linked-claim-id",
         issue_id,
         "--linked-artifact-ref",
@@ -428,7 +428,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                         {
                             "action_id": "action-diffusion-001",
                             "action_kind": "trace-cross-platform-diffusion",
-                            "assigned_role": "sociologist",
+                            "assigned_role": "social-investigator",
                             "priority": "medium",
                             "objective": "Trace how the smoke issue is moving across platforms.",
                             "reason": "Cross-platform diffusion may be changing how the controversy is represented.",

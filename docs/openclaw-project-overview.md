@@ -2,7 +2,7 @@
 
 ## 1. 项目定位
 
-OpenClaw 是一个面向生态环境争议调查的 DB-first 多 agent 议会运行时。它的目标不是让模型直接给出不可审计的结论，而是把模型调查、证据抓取、反证挑战、阶段推进、报告冻结和最终发布组织成一条可追溯、可复核、可恢复的工作流。
+OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运行时，支撑多 council-agent 协作。它的目标不是让模型直接给出不可审计的结论，而是把模型调查、证据抓取、反证挑战、阶段推进、报告冻结和最终发布组织成一条可追溯、可复核、可恢复的工作流。
 
 一句话定位：
 
@@ -14,6 +14,15 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 多 agent 议会运
 2. `agent council` 负责实质性调查判断，包括 proposal、finding、evidence bundle、challenge、readiness opinion。
 3. `database` 是议会状态、调查对象和报告依据的主要状态源。
 4. `artifact` 是导出、handoff、调试和人类阅读材料，不作为唯一事实源。
+
+### 概念模型和代码角色模型
+
+必须显式区分两层，避免把 runtime 的治理主体误读为议会 agent：
+
+1. 概念模型中，`runtime` 是维持议会可运行、可编排、可审计的框架。它提供给 human/operator 和被授权的顶层智能体使用，但自身不参与议会推理。
+2. 概念模型中，`moderator` 才是议会的真正组织者，负责议题边界、board 协调、proposal/readiness 汇总和 phase transition 请求。
+3. 代码角色模型中，`runtime-operator` 是 `actor_role`、审批主体和审计归因主体，用于授权 transition、skill approval、archive/replay/export 等运行面动作。它不是 council agent，也不做实质调查判断。
+4. 代码角色模型现在只保留一个 `social-investigator` council agent 来承接公共讨论、社区表达、正式记录和政策材料。`public-discourse-signal` 与 `formal-comment-signal` 仍是不同数据类型，但不再对应两个独立 agent。
 
 ## 2. 架构总览
 
@@ -77,31 +86,40 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 多 agent 议会运
 
 public/environment query 支持 `round_scope=current|up-to-current|all`，因此第二轮可以读取第一轮和当前轮的 normalized signals。source queue 也会记录 prior-round family memory，并支持受治理的 prior-round anchor。
 
-## 5. Agent 权责
+## 5. Council Agent 与 Runtime Principal
 
-核心角色：
+概念模型中的 council agents：
 
 1. `moderator`
-   - 主持议程、协调 board、提交 proposal/readiness、请求 phase transition。
+   - 议会组织者，主持议程、协调 board、提交 proposal/readiness、请求 phase transition。
 2. `environmental-investigator`
    - 抓取、归一化、查询、分析环境与物理证据，提交 finding/proposal/readiness。
-3. `public-discourse-investigator`
-   - 调查公共讨论、媒体、社区表达与公众证据。
-4. `formal-record-investigator`
-   - 调查正式记录、监管材料、政策文本和 docket/comment。
-5. `challenger`
+3. `social-investigator`
+   - 调查公共讨论、媒体、社区表达、正式记录和政策材料。当前代码角色模型不再保留历史 `sociologist`、`public-discourse-investigator` 或 `formal-record-investigator` 入口。
+4. `challenger`
    - 提交反证、开启 challenge/probe、质疑证据范围、taxonomy、时空匹配和结论表述。
-6. `report-editor`
+5. `report-editor`
    - 基于 frozen basis 写报告，不改变调查状态。
-7. `runtime-operator`
-   - 管理审批、运行边界、归档、审计、恢复和重放，不做实质议会判断。
+
+代码模型中的 runtime principal：
+
+1. `runtime-operator`
+   - 管理审批、运行边界、归档、审计、恢复和重放；它是 runtime/control-plane 的授权主体和 ledger 归因主体，不是 council agent，也不做实质议会判断。
 
 协作原则：
 
 1. 自由文本可以解释理由，但权威状态必须落到 DB council object。
 2. proposal/readiness/challenge/finding/evidence bundle 是议会推进主路径。
 3. helper 输出默认不能直接成为报告结论，必须被 DB council/reporting basis 显式引用。
-4. phase transition 由 moderator 请求，runtime-operator 批准，runtime kernel 执行。
+4. phase transition 由 moderator 请求，runtime-operator 批准，runtime kernel 执行；operator 批准程序性授权，不替代 moderator 的议会组织职责。
+
+实用 runtime CLI 封装：
+
+1. `start-council-run`
+   - 由 `runtime-operator` 调用，一次完成 `init-run`、moderator 身份的 `scaffold-mission-run`、moderator 身份的 `prepare-round`、`materialize-agent-entry-gate`，并默认生成 OpenClaw agent 注册计划。
+2. `materialize-openclaw-agent-registration`
+   - 从当前 agent entry gate 生成 `openclaw agents add ...` 注册命令和 per-role workspace，不执行外部 agent turn。
+3. 这些封装属于 runtime/kernel 操作，不封装为 skill；skill 继续用于有明确角色、输入输出契约和领域产物的工作单元。
 
 ## 6. 数据契约
 
@@ -131,7 +149,7 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 
 1. 受治理 run/round 生命周期。
 2. 多源抓取、导入、归一化和 DB query。
-3. 多 agent 议会对象写入与跨轮持久化。
+3. 多 council-agent 议会对象写入与跨轮持久化。
 4. proposal-authoritative 的议会推进路径。
 5. report basis gate、freeze、reporting、archive/history。
 6. approval-gated optional-analysis helper governance。

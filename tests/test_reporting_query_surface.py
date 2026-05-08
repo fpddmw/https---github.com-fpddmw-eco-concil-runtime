@@ -90,7 +90,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         "--status",
         "active",
         "--owner-role",
-        "environmentalist",
+        "environmental-investigator",
         "--linked-claim-id",
         issue_id,
         "--linked-artifact-ref",
@@ -135,7 +135,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         "--round-id",
         ROUND_ID,
         "--role",
-        "sociologist",
+        "social-investigator",
     )
     run_script(
         script_path("draft-expert-report"),
@@ -146,7 +146,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         "--round-id",
         ROUND_ID,
         "--role",
-        "environmentalist",
+        "environmental-investigator",
     )
     run_script(
         script_path("publish-expert-report"),
@@ -157,7 +157,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         "--round-id",
         ROUND_ID,
         "--role",
-        "sociologist",
+        "social-investigator",
     )
     run_script(
         script_path("publish-expert-report"),
@@ -168,7 +168,7 @@ def prepare_ready_reporting_plane(run_dir: Path, root: Path) -> dict[str, str]:
         "--round-id",
         ROUND_ID,
         "--role",
-        "environmentalist",
+        "environmental-investigator",
     )
     run_script(
         script_path("publish-council-decision"),
@@ -350,13 +350,13 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--agent-role",
-                "sociologist",
+                "social-investigator",
                 "--stage",
                 "canonical",
             )
             self.assertEqual(1, expert_payload["summary"]["returned_object_count"])
             self.assertEqual("canonical", expert_payload["objects"][0]["report_stage"])
-            self.assertEqual("sociologist", expert_payload["objects"][0]["agent_role"])
+            self.assertEqual("social-investigator", expert_payload["objects"][0]["agent_role"])
 
             publication_payload = run_kernel(
                 "query-reporting-objects",
@@ -473,7 +473,7 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 FROM expert_report_records
                 WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
                 """,
-                (RUN_ID, ROUND_ID, "draft", "sociologist"),
+                (RUN_ID, ROUND_ID, "draft", "social-investigator"),
             )
             expert_payload = fetch_raw_json(
                 db_path,
@@ -482,7 +482,7 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 FROM expert_report_records
                 WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
                 """,
-                (RUN_ID, ROUND_ID, "canonical", "sociologist"),
+                (RUN_ID, ROUND_ID, "canonical", "social-investigator"),
             )
             publication_payload = fetch_raw_json(
                 db_path,
@@ -507,13 +507,13 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
 
             self.assertEqual("expert-report-v1", expert_draft_payload["schema_version"])
             self.assertEqual("draft", expert_draft_payload["report_stage"])
-            self.assertEqual("sociologist", expert_draft_payload["agent_role"])
+            self.assertEqual("social-investigator", expert_draft_payload["agent_role"])
             self.assertIsInstance(expert_draft_payload["evidence_refs"], list)
             self.assertIsInstance(expert_draft_payload["lineage"], list)
             self.assertIsInstance(expert_draft_payload["provenance"], dict)
             self.assertEqual("expert-report-v1", expert_payload["schema_version"])
             self.assertEqual("canonical", expert_payload["report_stage"])
-            self.assertEqual("sociologist", expert_payload["agent_role"])
+            self.assertEqual("social-investigator", expert_payload["agent_role"])
             self.assertIsInstance(expert_payload["evidence_refs"], list)
             self.assertIsInstance(expert_payload["lineage"], list)
             self.assertIsInstance(expert_payload["provenance"], dict)
@@ -542,14 +542,14 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 expert_draft_payload,
                 load_json(
                     reporting_path(
-                        run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json"
+                        run_dir, f"expert_report_draft_social_investigator_{ROUND_ID}.json"
                     )
                 ),
             )
             self.assertDictEqual(
                 expert_payload,
                 load_json(
-                    reporting_path(run_dir, f"expert_report_sociologist_{ROUND_ID}.json")
+                    reporting_path(run_dir, f"expert_report_social_investigator_{ROUND_ID}.json")
                 ),
             )
             self.assertDictEqual(
@@ -574,7 +574,7 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 run_dir,
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
-                agent_role="sociologist",
+                agent_role="social-investigator",
                 report_stage="canonical",
             )
             self.assertIn("record_id", decision_context["payload"])
@@ -601,7 +601,7 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 DELETE FROM expert_report_records
                 WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
                 """,
-                (RUN_ID, ROUND_ID, "canonical", "sociologist"),
+                (RUN_ID, ROUND_ID, "canonical", "social-investigator"),
             )
             execute_db(
                 db_path,
@@ -624,7 +624,7 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 run_dir,
                 run_id=RUN_ID,
                 round_id=ROUND_ID,
-                agent_role="sociologist",
+                agent_role="social-investigator",
                 report_stage="canonical",
             )
             publication_context = load_final_publication_wrapper(
@@ -676,10 +676,10 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                 f"reporting_handoff_{ROUND_ID}.json",
                 f"council_decision_draft_{ROUND_ID}.json",
                 f"council_decision_{ROUND_ID}.json",
-                f"expert_report_draft_sociologist_{ROUND_ID}.json",
-                f"expert_report_draft_environmentalist_{ROUND_ID}.json",
-                f"expert_report_sociologist_{ROUND_ID}.json",
-                f"expert_report_environmentalist_{ROUND_ID}.json",
+                f"expert_report_draft_social_investigator_{ROUND_ID}.json",
+                f"expert_report_draft_environmental_investigator_{ROUND_ID}.json",
+                f"expert_report_social_investigator_{ROUND_ID}.json",
+                f"expert_report_environmental_investigator_{ROUND_ID}.json",
                 f"final_publication_{ROUND_ID}.json",
             ):
                 reporting_path(run_dir, name).unlink()
@@ -741,11 +741,11 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                     FROM expert_report_records
                     WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
                     """,
-                    (RUN_ID, ROUND_ID, "draft", "sociologist"),
+                    (RUN_ID, ROUND_ID, "draft", "social-investigator"),
                 ),
                 load_json(
                     reporting_path(
-                        run_dir, f"expert_report_draft_sociologist_{ROUND_ID}.json"
+                        run_dir, f"expert_report_draft_social_investigator_{ROUND_ID}.json"
                     )
                 ),
             )
@@ -757,12 +757,12 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                     FROM expert_report_records
                     WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
                     """,
-                    (RUN_ID, ROUND_ID, "draft", "environmentalist"),
+                    (RUN_ID, ROUND_ID, "draft", "environmental-investigator"),
                 ),
                 load_json(
                     reporting_path(
                         run_dir,
-                        f"expert_report_draft_environmentalist_{ROUND_ID}.json",
+                        f"expert_report_draft_environmental_investigator_{ROUND_ID}.json",
                     )
                 ),
             )
@@ -774,10 +774,10 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                     FROM expert_report_records
                     WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
                     """,
-                    (RUN_ID, ROUND_ID, "canonical", "sociologist"),
+                    (RUN_ID, ROUND_ID, "canonical", "social-investigator"),
                 ),
                 load_json(
-                    reporting_path(run_dir, f"expert_report_sociologist_{ROUND_ID}.json")
+                    reporting_path(run_dir, f"expert_report_social_investigator_{ROUND_ID}.json")
                 ),
             )
             self.assertDictEqual(
@@ -788,11 +788,11 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                     FROM expert_report_records
                     WHERE run_id = ? AND round_id = ? AND report_stage = ? AND agent_role = ?
                     """,
-                    (RUN_ID, ROUND_ID, "canonical", "environmentalist"),
+                    (RUN_ID, ROUND_ID, "canonical", "environmental-investigator"),
                 ),
                 load_json(
                     reporting_path(
-                        run_dir, f"expert_report_environmentalist_{ROUND_ID}.json"
+                        run_dir, f"expert_report_environmental_investigator_{ROUND_ID}.json"
                     )
                 ),
             )

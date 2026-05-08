@@ -143,7 +143,7 @@ def seed_ready_investigation_context(run_dir: Path, root: Path) -> dict[str, str
         "--status",
         "active",
         "--owner-role",
-        "environmentalist",
+        "environmental-investigator",
         "--linked-claim-id",
         issue_id,
         "--linked-artifact-ref",

@@ -34,14 +34,14 @@
 | --- | --- | --- | --- |
 | Config: split skill API key inheritance | done | `fetch-regulationsgov-comments`、`fetch-regulationsgov-comment-detail`、`fetch-openaq` 的 skill 文档改为加载真实 `assets/config.env`；配置检查已通过。 | 不暴露密钥；后续 CI 可加 no-config-env-doc-mismatch 检查。 |
 | G-001 runtime-operator data-execution boundary | done | 已回滚“给 `runtime-operator` 补 normalize 能力”的错误方向：`runtime-operator` 不再拥有 `normalize` capability，`normalize-fetch-execution.allowed_roles` 移除 `runtime-operator`；新增测试确认 operator preflight 会被 `actor-role-not-allowed` 阻断。 | operator 只保留审批、准入、runtime/admin/archive/export 类职责；若未来引入独立 executor role，必须使用独立能力而非 investigator-facing `normalize`。 |
-| G-006 role-owned fetch/normalize execution | done | `normalize-fetch-execution` 现在要求 `--actor-role` 或 kernel 注入的 `OPENCLAW_ACTOR_ROLE`，并只执行该 actor 对应 plan role 的 steps；执行结果和 detached fetch ledger 记录 `actor_role`/`resolved_actor_role`。`prepare-round` 输出 role-owned `suggested_next_skill_runs`，提示 sociologist/public-discourse 与 environmental investigator 分别执行自己的 fetch/normalize。 | 下一步可把 controller/runbook 中的推荐命令进一步 UI 化，避免人工只运行其中一个 role slice。 |
+| G-006 role-owned fetch/normalize execution | done | `normalize-fetch-execution` 现在要求 `--actor-role` 或 kernel 注入的 `OPENCLAW_ACTOR_ROLE`，并只执行该 actor 对应 plan role 的 steps；执行结果和 detached fetch ledger 记录 `actor_role`/`resolved_actor_role`。`prepare-round` 输出 role-owned `suggested_next_skill_runs`，提示 social-investigator/public-discourse 与 environmental investigator 分别执行自己的 fetch/normalize。 | 下一步可把 controller/runbook 中的推荐命令进一步 UI 化，避免人工只运行其中一个 role slice。 |
 | G-007 operator boundary audit | done | 检查 mission/source planning、data execution 和 reporting/content 主链路：`scaffold-mission-run`、`prepare-round`、`normalize-fetch-execution`、`materialize-reporting-handoff`、relation evidence packet、decision draft、expert report draft/publish、council decision publish、final publication 均不允许 `runtime-operator` 执行；controller 即使由 operator 监督启动，也按 stage `assigned_role_hint`/skill 默认角色执行内容 skill，不继承 operator 身份；新增测试冻结该边界。 | operator 仍可执行审批、准入、runtime admin、archive/export、read-only query；这些不是 moderator/investigator/report-editor 内容生成职责。 |
 | G-002 dead-letter lifecycle | done | 新增 `resolve-dead-letter` 命令、访问策略、CLI 解析、ledger 事件和 health 刷新；测试覆盖 dead letter 关闭后 health 消警。 | 后续可补 superseded/accepted-risk 的更细状态。 |
 | C-001 contract prose parsing | done | required input 解析不再把 `Optional:`/`Recommended:` 当硬要求；能从 prose 中提取 backtick identifier；测试覆盖 proposal 输入解析。 | 仍建议把 skill I/O contract 迁到机器可读 schema。 |
 | C-002/C-003 reporting contract cleanup | partial | 去重 `report_basis`，移除 no-op condition，过滤 `db_path` 类 summary 噪声。 | 仍缺完整机器可读 reporting contract 和 contract fixture。 |
 | R-001 false open risks | done | reporting handoff 不再把正向 gate reason / operator note 全部转成风险；仅在 readiness/supervisor 非 ready 时转为风险。 | 需要用真实 run fixture 防回归。 |
 | R-002 arbitrary decision lead basis | done | council decision 不再直接拿 `key_findings[0]` 作为任意 lead basis；decision summary 只报告显式选中 finding 的数量；reporting handoff 只把 evidence refs 或 basis object ids 已被 freeze 显式选中的 finding 写入 `key_findings`。 | lead basis 只能来自 agent/council 显式 lead-basis 对象；没有显式 lead-basis 对象时，decision 只列 evidence coverage/count，不由 skill 排序或选择。 |
-| R-003 role-specific expert reports | partial | expert report 增加基于 role 的 finding 过滤，减少 sociologist 直接继承环境证据的问题。 | 仍需 role-specific synthesis 模板和 cross-role evidence 引用规则。 |
+| R-003 role-specific expert reports | partial | expert report 增加基于 role 的 finding 过滤，减少 social-investigator 直接继承环境证据的问题。 | 仍需 role-specific synthesis 模板和 cross-role evidence 引用规则。 |
 | R-004 draft/canonical/publication status split | done | `publish-expert-report` 不再把 draft 的 `ready-to-publish` 原样带入 canonical；ready draft 发布后为 `canonical-published`，hold draft 发布后为 `canonical-needs-more-evidence`；final publication gate 接受 canonical published 状态。 | 后续可把状态枚举抽到共享 reporting status module。 |
 | R-005 report status propagation | done | expert report payload 写入 `readiness_status` 和 `supervisor_status`。 | 后续应与 publication gate 共用同一状态枚举。 |
 | R-006 final publication hard gate | partial | final publication 增加 release blockers；readiness、handoff、open risk、supervisor、report status、required section 状态、unresolved challenger constraints、显式 report-claim/lead-basis structural violations 可阻断 release；空风险/不确定性不再被误判为 `basis-gap`，open risks 会进入 uncertainty rows。 | 仍需补 section 结构完整性和未显式 claim-tagged 正文的治理策略；不能让 publication skill 自行判断 recommendation 或 claim 的专业支撑强度。 |
@@ -165,8 +165,8 @@ Primary final artifacts:
 
 1. `reporting/final_publication_round-001.json`
 2. `reporting/council_decision_round-001.json`
-3. `reporting/expert_report_sociologist_round-001.json`
-4. `reporting/expert_report_environmentalist_round-001.json`
+3. `reporting/expert_report_social_investigator_round-001.json`
+4. `reporting/expert_report_environmental_investigator_round-001.json`
 5. `report_basis/frozen_report_basis_round-001.json`
 6. `runtime/audit_ledger.jsonl`
 7. `runtime/runtime_health.json`
@@ -245,7 +245,7 @@ Actual source counts in `analytics/signal_plane.sqlite`:
 
 `fetch-nasa-firms-fire` was available in the environmental source catalog but not selected:
 
-1. `source_selection_environmentalist_round-001.json` marks `fetch-nasa-firms-fire` as `selected=false`.
+1. `source_selection_environmental-investigator_round-001.json` marks `fetch-nasa-firms-fire` as `selected=false`.
 2. `nasa-firms:active-fire` is explicitly skipped.
 
 ### 4.3 Selected Evidence Signals
@@ -351,7 +351,7 @@ Symptom:
 
 Root cause:
 
-No source request or evidence requirement asked for active-fire data. The environmentalist task was generic `environment-signal-import`, which was satisfied by Open-Meteo local air quality and weather.
+No source request or evidence requirement asked for active-fire data. The environmental-investigator task was generic `environment-signal-import`, which was satisfied by Open-Meteo local air quality and weather.
 
 Fix direction:
 
@@ -371,7 +371,7 @@ The environmental side collected local PM2.5 and local weather only.
 
 Root cause:
 
-The `environmentalist` / `environmental-investigator` role currently covers all physical evidence. There is no separate role or lane weight for source-origin, smoke plume, trajectory, or transport validation.
+The `environmental-investigator` / `environmental-investigator` role currently covers all physical evidence. There is no separate role or lane weight for source-origin, smoke plume, trajectory, or transport validation.
 
 Fix direction:
 
@@ -478,7 +478,7 @@ Root cause:
 
 The first block was not a bug. It correctly enforced that `runtime-operator` is an approval/admin role, not a data collection or normalization actor. The actual bug was that `skill_registry.py` still listed `runtime-operator` as allowed for `normalize-fetch-execution`, creating a misleading runnable surface.
 
-The retry exposed a second bug: `environmental-investigator` executed the whole fetch plan, including sociologist/public-discourse steps. That let one investigator role perform another role's data collection and normalization.
+The retry exposed a second bug: `environmental-investigator` executed the whole fetch plan, including social-investigator/public-discourse steps. That let one investigator role perform another role's data collection and normalization.
 
 Fix direction:
 
@@ -493,7 +493,7 @@ Implemented fix:
 1. `runtime-operator` no longer has `CAPABILITY_NORMALIZE`.
 2. `normalize-fetch-execution.allowed_roles` is now limited to investigator roles.
 3. Runtime `run-skill` injects `OPENCLAW_ACTOR_ROLE` and `OPENCLAW_RESOLVED_ACTOR_ROLE`; direct script use may also pass `--actor-role`.
-4. `normalize-fetch-execution` filters plan steps by actor role aliases: `public-discourse-investigator` owns `sociologist` steps, and `environmental-investigator` owns `environmentalist` steps.
+4. `normalize-fetch-execution` filters plan steps by actor role aliases: `social-investigator` owns `social-investigator` steps, and `environmental-investigator` owns `environmental-investigator` steps.
 5. Existing partial import execution receipts are merged, so public and environmental roles can run the same plan in separate role-owned slices.
 6. `prepare-round` emits `suggested_next_skill_runs` with role-owned `normalize-fetch-execution` runs.
 7. Tests confirm operator preflight is blocked and role-owned fetch/normalize statuses preserve actor lineage.

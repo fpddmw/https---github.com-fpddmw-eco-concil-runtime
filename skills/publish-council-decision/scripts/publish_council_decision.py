@@ -152,16 +152,16 @@ def publish_council_decision_skill(
     run_id: str,
     round_id: str,
     draft_path: str,
-    sociologist_report_path: str,
-    environmentalist_report_path: str,
+    social_investigator_report_path: str,
+    environmental_investigator_report_path: str,
     output_path: str,
     allow_overwrite: bool,
     skip_report_check: bool,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     draft_file = resolve_path(run_dir_path, draft_path, f"reporting/council_decision_draft_{round_id}.json")
-    sociologist_file = resolve_path(run_dir_path, sociologist_report_path, f"reporting/expert_report_sociologist_{round_id}.json")
-    environmentalist_file = resolve_path(run_dir_path, environmentalist_report_path, f"reporting/expert_report_environmentalist_{round_id}.json")
+    social_investigator_file = resolve_path(run_dir_path, social_investigator_report_path, f"reporting/expert_report_social_investigator_{round_id}.json")
+    environmental_investigator_file = resolve_path(run_dir_path, environmental_investigator_report_path, f"reporting/expert_report_environmental_investigator_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"reporting/council_decision_{round_id}.json")
     report_basis_file = resolve_path(
         run_dir_path,
@@ -237,40 +237,40 @@ def publish_council_decision_skill(
     report_basis = report_basis_payload if isinstance(report_basis_payload, dict) else {}
     report_refs: list[str] = []
     report_payloads: dict[str, dict[str, Any]] = {}
-    sociologist_context = load_expert_report_wrapper(
+    social_investigator_context = load_expert_report_wrapper(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
-        agent_role="sociologist",
+        agent_role="social-investigator",
         report_stage="canonical",
-        report_path=sociologist_report_path,
+        report_path=social_investigator_report_path,
     )
-    sociologist_payload = (
-        sociologist_context.get("payload")
-        if isinstance(sociologist_context.get("payload"), dict)
+    social_investigator_payload = (
+        social_investigator_context.get("payload")
+        if isinstance(social_investigator_context.get("payload"), dict)
         else None
     )
-    if isinstance(sociologist_payload, dict):
-        report_payloads["sociologist"] = sociologist_payload
-    environmentalist_context = load_expert_report_wrapper(
+    if isinstance(social_investigator_payload, dict):
+        report_payloads["social-investigator"] = social_investigator_payload
+    environmental_investigator_context = load_expert_report_wrapper(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
-        agent_role="environmentalist",
+        agent_role="environmental-investigator",
         report_stage="canonical",
-        report_path=environmentalist_report_path,
+        report_path=environmental_investigator_report_path,
     )
-    environmentalist_payload = (
-        environmentalist_context.get("payload")
-        if isinstance(environmentalist_context.get("payload"), dict)
+    environmental_investigator_payload = (
+        environmental_investigator_context.get("payload")
+        if isinstance(environmental_investigator_context.get("payload"), dict)
         else None
     )
-    if isinstance(environmentalist_payload, dict):
-        report_payloads["environmentalist"] = environmentalist_payload
+    if isinstance(environmental_investigator_payload, dict):
+        report_payloads["environmental-investigator"] = environmental_investigator_payload
     if publication_readiness == "ready" and not skip_report_check:
         for context, payload in (
-            (sociologist_context, sociologist_payload),
-            (environmentalist_context, environmentalist_payload),
+            (social_investigator_context, social_investigator_payload),
+            (environmental_investigator_context, environmental_investigator_payload),
         ):
             if not isinstance(payload, dict):
                 artifact_path = str(context.get("artifact_path", ""))
@@ -305,28 +305,28 @@ def publish_council_decision_skill(
         observed_inputs_overrides={
             "decision_artifact_present": bool(draft_context.get("artifact_present")),
             "decision_present": bool(draft_context.get("payload_present")),
-            "sociologist_report_artifact_present": bool(
-                sociologist_context.get("artifact_present")
+            "social_investigator_report_artifact_present": bool(
+                social_investigator_context.get("artifact_present")
             ),
-            "sociologist_report_present": bool(
-                sociologist_context.get("payload_present")
+            "social_investigator_report_present": bool(
+                social_investigator_context.get("payload_present")
             ),
-            "environmentalist_report_artifact_present": bool(
-                environmentalist_context.get("artifact_present")
+            "environmental_investigator_report_artifact_present": bool(
+                environmental_investigator_context.get("artifact_present")
             ),
-            "environmentalist_report_present": bool(
-                environmentalist_context.get("payload_present")
+            "environmental_investigator_report_present": bool(
+                environmental_investigator_context.get("payload_present")
             ),
         },
         field_overrides={
             "decision_source": maybe_text(draft_context.get("source"))
             or "missing-decision-draft",
-            "sociologist_report_source": maybe_text(sociologist_context.get("source"))
-            or "missing-sociologist-report",
-            "environmentalist_report_source": maybe_text(
-                environmentalist_context.get("source")
+            "social_investigator_report_source": maybe_text(social_investigator_context.get("source"))
+            or "missing-social-investigator-report",
+            "environmental_investigator_report_source": maybe_text(
+                environmental_investigator_context.get("source")
             )
-            or "missing-environmentalist-report",
+            or "missing-environmental-investigator-report",
         },
     )
     draft_supporting_proposal_ids = unique_texts(
@@ -670,11 +670,11 @@ def publish_council_decision_skill(
             "report_basis_freeze_path": str(report_basis_file),
             "decision_source": maybe_text(contract_fields.get("decision_source")),
             "decision_trace_id": trace_id,
-            "sociologist_report_source": maybe_text(
-                contract_fields.get("sociologist_report_source")
+            "social_investigator_report_source": maybe_text(
+                contract_fields.get("social_investigator_report_source")
             ),
-            "environmentalist_report_source": maybe_text(
-                contract_fields.get("environmentalist_report_source")
+            "environmental_investigator_report_source": maybe_text(
+                contract_fields.get("environmental_investigator_report_source")
             ),
             "db_path": contract_fields["db_path"],
         },
@@ -701,8 +701,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--draft-path", default="")
-    parser.add_argument("--sociologist-report-path", default="")
-    parser.add_argument("--environmentalist-report-path", default="")
+    parser.add_argument("--social-investigator-report-path", default="")
+    parser.add_argument("--environmental-investigator-report-path", default="")
     parser.add_argument("--output-path", default="")
     parser.add_argument("--allow-overwrite", action="store_true")
     parser.add_argument("--skip-report-check", action="store_true")
@@ -717,8 +717,8 @@ def main() -> int:
         run_id=args.run_id,
         round_id=args.round_id,
         draft_path=args.draft_path,
-        sociologist_report_path=args.sociologist_report_path,
-        environmentalist_report_path=args.environmentalist_report_path,
+        social_investigator_report_path=args.social_investigator_report_path,
+        environmental_investigator_report_path=args.environmental_investigator_report_path,
         output_path=args.output_path,
         allow_overwrite=args.allow_overwrite,
         skip_report_check=args.skip_report_check,

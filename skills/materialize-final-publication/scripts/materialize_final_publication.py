@@ -12,7 +12,7 @@ import sys
 from typing import Any
 
 SKILL_NAME = "materialize-final-publication"
-ROLE_VALUES = ("sociologist", "environmentalist")
+ROLE_VALUES = ("social-investigator", "environmental-investigator")
 RELEASE_BLOCKING_SECTION_STATUSES = {
     "basis-required",
     "basis-gap",
@@ -459,8 +459,8 @@ def materialize_final_publication_skill(
     round_id: str,
     reporting_handoff_path: str,
     decision_path: str,
-    sociologist_report_path: str,
-    environmentalist_report_path: str,
+    social_investigator_report_path: str,
+    environmental_investigator_report_path: str,
     report_basis_path: str,
     supervisor_state_path: str,
     output_path: str,
@@ -472,8 +472,8 @@ def materialize_final_publication_skill(
     report_basis_file = resolve_path(run_dir_path, report_basis_path, f"report_basis/frozen_report_basis_{round_id}.json")
     supervisor_file = resolve_path(run_dir_path, supervisor_state_path, f"runtime/supervisor_state_{round_id}.json")
     report_files = {
-        "sociologist": resolve_path(run_dir_path, sociologist_report_path, f"reporting/expert_report_sociologist_{round_id}.json"),
-        "environmentalist": resolve_path(run_dir_path, environmentalist_report_path, f"reporting/expert_report_environmentalist_{round_id}.json"),
+        "social-investigator": resolve_path(run_dir_path, social_investigator_report_path, f"reporting/expert_report_social_investigator_{round_id}.json"),
+        "environmental-investigator": resolve_path(run_dir_path, environmental_investigator_report_path, f"reporting/expert_report_environmental_investigator_{round_id}.json"),
     }
     output_file = resolve_path(run_dir_path, output_path, f"reporting/final_publication_{round_id}.json")
 
@@ -644,9 +644,9 @@ def materialize_final_publication_skill(
             agent_role=role,
             report_stage="canonical",
             report_path=(
-                sociologist_report_path
-                if role == "sociologist"
-                else environmentalist_report_path
+                social_investigator_report_path
+                if role == "social-investigator"
+                else environmental_investigator_report_path
             ),
         )
         report_contexts[role] = report_context
@@ -742,17 +742,17 @@ def materialize_final_publication_skill(
             "supervisor_state_present": bool(
                 supervisor_context.get("payload_present")
             ),
-            "sociologist_report_artifact_present": bool(
-                report_contexts.get("sociologist", {}).get("artifact_present")
+            "social_investigator_report_artifact_present": bool(
+                report_contexts.get("social-investigator", {}).get("artifact_present")
             ),
-            "sociologist_report_present": isinstance(
-                report_payloads.get("sociologist"), dict
+            "social_investigator_report_present": isinstance(
+                report_payloads.get("social-investigator"), dict
             ),
-            "environmentalist_report_artifact_present": bool(
-                report_contexts.get("environmentalist", {}).get("artifact_present")
+            "environmental_investigator_report_artifact_present": bool(
+                report_contexts.get("environmental-investigator", {}).get("artifact_present")
             ),
-            "environmentalist_report_present": isinstance(
-                report_payloads.get("environmentalist"), dict
+            "environmental_investigator_report_present": isinstance(
+                report_payloads.get("environmental-investigator"), dict
             ),
         },
         field_overrides={
@@ -764,14 +764,14 @@ def materialize_final_publication_skill(
             or "missing-report-basis",
             "supervisor_state_source": maybe_text(supervisor_context.get("source"))
             or "missing-supervisor-state",
-            "sociologist_report_source": maybe_text(
-                report_contexts.get("sociologist", {}).get("source")
+            "social_investigator_report_source": maybe_text(
+                report_contexts.get("social-investigator", {}).get("source")
             )
-            or "missing-sociologist-report",
-            "environmentalist_report_source": maybe_text(
-                report_contexts.get("environmentalist", {}).get("source")
+            or "missing-social-investigator-report",
+            "environmental_investigator_report_source": maybe_text(
+                report_contexts.get("environmental-investigator", {}).get("source")
             )
-            or "missing-environmentalist-report",
+            or "missing-environmental-investigator-report",
         },
     )
     publication_id = "final-publication-" + stable_hash(run_id, round_id, publication_posture, maybe_text(decision.get("decision_id")))[:12]
@@ -1038,11 +1038,11 @@ def materialize_final_publication_skill(
             "supervisor_state_source": maybe_text(
                 contract_fields.get("supervisor_state_source")
             ),
-            "sociologist_report_source": maybe_text(
-                contract_fields.get("sociologist_report_source")
+            "social_investigator_report_source": maybe_text(
+                contract_fields.get("social_investigator_report_source")
             ),
-            "environmentalist_report_source": maybe_text(
-                contract_fields.get("environmentalist_report_source")
+            "environmental_investigator_report_source": maybe_text(
+                contract_fields.get("environmental_investigator_report_source")
             ),
             "db_path": contract_fields["db_path"],
         },
@@ -1070,8 +1070,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--reporting-handoff-path", default="")
     parser.add_argument("--decision-path", default="")
-    parser.add_argument("--sociologist-report-path", default="")
-    parser.add_argument("--environmentalist-report-path", default="")
+    parser.add_argument("--social-investigator-report-path", default="")
+    parser.add_argument("--environmental-investigator-report-path", default="")
     parser.add_argument("--report-basis-path", default="")
     parser.add_argument("--supervisor-state-path", default="")
     parser.add_argument("--output-path", default="")
@@ -1088,8 +1088,8 @@ def main() -> int:
         round_id=args.round_id,
         reporting_handoff_path=args.reporting_handoff_path,
         decision_path=args.decision_path,
-        sociologist_report_path=args.sociologist_report_path,
-        environmentalist_report_path=args.environmentalist_report_path,
+        social_investigator_report_path=args.social_investigator_report_path,
+        environmental_investigator_report_path=args.environmental_investigator_report_path,
         report_basis_path=args.report_basis_path,
         supervisor_state_path=args.supervisor_state_path,
         output_path=args.output_path,

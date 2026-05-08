@@ -43,10 +43,10 @@ def suggested_next_skills_for_selections(selections: dict[str, dict[str, Any]]) 
 
 
 def normalize_actor_role_for_source_role(role: str) -> str:
-    if role == "environmentalist":
+    if role == "environmental-investigator":
         return "environmental-investigator"
-    if role == "sociologist":
-        return "public-discourse-investigator"
+    if role == "social-investigator":
+        return "social-investigator"
     return role
 
 

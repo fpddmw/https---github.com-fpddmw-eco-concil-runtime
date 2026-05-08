@@ -46,7 +46,7 @@ def normalize_claim_candidate_payload(
         OBJECT_KIND_CLAIM_CANDIDATE
     ).schema_version
     normalized["decision_source"] = decision_source
-    normalized["agent_role"] = maybe_text(normalized.get("agent_role")) or "sociologist"
+    normalized["agent_role"] = maybe_text(normalized.get("agent_role")) or "social-investigator"
     normalized["status"] = maybe_text(normalized.get("status")) or "candidate"
     normalized["issue_hint"] = (
         maybe_text(normalized.get("issue_hint"))

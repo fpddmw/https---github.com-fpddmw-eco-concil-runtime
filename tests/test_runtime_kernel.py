@@ -617,7 +617,7 @@ class RuntimeKernelTests(unittest.TestCase):
                 "--skill-name",
                 "summarize-board-state",
                 "--actor-role",
-                "environmentalist",
+                "environmental-investigator",
                 "--contract-mode",
                 "strict",
                 auto_actor_role=False,
@@ -823,7 +823,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     skill_name="fetch-youtube-video-search",
-                    actor_role="environmentalist",
+                    actor_role="environmental-investigator",
                     skill_args=[],
                     contract_mode="strict",
                 )
@@ -832,7 +832,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     skill_name="fetch-youtube-video-search",
-                    actor_role="environmentalist",
+                    actor_role="environmental-investigator",
                     skill_args=[],
                     contract_mode="strict",
                     allow_side_effects=["network-external"],
@@ -916,6 +916,27 @@ class RuntimeKernelTests(unittest.TestCase):
             with self.subTest(skill_name=skill_name):
                 policy = resolve_skill_policy(skill_name)
                 self.assertNotIn("runtime-operator", policy["allowed_roles"])
+
+    def test_role_contracts_expose_conceptual_role_boundaries(self) -> None:
+        ensure_runtime_src_on_path()
+
+        from eco_council_runtime.kernel.governance.role_contracts import known_actor_role, role_contract
+
+        operator = role_contract("runtime-operator")
+        moderator = role_contract("moderator")
+        social_investigator = role_contract("social-investigator")
+
+        self.assertEqual("runtime-principal", operator["role_kind"])
+        self.assertEqual("runtime", operator["conceptual_role"])
+        self.assertIn("not a council agent", operator["conceptual_note"])
+        self.assertEqual("council-agent", moderator["role_kind"])
+        self.assertEqual("moderator", moderator["conceptual_role"])
+        self.assertEqual("council-agent", social_investigator["role_kind"])
+        self.assertEqual("social-investigator", social_investigator["conceptual_role"])
+        self.assertEqual(["social-investigator"], social_investigator["aliases"])
+        self.assertFalse(known_actor_role("public-discourse-investigator"))
+        self.assertFalse(known_actor_role("formal-record-investigator"))
+        self.assertFalse(known_actor_role("social_investigator"))
 
     def test_prepare_round_contract_role_placeholder_is_fanout_safe(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

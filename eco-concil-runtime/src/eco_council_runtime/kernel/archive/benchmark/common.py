@@ -24,8 +24,8 @@ BENCHMARK_EVENT_TYPES = {
 INPUT_ARTIFACT_SPECS: tuple[tuple[str, str], ...] = (
     ("mission", "mission.json"),
     ("round_tasks", "investigation/round_tasks_{round_id}.json"),
-    ("source_selection_sociologist", "runtime/source_selection_sociologist_{round_id}.json"),
-    ("source_selection_environmentalist", "runtime/source_selection_environmentalist_{round_id}.json"),
+    ("source_selection_social_investigator", "runtime/source_selection_social-investigator_{round_id}.json"),
+    ("source_selection_environmental_investigator", "runtime/source_selection_environmental-investigator_{round_id}.json"),
     ("fetch_plan", "runtime/fetch_plan_{round_id}.json"),
 )
 

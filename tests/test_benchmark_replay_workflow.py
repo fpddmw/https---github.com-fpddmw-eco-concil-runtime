@@ -129,7 +129,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         "--status",
         "active",
         "--owner-role",
-        "environmentalist",
+        "environmental-investigator",
         "--linked-claim-id",
         issue_id,
         "--linked-artifact-ref",
@@ -170,7 +170,7 @@ def prepare_benchmark_ready_round(run_dir: Path, fixture_root: Path, run_id: str
         "--round-id",
         round_id,
     )
-    for role in ("sociologist", "environmentalist"):
+    for role in ("social-investigator", "environmental-investigator"):
         run_script(
             script_path("draft-expert-report"),
             "--run-dir",
