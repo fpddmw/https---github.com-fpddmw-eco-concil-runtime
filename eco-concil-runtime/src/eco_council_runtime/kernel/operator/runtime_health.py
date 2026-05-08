@@ -20,8 +20,19 @@ def runtime_health_payload(run_dir: Path, *, round_id: str = "") -> dict[str, An
     filtered_events = [
         event for event in events if isinstance(event, dict) and (not round_id or maybe_text(event.get("round_id")) == round_id)
     ]
-    failed_events = [event for event in filtered_events if maybe_text(event.get("status")) == "failed"]
-    blocked_events = [event for event in filtered_events if maybe_text(event.get("status")) == "blocked"]
+    dead_letters = load_dead_letters(run_dir, round_id=round_id, limit=50)
+    closed_dead_letter_ids = {
+        maybe_text(item.get("dead_letter_id"))
+        for item in dead_letters
+        if maybe_text(item.get("dead_letter_id")) and maybe_text(item.get("resolution_status")) == "closed"
+    }
+    unresolved_events = [
+        event
+        for event in filtered_events
+        if maybe_text(event.get("dead_letter_id")) not in closed_dead_letter_ids
+    ]
+    failed_events = [event for event in unresolved_events if maybe_text(event.get("status")) == "failed"]
+    blocked_events = [event for event in unresolved_events if maybe_text(event.get("status")) == "blocked"]
     degraded_events = [
         event for event in filtered_events if maybe_text(event.get("status")) in {"completed-with-warnings", "degraded"}
     ]
@@ -33,7 +44,6 @@ def runtime_health_payload(run_dir: Path, *, round_id: str = "") -> dict[str, An
         == "receipt-payload-hash-conflict"
     ]
     recovered_events = [event for event in filtered_events if bool(event.get("recovered_after_retry"))]
-    dead_letters = load_dead_letters(run_dir, round_id=round_id, limit=50)
     open_dead_letters = [item for item in dead_letters if maybe_text(item.get("resolution_status")) != "closed"]
     alerts: list[dict[str, Any]] = []
     failed_threshold = int(alert_policy.get("failed_event_threshold") or 1)

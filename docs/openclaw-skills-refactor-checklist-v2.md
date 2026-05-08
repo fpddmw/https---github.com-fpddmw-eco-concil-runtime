@@ -229,26 +229,27 @@
 
 该能力仍遵守 optional-analysis 降权原则：relation cue 是候选线索，不是传播证明、污染源归因或报告结论。
 
-## 7. 真实案例评测链路
+## 7. 动态多轮调查链路
 
-真实案例评测链路不在本文中继续展开，独立计划见 `docs/openclaw-case-study-evaluation-workplan.md`。
+动态多轮调查治理不在本文中继续展开，独立计划见 `docs/openclaw-dynamic-investigation-planning-workplan.md`。skills 层只提供原子能力和 role-governed surfaces，不负责把开放型 mission 直接硬编码成固定调查剧本。
 
-以下是评测时需要观察的能力节点，不是固定脚本，也不要求每次真实案例运行都按相同顺序成功出现：
+以下是动态多轮调查需要观察的 skills 能力节点，不是固定脚本，也不要求每次真实案例运行都按相同顺序成功出现：
 
 1. `scaffold-mission-run` 能初始化受治理 run/round。
-2. `prepare-round` 能生成可审计 source plan。
-3. fetch/import public + environment + fire/weather 能进入 raw/normalized surfaces。
-4. normalize 能写出可查询 signals 和 metadata。
-5. query signals 能返回 item-level evidence refs。
-6. investigator 能提交 finding/evidence bundle。
-7. optional helper 只能输出审计线索。
-8. challenger 能 open challenge 或 falsification probe。
-9. readiness opinion 能在证据不足时标记 `needs-more-data`。
-10. `open-investigation-round` 能从 gap/challenge 派生 follow-up round。
-11. structured relation cue 或 relation evidence packet 能暴露候选关系和不确定性。
-12. proposal/readiness 能承接下一步行动或阻断。
-13. `freeze-report-basis` 只能消费被承接过的 DB basis。
-14. reporting handoff / decision / expert reports / final publication 能保留 evidence index 和 residual disputes。
+2. moderator 规划类 write surface 能把开放型 mission 转成 investigation plan、subissues、round briefs。
+3. `prepare-round` 能优先消费 round-brief，而不是强依赖初始 mission scope。
+4. fetch/import public + environment + fire/weather 能进入 raw/normalized surfaces。
+5. normalize 能写出可查询 signals 和 metadata。
+6. query signals 能返回 item-level evidence refs。
+7. investigator 能提交 finding/evidence bundle。
+8. optional helper 只能输出审计线索。
+9. challenger 能 open challenge 或 falsification probe。
+10. readiness opinion 能在证据不足时标记 `needs-more-data`。
+11. `open-investigation-round` 能从 subissue/gap/challenge 派生 follow-up 或 supplemental round。
+12. structured relation cue 或 relation evidence packet 能暴露候选关系和不确定性。
+13. proposal/readiness 能承接下一步行动或阻断。
+14. `freeze-report-basis` 只能消费被承接过的 DB basis。
+15. reporting handoff / decision / expert reports / final publication 能保留 evidence index 和 residual disputes。
 
 ## 8. 当前结论
 
@@ -262,4 +263,4 @@ skills 当前形态可以接受，不进入批量拆分。
 4. skill 内部可以继续整理 helper，但优先保持 skill-local，避免把 provider 细节扩散到 runtime shared dependency。
 5. optional-analysis helper 继续保持 advisory/audit 定位；报告正文必须由 finding、evidence bundle、proposal、review comment、report basis 或 reporting object 显式承接。
 
-质量门入口保留在 `docs/openclaw-ci-quality-gates-workplan.md`。
+质量门基线命令保留在 `docs/openclaw-project-overview.md` 和 `docs/openclaw-refactor-overall-notes.md`。

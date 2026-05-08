@@ -1371,6 +1371,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def normalize_cli_argv(argv: list[str]) -> list[str]:
+    normalized: list[str] = []
+    index = 0
+    while index < len(argv):
+        item = argv[index]
+        next_item = argv[index + 1] if index + 1 < len(argv) else None
+        # argparse treats a bbox like "-90,40,-60,55" as an option token.
+        if item == "--bbox" and next_item is not None and next_item.startswith("-") and "," in next_item:
+            normalized.append(f"--bbox={next_item}")
+            index += 2
+            continue
+        normalized.append(item)
+        index += 1
+    return normalized
+
+
 def command_check_config(args: argparse.Namespace) -> int:
     config = build_runtime_config(args)
     logger = build_logger(args.log_level, args.log_file)
@@ -1629,9 +1645,9 @@ def command_fetch(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(normalize_cli_argv(sys.argv[1:] if argv is None else argv))
     if args.command == "check-config":
         return command_check_config(args)
     if args.command == "fetch":

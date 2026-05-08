@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import io
+import os
 import subprocess
 import sys
 import time
@@ -380,6 +381,118 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertIn("argv", event["command_snapshot"])
             self.assertTrue(event["execution_input_hash"])
             self.assertTrue(event["payload_hash"])
+
+    def test_kernel_does_not_prepend_runtime_flags_to_standalone_fetch_skills(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.execution.executor import run_skill
+
+            fake_script = root / "fake_fetch.py"
+            fake_payload = {
+                "status": "completed",
+                "summary": {"source": "fake"},
+                "receipt_id": "runtime-receipt-fetch-no-runtime-flags",
+                "artifact_refs": [],
+                "canonical_ids": [],
+            }
+            fake_skill_entry = {
+                "skill_name": "fetch-open-meteo-air-quality",
+                "script_path": str(fake_script),
+                "declared_contract": {"reads": [], "writes": []},
+                "declared_inputs": {"required": [], "optional": []},
+                "declared_side_effects": ["network-external"],
+                "execution_policy": {},
+                "agent": {},
+            }
+
+            with (
+                mock.patch("eco_council_runtime.kernel.governance.runtime_governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.execution.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch(
+                    "eco_council_runtime.kernel.execution.executor.subprocess.run",
+                    return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(fake_payload), stderr=""),
+                ) as run_mock,
+            ):
+                payload = run_skill(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    skill_name="fetch-open-meteo-air-quality",
+                    actor_role="environmental-investigator",
+                    skill_args=["fetch", "--location", "40.7128,-74.0060"],
+                    contract_mode="warn",
+                    allow_side_effects=["network-external"],
+                )
+
+            argv = run_mock.call_args.args[0]
+            self.assertEqual([sys.executable, str(fake_script), "fetch", "--location", "40.7128,-74.0060"], argv)
+            self.assertNotIn("--run-dir", argv)
+            self.assertEqual(argv, payload["event"]["command_snapshot"]["argv"])
+
+    def test_kernel_loads_skill_config_env_without_overriding_process_env(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.execution.executor import run_skill
+
+            fake_script = root / "skills" / "fetch-nasa-firms-fire" / "scripts" / "fake_fetch.py"
+            fake_script.parent.mkdir(parents=True)
+            config_env = fake_script.parent.parent / "assets" / "config.env"
+            config_env.parent.mkdir(parents=True)
+            config_env.write_text(
+                "NASA_FIRMS_MAP_KEY=from_config_env_file\n"
+                "NASA_FIRMS_TIMEOUT_SECONDS=45\n",
+                encoding="utf-8",
+            )
+            fake_payload = {
+                "status": "completed",
+                "summary": {"source": "fake"},
+                "receipt_id": "runtime-receipt-fetch-env",
+                "artifact_refs": [],
+                "canonical_ids": [],
+            }
+            fake_skill_entry = {
+                "skill_name": "fetch-nasa-firms-fire",
+                "script_path": str(fake_script),
+                "declared_contract": {"reads": [], "writes": []},
+                "declared_inputs": {"required": [], "optional": []},
+                "declared_side_effects": ["network-external"],
+                "execution_policy": {},
+                "agent": {},
+            }
+
+            with (
+                mock.patch.dict(os.environ, {"NASA_FIRMS_MAP_KEY": "from_process_env"}, clear=False),
+                mock.patch("eco_council_runtime.kernel.governance.runtime_governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.execution.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch(
+                    "eco_council_runtime.kernel.execution.executor.subprocess.run",
+                    return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(fake_payload), stderr=""),
+                ) as run_mock,
+            ):
+                payload = run_skill(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    skill_name="fetch-nasa-firms-fire",
+                    actor_role="environmental-investigator",
+                    skill_args=["fetch", "--dry-run"],
+                    contract_mode="warn",
+                    allow_side_effects=["network-external"],
+                )
+
+            env = run_mock.call_args.kwargs["env"]
+            self.assertEqual("from_process_env", env["NASA_FIRMS_MAP_KEY"])
+            self.assertEqual("45", env["NASA_FIRMS_TIMEOUT_SECONDS"])
+            self.assertEqual(
+                [str(config_env.resolve())],
+                payload["event"]["command_snapshot"]["loaded_env_files"],
+            )
 
     def test_kernel_blocks_write_command_without_explicit_actor_role(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1518,6 +1631,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 resolve_dead_letter,
                 runtime_health_payload,
             )
+            from eco_council_runtime.kernel.core.ledger import append_ledger_event
 
             dead_letter = materialize_dead_letter(
                 run_dir,
@@ -1528,6 +1642,19 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 message="Synthetic runtime failure for operator close coverage.",
                 failure={"error_code": "skill-timeout", "message": "timed out", "retryable": False},
                 summary={"skill_name": "test-skill", "run_id": RUN_ID, "round_id": ROUND_ID},
+            )
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": "runtimeevt-deadletter-health-test",
+                    "event_type": "skill-execution",
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "skill_name": "test-skill",
+                    "status": "failed",
+                    "dead_letter_id": dead_letter["dead_letter_id"],
+                },
             )
 
             before = runtime_health_payload(run_dir, round_id=ROUND_ID)
@@ -1542,7 +1669,10 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             self.assertEqual("open", dead_letter["resolution_status"])
             self.assertEqual("closed", closed["resolution_status"])
             self.assertEqual(1, before["summary"]["open_dead_letter_count"])
+            self.assertEqual(1, before["summary"]["failed_event_count"])
             self.assertEqual(0, after["summary"]["open_dead_letter_count"])
+            self.assertEqual(0, after["summary"]["failed_event_count"])
+            self.assertEqual("green", after["alert_status"])
 
     def test_default_admission_policy_keeps_writes_inside_run_surface(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

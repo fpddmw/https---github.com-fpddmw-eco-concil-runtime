@@ -40,6 +40,84 @@ from eco_council_runtime.kernel.operator.operations import (
     materialize_dead_letter,
 )
 
+def command_uses_runtime_builtins(skill_entry: dict[str, Any]) -> bool:
+    declared_inputs = skill_entry.get("declared_inputs", {}) if isinstance(skill_entry.get("declared_inputs"), dict) else {}
+    required_inputs = declared_inputs.get("required", []) if isinstance(declared_inputs.get("required"), list) else []
+    normalized_required = {maybe_text(item).replace("-", "_") for item in required_inputs}
+    return "run_dir" in normalized_required
+
+
+def build_skill_subprocess_command(
+    *,
+    script_path: Path,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    skill_entry: dict[str, Any],
+    skill_args: list[str],
+) -> list[str]:
+    command = [sys.executable, str(script_path)]
+    if command_uses_runtime_builtins(skill_entry):
+        command.extend(["--run-dir", str(run_dir), "--run-id", run_id, "--round-id", round_id])
+    command.extend(skill_args)
+    return command
+
+
+def skill_config_env_path(script_path: Path) -> Path | None:
+    if script_path.parent.name != "scripts":
+        return None
+    candidate = script_path.parent.parent / "assets" / "config.env"
+    return candidate if candidate.exists() else None
+
+
+def parse_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line.removeprefix("export ").strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
+def build_skill_subprocess_env(
+    *,
+    script_path: Path,
+    actor_role: str,
+    resolved_actor_role: str,
+    skill_name: str,
+    run_id: str,
+    round_id: str,
+) -> tuple[dict[str, str], list[str]]:
+    loaded_env_files: list[str] = []
+    file_env: dict[str, str] = {}
+    config_path = skill_config_env_path(script_path)
+    if config_path is not None:
+        file_env.update(parse_env_file(config_path))
+        loaded_env_files.append(str(config_path.resolve()))
+    env = {
+        **file_env,
+        **os.environ,
+        "OPENCLAW_ACTOR_ROLE": actor_role,
+        "OPENCLAW_RESOLVED_ACTOR_ROLE": resolved_actor_role,
+        "OPENCLAW_SKILL_NAME": skill_name,
+        "OPENCLAW_RUN_ID": run_id,
+        "OPENCLAW_ROUND_ID": round_id,
+    }
+    return env, loaded_env_files
+
+
 def run_skill(
     run_dir: Path,
     *,
@@ -83,7 +161,14 @@ def run_skill(
     retry_backoff_ms = int(execution_policy.get("retry_backoff_ms") or 0)
     declared_side_effects = preflight.get("declared_side_effects", []) if isinstance(preflight.get("declared_side_effects"), list) else []
     allowed_side_effects = preflight.get("allowed_side_effects", []) if isinstance(preflight.get("allowed_side_effects"), list) else []
-    command = [sys.executable, str(script_path), "--run-dir", str(run_dir), "--run-id", run_id, "--round-id", round_id, *skill_args]
+    command = build_skill_subprocess_command(
+        script_path=script_path,
+        run_dir=run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        skill_entry=skill_entry,
+        skill_args=skill_args,
+    )
     command_snapshot = {
         "argv": command,
         "cwd": str(root),
@@ -93,6 +178,16 @@ def run_skill(
         "actor_role": actor_role,
         "skill_approval_request_id": maybe_text(skill_approval_request_id),
     }
+    env, loaded_env_files = build_skill_subprocess_env(
+        script_path=script_path,
+        actor_role=actor_role,
+        resolved_actor_role=maybe_text(preflight.get("resolved_actor_role")),
+        skill_name=skill_name,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if loaded_env_files:
+        command_snapshot["loaded_env_files"] = loaded_env_files
     run_command_hint = skill_command_hint(
         "run-skill",
         run_dir=run_dir,
@@ -331,14 +426,6 @@ def run_skill(
         for attempt_number in range(1, retry_budget + 2):
             attempt_started_at = utc_now_iso()
             try:
-                env = {
-                    **os.environ,
-                    "OPENCLAW_ACTOR_ROLE": actor_role,
-                    "OPENCLAW_RESOLVED_ACTOR_ROLE": maybe_text(preflight.get("resolved_actor_role")),
-                    "OPENCLAW_SKILL_NAME": skill_name,
-                    "OPENCLAW_RUN_ID": run_id,
-                    "OPENCLAW_ROUND_ID": round_id,
-                }
                 completed = subprocess.run(
                     command,
                     capture_output=True,

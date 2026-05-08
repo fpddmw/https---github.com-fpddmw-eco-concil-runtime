@@ -86,6 +86,8 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
 
 public/environment query 支持 `round_scope=current|up-to-current|all`，因此第二轮可以读取第一轮和当前轮的 normalized signals。source queue 也会记录 prior-round family memory，并支持受治理的 prior-round anchor。
 
+当前已暴露的缺口是：moderator 还没有完整的动态调查规划能力。开放型或复合型 mission 不应被初始化为单一固定时空域，而应由 moderator 在 scoping round 中产出 investigation plan、subissues、candidate scopes 和 round briefs。该能力由 `docs/openclaw-dynamic-investigation-planning-workplan.md` 独立跟踪，是当前唯一新增开发计划。
+
 ## 5. Council Agent 与 Runtime Principal
 
 概念模型中的 council agents：
@@ -175,15 +177,28 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
 
 ## 9. 文档地图
 
-最终保留 5 个文档：
+当前文档分为基础文档、唯一新增开发计划和历史运行记录。
 
 1. `docs/openclaw-project-overview.md`
    - 项目总览、主工作流、能力边界和当前收口状态。
 2. `docs/openclaw-refactor-overall-notes.md`
    - 工程原则、重构收口摘要、剩余风险和论文展示建议。
-3. `docs/openclaw-ci-quality-gates-workplan.md`
-   - CI 与质量门的当前状态、命令和未闭环项。
-4. `docs/openclaw-skills-refactor-checklist-v2.md`
+3. `docs/openclaw-skills-refactor-checklist-v2.md`
    - skills 分层、原子能力边界、optional-analysis 降权和 relation baseline。
-5. `docs/openclaw-case-study-evaluation-workplan.md`
-   - 真实案例议会能力评测和可回放轨迹沉淀。
+4. `docs/openclaw-dynamic-investigation-planning-workplan.md`
+   - 当前唯一新增开发计划：moderator-led dynamic investigation planning、多 round 子议题治理、challenger supplemental round 和 context packet 压缩。
+5. `docs/openclaw-realcase-nyc-smoke-first-run-timeline.md`
+   - 第一次真实 run 的历史时间线；不作为开发计划或当前能力基线。
+
+质量门基线命令：
+
+1. `python3 tools/quality_gate.py syntax`
+2. `python3 tools/quality_gate.py test module-decomposition runtime-governance reporting case-study`
+3. `python3 tools/quality_gate.py full`
+
+质量门边界：
+
+1. `tools/quality_gate.py` 提供 `syntax`、`test`、`full`、`ci`、`list` 子命令。
+2. `syntax` gate 使用 AST parse，并阻断重复字面量 dict key。
+3. 默认质量门不依赖真实外部 API 或 secrets。
+4. case-study replay 只在真实运行抽取稳定 fixture 后作为固定回放门。

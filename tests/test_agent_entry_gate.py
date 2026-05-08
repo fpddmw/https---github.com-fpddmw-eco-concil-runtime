@@ -277,7 +277,23 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertNotIn("social_investigator", roles)
             self.assertNotIn("public-discourse-investigator", roles)
             self.assertTrue((run_dir / "supervisor" / "openclaw-workspaces" / "social-investigator").exists())
+            social_workspace = run_dir / "supervisor" / "openclaw-workspaces" / "social-investigator"
+            social_role_surface = load_json(social_workspace / "council_runtime" / "role_surface.json")
+            social_runtime_context = load_json(social_workspace / "council_runtime" / "runtime_context.json")
+            self.assertEqual("social-investigator", social_role_surface["role"])
+            self.assertEqual("social-investigator", social_runtime_context["role"])
+            self.assertTrue((social_workspace / "COUNCIL_RUNTIME.md").exists())
             self.assertIn("openclaw agents add", registration["register_all_command"])
+            self.assertIn("openclaw agents set-identity", registration["register_all_command"])
+            self.assertNotIn(" --identity ", registration["register_all_command"])
+            self.assertTrue(
+                any(
+                    item.get("role") == "social-investigator"
+                    and item.get("role_surface_path", "").endswith("role_surface.json")
+                    for item in registration["workspace_contexts"]
+                    if isinstance(item, dict)
+                )
+            )
             self.assertTrue(runtime_path(run_dir, f"source_selection_social-investigator_{ROUND_ID}.json").exists())
             self.assertTrue(runtime_path(run_dir, f"agent_entry_gate_{ROUND_ID}.json").exists())
             self.assertTrue(
