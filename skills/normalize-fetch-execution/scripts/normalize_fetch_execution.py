@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +34,10 @@ from eco_council_runtime.kernel.source_queue.source_queue_execution import (  # 
     resolved_artifact_path,
 )
 from eco_council_runtime.kernel.source_queue.source_queue_planner import ensure_fetch_plan_inputs_match  # noqa: E402
+from eco_council_runtime.kernel.governance.role_contracts import (  # noqa: E402
+    normalize_actor_role,
+    role_contract,
+)
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -63,6 +68,46 @@ def run_json_script(script_path: Path, *args: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise RuntimeError(f"Script did not emit a JSON object: {script_path.name}")
     return payload
+
+
+def actor_role_labels(actor_role: str) -> list[str]:
+    resolved = normalize_actor_role(actor_role) or maybe_text(actor_role)
+    contract = role_contract(resolved)
+    aliases = contract.get("aliases", []) if isinstance(contract.get("aliases"), list) else []
+    return unique_texts([actor_role, resolved, *aliases])
+
+
+def actor_owns_step(actor_role: str, step: dict[str, Any]) -> bool:
+    step_role = maybe_text(step.get("role"))
+    if not step_role:
+        return False
+    return normalize_actor_role(step_role) == (normalize_actor_role(actor_role) or maybe_text(actor_role))
+
+
+def load_existing_execution(output_path: Path) -> dict[str, Any]:
+    if not output_path.exists():
+        return {}
+    try:
+        payload = read_json_object(output_path)
+    except Exception:  # noqa: BLE001
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def existing_execution_statuses(existing_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    statuses = (
+        existing_payload.get("statuses", [])
+        if isinstance(existing_payload.get("statuses"), list)
+        else []
+    )
+    by_step: dict[str, dict[str, Any]] = {}
+    for status in statuses:
+        if not isinstance(status, dict):
+            continue
+        step_id = maybe_text(status.get("step_id"))
+        if step_id:
+            by_step[step_id] = status
+    return by_step
 
 
 def raw_only_normalization_payload(*, source_skill: str, run_id: str, round_id: str, artifact_path: Path, reason: str) -> dict[str, Any]:
@@ -98,6 +143,8 @@ def execute_queue_step(
     run_id: str,
     round_id: str,
     step: dict[str, Any],
+    actor_role: str,
+    resolved_actor_role: str,
 ) -> tuple[Path, dict[str, Any] | None, dict[str, Any]]:
     step_id = maybe_text(step.get("step_id"))
     step_kind = maybe_text(step.get("step_kind")) or "import"
@@ -108,7 +155,14 @@ def execute_queue_step(
     if step_kind == "import":
         raw_artifact_path = copy_import_artifact(step)
     elif step_kind == "detached-fetch":
-        raw_artifact_path, fetch_details = execute_detached_fetch_step(step, run_dir=run_dir, run_id=run_id, round_id=round_id)
+        raw_artifact_path, fetch_details = execute_detached_fetch_step(
+            step,
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            actor_role=actor_role,
+            resolved_actor_role=resolved_actor_role,
+        )
     else:
         raise RuntimeError(f"Unsupported step_kind: {step_kind}")
 
@@ -140,6 +194,8 @@ def execute_queue_step(
         "status": "completed",
         "component": "queue-runner",
         "role": maybe_text(step.get("role")),
+        "actor_role": actor_role,
+        "resolved_actor_role": resolved_actor_role,
         "source_skill": source_skill,
         "artifact_path": str(raw_artifact_path),
         "artifact_dir": maybe_text(step.get("artifact_dir")),
@@ -202,12 +258,16 @@ def execute_import_step(
     run_id: str,
     round_id: str,
     step: dict[str, Any],
+    actor_role: str,
+    resolved_actor_role: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     raw_artifact_path, fetch_details, queue_status = execute_queue_step(
         run_dir=run_dir,
         run_id=run_id,
         round_id=round_id,
         step=step,
+        actor_role=actor_role,
+        resolved_actor_role=resolved_actor_role,
     )
     payload = run_normalizer_for_step(
         run_dir=run_dir,
@@ -226,6 +286,8 @@ def execute_import_step(
             "execution_receipt": "pending",
         },
         "role": maybe_text(step.get("role")),
+        "actor_role": actor_role,
+        "resolved_actor_role": resolved_actor_role,
         "source_skill": maybe_text(step.get("source_skill")),
         "normalizer_skill": maybe_text(step.get("normalizer_skill")),
         "artifact_path": str(raw_artifact_path),
@@ -241,6 +303,8 @@ def execute_import_step(
             "status": maybe_text(payload.get("status")) or "completed",
             "receipt_id": maybe_text(payload.get("receipt_id")),
             "batch_id": maybe_text(payload.get("batch_id")),
+            "actor_role": actor_role,
+            "resolved_actor_role": resolved_actor_role,
             "canonical_count": len(payload.get("canonical_ids", [])) if isinstance(payload.get("canonical_ids"), list) else 0,
             "artifact_ref_count": len(payload.get("artifact_refs", [])) if isinstance(payload.get("artifact_refs"), list) else 0,
         },
@@ -256,6 +320,9 @@ def build_execution_payload(
     *,
     run_id: str,
     round_id: str,
+    actor_role: str,
+    resolved_actor_role: str,
+    actor_plan_roles: list[str],
     plan_path: Path,
     plan_sha256: str,
     statuses: list[dict[str, Any]],
@@ -268,6 +335,9 @@ def build_execution_payload(
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
+        "last_actor_role": actor_role,
+        "last_resolved_actor_role": resolved_actor_role,
+        "last_actor_plan_roles": actor_plan_roles,
         "execution_id": "import-execution-" + stable_hash(run_id, round_id, plan_sha256, len(statuses))[:12],
         "plan_path": str(plan_path),
         "plan_sha256": plan_sha256,
@@ -297,37 +367,107 @@ def build_execution_payload(
     return payload
 
 
-def import_fetch_execution_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, Any]:
+def ordered_statuses_for_plan(
+    steps: list[dict[str, Any]],
+    statuses_by_step: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    ordered: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for step in steps:
+        step_id = maybe_text(step.get("step_id"))
+        if step_id and step_id in statuses_by_step:
+            ordered.append(statuses_by_step[step_id])
+            seen.add(step_id)
+    for step_id, status in statuses_by_step.items():
+        if step_id not in seen:
+            ordered.append(status)
+    return ordered
+
+
+def import_fetch_execution_skill(
+    run_dir: str,
+    run_id: str,
+    round_id: str,
+    *,
+    actor_role: str,
+) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     plan_path = (run_dir_path / "runtime" / f"fetch_plan_{round_id}.json").resolve()
     output_path = (run_dir_path / "runtime" / f"import_execution_{round_id}.json").resolve()
 
+    normalized_actor_role = normalize_actor_role(actor_role) or maybe_text(actor_role)
+    if not normalized_actor_role:
+        raise RuntimeError(
+            "normalize-fetch-execution requires --actor-role or OPENCLAW_ACTOR_ROLE "
+            "so fetch and normalization can be limited to the actor's assigned steps."
+        )
+    plan_role_labels = actor_role_labels(normalized_actor_role)
     plan = read_json_object(plan_path)
     ensure_fetch_plan_inputs_match(run_dir=run_dir_path, round_id=round_id, plan=plan)
     steps = [item for item in plan.get("steps", []) if isinstance(item, dict)] if isinstance(plan.get("steps"), list) else []
+    owned_steps = [step for step in steps if actor_owns_step(normalized_actor_role, step)]
     plan_sha256 = file_sha256(plan_path)
 
-    statuses: list[dict[str, Any]] = []
-    normalized_receipt_ids: list[str] = []
-    normalized_artifact_refs: list[dict[str, Any]] = []
+    existing_payload = load_existing_execution(output_path)
+    statuses_by_step = existing_execution_statuses(existing_payload)
+    normalized_receipt_ids: list[str] = unique_texts(
+        existing_payload.get("normalized_receipt_ids", [])
+        if isinstance(existing_payload.get("normalized_receipt_ids"), list)
+        else []
+    )
+    normalized_artifact_refs: list[dict[str, Any]] = [
+        item
+        for item in (
+            existing_payload.get("normalized_artifact_refs", [])
+            if isinstance(existing_payload.get("normalized_artifact_refs"), list)
+            else []
+        )
+        if isinstance(item, dict)
+    ]
     warnings: list[dict[str, str]] = []
+    if not owned_steps:
+        warnings.append(
+            {
+                "code": "no-owned-fetch-plan-steps",
+                "message": (
+                    f"Actor role {normalized_actor_role} has no owned fetch-plan steps "
+                    f"for plan roles {', '.join(plan_role_labels)}."
+                ),
+            }
+        )
 
-    for step in steps:
+    newly_completed_step_ids: list[str] = []
+    skipped_step_ids: list[str] = []
+    for step in owned_steps:
+        step_id = maybe_text(step.get("step_id")) or "unknown-step"
+        existing_status = statuses_by_step.get(step_id)
+        if isinstance(existing_status, dict) and maybe_text(existing_status.get("status")) == "completed":
+            skipped_step_ids.append(step_id)
+            continue
         try:
-            status, payload = execute_import_step(run_dir=run_dir_path, run_id=run_id, round_id=round_id, step=step)
-            statuses.append(status)
+            status, payload = execute_import_step(
+                run_dir=run_dir_path,
+                run_id=run_id,
+                round_id=round_id,
+                step=step,
+                actor_role=actor_role,
+                resolved_actor_role=normalized_actor_role,
+            )
+            statuses_by_step[step_id] = status
+            newly_completed_step_ids.append(step_id)
             normalized_receipt_ids.append(maybe_text(payload.get("receipt_id")))
             if isinstance(payload.get("artifact_refs"), list):
                 normalized_artifact_refs.extend(item for item in payload["artifact_refs"] if isinstance(item, dict))
             if isinstance(payload.get("warnings"), list):
                 warnings.extend(item for item in payload["warnings"] if isinstance(item, dict) and maybe_text(item.get("message")))
         except Exception as exc:  # noqa: BLE001
-            step_id = maybe_text(step.get("step_id")) or "unknown-step"
             failed_status = {
                 "step_id": step_id,
                 "step_kind": maybe_text(step.get("step_kind")) or "import",
                 "status": "failed",
                 "role": maybe_text(step.get("role")),
+                "actor_role": actor_role,
+                "resolved_actor_role": normalized_actor_role,
                 "source_skill": maybe_text(step.get("source_skill")),
                 "normalizer_skill": maybe_text(step.get("normalizer_skill")),
                 "reason": str(exc),
@@ -339,10 +479,14 @@ def import_fetch_execution_skill(run_dir: str, run_id: str, round_id: str) -> di
             if isinstance(exc, DetachedFetchExecutionError):
                 failed_status["detached_fetch"] = exc.payload
                 failure_payload["detached_fetch"] = exc.payload
-            statuses.append(failed_status)
+            statuses_by_step[step_id] = failed_status
+            statuses = ordered_statuses_for_plan(steps, statuses_by_step)
             partial_payload = build_execution_payload(
                 run_id=run_id,
                 round_id=round_id,
+                actor_role=actor_role,
+                resolved_actor_role=normalized_actor_role,
+                actor_plan_roles=plan_role_labels,
                 plan_path=plan_path,
                 plan_sha256=plan_sha256,
                 statuses=statuses,
@@ -353,9 +497,13 @@ def import_fetch_execution_skill(run_dir: str, run_id: str, round_id: str) -> di
             write_json_file(output_path, partial_payload)
             raise RuntimeError(f"Import execution failed at {step_id}: {exc}") from exc
 
+    statuses = ordered_statuses_for_plan(steps, statuses_by_step)
     payload = build_execution_payload(
         run_id=run_id,
         round_id=round_id,
+        actor_role=actor_role,
+        resolved_actor_role=normalized_actor_role,
+        actor_plan_roles=plan_role_labels,
         plan_path=plan_path,
         plan_sha256=plan_sha256,
         statuses=statuses,
@@ -379,6 +527,13 @@ def import_fetch_execution_skill(run_dir: str, run_id: str, round_id: str) -> di
             "execution_id": payload["execution_id"],
             "normalized_step_count": payload["completed_count"],
             "failed_step_count": payload["failed_count"],
+            "actor_role": actor_role,
+            "resolved_actor_role": normalized_actor_role,
+            "actor_plan_roles": plan_role_labels,
+            "owned_step_count": len(owned_steps),
+            "newly_completed_step_count": len(newly_completed_step_ids),
+            "skipped_completed_step_count": len(skipped_step_ids),
+            "total_plan_step_count": len(steps),
         },
         "receipt_id": "ingress-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, payload["execution_id"])[:20],
         "batch_id": "ingressbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_path.name)[:16],
@@ -405,13 +560,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
+    parser.add_argument("--actor-role", default="", help="Actor executing this role-owned fetch/normalize slice.")
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    payload = import_fetch_execution_skill(run_dir=args.run_dir, run_id=args.run_id, round_id=args.round_id)
+    actor_role = maybe_text(args.actor_role) or maybe_text(os.environ.get("OPENCLAW_RESOLVED_ACTOR_ROLE")) or maybe_text(os.environ.get("OPENCLAW_ACTOR_ROLE"))
+    payload = import_fetch_execution_skill(
+        run_dir=args.run_dir,
+        run_id=args.run_id,
+        round_id=args.round_id,
+        actor_role=actor_role,
+    )
     print(pretty_json(payload, args.pretty))
     return 0
 

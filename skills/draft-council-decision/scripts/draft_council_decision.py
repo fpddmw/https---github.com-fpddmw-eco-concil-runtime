@@ -107,21 +107,9 @@ def decision_summary(
 ) -> str:
     if reporting_ready:
         if key_findings:
-            titles = unique_texts(
-                [
-                    maybe_text(item.get("title")) or maybe_text(item.get("finding_kind"))
-                    for item in key_findings[:3]
-                    if isinstance(item, dict)
-                ]
-            )
-            basis_summary = (
-                "; ".join(titles)
-                if titles
-                else f"{len(key_findings)} DB-backed finding records"
-            )
             return (
                 "Round is ready for formal reporting and decision finalization. "
-                f"Evidence basis covers {basis_summary}."
+                f"Evidence basis includes {len(key_findings)} explicitly selected DB-backed finding records."
             )
         return "Round is ready for formal reporting and decision finalization."
     if open_risks:
@@ -336,6 +324,41 @@ def draft_council_decision_skill(
     key_findings = handoff.get("key_findings", []) if isinstance(handoff.get("key_findings"), list) else []
     open_risks = handoff.get("open_risks", []) if isinstance(handoff.get("open_risks"), list) else []
     recommended_next_actions = handoff.get("recommended_next_actions", []) if isinstance(handoff.get("recommended_next_actions"), list) else []
+    challenger_constraints = (
+        handoff.get("challenger_constraints", [])
+        if isinstance(handoff.get("challenger_constraints"), list)
+        else []
+    )
+    unresolved_challenger_constraints = (
+        handoff.get("unresolved_challenger_constraints", [])
+        if isinstance(handoff.get("unresolved_challenger_constraints"), list)
+        else []
+    )
+    basis_use_constraints = (
+        handoff.get("basis_use_constraints", [])
+        if isinstance(handoff.get("basis_use_constraints"), list)
+        else []
+    )
+    explicit_lead_basis_objects = (
+        handoff.get("explicit_lead_basis_objects", [])
+        if isinstance(handoff.get("explicit_lead_basis_objects"), list)
+        else []
+    )
+    explicit_report_claim_objects = (
+        handoff.get("explicit_report_claim_objects", [])
+        if isinstance(handoff.get("explicit_report_claim_objects"), list)
+        else []
+    )
+    report_claim_structural_violations = (
+        handoff.get("report_claim_structural_violations", [])
+        if isinstance(handoff.get("report_claim_structural_violations"), list)
+        else []
+    )
+    lead_basis_constraint_violations = (
+        handoff.get("lead_basis_constraint_violations", [])
+        if isinstance(handoff.get("lead_basis_constraint_violations"), list)
+        else []
+    )
     rejected_proposal_ids = unique_texts(
         handoff.get("rejected_proposal_ids", [])
         if isinstance(handoff.get("rejected_proposal_ids"), list)
@@ -377,6 +400,11 @@ def draft_council_decision_skill(
         "decision_summary": summary_text,
         "memo_sections": memo_sections,
         "evidence_packet_id": maybe_text(handoff_evidence_packet.get("packet_id")),
+        "basis_use_constraints": basis_use_constraints,
+        "explicit_report_claim_objects": explicit_report_claim_objects,
+        "report_claim_structural_violations": report_claim_structural_violations,
+        "explicit_lead_basis_objects": explicit_lead_basis_objects,
+        "lead_basis_constraint_violations": lead_basis_constraint_violations,
     }
 
     wrapper = {
@@ -461,6 +489,13 @@ def draft_council_decision_skill(
             "open_risk_count": len(open_risks),
         },
         "key_findings": key_findings[:3],
+        "challenger_constraints": challenger_constraints,
+        "unresolved_challenger_constraints": unresolved_challenger_constraints,
+        "basis_use_constraints": basis_use_constraints,
+        "explicit_report_claim_objects": explicit_report_claim_objects,
+        "report_claim_structural_violations": report_claim_structural_violations,
+        "explicit_lead_basis_objects": explicit_lead_basis_objects,
+        "lead_basis_constraint_violations": lead_basis_constraint_violations,
         "recommended_next_actions": [item for item in recommended_next_actions[: max(1, max_actions)] if isinstance(item, dict)],
         "selected_evidence_refs": selected_evidence_refs,
         "audit_refs": {

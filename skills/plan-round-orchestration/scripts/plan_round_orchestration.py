@@ -701,20 +701,6 @@ def fallback_path(
             "submit-council-proposal",
             "submit-readiness-opinion",
         ]
-        if signal_counts.get("routing_actions", 0) > 0:
-            suggested_next_skills.insert(0, "suggest-evidence-lanes")
-        if signal_counts.get("representation_gap_actions", 0) > 0 or signal_counts.get(
-            "formal_linkage_actions",
-            0,
-        ) > 0:
-            suggested_next_skills.extend(
-                [
-                    "compare-formal-public-footprints",
-                    "identify-representation-audit-cues",
-                ]
-            )
-        if signal_counts.get("diffusion_focus_count", 0) > 0:
-            suggested_next_skills.append("detect-temporal-cooccurrence-cues")
         fallback_rows.append(
             {
                 "when": "Controversy agenda still carries unresolved probe-worthy work.",

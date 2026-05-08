@@ -56,6 +56,10 @@ INVESTIGATOR_ROLES = [
     ROLE_PUBLIC_DISCOURSE_INVESTIGATOR,
     ROLE_FORMAL_RECORD_INVESTIGATOR,
 ]
+FETCH_NORMALIZE_ROLES = [
+    *INVESTIGATOR_ROLES,
+    ROLE_CHALLENGER,
+]
 RESEARCH_ROLES = [
     ROLE_MODERATOR,
     *INVESTIGATOR_ROLES,
@@ -360,7 +364,7 @@ POLICIES.update(
     _group(
         FETCH_SKILLS,
         skill_layer=SKILL_LAYER_FETCH,
-        allowed_roles=INVESTIGATOR_ROLES,
+        allowed_roles=FETCH_NORMALIZE_ROLES,
         required_capabilities=[CAPABILITY_FETCH],
         side_effect_scope=["network-external", "artifact-write"],
         db_write_planes=[],
@@ -373,7 +377,7 @@ POLICIES.update(
     _group(
         NORMALIZE_SKILLS,
         skill_layer=SKILL_LAYER_NORMALIZE,
-        allowed_roles=INVESTIGATOR_ROLES,
+        allowed_roles=FETCH_NORMALIZE_ROLES,
         required_capabilities=[CAPABILITY_NORMALIZE],
         side_effect_scope=["artifact-read", "artifact-write", "db-write:signal"],
         db_write_planes=["signal"],
@@ -415,7 +419,7 @@ POLICIES.update(
         "scaffold-mission-run": _policy(
             skill_name="scaffold-mission-run",
             skill_layer=SKILL_LAYER_STATE_TRANSITION,
-            allowed_roles=[ROLE_MODERATOR, ROLE_RUNTIME_OPERATOR],
+            allowed_roles=[ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_ROUND_BOOTSTRAP],
             side_effect_scope=["artifact-write", "db-write:runtime", "db-write:deliberation"],
             db_write_planes=["runtime", "deliberation"],
@@ -427,7 +431,7 @@ POLICIES.update(
         "prepare-round": _policy(
             skill_name="prepare-round",
             skill_layer=SKILL_LAYER_STATE_TRANSITION,
-            allowed_roles=[ROLE_MODERATOR, ROLE_RUNTIME_OPERATOR],
+            allowed_roles=[ROLE_MODERATOR],
             required_capabilities=[CAPABILITY_ROUND_BOOTSTRAP],
             side_effect_scope=["artifact-write", "db-read"],
             db_write_planes=[],
@@ -439,7 +443,7 @@ POLICIES.update(
         "normalize-fetch-execution": _policy(
             skill_name="normalize-fetch-execution",
             skill_layer=SKILL_LAYER_NORMALIZE,
-            allowed_roles=[*INVESTIGATOR_ROLES, ROLE_RUNTIME_OPERATOR],
+            allowed_roles=FETCH_NORMALIZE_ROLES,
             required_capabilities=[CAPABILITY_NORMALIZE],
             side_effect_scope=["artifact-read", "artifact-write", "db-write:signal"],
             db_write_planes=["signal"],

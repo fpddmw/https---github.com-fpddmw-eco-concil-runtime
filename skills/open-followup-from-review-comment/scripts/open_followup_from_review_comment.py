@@ -448,7 +448,7 @@ def open_followup_from_review_comment_skill(
             "evidence_refs": artifact_refs,
             "gap_hints": [],
             "challenge_hints": [
-                "Review-comment follow-up is now board-visible; readiness should remain open until the task is completed or a challenger waiver is filed."
+                "Review-comment follow-up is now board-visible; readiness should remain open until the task is completed or an explicit constraint disposition is filed."
             ],
             "suggested_next_skills": [
                 "query-board-delta",

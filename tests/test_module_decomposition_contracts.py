@@ -55,6 +55,8 @@ FACADE_PUBLIC_SYMBOLS = {
     "eco_council_runtime.contracts": (
         "canonical_contract",
         "canonical_contracts_for_plane",
+        "contract_field_group",
+        "contract_field_groups",
         "validate_canonical_payload",
     ),
     "eco_council_runtime.kernel.cli": (
@@ -271,11 +273,15 @@ SPLIT_MODULE_PUBLIC_SYMBOLS = {
     ),
     "eco_council_runtime.contracts.types": (
         "CanonicalContract",
+        "ContractFieldGroup",
+        "CONTRACT_FIELD_GROUPS",
         "PLANE_ANALYSIS",
         "PLANE_DELIBERATION",
         "PLANE_REPORTING",
         "PLANE_RUNTIME",
         "PLANE_SIGNAL",
+        "contract_field_group",
+        "contract_field_groups",
     ),
     "eco_council_runtime.contracts.signal": (
         "ENVIRONMENT_SIGNAL_TAXONOMY_VERSION",

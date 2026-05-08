@@ -124,6 +124,12 @@ def list_items(value: Any) -> list[Any]:
     return list(value) if isinstance(value, list) else []
 
 
+def boolish(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return maybe_text(value).casefold() in {"1", "true", "yes", "y", "on"}
+
+
 def unique_items(values: list[Any]) -> list[Any]:
     seen: set[str] = set()
     results: list[Any] = []
@@ -165,12 +171,24 @@ def normalized_report_section_draft_payload(
     normalized["basis_object_ids"] = unique_items(list_items(normalized.get("basis_object_ids")))
     normalized["bundle_ids"] = unique_items(list_items(normalized.get("bundle_ids")))
     normalized["finding_ids"] = unique_items(list_items(normalized.get("finding_ids")))
+    normalized["claim_id"] = maybe_text(normalized.get("claim_id"))
+    normalized["claim_text"] = maybe_text(normalized.get("claim_text"))
+    normalized.pop("claim_scope", None)
+    normalized.pop("claim_boundary", None)
+    normalized.pop("claim_limitations", None)
+    normalized["claim_constraint_ids"] = unique_items(
+        list_items(normalized.get("claim_constraint_ids"))
+    )
+    normalized["basis_use"] = maybe_text(normalized.get("basis_use"))
+    normalized["lead_basis"] = boolish(normalized.get("lead_basis"))
     normalized["lineage"] = unique_items(
         [
             *list_items(normalized.get("lineage")),
             normalized["report_id"],
             normalized["section_key"],
             normalized["agent_role"],
+            normalized["claim_id"],
+            *normalized["claim_constraint_ids"],
             *normalized["basis_object_ids"],
             *normalized["bundle_ids"],
             *normalized["finding_ids"],

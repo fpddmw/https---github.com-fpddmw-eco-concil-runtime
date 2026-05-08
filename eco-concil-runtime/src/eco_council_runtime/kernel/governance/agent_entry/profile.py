@@ -120,6 +120,8 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "write_skills": [
             "submit-council-proposal",
             "submit-readiness-opinion",
+            "post-board-note",
+            "post-review-comment",
             "open-challenge-ticket",
             "open-falsification-probe",
             "close-challenge-ticket",
@@ -236,6 +238,50 @@ def query_result_item_template(*, run_dir: Path, run_id: str, round_id: str, ana
     )
 
 
+def layer_skill_commands(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    contract_mode: str,
+    actor_role: str,
+    skill_names: list[str],
+    command_kind: str,
+) -> list[str]:
+    commands: list[str] = []
+    for skill_name in skill_names:
+        if command_kind == SKILL_LAYER_FETCH:
+            commands.append(
+                run_skill_command(
+                    run_dir=run_dir,
+                    run_id=run_id,
+                    round_id=round_id,
+                    skill_name=skill_name,
+                    actor_role=actor_role,
+                    contract_mode=contract_mode,
+                    timeout_seconds=900.0,
+                    retry_budget=1,
+                    allow_side_effects=["network-external"],
+                    skill_args=["<skill_specific_args>"],
+                )
+            )
+        elif command_kind == SKILL_LAYER_NORMALIZE:
+            commands.append(
+                run_skill_command(
+                    run_dir=run_dir,
+                    run_id=run_id,
+                    round_id=round_id,
+                    skill_name=skill_name,
+                    actor_role=actor_role,
+                    contract_mode=contract_mode,
+                    timeout_seconds=900.0,
+                    retry_budget=1,
+                    skill_args=[] if skill_name == "normalize-fetch-execution" else ["<skill_specific_args>"],
+                )
+            )
+    return commands
+
+
 def default_agent_entry_status(
     *,
     governance: dict[str, Any],
@@ -295,6 +341,24 @@ def default_role_entry_points(
         role = maybe_text(definition.get("role"))
         role_metadata = role_contract(role)
         grouped_skill_names = allowed_skills_by_layer(role)
+        fetch_commands = layer_skill_commands(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            contract_mode=contract_mode,
+            actor_role=role,
+            skill_names=grouped_skill_names.get(SKILL_LAYER_FETCH, []),
+            command_kind=SKILL_LAYER_FETCH,
+        )
+        normalize_commands = layer_skill_commands(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            contract_mode=contract_mode,
+            actor_role=role,
+            skill_names=grouped_skill_names.get(SKILL_LAYER_NORMALIZE, []),
+            command_kind=SKILL_LAYER_NORMALIZE,
+        )
         role_read_commands: list[str] = []
         for skill_name in definition.get("read_skills", []) if isinstance(definition.get("read_skills"), list) else []:
             if skill_name == "query-board-delta":
@@ -401,6 +465,36 @@ def default_role_entry_points(
                             "--note-text",
                             "<note_text>",
                         ],
+                    )
+                )
+            elif skill_name == "post-review-comment":
+                role_write_commands.append(
+                    kernel_command(
+                        "post-review-comment",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        run_id,
+                        "--round-id",
+                        round_id,
+                        "--actor-role",
+                        role,
+                        "--author-role",
+                        role,
+                        "--review-kind",
+                        "<review_kind>",
+                        "--comment-text",
+                        "<review_comment>",
+                        "--target-kind",
+                        "<finding|evidence-bundle|proposal|challenge|round>",
+                        "--target-id",
+                        "<target_object_id>",
+                        "--response-to-id",
+                        "<finding_or_bundle_id>",
+                        "--evidence-ref",
+                        "<evidence_ref_or_evidence-bundle:id>",
+                        "--provenance-json",
+                        "{\"source\":\"<provenance_source>\"}",
                     )
                 )
             elif skill_name == "open-challenge-ticket":
@@ -683,6 +777,8 @@ def default_role_entry_points(
                 "capability_layers": capability_layers(role),
                 "skill_count_by_layer": skill_count_by_layer(role),
                 "skills_by_layer": grouped_skill_names,
+                "fetch_commands": fetch_commands,
+                "normalize_commands": normalize_commands,
                 "read_commands": role_read_commands,
                 "analysis_commands": analysis_commands,
                 "write_commands": role_write_commands,

@@ -280,6 +280,8 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--actor-role",
+                "public-discourse-investigator",
             )
             execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
             counts = normalized_counts_by_source(run_dir)
@@ -378,6 +380,8 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--actor-role",
+                "public-discourse-investigator",
             )
             execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
             counts = normalized_counts_by_source(run_dir)
@@ -467,6 +471,8 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--actor-role",
+                "environmental-investigator",
             )
             execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
             status = execution["statuses"][0]

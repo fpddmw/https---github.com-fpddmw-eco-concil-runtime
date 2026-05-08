@@ -299,6 +299,17 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
+            run_script(
+                script_path("normalize-fetch-execution"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "public-discourse-investigator",
+            )
             payload = run_script(
                 script_path("normalize-fetch-execution"),
                 "--run-dir",
@@ -307,6 +318,8 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--actor-role",
+                "environmental-investigator",
             )
 
             execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
@@ -315,6 +328,13 @@ class SourceQueueRebuildTests(unittest.TestCase):
             self.assertEqual(2, execution["completed_count"])
             self.assertEqual(0, execution["failed_count"])
             self.assertEqual({"import", "detached-fetch"}, {status["step_kind"] for status in execution["statuses"]})
+            self.assertEqual(
+                {
+                    "step-sociologist-01-fetch-youtube-video-search": "public-discourse-investigator",
+                    "step-environmentalist-02-fetch-openaq": "environmental-investigator",
+                },
+                {status["step_id"]: status["resolved_actor_role"] for status in execution["statuses"]},
+            )
             self.assertEqual(2, len(execution["normalized_receipt_ids"]))
             self.assertEqual("completed", execution["execution_components"]["queue_runner"]["status"])
             self.assertEqual("completed", execution["execution_components"]["normalizer_runner"]["status"])
@@ -444,6 +464,8 @@ class SourceQueueRebuildTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--actor-role",
+                "public-discourse-investigator",
             )
 
             execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
@@ -452,6 +474,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
 
             self.assertEqual(2, detached_meta["attempt_count"])
             self.assertTrue(detached_meta["recovered_after_retry"])
+            self.assertEqual("public-discourse-investigator", detached_meta["resolved_actor_role"])
             self.assertEqual(5.0, detached_meta["execution_policy"]["timeout_seconds"])
             self.assertEqual(1, detached_meta["execution_policy"]["retry_budget"])
             self.assertEqual(["writes-artifacts", "reads-shared-state"], detached_meta["declared_side_effects"])
@@ -503,6 +526,8 @@ class SourceQueueRebuildTests(unittest.TestCase):
                     RUN_ID,
                     "--round-id",
                     ROUND_ID,
+                    "--actor-role",
+                    "public-discourse-investigator",
                 ],
                 capture_output=True,
                 text=True,
@@ -569,6 +594,8 @@ class SourceQueueRebuildTests(unittest.TestCase):
                     RUN_ID,
                     "--round-id",
                     ROUND_ID,
+                    "--actor-role",
+                    "public-discourse-investigator",
                 ],
                 capture_output=True,
                 text=True,

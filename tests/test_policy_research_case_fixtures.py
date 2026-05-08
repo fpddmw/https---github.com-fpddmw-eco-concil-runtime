@@ -301,6 +301,17 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
         "--round-id",
         round_id,
     )
+    run_script(
+        script_path("normalize-fetch-execution"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--actor-role",
+        "public-discourse-investigator",
+    )
     import_payload = run_script(
         script_path("normalize-fetch-execution"),
         "--run-dir",
@@ -309,6 +320,8 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
         run_id,
         "--round-id",
         round_id,
+        "--actor-role",
+        "environmental-investigator",
     )
     execution = load_json(runtime_path(run_dir, f"import_execution_{round_id}.json"))
 
@@ -512,6 +525,64 @@ def run_policy_research_case(root: Path, *, case: dict[str, str]) -> dict[str, A
         agent_role="environmental-investigator",
         section_key="key-findings",
     )
+    case_intent_text = " ".join(
+        [
+            case["topic"],
+            case["objective"],
+            case["decision_question"],
+            case["public_body"],
+            case["formal_body"],
+        ]
+    ).casefold()
+    if any(
+        token in case_intent_text
+        for token in ("response", "recommendation", "handling")
+    ):
+        run_kernel(
+            "submit-report-section-draft",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--actor-role",
+            "report-editor",
+            "--agent-role",
+            "report-editor",
+            "--report-id",
+            round_id,
+            "--section-key",
+            "recommendations",
+            "--section-title",
+            "Evidence-Bounded Response Options",
+            "--section-text",
+            "Response options are bounded to the cited public, formal, and environmental records.",
+            "--basis-object-id",
+            bundle_id,
+            "--bundle-id",
+            bundle_id,
+            "--finding-id",
+            finding_ids[0],
+            "--finding-id",
+            finding_ids[1],
+            "--finding-id",
+            finding_ids[2],
+            "--evidence-ref",
+            public_ref,
+            "--evidence-ref",
+            formal_ref,
+            "--evidence-ref",
+            environment_ref,
+            "--provenance-json",
+            json.dumps(
+                {
+                    "source": "policy-research-case-response-section",
+                    "case_label": case["case_label"],
+                },
+                sort_keys=True,
+            ),
+        )
     submit_ready_council_support(
         run_dir,
         run_id=run_id,
@@ -749,15 +820,51 @@ class PolicyResearchCaseFixtureTests(unittest.TestCase):
                     self.assertIn("citation-index", publication["published_sections"])
                     self.assertIn("uncertainty-register", publication["published_sections"])
                     self.assertIn("remaining-disputes", publication["published_sections"])
-                    self.assertEqual(
-                        {result["bundle_id"]},
-                        set(result["frozen_report_basis"]["expanded_evidence_bundle_ids"]),
-                    )
                     self.assertTrue(
                         set(result["cross_plane_evidence_refs"]).issubset(
-                            set(result["frozen_report_basis"]["selected_evidence_refs"])
+                            set(result["frozen_report_basis"]["candidate_bundle_evidence_refs"])
                         )
                     )
+                    self.assertIn(
+                        result["bundle_id"],
+                        result["frozen_report_basis"]["candidate_evidence_bundle_ids"],
+                    )
+                    self.assertEqual([], result["frozen_report_basis"]["expanded_evidence_bundle_ids"])
+                    self.assertEqual(0, result["frozen_report_basis"]["expanded_evidence_bundle_ref_count"])
+                    self.assertEqual(
+                        "explicit-agent-council-evidence-refs-only-v1",
+                        result["frozen_report_basis"]["evidence_selection_policy"],
+                    )
+                    case_intent_text = " ".join(
+                        [
+                            case["topic"],
+                            case["objective"],
+                            case["decision_question"],
+                            case["public_body"],
+                            case["formal_body"],
+                        ]
+                    ).casefold()
+                    if any(
+                        token in case_intent_text
+                        for token in ("response", "recommendation", "handling")
+                    ):
+                        self.assertTrue(
+                            set(result["cross_plane_evidence_refs"]).issubset(
+                                set(result["frozen_report_basis"]["selected_evidence_refs"])
+                            )
+                        )
+                        self.assertGreaterEqual(
+                            result["frozen_report_basis"][
+                                "explicit_report_section_draft_evidence_ref_count"
+                            ],
+                            3,
+                        )
+                    else:
+                        self.assertFalse(
+                            set(result["cross_plane_evidence_refs"]).issubset(
+                                set(result["frozen_report_basis"]["selected_evidence_refs"])
+                            )
+                        )
                     self.assertTrue(
                         any(
                             item.get("object_kind") == "finding-record"

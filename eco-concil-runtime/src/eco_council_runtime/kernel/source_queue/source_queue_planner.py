@@ -198,6 +198,12 @@ def source_step_budget(mission: dict[str, Any]) -> dict[str, Any]:
         "effective_max_source_steps_per_round": effective_max,
         "required_lane_source_count": len(required_sources),
         "required_lane_source_skills": required_sources,
+        "required_lane_source_semantics": (
+            "legacy field name; values are mission-derived candidate sources, "
+            "not readiness blockers unless adopted as explicit required_source_skills"
+        ),
+        "mission_derived_lane_source_count": len(required_sources),
+        "mission_derived_lane_source_skills": required_sources,
     }
 
 
@@ -423,8 +429,8 @@ def build_fetch_plan(
                 "code": "source-step-budget-raised-for-required-lanes",
                 "message": (
                     "Raised effective max_source_steps_per_round from "
-                    f"{configured_max} to {max_source_steps_per_round} so required evidence-lane sources "
-                    "are not suppressed by the global per-round budget."
+                    f"{configured_max} to {max_source_steps_per_round} so mission-derived "
+                    "evidence-lane source candidates are not suppressed by the global per-round budget."
                 ),
             }
         )

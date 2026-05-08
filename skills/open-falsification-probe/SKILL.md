@@ -7,7 +7,8 @@ description: Open compact falsification probes from the next-action queue so con
 
 ## Core Goal
 - Convert probe-worthy next actions into explicit falsification probes.
-- Preserve the target ids, linked evidence refs, and requested follow-up skills.
+- Preserve the target ids, linked evidence refs, and governance follow-up actions.
+- Do not select professional analysis, query, transport, representation, or diffusion tools for the council.
 - Emit a durable investigation artifact for challenger and moderator workflows.
 
 ## Triggering Conditions

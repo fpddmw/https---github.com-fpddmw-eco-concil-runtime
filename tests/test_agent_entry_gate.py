@@ -253,6 +253,42 @@ class AgentEntryGateTests(unittest.TestCase):
                     if isinstance(entry.get("write_commands"), list)
                 )
             )
+            environmental_entries = [
+                entry
+                for entry in payload["agent_entry"]["role_entry_points"]
+                if isinstance(entry, dict) and entry.get("role") == "environmental-investigator"
+            ]
+            self.assertEqual(1, len(environmental_entries))
+            environmental_fetch_surface = "\n".join(environmental_entries[0].get("fetch_commands", []))
+            environmental_normalize_surface = "\n".join(environmental_entries[0].get("normalize_commands", []))
+            self.assertIn("fetch-open-meteo-air-quality", environmental_fetch_surface)
+            self.assertIn("--actor-role environmental-investigator", environmental_fetch_surface)
+            self.assertIn("--allow-side-effect network-external", environmental_fetch_surface)
+            self.assertIn("<skill_specific_args>", environmental_fetch_surface)
+            self.assertIn("normalize-fetch-execution", environmental_normalize_surface)
+            self.assertIn("--actor-role environmental-investigator", environmental_normalize_surface)
+            challenger_entries = [
+                entry
+                for entry in payload["agent_entry"]["role_entry_points"]
+                if isinstance(entry, dict) and entry.get("role") == "challenger"
+            ]
+            self.assertEqual(1, len(challenger_entries))
+            challenger_fetch_surface = "\n".join(challenger_entries[0].get("fetch_commands", []))
+            challenger_normalize_surface = "\n".join(challenger_entries[0].get("normalize_commands", []))
+            self.assertIn("fetch-gdelt-doc-search", challenger_fetch_surface)
+            self.assertIn("--actor-role challenger", challenger_fetch_surface)
+            self.assertIn("normalize-fetch-execution", challenger_normalize_surface)
+            self.assertIn("--actor-role challenger", challenger_normalize_surface)
+            challenger_write_surface = "\n".join(challenger_entries[0].get("write_commands", []))
+            self.assertIn("post-review-comment", challenger_write_surface)
+            self.assertIn("--actor-role challenger", challenger_write_surface)
+            self.assertIn("--author-role challenger", challenger_write_surface)
+            self.assertIn("submit-finding-record", challenger_write_surface)
+            self.assertIn("submit-evidence-bundle", challenger_write_surface)
+            self.assertIn("post-board-note", challenger_write_surface)
+            self.assertIn("open-challenge-ticket", challenger_write_surface)
+            self.assertIn("open-falsification-probe", challenger_write_surface)
+            self.assertNotIn("request-phase-transition", challenger_write_surface)
             self.assertTrue(any(item["step_id"] == "submit-council-proposal" for item in payload["agent_entry"]["entry_chain"]))
             self.assertTrue(any(item["step_id"] == "submit-readiness-opinion" for item in payload["agent_entry"]["entry_chain"]))
             self.assertTrue(any(item["step_id"] == "request-report-basis-transition" for item in payload["agent_entry"]["entry_chain"]))

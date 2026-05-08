@@ -10,7 +10,9 @@ from _workflow_support import (
     load_json,
     primary_research_issue_id,
     primary_successor_evidence_ref,
+    report_basis_path,
     reporting_path,
+    request_and_approve_transition,
     run_kernel,
     run_script,
     runtime_src_path,
@@ -36,6 +38,52 @@ ROUND_ID = "round-council-autonomy-001"
 
 
 class CouncilAutonomyFlowTests(unittest.TestCase):
+    def write_scope_mission(
+        self,
+        run_dir: Path,
+        *,
+        required_lanes: list[str | dict],
+        required_sources: list[str] | None = None,
+    ) -> None:
+        lane_entries = [
+            lane if isinstance(lane, dict) else {"lane_id": lane, "priority": "high"}
+            for lane in required_lanes
+        ]
+        write_json(
+            run_dir / "mission.json",
+            {
+                "schema_version": "1.0.0",
+                "run_id": RUN_ID,
+                "topic": "June 2023 New York City smoke episode",
+                "objective": (
+                    "Investigate candidate source regions, transport pathway, "
+                    "public impacts, and handling recommendations."
+                ),
+                "window": {
+                    "start_utc": "2023-06-07T00:00:00Z",
+                    "end_utc": "2023-06-10T00:00:00Z",
+                },
+                "region": {
+                    "label": "New York City, NY, United States",
+                    "geometry": {
+                        "type": "Point",
+                        "latitude": 40.7128,
+                        "longitude": -74.006,
+                    },
+                },
+                "verification_scope": {
+                    "required_evidence_lanes": lane_entries,
+                    "required_source_skills": required_sources or [],
+                    "candidate_source_region_policy": (
+                        "mission-derived-candidate-source-review"
+                    ),
+                    "transport_verification_policy": (
+                        "mission-derived-relation-review"
+                    ),
+                },
+            },
+        )
+
     def test_agent_proposal_queue_takes_priority_over_heuristic_actions(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -372,41 +420,22 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
     def test_verification_scope_required_sources_hold_ready_opinion(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
+            self.write_scope_mission(
+                run_dir,
+                required_lanes=[
+                    "receptor-air-quality",
+                    "fire-origin",
+                    "spatiotemporal-relation-review",
+                ],
+                required_sources=[
+                    "fetch-open-meteo-air-quality",
+                    "fetch-nasa-firms-fire",
+                ],
+            )
             write_json(
                 run_dir / "mission.json",
                 {
-                    "schema_version": "1.0.0",
-                    "run_id": RUN_ID,
-                    "topic": "June 2023 New York City smoke episode",
-                    "objective": "Investigate candidate source regions, transport pathway, public impacts, and handling recommendations.",
-                    "window": {
-                        "start_utc": "2023-06-07T00:00:00Z",
-                        "end_utc": "2023-06-10T00:00:00Z",
-                    },
-                    "region": {
-                        "label": "New York City, NY, United States",
-                        "geometry": {
-                            "type": "Point",
-                            "latitude": 40.7128,
-                            "longitude": -74.006,
-                        },
-                    },
-                    "verification_scope": {
-                        "required_evidence_lanes": [
-                            {"lane_id": "receptor-air-quality", "priority": "high"},
-                            {"lane_id": "fire-origin", "priority": "high"},
-                            {
-                                "lane_id": "spatiotemporal-relation-review",
-                                "priority": "high",
-                            },
-                        ],
-                        "required_source_skills": [
-                            "fetch-open-meteo-air-quality",
-                            "fetch-nasa-firms-fire",
-                        ],
-                        "candidate_source_region_policy": "candidate-source-regions-required",
-                        "transport_verification_policy": "required-before-source-or-transport-claim",
-                    },
+                    **load_json(run_dir / "mission.json"),
                     "source_selections": {
                         "environmentalist": {
                             "status": "complete",
@@ -462,9 +491,354 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             self.assertIn("fetch-nasa-firms-fire", artifact["recommended_next_skills"])
             self.assertIn("normalize-fetch-execution", artifact["recommended_next_skills"])
             self.assertIn(
-                "Verification scope requires completed source imports",
+                "Explicit verification scope requires completed source imports",
                 artifact["gate_reasons"][0],
             )
+
+    def test_required_lane_evidence_review_records_transport_lane_without_relation_packet(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            self.write_scope_mission(
+                run_dir,
+                required_lanes=[
+                    {
+                        "lane_id": "spatiotemporal-relation-review",
+                        "priority": "high",
+                        "evidence_requirements": [
+                            {
+                                "evidence_object_kind": "spatiotemporal-relation-evidence-packet",
+                                "minimum_relation_count": 1,
+                                "available_support_skills": [
+                                    "materialize-spatiotemporal-relation-evidence-packet"
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            )
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The council believes the report basis can freeze.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["evidence-bundle-transport"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://transport"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+
+            payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+            review = artifact["required_lane_evidence_review"]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("ready", artifact["readiness_status"])
+            self.assertTrue(artifact["sufficient_for_report_basis"])
+            self.assertEqual("missing-lane-evidence", review["status"])
+            self.assertEqual(
+                "spatiotemporal-relation-review",
+                review["missing_lanes"][0]["lane_id"],
+            )
+            self.assertIn(
+                "materialize-spatiotemporal-relation-evidence-packet",
+                review["missing_lanes"][0]["missing_requirements"][0]["available_support_skills"],
+            )
+            self.assertEqual(["freeze-report-basis"], artifact["recommended_next_skills"])
+
+    def test_required_lane_evidence_review_does_not_infer_missing_evidence_without_requirement(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            self.write_scope_mission(
+                run_dir,
+                required_lanes=["spatiotemporal-relation-review"],
+            )
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The council has not supplied lane-specific evidence requirements.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["evidence-bundle-transport"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://transport"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+
+            payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+            review = artifact["required_lane_evidence_review"]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("ready", artifact["readiness_status"])
+            self.assertEqual("not-evaluated", review["status"])
+            self.assertEqual([], review["missing_lanes"])
+            self.assertEqual(
+                "spatiotemporal-relation-review",
+                review["not_evaluated_lanes"][0]["lane_id"],
+            )
+
+    def test_required_lane_evidence_review_records_explicit_transport_scope_out(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            self.write_scope_mission(
+                run_dir,
+                required_lanes=["spatiotemporal-relation-review"],
+            )
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "challenger",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": (
+                                "The report may proceed only if transport attribution "
+                                "is explicitly out of scope."
+                            ),
+                            "decision_source": "agent-council",
+                            "basis_object_ids": [
+                                "scope-out:spatiotemporal-relation-review"
+                            ],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://bounded-report"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+
+            payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+            review = artifact["required_lane_evidence_review"]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("ready", artifact["readiness_status"])
+            self.assertEqual("satisfied", review["status"])
+            self.assertEqual(
+                ["spatiotemporal-relation-review"],
+                review["scoped_out_lanes"],
+            )
+            self.assertEqual(["freeze-report-basis"], artifact["recommended_next_skills"])
+
+    def test_required_lane_evidence_review_records_response_recommendations_without_evidence(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            self.write_scope_mission(
+                run_dir,
+                required_lanes=[
+                    {
+                        "lane_id": "response-recommendation-boundary",
+                        "priority": "high",
+                        "evidence_requirements": [
+                            {
+                                "evidence_object_kind": "report-section-draft",
+                                "section_keys": ["recommendations"],
+                                "requires_evidence_refs": True,
+                                "available_support_skills": ["submit-report-section-draft"],
+                            }
+                        ],
+                    }
+                ],
+            )
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The council believes response text can be included.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["evidence-bundle-response"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://response"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+
+            payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+            review = artifact["required_lane_evidence_review"]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("ready", artifact["readiness_status"])
+            self.assertEqual("missing-lane-evidence", review["status"])
+            self.assertEqual(
+                "response-recommendation-boundary",
+                review["missing_lanes"][0]["lane_id"],
+            )
+            self.assertIn(
+                "submit-report-section-draft",
+                review["missing_lanes"][0]["missing_requirements"][0]["available_support_skills"],
+            )
+            self.assertEqual(["freeze-report-basis"], artifact["recommended_next_skills"])
+
+    def test_required_lane_evidence_review_accepts_evidence_bound_response_section(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            self.write_scope_mission(
+                run_dir,
+                required_lanes=[
+                    {
+                        "lane_id": "response-recommendation-boundary",
+                        "priority": "high",
+                        "evidence_requirements": [
+                            {
+                                "evidence_object_kind": "report-section-draft",
+                                "section_keys": ["recommendations"],
+                                "requires_evidence_refs": True,
+                            }
+                        ],
+                    }
+                ],
+            )
+            section_payload = run_kernel(
+                "submit-report-section-draft",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "report-editor",
+                "--agent-role",
+                "report-editor",
+                "--report-id",
+                ROUND_ID,
+                "--section-key",
+                "recommendations",
+                "--section-title",
+                "Recommendations",
+                "--section-text",
+                "Only evidence-bounded response options are represented here.",
+                "--basis-object-id",
+                "evidence-bundle-response",
+                "--evidence-ref",
+                "evidence://response-section",
+                "--provenance-json",
+                "{\"source\":\"unit-test\"}",
+            )
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The response section has DB-backed evidence refs.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": section_payload["canonical_ids"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://response-section"],
+                            "lineage": section_payload["canonical_ids"],
+                        }
+                    ],
+                },
+            )
+
+            payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+            review = artifact["required_lane_evidence_review"]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("ready", artifact["readiness_status"])
+            self.assertEqual("satisfied", review["status"])
+            self.assertEqual(
+                "response-recommendation-boundary",
+                review["satisfied_lanes"][0]["lane_id"],
+            )
+            observed = review["satisfied_lanes"][0]["satisfied_requirements"][0]["observed"]
+            self.assertEqual(section_payload["canonical_ids"], observed["section_ids"])
+            self.assertEqual(["freeze-report-basis"], artifact["recommended_next_skills"])
 
     def test_readiness_with_council_opinions_stops_recommending_next_actions_recompute(
         self,
@@ -522,7 +896,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             self.assertIn("submit-council-proposal", artifact["recommended_next_skills"])
             self.assertIn("submit-readiness-opinion", artifact["recommended_next_skills"])
 
-    def test_report_risk_review_comment_blocks_readiness_until_challenger_waives(
+    def test_report_risk_review_comment_blocks_readiness_until_explicit_disposition(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -614,7 +988,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                     ],
                 },
             )
-            waived_payload = run_script(
+            still_blocked_payload = run_script(
                 script_path("summarize-round-readiness"),
                 "--run-dir",
                 str(run_dir),
@@ -623,14 +997,84 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
-            waived_artifact = load_json(
+            still_blocked_artifact = load_json(
                 reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
             )
 
-            self.assertEqual("ready", waived_payload["summary"]["readiness_status"])
-            self.assertEqual(0, waived_artifact["blocking_review_comment_count"])
-            self.assertEqual(1, waived_artifact["open_review_comment_count"])
-            self.assertIn("freeze-report-basis", waived_artifact["recommended_next_skills"])
+            self.assertEqual(
+                "needs-more-data",
+                still_blocked_payload["summary"]["readiness_status"],
+            )
+            self.assertEqual(
+                1,
+                still_blocked_artifact["unresolved_challenger_constraint_count"],
+            )
+            self.assertEqual(1, still_blocked_artifact["blocking_review_comment_count"])
+            self.assertIn(
+                "open-followup-from-review-comment",
+                still_blocked_artifact["recommended_next_skills"],
+            )
+
+            run_kernel(
+                "post-review-comment",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "challenger",
+                "--author-role",
+                "challenger",
+                "--review-kind",
+                "constraint-disposition",
+                "--comment-text",
+                "Accepted only as a source limitation for bounded report use.",
+                "--target-kind",
+                "evidence-bundle",
+                "--target-id",
+                "evidence-bundle-001",
+                "--response-to-id",
+                comment_id,
+                "--constraint-disposition",
+                "accepted_as_limitation",
+            )
+
+            disposition_payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            disposition_artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+
+            self.assertEqual(
+                "ready",
+                disposition_payload["summary"]["readiness_status"],
+            )
+            self.assertEqual(0, disposition_artifact["blocking_review_comment_count"])
+            self.assertEqual(
+                0,
+                disposition_artifact["unresolved_challenger_constraint_count"],
+            )
+            self.assertEqual(2, disposition_artifact["open_review_comment_count"])
+            self.assertIn("freeze-report-basis", disposition_artifact["recommended_next_skills"])
+            self.assertEqual(1, len(disposition_artifact["basis_use_constraints"]))
+            self.assertEqual(
+                "accepted_as_limitation",
+                disposition_artifact["basis_use_constraints"][0]["disposition"],
+            )
+            self.assertFalse(
+                disposition_artifact["basis_use_constraints"][0][
+                    "lead_basis_allowed"
+                ]
+            )
 
     def test_open_followup_from_review_comment_creates_challenge_and_task(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -711,6 +1155,444 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             self.assertEqual(comment_id, challenge_query["objects"][0]["source_review_comment_id"])
             self.assertEqual(challenge_id, task_query["objects"][0]["source_ticket_id"])
             self.assertIn(comment_id, task_query["objects"][0]["lineage"])
+
+    def test_lead_basis_conflicting_with_constraint_withholds_freeze(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            evidence_ref = "evidence://lead-basis-test"
+            finding_payload = run_kernel(
+                "submit-finding-record",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "environmental-investigator",
+                "--agent-role",
+                "environmental-investigator",
+                "--finding-kind",
+                "environmental-context",
+                "--title",
+                "Context finding",
+                "--summary",
+                "Context finding cites DB-backed evidence.",
+                "--rationale",
+                "The finding is only a context basis for structural gate testing.",
+                "--confidence",
+                "0.82",
+                "--target-kind",
+                "round",
+                "--target-id",
+                ROUND_ID,
+                "--evidence-ref",
+                evidence_ref,
+            )
+            finding_id = finding_payload["canonical_ids"][0]
+            bundle_payload = run_kernel(
+                "submit-evidence-bundle",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "environmental-investigator",
+                "--agent-role",
+                "environmental-investigator",
+                "--bundle-kind",
+                "context-bundle",
+                "--title",
+                "Context bundle",
+                "--summary",
+                "Bundle links the finding to the cited evidence ref.",
+                "--rationale",
+                "The bundle is a DB-backed reporting input.",
+                "--confidence",
+                "0.83",
+                "--target-kind",
+                "finding",
+                "--target-id",
+                finding_id,
+                "--finding-id",
+                finding_id,
+                "--evidence-ref",
+                evidence_ref,
+            )
+            bundle_id = bundle_payload["canonical_ids"][0]
+            section_payload = run_kernel(
+                "submit-report-section-draft",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "report-editor",
+                "--agent-role",
+                "report-editor",
+                "--report-id",
+                ROUND_ID,
+                "--section-key",
+                "key-findings",
+                "--section-title",
+                "Key Findings",
+                "--section-text",
+                "The section explicitly marks this context bundle as lead basis.",
+                "--claim-id",
+                "claim-lead-basis-001",
+                "--claim-text",
+                "The bounded report uses this context bundle as lead basis.",
+                "--basis-use",
+                "lead-basis",
+                "--lead-basis",
+                "--basis-object-id",
+                bundle_id,
+                "--bundle-id",
+                bundle_id,
+                "--finding-id",
+                finding_id,
+                "--evidence-ref",
+                evidence_ref,
+            )
+            section_id = section_payload["canonical_ids"][0]
+            review_payload = run_kernel(
+                "post-review-comment",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "challenger",
+                "--author-role",
+                "challenger",
+                "--review-kind",
+                "evidence-bundle-review",
+                "--comment-text",
+                "This bundle may be used only as a limitation/context caveat.",
+                "--target-kind",
+                "evidence-bundle",
+                "--target-id",
+                bundle_id,
+                "--report-risk",
+                "source-limitations",
+                "--evidence-ref",
+                evidence_ref,
+            )
+            comment_id = review_payload["canonical_ids"][0]
+            run_kernel(
+                "post-review-comment",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "challenger",
+                "--author-role",
+                "challenger",
+                "--review-kind",
+                "constraint-disposition",
+                "--comment-text",
+                "Accepted as limitation, not as lead basis.",
+                "--target-kind",
+                "evidence-bundle",
+                "--target-id",
+                bundle_id,
+                "--response-to-id",
+                comment_id,
+                "--constraint-disposition",
+                "accepted_as_limitation",
+            )
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The explicit limitation is recorded.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": [section_id, bundle_id],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": [evidence_ref],
+                            "lineage": [section_id, bundle_id],
+                        }
+                    ],
+                },
+            )
+            readiness_payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            self.assertEqual("ready", readiness_payload["summary"]["readiness_status"])
+
+            transition_request_id = request_and_approve_transition(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="freeze-report-basis",
+                evidence_refs=[evidence_ref],
+                basis_object_ids=[section_id, bundle_id],
+            )
+            freeze_payload = run_script(
+                script_path("freeze-report-basis"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--transition-request-id",
+                transition_request_id,
+            )
+            freeze_artifact = load_json(
+                report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", freeze_payload["status"])
+            self.assertEqual("withheld", freeze_artifact["report_basis_status"])
+            self.assertEqual(1, freeze_artifact["explicit_lead_basis_count"])
+            self.assertEqual(
+                1,
+                freeze_artifact["lead_basis_constraint_violation_count"],
+            )
+            self.assertEqual(
+                "lead-basis-disallowed-by-constraint",
+                freeze_artifact["lead_basis_constraint_violations"][0][
+                    "violation_kind"
+                ],
+            )
+            self.assertGreaterEqual(
+                freeze_artifact["report_claim_structural_violation_count"],
+                1,
+            )
+
+    def test_minimal_explicit_report_claim_freezes_without_template_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            evidence_ref = "evidence://report-claim-structure"
+            section_payload = run_kernel(
+                "submit-report-section-draft",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "report-editor",
+                "--agent-role",
+                "report-editor",
+                "--report-id",
+                ROUND_ID,
+                "--section-key",
+                "key-findings",
+                "--section-title",
+                "Key Findings",
+                "--section-text",
+                "This section declares a report claim with text and evidence.",
+                "--claim-id",
+                "claim-minimal-001",
+                "--claim-text",
+                "This is an explicit report claim.",
+                "--evidence-ref",
+                evidence_ref,
+            )
+            section_id = section_payload["canonical_ids"][0]
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "Readiness is ready and the explicit claim has the minimum governance fields.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": [section_id],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": [evidence_ref],
+                            "lineage": [section_id],
+                        }
+                    ],
+                },
+            )
+            readiness_payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            self.assertEqual("ready", readiness_payload["summary"]["readiness_status"])
+            transition_request_id = request_and_approve_transition(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="freeze-report-basis",
+                evidence_refs=[evidence_ref],
+                basis_object_ids=[section_id],
+            )
+            freeze_payload = run_script(
+                script_path("freeze-report-basis"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--transition-request-id",
+                transition_request_id,
+            )
+            freeze_artifact = load_json(
+                report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", freeze_payload["status"])
+            self.assertEqual("frozen", freeze_artifact["report_basis_status"])
+            self.assertEqual(1, freeze_artifact["explicit_report_claim_count"])
+            self.assertEqual(
+                0,
+                freeze_artifact["report_claim_structural_violation_count"],
+            )
+            claim_object = freeze_artifact["explicit_report_claim_objects"][0]
+            self.assertEqual(
+                {
+                    "claim_id",
+                    "source_object_kind",
+                    "source_object_id",
+                    "section_id",
+                    "section_key",
+                    "claim_text",
+                    "claim_constraint_ids",
+                    "basis_use",
+                    "basis_object_ids",
+                    "bundle_ids",
+                    "finding_ids",
+                    "evidence_refs",
+                    "reference_ids",
+                    "is_lead_basis",
+                    "structural_status",
+                    "missing_structural_fields",
+                },
+                set(claim_object.keys()),
+            )
+
+    def test_explicit_report_claim_without_text_withholds_freeze(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            evidence_ref = "evidence://report-claim-without-text"
+            section_payload = run_kernel(
+                "submit-report-section-draft",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "report-editor",
+                "--agent-role",
+                "report-editor",
+                "--report-id",
+                ROUND_ID,
+                "--section-key",
+                "key-findings",
+                "--section-title",
+                "Key Findings",
+                "--section-text",
+                "This section declares a report claim id but omits the explicit claim text.",
+                "--claim-id",
+                "claim-without-text-001",
+                "--evidence-ref",
+                evidence_ref,
+            )
+            section_id = section_payload["canonical_ids"][0]
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "Readiness is ready, but explicit claim text is still required for traceability.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": [section_id],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": [evidence_ref],
+                            "lineage": [section_id],
+                        }
+                    ],
+                },
+            )
+            readiness_payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            self.assertEqual("ready", readiness_payload["summary"]["readiness_status"])
+            transition_request_id = request_and_approve_transition(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="freeze-report-basis",
+                evidence_refs=[evidence_ref],
+                basis_object_ids=[section_id],
+            )
+            freeze_payload = run_script(
+                script_path("freeze-report-basis"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--transition-request-id",
+                transition_request_id,
+            )
+            freeze_artifact = load_json(
+                report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", freeze_payload["status"])
+            self.assertEqual("withheld", freeze_artifact["report_basis_status"])
+            self.assertEqual(1, freeze_artifact["explicit_report_claim_count"])
+            self.assertEqual(
+                1,
+                freeze_artifact["report_claim_structural_violation_count"],
+            )
+            missing_fields = set(
+                freeze_artifact["report_claim_structural_violations"][0][
+                    "missing_structural_fields"
+                ]
+            )
+            self.assertEqual({"claim_text"}, missing_fields)
 
     def test_probe_opening_can_execute_directly_from_council_proposal(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

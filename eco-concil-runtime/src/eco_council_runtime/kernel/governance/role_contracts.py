@@ -166,6 +166,8 @@ ROLE_CONTRACTS = {
         "aliases": ["challenger"],
         "description": "Tests competing explanations, opens/closes challenges, and pushes contradiction or falsification work.",
         "capabilities": [
+            CAPABILITY_FETCH,
+            CAPABILITY_NORMALIZE,
             CAPABILITY_QUERY,
             CAPABILITY_ANALYSIS,
             CAPABILITY_DERIVED_EXPORT,
@@ -198,9 +200,7 @@ ROLE_CONTRACTS = {
         "description": "Owns runtime governance, audit, replay, export rebuild, admission policy, and operational write surfaces.",
         "capabilities": [
             CAPABILITY_QUERY,
-            CAPABILITY_NORMALIZE,
             CAPABILITY_DERIVED_EXPORT,
-            CAPABILITY_ROUND_BOOTSTRAP,
             CAPABILITY_ARCHIVE_WRITE,
             CAPABILITY_RUNTIME_ADMIN,
         ],

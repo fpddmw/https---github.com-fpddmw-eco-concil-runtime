@@ -1,20 +1,23 @@
 ---
 name: normalize-fetch-execution
-description: Execute one prepared fetch-plan through explicit queue-runner, normalizer-runner, and execution-receipt components. Use when investigators or operators need raw artifacts copied/fetched, normalized into DB signal rows, and recorded without selecting downstream analysis conclusions.
+description: Execute the current actor's slice of one prepared fetch-plan through explicit queue-runner, normalizer-runner, and execution-receipt components. Use when an investigator needs their assigned raw artifacts copied/fetched, normalized into DB signal rows, and recorded without selecting downstream analysis conclusions.
 ---
 
 # Eco Import Fetch Execution
 
 ## Core Goal
 - Read the prepared fetch plan for the current round.
-- Run the `queue_runner` component: copy local imports or execute approved detached-fetch steps into the current run raw store.
-- Run the `normalizer_runner` component: invoke mapped normalizer skills or keep a raw-only receipt when no normalizer exists.
+- Resolve the executing actor role from `--actor-role` or the runtime-injected `OPENCLAW_ACTOR_ROLE`.
+- Run only fetch-plan steps owned by that actor's role, for example `public-discourse-investigator` for `sociologist` steps and `environmental-investigator` for `environmentalist` steps.
+- Run the `queue_runner` component for owned steps: copy local imports or execute approved detached-fetch steps into the current run raw store.
+- Run the `normalizer_runner` component for owned steps: invoke mapped normalizer skills or keep a raw-only receipt when no normalizer exists.
 - Run the `execution_receipt` component: write one auditable execution snapshot with step status, raw artifact refs, normalizer receipts, and warnings.
 - Do not choose claim extraction, observation extraction, coverage scoring, readiness, report basis, or any other analysis chain.
 
 ## Triggering Conditions
 - `prepare-round` already wrote `fetch_plan_<round_id>.json`.
 - The current ingress path may contain both local artifact imports and detached fetch requests.
+- Each investigator runs their own role slice; runtime-operator approves/governs but does not execute data fetch or normalization.
 - Downstream extraction should start from normalized signal-plane data rather than direct seed helpers.
 
 ## Read/Write Contract
@@ -28,6 +31,7 @@ description: Execute one prepared fetch-plan through explicit queue-runner, norm
 - `run_dir`
 - `run_id`
 - `round_id`
+- `actor_role` through `--actor-role` or runtime `OPENCLAW_ACTOR_ROLE`
 
 ## Output Contract
 - `status`

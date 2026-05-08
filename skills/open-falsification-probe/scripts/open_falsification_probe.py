@@ -105,63 +105,12 @@ def write_json_file(path: Path, payload: dict[str, Any]) -> None:
 
 def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
     action_kind = maybe_text(action.get("action_kind"))
-    assigned_role = maybe_text(action.get("assigned_role"))
-    suggestions: list[str] = []
+    suggestions: list[str] = ["submit-council-proposal"]
     if action_kind in {"resolve-challenge", "resolve-contradiction"}:
         suggestions.extend(
             [
-                "submit-council-proposal",
                 "submit-readiness-opinion",
                 "close-challenge-ticket",
-            ]
-        )
-    if action_kind == "clarify-verification-route":
-        suggestions.extend(
-            [
-                "suggest-evidence-lanes",
-                "submit-council-proposal",
-            ]
-        )
-    if action_kind == "advance-empirical-verification":
-        suggestions.extend(
-            [
-                "review-fact-check-evidence-scope",
-                "review-evidence-sufficiency",
-                "submit-council-proposal",
-            ]
-        )
-    if action_kind == "review-formal-record":
-        suggestions.extend(
-            [
-                "compare-formal-public-footprints",
-                "submit-council-proposal",
-            ]
-        )
-    if action_kind in {
-        "analyze-public-discourse",
-        "analyze-stakeholder-deliberation",
-        "review-formal-public-linkage",
-    }:
-        suggestions.extend(
-            [
-                "compare-formal-public-footprints",
-                "identify-representation-audit-cues",
-                "submit-council-proposal",
-            ]
-        )
-    if action_kind == "address-representation-gap":
-        suggestions.extend(
-            [
-                "identify-representation-audit-cues",
-                "compare-formal-public-footprints",
-                "submit-council-proposal",
-            ]
-        )
-    if action_kind == "trace-cross-platform-diffusion":
-        suggestions.extend(
-            [
-                "detect-temporal-cooccurrence-cues",
-                "submit-council-proposal",
             ]
         )
     if action_kind in {
@@ -170,33 +119,17 @@ def requested_skills_for_action(action: dict[str, Any]) -> list[str]:
     } or maybe_text(action.get("relation_id")):
         suggestions.extend(
             [
-                "query-spatiotemporal-relations",
-                "review-spatiotemporal-relation-alternatives",
                 "post-review-comment",
                 "open-challenge-ticket",
-            ]
-        )
-    if action_kind in {"resolve-contradiction", "expand-coverage"}:
-        suggestions.extend(["query-environment-signals", "query-public-signals"])
-    if action_kind == "classify-verifiability":
-        suggestions.extend(
-            [
-                "submit-council-proposal",
-                "query-public-signals",
             ]
         )
     if action_kind == "stabilize-hypothesis":
         suggestions.extend(
             [
                 "update-hypothesis-status",
-                "submit-council-proposal",
                 "submit-readiness-opinion",
             ]
         )
-    if assigned_role == "environmentalist":
-        suggestions.append("query-environment-signals")
-    if assigned_role == "sociologist":
-        suggestions.append("query-public-signals")
     return unique_texts(suggestions)
 
 

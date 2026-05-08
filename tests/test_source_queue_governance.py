@@ -212,7 +212,7 @@ class SourceQueueGovernanceTests(unittest.TestCase):
             },
         )
 
-    def test_smoke_episode_verification_scope_requires_origin_and_transport_lanes(self) -> None:
+    def test_smoke_episode_verification_scope_records_origin_and_transport_lanes(self) -> None:
         _, contract_module = load_modules()
         mission = {
             "run_id": "run-governance-005",
@@ -228,11 +228,12 @@ class SourceQueueGovernanceTests(unittest.TestCase):
         scope = contract_module.derive_verification_scope(mission)
         lane_ids = {item["lane_id"] for item in scope["required_evidence_lanes"]}
 
-        self.assertEqual("candidate-source-regions-required", scope["candidate_source_region_policy"])
-        self.assertEqual("required-before-source-or-transport-claim", scope["transport_verification_policy"])
+        self.assertEqual("mission-derived-candidate-source-review", scope["candidate_source_region_policy"])
+        self.assertEqual("mission-derived-relation-review", scope["transport_verification_policy"])
         self.assertIn("fire-origin", lane_ids)
         self.assertIn("spatiotemporal-relation-review", lane_ids)
-        self.assertIn("fetch-nasa-firms-fire", scope["required_source_skills"])
+        self.assertEqual([], scope["required_source_skills"])
+        self.assertIn("fetch-nasa-firms-fire", scope["candidate_source_skills"])
 
     def test_lane_required_sources_raise_effective_step_budget(self) -> None:
         selection_module, _ = load_modules()
@@ -298,7 +299,7 @@ class SourceQueueGovernanceTests(unittest.TestCase):
             )
 
         self.assertEqual(4, len(plan["steps"]))
-        self.assertEqual("candidate-source-regions-required", plan["verification_scope"]["candidate_source_region_policy"])
+        self.assertEqual("mission-derived-candidate-source-review", plan["verification_scope"]["candidate_source_region_policy"])
         self.assertEqual(1, plan["source_step_budget"]["configured_max_source_steps_per_round"])
         self.assertEqual(4, plan["source_step_budget"]["effective_max_source_steps_per_round"])
         self.assertTrue(any(item["code"] == "source-step-budget-raised-for-required-lanes" for item in warnings))

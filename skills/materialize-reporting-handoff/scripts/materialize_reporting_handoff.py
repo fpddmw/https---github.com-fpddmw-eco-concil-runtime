@@ -270,16 +270,24 @@ def build_evidence_index(
 def build_key_findings_from_council_basis(
     council_basis: dict[str, list[dict[str, Any]]],
     max_findings: int,
+    *,
+    selected_evidence_refs: list[str],
+    selected_basis_object_ids: list[str],
 ) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
-    for index, row in enumerate(council_basis.get("finding-record", [])[: max(0, max_findings)], start=1):
+    selected_ref_lookup = set(unique_texts(selected_evidence_refs))
+    selected_basis_lookup = set(unique_texts(selected_basis_object_ids))
+    for row in council_basis.get("finding-record", []):
         refs = evidence_refs_for(row)
         if not refs:
             continue
+        finding_id = object_id_for("finding-record", row)
+        if finding_id not in selected_basis_lookup and not selected_ref_lookup.intersection(refs):
+            continue
         findings.append(
             {
-                "finding_id": object_id_for("finding-record", row),
-                "title": maybe_text(row.get("title")) or f"Finding {index}",
+                "finding_id": finding_id,
+                "title": maybe_text(row.get("title")) or f"Finding {len(findings) + 1}",
                 "summary": object_summary(row),
                 "finding_kind": maybe_text(row.get("finding_kind")) or "finding",
                 "agent_role": maybe_text(row.get("agent_role")),
@@ -287,6 +295,8 @@ def build_key_findings_from_council_basis(
                 "basis_object_ids": unique_texts(list_items(row.get("basis_object_ids"))),
             }
         )
+        if len(findings) >= max(0, max_findings):
+            break
     return findings
 
 
@@ -309,6 +319,59 @@ def build_open_risks(
                 "risk_type": maybe_text(risk.get("action_kind")) or "investigation",
                 "priority": maybe_text(risk.get("priority")) or "medium",
                 "summary": maybe_text(risk.get("reason")) or "Promotion basis still carries unresolved risk.",
+            }
+        )
+    unresolved_constraints: list[dict[str, Any]] = []
+    for source in (report_basis_freeze, readiness):
+        for constraint in list_items(source.get("unresolved_challenger_constraints")):
+            if isinstance(constraint, dict):
+                unresolved_constraints.append(constraint)
+    for index, constraint in enumerate(unresolved_constraints, start=1):
+        results.append(
+            {
+                "risk_id": maybe_text(constraint.get("constraint_id"))
+                or f"challenger-constraint-{index:03d}",
+                "risk_type": "challenger-constraint",
+                "priority": "high",
+                "summary": maybe_text(constraint.get("comment_text"))
+                or "A challenger constraint requires explicit disposition before reporting handoff.",
+            }
+        )
+    for index, violation in enumerate(
+        list_items(report_basis_freeze.get("lead_basis_constraint_violations")),
+        start=1,
+    ):
+        if not isinstance(violation, dict):
+            continue
+        results.append(
+            {
+                "risk_id": maybe_text(violation.get("violation_id"))
+                or f"lead-basis-constraint-{index:03d}",
+                "risk_type": "lead-basis-constraint",
+                "priority": "high",
+                "summary": (
+                    "An explicit lead-basis declaration conflicts with a structural "
+                    "claim or challenger constraint."
+                ),
+            }
+        )
+    for index, violation in enumerate(
+        list_items(report_basis_freeze.get("report_claim_structural_violations")),
+        start=1,
+    ):
+        if not isinstance(violation, dict):
+            continue
+        results.append(
+            {
+                "risk_id": maybe_text(violation.get("violation_id"))
+                or f"report-claim-structural-{index:03d}",
+                "risk_type": maybe_text(violation.get("violation_kind"))
+                or "report-claim-structural",
+                "priority": "high",
+                "summary": (
+                    "An explicit report-claim declaration is missing structural "
+                    "fields or a challenger disposition link."
+                ),
             }
         )
     if supervisor_status and supervisor_status != "reporting-ready":
@@ -837,14 +900,70 @@ def materialize_reporting_handoff_skill(
         if isinstance(gate_state.get("reporting_blockers"), list)
         else []
     )
+    unresolved_challenger_constraints = [
+        constraint
+        for source in (report_basis_freeze, readiness)
+        for constraint in list_items(source.get("unresolved_challenger_constraints"))
+        if isinstance(constraint, dict)
+    ]
+    basis_use_constraints = [
+        constraint
+        for source in (report_basis_freeze, readiness)
+        for constraint in list_items(source.get("basis_use_constraints"))
+        if isinstance(constraint, dict)
+    ]
+    lead_basis_constraint_violations = [
+        violation
+        for violation in list_items(
+            report_basis_freeze.get("lead_basis_constraint_violations")
+        )
+        if isinstance(violation, dict)
+    ]
+    report_claim_structural_violations = [
+        violation
+        for violation in list_items(
+            report_basis_freeze.get("report_claim_structural_violations")
+        )
+        if isinstance(violation, dict)
+    ]
+    if (
+        unresolved_challenger_constraints
+        or lead_basis_constraint_violations
+        or report_claim_structural_violations
+    ):
+        reporting_ready = False
+        handoff_status = "investigation-open"
+        blocker_updates = []
+        if unresolved_challenger_constraints:
+            blocker_updates.append("unresolved-challenger-constraints")
+        if lead_basis_constraint_violations:
+            blocker_updates.append("lead-basis-constraint-violations")
+        if report_claim_structural_violations:
+            blocker_updates.append("report-claim-structural-violations")
+        reporting_blockers = unique_texts(reporting_blockers + blocker_updates)
     reporting_blocker_hints = reporting_blocker_summaries(reporting_blockers)
 
+    selected_basis_object_ids = unique_texts(
+        report_basis_freeze.get("selected_basis_object_ids", [])
+        if isinstance(report_basis_freeze.get("selected_basis_object_ids"), list)
+        else []
+    )
+    selected_evidence_refs = unique_texts(
+        report_basis_freeze.get("selected_evidence_refs", [])
+        if isinstance(report_basis_freeze.get("selected_evidence_refs"), list)
+        else []
+    )
     council_basis = load_reporting_basis_objects(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
     )
-    key_findings = build_key_findings_from_council_basis(council_basis, max_findings)
+    key_findings = build_key_findings_from_council_basis(
+        council_basis,
+        max_findings,
+        selected_evidence_refs=selected_evidence_refs,
+        selected_basis_object_ids=selected_basis_object_ids,
+    )
     ignored_legacy_basis_count = legacy_reporting_basis_count(report_basis_freeze)
     if ignored_legacy_basis_count:
         warnings.append(
@@ -861,11 +980,6 @@ def materialize_reporting_handoff_skill(
         supervisor_state,
         open_risks=open_risks,
         reporting_blocker_hints=reporting_blocker_hints,
-    )
-    selected_basis_object_ids = unique_texts(
-        report_basis_freeze.get("selected_basis_object_ids", [])
-        if isinstance(report_basis_freeze.get("selected_basis_object_ids"), list)
-        else []
     )
     supporting_proposal_ids = unique_texts(
         report_basis_freeze.get("supporting_proposal_ids", [])
@@ -891,11 +1005,6 @@ def materialize_reporting_handoff_skill(
         report_basis_freeze.get("council_input_counts", {})
         if isinstance(report_basis_freeze.get("council_input_counts"), dict)
         else {}
-    )
-    selected_evidence_refs = unique_texts(
-        report_basis_freeze.get("selected_evidence_refs", [])
-        if isinstance(report_basis_freeze.get("selected_evidence_refs"), list)
-        else []
     )
     evidence_packet, decision_packet, report_packet = build_packets(
         run_id=run_id,
@@ -967,6 +1076,44 @@ def materialize_reporting_handoff_skill(
         "uncertainty_register": list_items(report_packet.get("uncertainty_register")),
         "residual_disputes": list_items(report_packet.get("residual_disputes")),
         "policy_recommendations": list_items(report_packet.get("policy_recommendations")),
+        "challenger_constraint_count": len(
+            list_items(report_basis_freeze.get("challenger_constraints"))
+        )
+        or len(list_items(readiness.get("challenger_constraints"))),
+        "unresolved_challenger_constraint_count": len(
+            unresolved_challenger_constraints
+        ),
+        "challenger_constraints": (
+            list_items(report_basis_freeze.get("challenger_constraints"))
+            or list_items(readiness.get("challenger_constraints"))
+        ),
+        "unresolved_challenger_constraints": unresolved_challenger_constraints,
+        "basis_use_constraints": basis_use_constraints,
+        "report_claim_structure": (
+            report_basis_freeze.get("report_claim_structure", {})
+            if isinstance(report_basis_freeze.get("report_claim_structure"), dict)
+            else {}
+        ),
+        "explicit_report_claim_count": int(
+            report_basis_freeze.get("explicit_report_claim_count") or 0
+        ),
+        "explicit_report_claim_objects": list_items(
+            report_basis_freeze.get("explicit_report_claim_objects")
+        ),
+        "report_claim_structural_violation_count": len(
+            report_claim_structural_violations
+        ),
+        "report_claim_structural_violations": report_claim_structural_violations,
+        "explicit_lead_basis_count": int(
+            report_basis_freeze.get("explicit_lead_basis_count") or 0
+        ),
+        "explicit_lead_basis_objects": list_items(
+            report_basis_freeze.get("explicit_lead_basis_objects")
+        ),
+        "lead_basis_constraint_violation_count": len(
+            lead_basis_constraint_violations
+        ),
+        "lead_basis_constraint_violations": lead_basis_constraint_violations,
         "board_brief_excerpt": board_excerpt,
         "key_findings": key_findings,
         "open_risks": open_risks,
@@ -999,6 +1146,15 @@ def materialize_reporting_handoff_skill(
             "decision_packet_id": maybe_text(decision_packet.get("packet_id")),
             "report_packet_id": maybe_text(report_packet.get("packet_id")),
             "evidence_index_count": len(list_items(evidence_packet.get("evidence_index"))),
+            "unresolved_challenger_constraint_count": len(
+                unresolved_challenger_constraints
+            ),
+            "lead_basis_constraint_violation_count": len(
+                lead_basis_constraint_violations
+            ),
+            "report_claim_structural_violation_count": len(
+                report_claim_structural_violations
+            ),
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
             "report_basis_source": maybe_text(contract_fields.get("report_basis_source")),

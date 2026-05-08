@@ -69,6 +69,8 @@ def append_detached_fetch_event(
     *,
     run_id: str,
     round_id: str,
+    actor_role: str,
+    resolved_actor_role: str,
     step_id: str,
     source_skill: str,
     started_at_utc: str,
@@ -94,6 +96,8 @@ def append_detached_fetch_event(
         "run_id": run_id,
         "round_id": round_id,
         "skill_name": source_skill or step_id,
+        "actor_role": actor_role,
+        "resolved_actor_role": resolved_actor_role,
         "step_id": step_id,
         "source_skill": source_skill,
         "started_at_utc": started_at_utc,
@@ -259,6 +263,8 @@ def execute_detached_fetch_step(
     run_dir: Path,
     run_id: str,
     round_id: str,
+    actor_role: str = "",
+    resolved_actor_role: str = "",
 ) -> tuple[Path, dict[str, Any]]:
     resolved = validate_detached_fetch_step(step, run_dir=run_dir, run_id=run_id, round_id=round_id)
     step_id = resolved["step_id"]
@@ -271,6 +277,8 @@ def execute_detached_fetch_step(
     command_snapshot = {
         "argv": resolved["argv"],
         "cwd": str(resolved["cwd"]),
+        "actor_role": maybe_text(actor_role),
+        "resolved_actor_role": maybe_text(resolved_actor_role) or maybe_text(actor_role),
     }
     runtime_admission = evaluate_execution_admission(
         run_dir,
@@ -322,6 +330,8 @@ def execute_detached_fetch_step(
             run_dir,
             run_id=run_id,
             round_id=round_id,
+            actor_role=maybe_text(actor_role),
+            resolved_actor_role=maybe_text(resolved_actor_role) or maybe_text(actor_role),
             step_id=step_id,
             source_skill=source_skill,
             started_at_utc=started_at_utc,
@@ -472,6 +482,8 @@ def execute_detached_fetch_step(
             run_dir,
             run_id=run_id,
             round_id=round_id,
+            actor_role=maybe_text(actor_role),
+            resolved_actor_role=maybe_text(resolved_actor_role) or maybe_text(actor_role),
             step_id=step_id,
             source_skill=source_skill,
             started_at_utc=started_at_utc,
@@ -491,6 +503,8 @@ def execute_detached_fetch_step(
         operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
         return artifact_path, {
             "command_snapshot": command_snapshot,
+            "actor_role": maybe_text(actor_role),
+            "resolved_actor_role": maybe_text(resolved_actor_role) or maybe_text(actor_role),
             "artifact_capture": resolved["artifact_capture"],
             "execution_policy": policy,
             "declared_side_effects": resolved["declared_side_effects"],
@@ -535,6 +549,8 @@ def execute_detached_fetch_step(
         run_dir,
         run_id=run_id,
         round_id=round_id,
+        actor_role=maybe_text(actor_role),
+        resolved_actor_role=maybe_text(resolved_actor_role) or maybe_text(actor_role),
         step_id=step_id,
         source_skill=source_skill,
         started_at_utc=started_at_utc,

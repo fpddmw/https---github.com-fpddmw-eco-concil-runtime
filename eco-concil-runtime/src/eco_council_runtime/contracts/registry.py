@@ -10,6 +10,17 @@ from .runtime import RUNTIME_CONTRACTS
 from .signal import SIGNAL_CONTRACTS
 
 
+def optional_field_is_present(payload: dict[str, Any], field_name: str) -> bool:
+    if field_name not in payload:
+        return False
+    value = payload.get(field_name)
+    if value is None:
+        return False
+    if isinstance(value, str) and not maybe_text(value):
+        return False
+    return True
+
+
 CANONICAL_CONTRACTS: dict[str, CanonicalContract] = {
     **SIGNAL_CONTRACTS,
     **ANALYSIS_CONTRACTS,
@@ -73,6 +84,33 @@ def validate_canonical_payload(
         if not isinstance(normalized.get(field_name), (int, float))
         or isinstance(normalized.get(field_name), bool)
     ]
+    invalid_optional_list_fields = [
+        field_name
+        for field_name in contract.optional_list_fields
+        if optional_field_is_present(normalized, field_name)
+        and not isinstance(normalized.get(field_name), list)
+    ]
+    invalid_optional_dict_fields = [
+        field_name
+        for field_name in contract.optional_dict_fields
+        if optional_field_is_present(normalized, field_name)
+        and not isinstance(normalized.get(field_name), dict)
+    ]
+    invalid_optional_number_fields = [
+        field_name
+        for field_name in contract.optional_number_fields
+        if optional_field_is_present(normalized, field_name)
+        and (
+            not isinstance(normalized.get(field_name), (int, float))
+            or isinstance(normalized.get(field_name), bool)
+        )
+    ]
+    invalid_optional_bool_fields = [
+        field_name
+        for field_name in contract.optional_bool_fields
+        if optional_field_is_present(normalized, field_name)
+        and not isinstance(normalized.get(field_name), bool)
+    ]
     empty_list_fields = [
         field_name
         for field_name in contract.required_non_empty_list_fields
@@ -88,6 +126,10 @@ def validate_canonical_payload(
         or invalid_list_fields
         or invalid_dict_fields
         or invalid_number_fields
+        or invalid_optional_list_fields
+        or invalid_optional_dict_fields
+        or invalid_optional_number_fields
+        or invalid_optional_bool_fields
         or empty_list_fields
         or empty_dict_fields
     ):
@@ -107,6 +149,26 @@ def validate_canonical_payload(
         if invalid_number_fields:
             problems.append(
                 "number fields required: " + ", ".join(sorted(invalid_number_fields))
+            )
+        if invalid_optional_list_fields:
+            problems.append(
+                "optional list fields must be lists when present: "
+                + ", ".join(sorted(invalid_optional_list_fields))
+            )
+        if invalid_optional_dict_fields:
+            problems.append(
+                "optional dict fields must be dicts when present: "
+                + ", ".join(sorted(invalid_optional_dict_fields))
+            )
+        if invalid_optional_number_fields:
+            problems.append(
+                "optional number fields must be numbers when present: "
+                + ", ".join(sorted(invalid_optional_number_fields))
+            )
+        if invalid_optional_bool_fields:
+            problems.append(
+                "optional bool fields must be bools when present: "
+                + ", ".join(sorted(invalid_optional_bool_fields))
             )
         if empty_list_fields:
             problems.append(

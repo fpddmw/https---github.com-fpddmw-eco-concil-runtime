@@ -752,6 +752,7 @@ def main(
                 "alternative_explanation": maybe_text(args.alternative_explanation),
                 "required_followup_evidence": args.required_followup_evidence,
                 "report_risk": maybe_text(args.report_risk),
+                "constraint_disposition": maybe_text(args.constraint_disposition),
                 "provenance": parse_json_object_arg(args.provenance_json, field_name="provenance-json"),
             }
             try:
@@ -896,6 +897,11 @@ def main(
                 "basis_object_ids": args.basis_object_id,
                 "bundle_ids": args.bundle_id,
                 "finding_ids": args.finding_id,
+                "claim_id": maybe_text(args.claim_id),
+                "claim_text": maybe_text(args.claim_text),
+                "claim_constraint_ids": args.claim_constraint_id,
+                "basis_use": maybe_text(args.basis_use),
+                "lead_basis": bool(args.lead_basis),
                 "evidence_refs": args.evidence_ref,
                 "provenance": parse_json_object_arg(args.provenance_json, field_name="provenance-json"),
             }
@@ -916,11 +922,12 @@ def main(
                 }
                 print(pretty_json(failure, args.pretty))
                 return 1
-            section_id = maybe_text(record.get("section_id"))
+            section = record.get("section", {}) if isinstance(record, dict) else {}
+            section_id = maybe_text(section.get("section_id"))
             artifact_file = write_command_artifact(
                 run_dir,
                 f"reporting/report_section_draft_{args.round_id}_{section_id}.json",
-                {"schema_version": "report-section-draft-append-v1", "section": record},
+                record,
             )
             append_ledger_event(
                 run_dir,
@@ -933,7 +940,7 @@ def main(
                     "actor_role": args.actor_role,
                     "status": "completed",
                     "section_id": section_id,
-                    "report_id": maybe_text(record.get("report_id")),
+                    "report_id": maybe_text(section.get("report_id")),
                 },
             )
             payload_out = {

@@ -400,6 +400,30 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("failed", payload["status"])
             self.assertIn("missing-actor-role", {item["code"] for item in payload["access_policy"]["issues"]})
 
+    def test_challenger_can_review_but_not_transition(self) -> None:
+        ensure_runtime_src_on_path()
+
+        from eco_council_runtime.kernel.governance.access_policy import (
+            evaluate_kernel_command_access,
+        )
+
+        review_access = evaluate_kernel_command_access(
+            "post-review-comment",
+            actor_role="challenger",
+        )
+        transition_access = evaluate_kernel_command_access(
+            "request-phase-transition",
+            actor_role="challenger",
+        )
+
+        self.assertFalse(review_access["block_execution"])
+        self.assertEqual("challenger", review_access["resolved_actor_role"])
+        self.assertTrue(transition_access["block_execution"])
+        self.assertIn(
+            "actor-role-not-allowed",
+            {item["code"] for item in transition_access["issues"]},
+        )
+
     def test_transition_request_store_rejects_non_moderator_role(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -835,6 +859,63 @@ class RuntimeKernelTests(unittest.TestCase):
                     mismatches.append((skill_name, role, missing))
 
         self.assertEqual([], mismatches)
+
+    def test_runtime_operator_cannot_run_fetch_normalize_bridge(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.governance.role_contracts import role_capabilities
+            from eco_council_runtime.kernel.governance.runtime_governance import preflight_skill_execution
+            from eco_council_runtime.kernel.governance.skill_registry import resolve_skill_policy
+
+            policy = resolve_skill_policy("normalize-fetch-execution")
+            payload = preflight_skill_execution(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                skill_name="normalize-fetch-execution",
+                actor_role="runtime-operator",
+                skill_args=[],
+                contract_mode="strict",
+            )
+
+            self.assertNotIn("runtime-operator", policy["allowed_roles"])
+            self.assertNotIn("normalize", role_capabilities("runtime-operator"))
+            self.assertTrue(payload["block_execution"])
+            self.assertIn("actor-role-not-allowed", {item["code"] for item in payload["issues"]})
+
+    def test_runtime_operator_cannot_run_reporting_content_skills(self) -> None:
+        ensure_runtime_src_on_path()
+
+        from eco_council_runtime.kernel.governance.skill_registry import resolve_skill_policy
+
+        content_skills = [
+            "materialize-reporting-handoff",
+            "materialize-spatiotemporal-relation-evidence-packet",
+            "draft-council-decision",
+            "draft-expert-report",
+            "publish-expert-report",
+            "publish-council-decision",
+            "materialize-final-publication",
+        ]
+
+        for skill_name in content_skills:
+            with self.subTest(skill_name=skill_name):
+                policy = resolve_skill_policy(skill_name)
+                self.assertNotIn("runtime-operator", policy["allowed_roles"])
+
+    def test_runtime_operator_cannot_run_mission_or_source_planning_skills(self) -> None:
+        ensure_runtime_src_on_path()
+
+        from eco_council_runtime.kernel.governance.role_contracts import role_capabilities
+        from eco_council_runtime.kernel.governance.skill_registry import resolve_skill_policy
+
+        self.assertNotIn("round-bootstrap", role_capabilities("runtime-operator"))
+        for skill_name in ["scaffold-mission-run", "prepare-round"]:
+            with self.subTest(skill_name=skill_name):
+                policy = resolve_skill_policy(skill_name)
+                self.assertNotIn("runtime-operator", policy["allowed_roles"])
 
     def test_prepare_round_contract_role_placeholder_is_fanout_safe(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1600,6 +1681,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
 
             self.assertEqual(6, run_skill_mock.call_count)
             for call in run_skill_mock.call_args_list:
+                self.assertEqual("moderator", call.kwargs["actor_role"])
                 self.assertEqual(12.5, call.kwargs["timeout_seconds"])
                 self.assertEqual(2, call.kwargs["retry_budget"])
                 self.assertEqual(150, call.kwargs["retry_backoff_ms"])

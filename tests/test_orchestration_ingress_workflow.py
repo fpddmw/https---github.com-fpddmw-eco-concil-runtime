@@ -229,8 +229,8 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             scope = mission_artifact["verification_scope"]
             lane_ids = {item["lane_id"] for item in scope["required_evidence_lanes"]}
 
-            self.assertEqual("candidate-source-regions-required", scope["candidate_source_region_policy"])
-            self.assertEqual("required-before-source-or-transport-claim", scope["transport_verification_policy"])
+            self.assertEqual("mission-derived-candidate-source-review", scope["candidate_source_region_policy"])
+            self.assertEqual("mission-derived-relation-review", scope["transport_verification_policy"])
             self.assertIn("fire-origin", lane_ids)
             self.assertIn("spatiotemporal-relation-review", lane_ids)
             self.assertIn("fetch-nasa-firms-fire", scaffold_artifact["intent_sources_by_role"]["environmentalist"])
@@ -384,6 +384,17 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
             )
+            run_script(
+                script_path("normalize-fetch-execution"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "public-discourse-investigator",
+            )
             import_payload = run_script(
                 script_path("normalize-fetch-execution"),
                 "--run-dir",
@@ -392,6 +403,8 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--actor-role",
+                "environmental-investigator",
             )
 
             discourse_payload = run_script(script_path("discover-discourse-issues"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)

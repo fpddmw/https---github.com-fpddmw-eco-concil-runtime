@@ -120,13 +120,13 @@ STATE_TRANSITION_PROFILES = {
     "scaffold-mission-run": {
         "stage": "ingress",
         "queue_role": "run-bootstrap",
-        "default_invocation": "moderator-or-operator-triggered",
+        "default_invocation": "moderator-triggered",
         "notes": "Bootstrap a run and first round without selecting a domain analysis chain.",
     },
     "prepare-round": {
         "stage": "source-selection",
         "queue_role": "capability-check",
-        "default_invocation": "moderator-or-operator-triggered",
+        "default_invocation": "moderator-triggered",
         "notes": "Prepare source capabilities and governance checks without deciding research method.",
     },
 }
@@ -230,10 +230,10 @@ def source_queue_profile(skill_name: str) -> dict[str, object]:
             queue_status="bridge",
             stage="fetch-normalize-bridge",
             queue_role="execution-receipt",
-            default_invocation="investigator-or-operator-triggered",
+            default_invocation="role-owner-investigator-triggered",
             notes=(
-                "Import or execute approved fetch outputs and write signal-plane receipts; "
-                "it must not select downstream analysis conclusions."
+                "Import or execute only the actor's assigned fetch outputs and write "
+                "signal-plane receipts; it must not select downstream analysis conclusions."
             ),
         )
 

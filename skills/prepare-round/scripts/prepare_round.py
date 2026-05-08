@@ -39,24 +39,39 @@ def pretty_json(data: Any, pretty: bool) -> str:
 
 
 def suggested_next_skills_for_selections(selections: dict[str, dict[str, Any]]) -> list[str]:
-    suggestions = ["normalize-fetch-execution"]
-    requirement_types = {
-        maybe_text(requirement.get("requirement_type"))
-        for selection in selections.values()
-        if isinstance(selection, dict)
-        for requirement in selection.get("evidence_requirements", [])
-        if isinstance(requirement, dict)
-    }
-    if "spatiotemporal-relation-review" in requirement_types:
-        suggestions.extend(
-            [
-                "detect-temporal-cooccurrence-cues",
-                "query-spatiotemporal-relations",
-                "review-spatiotemporal-relation-alternatives",
-                "materialize-spatiotemporal-relation-evidence-packet",
-            ]
+    return ["normalize-fetch-execution"]
+
+
+def normalize_actor_role_for_source_role(role: str) -> str:
+    if role == "environmentalist":
+        return "environmental-investigator"
+    if role == "sociologist":
+        return "public-discourse-investigator"
+    return role
+
+
+def suggested_next_skill_runs_for_selections(selections: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    runs: list[dict[str, Any]] = []
+    for role, selection in selections.items():
+        if not isinstance(selection, dict):
+            continue
+        selected_sources = [
+            source
+            for source in selection.get("selected_sources", [])
+            if maybe_text(source)
+        ] if isinstance(selection.get("selected_sources"), list) else []
+        if not selected_sources:
+            continue
+        runs.append(
+            {
+                "skill_name": "normalize-fetch-execution",
+                "actor_role": normalize_actor_role_for_source_role(maybe_text(role)),
+                "plan_role": maybe_text(role),
+                "reason": "Run only this role owner's fetch and normalization steps.",
+                "selected_source_skills": selected_sources,
+            }
         )
-    return list(dict.fromkeys(suggestions))
+    return runs
 
 
 def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, Any]:
@@ -124,6 +139,7 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
         if maybe_text(source_skill)
     ]
     suggested_next_skills = suggested_next_skills_for_selections(selections)
+    suggested_next_skill_runs = suggested_next_skill_runs_for_selections(selections)
     return {
         "status": "completed",
         "summary": {
@@ -152,6 +168,7 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
             "gap_hints": [item["message"] for item in warnings],
             "challenge_hints": [],
             "suggested_next_skills": suggested_next_skills,
+            "suggested_next_skill_runs": suggested_next_skill_runs,
         },
     }
 

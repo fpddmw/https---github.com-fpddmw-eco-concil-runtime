@@ -9,12 +9,23 @@ from .runtime import *
 from .signal import *
 
 __all__ = (
+    "ContractFieldGroup",
     "CanonicalContract",
+    "CONTRACT_FIELD_GROUPS",
+    "FIELD_GROUP_OBJECT_IDENTITY",
+    "FIELD_GROUP_EVIDENCE_LINEAGE",
+    "FIELD_GROUP_PROVENANCE",
+    "FIELD_GROUP_GOVERNANCE_TARGET",
+    "FIELD_GROUP_BASIS_LINKAGE",
+    "FIELD_GROUP_CHALLENGER_CONSTRAINT_STATE",
+    "FIELD_GROUP_REPORT_CLAIM_LINKAGE",
     "PLANE_SIGNAL",
     "PLANE_ANALYSIS",
     "PLANE_DELIBERATION",
     "PLANE_REPORTING",
     "PLANE_RUNTIME",
+    "contract_field_group",
+    "contract_field_groups",
     "maybe_text",
     "_contract",
     "ENVIRONMENT_SIGNAL_TAXONOMY_VERSION",

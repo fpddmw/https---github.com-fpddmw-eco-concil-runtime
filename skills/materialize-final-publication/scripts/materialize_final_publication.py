@@ -205,6 +205,30 @@ def publication_release_blockers(
         summary = maybe_text(risk.get("summary"))
         if summary:
             blockers.append("open-risk-" + stable_hash(summary)[:12])
+    for constraint in list_items(handoff.get("unresolved_challenger_constraints")):
+        if not isinstance(constraint, dict):
+            continue
+        constraint_id = maybe_text(constraint.get("constraint_id"))
+        blockers.append(
+            "unresolved-challenger-constraint-"
+            + (stable_hash(constraint_id)[:12] if constraint_id else "missing")
+        )
+    for violation in list_items(handoff.get("lead_basis_constraint_violations")):
+        if not isinstance(violation, dict):
+            continue
+        violation_id = maybe_text(violation.get("violation_id"))
+        blockers.append(
+            "lead-basis-constraint-"
+            + (stable_hash(violation_id)[:12] if violation_id else "missing")
+        )
+    for violation in list_items(handoff.get("report_claim_structural_violations")):
+        if not isinstance(violation, dict):
+            continue
+        violation_id = maybe_text(violation.get("violation_id"))
+        blockers.append(
+            "report-claim-structural-"
+            + (stable_hash(violation_id)[:12] if violation_id else "missing")
+        )
     supervisor_status = (
         maybe_text(handoff.get("supervisor_status"))
         or maybe_text(supervisor_state.get("supervisor_status"))
@@ -890,6 +914,37 @@ def materialize_final_publication_skill(
             else [],
             "open_risks": handoff.get("open_risks", [])
             if isinstance(handoff.get("open_risks"), list)
+            else [],
+            "challenger_constraints": handoff.get("challenger_constraints", [])
+            if isinstance(handoff.get("challenger_constraints"), list)
+            else [],
+            "unresolved_challenger_constraints": handoff.get(
+                "unresolved_challenger_constraints", []
+            )
+            if isinstance(handoff.get("unresolved_challenger_constraints"), list)
+            else [],
+            "basis_use_constraints": handoff.get("basis_use_constraints", [])
+            if isinstance(handoff.get("basis_use_constraints"), list)
+            else [],
+            "explicit_report_claim_objects": handoff.get(
+                "explicit_report_claim_objects", []
+            )
+            if isinstance(handoff.get("explicit_report_claim_objects"), list)
+            else [],
+            "report_claim_structural_violations": handoff.get(
+                "report_claim_structural_violations", []
+            )
+            if isinstance(handoff.get("report_claim_structural_violations"), list)
+            else [],
+            "explicit_lead_basis_objects": handoff.get(
+                "explicit_lead_basis_objects", []
+            )
+            if isinstance(handoff.get("explicit_lead_basis_objects"), list)
+            else [],
+            "lead_basis_constraint_violations": handoff.get(
+                "lead_basis_constraint_violations", []
+            )
+            if isinstance(handoff.get("lead_basis_constraint_violations"), list)
             else [],
             "release_blockers": release_blockers,
             "recommended_next_actions": handoff.get(

@@ -280,6 +280,10 @@ def maybe_text(value: Any) -> str:
     return normalize_space(value)
 
 
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
 def coerce_int(value: Any) -> int | None:
     if value in (None, ""):
         return None
@@ -474,13 +478,13 @@ def derive_evidence_lanes(mission: dict[str, Any]) -> list[dict[str, str]]:
             "receptor-air-quality",
             "environmentalist",
             "receptor-air-quality",
-            "Establish local receptor air-quality anomaly before any attribution claim.",
+            "Record local receptor air-quality anomaly evidence as a candidate review lane.",
         )
         add(
             "fire-origin",
             "environmentalist",
             "fire-origin-candidate",
-            "Collect candidate active-fire evidence for possible wildfire source regions.",
+            "Record active-fire evidence sources for candidate wildfire source-region review.",
         )
         add(
             "public-discourse",
@@ -493,20 +497,20 @@ def derive_evidence_lanes(mission: dict[str, Any]) -> list[dict[str, str]]:
             "local-weather-context",
             "environmentalist",
             "weather-transport-context",
-            "Collect local weather context needed to evaluate transport plausibility.",
+            "Record local weather context for later council or agent transport review.",
         )
         add(
             "spatiotemporal-relation-review",
             "environmentalist",
             "spatiotemporal-relation-review",
-            "Require governed spatiotemporal relation review before source or transport claims are used in reporting.",
+            "Record a spatiotemporal relation review lane when source or transport questions are in scope.",
         )
     if any(token in text for token in ("health", "asthma", "community", "impact", "public health")):
         add(
             "community-impact",
             "sociologist",
             "community-impact-signal",
-            "Collect public/community impact signals and keep them separate from physical attribution.",
+            "Record public/community impact signals as a separate evidence lane.",
             priority="medium",
         )
     if any(token in text for token in ("recommendation", "response", "handling", "处理", "建议")):
@@ -514,7 +518,7 @@ def derive_evidence_lanes(mission: dict[str, Any]) -> list[dict[str, str]]:
             "response-recommendation-boundary",
             "sociologist",
             "response-record-signal",
-            "Collect public response records and constrain recommendations to cited evidence.",
+            "Record response or recommendation evidence when handling recommendations are in scope.",
             priority="medium",
         )
     return lanes
@@ -529,8 +533,20 @@ def derive_verification_scope(mission: dict[str, Any]) -> dict[str, Any]:
     source_required = "fire-origin" in lane_ids
     transport_required = "spatiotemporal-relation-review" in lane_ids
     required_source_skills: list[str] = []
+    candidate_source_skills: list[str] = []
+    source_selections = (
+        mission.get("source_selections")
+        if isinstance(mission.get("source_selections"), dict)
+        else {}
+    )
+    explicit_selected_sources: list[str] = []
+    for selection in source_selections.values():
+        if isinstance(selection, dict):
+            explicit_selected_sources.extend(list_items(selection.get("selected_sources")))
+    if explicit_selected_sources:
+        required_source_skills.extend(unique_texts(explicit_selected_sources))
     for role in SOURCE_SELECTION_ROLES:
-        required_source_skills.extend(intent_selected_sources(mission, role))
+        candidate_source_skills.extend(intent_selected_sources(mission, role))
     return {
         "scope_id": "verification-scope-"
         + stable_hash(
@@ -551,10 +567,10 @@ def derive_verification_scope(mission: dict[str, Any]) -> dict[str, Any]:
         },
         "required_evidence_lanes": lanes,
         "candidate_source_region_policy": (
-            "candidate-source-regions-required" if source_required else "not-required"
+            "mission-derived-candidate-source-review" if source_required else "not-applicable"
         ),
         "transport_verification_policy": (
-            "required-before-source-or-transport-claim" if transport_required else "not-required"
+            "mission-derived-relation-review" if transport_required else "not-applicable"
         ),
         "lag_window": {
             "mode": "mission-derived",
@@ -562,15 +578,7 @@ def derive_verification_scope(mission: dict[str, Any]) -> dict[str, Any]:
             "maximum_hours": 72 if source_required or transport_required else 0,
         },
         "required_source_skills": unique_texts(required_source_skills),
-        "excluded_inferences": [
-            "Do not assert source attribution without fire-origin, timing, spatial, and transport evidence.",
-            "Do not treat local weather context alone as proof of transport direction.",
-            "Do not turn public-discourse records into exposure, health-impact, or representativeness conclusions without separate support.",
-        ],
-        "reportable_claim_boundary": (
-            "Report receptor observations, candidate source evidence, transport plausibility, impacts, "
-            "recommendations, and uncertainty only to the extent each claim is supported by its required evidence lane."
-        ),
+        "candidate_source_skills": unique_texts(candidate_source_skills),
     }
 
 

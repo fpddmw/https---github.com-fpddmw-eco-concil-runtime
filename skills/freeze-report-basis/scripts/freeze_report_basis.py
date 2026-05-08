@@ -19,6 +19,12 @@ if str(RUNTIME_SRC) not in sys.path:
 
 from eco_council_runtime.kernel.governance.fallback.context import load_d1_shared_context  # noqa: E402
 from eco_council_runtime.objects.council import query_council_objects  # noqa: E402
+from eco_council_runtime.challenger_constraints import (  # noqa: E402
+    load_challenger_constraint_state,
+)
+from eco_council_runtime.report_claim_structure import (  # noqa: E402
+    report_claim_structure_state,
+)
 from eco_council_runtime.kernel.governance.report_basis_resolution import (  # noqa: E402
     load_council_proposals,
     load_council_readiness_opinions,
@@ -34,6 +40,7 @@ from eco_council_runtime.kernel.operator.surfaces import (  # noqa: E402
 from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_report_basis_freeze_record,
 )
+from eco_council_runtime.reporting_objects import query_reporting_objects  # noqa: E402
 from eco_council_runtime.kernel.reporting.reporting_contracts import (  # noqa: E402
     reporting_contract_fields_from_payload,
 )
@@ -192,6 +199,35 @@ def load_round_evidence_bundles(
     return [item for item in objects if isinstance(item, dict)]
 
 
+def load_round_report_section_drafts(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    payload = query_reporting_objects(
+        run_dir,
+        object_kind="report-section-draft",
+        run_id=run_id,
+        round_id=round_id,
+        limit=500,
+    )
+    objects = payload.get("objects", []) if isinstance(payload.get("objects"), list) else []
+    return [item for item in objects if isinstance(item, dict)]
+
+
+def accepted_report_section_drafts(
+    report_section_drafts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rejected_statuses = {"withdrawn", "rejected", "superseded"}
+    return [
+        section
+        for section in report_section_drafts
+        if maybe_text(section.get("status")).casefold() not in rejected_statuses
+        and list_items(section.get("evidence_refs"))
+    ]
+
+
 def evidence_bundle_ids_from_objects(objects: list[dict[str, Any]]) -> list[str]:
     values: list[Any] = []
     for item in objects:
@@ -211,34 +247,34 @@ def evidence_bundle_ids_from_objects(objects: list[dict[str, Any]]) -> list[str]
     return normalized_object_id_values(values)
 
 
-def expanded_evidence_refs_from_selected_bundles(
+def candidate_evidence_refs_from_referenced_bundles(
     *,
     evidence_bundles: list[dict[str, Any]],
     selected_basis_object_ids: list[str],
     supporting_proposals: list[dict[str, Any]],
     supporting_opinions: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    selected_bundle_ids = set(
+    referenced_bundle_ids = set(
         normalized_object_id_values(
             selected_basis_object_ids
             + evidence_bundle_ids_from_objects(supporting_proposals)
             + evidence_bundle_ids_from_objects(supporting_opinions)
         )
     )
-    expanded_refs: list[Any] = []
-    expanded_bundle_ids: list[str] = []
+    candidate_refs: list[Any] = []
+    candidate_bundle_ids: list[str] = []
     for bundle in evidence_bundles:
         bundle_id = maybe_text(bundle.get("bundle_id")) or maybe_text(bundle.get("object_id"))
-        if not bundle_id or bundle_id not in selected_bundle_ids:
+        if not bundle_id or bundle_id not in referenced_bundle_ids:
             continue
         refs = list_items(bundle.get("evidence_refs"))
         if not refs:
             continue
-        expanded_bundle_ids.append(bundle_id)
-        expanded_refs.extend(refs)
+        candidate_bundle_ids.append(bundle_id)
+        candidate_refs.extend(refs)
     return {
-        "expanded_evidence_bundle_ids": unique_texts(expanded_bundle_ids),
-        "expanded_evidence_refs": unique_artifact_ref_texts(expanded_refs),
+        "candidate_evidence_bundle_ids": unique_texts(candidate_bundle_ids),
+        "candidate_bundle_evidence_refs": unique_artifact_ref_texts(candidate_refs),
     }
 
 
@@ -656,6 +692,25 @@ def freeze_report_basis_skill(
         }
     else:
         readiness = readiness_payload
+    challenger_constraint_state = load_challenger_constraint_state(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    unresolved_challenger_constraints = [
+        constraint
+        for constraint in list_items(
+            challenger_constraint_state.get("unresolved_challenger_constraints")
+        )
+        if isinstance(constraint, dict)
+    ]
+    basis_use_constraints = [
+        constraint
+        for constraint in list_items(
+            challenger_constraint_state.get("basis_use_constraints")
+        )
+        if isinstance(constraint, dict)
+    ]
     shared_context = load_d1_shared_context(
         run_dir_path,
         run_id=run_id,
@@ -833,6 +888,17 @@ def freeze_report_basis_skill(
         if isinstance(report_basis_resolution.get("report_basis_resolution_reasons"), list)
         else []
     )
+    if unresolved_challenger_constraints:
+        report_basis_status = "withheld"
+        report_basis_resolution_reasons = unique_texts(
+            [
+                (
+                    f"{len(unresolved_challenger_constraints)} unresolved challenger "
+                    "constraints require explicit disposition before report-basis freeze."
+                )
+            ]
+            + report_basis_resolution_reasons
+        )
     if report_basis_status == "withheld":
         warnings.append(
             {
@@ -904,6 +970,68 @@ def freeze_report_basis_skill(
         for opinion in council_opinions
         if maybe_text(opinion.get("opinion_id")) in supporting_opinion_ids
     ]
+    report_section_drafts = accepted_report_section_drafts(
+        load_round_report_section_drafts(
+            run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+        )
+    )
+    report_claim_structure = report_claim_structure_state(
+        report_section_drafts,
+        challenger_constraints=[
+            constraint
+            for constraint in list_items(
+                challenger_constraint_state.get("challenger_constraints")
+            )
+            if isinstance(constraint, dict)
+        ],
+    )
+    lead_basis_constraint_violations = [
+        violation
+        for violation in list_items(
+            report_claim_structure.get("lead_basis_constraint_violations")
+        )
+        if isinstance(violation, dict)
+    ]
+    report_claim_structural_violations = [
+        violation
+        for violation in list_items(
+            report_claim_structure.get("report_claim_structural_violations")
+        )
+        if isinstance(violation, dict)
+    ]
+    structural_report_violations = [
+        *report_claim_structural_violations,
+        *lead_basis_constraint_violations,
+    ]
+    if structural_report_violations:
+        report_basis_status = "withheld"
+        report_basis_resolution_reasons = unique_texts(
+            [
+                (
+                    f"{len(structural_report_violations)} explicit report-claim "
+                    "or lead-basis declarations conflict with structural constraints."
+                )
+            ]
+            + report_basis_resolution_reasons
+        )
+        warnings.append(
+            {
+                "code": "report-claim-structural-violation",
+                "message": maybe_text(report_basis_resolution_reasons[0]),
+            }
+        )
+    report_section_draft_ids = unique_texts(
+        [section.get("section_id") for section in report_section_drafts]
+    )
+    report_section_draft_evidence_refs = unique_artifact_ref_texts(
+        [
+            ref
+            for section in report_section_drafts
+            for ref in list_items(section.get("evidence_refs"))
+        ]
+    )
     selected_evidence_refs = unique_artifact_ref_texts(
         [
             ref
@@ -936,8 +1064,9 @@ def freeze_report_basis_skill(
             for proposal in council_proposals
             for ref in list_items(proposal.get("evidence_refs"))
         ]
+        + report_section_draft_evidence_refs
     )
-    bundle_expansion = expanded_evidence_refs_from_selected_bundles(
+    bundle_candidates = candidate_evidence_refs_from_referenced_bundles(
         evidence_bundles=load_round_evidence_bundles(
             run_dir_path,
             run_id=run_id,
@@ -947,11 +1076,26 @@ def freeze_report_basis_skill(
         supporting_proposals=supporting_proposals,
         supporting_opinions=supporting_opinions,
     )
-    expanded_bundle_ids = list_items(bundle_expansion.get("expanded_evidence_bundle_ids"))
-    expanded_bundle_evidence_refs = list_items(bundle_expansion.get("expanded_evidence_refs"))
-    selected_evidence_refs = unique_artifact_ref_texts(
-        selected_evidence_refs + expanded_bundle_evidence_refs
+    candidate_bundle_ids = list_items(bundle_candidates.get("candidate_evidence_bundle_ids"))
+    candidate_bundle_evidence_refs = list_items(
+        bundle_candidates.get("candidate_bundle_evidence_refs")
     )
+    unselected_candidate_bundle_evidence_refs = [
+        ref
+        for ref in candidate_bundle_evidence_refs
+        if ref not in set(selected_evidence_refs)
+    ]
+    if unselected_candidate_bundle_evidence_refs:
+        warnings.append(
+            {
+                "code": "bundle-evidence-refs-not-auto-selected",
+                "message": (
+                    f"{len(unselected_candidate_bundle_evidence_refs)} evidence refs are present "
+                    "in referenced evidence bundles but were not explicitly selected by council "
+                    "or agent evidence_refs, so freeze-report-basis leaves them as candidates."
+                ),
+            }
+        )
     fallback_remaining_risks = [
         {
             "action_id": maybe_text(item.get("action_id")),
@@ -964,8 +1108,37 @@ def freeze_report_basis_skill(
         for item in next_actions.get("ranked_actions", [])
         if isinstance(item, dict) and action_is_readiness_blocker(item)
     ][:4] if isinstance(next_actions.get("ranked_actions"), list) else []
+    challenger_constraint_risks = [
+        {
+            "action_id": maybe_text(constraint.get("constraint_id")),
+            "action_kind": "challenger-constraint",
+            "priority": "high",
+            "reason": maybe_text(constraint.get("comment_text"))
+            or "A challenger constraint requires explicit disposition before report-basis freeze.",
+            "controversy_gap": "challenger-constraint-disposition",
+            "recommended_lane": "council-deliberation",
+        }
+        for constraint in unresolved_challenger_constraints[:3]
+    ]
+    lead_basis_violation_risks = [
+        {
+            "action_id": maybe_text(violation.get("violation_id")),
+            "action_kind": maybe_text(violation.get("violation_kind"))
+            or "report-claim-structural-constraint",
+            "priority": "high",
+            "reason": (
+                "An explicit report-claim or lead-basis declaration conflicts "
+                "with a structural claim or challenger constraint."
+            ),
+            "controversy_gap": "report-claim-structural-constraint",
+            "recommended_lane": "council-deliberation",
+        }
+        for violation in structural_report_violations[:3]
+    ]
     remaining_risks = (
-        [
+        challenger_constraint_risks
+        + lead_basis_violation_risks
+        + [
             {
                 "action_id": maybe_text(proposal.get("proposal_id")),
                 "action_kind": "proposal-veto",
@@ -1015,6 +1188,8 @@ def freeze_report_basis_skill(
         + rejected_proposal_ids
         + supporting_opinion_ids
         + rejected_opinion_ids
+        + report_section_draft_ids
+        + list_items(challenger_constraint_state.get("challenger_constraint_ids"))
     )
     wrapper = {
         "schema_version": "d2.1",
@@ -1050,6 +1225,10 @@ def freeze_report_basis_skill(
         "rejected_proposal_ids": rejected_proposal_ids,
         "supporting_opinion_ids": supporting_opinion_ids,
         "rejected_opinion_ids": rejected_opinion_ids,
+        "explicit_report_section_draft_ids": report_section_draft_ids,
+        "explicit_report_section_draft_evidence_ref_count": len(
+            report_section_draft_evidence_refs
+        ),
         "proposal_resolution_records": proposal_resolution_records,
         "proposal_resolution_mode_counts": (
             report_basis_resolution.get("proposal_resolution_mode_counts", {})
@@ -1063,10 +1242,57 @@ def freeze_report_basis_skill(
         ),
         "frozen_basis": frozen_basis,
         "selected_coverages": selected_coverages,
+        "evidence_selection_policy": "explicit-agent-council-evidence-refs-only-v1",
         "selected_evidence_refs": selected_evidence_refs,
         "evidence_refs": selected_evidence_refs,
-        "expanded_evidence_bundle_ids": expanded_bundle_ids,
-        "expanded_evidence_bundle_ref_count": len(expanded_bundle_evidence_refs),
+        "challenger_constraint_count": int(
+            challenger_constraint_state.get("challenger_constraint_count") or 0
+        ),
+        "unresolved_challenger_constraint_count": int(
+            challenger_constraint_state.get(
+                "unresolved_challenger_constraint_count"
+            )
+            or 0
+        ),
+        "challenger_constraint_ids": list_items(
+            challenger_constraint_state.get("challenger_constraint_ids")
+        ),
+        "unresolved_challenger_constraint_ids": list_items(
+            challenger_constraint_state.get("unresolved_challenger_constraint_ids")
+        ),
+        "challenger_constraints": list_items(
+            challenger_constraint_state.get("challenger_constraints")
+        ),
+        "unresolved_challenger_constraints": unresolved_challenger_constraints,
+        "basis_use_constraints": basis_use_constraints,
+        "report_claim_structure": report_claim_structure,
+        "explicit_report_claim_count": int(
+            report_claim_structure.get("explicit_report_claim_count") or 0
+        ),
+        "explicit_report_claim_objects": list_items(
+            report_claim_structure.get("explicit_report_claim_objects")
+        ),
+        "report_claim_structural_violation_count": len(
+            report_claim_structural_violations
+        ),
+        "report_claim_structural_violations": report_claim_structural_violations,
+        "explicit_lead_basis_count": int(
+            report_claim_structure.get("explicit_lead_basis_count") or 0
+        ),
+        "explicit_lead_basis_objects": list_items(
+            report_claim_structure.get("explicit_lead_basis_objects")
+        ),
+        "lead_basis_constraint_violation_count": len(
+            lead_basis_constraint_violations
+        ),
+        "lead_basis_constraint_violations": lead_basis_constraint_violations,
+        "candidate_evidence_bundle_ids": candidate_bundle_ids,
+        "candidate_bundle_evidence_refs": candidate_bundle_evidence_refs,
+        "unselected_candidate_bundle_evidence_refs": unique_artifact_ref_texts(
+            unselected_candidate_bundle_evidence_refs
+        ),
+        "expanded_evidence_bundle_ids": [],
+        "expanded_evidence_bundle_ref_count": 0,
         "lineage": lineage,
         "provenance": {
             "source_skill": SKILL_NAME,
@@ -1142,6 +1368,15 @@ def freeze_report_basis_skill(
             "next_actions_source": maybe_text(contract_fields.get("next_actions_source")),
             "db_path": contract_fields["db_path"],
             "transition_request_id": maybe_text(transition_request.get("request_id")),
+            "unresolved_challenger_constraint_count": len(
+                unresolved_challenger_constraints
+            ),
+            "lead_basis_constraint_violation_count": len(
+                lead_basis_constraint_violations
+            ),
+            "report_claim_structural_violation_count": len(
+                report_claim_structural_violations
+            ),
         },
         "receipt_id": "report-basis-freeze-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, basis_id)[:20],
         "batch_id": "reportbasisfreeze-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],

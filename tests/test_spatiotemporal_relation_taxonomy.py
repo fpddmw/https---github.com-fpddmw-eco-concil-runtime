@@ -1013,8 +1013,14 @@ class SpatiotemporalRelationTaxonomyTests(unittest.TestCase):
                 probe["target"]["object_kind"],
             )
             self.assertEqual(relation_id, probe["target"]["object_id"])
-            self.assertIn("query-spatiotemporal-relations", probe["requested_skills"])
+            self.assertIn("submit-council-proposal", probe["requested_skills"])
+            self.assertIn("post-review-comment", probe["requested_skills"])
             self.assertIn(
+                "open-challenge-ticket",
+                probe["requested_skills"],
+            )
+            self.assertNotIn("query-spatiotemporal-relations", probe["requested_skills"])
+            self.assertNotIn(
                 "review-spatiotemporal-relation-alternatives",
                 probe["requested_skills"],
             )
@@ -1140,7 +1146,15 @@ class SpatiotemporalRelationTaxonomyTests(unittest.TestCase):
                 any("spatiotemporal relation gap" in reason for reason in readiness_artifact["gate_reasons"])
             )
             self.assertIn(
+                "open-falsification-probe",
+                readiness_artifact["recommended_next_skills"],
+            )
+            self.assertNotIn(
                 "review-spatiotemporal-relation-alternatives",
+                readiness_artifact["recommended_next_skills"],
+            )
+            self.assertNotIn(
+                "query-spatiotemporal-relations",
                 readiness_artifact["recommended_next_skills"],
             )
 

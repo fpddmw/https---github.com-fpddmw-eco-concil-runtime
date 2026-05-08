@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -330,6 +331,14 @@ def run_skill(
         for attempt_number in range(1, retry_budget + 2):
             attempt_started_at = utc_now_iso()
             try:
+                env = {
+                    **os.environ,
+                    "OPENCLAW_ACTOR_ROLE": actor_role,
+                    "OPENCLAW_RESOLVED_ACTOR_ROLE": maybe_text(preflight.get("resolved_actor_role")),
+                    "OPENCLAW_SKILL_NAME": skill_name,
+                    "OPENCLAW_RUN_ID": run_id,
+                    "OPENCLAW_ROUND_ID": round_id,
+                }
                 completed = subprocess.run(
                     command,
                     capture_output=True,
@@ -337,6 +346,7 @@ def run_skill(
                     check=False,
                     cwd=str(root),
                     timeout=timeout_seconds or None,
+                    env=env,
                 )
             except subprocess.TimeoutExpired as exc:
                 final_stdout = exc.stdout if isinstance(exc.stdout, str) else (exc.stdout.decode("utf-8", errors="replace") if exc.stdout else "")

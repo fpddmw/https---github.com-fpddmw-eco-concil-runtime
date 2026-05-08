@@ -10,12 +10,17 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.contracts import (  # noqa: E402
+    FIELD_GROUP_CHALLENGER_CONSTRAINT_STATE,
+    FIELD_GROUP_EVIDENCE_LINEAGE,
+    FIELD_GROUP_REPORT_CLAIM_LINKAGE,
     PLANE_ANALYSIS,
     PLANE_DELIBERATION,
     PLANE_REPORTING,
     PLANE_RUNTIME,
     canonical_contract,
     canonical_contract_kinds,
+    contract_field_group,
+    contract_field_groups,
     validate_canonical_payload,
 )
 
@@ -143,6 +148,27 @@ class CanonicalContractTests(unittest.TestCase):
             set(canonical_contract_kinds(plane=PLANE_RUNTIME)),
         )
 
+    def test_contracts_expose_shared_minimal_field_groups(self) -> None:
+        groups = {group["group_id"] for group in contract_field_groups()}
+        self.assertIn(FIELD_GROUP_EVIDENCE_LINEAGE, groups)
+        self.assertIn(FIELD_GROUP_CHALLENGER_CONSTRAINT_STATE, groups)
+        self.assertIn(FIELD_GROUP_REPORT_CLAIM_LINKAGE, groups)
+
+        evidence_group = contract_field_group(FIELD_GROUP_EVIDENCE_LINEAGE)
+        self.assertEqual(("evidence_refs", "lineage"), evidence_group.list_fields)
+
+        section_contract = canonical_contract("report-section-draft")
+        self.assertIn(FIELD_GROUP_REPORT_CLAIM_LINKAGE, section_contract.field_groups)
+        self.assertIn("claim_text", section_contract.optional_text_fields)
+        self.assertIn("claim_constraint_ids", section_contract.optional_list_fields)
+        self.assertIn("lead_basis", section_contract.optional_bool_fields)
+
+        readiness_contract = canonical_contract("readiness-assessment")
+        self.assertIn(
+            FIELD_GROUP_CHALLENGER_CONSTRAINT_STATE,
+            readiness_contract.field_groups,
+        )
+
     def test_validate_canonical_payload_rejects_missing_structural_fields(self) -> None:
         with self.assertRaises(ValueError):
             validate_canonical_payload(
@@ -190,6 +216,33 @@ class CanonicalContractTests(unittest.TestCase):
         contract = canonical_contract("proposal")
         self.assertEqual(contract.schema_version, payload["schema_version"])
         self.assertEqual("proposal-001", payload["proposal_id"])
+
+    def test_validate_canonical_payload_rejects_malformed_optional_fields(self) -> None:
+        with self.assertRaisesRegex(ValueError, "optional list fields"):
+            validate_canonical_payload(
+                "report-section-draft",
+                {
+                    "run_id": "run-001",
+                    "round_id": "round-001",
+                    "section_id": "section-001",
+                    "decision_source": "report-editor",
+                    "agent_role": "report-editor",
+                    "status": "draft",
+                    "report_id": "round-001",
+                    "section_key": "summary",
+                    "section_title": "Summary",
+                    "section_text": "Draft text.",
+                    "evidence_refs": ["evidence://issue-001"],
+                    "lineage": [],
+                    "basis_object_ids": [],
+                    "bundle_ids": [],
+                    "finding_ids": [],
+                    "provenance": {"source": "unit-test"},
+                    "claim_text": "Claim supplied by report editor.",
+                    "claim_constraint_ids": "challenger-constraint-001",
+                    "lead_basis": False,
+                },
+            )
 
     def test_validate_canonical_payload_accepts_well_formed_claim_candidate(self) -> None:
         payload = validate_canonical_payload(
