@@ -90,8 +90,8 @@ class RealcaseNycSmokePhase0FixtureTests(unittest.TestCase):
     def test_reporting_snapshot_preserves_original_gate_and_status_holes(self) -> None:
         handoff = load_json(self.source_path("reporting_handoff"))
         final_publication = load_json(self.source_path("final_publication"))
-        environmental_investigator_report = load_json(self.source_path("expert_report_environmental_investigator"))
-        social_investigator_report = load_json(self.source_path("expert_report_social_investigator"))
+        environmentalist_report = load_json(self.source_path("expert_report_environmentalist"))
+        sociologist_report = load_json(self.source_path("expert_report_sociologist"))
         snapshot = self.fixture["reporting_snapshot"]
 
         self.assertEqual(snapshot["handoff_status"], handoff["handoff_status"])
@@ -105,8 +105,8 @@ class RealcaseNycSmokePhase0FixtureTests(unittest.TestCase):
         self.assertIn("Council submitted 1 readiness opinions and all support report-basis freeze.", open_risk_summaries)
 
         reports_by_role = {
-            environmental_investigator_report["agent_role"]: environmental_investigator_report,
-            social_investigator_report["agent_role"]: social_investigator_report,
+            environmentalist_report["agent_role"]: environmentalist_report,
+            sociologist_report["agent_role"]: sociologist_report,
         }
         for report_snapshot in snapshot["expert_reports"]:
             with self.subTest(role=report_snapshot["role"]):

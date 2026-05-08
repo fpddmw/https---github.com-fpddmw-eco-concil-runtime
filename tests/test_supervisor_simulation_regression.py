@@ -183,6 +183,15 @@ class SupervisorSimulationRegressionTests(unittest.TestCase):
                 "--linked-artifact-ref",
                 coverage_ref,
             )
+            run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
 
             approve_report_basis_transition(run_dir)
             supervisor_payload = run_kernel(
