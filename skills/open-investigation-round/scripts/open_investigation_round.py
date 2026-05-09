@@ -16,6 +16,10 @@ from typing import Any
 
 SKILL_NAME = "open-investigation-round"
 SOURCE_SELECTION_ROLES = ("social-investigator", "environmental-investigator")
+COORDINATION_HINT_SEMANTICS = (
+    "Optional coordination context only; it does not restrict agent write "
+    "surfaces, agenda control, evidence acceptance, or investigator autonomy."
+)
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
@@ -70,6 +74,94 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def text_values(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return unique_texts(value)
+    text = maybe_text(value)
+    return [text] if text else []
+
+
+def request_payload_text_list(transition_request: dict[str, Any], key: str) -> list[str]:
+    return text_values(request_payload_option(transition_request, key, []))
+
+
+def build_round_coordination_context(
+    *,
+    run_id: str,
+    round_id: str,
+    source_round_id: str,
+    transition_request: dict[str, Any],
+    round_mode: str = "",
+    primary_focus_refs: list[str] | None = None,
+    target_challenge_id: str = "",
+    context_packet_id: str = "",
+    round_brief_id: str = "",
+) -> dict[str, Any]:
+    resolved_round_mode = maybe_text(round_mode) or maybe_text(
+        request_payload_option(transition_request, "round_mode", "")
+    )
+    resolved_focus_refs = unique_texts(
+        [
+            *(primary_focus_refs or []),
+            *request_payload_text_list(transition_request, "primary_focus_refs"),
+            *request_payload_text_list(transition_request, "primary_focus_ref"),
+        ]
+    )
+    resolved_target_challenge_id = (
+        maybe_text(target_challenge_id)
+        or maybe_text(request_payload_option(transition_request, "target_challenge_id", ""))
+        or maybe_text(request_payload_option(transition_request, "target_ticket_id", ""))
+    )
+    resolved_context_packet_id = maybe_text(context_packet_id) or maybe_text(
+        request_payload_option(transition_request, "context_packet_id", "")
+    )
+    resolved_round_brief_id = (
+        maybe_text(round_brief_id)
+        or maybe_text(request_payload_option(transition_request, "round_brief_id", ""))
+        or maybe_text(request_payload_option(transition_request, "round_brief_object_id", ""))
+    )
+    provided = any(
+        [
+            resolved_round_mode,
+            resolved_focus_refs,
+            resolved_target_challenge_id,
+            resolved_context_packet_id,
+            resolved_round_brief_id,
+        ]
+    )
+    return {
+        "schema_version": "round-coordination-context-v1",
+        "run_id": maybe_text(run_id),
+        "round_id": maybe_text(round_id),
+        "source_round_id": maybe_text(source_round_id),
+        "context_status": "provided" if provided else "minimal",
+        "round_mode": resolved_round_mode,
+        "primary_focus_refs": resolved_focus_refs,
+        "target_challenge_id": resolved_target_challenge_id,
+        "context_packet_id": resolved_context_packet_id,
+        "round_brief_id": resolved_round_brief_id,
+        "transition_request_id": maybe_text(transition_request.get("request_id")),
+        "semantics": COORDINATION_HINT_SEMANTICS,
+        "agent_autonomy": (
+            "Agents may request additional context, pursue alternative evidence, "
+            "and decide how to combine or credit evidence."
+        ),
+    }
+
+
+def coordination_related_ids(context: dict[str, Any]) -> list[str]:
+    if not isinstance(context, dict):
+        return []
+    return unique_texts(
+        [
+            *text_values(context.get("primary_focus_refs")),
+            context.get("target_challenge_id"),
+            context.get("context_packet_id"),
+            context.get("round_brief_id"),
+        ]
+    )
 
 
 def expected_output_kinds_for_role(role: str, existing: list[Any] | None = None) -> list[str]:
@@ -399,8 +491,14 @@ def build_followup_round_tasks(
     active_hypothesis_count: int,
     open_challenge_count: int,
     open_task_count: int,
+    coordination_context: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     warnings: list[dict[str, str]] = []
+    task_coordination_context = (
+        copy.deepcopy(coordination_context)
+        if isinstance(coordination_context, dict)
+        else {}
+    )
     ranked_actions = next_actions.get("ranked_actions", []) if isinstance(next_actions.get("ranked_actions"), list) else []
     role_actions = {
         role: [item for item in ranked_actions if isinstance(item, dict) and maybe_text(item.get("assigned_role")) == role]
@@ -443,6 +541,8 @@ def build_followup_round_tasks(
             )
             inputs["evidence_requirements"] = requirements
             inputs["prior_round_ids"] = unique_texts([source_round_id, *inputs.get("prior_round_ids", [])]) if isinstance(inputs.get("prior_round_ids"), list) else [source_round_id]
+            if task_coordination_context:
+                inputs["round_coordination_context"] = task_coordination_context
             cloned["inputs"] = inputs
             tasks.append(cloned)
         return tasks, warnings
@@ -479,6 +579,7 @@ def build_followup_round_tasks(
                     "mission_geometry": geometry,
                     "source_skills": role_source_skills,
                     "prior_round_ids": [source_round_id],
+                    "round_coordination_context": task_coordination_context,
                     "evidence_requirements": carryover_requirements(
                         role=role,
                         source_round_id=source_round_id,
@@ -507,6 +608,11 @@ def open_investigation_round_skill(
     author_role: str,
     transition_note: str,
     action_limit: int,
+    round_mode: str = "",
+    primary_focus_refs: list[str] | None = None,
+    target_challenge_id: str = "",
+    context_packet_id: str = "",
+    round_brief_id: str = "",
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     board_file = resolve_board_path(run_dir_path, board_path)
@@ -565,6 +671,18 @@ def open_investigation_round_skill(
         action_limit = max(0, int(requested_action_limit or action_limit))
     except (TypeError, ValueError):
         action_limit = max(0, int(action_limit or 0))
+    coordination_context = build_round_coordination_context(
+        run_id=run_id,
+        round_id=round_id,
+        source_round_id=source_round_id,
+        transition_request=transition_request,
+        round_mode=round_mode,
+        primary_focus_refs=primary_focus_refs or [],
+        target_challenge_id=target_challenge_id,
+        context_packet_id=context_packet_id,
+        round_brief_id=round_brief_id,
+    )
+    coordination_ids = coordination_related_ids(coordination_context)
 
     warnings: list[dict[str, str]] = []
     source_task_source = (
@@ -735,6 +853,11 @@ def open_investigation_round_skill(
                 if isinstance(target_snapshot.get("deliberation_sync"), dict)
                 else {}
             )
+            existing_coordination_context = (
+                existing_transition.get("coordination_context")
+                if isinstance(existing_transition.get("coordination_context"), dict)
+                else coordination_context
+            )
             return {
                 "status": "completed",
                 "summary": {
@@ -750,6 +873,10 @@ def open_investigation_round_skill(
                     "output_path": str(output_file),
                     "task_path": str(target_task_file),
                     "transition_request_id": transition_request_id,
+                    "round_mode": maybe_text(existing_coordination_context.get("round_mode")),
+                    "context_packet_id": maybe_text(existing_coordination_context.get("context_packet_id")),
+                    "target_challenge_id": maybe_text(existing_coordination_context.get("target_challenge_id")),
+                    "round_brief_id": maybe_text(existing_coordination_context.get("round_brief_id")),
                 },
                 "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, "noop")[:20],
                 "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, "noop")[:16],
@@ -760,7 +887,7 @@ def open_investigation_round_skill(
                 "canonical_ids": [existing_transition_id] if existing_transition_id else [],
                 "warnings": warnings,
                 "board_handoff": {
-                    "candidate_ids": [round_id],
+                    "candidate_ids": unique_texts([round_id, *coordination_related_ids(existing_coordination_context)]),
                     "evidence_refs": [{"signal_id": "", "artifact_path": str(board_file), "record_locator": f"$.rounds.{round_id}", "artifact_ref": f"{board_file}:$.rounds.{round_id}"}],
                     "gap_hints": [],
                     "challenge_hints": [],
@@ -854,7 +981,14 @@ def open_investigation_round_skill(
             "note_text": generated_note_text,
             "tags": ["round-open", "carryover"],
             "linked_artifact_refs": [],
-            "related_ids": unique_texts([source_round_id, *[item.get("task_id") for item in carried_tasks], *[item.get("hypothesis_id") for item in carried_hypotheses]]),
+            "related_ids": unique_texts(
+                [
+                    source_round_id,
+                    *coordination_ids,
+                    *[item.get("task_id") for item in carried_tasks],
+                    *[item.get("hypothesis_id") for item in carried_hypotheses],
+                ]
+            ),
         }
         followup_tasks, task_warnings = build_followup_round_tasks(
             run_id=run_id,
@@ -866,6 +1000,7 @@ def open_investigation_round_skill(
             active_hypothesis_count=len(carried_hypotheses),
             open_challenge_count=len(open_challenges),
             open_task_count=len(open_board_tasks),
+            coordination_context=coordination_context,
         )
         warnings.extend(task_warnings)
         write_summary = commit_board_mutation(
@@ -883,6 +1018,7 @@ def open_investigation_round_skill(
                 "carried_hypothesis_count": len(carried_hypotheses),
                 "carried_task_count": len(carried_tasks),
                 "source_open_challenge_count": len(open_challenges),
+                "coordination_context": coordination_context,
             },
             event_created_at_utc=timestamp,
             event_discriminator=note_id,
@@ -927,11 +1063,20 @@ def open_investigation_round_skill(
             "transition_request_id": maybe_text(transition_request.get("request_id")),
             "transition_request_status": maybe_text(transition_request.get("request_status")),
             "approved_by_role": maybe_text(transition_request.get("latest_decision_by_role")),
+            "round_mode": maybe_text(coordination_context.get("round_mode")),
+            "primary_focus_refs": text_values(coordination_context.get("primary_focus_refs")),
+            "target_challenge_id": maybe_text(coordination_context.get("target_challenge_id")),
+            "context_packet_id": maybe_text(coordination_context.get("context_packet_id")),
+            "round_brief_id": maybe_text(coordination_context.get("round_brief_id")),
+            "coordination_context": coordination_context,
             "observed_inputs": {
                 "source_task_present": source_task_present,
                 "source_task_artifact_present": source_task_artifact_present,
                 "source_next_actions_present": source_next_actions_present,
                 "source_next_actions_artifact_present": source_next_actions_artifact_present,
+                "coordination_context_status": maybe_text(coordination_context.get("context_status")),
+                "round_brief_id_present": bool(maybe_text(coordination_context.get("round_brief_id"))),
+                "context_packet_id_present": bool(maybe_text(coordination_context.get("context_packet_id"))),
             },
             "counts": {
                 "carried_hypothesis_count": len(carried_hypotheses),
@@ -1006,6 +1151,11 @@ def open_investigation_round_skill(
             "db_path": maybe_text(write_summary.get("db_path")),
             "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
             "transition_request_id": maybe_text(transition_request.get("request_id")),
+            "round_mode": maybe_text(coordination_context.get("round_mode")),
+            "context_packet_id": maybe_text(coordination_context.get("context_packet_id")),
+            "target_challenge_id": maybe_text(coordination_context.get("target_challenge_id")),
+            "round_brief_id": maybe_text(coordination_context.get("round_brief_id")),
+            "coordination_context_status": maybe_text(coordination_context.get("context_status")),
         },
         "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, transition_id)[:20],
         "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event_id)[:16],
@@ -1013,7 +1163,7 @@ def open_investigation_round_skill(
         "canonical_ids": [item for item in canonical_ids if maybe_text(item)],
         "warnings": warnings,
         "board_handoff": {
-            "candidate_ids": [round_id, transition_id],
+            "candidate_ids": unique_texts([round_id, transition_id, *coordination_ids]),
             "evidence_refs": artifact_refs,
             "gap_hints": [item["message"] for item in warnings if item.get("code") in {"missing-source-round-tasks", "missing-mission"}],
             "challenge_hints": [f"{len(open_challenges)} source-round challenge tickets were converted into follow-up tasks."] if open_challenges else [],
@@ -1042,6 +1192,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--author-role", default="moderator")
     parser.add_argument("--transition-note", default="")
     parser.add_argument("--action-limit", type=int, default=3)
+    parser.add_argument("--round-mode", default="")
+    parser.add_argument("--primary-focus-ref", action="append", default=[])
+    parser.add_argument("--target-challenge-id", default="")
+    parser.add_argument("--context-packet-id", default="")
+    parser.add_argument("--round-brief-id", default="")
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
@@ -1061,6 +1216,11 @@ def main() -> int:
         author_role=args.author_role,
         transition_note=args.transition_note,
         action_limit=args.action_limit,
+        round_mode=args.round_mode,
+        primary_focus_refs=args.primary_focus_ref,
+        target_challenge_id=args.target_challenge_id,
+        context_packet_id=args.context_packet_id,
+        round_brief_id=args.round_brief_id,
     )
     print(pretty_json(payload, args.pretty))
     return 0

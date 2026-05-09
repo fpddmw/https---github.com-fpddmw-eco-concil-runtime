@@ -6,7 +6,9 @@ from typing import Any
 
 from .schema import connect_db
 from .payloads import (
+    DYNAMIC_INVESTIGATION_OBJECT_KINDS,
     normalized_discussion_message_payload,
+    normalized_dynamic_investigation_object_payload,
     normalized_evidence_bundle_payload,
     normalized_finding_payload,
     normalized_proposal_payload,
@@ -14,6 +16,7 @@ from .payloads import (
 )
 from .rows import (
     discussion_message_row_from_payload,
+    dynamic_investigation_object_row_from_payload,
     evidence_bundle_row_from_payload,
     finding_row_from_payload,
     proposal_row_from_payload,
@@ -21,6 +24,7 @@ from .rows import (
     review_comment_row_from_payload,
     write_council_proposal_row,
     write_discussion_message_row,
+    write_dynamic_investigation_object_row,
     write_evidence_bundle_row,
     write_finding_row,
     write_readiness_opinion_row,
@@ -302,6 +306,58 @@ def append_readiness_opinion_record(
     }
 
 
+def append_dynamic_investigation_object_record(
+    run_dir: str | Path,
+    *,
+    object_payload: dict[str, Any],
+    object_kind: str = "",
+    artifact_path: str = "",
+    record_locator: str = "$.object",
+    db_path: str = "",
+) -> dict[str, Any]:
+    payload = dict(object_payload) if isinstance(object_payload, dict) else {}
+    normalized_kind = maybe_text(object_kind) or maybe_text(payload.get("object_kind"))
+    if normalized_kind not in DYNAMIC_INVESTIGATION_OBJECT_KINDS:
+        supported = ", ".join(DYNAMIC_INVESTIGATION_OBJECT_KINDS)
+        raise ValueError(
+            f"Unsupported dynamic investigation object kind: "
+            f"{normalized_kind or '<empty>'}. Supported kinds: {supported}."
+        )
+    run_id = maybe_text(payload.get("run_id"))
+    round_id = maybe_text(payload.get("round_id"))
+    connection, db_file = connect_db(run_dir, db_path)
+    try:
+        with connection:
+            object_index = next_round_object_index(
+                connection,
+                table_name="dynamic_investigation_objects",
+                run_id=run_id,
+                round_id=round_id,
+            )
+            normalized = normalized_dynamic_investigation_object_payload(
+                payload,
+                run_id=run_id,
+                round_id=round_id,
+                object_kind=normalized_kind,
+                object_index=object_index,
+            )
+            write_dynamic_investigation_object_row(
+                connection,
+                dynamic_investigation_object_row_from_payload(
+                    normalized,
+                    artifact_path=artifact_path,
+                    record_locator=record_locator,
+                ),
+            )
+    finally:
+        connection.close()
+    return {
+        "schema_version": "dynamic-investigation-object-append-v1",
+        "db_path": str(db_file),
+        "object": normalized,
+    }
+
+
 def store_council_proposal_records(
     run_dir: str | Path,
     *,
@@ -418,6 +474,7 @@ __all__ = (
     "append_evidence_bundle_record",
     "append_review_comment_record",
     "append_readiness_opinion_record",
+    "append_dynamic_investigation_object_record",
     "store_council_proposal_records",
     "store_readiness_opinion_records",
 )

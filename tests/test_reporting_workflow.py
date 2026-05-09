@@ -97,7 +97,7 @@ def seed_ready_reporting_context(
     outputs = seed_analysis_chain(run_dir, root, RUN_ID, ROUND_ID, include_airnow=True)
     evidence_ref = primary_successor_evidence_ref(outputs)
     issue_id = primary_research_issue_id(outputs)
-    submit_ready_council_support(
+    council_support = submit_ready_council_support(
         run_dir,
         run_id=RUN_ID,
         round_id=ROUND_ID,
@@ -148,6 +148,7 @@ def seed_ready_reporting_context(
         "outputs": outputs,
         "evidence_ref": evidence_ref,
         "issue_id": issue_id,
+        "council_support": council_support,
         "hypothesis_payload": hypothesis_payload,
     }
 
@@ -753,7 +754,10 @@ class ReportingWorkflowTests(unittest.TestCase):
             self.assertFalse(
                 decision_artifact["observed_inputs"]["board_brief_artifact_present"]
             )
-            self.assertIn("report-basis-withheld", decision_artifact["decision_gating"]["reason_codes"])
+            self.assertIn(
+                "report-basis-withheld",
+                decision_artifact["decision_gating"]["reason_codes"],
+            )
             self.assertIn(
                 "submit-council-proposal",
                 decision_payload["board_handoff"]["suggested_next_skills"],
@@ -766,6 +770,174 @@ class ReportingWorkflowTests(unittest.TestCase):
                 "post-board-note",
                 decision_payload["board_handoff"]["suggested_next_skills"],
             )
+
+    def test_reporting_packets_split_accepted_limitations_and_unresolved_challenges(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            context = seed_ready_reporting_context(
+                run_dir,
+                root,
+                note_text="Round can proceed with an explicit source limitation.",
+            )
+            proposal_id = context["council_support"]["proposal"]["canonical_ids"][0]
+            evidence_ref = context["evidence_ref"]
+            review_payload = run_kernel(
+                "post-review-comment",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "challenger",
+                "--author-role",
+                "challenger",
+                "--review-kind",
+                "report-basis-review",
+                "--comment-text",
+                "Use this basis only with a source limitation.",
+                "--target-kind",
+                "proposal",
+                "--target-id",
+                proposal_id,
+                "--report-risk",
+                "source-limitations",
+                "--evidence-ref",
+                evidence_ref,
+            )
+            comment_id = review_payload["canonical_ids"][0]
+            run_script(
+                script_path("submit-challenge-disposition"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--author-role",
+                "moderator",
+                "--target-kind",
+                "review-comment",
+                "--target-id",
+                comment_id,
+                "--response-to-id",
+                comment_id,
+                "--source-review-comment-id",
+                comment_id,
+                "--disposition-status",
+                "accepted-as-limitation",
+                "--decided-by-role",
+                "moderator",
+                "--rationale",
+                "Carry the challenger review as an explicit limitation.",
+                "--evidence-ref",
+                evidence_ref,
+            )
+            run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            prepare_optional_analysis_for_supervision(run_dir)
+            approve_report_basis_transition(run_dir)
+            run_kernel(
+                "supervise-round",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("materialize-reporting-handoff"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("draft-council-decision"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            run_script(
+                script_path("publish-council-decision"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skip-report-check",
+            )
+
+            handoff = load_json(
+                reporting_path(run_dir, f"reporting_handoff_{ROUND_ID}.json")
+            )
+            report_basis = load_json(
+                report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json")
+            )
+            decision = load_json(
+                reporting_path(run_dir, f"council_decision_draft_{ROUND_ID}.json")
+            )
+            canonical_decision = load_json(
+                reporting_path(run_dir, f"council_decision_{ROUND_ID}.json")
+            )
+
+            self.assertTrue(handoff["reporting_ready"])
+            self.assertEqual([], handoff["unresolved_challenges"])
+            self.assertEqual(1, len(handoff["accepted_limitations"]))
+            self.assertEqual(
+                "accepted_as_limitation",
+                handoff["accepted_limitations"][0]["disposition"],
+            )
+            self.assertEqual(
+                handoff["accepted_limitations"],
+                report_basis["accepted_limitations"],
+            )
+            self.assertEqual([], report_basis["unresolved_challenges"])
+            self.assertIn(
+                "supervisor-next-action",
+                report_basis["report_basis_input_policy"]["excluded_direct_sources"],
+            )
+            self.assertEqual(
+                handoff["accepted_limitations"],
+                handoff["report_packet"]["accepted_limitations"],
+            )
+            self.assertEqual(
+                [],
+                handoff["report_packet"]["unresolved_challenges"],
+            )
+            self.assertEqual([], handoff["report_packet"]["policy_recommendations"])
+            self.assertIn(
+                "helper-artifact",
+                handoff["report_basis_input_policy"]["excluded_direct_sources"],
+            )
+            self.assertEqual(
+                handoff["accepted_limitations"],
+                decision["accepted_limitations"],
+            )
+            self.assertEqual(
+                handoff["accepted_limitations"],
+                canonical_decision["accepted_limitations"],
+            )
+            self.assertEqual([], canonical_decision["unresolved_challenges"])
 
 
 if __name__ == "__main__":

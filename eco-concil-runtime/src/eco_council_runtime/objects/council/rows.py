@@ -161,6 +161,33 @@ def review_comment_row_from_payload(
     }
 
 
+def dynamic_investigation_object_row_from_payload(
+    dynamic_object: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str,
+) -> dict[str, Any]:
+    return {
+        "object_id": maybe_text(dynamic_object.get("object_id")),
+        "object_kind": maybe_text(dynamic_object.get("object_kind")),
+        "run_id": maybe_text(dynamic_object.get("run_id")),
+        "round_id": maybe_text(dynamic_object.get("round_id")),
+        "generated_at_utc": maybe_text(dynamic_object.get("generated_at_utc")),
+        "author_role": maybe_text(dynamic_object.get("author_role")),
+        "status": maybe_text(dynamic_object.get("status")),
+        "target_kind": maybe_text(dynamic_object.get("target_kind")),
+        "target_id": maybe_text(dynamic_object.get("target_id")),
+        "rationale": maybe_text(dynamic_object.get("rationale")),
+        "decision_source": maybe_text(dynamic_object.get("decision_source")),
+        "evidence_refs_json": json_text(dynamic_object.get("evidence_refs", [])),
+        "provenance_json": json_text(dynamic_object.get("provenance", {})),
+        "lineage_json": json_text(dynamic_object.get("lineage", [])),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator),
+        "raw_json": json_text(dynamic_object),
+    }
+
+
 def readiness_opinion_row_from_payload(
     opinion: dict[str, Any],
     *,
@@ -329,17 +356,41 @@ def write_readiness_opinion_row(
     )
 
 
+def write_dynamic_investigation_object_row(
+    connection: sqlite3.Connection,
+    row: dict[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO dynamic_investigation_objects (
+            object_id, object_kind, run_id, round_id, generated_at_utc,
+            author_role, status, target_kind, target_id, rationale,
+            decision_source, evidence_refs_json, provenance_json, lineage_json,
+            artifact_path, record_locator, raw_json
+        ) VALUES (
+            :object_id, :object_kind, :run_id, :round_id, :generated_at_utc,
+            :author_role, :status, :target_kind, :target_id, :rationale,
+            :decision_source, :evidence_refs_json, :provenance_json,
+            :lineage_json, :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
 __all__ = (
     "proposal_row_from_payload",
     "finding_row_from_payload",
     "discussion_message_row_from_payload",
     "evidence_bundle_row_from_payload",
     "review_comment_row_from_payload",
+    "dynamic_investigation_object_row_from_payload",
     "readiness_opinion_row_from_payload",
     "write_council_proposal_row",
     "write_finding_row",
     "write_discussion_message_row",
     "write_evidence_bundle_row",
     "write_review_comment_row",
+    "write_dynamic_investigation_object_row",
     "write_readiness_opinion_row",
 )

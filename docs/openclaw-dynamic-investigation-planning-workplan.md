@@ -2,34 +2,40 @@
 
 ## 1. 文档定位
 
-本文是下一阶段核心开发计划，目标是补齐 `moderator-led dynamic investigation planning`。
+本文是下一阶段核心开发计划，目标是补齐 `moderator-led dynamic investigation planning`，但该能力必须保持为薄 runtime 治理与 agent 自主调查的组合。
 
-本计划解决的不是某个单一案例的 follow-up bug，而是 OpenClaw 当前更深层的治理缺口：
+本计划不让 runtime 变成事实判断者、调查议程制定者或证据采信模型。runtime 只负责让议会可运行、可审计、可恢复、可授权；moderator 是议会组织者；investigators、challenger、report-editor 保留自主调查、证据组合和结论表达权。
 
-1. mission 不一定自带明确时空域、对象范围或指标范围。
-2. 复合型问题不能在初始化时被强行压成一个固定 verification scope。
-3. moderator 应主动拆分调查、组织多 round、发布子议题和子目标，而不是只在 challenger 质询后被动补证。
-4. challenger 对一个子结论的反对意见，应阻断该子议题进入 synthesis，并触发轻量补充轮。
-5. 多 round 场景必须有 context 压缩机制，不能每轮重复加载全量议程和全量历史。
+本计划要解决的治理缺口：
 
-## 2. 目标架构原则
+1. mission 可以是开放型问题，不一定自带明确时空域、对象范围或指标范围。
+2. 复合型问题不应在初始化时被强行压成固定 verification scope。
+3. moderator 应能提出调查拆分和 round brief，但这些对象是议会工作材料，不是 runtime 对 agent 的推理脚本。
+4. challenger 应能阻断具体对象进入 synthesis，并触发有目标的补充调查。
+5. 多 round 场景需要 context packet，避免每轮重复加载全量历史。
 
-1. `mission can be broad`
-   - mission 可以是开放型问题，例如“对比美国多条河流污染情况”或“调查中国主要沿海城市生态情况”。
-   - mission 不要求预置单一时空域。
-2. `scope is a council object`
-   - 时空域、对象集合、指标范围、比较口径应由 moderator 在 scoping round 中产出，并可被后续 round 修订。
-3. `one round, one subissue`
-   - 每个调查 round 应围绕一个明确子议题展开，产出一个子结论或明确的 evidence gap。
-4. `challenger blocks subissue, not the whole project by default`
-   - challenger 可以阻断某个 subissue 进入 synthesis。
-   - 只有核心 subissue 被阻断时，整体 reporting 才被阻断。
-5. `operator does not steer investigation`
-   - runtime-operator 只批准 moderator 发出的 transition/approval 请求、修运行故障、维护流程完整性。
-   - 调查方向、sub-target、source scope 由 council objects 承载。
-6. `context is packetized`
-   - 每轮 agent 不应读取全量历史。
-   - agent 读取当前 round 的 context packet、evidence refs、delta summary 和必要 lineage。
+## 2. 不可违反的治理边界
+
+1. `runtime is thin`
+   - runtime 只维护权限、ledger、artifact refs、状态转移、上下文分发和可恢复执行。
+   - runtime 不判断证据强弱，不给结论打分，不替 agent 决定调查方向。
+2. `contracts are envelopes, not agendas`
+   - contract 只规定对象 envelope：身份、作者、时间、目标引用、证据引用、provenance、状态。
+   - 不引入厚字段来规定调查步骤、证据质量等级、采信标准、议程顺序或结论模板。
+3. `agents own investigation judgment`
+   - agent 可以接受、修改、拒绝或扩展 moderator 的 round brief，只要写明 rationale 和 evidence refs。
+   - investigator 自主决定如何组合证据、哪些证据可采信、哪些证据只能作为限制条件。
+   - report-editor 只消费 council 提交的显式对象，不从 helper artifact 自动推断结论。
+4. `skills provide evidence, not judgment`
+   - fetch/normalize/query/analysis skills 只提供 raw artifact、normalized signals、检索结果、可复现派生结果和 source/provenance notes。
+   - skill 不输出“推荐结论”“证据权重”“可信度排序”“最佳 source 组合”。
+   - 如需列表顺序，只允许使用确定性展示顺序，例如输入顺序、时间顺序、artifact 生成顺序；不得包装成调查建议。
+5. `no hidden heuristics`
+   - 不新增非必要启发式规则、权值计算、自动排序或自动筛选。
+   - 必要的 runtime gate 只能检查程序性条件：权限、provenance、对象是否存在、blocking challenge 是否有 disposition、operator 是否已授权。
+6. `moderator organizes, does not over-script`
+   - moderator 可以提出 plan、scope hints、round brief 和 open questions。
+   - 这些对象是协调材料，不得把 agent 限死在唯一子议题、唯一 source family 或唯一输出格式上。
 
 ## 3. 目标工作流
 
@@ -38,36 +44,41 @@
 输入：
 
 1. 原始 mission。
-2. 可选的 policy profile。
-3. 可选的用户边界，例如“不做健康风险评估”。
+2. 可选 policy profile。
+3. 可选用户边界，例如“不做健康风险评估”。
 
-moderator 输出：
+moderator 可输出：
 
 1. `investigation-plan`
-2. `subissue` 列表
-3. `candidate-scope` 列表
-4. `evidence-need` 列表
-5. 初始 round sequence
+2. `subissue` 草案
+3. `scope-hint` 或 `candidate-scope`
+4. `evidence-request`
+5. 下一轮 round brief 草案
 
-该阶段不要求产生实质结论，也不要求抓取完整证据。
+边界：
+
+1. 该阶段不要求产生实质结论。
+2. 该阶段不要求抓取完整证据。
+3. plan 不得包含 runtime 强制执行的优先级、权重或 source 排序。
+4. investigator 和 challenger 可以提出新增、合并、拆分或拒绝 subissue/scope 的意见。
 
 验收重点：
 
 1. 没有明确时空域的 mission 也能进入 scoping。
 2. 不把开放型 mission 强行编译成单一 region/window。
-3. 每个 subissue 都有可审计的 rationale 和预期输出。
+3. plan 只记录 moderator 的组织意图和 rationale，不形成 runtime 议程锁。
 
-### 3.2 Subissue Round
+### 3.2 Investigation Round
 
-每轮 round 只处理一个主子议题。
+每轮 round 可以有一个 primary focus，但不强制 “one round, one subissue”。agent 可以记录与 primary focus 相关的旁支发现，并建议后续 round。
 
 输入：
 
 1. `round-brief`
-2. 当前 `subissue`
-3. 当前 active scope 或 candidate scopes
-4. evidence needs
-5. 上轮 delta packet
+2. primary focus refs，例如 subissue/scope/challenge/evidence-request
+3. context packet
+4. 可用 skill surface
+5. 上轮 delta refs
 
 investigator 输出：
 
@@ -75,126 +86,163 @@ investigator 输出：
 2. normalized signals
 3. finding / evidence bundle / uncertainty note
 4. unresolved evidence gaps
+5. 自主提出的 follow-up question 或 scope revision
 
 moderator 输出：
 
 1. round state note
-2. 是否进入 sub-conclusion
-3. 是否需要补充 round
+2. 是否需要补充 round
+3. 是否邀请其他角色介入
 
-### 3.3 Sub-conclusion
+边界：
 
-每个子议题完成后必须有 `sub-conclusion`。
+1. round-brief 是协调输入，不是强制脚本。
+2. `expected_outputs` 如存在，只能是提示，不得作为 runtime 拒绝 agent 输出的依据。
+3. prepare-round 不得根据启发式权重替 agent 自动挑选“最佳”来源。
+
+### 3.3 Agent Position / Subissue Position
+
+子议题完成后可以形成 `subissue-position`，但它不是每轮硬性产物。若证据不足，agent 可以只提交 finding、gap note 或 challenge。
 
 最小字段：
 
-1. `subissue_id`
-2. `claim_summary`
-3. `support_level`
+1. `position_id`
+2. `target_ref`
+3. `claim_summary`
 4. `evidence_refs`
-5. `coverage_limits`
-6. `open_challenges`
-7. `synthesis_status`
+5. `limitations`
+6. `open_challenge_refs`
+7. `author_role`
+8. `rationale`
 
 允许状态：
 
-1. `ready-for-synthesis`
+1. `proposed-for-synthesis`
 2. `needs-more-evidence`
 3. `blocked-by-challenge`
-4. `withheld`
+4. `withheld-by-author`
+
+边界：
+
+1. 不设置 `support_level`、score、rank 或 weight。
+2. 采信理由由 author_role 以自然语言和 evidence refs 表达。
+3. synthesis 是否采纳由后续 council/reporting 对象显式记录。
 
 ### 3.4 Challenger Review
 
 challenger 的对象必须绑定具体目标：
 
-1. `target_kind=subissue|sub-conclusion|finding|evidence-bundle|scope`
+1. `target_kind=subissue|position|finding|evidence-bundle|scope|report-section`
 2. `target_id`
 3. `objection_kind`
-4. `required_followup_evidence`
-5. `blocking_scope`
+4. `challenge_text`
+5. `evidence_refs`
+6. `blocking=true|false`
 
-challenge disposition 必须显式记录：
+challenge disposition 最小记录：
 
-1. `resolved-by-followup`
-2. `requires-followup`
-3. `accepted-as-limitation`
-4. `excluded-from-synthesis`
-5. `waived-by-challenger`
+1. `disposition_status=resolved|requires-followup|accepted-as-limitation|excluded-from-synthesis|withdrawn`
+2. `rationale`
+3. `evidence_refs`
+4. `decided_by_role`
 
-没有 disposition 的 blocking challenge 不能进入 synthesis。
+边界：
+
+1. blocking challenge 没有 disposition 时，不能进入 synthesis/report basis。
+2. disposition 不得被当作形式动作；它必须说明 agent/council 如何处理该 objection。
+3. runtime 只检查 disposition 是否存在和是否引用目标，不判断 disposition 是否“正确”。
 
 ### 3.5 Supplemental Round
 
 补充轮不是完整重跑。
 
-输入仅包括：
+输入通常包括：
 
 1. 原 mission 摘要。
-2. 目标 subissue。
+2. target refs。
 3. 被阻断的 challenge。
-4. required follow-up evidence。
-5. 上一轮相关 evidence refs。
+4. related evidence refs。
+5. 上轮 delta refs。
 
-输出仅解决该 challenge 或明确无法解决。
+输出目标：
 
-默认不加载：
+1. 回应 challenge。
+2. 提交新增证据或说明无法补足。
+3. 提出 scope/subissue 修订建议。
 
-1. 全量 board history。
-2. 全量 raw records。
-3. 与 target subissue 无关的其他子议题。
-4. report drafting surface。
+边界：
+
+1. 默认不加载全量 board history。
+2. 默认不加载全量 raw records。
+3. 默认不暴露 report drafting surface。
+4. agent 如认为必须扩展范围，可以提交理由和新的 evidence-request，而不是被 runtime 拦截。
 
 ### 3.6 Synthesis / Reporting Round
 
-只有在必要 subissues 完成 disposition 后，moderator 才能请求 synthesis/report-basis transition。
+moderator 请求 synthesis/report-basis transition 时，只提交显式 council objects：
 
-report-editor 只消费：
+1. agent positions 或 subissue positions
+2. findings
+3. evidence bundles
+4. accepted limitations
+5. resolved/unresolved challenges
+6. selected evidence refs
 
-1. frozen sub-conclusions
-2. accepted limitations
-3. resolved challenges
-4. selected evidence bundles
-5. explicit report basis
+report-editor 只消费这些显式对象。helper artifact、context packet、source selection 或 query result 本身不得被自动当作结论。
 
-## 4. 新增或强化的治理对象
+## 4. 薄治理对象
 
 ### 4.1 `investigation-plan`
 
-用途：记录 moderator 对开放 mission 的调查拆分。
+用途：记录 moderator 的调查组织意图。
 
-关键字段：
+最小字段：
 
 1. `plan_id`
-2. `mission_id`
-3. `planning_round_id`
-4. `planning_status`
-5. `subissue_ids`
-6. `scope_ids`
-7. `priority_order`
-8. `rationale`
-9. `revision_history`
+2. `mission_ref`
+3. `author_role`
+4. `planning_round_id`
+5. `plan_status=draft|active|superseded|withdrawn`
+6. `proposed_subissue_refs`
+7. `scope_hint_refs`
+8. `open_questions`
+9. `rationale`
+10. `supersedes_plan_id`
+
+禁止字段：
+
+1. numeric priority
+2. weight
+3. score
+4. automatic source ranking
+5. mandatory agenda order
 
 ### 4.2 `subissue`
 
-用途：一个可独立调查、推理、挑战和归纳的子议题。
+用途：表达一个可被调查、挑战和归纳的问题对象。
 
-关键字段：
+最小字段：
 
 1. `subissue_id`
 2. `title`
 3. `question`
 4. `parent_plan_id`
-5. `priority`
-6. `required_roles`
-7. `evidence_need_ids`
-8. `status`
-9. `synthesis_criticality`
+5. `status=proposed|active|closed|withheld`
+6. `rationale`
+7. `created_by_role`
+
+边界：
+
+1. 不设置 numeric priority。
+2. 不设置 required_roles。
+3. 不设置 synthesis criticality 分数。
+4. 是否进入 synthesis 由显式 position/report-basis 对象决定。
 
 ### 4.3 `investigation-scope`
 
 用途：表达候选或激活的对象范围、时空范围、指标范围。
 
-关键字段：
+最小字段：
 
 1. `scope_id`
 2. `scope_kind`
@@ -206,57 +254,76 @@ report-editor 只消费：
 8. `comparison_frame`
 9. `rationale`
 
+边界：
+
+1. scope 可以为空或局部未知。
+2. scope 是 agent/council 可修订对象，不是 mission 编译后的硬约束。
+
 ### 4.4 `round-brief`
 
-用途：每轮 round 的机器可读任务说明。
+用途：给本轮 agent turn 提供协调材料。
 
-关键字段：
+最小字段：
 
 1. `round_id`
-2. `round_mode=scoping|subissue|supplemental|synthesis`
-3. `target_subissue_id`
-4. `target_challenge_id`
-5. `active_scope_ids`
-6. `evidence_need_ids`
-7. `allowed_roles`
-8. `expected_outputs`
-9. `context_packet_id`
+2. `round_mode=scoping|investigation|supplemental|synthesis`
+3. `primary_focus_refs`
+4. `context_packet_id`
+5. `open_questions`
+6. `source_boundary_notes`
+7. `invited_roles`
+8. `requested_outputs`
 
-### 4.5 `evidence-need`
+边界：
 
-用途：表达当前子议题需要什么类型证据，而不是直接写死抓取参数。
+1. `invited_roles` 不是权限表；真实权限仍由 role contracts 和 access policy 控制。
+2. `requested_outputs` 是提示，不是 runtime hard gate。
+3. agent 可以提交 brief revision request。
 
-关键字段：
+### 4.5 `evidence-request`
 
-1. `evidence_need_id`
-2. `subissue_id`
-3. `need_kind`
-4. `minimum_coverage`
-5. `candidate_source_families`
-6. `quality_requirements`
-7. `blocking_if_missing`
+用途：表达 agent/council 想寻找什么证据，而不是写死抓取参数或 source 排序。
 
-### 4.6 `sub-conclusion`
+最小字段：
 
-用途：每个子议题的阶段性结论。
+1. `evidence_request_id`
+2. `target_ref`
+3. `question`
+4. `desired_evidence_type`
+5. `source_hints`
+6. `boundary_notes`
+7. `rationale`
+8. `created_by_role`
 
-关键字段：
+禁止字段：
 
-1. `sub_conclusion_id`
-2. `subissue_id`
-3. `round_id`
+1. `minimum_coverage`
+2. `quality_score`
+3. `blocking_if_missing`
+4. `candidate_source_weight`
+5. `recommended_source_rank`
+
+### 4.6 `agent-position`
+
+用途：agent 对某个 target 的阶段性立场或结论候选。
+
+最小字段：
+
+1. `position_id`
+2. `target_ref`
+3. `author_role`
 4. `claim_summary`
-5. `support_level`
-6. `evidence_refs`
-7. `limitations`
-8. `challenge_ids`
-9. `synthesis_status`
+5. `evidence_refs`
+6. `limitations`
+7. `open_challenge_refs`
+8. `rationale`
+9. `status=proposed|withheld|needs-more-evidence`
 
 ### 4.7 `context-packet`
 
 用途：为 agent turn 提供压缩上下文。
 
-关键字段：
+最小字段：
 
 1. `context_packet_id`
 2. `packet_profile`
@@ -264,43 +331,67 @@ report-editor 只消费：
 4. `included_object_refs`
 5. `excluded_object_refs`
 6. `summary_text`
-7. `token_budget_estimate`
-8. `raw_data_policy`
+7. `raw_data_policy`
+8. `source_refs`
+
+边界：
+
+1. packet 不做 salience ranking。
+2. packet 不根据权重自动删除反证。
+3. packet 只说明 included/excluded 的 provenance 和范围理由。
+4. token/字符预算来自 operator 配置或 human request，不写死 25% 之类启发式阈值。
 
 ## 5. Runtime 与 Skill 修改计划
 
-### P0：契约与 schema 设计
+### P0：薄对象 envelope 与 query surface
 
 修改范围：
 
 1. `eco-concil-runtime/src/eco_council_runtime/contracts/deliberation.py`
 2. `eco-concil-runtime/src/eco_council_runtime/contracts/reporting.py`
 3. `eco-concil-runtime/src/eco_council_runtime/kernel/planes/...`
-4. 新增 migration 测试。
+4. migration 测试
 
 验收：
 
-1. 新对象都有 canonical contract。
-2. DB schema 可从旧 run 迁移。
-3. query surface 能查询 plan/subissue/scope/round-brief/sub-conclusion/context-packet。
+1. 新对象只引入薄 envelope 和必要索引。
+2. DB schema 不引入 score/weight/rank/priority_order。
+3. query surface 能按 kind、author_role、target_ref、round_id 查询对象。
+4. 旧 run 可迁移或作为历史 fixture 被读取，不伪装成新角色模型。
 
-### P1：Moderator planning write surface
+### P1：Moderator coordination write surface
 
 新增或扩展 skills：
 
-1. `draft-investigation-plan`
-2. `submit-investigation-plan`
-3. `update-investigation-scope`
-4. `submit-round-brief`
-5. `submit-sub-conclusion`
+1. `submit-investigation-plan`
+2. `submit-investigation-scope`
+3. `submit-round-brief`
+4. `submit-evidence-request`
+5. `submit-agent-position`
 
 验收：
 
 1. moderator 可以在没有明确时空域的 mission 上发布 plan。
-2. plan 中至少能表达多个 subissues。
+2. plan 可表达多个 proposed subissues 或 scope hints。
 3. operator 不参与 plan 内容。
+4. investigator/challenger 可以提交 plan 或 scope revision request。
 
-### P2：Round lifecycle 改造
+### P2：Skill boundary audit
+
+修改重点：
+
+1. fetch skills 只输出 raw artifact、receipt、source metadata。
+2. normalize skills 只输出 normalized signals 和转换 provenance。
+3. query skills 只输出匹配结果和查询条件。
+4. analysis skills 只输出可复现派生对象，不输出采信排序。
+
+验收：
+
+1. skill payload 不包含 evidence score、weight、rank、recommended conclusion。
+2. 如存在列表顺序，文档必须说明只是 deterministic display order。
+3. evidence bundle 的组合由 agent 提交，不由 skill 自动合成。
+
+### P3：Round lifecycle 改造
 
 修改：
 
@@ -311,32 +402,33 @@ report-editor 只消费：
 
 行为：
 
-1. 若存在 `round-brief`，prepare-round 以 round-brief 为主。
-2. 若无 round-brief，才回退到 mission scaffold。
-3. `open-investigation-round` 支持 `round_mode`、`target_subissue_id`、`target_challenge_id`、`context_packet_id`。
+1. 若存在 `round-brief`，prepare-round 将其作为 context hint。
+2. 若无 round-brief，继续允许 agent 从 mission/context 自主提出首轮调查动作。
+3. `open-investigation-round` 支持 `round_mode`、`primary_focus_refs`、`target_challenge_id`、`context_packet_id`。
 
 验收：
 
-1. subissue round 不读取其他 subissue 的任务面。
-2. supplemental round 只给相关角色开放必要 read/write/fetch surface。
-3. round transition request 由 moderator 发起，operator 只审批。
+1. round brief 不会隐藏 agent 可用的合法 write surface。
+2. supplemental round 默认给最小上下文，但允许 agent 请求扩展。
+3. round transition request 由 moderator 发起，operator 只审批程序性动作。
 
-### P3：Challenger blocking 与 disposition
+### P4：Challenger blocking 与 disposition
 
 修改：
 
-1. challenge ticket schema。
-2. readiness gate。
-3. report basis gate。
-4. challenger constraints。
+1. challenge ticket envelope。
+2. challenge disposition envelope。
+3. readiness gate。
+4. report basis gate。
 
 验收：
 
-1. blocking challenge 会阻断 target subissue 的 synthesis status。
+1. blocking challenge 会阻断对应 target 进入 synthesis/report basis。
 2. 未 disposition 的 blocking challenge 不允许 report basis freeze。
-3. resolved challenge 可以恢复 target subissue 的 synthesis eligibility。
+3. resolved/accepted-as-limitation challenge 可以恢复 target 的 synthesis eligibility。
+4. runtime 不判断 challenge 内容真伪，只检查对象状态和引用完整性。
 
-### P4：Context packet 与 token 压缩
+### P5：Context packet 与压缩
 
 新增 skill：
 
@@ -344,32 +436,33 @@ report-editor 只消费：
 
 packet profiles：
 
-1. `scoping-full`
-2. `subissue-standard`
-3. `supplemental-minimal`
-4. `synthesis-basis`
+1. `scoping`
+2. `investigation`
+3. `supplemental`
+4. `synthesis`
 
 验收：
 
-1. supplemental packet 不包含 raw records。
-2. supplemental packet 只包含 target challenge/subissue/evidence refs/delta。
-3. packet 有字符数或 token estimate。
+1. packet 默认不包含 raw records。
+2. packet 包含 target refs、evidence refs、delta refs 和 excluded refs。
+3. packet 不进行权重筛选或 salience 排序。
 4. agent workspace 中默认暴露 context packet 指针，而不是全量历史。
 
-### P5：Synthesis 与 reporting gate
+### P6：Synthesis 与 reporting gate
 
 修改：
 
 1. `materialize-reporting-handoff`
 2. `draft-council-decision`
 3. `publish-council-decision`
-4. report basis freeze gate。
+4. report basis freeze gate
 
 验收：
 
-1. reporting handoff 只消费 ready/frozen sub-conclusions。
+1. reporting handoff 只消费显式 council objects。
 2. accepted limitations 与 unresolved challenges 分开展示。
 3. report 不从 helper artifact 直接摘取结论。
+4. final publication 不采纳没有 author_role/provenance/evidence_refs 的结论。
 
 ## 6. 验收指标
 
@@ -383,60 +476,73 @@ packet profiles：
 必须满足：
 
 1. 初始化不要求单一 region/window。
-2. moderator 生成 investigation-plan。
-3. plan 中存在多个 subissues 或 candidate scopes。
+2. moderator 可生成 investigation-plan，但 plan 不锁定唯一议程。
+3. investigator/challenger 可提出 scope 或 subissue revision。
 4. 第一轮不会直接执行全量 fetch。
 5. operator trace 中没有调查方向内容。
 
-### 6.2 子议题 round 验收
+### 6.2 Agent 自主调查验收
 
 必须满足：
 
-1. 每个 evidence round 有且只有一个 primary subissue。
-2. 每个 subissue round 有 round-brief。
-3. fetch/normalize/query surface 来自 round-brief 和 role surface。
-4. 每轮产出 sub-conclusion 或 needs-more-evidence 状态。
+1. agent 可以提交未在 round brief 中列出的相关 finding 或 evidence-request。
+2. agent 可以说明某个 source hint 不适用。
+3. agent 可以把证据作为 limitation 而非 supporting evidence。
+4. runtime 不因 agent 输出不符合 `requested_outputs` 而拒绝对象。
 
-### 6.3 Challenger 验收
+### 6.3 Skill 边界验收
+
+必须满足：
+
+1. skill 不输出 score/weight/rank/recommended conclusion。
+2. skill 不自动把 query results 合成为 evidence bundle。
+3. skill 输出必须保留 provenance、query/source parameters、artifact refs。
+4. skill 的缺证说明只能描述缺口，不能裁定结论不成立。
+
+### 6.4 Challenger 验收
 
 必须满足：
 
 1. challenger challenge 绑定 target object。
-2. blocking challenge 阻断对应 subissue。
+2. blocking challenge 阻断对应 target 的 synthesis/report basis。
 3. moderator 能基于 challenge 发布 supplemental-round request。
-4. supplemental round 完成后必须写 disposition。
+4. supplemental round 完成后由 agent/council 写 disposition。
 
-### 6.4 Token 压缩验收
-
-必须满足：
-
-1. supplemental context packet 不超过 full scoping packet 的 25% 字符数，或低于项目设置的硬阈值。
-2. packet 不包含 raw record 全文。
-3. packet 中 evidence 以 refs 和摘要呈现。
-4. agent prompt 不注入 unrelated subissue history。
-
-### 6.5 Reporting 验收
+### 6.5 Context Packet 验收
 
 必须满足：
 
-1. 未完成 critical subissue 时不能 final publication。
-2. unresolved blocking challenge 时不能 freeze report basis。
-3. final report 能列出 sub-conclusions、limitations、resolved/unresolved challenges。
+1. packet 不包含 raw record 全文，除非 human/operator 明确授权。
+2. packet 中 evidence 以 refs 和摘要呈现。
+3. packet 记录 included/excluded refs。
+4. packet 不使用固定百分比阈值或自动 salience ranking。
+5. agent prompt 不注入 unrelated history，但 agent 可请求扩展上下文。
+
+### 6.6 Reporting 验收
+
+必须满足：
+
+1. unresolved blocking challenge 时不能 freeze report basis。
+2. final report 能列出 positions、limitations、resolved/unresolved challenges。
+3. final report 的每个结论都有 author_role 和 evidence_refs。
+4. final publication 不从 runtime helper artifact 自动生成结论。
 
 ## 7. 回归测试计划
 
 新增测试建议：
 
 1. `tests/test_dynamic_investigation_planning.py`
-   - broad mission -> plan/subissue/scope。
-2. `tests/test_subissue_round_lifecycle.py`
-   - round-brief -> prepare-round -> role surface。
-3. `tests/test_challenger_supplemental_round.py`
+   - broad mission -> plan/subissue/scope hints。
+2. `tests/test_agent_autonomy_round_lifecycle.py`
+   - round-brief -> prepare-round -> agent 提交 brief 外相关 finding。
+3. `tests/test_skill_evidence_only_boundary.py`
+   - skill payload 不包含 score/weight/rank/recommended conclusion。
+4. `tests/test_challenger_supplemental_round.py`
    - challenge -> supplemental round request -> disposition。
-4. `tests/test_context_packet_workflow.py`
-   - packet profile、压缩、raw data exclusion。
-5. `tests/test_dynamic_reporting_gate.py`
-   - subissue readiness 与 report basis gate。
+5. `tests/test_context_packet_workflow.py`
+   - packet profile、raw data exclusion、no salience ranking。
+6. `tests/test_dynamic_reporting_gate.py`
+   - blocking challenge 与 explicit council objects 控制 report basis gate。
 
 质量门：
 
@@ -452,21 +558,24 @@ packet profiles：
 2. 自动确定“真实世界最佳调查范围”。
 3. 自动替代专家判断。
 4. operator 主导调查方向。
-5. 为特定案例硬编码河流、城市、火点或指标列表。
+5. runtime 主导证据采信。
+6. skill 自动生成结论或证据权重。
+7. 为特定案例硬编码河流、城市、火点或指标列表。
 
 ## 9. 风险与边界
 
 主要风险：
 
-1. moderator 过度规划，产生过多 subissues。
+1. moderator 过度规划，导致 agent 被隐性议程锁定。
 2. context packet 过度压缩，丢失关键反证。
 3. challenge disposition 被当成形式动作。
-4. report gate 仍可能从非 frozen 对象取结论。
+4. report gate 从非显式 council object 取结论。
+5. skill 逐步滑向推荐系统或证据打分系统。
 
 对应约束：
 
-1. plan 必须有 priority 和 synthesis criticality。
-2. packet 必须保留 evidence refs 和 excluded refs。
-3. challenge disposition 必须带 rationale 和 evidence refs。
-4. report basis 只接受 frozen/ready sub-conclusions 与 selected evidence bundles。
-
+1. plan/round brief 只能作为 council coordination object。
+2. packet 必须保留 included/excluded refs 和范围理由。
+3. challenge disposition 必须带 rationale 和 target refs。
+4. report basis 只接受 agent/council 显式提交的 positions、findings、evidence bundles、limitations、challenge dispositions。
+5. 任何 score/weight/rank/heuristic selection 字段都必须作为架构异味处理，除非 human 明确要求且另行设计治理边界。

@@ -33,6 +33,11 @@ from eco_council_runtime.reporting_status import (  # noqa: E402
     reporting_blocker_summaries,
     reporting_gate_state,
 )
+from eco_council_runtime.report_basis_policy import (  # noqa: E402
+    accepted_limitations_from_constraints,
+    report_basis_input_policy,
+    unresolved_challenges_from_constraints,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -480,8 +485,25 @@ def build_uncertainty_register(
     open_risks: list[dict[str, str]],
     reporting_blocker_hints: list[str],
     evidence_index: list[dict[str, Any]],
+    accepted_limitations: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     register: list[dict[str, Any]] = []
+    for index, limitation in enumerate(accepted_limitations, start=1):
+        if not isinstance(limitation, dict):
+            continue
+        summary = maybe_text(limitation.get("summary"))
+        if not summary:
+            continue
+        register.append(
+            {
+                "uncertainty_id": maybe_text(limitation.get("limitation_id"))
+                or f"accepted-limitation-{index:03d}",
+                "uncertainty_type": "accepted-limitation",
+                "summary": summary,
+                "report_treatment": maybe_text(limitation.get("report_treatment"))
+                or "Carry as an explicit limitation.",
+            }
+        )
     for index, risk in enumerate(open_risks, start=1):
         summary = maybe_text(risk.get("summary")) if isinstance(risk, dict) else ""
         if not summary:
@@ -524,8 +546,25 @@ def build_residual_disputes(
     rejected_proposal_ids: list[str],
     rejected_opinion_ids: list[str],
     open_risks: list[dict[str, str]],
+    unresolved_challenges: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     disputes: list[dict[str, Any]] = []
+    for challenge in unresolved_challenges:
+        if not isinstance(challenge, dict):
+            continue
+        summary = maybe_text(challenge.get("summary"))
+        if not summary:
+            continue
+        disputes.append(
+            {
+                "dispute_id": maybe_text(challenge.get("challenge_id"))
+                or "unresolved-challenge",
+                "object_kind": "challenger-constraint",
+                "object_id": maybe_text(challenge.get("constraint_id")),
+                "summary": summary,
+                "status": "unresolved",
+            }
+        )
     for index, blocker in enumerate(reporting_blockers, start=1):
         summaries = reporting_blocker_summaries([blocker])
         disputes.append(
@@ -578,20 +617,7 @@ def build_policy_recommendations(
     recommended_next_actions: list[dict[str, str]],
     uncertainty_register: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    if reporting_ready:
-        return []
-    recommendations: list[dict[str, Any]] = []
-    for index, action in enumerate(recommended_next_actions, start=1):
-        recommendations.append(
-            {
-                "recommendation_id": f"next-round-action-{index:03d}",
-                "recommendation_type": "follow-up-investigation",
-                "summary": maybe_text(action.get("objective")),
-                "assigned_role": maybe_text(action.get("assigned_role")),
-                "basis": maybe_text(action.get("reason")),
-            }
-        )
-    return [item for item in recommendations if maybe_text(item.get("summary"))][:6]
+    return []
 
 
 def build_packets(
@@ -616,6 +642,8 @@ def build_packets(
     recommended_next_actions: list[dict[str, str]],
     council_basis: dict[str, list[dict[str, Any]]],
     reporting_blocker_hints: list[str],
+    accepted_limitations: list[dict[str, Any]],
+    unresolved_challenges: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     evidence_index = build_evidence_index(
         selected_evidence_refs=selected_evidence_refs,
@@ -625,12 +653,14 @@ def build_packets(
         open_risks=open_risks,
         reporting_blocker_hints=reporting_blocker_hints,
         evidence_index=evidence_index,
+        accepted_limitations=accepted_limitations,
     )
     residual_disputes = build_residual_disputes(
         reporting_blockers=reporting_blockers,
         rejected_proposal_ids=rejected_proposal_ids,
         rejected_opinion_ids=rejected_opinion_ids,
         open_risks=open_risks,
+        unresolved_challenges=unresolved_challenges,
     )
     policy_recommendations = build_policy_recommendations(
         reporting_ready=reporting_ready,
@@ -654,6 +684,7 @@ def build_packets(
             "Helper and heuristic outputs are not direct report_basis unless cited through DB council/reporting objects.",
             "Frozen evidence refs identify citation candidates; report conclusions require finding, evidence bundle, proposal, or report section basis.",
         ],
+        "report_basis_input_policy": report_basis_input_policy(),
     }
     decision_packet = {
         "packet_id": f"decision-packet-{packet_suffix}",
@@ -672,6 +703,9 @@ def build_packets(
         "open_risks": open_risks,
         "recommended_next_actions": recommended_next_actions,
         "residual_disputes": residual_disputes,
+        "accepted_limitations": accepted_limitations,
+        "unresolved_challenges": unresolved_challenges,
+        "report_basis_input_policy": report_basis_input_policy(),
     }
     report_packet = {
         "packet_id": f"report-packet-{packet_suffix}",
@@ -690,7 +724,10 @@ def build_packets(
         ],
         "uncertainty_register": uncertainty_register,
         "residual_disputes": residual_disputes,
+        "accepted_limitations": accepted_limitations,
+        "unresolved_challenges": unresolved_challenges,
         "policy_recommendations": policy_recommendations,
+        "report_basis_input_policy": report_basis_input_policy(),
     }
     return evidence_packet, decision_packet, report_packet
 
@@ -912,6 +949,10 @@ def materialize_reporting_handoff_skill(
         for constraint in list_items(source.get("basis_use_constraints"))
         if isinstance(constraint, dict)
     ]
+    accepted_limitations = accepted_limitations_from_constraints(basis_use_constraints)
+    unresolved_challenges = unresolved_challenges_from_constraints(
+        unresolved_challenger_constraints
+    )
     lead_basis_constraint_violations = [
         violation
         for violation in list_items(
@@ -1027,6 +1068,8 @@ def materialize_reporting_handoff_skill(
         recommended_next_actions=next_actions,
         council_basis=council_basis,
         reporting_blocker_hints=reporting_blocker_hints,
+        accepted_limitations=accepted_limitations,
+        unresolved_challenges=unresolved_challenges,
     )
     board_excerpt = excerpt_text(board_brief_text)
     handoff_id = "reporting-handoff-" + stable_hash(run_id, round_id, handoff_status, report_basis_status)[:12]
@@ -1089,6 +1132,9 @@ def materialize_reporting_handoff_skill(
         ),
         "unresolved_challenger_constraints": unresolved_challenger_constraints,
         "basis_use_constraints": basis_use_constraints,
+        "accepted_limitations": accepted_limitations,
+        "unresolved_challenges": unresolved_challenges,
+        "report_basis_input_policy": report_basis_input_policy(),
         "report_claim_structure": (
             report_basis_freeze.get("report_claim_structure", {})
             if isinstance(report_basis_freeze.get("report_claim_structure"), dict)

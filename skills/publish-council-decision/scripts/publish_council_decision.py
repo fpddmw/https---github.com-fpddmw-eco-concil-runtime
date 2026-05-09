@@ -354,6 +354,13 @@ def publish_council_decision_skill(
             else []
         )
     )
+    accepted_limitations = list_items(draft_payload.get("accepted_limitations"))
+    unresolved_challenges = list_items(draft_payload.get("unresolved_challenges"))
+    report_basis_input_policy = (
+        draft_payload.get("report_basis_input_policy")
+        if isinstance(draft_payload.get("report_basis_input_policy"), dict)
+        else {}
+    )
     all_proposals = load_council_proposals(
         run_dir_path,
         run_id=run_id,
@@ -537,6 +544,9 @@ def publish_council_decision_skill(
             "published_report_refs": unique_texts(report_refs),
             "report_basis_id": report_basis_id,
             "selected_basis_object_ids": selected_basis_object_ids,
+            "accepted_limitations": accepted_limitations,
+            "unresolved_challenges": unresolved_challenges,
+            "report_basis_input_policy": report_basis_input_policy,
             "supporting_proposal_ids": supporting_proposal_ids,
             "rejected_proposal_ids": rejected_proposal_ids,
             "supporting_opinion_ids": supporting_opinion_ids,

@@ -30,6 +30,13 @@ from eco_council_runtime.kernel.source_queue.source_queue_history import (  # no
     load_round_tasks_wrapper,
 )
 from eco_council_runtime.kernel.source_queue.source_queue_selection import build_source_selections  # noqa: E402
+from eco_council_runtime.objects.council import query_council_objects  # noqa: E402
+
+
+ROUND_BRIEF_HINT_SEMANTICS = (
+    "Optional coordination context only; it does not restrict agent write "
+    "surfaces, source selection, evidence acceptance, or investigator autonomy."
+)
 
 
 def pretty_json(data: Any, pretty: bool) -> str:
@@ -48,6 +55,77 @@ def normalize_actor_role_for_source_role(role: str) -> str:
     if role == "social-investigator":
         return "social-investigator"
     return role
+
+
+def text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [maybe_text(item) for item in value if maybe_text(item)]
+
+
+def latest_round_brief_context(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
+    query = {
+        "object_kind": "round-brief",
+        "run_id": maybe_text(run_id),
+        "round_id": maybe_text(round_id),
+        "limit": 1,
+    }
+    try:
+        result = query_council_objects(
+            run_dir,
+            object_kind="round-brief",
+            run_id=run_id,
+            round_id=round_id,
+            limit=1,
+        )
+    except ValueError as exc:
+        return {
+            "present": False,
+            "source": "deliberation-plane",
+            "query": query,
+            "error": str(exc),
+            "semantics": ROUND_BRIEF_HINT_SEMANTICS,
+        }
+    objects = result.get("objects", []) if isinstance(result.get("objects"), list) else []
+    brief = objects[0] if objects and isinstance(objects[0], dict) else {}
+    if not brief:
+        return {
+            "present": False,
+            "source": "deliberation-plane",
+            "query": query,
+            "matching_object_count": int(result.get("summary", {}).get("matching_object_count") or 0)
+            if isinstance(result.get("summary"), dict)
+            else 0,
+            "semantics": ROUND_BRIEF_HINT_SEMANTICS,
+        }
+    return {
+        "present": True,
+        "source": "deliberation-plane",
+        "query": query,
+        "object_kind": "round-brief",
+        "object_id": maybe_text(brief.get("object_id")),
+        "author_role": maybe_text(brief.get("author_role")),
+        "status": maybe_text(brief.get("status")),
+        "round_mode": maybe_text(brief.get("round_mode")),
+        "target_kind": maybe_text(brief.get("target_kind")),
+        "target_id": maybe_text(brief.get("target_id")),
+        "context_packet_id": maybe_text(brief.get("context_packet_id")),
+        "primary_focus_refs": text_list(brief.get("primary_focus_refs")),
+        "open_questions": text_list(brief.get("open_questions")),
+        "requested_outputs": text_list(brief.get("requested_outputs")),
+        "invited_roles": text_list(brief.get("invited_roles")),
+        "boundary_notes": text_list(brief.get("boundary_notes")),
+        "source_boundary_notes": text_list(brief.get("source_boundary_notes")),
+        "brief_text": maybe_text(brief.get("brief_text")),
+        "rationale": maybe_text(brief.get("rationale")),
+        "semantics": ROUND_BRIEF_HINT_SEMANTICS,
+        "object": brief,
+    }
 
 
 def suggested_next_skill_runs_for_selections(selections: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -103,6 +181,11 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
     if not task_artifact_present:
         write_json_file(task_path, tasks)
 
+    round_brief_context = latest_round_brief_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
     selections = build_source_selections(run_dir=run_dir_path, mission=mission, tasks=tasks, run_id=run_id, round_id=round_id)
     write_source_selections(run_dir_path, round_id, selections)
     plan_payload, warnings = build_fetch_plan(
@@ -115,9 +198,16 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
     )
     plan_payload["task_path"] = str(task_path)
     plan_payload["task_source"] = task_source
+    plan_payload["round_brief_context"] = round_brief_context
+    plan_payload["coordination_context"] = {
+        "round_brief": round_brief_context,
+        "semantics": ROUND_BRIEF_HINT_SEMANTICS,
+    }
     plan_payload["observed_inputs"] = {
         "round_tasks_artifact_present": task_artifact_present,
         "round_tasks_present": task_present,
+        "round_brief_present": bool(round_brief_context.get("present")),
+        "round_brief_source": maybe_text(round_brief_context.get("source")),
     }
     write_json_file(output_path, plan_payload)
 
@@ -151,6 +241,8 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
             "source_count": len({maybe_text(item) for item in selected_sources if maybe_text(item)}),
             "step_count": len(plan_payload["steps"]),
             "task_source": task_source,
+            "round_brief_id": maybe_text(round_brief_context.get("object_id")),
+            "round_brief_present": bool(round_brief_context.get("present")),
             "selection_statuses": {
                 role: maybe_text(payload.get("selection_status"))
                 for role, payload in plan_payload.get("roles", {}).items()
@@ -160,10 +252,24 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
         "receipt_id": "ingress-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, plan_payload["plan_id"])[:20],
         "batch_id": "ingressbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_path.name)[:16],
         "artifact_refs": artifact_refs,
-        "canonical_ids": [plan_payload["plan_id"]],
+        "canonical_ids": [
+            item
+            for item in [
+                plan_payload["plan_id"],
+                maybe_text(round_brief_context.get("object_id")),
+            ]
+            if maybe_text(item)
+        ],
         "warnings": warnings,
         "board_handoff": {
-            "candidate_ids": [plan_payload["plan_id"]],
+            "candidate_ids": [
+                item
+                for item in [
+                    plan_payload["plan_id"],
+                    maybe_text(round_brief_context.get("object_id")),
+                ]
+                if maybe_text(item)
+            ],
             "evidence_refs": artifact_refs,
             "gap_hints": [item["message"] for item in warnings],
             "challenge_hints": [],

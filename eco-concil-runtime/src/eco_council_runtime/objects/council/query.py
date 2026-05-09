@@ -11,13 +11,19 @@ from eco_council_runtime.contracts import (
 )
 from .schema import connect_db
 from .payloads import (
+    DYNAMIC_INVESTIGATION_OBJECT_KINDS,
     OBJECT_KIND_BOARD_TASK,
     OBJECT_KIND_CHALLENGE,
+    OBJECT_KIND_CHALLENGE_DISPOSITION,
+    OBJECT_KIND_CONTEXT_PACKET,
     OBJECT_KIND_DECISION_TRACE,
     OBJECT_KIND_DISCUSSION_MESSAGE,
     OBJECT_KIND_EVIDENCE_BUNDLE,
+    OBJECT_KIND_EVIDENCE_REQUEST,
     OBJECT_KIND_FINDING,
     OBJECT_KIND_HYPOTHESIS,
+    OBJECT_KIND_INVESTIGATION_PLAN,
+    OBJECT_KIND_INVESTIGATION_SCOPE,
     OBJECT_KIND_NEXT_ACTION,
     OBJECT_KIND_PROBE,
     OBJECT_KIND_PROPOSAL,
@@ -25,6 +31,9 @@ from .payloads import (
     OBJECT_KIND_READINESS_OPINION,
     OBJECT_KIND_REPORT_BASIS_FREEZE,
     OBJECT_KIND_REVIEW_COMMENT,
+    OBJECT_KIND_ROUND_BRIEF,
+    OBJECT_KIND_AGENT_POSITION,
+    OBJECT_KIND_SUBISSUE,
 )
 from eco_council_runtime.deliberation_target_semantics import canonical_target_kind
 from eco_council_runtime.kernel.planes.deliberation_plane import maybe_text, payload_from_db_row
@@ -205,6 +214,36 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
     },
 }
 
+_DYNAMIC_INVESTIGATION_QUERY_OBJECT_KINDS = (
+    OBJECT_KIND_INVESTIGATION_PLAN,
+    OBJECT_KIND_SUBISSUE,
+    OBJECT_KIND_INVESTIGATION_SCOPE,
+    OBJECT_KIND_ROUND_BRIEF,
+    OBJECT_KIND_EVIDENCE_REQUEST,
+    OBJECT_KIND_AGENT_POSITION,
+    OBJECT_KIND_CHALLENGE_DISPOSITION,
+    OBJECT_KIND_CONTEXT_PACKET,
+)
+
+for _dynamic_object_kind in _DYNAMIC_INVESTIGATION_QUERY_OBJECT_KINDS:
+    if _dynamic_object_kind not in DYNAMIC_INVESTIGATION_OBJECT_KINDS:
+        continue
+    QUERY_CONFIGS[_dynamic_object_kind] = {
+        "table_name": "dynamic_investigation_objects",
+        "id_column": "object_id",
+        "timestamp_column": "generated_at_utc",
+        "order_by": "generated_at_utc DESC, object_id DESC",
+        "agent_role_column": "author_role",
+        "status_column": "status",
+        "decision_id_column": "",
+        "object_kind_column": "object_kind",
+        "object_kind_value": _dynamic_object_kind,
+        "filter_columns": {
+            "target_kind": "target_kind",
+            "target_id": "target_id",
+        },
+    }
+
 
 def council_queryable_object_kinds() -> list[str]:
     target_kinds = set(canonical_contract_kinds(plane=PLANE_DELIBERATION))
@@ -324,6 +363,10 @@ def query_council_objects(
     safe_offset = max(0, int(offset or 0))
     where_clauses: list[str] = []
     params: list[str] = []
+    object_kind_column = maybe_text(config.get("object_kind_column"))
+    if object_kind_column:
+        where_clauses.append(f"{object_kind_column} = ?")
+        params.append(maybe_text(config.get("object_kind_value")) or normalized_kind)
     if maybe_text(run_id):
         where_clauses.append("run_id = ?")
         params.append(maybe_text(run_id))

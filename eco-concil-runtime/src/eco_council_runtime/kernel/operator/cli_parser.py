@@ -10,7 +10,10 @@ from eco_council_runtime.contracts import (
     PLANE_SIGNAL,
 )
 from eco_council_runtime.control_objects import control_queryable_object_kinds
-from eco_council_runtime.objects.council import council_queryable_object_kinds
+from eco_council_runtime.objects.council import (
+    DYNAMIC_INVESTIGATION_OBJECT_KINDS,
+    council_queryable_object_kinds,
+)
 from eco_council_runtime.kernel.archive.post_round import ARCHIVE_FAILURE_POLICIES
 from eco_council_runtime.kernel.governance.runtime_governance import CONTRACT_MODES
 from eco_council_runtime.kernel.governance.transition_requests import (
@@ -422,6 +425,30 @@ def build_parser() -> argparse.ArgumentParser:
     submit_evidence_cmd.add_argument("--evidence-ref", action="append", default=[])
     submit_evidence_cmd.add_argument("--provenance-json", default="{}")
     submit_evidence_cmd.add_argument("--pretty", action="store_true")
+
+    submit_dynamic_investigation_cmd = sub.add_parser(
+        "submit-dynamic-investigation-object",
+        help="Persist one thin dynamic investigation planning object for the selected round.",
+    )
+    submit_dynamic_investigation_cmd.add_argument("--run-dir", required=True)
+    submit_dynamic_investigation_cmd.add_argument("--run-id", required=True)
+    submit_dynamic_investigation_cmd.add_argument("--round-id", required=True)
+    add_actor_role_arg(submit_dynamic_investigation_cmd)
+    submit_dynamic_investigation_cmd.add_argument(
+        "--object-kind",
+        required=True,
+        choices=DYNAMIC_INVESTIGATION_OBJECT_KINDS,
+    )
+    submit_dynamic_investigation_cmd.add_argument("--author-role", default="")
+    submit_dynamic_investigation_cmd.add_argument("--status", default="")
+    submit_dynamic_investigation_cmd.add_argument("--target-kind", default="round")
+    submit_dynamic_investigation_cmd.add_argument("--target-id", default="")
+    submit_dynamic_investigation_cmd.add_argument("--rationale", required=True)
+    submit_dynamic_investigation_cmd.add_argument("--evidence-ref", action="append", default=[])
+    submit_dynamic_investigation_cmd.add_argument("--lineage-ref", action="append", default=[])
+    submit_dynamic_investigation_cmd.add_argument("--payload-json", default="{}")
+    submit_dynamic_investigation_cmd.add_argument("--provenance-json", default="{}")
+    submit_dynamic_investigation_cmd.add_argument("--pretty", action="store_true")
 
     submit_section_cmd = sub.add_parser(
         "submit-report-section-draft",

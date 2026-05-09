@@ -3,6 +3,30 @@ from __future__ import annotations
 from .types import CanonicalContract, PLANE_DELIBERATION, _contract
 
 
+def _dynamic_investigation_contract(
+    object_kind: str,
+    *,
+    schema_version: str,
+) -> CanonicalContract:
+    return _contract(
+        object_kind,
+        plane=PLANE_DELIBERATION,
+        schema_version=schema_version,
+        id_field="object_id",
+        required_text_fields=(
+            "object_kind",
+            "decision_source",
+            "author_role",
+            "status",
+            "target_kind",
+            "target_id",
+            "rationale",
+        ),
+        required_list_fields=("evidence_refs", "lineage"),
+        required_dict_fields=("provenance", "target"),
+    )
+
+
 DELIBERATION_CONTRACTS: dict[str, CanonicalContract] = {
     "proposal": _contract(
         "proposal",
@@ -125,6 +149,38 @@ DELIBERATION_CONTRACTS: dict[str, CanonicalContract] = {
         required_non_empty_dict_fields=("provenance", "target"),
         optional_text_fields=("report_risk", "constraint_disposition"),
         optional_list_fields=("required_followup_evidence",),
+    ),
+    "investigation-plan": _dynamic_investigation_contract(
+        "investigation-plan",
+        schema_version="investigation-plan-v1",
+    ),
+    "subissue": _dynamic_investigation_contract(
+        "subissue",
+        schema_version="subissue-v1",
+    ),
+    "investigation-scope": _dynamic_investigation_contract(
+        "investigation-scope",
+        schema_version="investigation-scope-v1",
+    ),
+    "round-brief": _dynamic_investigation_contract(
+        "round-brief",
+        schema_version="round-brief-v1",
+    ),
+    "evidence-request": _dynamic_investigation_contract(
+        "evidence-request",
+        schema_version="evidence-request-v1",
+    ),
+    "agent-position": _dynamic_investigation_contract(
+        "agent-position",
+        schema_version="agent-position-v1",
+    ),
+    "context-packet": _dynamic_investigation_contract(
+        "context-packet",
+        schema_version="context-packet-v1",
+    ),
+    "challenge-disposition": _dynamic_investigation_contract(
+        "challenge-disposition",
+        schema_version="challenge-disposition-v1",
     ),
     "hypothesis": _contract(
         "hypothesis",
@@ -268,12 +324,14 @@ DELIBERATION_CONTRACTS: dict[str, CanonicalContract] = {
             "challenger_constraints",
             "unresolved_challenger_constraints",
             "basis_use_constraints",
+            "accepted_limitations",
+            "unresolved_challenges",
             "explicit_report_claim_objects",
             "report_claim_structural_violations",
             "explicit_lead_basis_objects",
             "lead_basis_constraint_violations",
         ),
-        optional_dict_fields=("report_claim_structure",),
+        optional_dict_fields=("report_claim_structure", "report_basis_input_policy"),
         optional_number_fields=(
             "challenger_constraint_count",
             "unresolved_challenger_constraint_count",

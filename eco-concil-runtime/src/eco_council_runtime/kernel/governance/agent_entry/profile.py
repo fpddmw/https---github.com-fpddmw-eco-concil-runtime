@@ -38,6 +38,17 @@ RecommendedSkillsBuilder = Callable[..., list[str]]
 OperatorNotesBuilder = Callable[..., list[str]]
 OperatorCommandsBuilder = Callable[..., dict[str, str]]
 
+COORDINATION_READ_OBJECT_KINDS = (
+    "investigation-plan",
+    "subissue",
+    "investigation-scope",
+    "round-brief",
+    "evidence-request",
+    "agent-position",
+    "context-packet",
+    "challenge-disposition",
+)
+
 
 DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     {
@@ -50,6 +61,13 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "query-environment-signals",
         ],
         "write_skills": [
+            "submit-investigation-plan",
+            "submit-investigation-scope",
+            "submit-round-brief",
+            "materialize-context-packet",
+            "submit-evidence-request",
+            "submit-agent-position",
+            "submit-challenge-disposition",
             "submit-council-proposal",
             "submit-readiness-opinion",
             "claim-board-task",
@@ -71,6 +89,9 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "query-formal-signals",
         ],
         "write_skills": [
+            "submit-investigation-scope",
+            "submit-evidence-request",
+            "submit-agent-position",
             "submit-council-proposal",
             "submit-readiness-opinion",
             "post-board-note",
@@ -86,6 +107,9 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "query-formal-signals",
         ],
         "write_skills": [
+            "submit-investigation-scope",
+            "submit-evidence-request",
+            "submit-agent-position",
             "submit-council-proposal",
             "submit-readiness-opinion",
             "post-board-note",
@@ -102,10 +126,14 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "query-environment-signals",
         ],
         "write_skills": [
+            "submit-investigation-scope",
+            "submit-evidence-request",
+            "submit-agent-position",
             "submit-council-proposal",
             "submit-readiness-opinion",
             "post-board-note",
             "post-review-comment",
+            "submit-challenge-disposition",
             "open-challenge-ticket",
             "open-falsification-probe",
             "close-challenge-ticket",
@@ -220,6 +248,45 @@ def query_result_item_template(*, run_dir: Path, run_id: str, round_id: str, ana
         "--include-contract",
         "--pretty",
     )
+
+
+def query_coordination_object_command(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    object_kind: str,
+) -> str:
+    return kernel_command(
+        "query-council-objects",
+        "--run-dir",
+        str(run_dir),
+        "--object-kind",
+        object_kind,
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--include-contract",
+        "--pretty",
+    )
+
+
+def coordination_read_commands(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+) -> list[str]:
+    return [
+        query_coordination_object_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind=object_kind,
+        )
+        for object_kind in COORDINATION_READ_OBJECT_KINDS
+    ]
 
 
 def layer_skill_commands(
@@ -378,9 +445,199 @@ def default_role_entry_points(
             for analysis_kind in definition.get("analysis_kinds", [])
             if isinstance(definition.get("analysis_kinds"), list)
         ]
+        role_coordination_read_commands = coordination_read_commands(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+        )
         role_write_commands: list[str] = []
         for skill_name in definition.get("write_skills", []) if isinstance(definition.get("write_skills"), list) else []:
-            if skill_name == "submit-council-proposal":
+            if skill_name == "submit-investigation-plan":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--author-role",
+                            role,
+                            "--mission-ref",
+                            "<mission_ref>",
+                            "--rationale",
+                            "<rationale>",
+                            "--open-question",
+                            "<open_question>",
+                            "--provenance-json",
+                            "{\"source\":\"<provenance_source>\"}",
+                        ],
+                    )
+                )
+            elif skill_name == "submit-investigation-scope":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--author-role",
+                            role,
+                            "--scope-kind",
+                            "<scope_kind>",
+                            "--rationale",
+                            "<rationale>",
+                            "--target-kind",
+                            "<target_kind>",
+                            "--target-id",
+                            "<target_id>",
+                            "--provenance-json",
+                            "{\"source\":\"<provenance_source>\"}",
+                        ],
+                    )
+                )
+            elif skill_name == "submit-round-brief":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--author-role",
+                            role,
+                            "--round-mode",
+                            "<scoping|investigation|supplemental|synthesis>",
+                            "--rationale",
+                            "<rationale>",
+                            "--primary-focus-ref",
+                            "<object_kind:object_id>",
+                            "--open-question",
+                            "<open_question>",
+                            "--provenance-json",
+                            "{\"source\":\"<provenance_source>\"}",
+                        ],
+                    )
+                )
+            elif skill_name == "materialize-context-packet":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--author-role",
+                            role,
+                            "--packet-profile",
+                            "<scoping|investigation|supplemental|synthesis>",
+                            "--target-ref",
+                            "<target_kind:target_id>",
+                            "--rationale",
+                            "<rationale>",
+                            "--source-ref",
+                            "<source_ref>",
+                            "--raw-data-policy",
+                            "refs-only",
+                            "--provenance-json",
+                            "{\"source\":\"<provenance_source>\"}",
+                        ],
+                    )
+                )
+            elif skill_name == "submit-evidence-request":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--author-role",
+                            role,
+                            "--question",
+                            "<evidence_question>",
+                            "--desired-evidence-type",
+                            "<desired_evidence_type>",
+                            "--rationale",
+                            "<rationale>",
+                            "--target-kind",
+                            "<target_kind>",
+                            "--target-id",
+                            "<target_id>",
+                            "--provenance-json",
+                            "{\"source\":\"<provenance_source>\"}",
+                        ],
+                    )
+                )
+            elif skill_name == "submit-agent-position":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--author-role",
+                            role,
+                            "--claim-summary",
+                            "<claim_summary>",
+                            "--rationale",
+                            "<rationale>",
+                            "--target-kind",
+                            "<target_kind>",
+                            "--target-id",
+                            "<target_id>",
+                            "--evidence-ref",
+                            "<evidence_ref>",
+                            "--provenance-json",
+                            "{\"source\":\"<provenance_source>\"}",
+                        ],
+                    )
+                )
+            elif skill_name == "submit-challenge-disposition":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--author-role",
+                            role,
+                            "--target-kind",
+                            "<review-comment|challenge>",
+                            "--target-id",
+                            "<target_object_id>",
+                            "--response-to-id",
+                            "<review_comment_or_challenge_id>",
+                            "--disposition-status",
+                            "<accepted-as-limitation|requires-followup|excluded-from-report-basis|resolved-by-followup|waived-by-challenger>",
+                            "--decided-by-role",
+                            role,
+                            "--rationale",
+                            "<rationale>",
+                            "--evidence-ref",
+                            "<evidence_ref>",
+                            "--provenance-json",
+                            "{\"source\":\"<provenance_source>\"}",
+                        ],
+                    )
+                )
+            elif skill_name == "submit-council-proposal":
                 role_write_commands.append(
                     run_skill_command(
                         run_dir=run_dir,
@@ -765,7 +1022,8 @@ def default_role_entry_points(
                 "skills_by_layer": grouped_skill_names,
                 "fetch_commands": fetch_commands,
                 "normalize_commands": normalize_commands,
-                "read_commands": role_read_commands,
+                "read_commands": [*role_read_commands, *role_coordination_read_commands],
+                "coordination_read_commands": role_coordination_read_commands,
                 "analysis_commands": analysis_commands,
                 "write_commands": role_write_commands,
                 "transition_commands": transition_commands,
@@ -963,6 +1221,48 @@ def default_agent_entry_operator_commands(
             round_id,
             "--include-contract",
             "--pretty",
+        ),
+        "query_investigation_plans_command": query_coordination_object_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind="investigation-plan",
+        ),
+        "query_subissues_command": query_coordination_object_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind="subissue",
+        ),
+        "query_investigation_scopes_command": query_coordination_object_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind="investigation-scope",
+        ),
+        "query_round_briefs_command": query_coordination_object_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind="round-brief",
+        ),
+        "query_evidence_requests_command": query_coordination_object_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind="evidence-request",
+        ),
+        "query_agent_positions_command": query_coordination_object_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind="agent-position",
+        ),
+        "query_context_packets_command": query_coordination_object_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind="context-packet",
         ),
         "query_report_section_drafts_command": kernel_command(
             "query-reporting-objects",
@@ -1319,6 +1619,7 @@ __all__ = [
     "OperatorNotesBuilder",
     "RecommendedSkillsBuilder",
     "RoleEntryBuilder",
+    "coordination_read_commands",
     "default_agent_entry_operator_commands",
     "default_agent_entry_operator_notes",
     "default_agent_entry_recommended_skills",

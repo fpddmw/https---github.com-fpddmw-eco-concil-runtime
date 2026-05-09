@@ -1076,6 +1076,139 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 ]
             )
 
+    def test_challenge_disposition_object_releases_report_risk_constraint(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The bounded report can proceed if explicit challenge dispositions are honored.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["evidence-bundle-001"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://bundle-001"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+            review_payload = run_kernel(
+                "post-review-comment",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "challenger",
+                "--author-role",
+                "challenger",
+                "--review-kind",
+                "evidence-bundle-review",
+                "--comment-text",
+                "Do not use this evidence for attribution unless the limitation is explicit.",
+                "--target-kind",
+                "evidence-bundle",
+                "--target-id",
+                "evidence-bundle-001",
+                "--report-risk",
+                "source-limitations",
+                "--evidence-ref",
+                "evidence://bundle-001",
+            )
+            comment_id = review_payload["canonical_ids"][0]
+
+            blocked_payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            blocked_artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+
+            self.assertEqual(
+                "needs-more-data",
+                blocked_payload["summary"]["readiness_status"],
+            )
+            self.assertEqual(
+                1,
+                blocked_artifact["unresolved_challenger_constraint_count"],
+            )
+
+            disposition_payload = run_script(
+                script_path("submit-challenge-disposition"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--author-role",
+                "moderator",
+                "--target-kind",
+                "review-comment",
+                "--target-id",
+                comment_id,
+                "--response-to-id",
+                comment_id,
+                "--source-review-comment-id",
+                comment_id,
+                "--disposition-status",
+                "accepted-as-limitation",
+                "--decided-by-role",
+                "moderator",
+                "--rationale",
+                "Accept only as a stated limitation for bounded report-basis use.",
+                "--evidence-ref",
+                "evidence://bundle-001",
+            )
+
+            released_payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            released_artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("ready", released_payload["summary"]["readiness_status"])
+            self.assertEqual(0, released_artifact["blocking_review_comment_count"])
+            self.assertEqual(
+                0,
+                released_artifact["unresolved_challenger_constraint_count"],
+            )
+            self.assertEqual(1, len(released_artifact["basis_use_constraints"]))
+            self.assertEqual(
+                "accepted_as_limitation",
+                released_artifact["basis_use_constraints"][0]["disposition"],
+            )
+            self.assertEqual(
+                disposition_payload["canonical_ids"][0],
+                released_artifact["challenger_constraints"][0][
+                    "disposition_comment_id"
+                ],
+            )
+
     def test_open_followup_from_review_comment_creates_challenge_and_task(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -1285,30 +1418,34 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 evidence_ref,
             )
             comment_id = review_payload["canonical_ids"][0]
-            run_kernel(
-                "post-review-comment",
+            run_script(
+                script_path("submit-challenge-disposition"),
                 "--run-dir",
                 str(run_dir),
                 "--run-id",
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
-                "--actor-role",
-                "challenger",
                 "--author-role",
-                "challenger",
-                "--review-kind",
-                "constraint-disposition",
-                "--comment-text",
-                "Accepted as limitation, not as lead basis.",
+                "moderator",
                 "--target-kind",
-                "evidence-bundle",
+                "review-comment",
                 "--target-id",
-                bundle_id,
+                comment_id,
                 "--response-to-id",
                 comment_id,
-                "--constraint-disposition",
-                "accepted_as_limitation",
+                "--source-review-comment-id",
+                comment_id,
+                "--disposition-status",
+                "accepted-as-limitation",
+                "--decided-by-role",
+                "moderator",
+                "--disposition-text",
+                "Accepted as limitation, not as lead basis.",
+                "--rationale",
+                "Record limited report-basis use without resolving the evidence truth.",
+                "--evidence-ref",
+                evidence_ref,
             )
             store_readiness_opinion_records(
                 run_dir,

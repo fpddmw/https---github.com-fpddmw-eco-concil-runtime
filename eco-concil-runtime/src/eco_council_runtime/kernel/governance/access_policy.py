@@ -64,6 +64,16 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         ],
         "default_actor_role_hint": "<actor_role>",
     },
+    "submit-dynamic-investigation-object": {
+        "allowed_roles": [
+            "moderator",
+            "environmental-investigator",
+            "social-investigator",
+            "challenger",
+            "report-editor",
+        ],
+        "default_actor_role_hint": "moderator",
+    },
     "post-review-comment": {
         "allowed_roles": ["moderator", "challenger"],
         "default_actor_role_hint": "challenger",

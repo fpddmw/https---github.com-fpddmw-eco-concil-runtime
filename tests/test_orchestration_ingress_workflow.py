@@ -357,6 +357,160 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             self.assertEqual(2, len(recreated_tasks))
             self.assertEqual(4, len(plan_artifact["steps"]))
 
+    def test_prepare_round_carries_round_brief_as_optional_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            artifacts = build_raw_artifacts(root)
+            mission_path = build_mission_file(root, artifacts)
+
+            run_script(
+                script_path("scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+            )
+            brief_payload = run_script(
+                script_path("submit-round-brief"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--target-id",
+                ROUND_ID,
+                "--rationale",
+                "Moderator supplies optional context for the next preparation pass.",
+                "--round-mode",
+                "supplemental-investigation",
+                "--primary-focus-ref",
+                "challenge-ticket-001",
+                "--requested-output",
+                "evidence-request",
+                "--source-boundary-note",
+                "Do not treat source hints as exclusive.",
+                "--brief-text",
+                "Inspect timing gaps without constraining investigator evidence use.",
+            )
+
+            prepare_payload = run_script(
+                script_path("prepare-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            brief_id = brief_payload["summary"]["object_id"]
+            plan_artifact = load_json(runtime_path(run_dir, f"fetch_plan_{ROUND_ID}.json"))
+
+            self.assertEqual(4, prepare_payload["summary"]["step_count"])
+            self.assertEqual(4, len(plan_artifact["steps"]))
+            self.assertTrue(plan_artifact["observed_inputs"]["round_brief_present"])
+            self.assertEqual(brief_id, plan_artifact["round_brief_context"]["object_id"])
+            self.assertEqual(
+                "supplemental-investigation",
+                plan_artifact["round_brief_context"]["round_mode"],
+            )
+            self.assertIn(
+                "does not restrict",
+                plan_artifact["round_brief_context"]["semantics"],
+            )
+            self.assertEqual(
+                ["Do not treat source hints as exclusive."],
+                plan_artifact["round_brief_context"]["source_boundary_notes"],
+            )
+            self.assertEqual(
+                ["fetch-youtube-video-search", "fetch-bluesky-cascade"],
+                plan_artifact["roles"]["social-investigator"]["selected_sources"],
+            )
+            self.assertIn(brief_id, prepare_payload["board_handoff"]["candidate_ids"])
+
+    def test_open_investigation_round_records_optional_coordination_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            artifacts = build_raw_artifacts(root)
+            mission_path = build_mission_file(root, artifacts)
+            round2_id = "round-002"
+
+            run_script(
+                script_path("scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+            )
+            transition_request_id = request_and_approve_transition(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="open-investigation-round",
+                target_round_id=round2_id,
+                source_round_id=ROUND_ID,
+                rationale="Moderator opens a supplemental investigation round.",
+                request_payload={
+                    "context_packet_id": "context-packet-001",
+                    "primary_focus_refs": ["request-focus-001"],
+                },
+            )
+
+            open_payload = run_script(
+                script_path("open-investigation-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                round2_id,
+                "--source-round-id",
+                ROUND_ID,
+                "--transition-request-id",
+                transition_request_id,
+                "--round-mode",
+                "supplemental-investigation",
+                "--primary-focus-ref",
+                "cli-focus-001",
+                "--target-challenge-id",
+                "challenge-ticket-001",
+                "--round-brief-id",
+                "round-brief-001",
+            )
+
+            transition_artifact = load_json(runtime_path(run_dir, f"round_transition_{round2_id}.json"))
+            round2_tasks = json.loads(
+                (run_dir / "investigation" / f"round_tasks_{round2_id}.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            task_context = round2_tasks[0]["inputs"]["round_coordination_context"]
+
+            self.assertEqual("provided", transition_artifact["coordination_context"]["context_status"])
+            self.assertEqual("supplemental-investigation", transition_artifact["round_mode"])
+            self.assertEqual("context-packet-001", transition_artifact["context_packet_id"])
+            self.assertEqual("challenge-ticket-001", transition_artifact["target_challenge_id"])
+            self.assertEqual("round-brief-001", transition_artifact["round_brief_id"])
+            self.assertEqual(
+                ["cli-focus-001", "request-focus-001"],
+                transition_artifact["primary_focus_refs"],
+            )
+            self.assertEqual("context-packet-001", task_context["context_packet_id"])
+            self.assertIn("does not restrict", task_context["semantics"])
+            self.assertEqual("round-brief-001", open_payload["summary"]["round_brief_id"])
+            self.assertIn("challenge-ticket-001", open_payload["board_handoff"]["candidate_ids"])
+
     def test_ingress_import_execution_reconnects_to_reporting_mainline(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

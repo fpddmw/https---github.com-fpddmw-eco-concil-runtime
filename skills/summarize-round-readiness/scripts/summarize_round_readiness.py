@@ -37,7 +37,7 @@ from eco_council_runtime.kernel.execution.governed_council_execution import (  #
     normalize_council_execution_mode,
 )
 from eco_council_runtime.challenger_constraints import (  # noqa: E402
-    challenger_constraint_state_from_review_comments,
+    load_challenger_constraint_state,
     review_comment_is_open,
 )
 from eco_council_runtime.kernel.execution.governed_execution_action_semantics import (  # noqa: E402
@@ -1060,8 +1060,10 @@ def summarize_round_readiness_skill(
     open_review_comments = [
         comment for comment in review_comments if review_comment_is_open(comment)
     ]
-    challenger_constraint_state = challenger_constraint_state_from_review_comments(
-        review_comments
+    challenger_constraint_state = load_challenger_constraint_state(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
     )
     unresolved_challenger_constraints = [
         constraint

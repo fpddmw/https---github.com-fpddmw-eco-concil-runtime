@@ -339,6 +339,21 @@ def draft_council_decision_skill(
         if isinstance(handoff.get("basis_use_constraints"), list)
         else []
     )
+    accepted_limitations = (
+        handoff.get("accepted_limitations", [])
+        if isinstance(handoff.get("accepted_limitations"), list)
+        else []
+    )
+    unresolved_challenges = (
+        handoff.get("unresolved_challenges", [])
+        if isinstance(handoff.get("unresolved_challenges"), list)
+        else []
+    )
+    report_basis_input_policy = (
+        handoff.get("report_basis_input_policy", {})
+        if isinstance(handoff.get("report_basis_input_policy"), dict)
+        else {}
+    )
     explicit_lead_basis_objects = (
         handoff.get("explicit_lead_basis_objects", [])
         if isinstance(handoff.get("explicit_lead_basis_objects"), list)
@@ -401,6 +416,9 @@ def draft_council_decision_skill(
         "memo_sections": memo_sections,
         "evidence_packet_id": maybe_text(handoff_evidence_packet.get("packet_id")),
         "basis_use_constraints": basis_use_constraints,
+        "accepted_limitations": accepted_limitations,
+        "unresolved_challenges": unresolved_challenges,
+        "report_basis_input_policy": report_basis_input_policy,
         "explicit_report_claim_objects": explicit_report_claim_objects,
         "report_claim_structural_violations": report_claim_structural_violations,
         "explicit_lead_basis_objects": explicit_lead_basis_objects,
@@ -492,6 +510,9 @@ def draft_council_decision_skill(
         "challenger_constraints": challenger_constraints,
         "unresolved_challenger_constraints": unresolved_challenger_constraints,
         "basis_use_constraints": basis_use_constraints,
+        "accepted_limitations": accepted_limitations,
+        "unresolved_challenges": unresolved_challenges,
+        "report_basis_input_policy": report_basis_input_policy,
         "explicit_report_claim_objects": explicit_report_claim_objects,
         "report_claim_structural_violations": report_claim_structural_violations,
         "explicit_lead_basis_objects": explicit_lead_basis_objects,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -229,6 +230,174 @@ class AgentEntryGateTests(unittest.TestCase):
                 )
             )
 
+    def test_agent_entry_gate_exposes_coordination_surface_without_narrowing_roles(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            artifacts = build_raw_artifacts(root)
+            mission_path = build_mission_file(root, artifacts)
+
+            run_script(
+                script_path("scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+                "--orchestration-mode",
+                "openclaw-agent",
+            )
+            context_packet = run_kernel(
+                "submit-dynamic-investigation-object",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "moderator",
+                "--object-kind",
+                "context-packet",
+                "--author-role",
+                "moderator",
+                "--target-id",
+                ROUND_ID,
+                "--rationale",
+                "Expose a compact context pointer for agent entry.",
+                "--payload-json",
+                json.dumps(
+                    {
+                        "object_id": "context-packet-agent-entry-001",
+                        "packet_profile": "investigation",
+                        "target_round_id": ROUND_ID,
+                        "included_object_refs": ["round:" + ROUND_ID],
+                        "excluded_object_refs": ["raw-records:*"],
+                        "summary_text": "Compact context only; agents may request expansion.",
+                        "raw_data_policy": "refs-only",
+                    },
+                    ensure_ascii=True,
+                    sort_keys=True,
+                ),
+            )
+            brief_payload = run_script(
+                script_path("submit-round-brief"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--object-id",
+                "round-brief-agent-entry-001",
+                "--target-id",
+                ROUND_ID,
+                "--rationale",
+                "Moderator exposes non-binding round context.",
+                "--round-mode",
+                "investigation",
+                "--context-packet-id",
+                context_packet["summary"]["object_id"],
+                "--primary-focus-ref",
+                "subissue:air-quality",
+                "--requested-output",
+                "evidence-request",
+                "--source-boundary-note",
+                "Do not narrow legal read or write surfaces.",
+                "--open-question",
+                "What additional evidence would clarify timing?",
+                "--brief-text",
+                "Use this as context, not a hard agenda.",
+            )
+
+            payload = run_kernel(
+                "materialize-agent-entry-gate",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--pretty",
+            )
+            state_payload = run_kernel(
+                "show-run-state",
+                "--run-dir",
+                str(run_dir),
+                "--round-id",
+                ROUND_ID,
+                "--pretty",
+            )
+
+            coordination = payload["agent_entry"]["coordination_surface"]
+            social_entry = next(
+                entry
+                for entry in payload["agent_entry"]["role_entry_points"]
+                if isinstance(entry, dict) and entry.get("role") == "social-investigator"
+            )
+            moderator_entry = next(
+                entry
+                for entry in payload["agent_entry"]["role_entry_points"]
+                if isinstance(entry, dict) and entry.get("role") == "moderator"
+            )
+            challenger_entry = next(
+                entry
+                for entry in payload["agent_entry"]["role_entry_points"]
+                if isinstance(entry, dict) and entry.get("role") == "challenger"
+            )
+            social_write_surface = "\n".join(social_entry["write_commands"])
+            social_read_surface = "\n".join(social_entry["coordination_read_commands"])
+            moderator_write_surface = "\n".join(moderator_entry["write_commands"])
+            challenger_write_surface = "\n".join(challenger_entry["write_commands"])
+            challenger_read_surface = "\n".join(
+                challenger_entry["coordination_read_commands"]
+            )
+
+            self.assertEqual(
+                brief_payload["summary"]["object_id"],
+                coordination["latest_round_brief"]["object_id"],
+            )
+            self.assertEqual(
+                context_packet["summary"]["object_id"],
+                coordination["context_packet"]["object_id"],
+            )
+            self.assertIn("does not restrict", coordination["semantics"])
+            self.assertEqual(
+                ["Do not narrow legal read or write surfaces."],
+                coordination["latest_round_brief"]["source_boundary_notes"],
+            )
+            self.assertIn("query-council-objects", social_read_surface)
+            self.assertIn("--object-kind round-brief", social_read_surface)
+            self.assertIn("--object-kind context-packet", social_read_surface)
+            self.assertIn("--object-kind challenge-disposition", challenger_read_surface)
+            self.assertIn("materialize-context-packet", moderator_write_surface)
+            self.assertIn("submit-evidence-request", social_write_surface)
+            self.assertIn("submit-agent-position", social_write_surface)
+            self.assertIn(
+                "submit-challenge-disposition",
+                challenger_write_surface,
+            )
+            self.assertTrue(
+                state_payload["agent_entry"]["operator"]["coordination_surface_present"]
+            )
+            self.assertEqual(
+                brief_payload["summary"]["object_id"],
+                state_payload["agent_entry"]["operator"]["latest_round_brief_id"],
+            )
+            self.assertIn(
+                "--object-kind round-brief",
+                state_payload["agent_entry"]["operator"]["query_round_briefs_command"],
+            )
+            self.assertIn(
+                "--object-kind context-packet",
+                state_payload["agent_entry"]["operator"]["query_context_packets_command"],
+            )
+
     def test_start_council_run_scaffolds_prepare_and_registration_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -280,8 +449,18 @@ class AgentEntryGateTests(unittest.TestCase):
             social_workspace = run_dir / "supervisor" / "openclaw-workspaces" / "social-investigator"
             social_role_surface = load_json(social_workspace / "council_runtime" / "role_surface.json")
             social_runtime_context = load_json(social_workspace / "council_runtime" / "runtime_context.json")
+            social_coordination_surface = load_json(social_workspace / "council_runtime" / "coordination_surface.json")
             self.assertEqual("social-investigator", social_role_surface["role"])
             self.assertEqual("social-investigator", social_runtime_context["role"])
+            self.assertTrue(
+                social_runtime_context["coordination_surface_path"].endswith(
+                    "coordination_surface.json"
+                )
+            )
+            self.assertEqual(
+                "agent-entry-coordination-surface-v1",
+                social_coordination_surface["schema_version"],
+            )
             self.assertTrue((social_workspace / "COUNCIL_RUNTIME.md").exists())
             self.assertIn("openclaw agents add", registration["register_all_command"])
             self.assertIn("openclaw agents set-identity", registration["register_all_command"])

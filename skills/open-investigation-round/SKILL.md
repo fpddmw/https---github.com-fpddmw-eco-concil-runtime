@@ -11,6 +11,7 @@ description: Moderator-controlled council-state skill that opens one follow-up i
 - Preserve the source round as historical context.
 - Carry forward active hypotheses and unresolved follow-up work into the new round.
 - Materialize `round_tasks_<round_id>.json` so the next round can immediately continue through `prepare-round` or agent-led investigation.
+- Carry optional coordination hints such as `round_mode`, `primary_focus_refs`, `target_challenge_id`, `context_packet_id`, and `round_brief_id` without turning them into hard constraints.
 
 ## Triggering Conditions
 - The current round is evidence-insufficient and the moderator decides to continue in a new round.
@@ -24,6 +25,7 @@ description: Moderator-controlled council-state skill that opens one follow-up i
 - Reads `run_dir/mission.json` when present.
 - Writes `run_dir/investigation/round_tasks_<round_id>.json`.
 - Writes `run_dir/runtime/round_transition_<round_id>.json`.
+- The skill consumes an approved moderator transition request. Runtime operator approval is procedural authorization; it does not make runtime the council organizer.
 
 ## Required Input
 - `run_dir`
@@ -38,6 +40,11 @@ description: Moderator-controlled council-state skill that opens one follow-up i
   - `author_role`
   - `transition_note`
   - `action_limit`
+  - `round_mode`
+  - `primary_focus_refs`
+  - `target_challenge_id`
+  - `context_packet_id`
+  - `round_brief_id`
 
 ## Output Contract
 - `status`

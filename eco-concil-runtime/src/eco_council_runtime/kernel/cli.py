@@ -7,6 +7,7 @@ from eco_council_runtime.contracts import SPATIOTEMPORAL_OBJECTION_CODE_VALUES
 from eco_council_runtime.control_objects import query_control_objects
 from eco_council_runtime.objects.council import (
     append_discussion_message_record,
+    append_dynamic_investigation_object_record,
     append_evidence_bundle_record,
     append_finding_record,
     append_review_comment_record,
@@ -1002,6 +1003,110 @@ def main(
                     "artifact_path": str(artifact_file),
                 },
                 "canonical_ids": [bundle_id],
+                "record": record,
+            }
+            print(pretty_json(payload_out, args.pretty))
+            return 0
+
+    if args.command == "submit-dynamic-investigation-object":
+            init_run(run_dir, args.run_id)
+            payload = parse_json_object_arg(args.payload_json, field_name="payload-json")
+            payload_kind = maybe_text(payload.get("object_kind"))
+            if payload_kind and payload_kind != maybe_text(args.object_kind):
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "object_kind": args.object_kind,
+                    },
+                    "message": (
+                        f"payload-json object_kind `{payload_kind}` does not match "
+                        f"--object-kind `{args.object_kind}`."
+                    ),
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            provenance = payload.get("provenance") if isinstance(payload.get("provenance"), dict) else {}
+            provenance.update(parse_json_object_arg(args.provenance_json, field_name="provenance-json"))
+            existing_evidence_refs = (
+                payload.get("evidence_refs") if isinstance(payload.get("evidence_refs"), list) else []
+            )
+            existing_lineage = (
+                payload.get("lineage") if isinstance(payload.get("lineage"), list) else []
+            )
+            payload.update(
+                {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "object_kind": args.object_kind,
+                    "author_role": maybe_text(args.author_role) or maybe_text(args.actor_role) or "moderator",
+                    "target_kind": args.target_kind,
+                    "target_id": args.target_id,
+                    "rationale": args.rationale,
+                    "evidence_refs": [*existing_evidence_refs, *args.evidence_ref],
+                    "lineage": [*existing_lineage, *args.lineage_ref],
+                    "provenance": provenance,
+                }
+            )
+            if maybe_text(args.status):
+                payload["status"] = maybe_text(args.status)
+            try:
+                record = append_dynamic_investigation_object_record(
+                    run_dir,
+                    object_payload=payload,
+                    object_kind=args.object_kind,
+                )
+            except ValueError as exc:
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "object_kind": args.object_kind,
+                    },
+                    "message": str(exc),
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            dynamic_object = record.get("object", {}) if isinstance(record, dict) else {}
+            object_id = maybe_text(dynamic_object.get("object_id"))
+            artifact_file = write_command_artifact(
+                run_dir,
+                f"deliberation/dynamic_investigation_object_{args.round_id}_{object_id}.json",
+                record,
+            )
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": new_runtime_event_id(
+                        "runtimeevt",
+                        args.run_id,
+                        args.round_id,
+                        "dynamic-investigation-object",
+                        object_id,
+                    ),
+                    "event_type": "dynamic-investigation-object-submitted",
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "actor_role": args.actor_role,
+                    "status": "completed",
+                    "object_kind": maybe_text(dynamic_object.get("object_kind")),
+                    "object_id": object_id,
+                },
+            )
+            payload_out = {
+                "status": "completed",
+                "summary": {
+                    "run_id": args.run_id,
+                    "round_id": args.round_id,
+                    "object_kind": maybe_text(dynamic_object.get("object_kind")),
+                    "object_id": object_id,
+                    "db_path": record.get("db_path"),
+                    "artifact_path": str(artifact_file),
+                },
+                "canonical_ids": [object_id],
                 "record": record,
             }
             print(pretty_json(payload_out, args.pretty))

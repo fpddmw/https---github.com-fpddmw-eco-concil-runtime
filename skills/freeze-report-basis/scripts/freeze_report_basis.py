@@ -30,6 +30,11 @@ from eco_council_runtime.kernel.governance.report_basis_resolution import (  # n
     load_council_readiness_opinions,
     resolve_report_basis_council_inputs,
 )
+from eco_council_runtime.report_basis_policy import (  # noqa: E402
+    accepted_limitations_from_constraints,
+    report_basis_input_policy,
+    unresolved_challenges_from_constraints,
+)
 from eco_council_runtime.kernel.execution.governed_execution_action_semantics import (  # noqa: E402
     action_is_readiness_blocker,
 )
@@ -711,6 +716,10 @@ def freeze_report_basis_skill(
         )
         if isinstance(constraint, dict)
     ]
+    accepted_limitations = accepted_limitations_from_constraints(basis_use_constraints)
+    unresolved_challenges = unresolved_challenges_from_constraints(
+        unresolved_challenger_constraints
+    )
     shared_context = load_d1_shared_context(
         run_dir_path,
         run_id=run_id,
@@ -1265,6 +1274,9 @@ def freeze_report_basis_skill(
         ),
         "unresolved_challenger_constraints": unresolved_challenger_constraints,
         "basis_use_constraints": basis_use_constraints,
+        "accepted_limitations": accepted_limitations,
+        "unresolved_challenges": unresolved_challenges,
+        "report_basis_input_policy": report_basis_input_policy(),
         "report_claim_structure": report_claim_structure,
         "explicit_report_claim_count": int(
             report_claim_structure.get("explicit_report_claim_count") or 0

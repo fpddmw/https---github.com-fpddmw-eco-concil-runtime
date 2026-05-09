@@ -59,10 +59,17 @@ def write_role_workspace_context(
     context_dir.mkdir(parents=True, exist_ok=True)
 
     role_surface_path = context_dir / "role_surface.json"
+    coordination_surface_path = context_dir / "coordination_surface.json"
     runtime_context_path = context_dir / "runtime_context.json"
     source_selection_path = run_dir / "runtime" / f"source_selection_{role}_{round_id}.json"
     role_surface = role_surface_for(agent_entry_gate, role)
+    coordination_surface = (
+        agent_entry_gate.get("coordination_surface")
+        if isinstance(agent_entry_gate.get("coordination_surface"), dict)
+        else {}
+    )
     write_json(role_surface_path, role_surface)
+    write_json(coordination_surface_path, coordination_surface)
 
     context_payload = {
         "schema_version": "openclaw-role-workspace-context-v1",
@@ -73,6 +80,7 @@ def write_role_workspace_context(
         "mission_path": str((run_dir / "mission.json").resolve()),
         "agent_entry_gate_path": str(agent_entry_gate_path(run_dir, round_id).resolve()),
         "role_surface_path": str(role_surface_path.resolve()),
+        "coordination_surface_path": str(coordination_surface_path.resolve()),
         "source_selection_path": str(source_selection_path.resolve()),
         "runtime_health_path": str((run_dir / "runtime" / "runtime_health.json").resolve()),
         "investigation_board_path": str((run_dir / "board" / "investigation_board.json").resolve()),
@@ -90,6 +98,7 @@ def write_role_workspace_context(
                 f"- Role: `{role}`",
                 f"- Runtime context: `{runtime_context_path.resolve()}`",
                 f"- Role surface: `{role_surface_path.resolve()}`",
+                f"- Coordination surface: `{coordination_surface_path.resolve()}`",
                 f"- Agent entry gate: `{agent_entry_gate_path(run_dir, round_id).resolve()}`",
                 f"- Mission: `{(run_dir / 'mission.json').resolve()}`",
                 f"- Runtime health: `{(run_dir / 'runtime' / 'runtime_health.json').resolve()}`",
@@ -106,6 +115,7 @@ def write_role_workspace_context(
         "overview_path": str(overview_path.resolve()),
         "runtime_context_path": str(runtime_context_path.resolve()),
         "role_surface_path": str(role_surface_path.resolve()),
+        "coordination_surface_path": str(coordination_surface_path.resolve()),
     }
 
 

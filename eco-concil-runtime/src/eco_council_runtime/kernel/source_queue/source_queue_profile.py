@@ -145,6 +145,13 @@ DELIBERATION_WRITE_SKILLS = {
     "claim-board-task": "task-write",
     "submit-council-proposal": "proposal-write",
     "submit-readiness-opinion": "readiness-opinion-write",
+    "submit-investigation-plan": "coordination-plan-write",
+    "submit-investigation-scope": "coordination-scope-write",
+    "submit-round-brief": "coordination-brief-write",
+    "materialize-context-packet": "coordination-context-packet-write",
+    "submit-evidence-request": "coordination-evidence-request-write",
+    "submit-agent-position": "coordination-agent-position-write",
+    "submit-challenge-disposition": "coordination-challenge-disposition-write",
     "summarize-board-state": "derived-board-export",
     "materialize-board-brief": "human-handoff-export",
 }

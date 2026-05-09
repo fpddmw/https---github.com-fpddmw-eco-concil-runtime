@@ -161,6 +161,32 @@ ON review_comments(run_id, round_id, thread_id, generated_at_utc, comment_id);
 CREATE INDEX IF NOT EXISTS idx_review_comments_target
 ON review_comments(run_id, round_id, target_kind, target_id, comment_id);
 
+CREATE TABLE IF NOT EXISTS dynamic_investigation_objects (
+    object_id TEXT PRIMARY KEY,
+    object_kind TEXT NOT NULL DEFAULT '',
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    author_role TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    target_kind TEXT NOT NULL DEFAULT '',
+    target_id TEXT NOT NULL DEFAULT '',
+    rationale TEXT NOT NULL DEFAULT '',
+    decision_source TEXT NOT NULL DEFAULT '',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_dynamic_investigation_objects_round
+ON dynamic_investigation_objects(run_id, round_id, object_kind, generated_at_utc, object_id);
+CREATE INDEX IF NOT EXISTS idx_dynamic_investigation_objects_role_status
+ON dynamic_investigation_objects(run_id, round_id, object_kind, author_role, status, object_id);
+CREATE INDEX IF NOT EXISTS idx_dynamic_investigation_objects_target
+ON dynamic_investigation_objects(run_id, round_id, object_kind, target_kind, target_id, object_id);
+
 CREATE TABLE IF NOT EXISTS readiness_opinions (
     opinion_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,

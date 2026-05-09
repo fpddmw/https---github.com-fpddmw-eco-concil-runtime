@@ -19,6 +19,14 @@ OBJECT_KIND_FINDING = "finding"
 OBJECT_KIND_DISCUSSION_MESSAGE = "discussion-message"
 OBJECT_KIND_EVIDENCE_BUNDLE = "evidence-bundle"
 OBJECT_KIND_REVIEW_COMMENT = "review-comment"
+OBJECT_KIND_INVESTIGATION_PLAN = "investigation-plan"
+OBJECT_KIND_SUBISSUE = "subissue"
+OBJECT_KIND_INVESTIGATION_SCOPE = "investigation-scope"
+OBJECT_KIND_ROUND_BRIEF = "round-brief"
+OBJECT_KIND_EVIDENCE_REQUEST = "evidence-request"
+OBJECT_KIND_AGENT_POSITION = "agent-position"
+OBJECT_KIND_CONTEXT_PACKET = "context-packet"
+OBJECT_KIND_CHALLENGE_DISPOSITION = "challenge-disposition"
 OBJECT_KIND_HYPOTHESIS = "hypothesis"
 OBJECT_KIND_CHALLENGE = "challenge"
 OBJECT_KIND_BOARD_TASK = "board-task"
@@ -28,6 +36,81 @@ OBJECT_KIND_READINESS_OPINION = "readiness-opinion"
 OBJECT_KIND_READINESS_ASSESSMENT = "readiness-assessment"
 OBJECT_KIND_REPORT_BASIS_FREEZE = "report-basis-freeze"
 OBJECT_KIND_DECISION_TRACE = "decision-trace"
+
+DYNAMIC_INVESTIGATION_OBJECT_KINDS = (
+    OBJECT_KIND_INVESTIGATION_PLAN,
+    OBJECT_KIND_SUBISSUE,
+    OBJECT_KIND_INVESTIGATION_SCOPE,
+    OBJECT_KIND_ROUND_BRIEF,
+    OBJECT_KIND_EVIDENCE_REQUEST,
+    OBJECT_KIND_AGENT_POSITION,
+    OBJECT_KIND_CONTEXT_PACKET,
+    OBJECT_KIND_CHALLENGE_DISPOSITION,
+)
+
+DYNAMIC_INVESTIGATION_ID_FIELDS = {
+    OBJECT_KIND_INVESTIGATION_PLAN: "plan_id",
+    OBJECT_KIND_SUBISSUE: "subissue_id",
+    OBJECT_KIND_INVESTIGATION_SCOPE: "scope_id",
+    OBJECT_KIND_ROUND_BRIEF: "brief_id",
+    OBJECT_KIND_EVIDENCE_REQUEST: "request_id",
+    OBJECT_KIND_AGENT_POSITION: "position_id",
+    OBJECT_KIND_CONTEXT_PACKET: "packet_id",
+    OBJECT_KIND_CHALLENGE_DISPOSITION: "disposition_id",
+}
+
+DYNAMIC_INVESTIGATION_STATUS_DEFAULTS = {
+    OBJECT_KIND_INVESTIGATION_PLAN: "draft",
+    OBJECT_KIND_SUBISSUE: "proposed",
+    OBJECT_KIND_INVESTIGATION_SCOPE: "candidate",
+    OBJECT_KIND_ROUND_BRIEF: "draft",
+    OBJECT_KIND_EVIDENCE_REQUEST: "open",
+    OBJECT_KIND_AGENT_POSITION: "proposed",
+    OBJECT_KIND_CONTEXT_PACKET: "materialized",
+    OBJECT_KIND_CHALLENGE_DISPOSITION: "recorded",
+}
+
+FORBIDDEN_DYNAMIC_INVESTIGATION_FIELDS = (
+    "blocking_if_missing",
+    "candidate_source_weight",
+    "confidence",
+    "confidence_score",
+    "heuristic",
+    "heuristic_rule",
+    "heuristic_rules",
+    "heuristics",
+    "minimum_coverage",
+    "priority",
+    "priority_order",
+    "quality_score",
+    "rank",
+    "ranked_items",
+    "ranking",
+    "readiness_score",
+    "recommended_source_rank",
+    "score",
+    "scores",
+    "source_weight",
+    "sufficiency_score",
+    "support_level",
+    "support_score",
+    "weight",
+    "weights",
+)
+
+DYNAMIC_INVESTIGATION_LINEAGE_FIELDS = (
+    "source_object_ids",
+    "related_object_ids",
+    "subissue_ids",
+    "scope_ids",
+    "evidence_request_ids",
+    "position_ids",
+    "context_packet_ids",
+    "supersedes_object_ids",
+    "response_to_ids",
+    "target_refs",
+    "delta_refs",
+)
 
 
 def unique_texts(values: list[Any]) -> list[str]:
@@ -230,6 +313,151 @@ def readiness_opinion_id(
         readiness_status,
         opinion_index,
     )[:12]
+
+
+def dynamic_investigation_object_id(
+    object_kind: str,
+    run_id: str,
+    round_id: str,
+    author_role: str,
+    object_index: int,
+    rationale: str,
+) -> str:
+    normalized_kind = maybe_text(object_kind)
+    return normalized_kind + "-" + stable_hash(
+        "dynamic-investigation-object",
+        normalized_kind,
+        run_id,
+        round_id,
+        author_role,
+        object_index,
+        rationale,
+    )[:12]
+
+
+def reject_dynamic_investigation_heuristic_fields(
+    object_kind: str,
+    payload: dict[str, Any],
+) -> None:
+    for field_name in FORBIDDEN_DYNAMIC_INVESTIGATION_FIELDS:
+        if field_name in payload:
+            raise ValueError(
+                f"{object_kind} cannot include heuristic/control field "
+                f"`{field_name}`. Runtime dynamic investigation objects are "
+                "structural envelopes only; evidence weighting and uptake stay "
+                "with agents."
+            )
+
+
+def normalized_dynamic_investigation_object_payload(
+    payload: dict[str, Any],
+    *,
+    run_id: str,
+    round_id: str,
+    object_kind: str,
+    object_index: int,
+) -> dict[str, Any]:
+    normalized = dict(payload)
+    requested_kind = maybe_text(object_kind) or maybe_text(normalized.get("object_kind"))
+    payload_kind = maybe_text(normalized.get("object_kind"))
+    if payload_kind and requested_kind and payload_kind != requested_kind:
+        raise ValueError(
+            f"Dynamic investigation payload object_kind `{payload_kind}` "
+            f"does not match requested object_kind `{requested_kind}`."
+        )
+    normalized_kind = requested_kind or payload_kind
+    if normalized_kind not in DYNAMIC_INVESTIGATION_OBJECT_KINDS:
+        supported = ", ".join(DYNAMIC_INVESTIGATION_OBJECT_KINDS)
+        raise ValueError(
+            f"Unsupported dynamic investigation object kind: "
+            f"{normalized_kind or '<empty>'}. Supported kinds: {supported}."
+        )
+    reject_dynamic_investigation_heuristic_fields(normalized_kind, normalized)
+
+    normalized_run_id = maybe_text(normalized.get("run_id")) or run_id
+    normalized_round_id = maybe_text(normalized.get("round_id")) or round_id
+    author_role = (
+        maybe_text(normalized.get("author_role"))
+        or maybe_text(normalized.get("agent_role"))
+        or maybe_text(normalized.get("created_by_role"))
+        or "moderator"
+    )
+    decision_source = maybe_text(normalized.get("decision_source")) or "agent-coordination"
+    normalized["run_id"] = normalized_run_id
+    normalized["round_id"] = normalized_round_id
+    normalized["object_kind"] = normalized_kind
+    normalized["generated_at_utc"] = (
+        maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    )
+    normalized["author_role"] = author_role
+    normalized["agent_role"] = maybe_text(normalized.get("agent_role")) or author_role
+    normalized["decision_source"] = decision_source
+    normalized["status"] = (
+        maybe_text(normalized.get("status"))
+        or DYNAMIC_INVESTIGATION_STATUS_DEFAULTS[normalized_kind]
+    )
+
+    target = default_deliberation_target(
+        normalized.get("target"),
+        round_id=normalized_round_id,
+        target_kind=normalized.get("target_kind"),
+        target_id=normalized.get("target_id"),
+    )
+    normalized["target"] = target
+    normalized["target_kind"] = maybe_text(target.get("object_kind")) or "round"
+    normalized["target_id"] = maybe_text(target.get("object_id")) or normalized_round_id
+
+    rationale = (
+        maybe_text(normalized.get("rationale"))
+        or maybe_text(normalized.get("summary"))
+        or maybe_text(normalized.get("summary_text"))
+        or maybe_text(normalized.get("question"))
+        or maybe_text(normalized.get("claim_summary"))
+        or maybe_text(normalized.get("objective"))
+        or maybe_text(normalized.get("brief_text"))
+        or maybe_text(normalized.get("position_text"))
+        or maybe_text(normalized.get("request_text"))
+        or maybe_text(normalized.get("scope_text"))
+        or maybe_text(normalized.get("title"))
+        or f"{normalized_kind} submitted by {author_role}"
+    )
+    normalized["rationale"] = rationale
+
+    normalized["evidence_refs"] = normalized_evidence_refs(
+        normalized.get("evidence_refs")
+    )
+    lineage_values: list[Any] = [
+        *normalized_lineage(normalized.get("lineage")),
+        normalized["target_id"],
+    ]
+    for field_name in DYNAMIC_INVESTIGATION_LINEAGE_FIELDS:
+        lineage_values.extend(normalized_text_list(normalized.get(field_name)))
+    supersedes_object_id = maybe_text(normalized.get("supersedes_object_id"))
+    if supersedes_object_id:
+        lineage_values.append(supersedes_object_id)
+    normalized["lineage"] = normalized_text_list(lineage_values)
+    normalized["provenance"] = normalized_provenance(
+        normalized.get("provenance"),
+        decision_source=decision_source,
+    )
+
+    id_field = DYNAMIC_INVESTIGATION_ID_FIELDS[normalized_kind]
+    object_id = (
+        maybe_text(normalized.get("object_id"))
+        or maybe_text(normalized.get(id_field))
+        or dynamic_investigation_object_id(
+            normalized_kind,
+            normalized_run_id,
+            normalized_round_id,
+            author_role,
+            object_index,
+            rationale,
+        )
+    )
+    normalized["object_id"] = object_id
+    normalized[id_field] = maybe_text(normalized.get(id_field)) or object_id
+    normalized["schema_version"] = canonical_contract(normalized_kind).schema_version
+    return validate_canonical_payload(normalized_kind, normalized)
 
 
 def normalized_finding_payload(
@@ -708,6 +936,14 @@ __all__ = (
     "OBJECT_KIND_DISCUSSION_MESSAGE",
     "OBJECT_KIND_EVIDENCE_BUNDLE",
     "OBJECT_KIND_REVIEW_COMMENT",
+    "OBJECT_KIND_INVESTIGATION_PLAN",
+    "OBJECT_KIND_SUBISSUE",
+    "OBJECT_KIND_INVESTIGATION_SCOPE",
+    "OBJECT_KIND_ROUND_BRIEF",
+    "OBJECT_KIND_EVIDENCE_REQUEST",
+    "OBJECT_KIND_AGENT_POSITION",
+    "OBJECT_KIND_CONTEXT_PACKET",
+    "OBJECT_KIND_CHALLENGE_DISPOSITION",
     "OBJECT_KIND_HYPOTHESIS",
     "OBJECT_KIND_CHALLENGE",
     "OBJECT_KIND_BOARD_TASK",
@@ -717,6 +953,11 @@ __all__ = (
     "OBJECT_KIND_READINESS_ASSESSMENT",
     "OBJECT_KIND_REPORT_BASIS_FREEZE",
     "OBJECT_KIND_DECISION_TRACE",
+    "DYNAMIC_INVESTIGATION_OBJECT_KINDS",
+    "DYNAMIC_INVESTIGATION_ID_FIELDS",
+    "DYNAMIC_INVESTIGATION_STATUS_DEFAULTS",
+    "FORBIDDEN_DYNAMIC_INVESTIGATION_FIELDS",
+    "DYNAMIC_INVESTIGATION_LINEAGE_FIELDS",
     "maybe_text",
     "stable_hash",
     "utc_now_iso",
@@ -736,6 +977,9 @@ __all__ = (
     "evidence_bundle_id",
     "review_comment_id",
     "readiness_opinion_id",
+    "dynamic_investigation_object_id",
+    "reject_dynamic_investigation_heuristic_fields",
+    "normalized_dynamic_investigation_object_payload",
     "normalized_finding_payload",
     "normalized_discussion_message_payload",
     "normalized_evidence_bundle_payload",

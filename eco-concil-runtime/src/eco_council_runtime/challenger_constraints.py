@@ -27,6 +27,22 @@ CONSTRAINT_DISPOSITIONS = {
     "resolved_by_followup",
     "waived_by_challenger",
 }
+CONSTRAINT_DISPOSITION_ALIASES = {
+    "accepted-as-limitation": "accepted_as_limitation",
+    "accepted_as_limitation": "accepted_as_limitation",
+    "requires-followup": "requires_followup",
+    "requires_followup": "requires_followup",
+    "excluded-from-report-basis": "excluded_from_report_basis",
+    "excluded_from_report_basis": "excluded_from_report_basis",
+    "excluded-from-synthesis": "excluded_from_report_basis",
+    "excluded_from_synthesis": "excluded_from_report_basis",
+    "resolved": "resolved_by_followup",
+    "resolved-by-followup": "resolved_by_followup",
+    "resolved_by_followup": "resolved_by_followup",
+    "waived-by-challenger": "waived_by_challenger",
+    "waived_by_challenger": "waived_by_challenger",
+    "withdrawn": "waived_by_challenger",
+}
 RESOLVED_CONSTRAINT_DISPOSITIONS = {
     "accepted_as_limitation",
     "excluded_from_report_basis",
@@ -90,7 +106,11 @@ def comment_id(comment: dict[str, Any]) -> str:
 def comment_references(response: dict[str, Any], target_comment_id: str) -> bool:
     if not target_comment_id:
         return False
-    referenced_values: list[Any] = []
+    referenced_values: list[Any] = [
+        response.get("target_id"),
+        response.get("source_review_comment_id"),
+        response.get("challenge_id"),
+    ]
     for field_name in (
         "response_to_ids",
         "lineage",
@@ -105,10 +125,25 @@ def comment_references(response: dict[str, Any], target_comment_id: str) -> bool
     return bool(thread_id and thread_id == target_comment_id)
 
 
+def normalize_disposition_value(value: Any) -> str:
+    disposition = maybe_text(value).casefold()
+    if not disposition:
+        return ""
+    normalized = CONSTRAINT_DISPOSITION_ALIASES.get(disposition, disposition)
+    if normalized in CONSTRAINT_DISPOSITIONS:
+        return normalized
+    return ""
+
+
 def normalized_constraint_disposition(comment: dict[str, Any]) -> str:
-    disposition = maybe_text(comment.get("constraint_disposition")).casefold()
-    if disposition in CONSTRAINT_DISPOSITIONS:
-        return disposition
+    for field_name in (
+        "constraint_disposition",
+        "disposition_status",
+        "disposition",
+    ):
+        disposition = normalize_disposition_value(comment.get(field_name))
+        if disposition:
+            return disposition
     return ""
 
 
@@ -144,7 +179,13 @@ def latest_disposition_comment(
     candidates = disposition_comments_for_constraint(constraint_comment, comments)
     if not candidates:
         return None
-    return candidates[-1]
+    return sorted(
+        candidates,
+        key=lambda item: (
+            maybe_text(item.get("generated_at_utc")),
+            comment_id(item),
+        ),
+    )[-1]
 
 
 def basis_use_for_disposition(disposition: str) -> str:
@@ -274,16 +315,31 @@ def load_challenger_constraint_state(
     run_id: str,
     round_id: str,
 ) -> dict[str, Any]:
-    payload = query_council_objects(
+    review_payload = query_council_objects(
         run_dir,
         object_kind="review-comment",
         run_id=run_id,
         round_id=round_id,
     )
-    objects = (
-        payload.get("objects", [])
-        if isinstance(payload.get("objects"), list)
+    disposition_payload = query_council_objects(
+        run_dir,
+        object_kind="challenge-disposition",
+        run_id=run_id,
+        round_id=round_id,
+    )
+    review_objects = (
+        review_payload.get("objects", [])
+        if isinstance(review_payload.get("objects"), list)
         else []
     )
-    comments = [comment for comment in objects if isinstance(comment, dict)]
+    disposition_objects = (
+        disposition_payload.get("objects", [])
+        if isinstance(disposition_payload.get("objects"), list)
+        else []
+    )
+    comments = [
+        comment
+        for comment in [*review_objects, *disposition_objects]
+        if isinstance(comment, dict)
+    ]
     return challenger_constraint_state_from_review_comments(comments)

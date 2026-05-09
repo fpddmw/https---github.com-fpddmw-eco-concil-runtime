@@ -20,6 +20,25 @@ from eco_council_runtime.kernel.core.paths import (
     mission_scaffold_path,
     resolve_run_dir,
 )
+from eco_council_runtime.objects.council import query_council_objects
+from eco_council_runtime.runtime_command_hints import kernel_command
+
+
+COORDINATION_OBJECT_KINDS = (
+    "investigation-plan",
+    "subissue",
+    "investigation-scope",
+    "round-brief",
+    "evidence-request",
+    "agent-position",
+    "context-packet",
+    "challenge-disposition",
+)
+
+COORDINATION_HINT_SEMANTICS = (
+    "Optional council coordination context only; it does not restrict agent "
+    "write surfaces, source selection, evidence acceptance, or investigator autonomy."
+)
 
 
 def board_counts(round_state: dict[str, Any]) -> dict[str, int]:
@@ -178,6 +197,227 @@ def mission_surface(run_dir: Path, round_id: str) -> dict[str, Any]:
     }
 
 
+def text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [maybe_text(item) for item in value if maybe_text(item)]
+
+
+def coordination_query_command(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    object_kind: str,
+) -> str:
+    return kernel_command(
+        "query-council-objects",
+        "--run-dir",
+        str(run_dir),
+        "--object-kind",
+        object_kind,
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--include-contract",
+        "--pretty",
+    )
+
+
+def compact_coordination_object(payload: dict[str, Any]) -> dict[str, Any]:
+    compact: dict[str, Any] = {
+        "object_kind": maybe_text(payload.get("object_kind")),
+        "object_id": maybe_text(payload.get("object_id")),
+        "author_role": maybe_text(payload.get("author_role")),
+        "status": maybe_text(payload.get("status")),
+        "generated_at_utc": maybe_text(payload.get("generated_at_utc")),
+        "target_kind": maybe_text(payload.get("target_kind")),
+        "target_id": maybe_text(payload.get("target_id")),
+        "rationale": maybe_text(payload.get("rationale")),
+    }
+    for field_name in (
+        "title",
+        "question",
+        "summary",
+        "summary_text",
+        "brief_text",
+        "request_text",
+        "scope_text",
+        "claim_summary",
+        "round_mode",
+        "context_packet_id",
+        "desired_evidence_type",
+        "packet_profile",
+        "target_round_id",
+        "raw_data_policy",
+        "scope_kind",
+        "spatial_scope",
+        "temporal_scope",
+        "object_scope",
+        "metric_scope",
+        "comparison_frame",
+        "ordering_semantics",
+        "compression_policy",
+    ):
+        value = maybe_text(payload.get(field_name))
+        if value:
+            compact[field_name] = value
+    for field_name in (
+        "proposed_subissue_refs",
+        "scope_hint_refs",
+        "open_questions",
+        "source_hints",
+        "boundary_notes",
+        "source_boundary_notes",
+        "limitations",
+        "open_challenge_refs",
+        "primary_focus_refs",
+        "requested_outputs",
+        "invited_roles",
+        "included_object_refs",
+        "excluded_object_refs",
+        "target_refs",
+        "delta_refs",
+        "source_refs",
+        "evidence_refs",
+        "lineage",
+    ):
+        values = text_list(payload.get(field_name))
+        if values:
+            compact[field_name] = values
+    return {key: value for key, value in compact.items() if value not in ("", [], {})}
+
+
+def coordination_object_set(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    object_kind: str,
+    limit: int,
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    warnings: list[dict[str, str]] = []
+    try:
+        result = query_council_objects(
+            run_dir,
+            object_kind=object_kind,
+            run_id=run_id,
+            round_id=round_id,
+            limit=limit,
+        )
+    except ValueError as exc:
+        warnings.append(
+            {
+                "code": "coordination-object-query-failed",
+                "message": str(exc),
+            }
+        )
+        return {
+            "object_kind": object_kind,
+            "matching_object_count": 0,
+            "returned_object_count": 0,
+            "objects": [],
+            "query_command": coordination_query_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                object_kind=object_kind,
+            ),
+        }, warnings
+    objects = [
+        compact_coordination_object(item)
+        for item in result.get("objects", [])
+        if isinstance(item, dict)
+    ]
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    return {
+        "object_kind": object_kind,
+        "matching_object_count": int(summary.get("matching_object_count") or len(objects)),
+        "returned_object_count": len(objects),
+        "objects": objects,
+        "query_command": coordination_query_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind=object_kind,
+        ),
+    }, warnings
+
+
+def coordination_object_ref(payload: dict[str, Any]) -> dict[str, str]:
+    return {
+        "object_kind": maybe_text(payload.get("object_kind")),
+        "object_id": maybe_text(payload.get("object_id")),
+    }
+
+
+def coordination_surface(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any]:
+    object_sets: dict[str, Any] = {}
+    warnings: list[dict[str, str]] = []
+    for object_kind in COORDINATION_OBJECT_KINDS:
+        object_set, object_warnings = coordination_object_set(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind=object_kind,
+            limit=20,
+        )
+        object_sets[object_kind] = object_set
+        warnings.extend(object_warnings)
+
+    round_briefs = object_sets.get("round-brief", {}).get("objects", [])
+    latest_round_brief = (
+        round_briefs[0]
+        if isinstance(round_briefs, list) and round_briefs and isinstance(round_briefs[0], dict)
+        else {}
+    )
+    context_packet_id = maybe_text(latest_round_brief.get("context_packet_id"))
+    context_packets = object_sets.get("context-packet", {}).get("objects", [])
+    context_packet = {}
+    if isinstance(context_packets, list):
+        for packet in context_packets:
+            if not isinstance(packet, dict):
+                continue
+            if context_packet_id and maybe_text(packet.get("object_id")) != context_packet_id:
+                continue
+            context_packet = packet
+            break
+    object_refs = [
+        coordination_object_ref(item)
+        for object_set in object_sets.values()
+        if isinstance(object_set, dict)
+        for item in object_set.get("objects", [])
+        if isinstance(item, dict) and maybe_text(item.get("object_id"))
+    ]
+    return {
+        "schema_version": "agent-entry-coordination-surface-v1",
+        "run_id": run_id,
+        "round_id": round_id,
+        "semantics": COORDINATION_HINT_SEMANTICS,
+        "ordering_semantics": "Objects are exposed in deterministic generated_at order only, not salience or evidence strength order.",
+        "latest_round_brief": latest_round_brief,
+        "context_packet": context_packet
+        or (
+            {
+                "object_kind": "context-packet",
+                "object_id": context_packet_id,
+                "resolution_status": "referenced-not-loaded",
+            }
+            if context_packet_id
+            else {}
+        ),
+        "object_refs": object_refs,
+        "object_sets": object_sets,
+        "query_commands": {
+            object_kind: maybe_text(object_set.get("query_command"))
+            for object_kind, object_set in object_sets.items()
+            if isinstance(object_set, dict)
+        },
+        "warnings": warnings,
+    }
+
+
 def resolved_agent_entry_profile(agent_entry_profile: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(agent_entry_profile, dict):
         raise ValueError("No agent entry profile was injected into kernel.agent_entry.")
@@ -220,6 +460,7 @@ def build_agent_entry_payload(
     mission = mission_surface(run_dir, round_id)
     round_state = round_surface(run_dir, run_id=run_id, round_id=round_id)
     analysis = analysis_surface(run_dir, run_id=run_id, round_id=round_id)
+    coordination = coordination_surface(run_dir, run_id=run_id, round_id=round_id)
     next_round_id = maybe_text(
         next_round_id_builder(
             run_dir=run_dir,
@@ -258,6 +499,7 @@ def build_agent_entry_payload(
         "governance": governance,
         "round_surface": round_state,
         "analysis_surface": analysis,
+        "coordination_surface": coordination,
         "capability_surface": role_entries,
         "recommended_entry_skills": recommended_skills,
         "role_entry_points": role_entries,
@@ -285,6 +527,11 @@ def build_agent_entry_payload(
         + (
             analysis.get("warnings", [])
             if isinstance(analysis.get("warnings"), list)
+            else []
+        )
+        + (
+            coordination.get("warnings", [])
+            if isinstance(coordination.get("warnings"), list)
             else []
         ),
     }
@@ -336,10 +583,28 @@ def agent_entry_operator_view(
         if run_id and round_id
         else {}
     )
+    coordination = (
+        gate.get("coordination_surface")
+        if isinstance(gate.get("coordination_surface"), dict)
+        else {}
+    )
+    latest_round_brief = (
+        coordination.get("latest_round_brief")
+        if isinstance(coordination.get("latest_round_brief"), dict)
+        else {}
+    )
+    context_packet = (
+        coordination.get("context_packet")
+        if isinstance(coordination.get("context_packet"), dict)
+        else {}
+    )
     return {
         "entry_gate_present": bool(gate),
         "entry_status": maybe_text(gate.get("entry_status")) or "",
         "orchestration_mode": maybe_text(gate.get("orchestration_mode")) or "",
+        "coordination_surface_present": bool(coordination),
+        "latest_round_brief_id": maybe_text(latest_round_brief.get("object_id")),
+        "active_context_packet_id": maybe_text(context_packet.get("object_id")),
         "entry_gate_path": str(agent_entry_gate_path(run_dir, round_id).resolve()) if round_id else "",
         "mission_scaffold_path": str(mission_scaffold_path(run_dir, round_id).resolve()) if round_id else "",
         "recommended_entry_skills": gate.get("recommended_entry_skills", []) if isinstance(gate.get("recommended_entry_skills"), list) else [],
@@ -355,6 +620,13 @@ def agent_entry_operator_view(
         "query_review_comments_command": maybe_text(entry_commands.get("query_review_comments_command")),
         "query_evidence_bundles_command": maybe_text(entry_commands.get("query_evidence_bundles_command")),
         "query_readiness_opinions_command": maybe_text(entry_commands.get("query_readiness_opinions_command")),
+        "query_investigation_plans_command": maybe_text(entry_commands.get("query_investigation_plans_command")),
+        "query_subissues_command": maybe_text(entry_commands.get("query_subissues_command")),
+        "query_investigation_scopes_command": maybe_text(entry_commands.get("query_investigation_scopes_command")),
+        "query_round_briefs_command": maybe_text(entry_commands.get("query_round_briefs_command")),
+        "query_evidence_requests_command": maybe_text(entry_commands.get("query_evidence_requests_command")),
+        "query_agent_positions_command": maybe_text(entry_commands.get("query_agent_positions_command")),
+        "query_context_packets_command": maybe_text(entry_commands.get("query_context_packets_command")),
         "query_report_section_drafts_command": maybe_text(entry_commands.get("query_report_section_drafts_command")),
         "query_transition_requests_command": maybe_text(entry_commands.get("query_transition_requests_command")),
         "query_skill_approval_requests_command": maybe_text(entry_commands.get("query_skill_approval_requests_command")),
@@ -466,6 +738,10 @@ def materialize_agent_entry_gate(
             "entry_status": maybe_text(payload.get("entry_status")),
             "orchestration_mode": maybe_text(payload.get("orchestration_mode")),
             "output_path": str(output_file.resolve()),
+            "coordination_object_count": len(payload.get("coordination_surface", {}).get("object_refs", []))
+            if isinstance(payload.get("coordination_surface"), dict)
+            and isinstance(payload.get("coordination_surface", {}).get("object_refs"), list)
+            else 0,
             "analysis_kind_count": int(payload.get("analysis_surface", {}).get("analysis_kind_count") or 0)
             if isinstance(payload.get("analysis_surface"), dict)
             else 0,
@@ -481,6 +757,7 @@ def materialize_agent_entry_gate(
 
 
 __all__ = [
+    "coordination_surface",
     "agent_entry_state",
     "materialize_agent_entry_gate",
 ]

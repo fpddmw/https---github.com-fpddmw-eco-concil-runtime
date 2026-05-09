@@ -10,6 +10,7 @@ from eco_council_runtime.kernel.governance.role_contracts import (
     CAPABILITY_BOARD_NOTE_WRITE,
     CAPABILITY_BOARD_TASK_WRITE,
     CAPABILITY_CHALLENGE_WRITE,
+    CAPABILITY_DISCUSSION_WRITE,
     CAPABILITY_DERIVED_EXPORT,
     CAPABILITY_FETCH,
     CAPABILITY_HYPOTHESIS_WRITE,
@@ -222,6 +223,41 @@ OPTIONAL_ANALYSIS_SKILLS = [
     "review-evidence-sufficiency",
 ]
 
+EVIDENCE_ONLY_FORBIDDEN_OUTPUT_FIELDS = (
+    "blocking_if_missing",
+    "candidate_source_weight",
+    "confidence_score",
+    "coverage_score",
+    "evidence_score",
+    "heuristic_score",
+    "minimum_coverage",
+    "priority",
+    "priority_order",
+    "quality_score",
+    "rank",
+    "ranked_items",
+    "ranking",
+    "readiness_score",
+    "recommended_conclusion",
+    "recommended_outcome",
+    "recommended_source_rank",
+    "score",
+    "scores",
+    "source_weight",
+    "sufficiency_score",
+    "support_level",
+    "support_score",
+    "weight",
+    "weights",
+)
+
+EVIDENCE_ONLY_REQUIRED_OUTPUT_FIELDS = (
+    "artifact_refs",
+    "provenance",
+    "source_parameters",
+    "query_parameters",
+)
+
 OPTIONAL_HELPER_ALLOWED_DECISION_SOURCES = [
     "approved-helper-view",
     "manual-or-moderator-defined",
@@ -356,6 +392,140 @@ QUERY_SKILLS = [
     "query-signal-corpus",
     "query-case-library",
 ]
+
+
+def evidence_only_skill_names() -> list[str]:
+    return unique_texts(
+        [
+            *FETCH_SKILLS,
+            *NORMALIZE_SKILLS,
+            "normalize-fetch-execution",
+            *QUERY_SKILLS,
+            *OPTIONAL_ANALYSIS_SKILLS,
+        ]
+    )
+
+
+def skill_boundary_metadata(skill_name: str) -> dict[str, Any]:
+    normalized_name = maybe_text(skill_name)
+    if normalized_name in FETCH_SKILLS:
+        profile = "raw-artifact-evidence-only"
+        allowed_outputs = [
+            "raw provider artifacts",
+            "fetch receipts",
+            "source metadata",
+            "scope and coverage limitations",
+        ]
+    elif normalized_name in NORMALIZE_SKILLS or normalized_name == "normalize-fetch-execution":
+        profile = "normalized-signal-evidence-only"
+        allowed_outputs = [
+            "normalized signals",
+            "conversion provenance",
+            "quality flags",
+            "source/artifact references",
+        ]
+    elif normalized_name in QUERY_SKILLS:
+        profile = "query-response-evidence-only"
+        allowed_outputs = [
+            "matching records",
+            "query parameters",
+            "source/artifact references",
+            "pagination metadata",
+        ]
+    elif normalized_name in OPTIONAL_ANALYSIS_SKILLS:
+        profile = "approved-helper-derived-evidence-only"
+        allowed_outputs = [
+            "reproducible derived evidence objects",
+            "source/provenance notes",
+            "audit caveats",
+            "object references",
+        ]
+    else:
+        return {}
+    return {
+        "boundary_version": "evidence-only-skill-boundary-v1",
+        "boundary_profile": profile,
+        "allowed_outputs": allowed_outputs,
+        "forbidden_output_fields": list(EVIDENCE_ONLY_FORBIDDEN_OUTPUT_FIELDS),
+        "required_output_semantics": list(EVIDENCE_ONLY_REQUIRED_OUTPUT_FIELDS),
+        "does_not_assign_evidence_weight": True,
+        "does_not_rank_sources": True,
+        "does_not_recommend_conclusions": True,
+        "requires_agent_uptake": True,
+        "agent_authority": (
+            "Agents decide evidence combination, acceptance, caveats, and "
+            "report-facing judgement through explicit council objects."
+        ),
+    }
+
+
+def _boundary_path_is_ignored(path: str, ignored_paths: set[str]) -> bool:
+    return path in ignored_paths or any(
+        path.startswith(ignored + ".") or path.startswith(ignored + "[")
+        for ignored in ignored_paths
+    )
+
+
+def skill_boundary_violations(
+    skill_name: str,
+    payload: Any,
+    *,
+    ignored_paths: list[str] | None = None,
+) -> list[dict[str, str]]:
+    boundary = skill_boundary_metadata(skill_name)
+    if not boundary:
+        return []
+    forbidden_fields = {
+        maybe_text(field_name)
+        for field_name in boundary.get("forbidden_output_fields", [])
+        if maybe_text(field_name)
+    }
+    ignored = set(ignored_paths or [])
+    violations: list[dict[str, str]] = []
+
+    def visit(value: Any, path: str) -> None:
+        if _boundary_path_is_ignored(path, ignored):
+            return
+        if isinstance(value, dict):
+            for key, child in value.items():
+                child_path = f"{path}.{key}"
+                if maybe_text(key) in forbidden_fields:
+                    violations.append(
+                        {
+                            "skill_name": maybe_text(skill_name),
+                            "path": child_path,
+                            "field_name": maybe_text(key),
+                            "boundary_profile": maybe_text(
+                                boundary.get("boundary_profile")
+                            ),
+                        }
+                    )
+                visit(child, child_path)
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                visit(child, f"{path}[{index}]")
+
+    visit(payload, "$")
+    return violations
+
+
+def validate_skill_output_boundary(
+    skill_name: str,
+    payload: Any,
+    *,
+    ignored_paths: list[str] | None = None,
+) -> None:
+    violations = skill_boundary_violations(
+        skill_name,
+        payload,
+        ignored_paths=ignored_paths,
+    )
+    if not violations:
+        return
+    paths = ", ".join(violation["path"] for violation in violations[:10])
+    raise ValueError(
+        f"{skill_name} violates evidence-only skill boundary at: {paths}"
+    )
 
 POLICIES: dict[str, dict[str, Any]] = {}
 POLICIES.update(
@@ -556,6 +726,106 @@ POLICIES.update(
             input_object_kinds=["proposal", "finding", "board-state"],
             output_object_kinds=["readiness-opinion"],
             write_scope=WRITE_SCOPE_DELIBERATION,
+        ),
+        "submit-investigation-plan": _policy(
+            skill_name="submit-investigation-plan",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[ROLE_MODERATOR],
+            required_capabilities=[CAPABILITY_DISCUSSION_WRITE],
+            side_effect_scope=["artifact-write", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=["mission", "subissue", "investigation-scope"],
+            output_object_kinds=["investigation-plan"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+            default_actor_role_hint=ROLE_MODERATOR,
+        ),
+        "submit-investigation-scope": _policy(
+            skill_name="submit-investigation-scope",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[ROLE_MODERATOR, *INVESTIGATOR_ROLES, ROLE_CHALLENGER],
+            required_capabilities=[CAPABILITY_DISCUSSION_WRITE],
+            side_effect_scope=["artifact-write", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=["mission", "investigation-plan", "subissue"],
+            output_object_kinds=["investigation-scope"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+        ),
+        "submit-round-brief": _policy(
+            skill_name="submit-round-brief",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[ROLE_MODERATOR],
+            required_capabilities=[CAPABILITY_DISCUSSION_WRITE],
+            side_effect_scope=["artifact-write", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=["mission", "investigation-plan", "subissue", "context-packet"],
+            output_object_kinds=["round-brief"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+            default_actor_role_hint=ROLE_MODERATOR,
+        ),
+        "materialize-context-packet": _policy(
+            skill_name="materialize-context-packet",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[ROLE_MODERATOR],
+            required_capabilities=[CAPABILITY_DISCUSSION_WRITE],
+            side_effect_scope=["artifact-write", "db-read", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=[
+                "investigation-plan",
+                "subissue",
+                "investigation-scope",
+                "round-brief",
+                "evidence-request",
+                "agent-position",
+                "challenge-disposition",
+                "review-comment",
+                "finding",
+                "evidence-bundle",
+                "proposal",
+                "readiness-opinion",
+            ],
+            output_object_kinds=["context-packet"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+            default_actor_role_hint=ROLE_MODERATOR,
+        ),
+        "submit-evidence-request": _policy(
+            skill_name="submit-evidence-request",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[ROLE_MODERATOR, *INVESTIGATOR_ROLES, ROLE_CHALLENGER],
+            required_capabilities=[CAPABILITY_DISCUSSION_WRITE],
+            side_effect_scope=["artifact-write", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=["mission", "subissue", "investigation-scope", "challenge"],
+            output_object_kinds=["evidence-request"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+        ),
+        "submit-agent-position": _policy(
+            skill_name="submit-agent-position",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[ROLE_MODERATOR, *INVESTIGATOR_ROLES, ROLE_CHALLENGER],
+            required_capabilities=[CAPABILITY_DISCUSSION_WRITE],
+            side_effect_scope=["artifact-write", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=["finding", "evidence-bundle", "subissue", "investigation-scope", "challenge"],
+            output_object_kinds=["agent-position"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+        ),
+        "submit-challenge-disposition": _policy(
+            skill_name="submit-challenge-disposition",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[ROLE_MODERATOR, ROLE_CHALLENGER],
+            required_capabilities=[CAPABILITY_DISCUSSION_WRITE],
+            side_effect_scope=["artifact-write", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=[
+                "review-comment",
+                "challenge",
+                "evidence-bundle",
+                "finding",
+                "agent-position",
+            ],
+            output_object_kinds=["challenge-disposition"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+            default_actor_role_hint=ROLE_MODERATOR,
         ),
         "summarize-board-state": _policy(
             skill_name="summarize-board-state",
@@ -837,6 +1107,9 @@ for _skill_name, _policy_payload in POLICIES.items():
     _metadata = helper_governance_metadata(_skill_name)
     if _metadata:
         _policy_payload["helper_governance"] = _metadata
+    _boundary_metadata = skill_boundary_metadata(_skill_name)
+    if _boundary_metadata:
+        _policy_payload["skill_boundary"] = _boundary_metadata
 
 
 def available_skill_names(root: Path | None = None) -> list[str]:
@@ -881,6 +1154,9 @@ def resolve_skill_policy(skill_name: str, root: Path | None = None) -> dict[str,
         "default_actor_role_hint": maybe_text(policy.get("default_actor_role_hint")),
         "helper_governance": dict(policy.get("helper_governance", {}))
         if isinstance(policy.get("helper_governance"), dict)
+        else {},
+        "skill_boundary": dict(policy.get("skill_boundary", {}))
+        if isinstance(policy.get("skill_boundary"), dict)
         else {},
     }
 
@@ -946,12 +1222,22 @@ __all__ = [
     "WRITE_SCOPE_RUNTIME",
     "WRITE_SCOPE_SIGNAL",
     "WRITE_SCOPE_STATE_TRANSITION",
+    "EVIDENCE_ONLY_FORBIDDEN_OUTPUT_FIELDS",
+    "EVIDENCE_ONLY_REQUIRED_OUTPUT_FIELDS",
+    "FETCH_SKILLS",
+    "NORMALIZE_SKILLS",
+    "OPTIONAL_ANALYSIS_SKILLS",
+    "QUERY_SKILLS",
     "available_skill_names",
     "default_actor_role_hint",
+    "evidence_only_skill_names",
     "resolve_skill_policy",
     "skill_registry_snapshot",
+    "skill_boundary_violations",
     "skill_requires_write_actor_role",
     "skill_write_scope",
     "validate_skill_registry",
+    "validate_skill_output_boundary",
     "helper_governance_metadata",
+    "skill_boundary_metadata",
 ]
