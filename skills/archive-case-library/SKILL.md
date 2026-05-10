@@ -1,6 +1,6 @@
 ---
 name: archive-case-library
-description: Archive one run's canonical board, reporting, and report basis artifacts into a compact case library SQLite store for future historical retrieval.
+description: Checkpoint one run's board, reporting, report-basis, finding, challenge, and readiness artifacts into a compact case library SQLite store for future historical retrieval.
 ---
 
 # Eco Archive Case Library
@@ -9,6 +9,7 @@ description: Archive one run's canonical board, reporting, and report basis arti
 - Compress one run's canonical investigation state into a reusable case library entry.
 - Preserve compact excerpts, profile tags, structured overlap fields, and final posture.
 - Emit one auditable archive import snapshot for later history retrieval.
+- Allow partial non-terminal case checkpoints; archived material is historical context, not a conclusion for later runs.
 
 ## Triggering Conditions
 - The run already produced board, report basis, or reporting artifacts.

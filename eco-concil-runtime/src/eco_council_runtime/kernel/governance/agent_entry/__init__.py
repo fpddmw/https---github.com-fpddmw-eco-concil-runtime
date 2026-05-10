@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from eco_council_runtime.kernel.governance.agent_entry.handoff import EntryChainBuilder, HardGateCommandBuilder
+from eco_council_runtime.kernel.governance.round_liveness import build_round_liveness_surface
 from eco_council_runtime.kernel.governance.role_contracts import normalize_actor_role
 from eco_council_runtime.kernel.planes.analysis_plane import query_analysis_result_sets
 from eco_council_runtime.kernel.planes.deliberation_plane import load_round_snapshot
@@ -31,6 +32,7 @@ COORDINATION_OBJECT_KINDS = (
     "investigation-scope",
     "round-brief",
     "evidence-request",
+    "source-acquisition-proposal",
     "agent-position",
     "context-packet",
     "challenge-disposition",
@@ -499,6 +501,12 @@ def build_agent_entry_payload(
             current_round_id=round_id,
         )
     )
+    round_liveness = build_round_liveness_surface(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        next_round_id=next_round_id,
+    )
     status, warnings = status_evaluator(
         governance=governance,
         mission=mission,
@@ -532,6 +540,7 @@ def build_agent_entry_payload(
         "round_surface": round_state,
         "analysis_surface": analysis,
         "coordination_surface": coordination,
+        "round_liveness_surface": round_liveness,
         "capability_surface": role_entries,
         "recommended_entry_skills": recommended_skills,
         "role_entry_points": role_entries,
@@ -564,6 +573,11 @@ def build_agent_entry_payload(
         + (
             coordination.get("warnings", [])
             if isinstance(coordination.get("warnings"), list)
+            else []
+        )
+        + (
+            round_liveness.get("warnings", [])
+            if isinstance(round_liveness.get("warnings"), list)
             else []
         ),
     }
@@ -630,6 +644,18 @@ def agent_entry_operator_view(
         if isinstance(coordination.get("context_packet"), dict)
         else {}
     )
+    round_liveness = (
+        gate.get("round_liveness_surface")
+        if isinstance(gate.get("round_liveness_surface"), dict)
+        else build_round_liveness_surface(run_dir, run_id=run_id, round_id=round_id)
+        if run_id and round_id
+        else {}
+    )
+    continuation = (
+        round_liveness.get("continuation")
+        if isinstance(round_liveness.get("continuation"), dict)
+        else {}
+    )
     return {
         "entry_gate_present": bool(gate),
         "entry_status": maybe_text(gate.get("entry_status")) or "",
@@ -637,6 +663,11 @@ def agent_entry_operator_view(
         "coordination_surface_present": bool(coordination),
         "latest_round_brief_id": maybe_text(latest_round_brief.get("object_id")),
         "active_context_packet_id": maybe_text(context_packet.get("object_id")),
+        "round_liveness_status": maybe_text(continuation.get("status")),
+        "round_unresolved_ref_count": int(round_liveness.get("unresolved_ref_count") or 0),
+        "round_unresolved_refs": round_liveness.get("unresolved_refs", [])
+        if isinstance(round_liveness.get("unresolved_refs"), list)
+        else [],
         "entry_gate_path": str(agent_entry_gate_path(run_dir, round_id).resolve()) if round_id else "",
         "mission_scaffold_path": str(mission_scaffold_path(run_dir, round_id).resolve()) if round_id else "",
         "recommended_entry_skills": gate.get("recommended_entry_skills", []) if isinstance(gate.get("recommended_entry_skills"), list) else [],
@@ -657,6 +688,7 @@ def agent_entry_operator_view(
         "query_investigation_scopes_command": maybe_text(entry_commands.get("query_investigation_scopes_command")),
         "query_round_briefs_command": maybe_text(entry_commands.get("query_round_briefs_command")),
         "query_evidence_requests_command": maybe_text(entry_commands.get("query_evidence_requests_command")),
+        "query_source_acquisition_proposals_command": maybe_text(entry_commands.get("query_source_acquisition_proposals_command")),
         "query_agent_positions_command": maybe_text(entry_commands.get("query_agent_positions_command")),
         "query_context_packets_command": maybe_text(entry_commands.get("query_context_packets_command")),
         "query_report_section_drafts_command": maybe_text(entry_commands.get("query_report_section_drafts_command")),
@@ -665,6 +697,7 @@ def agent_entry_operator_view(
         "query_skill_approvals_command": maybe_text(entry_commands.get("query_skill_approvals_command")),
         "query_skill_approval_consumptions_command": maybe_text(entry_commands.get("query_skill_approval_consumptions_command")),
         "request_optional_analysis_approval_command_template": maybe_text(entry_commands.get("request_optional_analysis_approval_command_template")),
+        "request_falsification_probe_approval_command_template": maybe_text(entry_commands.get("request_falsification_probe_approval_command_template")),
         "approve_skill_approval_command_template": maybe_text(entry_commands.get("approve_skill_approval_command_template")),
         "reject_skill_approval_command_template": maybe_text(entry_commands.get("reject_skill_approval_command_template")),
         "run_approved_optional_analysis_command_template": maybe_text(entry_commands.get("run_approved_optional_analysis_command_template")),
@@ -676,8 +709,12 @@ def agent_entry_operator_view(
         "post_discussion_message_command_template": maybe_text(entry_commands.get("post_discussion_message_command_template")),
         "post_review_comment_command_template": maybe_text(entry_commands.get("post_review_comment_command_template")),
         "submit_evidence_bundle_command_template": maybe_text(entry_commands.get("submit_evidence_bundle_command_template")),
+        "update_hypothesis_from_finding_command_template": maybe_text(entry_commands.get("update_hypothesis_from_finding_command_template")),
+        "open_challenge_on_hypothesis_or_bundle_command_template": maybe_text(entry_commands.get("open_challenge_on_hypothesis_or_bundle_command_template")),
         "submit_report_section_draft_command_template": maybe_text(entry_commands.get("submit_report_section_draft_command_template")),
         "submit_readiness_opinion_command_template": maybe_text(entry_commands.get("submit_readiness_opinion_command_template")),
+        "request_continuation_round_command_template": maybe_text(continuation.get("request_open_round_command_template")),
+        "open_continuation_round_after_approval_command_template": maybe_text(continuation.get("open_round_after_approval_command_template")),
         "open_next_round_command_template": maybe_text(handoff_commands.get("open_next_round")),
         "return_to_supervisor_command": maybe_text(handoff_commands.get("supervise_round")),
     }

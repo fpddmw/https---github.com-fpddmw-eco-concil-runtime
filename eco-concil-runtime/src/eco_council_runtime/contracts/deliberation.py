@@ -170,6 +170,10 @@ DELIBERATION_CONTRACTS: dict[str, CanonicalContract] = {
         "evidence-request",
         schema_version="evidence-request-v1",
     ),
+    "source-acquisition-proposal": _dynamic_investigation_contract(
+        "source-acquisition-proposal",
+        schema_version="source-acquisition-proposal-v1",
+    ),
     "agent-position": _dynamic_investigation_contract(
         "agent-position",
         schema_version="agent-position-v1",

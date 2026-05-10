@@ -50,14 +50,18 @@ def suggested_next_skills_for_selections(
     selections: dict[str, dict[str, Any]],
     *,
     mission: dict[str, Any],
+    has_fetch_steps: bool,
 ) -> list[str]:
     if mission_requires_scoping(mission):
-        return [
+        next_skills = [
             "submit-investigation-plan",
             "submit-investigation-scope",
             "submit-round-brief",
             "submit-evidence-request",
         ]
+        if has_fetch_steps:
+            next_skills.append("normalize-fetch-execution")
+        return next_skills
     return ["normalize-fetch-execution"]
 
 
@@ -243,6 +247,7 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
     suggested_next_skills = suggested_next_skills_for_selections(
         selections,
         mission=mission,
+        has_fetch_steps=bool(plan_payload.get("steps")),
     )
     suggested_next_skill_runs = suggested_next_skill_runs_for_selections(selections)
     return {

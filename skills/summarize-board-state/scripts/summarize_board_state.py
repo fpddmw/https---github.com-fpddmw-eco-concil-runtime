@@ -18,6 +18,7 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.planes.deliberation_plane import load_round_snapshot  # noqa: E402
+from eco_council_runtime.kernel.governance.round_liveness import build_round_liveness_surface  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -196,6 +197,11 @@ def summarize_board_state_skill(
     }
     status_rollup = board_rollup(counts["hypotheses_active"], counts["challenge_open"], counts["tasks_open"], counts["notes_total"])
     suggested_next_skills = next_skill_hints(counts["hypotheses_active"], counts["challenge_open"], counts["tasks_open"], counts["notes_total"])
+    round_liveness = build_round_liveness_surface(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
 
     summary_payload = {
         "schema_version": "board-summary-v1",
@@ -209,6 +215,7 @@ def summarize_board_state_skill(
         "deliberation_sync": deliberation_sync,
         "status_rollup": status_rollup,
         "counts": counts,
+        "round_liveness": round_liveness,
         "active_hypotheses": [
             {
                 "hypothesis_id": maybe_text(item.get("hypothesis_id")),
@@ -270,6 +277,11 @@ def summarize_board_state_skill(
         challenge_hints.append(f"{counts['challenge_open']} challenge tickets remain open.")
     if counts["hypotheses_low_confidence"] > 0 and counts["challenge_open"] == 0:
         challenge_hints.append(f"{counts['hypotheses_low_confidence']} active hypotheses remain low confidence without an open challenge ticket.")
+    unresolved_refs = (
+        round_liveness.get("unresolved_refs", [])
+        if isinstance(round_liveness.get("unresolved_refs"), list)
+        else []
+    )
     return {
         "status": "completed",
         "summary": {
@@ -293,11 +305,19 @@ def summarize_board_state_skill(
                 [item.get("hypothesis_id") for item in active_hypothesis_items[:8]]
                 + [item.get("ticket_id") for item in open_challenge_items[:8]]
                 + [item.get("task_id") for item in open_task_items[:8]]
+                + unresolved_refs[:8]
             ),
             "evidence_refs": artifact_refs,
             "gap_hints": gap_hints,
             "challenge_hints": challenge_hints,
-            "suggested_next_skills": suggested_next_skills,
+            "suggested_next_skills": unique_texts(
+                suggested_next_skills
+                + (
+                    ["materialize-context-packet", "submit-round-brief"]
+                    if unresolved_refs
+                    else []
+                )
+            ),
         },
     }
 

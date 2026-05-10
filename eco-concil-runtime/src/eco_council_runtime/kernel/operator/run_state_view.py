@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,7 @@ from eco_council_runtime.kernel.core.paths import (
 from eco_council_runtime.kernel.execution.executor import maybe_text
 from eco_council_runtime.kernel.governance.agent_entry import agent_entry_state
 from eco_council_runtime.kernel.governance.agent_entry.handoff import HardGateCommandBuilder
+from eco_council_runtime.kernel.governance.round_liveness import build_round_liveness_surface
 from eco_council_runtime.kernel.governance.skill_approvals import (
     REQUEST_STATUS_APPROVED as SKILL_REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_CONSUMED as SKILL_REQUEST_STATUS_CONSUMED,
@@ -283,6 +285,17 @@ def transition_request_state(
             "<target_round_id>",
             "--source-round-id",
             round_id,
+            "--request-payload-json",
+            json.dumps(
+                {
+                    "round_mode": "continuation",
+                    "primary_focus_refs": ["<object_kind:object_id>"],
+                    "continuation_basis": "moderator-selected unresolved refs",
+                    "closure_reason_if_not_continuing": "<report-ready|no-actionable-path|human-paused|out-of-scope>",
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+            ),
             "--rationale",
             "<rationale>",
             actor_role="moderator",
@@ -649,6 +662,17 @@ def governed_execution_operator_view(
                 suggested_next_round_id or "<target_round_id>",
                 "--source-round-id",
                 round_id,
+                "--request-payload-json",
+                json.dumps(
+                    {
+                        "round_mode": "continuation",
+                        "primary_focus_refs": ["<object_kind:object_id>"],
+                        "continuation_basis": "moderator-selected unresolved refs",
+                        "closure_reason_if_not_continuing": "<report-ready|no-actionable-path|human-paused|out-of-scope>",
+                    },
+                    ensure_ascii=True,
+                    sort_keys=True,
+                ),
                 "--rationale",
                 "<rationale>",
                 actor_role="moderator",
@@ -1288,6 +1312,7 @@ def show_run_state(
     post_round_state: dict[str, Any] = {}
     benchmark_state: dict[str, Any] = {}
     transition_state: dict[str, Any] = {}
+    round_liveness_state: dict[str, Any] = {}
     if selected_round_id:
         control_state = load_governed_execution_control_state(
             run_dir,
@@ -1390,6 +1415,11 @@ def show_run_state(
             run_id=resolved_run_id,
             round_id=selected_round_id,
         )
+        round_liveness_state = build_round_liveness_surface(
+            run_dir,
+            run_id=resolved_run_id,
+            round_id=selected_round_id,
+        )
     operations = operations_state(run_dir, selected_round_id)
     if not transition_state and selected_round_id:
         transition_state = transition_request_state(
@@ -1440,6 +1470,7 @@ def show_run_state(
             agent_entry_profile=agent_entry_profile,
             hard_gate_command_builder=hard_gate_command_builder,
         ),
+        "round_liveness": round_liveness_state,
         "governed_execution": governed_execution_state,
         "reporting": reporting_state,
         "post_round": post_round_state,

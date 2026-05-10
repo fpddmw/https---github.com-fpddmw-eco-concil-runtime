@@ -233,10 +233,13 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             self.assertEqual("mission-derived-relation-review", scope["transport_verification_policy"])
             self.assertIn("fire-origin", lane_ids)
             self.assertIn("spatiotemporal-relation-review", lane_ids)
-            self.assertIn("fetch-nasa-firms-fire", scaffold_artifact["intent_sources_by_role"]["environmental-investigator"])
+            self.assertEqual([], scaffold_artifact["intent_sources_by_role"]["environmental-investigator"])
             self.assertIn("fire-origin", scaffold_artifact["verification_scope_required_lane_ids"])
             self.assertTrue(all(task["inputs"]["verification_scope"]["scope_id"] == scope["scope_id"] for task in tasks_payload))
-            self.assertFalse(scaffold_payload["warnings"])
+            self.assertEqual(
+                ["no-source-inputs"],
+                [item["code"] for item in scaffold_payload["warnings"]],
+            )
 
     def test_start_council_run_allows_open_mission_to_enter_scoping(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -318,6 +321,113 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 "normalize-fetch-execution",
                 prepare_payload["board_handoff"]["suggested_next_skills"],
             )
+
+    def test_scoping_mode_with_explicit_import_still_suggests_normalization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            artifacts = build_raw_artifacts(root)
+            mission_path = run_dir / "input" / "open-mission-with-explicit-input.json"
+            write_json(
+                mission_path,
+                {
+                    "schema_version": "1.0.0",
+                    "run_id": RUN_ID,
+                    "topic": "Open smoke evidence review",
+                    "request_text": "Investigate the smoke episode after reviewing provided public records.",
+                    "objective": "Investigate the smoke episode after reviewing provided public records.",
+                    "artifact_imports": [
+                        {
+                            "source_skill": "fetch-youtube-video-search",
+                            "artifact_path": str(artifacts["youtube"]),
+                            "query_text": "nyc smoke wildfire",
+                        }
+                    ],
+                },
+            )
+
+            payload = run_kernel(
+                "start-council-run",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+                "--no-materialize-agent-registration",
+            )
+
+            mission_artifact = load_json(run_dir / "mission.json")
+            fetch_plan = load_json(runtime_path(run_dir, f"fetch_plan_{ROUND_ID}.json"))
+            prepare_payload = payload["prepare_round"]["skill_payload"]
+            next_skills = prepare_payload["board_handoff"]["suggested_next_skills"]
+
+            self.assertTrue(mission_artifact["mission_scope_status"]["scoping_required"])
+            self.assertEqual(1, prepare_payload["summary"]["step_count"])
+            self.assertEqual(1, len(fetch_plan["steps"]))
+            self.assertIn("submit-investigation-scope", next_skills)
+            self.assertIn("normalize-fetch-execution", next_skills)
+
+    def test_request_text_preserves_lanes_without_runtime_source_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            mission_path = run_dir / "input" / "bounded-request-text-mission.json"
+            write_json(
+                mission_path,
+                {
+                    "schema_version": "1.0.0",
+                    "run_id": RUN_ID,
+                    "topic": "NYC smoke case",
+                    "objective": "Investigate the requested environmental case.",
+                    "request_text": (
+                        "Investigate the 2023 New York City wildfire smoke event, "
+                        "candidate source origin, and possible transport pathway."
+                    ),
+                    "window": {
+                        "start_utc": "2023-06-07T00:00:00Z",
+                        "end_utc": "2023-06-10T00:00:00Z",
+                    },
+                    "region": {
+                        "label": "New York City, USA",
+                        "geometry": {
+                            "type": "Point",
+                            "latitude": 40.7128,
+                            "longitude": -74.0060,
+                        },
+                    },
+                },
+            )
+
+            payload = run_kernel(
+                "start-council-run",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+                "--no-materialize-agent-registration",
+            )
+
+            mission_artifact = load_json(run_dir / "mission.json")
+            scaffold_artifact = load_json(runtime_path(run_dir, f"mission_scaffold_{ROUND_ID}.json"))
+            environmental_selection = load_json(
+                runtime_path(run_dir, f"source_selection_environmental-investigator_{ROUND_ID}.json")
+            )
+
+            self.assertFalse(mission_artifact["mission_scope_status"]["scoping_required"])
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual(
+                [],
+                scaffold_artifact["intent_sources_by_role"]["environmental-investigator"],
+            )
+            self.assertEqual([], environmental_selection["selected_sources"])
+            self.assertIn("fetch-nasa-firms-fire", environmental_selection["allowed_sources"])
 
     def test_start_council_run_materializes_prompt_as_minimal_mission(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

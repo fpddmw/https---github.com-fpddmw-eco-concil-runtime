@@ -32,6 +32,7 @@ from .payloads import (
     OBJECT_KIND_REPORT_BASIS_FREEZE,
     OBJECT_KIND_REVIEW_COMMENT,
     OBJECT_KIND_ROUND_BRIEF,
+    OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL,
     OBJECT_KIND_AGENT_POSITION,
     OBJECT_KIND_SUBISSUE,
 )
@@ -220,6 +221,7 @@ _DYNAMIC_INVESTIGATION_QUERY_OBJECT_KINDS = (
     OBJECT_KIND_INVESTIGATION_SCOPE,
     OBJECT_KIND_ROUND_BRIEF,
     OBJECT_KIND_EVIDENCE_REQUEST,
+    OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL,
     OBJECT_KIND_AGENT_POSITION,
     OBJECT_KIND_CHALLENGE_DISPOSITION,
     OBJECT_KIND_CONTEXT_PACKET,
@@ -228,6 +230,19 @@ _DYNAMIC_INVESTIGATION_QUERY_OBJECT_KINDS = (
 for _dynamic_object_kind in _DYNAMIC_INVESTIGATION_QUERY_OBJECT_KINDS:
     if _dynamic_object_kind not in DYNAMIC_INVESTIGATION_OBJECT_KINDS:
         continue
+    filter_columns = {
+        "target_kind": "target_kind",
+        "target_id": "target_id",
+    }
+    if _dynamic_object_kind == OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL:
+        filter_columns.update(
+            {
+                "source_skill": "json_extract(raw_json, '$.source_skill')",
+                "target_evidence_request_id": (
+                    "json_extract(raw_json, '$.target_evidence_request_id')"
+                ),
+            }
+        )
     QUERY_CONFIGS[_dynamic_object_kind] = {
         "table_name": "dynamic_investigation_objects",
         "id_column": "object_id",
@@ -238,10 +253,7 @@ for _dynamic_object_kind in _DYNAMIC_INVESTIGATION_QUERY_OBJECT_KINDS:
         "decision_id_column": "",
         "object_kind_column": "object_kind",
         "object_kind_value": _dynamic_object_kind,
-        "filter_columns": {
-            "target_kind": "target_kind",
-            "target_id": "target_id",
-        },
+        "filter_columns": filter_columns,
     }
 
 
@@ -346,6 +358,8 @@ def query_council_objects(
     gap_id: str = "",
     proposal_id: str = "",
     source_proposal_id: str = "",
+    source_skill: str = "",
+    target_evidence_request_id: str = "",
     readiness_blocker_only: bool = False,
     include_contract: bool = False,
     include_items: bool = False,
@@ -465,6 +479,22 @@ def query_council_objects(
         where_clauses=where_clauses,
         params=params,
     )
+    add_supported_filter(
+        config=config,
+        filter_name="source_skill",
+        filter_value=source_skill,
+        object_kind=normalized_kind,
+        where_clauses=where_clauses,
+        params=params,
+    )
+    add_supported_filter(
+        config=config,
+        filter_name="target_evidence_request_id",
+        filter_value=target_evidence_request_id,
+        object_kind=normalized_kind,
+        where_clauses=where_clauses,
+        params=params,
+    )
     if readiness_blocker_only:
         blocker_column = maybe_text(config.get("readiness_blocker_column"))
         if not blocker_column:
@@ -520,6 +550,8 @@ def query_council_objects(
             "gap_id": maybe_text(gap_id),
             "proposal_id": maybe_text(proposal_id),
             "source_proposal_id": maybe_text(source_proposal_id),
+            "source_skill": maybe_text(source_skill),
+            "target_evidence_request_id": maybe_text(target_evidence_request_id),
             "readiness_blocker_only": bool(readiness_blocker_only),
         },
         "paging": {

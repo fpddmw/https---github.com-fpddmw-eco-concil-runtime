@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable
@@ -30,6 +31,7 @@ from eco_council_runtime.kernel.governance.transition_requests import (
     TRANSITION_KIND_FREEZE_REPORT_BASIS,
 )
 from eco_council_runtime.kernel.execution.runtime_round_profile import default_next_round_id_builder
+from eco_council_runtime.kernel.source_queue.source_queue_contract import source_capability_hints
 from eco_council_runtime.runtime_command_hints import kernel_command, run_skill_command
 
 EntryStatusEvaluator = Callable[..., tuple[str, list[dict[str, str]]]]
@@ -44,6 +46,7 @@ COORDINATION_READ_OBJECT_KINDS = (
     "investigation-scope",
     "round-brief",
     "evidence-request",
+    "source-acquisition-proposal",
     "agent-position",
     "context-packet",
     "challenge-disposition",
@@ -67,6 +70,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "materialize-context-packet",
             "submit-evidence-request",
             "submit-agent-position",
+            "update-hypothesis-status",
             "submit-challenge-disposition",
             "submit-council-proposal",
             "submit-readiness-opinion",
@@ -91,7 +95,9 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "write_skills": [
             "submit-investigation-scope",
             "submit-evidence-request",
+            "submit-source-acquisition-proposal",
             "submit-agent-position",
+            "update-hypothesis-status",
             "submit-council-proposal",
             "submit-readiness-opinion",
             "post-board-note",
@@ -109,7 +115,9 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "write_skills": [
             "submit-investigation-scope",
             "submit-evidence-request",
+            "submit-source-acquisition-proposal",
             "submit-agent-position",
+            "update-hypothesis-status",
             "submit-council-proposal",
             "submit-readiness-opinion",
             "post-board-note",
@@ -128,6 +136,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "write_skills": [
             "submit-investigation-scope",
             "submit-evidence-request",
+            "submit-source-acquisition-proposal",
             "submit-agent-position",
             "submit-council-proposal",
             "submit-readiness-opinion",
@@ -302,20 +311,34 @@ def layer_skill_commands(
     commands: list[str] = []
     for skill_name in skill_names:
         if command_kind == SKILL_LAYER_FETCH:
-            commands.append(
-                run_skill_command(
-                    run_dir=run_dir,
-                    run_id=run_id,
-                    round_id=round_id,
-                    skill_name=skill_name,
-                    actor_role=actor_role,
-                    contract_mode=contract_mode,
-                    timeout_seconds=900.0,
-                    retry_budget=1,
-                    allow_side_effects=["network-external"],
-                    skill_args=["<skill_specific_args>"],
-                )
+            capability_hints = source_capability_hints(skill_name)
+            templates = (
+                capability_hints.get("fetch_argument_templates", [])
+                if isinstance(capability_hints.get("fetch_argument_templates"), list)
+                else []
             )
+            fetch_templates = [
+                [maybe_text(arg) for arg in template if maybe_text(arg)]
+                for template in templates
+                if isinstance(template, list)
+            ]
+            if not fetch_templates:
+                fetch_templates = [["check-config"]]
+            for fetch_template in fetch_templates:
+                commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=actor_role,
+                        contract_mode=contract_mode,
+                        timeout_seconds=900.0,
+                        retry_budget=1,
+                        allow_side_effects=["network-external"],
+                        skill_args=fetch_template,
+                    )
+                )
         elif command_kind == SKILL_LAYER_NORMALIZE:
             commands.append(
                 run_skill_command(
@@ -331,6 +354,42 @@ def layer_skill_commands(
                 )
             )
     return commands
+
+
+def fetch_skill_command_surfaces(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    contract_mode: str,
+    actor_role: str,
+    skill_names: list[str],
+) -> list[dict[str, Any]]:
+    surfaces: list[dict[str, Any]] = []
+    for skill_name in skill_names:
+        capability_hints = source_capability_hints(skill_name)
+        commands = layer_skill_commands(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            contract_mode=contract_mode,
+            actor_role=actor_role,
+            skill_names=[skill_name],
+            command_kind=SKILL_LAYER_FETCH,
+        )
+        surfaces.append(
+            {
+                "skill_name": skill_name,
+                "provider_modes": capability_hints.get("provider_modes", [])
+                if isinstance(capability_hints.get("provider_modes"), list)
+                else [],
+                "fetch_argument_templates": capability_hints.get("fetch_argument_templates", [])
+                if isinstance(capability_hints.get("fetch_argument_templates"), list)
+                else [],
+                "commands": commands,
+            }
+        )
+    return surfaces
 
 
 def default_agent_entry_status(
@@ -392,15 +451,21 @@ def default_role_entry_points(
         role = maybe_text(definition.get("role"))
         role_metadata = role_contract(role)
         grouped_skill_names = allowed_skills_by_layer(role)
-        fetch_commands = layer_skill_commands(
+        fetch_command_surfaces = fetch_skill_command_surfaces(
             run_dir=run_dir,
             run_id=run_id,
             round_id=round_id,
             contract_mode=contract_mode,
             actor_role=role,
             skill_names=grouped_skill_names.get(SKILL_LAYER_FETCH, []),
-            command_kind=SKILL_LAYER_FETCH,
         )
+        fetch_commands = [
+            command
+            for surface in fetch_command_surfaces
+            if isinstance(surface.get("commands"), list)
+            for command in surface.get("commands", [])
+            if isinstance(command, str)
+        ]
         normalize_commands = layer_skill_commands(
             run_dir=run_dir,
             run_id=run_id,
@@ -579,6 +644,37 @@ def default_role_entry_points(
                         ],
                     )
                 )
+            elif skill_name == "submit-source-acquisition-proposal":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--author-role",
+                            role,
+                            "--source-skill",
+                            "<fetch_source_skill>",
+                            "--query-parameters-json",
+                            "{\"query\":\"<agent_defined_query_or_params>\"}",
+                            "--target-kind",
+                            "<evidence-request|challenge|finding|round>",
+                            "--target-id",
+                            "<target_id>",
+                            "--rationale",
+                            "<rationale>",
+                            "--declared-side-effect",
+                            "network-external",
+                            "--declared-side-effect",
+                            "writes-artifacts",
+                            "--provenance-json",
+                            "{\"source\":\"<provenance_source>\"}",
+                        ],
+                    )
+                )
             elif skill_name == "submit-agent-position":
                 role_write_commands.append(
                     run_skill_command(
@@ -752,10 +848,39 @@ def default_role_entry_points(
                             "<challenge_title>",
                             "--challenge-statement",
                             "<challenge_statement>",
-                            "--priority",
-                            "high",
+                            "--target-hypothesis-id",
+                            "<hypothesis_id>",
+                            "--evidence-bundle-id",
+                            "<evidence_bundle_id>",
+                            "--linked-artifact-ref",
+                            "<finding_or_bundle_evidence_ref>",
                             "--owner-role",
                             ROLE_CHALLENGER,
+                        ],
+                    )
+                )
+            elif skill_name == "update-hypothesis-status":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--title",
+                            "<provisional_hypothesis_title>",
+                            "--statement",
+                            "<hypothesis_statement>",
+                            "--status",
+                            "active",
+                            "--owner-role",
+                            role,
+                            "--linked-artifact-ref",
+                            "finding:<finding_id>",
+                            "--evidence-ref",
+                            "<finding_evidence_ref>",
                         ],
                     )
                 )
@@ -982,6 +1107,17 @@ def default_role_entry_points(
                         next_round_id,
                         "--source-round-id",
                         round_id,
+                        "--request-payload-json",
+                        json.dumps(
+                            {
+                                "round_mode": "continuation",
+                                "primary_focus_refs": ["<object_kind:object_id>"],
+                                "continuation_basis": "moderator-selected unresolved refs",
+                                "closure_reason_if_not_continuing": "<report-ready|no-actionable-path|human-paused|out-of-scope>",
+                            },
+                            ensure_ascii=True,
+                            sort_keys=True,
+                        ),
                         "--rationale",
                         "<rationale>",
                         actor_role=ROLE_MODERATOR,
@@ -1021,6 +1157,7 @@ def default_role_entry_points(
                 "skill_count_by_layer": skill_count_by_layer(role),
                 "skills_by_layer": grouped_skill_names,
                 "fetch_commands": fetch_commands,
+                "fetch_command_surfaces": fetch_command_surfaces,
                 "normalize_commands": normalize_commands,
                 "read_commands": [*role_read_commands, *role_coordination_read_commands],
                 "coordination_read_commands": role_coordination_read_commands,
@@ -1252,6 +1389,12 @@ def default_agent_entry_operator_commands(
             round_id=round_id,
             object_kind="evidence-request",
         ),
+        "query_source_acquisition_proposals_command": query_coordination_object_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind="source-acquisition-proposal",
+        ),
         "query_agent_positions_command": query_coordination_object_command(
             run_dir=run_dir,
             run_id=run_id,
@@ -1340,6 +1483,26 @@ def default_agent_entry_operator_commands(
             "--rationale",
             "<rationale>",
             actor_role=ROLE_MODERATOR,
+        ),
+        "request_falsification_probe_approval_command_template": kernel_command(
+            "request-skill-approval",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--skill-name",
+            "open-falsification-probe",
+            "--requested-actor-role",
+            ROLE_CHALLENGER,
+            "--requested-skill-arg",
+            "--action-id=<action_id>",
+            "--basis-object-id",
+            "<hypothesis_or_challenge_or_bundle_id>",
+            "--rationale",
+            "<why_this_probe_is_needed>",
+            actor_role=ROLE_CHALLENGER,
         ),
         "approve_skill_approval_command_template": kernel_command(
             "approve-skill-approval",
@@ -1549,6 +1712,49 @@ def default_agent_entry_operator_commands(
             "<evidence_ref>",
             "--provenance-json",
             "{\"source\":\"<provenance_source>\"}",
+        ),
+        "update_hypothesis_from_finding_command_template": run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="update-hypothesis-status",
+            contract_mode=contract_mode,
+            skill_args=[
+                "--title",
+                "<provisional_hypothesis_title>",
+                "--statement",
+                "<hypothesis_statement>",
+                "--status",
+                "active",
+                "--owner-role",
+                "<agent_role>",
+                "--linked-artifact-ref",
+                "finding:<finding_id>",
+                "--evidence-ref",
+                "<finding_evidence_ref>",
+            ],
+        ),
+        "open_challenge_on_hypothesis_or_bundle_command_template": run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="open-challenge-ticket",
+            actor_role=ROLE_CHALLENGER,
+            contract_mode=contract_mode,
+            skill_args=[
+                "--title",
+                "<challenge_title>",
+                "--challenge-statement",
+                "<challenge_statement>",
+                "--target-hypothesis-id",
+                "<hypothesis_id>",
+                "--evidence-bundle-id",
+                "<evidence_bundle_id>",
+                "--linked-artifact-ref",
+                "<finding_or_bundle_evidence_ref>",
+                "--owner-role",
+                ROLE_CHALLENGER,
+            ],
         ),
         "submit_report_section_draft_command_template": kernel_command(
             "submit-report-section-draft",

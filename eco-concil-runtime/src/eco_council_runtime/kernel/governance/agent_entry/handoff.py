@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Callable
 
@@ -121,6 +122,17 @@ def default_agent_entry_hard_gate_commands(
             next_round_id,
             "--source-round-id",
             round_id,
+            "--request-payload-json",
+            json.dumps(
+                {
+                    "round_mode": "continuation",
+                    "primary_focus_refs": ["<object_kind:object_id>"],
+                    "continuation_basis": "moderator-selected unresolved refs",
+                    "closure_reason_if_not_continuing": "<report-ready|no-actionable-path|human-paused|out-of-scope>",
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+            ),
             "--rationale",
             "<rationale>",
             actor_role="moderator",
@@ -317,6 +329,17 @@ def default_agent_entry_chain(
                 next_round_id,
                 "--source-round-id",
                 round_id,
+                "--request-payload-json",
+                json.dumps(
+                    {
+                        "round_mode": "continuation",
+                        "primary_focus_refs": ["<object_kind:object_id>"],
+                        "continuation_basis": "moderator-selected unresolved refs",
+                        "closure_reason_if_not_continuing": "<report-ready|no-actionable-path|human-paused|out-of-scope>",
+                    },
+                    ensure_ascii=True,
+                    sort_keys=True,
+                ),
                 "--rationale",
                 "<rationale>",
                 actor_role="moderator",

@@ -1,14 +1,15 @@
 ---
 name: materialize-history-context
-description: Build retrieval-ready history context for the current round by querying the archived case library and signal corpus, selecting compact excerpts, and rendering one markdown context object.
+description: Build retrieval-ready history context for the current round by querying the archived case library and signal corpus, preserving compact evidence refs and match surfaces without scoring or conclusions.
 ---
 
 # Eco Materialize History Context
 
 ## Core Goal
 - Build one structured history query from current run artifacts.
-- Retrieve analogous archived cases and historical signal hints.
+- Retrieve archived case and signal evidence refs.
 - Render one retrieval snapshot and one compact markdown history context.
+- Preserve agent autonomy: this skill does not score, rank, tier, or recommend historical material.
 
 ## Triggering Conditions
 - Archive stores already contain historical cases or signals.

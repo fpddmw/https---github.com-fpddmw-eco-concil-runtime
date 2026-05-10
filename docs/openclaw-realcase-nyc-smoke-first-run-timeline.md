@@ -10,7 +10,7 @@
 
 说明：本文按运行产物中的 UTC 时间整理。主要依据包括 `runtime/audit_ledger.jsonl`、`analytics/signal_plane.sqlite`、`deliberation/`、`evidence/`、`discussion/`、`report_basis/` 和 `reporting/` 下的最终产物。
 
-文档性质：本文是第一次真实 run 的历史运行记录，不是开发工作计划，也不是当前系统能力基线。后续动态多轮调查治理以 `docs/openclaw-dynamic-investigation-planning-workplan.md` 为准；本文只用于保留当次运行事实、边界和暴露问题。
+文档性质：本文是第一次真实 run 的历史运行记录，不是开发工作计划，也不是当前系统能力基线。后续 agent 自主调查、多轮 continuation 和 archive/history 复用以 `docs/openclaw-agent-autonomy-archive-workplan.md` 为准；本文只用于保留当次运行事实、边界和暴露问题。
 
 ## 1. 总体结论
 

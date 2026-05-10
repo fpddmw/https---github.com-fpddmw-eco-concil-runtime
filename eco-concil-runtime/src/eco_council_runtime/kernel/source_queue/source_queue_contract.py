@@ -285,6 +285,209 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
     ),
 }
 
+_GDELT_EXPORT_HINT = {
+    "provider_modes": [
+        {
+            "mode": "latest",
+            "time_coverage": "latest public GDELT export snapshot",
+            "time_args": [],
+        },
+        {
+            "mode": "range",
+            "time_coverage": "historical UTC export snapshots available from GDELT file lists",
+            "time_args": ["--start-datetime", "--end-datetime"],
+        },
+    ],
+    "fetch_argument_templates": [
+        ["fetch", "--mode", "range", "--start-datetime", "<YYYYMMDDHHMMSS>", "--end-datetime", "<YYYYMMDDHHMMSS>", "--dry-run"],
+        ["resolve-latest"],
+    ],
+}
+
+SOURCE_CAPABILITY_HINTS: dict[str, dict[str, Any]] = {
+    "fetch-bluesky-cascade": {
+        "provider_modes": [
+            {
+                "mode": "search",
+                "time_coverage": "provider-indexed recent or historical posts available through Bluesky search",
+                "time_args": ["--start-datetime", "--end-datetime"],
+            },
+            {
+                "mode": "author-feed",
+                "time_coverage": "provider-visible author feed items within the requested UTC window",
+                "time_args": ["--start-datetime", "--end-datetime"],
+            },
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--source-mode", "search", "--query", "<query>", "--start-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--end-datetime", "<YYYY-MM-DDTHH:MM:SSZ>"],
+            ["fetch", "--source-mode", "author-feed", "--actor", "<handle-or-did>", "--start-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--end-datetime", "<YYYY-MM-DDTHH:MM:SSZ>"],
+        ],
+    },
+    "fetch-gdelt-doc-search": {
+        "provider_modes": [
+            {
+                "mode": "doc-search",
+                "time_coverage": "GDELT DOC API indexed documents for a relative timespan or absolute UTC interval",
+                "time_args": ["--timespan", "--start-datetime", "--end-datetime"],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["search", "--query", "<query>", "--mode", "artlist", "--format", "json", "--start-datetime", "<YYYYMMDDHHMMSS>", "--end-datetime", "<YYYYMMDDHHMMSS>", "--max-records", "<1-250>"],
+        ],
+    },
+    "fetch-gdelt-events": _GDELT_EXPORT_HINT,
+    "fetch-gdelt-mentions": _GDELT_EXPORT_HINT,
+    "fetch-gdelt-gkg": _GDELT_EXPORT_HINT,
+    "fetch-youtube-video-search": {
+        "provider_modes": [
+            {
+                "mode": "search",
+                "time_coverage": "YouTube Data API search index constrained by published-after/published-before when supplied",
+                "time_args": ["--published-after", "--published-before"],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["search", "--query", "<query>", "--published-after", "<YYYY-MM-DDTHH:MM:SSZ>", "--published-before", "<YYYY-MM-DDTHH:MM:SSZ>", "--max-results", "<count>", "--include-records", "--no-save-records"],
+        ],
+    },
+    "fetch-youtube-comments": {
+        "provider_modes": [
+            {
+                "mode": "comments",
+                "time_coverage": "comments visible for supplied video ids, optionally filtered by UTC comment timestamps after fetch",
+                "time_args": ["--start-datetime", "--end-datetime"],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--video-id", "<video_id>", "--start-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--end-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--include-records", "--no-save-records"],
+            ["fetch", "--video-ids-file", "<path>", "--start-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--end-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--include-records", "--no-save-records"],
+        ],
+    },
+    "fetch-regulationsgov-comments": {
+        "provider_modes": [
+            {
+                "mode": "comments",
+                "time_coverage": "Regulations.gov API comments filtered by posted date or modified date arguments",
+                "time_args": ["--start-datetime", "--end-datetime", "--start-date", "--end-date"],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--filter-mode", "last-modified", "--start-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--end-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--include-records", "--no-save-response"],
+            ["fetch", "--filter-mode", "posted", "--start-date", "<YYYY-MM-DD>", "--end-date", "<YYYY-MM-DD>", "--include-records", "--no-save-response"],
+            ["fetch", "--comment-on-id", "<document_id>", "--include-records", "--no-save-response"],
+        ],
+    },
+    "fetch-regulationsgov-comment-detail": {
+        "provider_modes": [
+            {
+                "mode": "comment-detail",
+                "time_coverage": "details for explicitly supplied Regulations.gov comment ids",
+                "time_args": [],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--comment-id", "<comment_id>", "--include-records", "--no-save-response"],
+            ["fetch", "--comment-ids-file", "<path>", "--include-records", "--no-save-response"],
+        ],
+    },
+    "fetch-airnow-hourly-observations": {
+        "provider_modes": [
+            {
+                "mode": "hourly-file-archive",
+                "time_coverage": "AirNow hourly AQ Obs file products for requested UTC hours when files are available",
+                "time_args": ["--start-datetime", "--end-datetime"],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--bbox", "<min_lon,min_lat,max_lon,max_lat>", "--start-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--end-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--parameter", "PM25", "--dry-run"],
+        ],
+    },
+    "fetch-openaq": {
+        "provider_modes": [
+            {
+                "mode": "api",
+                "time_coverage": "OpenAQ API v3 metadata or measurement windows exposed by API endpoints",
+                "time_args": ["--datetime-from", "--datetime-to"],
+            },
+            {
+                "mode": "s3",
+                "time_coverage": "OpenAQ public S3 archive partitions for explicit location/time keys",
+                "time_args": ["--year", "--month", "--day", "--hour"],
+            },
+        ],
+        "fetch_argument_templates": [
+            ["fetch-measurements", "--locations-id", "<location_id>", "--parameters-id", "<parameter_id>", "--datetime-from", "<ISO8601>", "--datetime-to", "<ISO8601>", "--dry-run"],
+            ["fetch-archive-backfill", "--location-id", "<location_id>", "--year", "<YYYY>", "--month", "<1-12>", "--day", "<1-31>", "--dry-run"],
+        ],
+    },
+    "fetch-open-meteo-historical": {
+        "provider_modes": [
+            {
+                "mode": "historical-archive",
+                "time_coverage": "Open-Meteo historical archive endpoint for explicit coordinates and inclusive date range",
+                "time_args": ["--start-date", "--end-date"],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--location", "<latitude,longitude>", "--start-date", "<YYYY-MM-DD>", "--end-date", "<YYYY-MM-DD>", "--hourly-var", "wind_speed_10m", "--dry-run"],
+        ],
+    },
+    "fetch-open-meteo-air-quality": {
+        "provider_modes": [
+            {
+                "mode": "air-quality-archive",
+                "time_coverage": "Open-Meteo air-quality endpoint for explicit coordinates and inclusive date range",
+                "time_args": ["--start-date", "--end-date"],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--location", "<latitude,longitude>", "--start-date", "<YYYY-MM-DD>", "--end-date", "<YYYY-MM-DD>", "--hourly-var", "pm2_5", "--dry-run"],
+        ],
+    },
+    "fetch-open-meteo-flood": {
+        "provider_modes": [
+            {
+                "mode": "flood-archive",
+                "time_coverage": "Open-Meteo flood endpoint for explicit coordinates and inclusive date range",
+                "time_args": ["--start-date", "--end-date"],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--location", "<latitude,longitude>", "--start-date", "<YYYY-MM-DD>", "--end-date", "<YYYY-MM-DD>", "--daily-var", "river_discharge", "--dry-run"],
+        ],
+    },
+    "fetch-usgs-water-iv": {
+        "provider_modes": [
+            {
+                "mode": "instantaneous-values",
+                "time_coverage": "USGS Water Services IV records for requested sites or bbox and date-time interval",
+                "time_args": ["--start-datetime", "--end-datetime"],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--bbox", "<west,south,east,north>", "--start-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--end-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--dry-run"],
+            ["fetch", "--site", "<site_no>", "--start-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--end-datetime", "<YYYY-MM-DDTHH:MM:SSZ>", "--dry-run"],
+        ],
+    },
+    "fetch-nasa-firms-fire": {
+        "provider_modes": [
+            {
+                "mode": "nrt",
+                "time_coverage": "NASA FIRMS near-real-time active fire source ids for short inclusive date windows",
+                "time_args": ["--start-date", "--end-date"],
+            },
+            {
+                "mode": "standard-processing",
+                "time_coverage": "NASA FIRMS standard-processing source ids when the selected source is available",
+                "time_args": ["--start-date", "--end-date"],
+            },
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--source", "VIIRS_NOAA20_NRT", "--bbox", "<west,south,east,north>", "--start-date", "<YYYY-MM-DD>", "--end-date", "<YYYY-MM-DD>", "--dry-run"],
+        ],
+    },
+}
+
 SMOKE_SOURCE_INTENT_TOKENS = (
     "wildfire",
     "wild fire",
@@ -420,6 +623,13 @@ def source_config(source_skill: str) -> dict[str, Any]:
     return config
 
 
+def source_capability_hints(source_skill: str) -> dict[str, Any]:
+    hints = SOURCE_CAPABILITY_HINTS.get(maybe_text(source_skill))
+    if not isinstance(hints, dict):
+        return {"provider_modes": [], "fetch_argument_templates": []}
+    return json.loads(json.dumps(hints, ensure_ascii=True))
+
+
 def source_role(source_skill: str) -> str:
     return maybe_text(source_config(source_skill).get("role"))
 
@@ -473,6 +683,7 @@ def mission_intent_text(mission: dict[str, Any]) -> str:
     parts: list[str] = [
         maybe_text(mission.get("topic")),
         maybe_text(mission.get("objective")),
+        maybe_text(mission.get("request_text")),
     ]
     for item in mission.get("hypotheses", []) if isinstance(mission.get("hypotheses"), list) else []:
         if isinstance(item, dict):
@@ -630,23 +841,7 @@ def derive_verification_scope(mission: dict[str, Any]) -> dict[str, Any]:
 
 
 def intent_selected_sources(mission: dict[str, Any], role: str) -> list[str]:
-    if mission_requires_scoping(mission):
-        return []
-    lanes = [lane for lane in derive_evidence_lanes(mission) if lane.get("role") == role]
-    lane_ids = {maybe_text(lane.get("lane_id")) for lane in lanes}
-    values: list[str] = []
-    if role == "environmental-investigator":
-        if "receptor-air-quality" in lane_ids:
-            values.append("fetch-open-meteo-air-quality")
-        if "local-weather-context" in lane_ids or "spatiotemporal-relation-review" in lane_ids:
-            values.append("fetch-open-meteo-historical")
-        if "fire-origin" in lane_ids:
-            values.append("fetch-nasa-firms-fire")
-    if role == "social-investigator":
-        if lane_ids & {"public-discourse", "community-impact", "response-recommendation-boundary"}:
-            values.append("fetch-gdelt-doc-search")
-    allowed_lookup = {item.casefold() for item in allowed_sources_for_role(mission, role)}
-    return unique_texts([value for value in values if value.casefold() in allowed_lookup])
+    return []
 
 
 def lane_evidence_requirements(mission: dict[str, Any], *, round_id: str, role: str) -> list[dict[str, str]]:
@@ -912,6 +1107,7 @@ __all__ = [
     "coerce_int",
     "KNOWN_FETCH_SIDE_EFFECTS",
     "SOURCE_CATALOG",
+    "SOURCE_CAPABILITY_HINTS",
     "SOURCE_SELECTION_ROLES",
     "SUPPORTED_ARTIFACT_CAPTURE_MODES",
     "allowed_sources_for_role",
@@ -941,6 +1137,7 @@ __all__ = [
     "source_anchor_source_skills",
     "source_artifact_capture",
     "source_auto_selectable",
+    "source_capability_hints",
     "source_config",
     "source_normalizer_skill",
     "source_role",

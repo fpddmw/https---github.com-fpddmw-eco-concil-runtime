@@ -154,7 +154,7 @@ def search_terms(*values: Any) -> list[str]:
     return sorted(tokens)
 
 
-def lexical_overlap_score(row: sqlite3.Row, query_terms: list[str]) -> tuple[float, list[str]]:
+def lexical_hits(row: sqlite3.Row, query_terms: list[str]) -> list[str]:
     haystack = " ".join(
         [
             maybe_text(row["title"]),
@@ -163,33 +163,30 @@ def lexical_overlap_score(row: sqlite3.Row, query_terms: list[str]) -> tuple[flo
             maybe_text(row["topic"]),
         ]
     ).casefold()
-    hits = [term for term in query_terms if term and term in haystack]
-    if not hits:
-        return 0.0, []
-    return min(2.0, 0.4 * len(hits)), [f"lexical:{','.join(hits[:4])}"]
+    return [term for term in query_terms if term and term in haystack]
 
 
-def overlap_score(query_values: list[str], row_value: str, label: str, base: float, per_value: float) -> tuple[float, list[str]]:
+def overlap_reasons(query_values: list[str], row_value: str, label: str) -> list[str]:
     values = {maybe_text(value).casefold() for value in query_values if maybe_text(value)}
     normalized = maybe_text(row_value).casefold()
     if not values or not normalized or normalized not in values:
-        return 0.0, []
-    return base + per_value, [f"{label}:{normalized}"]
+        return []
+    return [f"{label}:{normalized}"]
 
 
-def region_score(query_region: str, row_region: str) -> tuple[float, list[str]]:
+def region_match_reasons(query_region: str, row_region: str) -> list[str]:
     query_text = maybe_text(query_region).casefold()
     row_text = maybe_text(row_region).casefold()
     if not query_text or not row_text:
-        return 0.0, []
+        return []
     if query_text == row_text:
-        return 1.4, [f"region:{row_text}"]
+        return [f"region:{row_text}"]
     if query_text in row_text or row_text in query_text:
-        return 0.8, [f"region-partial:{row_text}"]
-    return 0.0, []
+        return [f"region-partial:{row_text}"]
+    return []
 
 
-def compact_result(row: sqlite3.Row, score: float, reasons: list[str]) -> dict[str, Any]:
+def compact_result(row: sqlite3.Row, reasons: list[str], lexical_terms: list[str]) -> dict[str, Any]:
     return {
         "run_id": maybe_text(row["run_id"]),
         "round_id": maybe_text(row["round_id"]),
@@ -203,8 +200,10 @@ def compact_result(row: sqlite3.Row, score: float, reasons: list[str]) -> dict[s
         "snippet": maybe_text(row["snippet"]),
         "region_label": maybe_text(row["region_label"]),
         "topic": maybe_text(row["topic"]),
-        "score": round(score, 3),
         "match_reasons": reasons,
+        "match_surfaces": {
+            "lexical_terms": lexical_terms[:8],
+        },
         "artifact_ref": maybe_text(row["artifact_ref"]),
     }
 
@@ -247,31 +246,30 @@ def query_signal_corpus_skill(
     finally:
         connection.close()
 
-    scored_rows: list[tuple[float, dict[str, Any]]] = []
+    matched_rows: list[dict[str, Any]] = []
+    has_filters = any(
+        [
+            maybe_text(query_text),
+            maybe_text(region_label),
+            maybe_text(plane),
+            metric_families,
+            source_skills,
+        ]
+    )
     for row in rows:
         reasons: list[str] = []
-        score = 0.0
-        score_part, reason_part = overlap_score([plane], row["plane"], "plane", 1.2, 0.0)
-        score += score_part
-        reasons.extend(reason_part)
-        score_part, reason_part = overlap_score(metric_families, row["metric_family"], "metric_family", 1.6, 0.4)
-        score += score_part
-        reasons.extend(reason_part)
-        score_part, reason_part = overlap_score(source_skills, row["source_skill"], "source_skill", 1.0, 0.3)
-        score += score_part
-        reasons.extend(reason_part)
-        score_part, reason_part = region_score(region_label, row["region_label"])
-        score += score_part
-        reasons.extend(reason_part)
-        score_part, reason_part = lexical_overlap_score(row, query_terms)
-        score += score_part
-        reasons.extend(reason_part)
-        if score <= 0 and query_terms:
+        reasons.extend(overlap_reasons([plane], row["plane"], "plane"))
+        reasons.extend(overlap_reasons(metric_families, row["metric_family"], "metric_family"))
+        reasons.extend(overlap_reasons(source_skills, row["source_skill"], "source_skill"))
+        reasons.extend(region_match_reasons(region_label, row["region_label"]))
+        matched_terms = lexical_hits(row, query_terms)
+        if matched_terms:
+            reasons.append(f"lexical:{','.join(matched_terms[:4])}")
+        if has_filters and not reasons:
             continue
-        scored_rows.append((score, compact_result(row, score, unique_texts(reasons))))
+        matched_rows.append(compact_result(row, unique_texts(reasons), matched_terms))
 
-    scored_rows.sort(key=lambda item: (-item[0], item[1]["run_id"], item[1]["signal_id"]))
-    results = [item[1] for item in scored_rows[: max(1, limit)]]
+    results = matched_rows[: max(1, limit)]
     warnings = [] if results else [{"code": "no-results", "message": "No historical corpus signals matched the supplied filters."}]
     payload = {
         "schema_version": "archive-signal-query-v1",

@@ -4,7 +4,7 @@
 
 本文描述当前 skills 体系、分层和治理边界。文件名保留历史路径，但本文不再是迁移清单或统一扩展计划。
 
-当前 active skills：`82`。
+当前 active skills：`90`。
 
 分层统计：
 
@@ -12,7 +12,7 @@
 2. `normalize`: 17
 3. `query`: 9
 4. `optional-analysis`: 17
-5. `deliberation-write`: 9
+5. `deliberation-write`: 17
 6. `reporting`: 8
 7. `state-transition`: 4
 8. `runtime-admin`: 2
@@ -126,9 +126,16 @@
 4. `update-hypothesis-status`
 5. `open-challenge-ticket`
 6. `close-challenge-ticket`
-7. `claim-board-task`
-8. `summarize-board-state`
-9. `materialize-board-brief`
+7. `submit-evidence-request`
+8. `submit-investigation-plan`
+9. `submit-investigation-scope`
+10. `submit-round-brief`
+11. `submit-agent-position`
+12. `submit-challenge-disposition`
+13. `claim-board-task`
+14. `summarize-board-state`
+15. `materialize-board-brief`
+16. `materialize-context-packet`
 
 职责：
 
@@ -229,27 +236,28 @@
 
 该能力仍遵守 optional-analysis 降权原则：relation cue 是候选线索，不是传播证明、污染源归因或报告结论。
 
-## 7. 动态多轮调查链路
+## 7. Agent 自主调查链路
 
-动态多轮调查治理不在本文中继续展开，独立计划见 `docs/openclaw-dynamic-investigation-planning-workplan.md`。skills 层只提供原子能力和 role-governed surfaces，不负责把开放型 mission 直接硬编码成固定调查剧本。
+agent 自主取证、finding 后续议程承接、多轮 continuation 和 archive/history 复用不在本文中继续展开，独立计划见 `docs/openclaw-agent-autonomy-archive-workplan.md`。skills 层只提供原子能力和 role-governed surfaces，不负责把开放型 mission 直接硬编码成固定调查剧本，也不负责替 agent 排序 source 或采信证据。
 
-以下是动态多轮调查需要观察的 skills 能力节点，不是固定脚本，也不要求每次真实案例运行都按相同顺序成功出现：
+以下是后续真实案例需要观察的 skills 能力节点，不是固定脚本，也不要求每次运行都按相同顺序成功出现：
 
 1. `scaffold-mission-run` 能初始化受治理 run/round。
 2. moderator 规划类 write surface 能把开放型 mission 转成 investigation plan、subissues、round briefs。
-3. `prepare-round` 能优先消费 round-brief，而不是强依赖初始 mission scope。
-4. fetch/import public + environment + fire/weather 能进入 raw/normalized surfaces。
-5. normalize 能写出可查询 signals 和 metadata。
-6. query signals 能返回 item-level evidence refs。
-7. investigator 能提交 finding/evidence bundle。
-8. optional helper 只能输出审计线索。
-9. challenger 能 open challenge 或 falsification probe。
-10. readiness opinion 能在证据不足时标记 `needs-more-data`。
-11. `open-investigation-round` 能从 subissue/gap/challenge 派生 follow-up 或 supplemental round。
-12. structured relation cue 或 relation evidence packet 能暴露候选关系和不确定性。
-13. proposal/readiness 能承接下一步行动或阻断。
-14. `freeze-report-basis` 只能消费被承接过的 DB basis。
-15. reporting handoff / decision / expert reports / final publication 能保留 evidence index 和 residual disputes。
+3. evidence request 表达“需要什么信息”，source acquisition 由 agent 自主提出或执行。
+4. `prepare-round` 能消费 round-brief，但不把 source plan 变成 agent 议程锁。
+5. fetch/import public + environment + fire/weather 能进入 raw/normalized surfaces。
+6. normalize 能写出可查询 signals 和 metadata。
+7. query signals 能返回 item-level evidence refs。
+8. investigator 能提交 finding/evidence bundle/hypothesis/proposal。
+9. optional helper 只能输出审计线索。
+10. challenger 能 open challenge 或 approval-gated falsification probe。
+11. readiness opinion 能在证据不足时标记 `needs-more-data`。
+12. `open-investigation-round` 能从 gap/challenge/finding 派生 follow-up 或 supplemental round。
+13. structured relation cue 或 relation evidence packet 能暴露候选关系和不确定性。
+14. archive/history 能在 checkpoint 或 closeout 后提供历史 evidence refs。
+15. `freeze-report-basis` 只能消费被承接过的 DB basis。
+16. reporting handoff / decision / expert reports / final publication 能保留 evidence index 和 residual disputes。
 
 ## 8. 当前结论
 

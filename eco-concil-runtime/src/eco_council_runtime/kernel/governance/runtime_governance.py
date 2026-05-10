@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -295,12 +296,34 @@ def resolve_skill_approval_context(
         actor_role
     )
     if not normalized_request_id:
+        request_command_template = shlex.join(
+            [
+                "python3",
+                "eco-concil-runtime/scripts/eco_runtime_kernel.py",
+                "request-skill-approval",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+                "--actor-role",
+                resolved_actor_role,
+                "--skill-name",
+                skill_name,
+                "--requested-actor-role",
+                resolved_actor_role,
+                "--rationale",
+                "<approval_rationale>",
+            ]
+        )
         return [
             issue(
                 "missing-skill-approval-request-id",
                 (
                     "This skill declares requires_operator_approval and requires "
-                    "--skill-approval-request-id for an operator-approved request."
+                    "--skill-approval-request-id for an operator-approved request. "
+                    f"Create one with: {request_command_template}"
                 ),
                 field="skill_approval_request_id",
                 blocking=True,
@@ -310,6 +333,7 @@ def resolve_skill_approval_context(
             "status": "missing-request-id",
             "request_id": "",
             "skill_layer": skill_layer,
+            "request_skill_approval_command_template": request_command_template,
         }
     try:
         request = resolve_skill_approval_for_execution(

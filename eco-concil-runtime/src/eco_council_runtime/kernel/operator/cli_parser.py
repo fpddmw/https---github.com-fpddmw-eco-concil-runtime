@@ -31,6 +31,7 @@ __all__ = (
     "add_admission_policy_args",
     "add_analysis_query_args",
     "add_control_query_args",
+    "add_status_surface_args",
     "add_council_query_args",
     "add_execution_policy_args",
     "add_reporting_query_args",
@@ -59,7 +60,7 @@ def add_admission_policy_args(command: argparse.ArgumentParser) -> None:
 
 
 def add_actor_role_arg(command: argparse.ArgumentParser) -> None:
-    command.add_argument("--actor-role", default="")
+    command.add_argument("--actor-role", "--actor_role", default="")
 
 
 def add_analysis_query_args(command: argparse.ArgumentParser) -> None:
@@ -83,14 +84,15 @@ def add_analysis_query_args(command: argparse.ArgumentParser) -> None:
 
 def add_council_query_args(command: argparse.ArgumentParser) -> None:
     supported_kinds = ", ".join(council_queryable_object_kinds())
-    command.add_argument("--run-dir", required=True)
+    command.add_argument("--run-dir", "--run_dir", required=True)
     command.add_argument(
         "--object-kind",
+        "--object_kind",
         required=True,
         help=f"Canonical deliberation object kind. Supported kinds: {supported_kinds}.",
     )
-    command.add_argument("--run-id", default="")
-    command.add_argument("--round-id", default="")
+    command.add_argument("--run-id", "--run_id", default="")
+    command.add_argument("--round-id", "--round_id", default="")
     command.add_argument("--agent-role", default="")
     command.add_argument("--status", default="")
     command.add_argument("--decision-id", default="")
@@ -104,6 +106,8 @@ def add_council_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--gap-id", default="")
     command.add_argument("--proposal-id", default="")
     command.add_argument("--source-proposal-id", default="")
+    command.add_argument("--source-skill", "--source_skill", default="")
+    command.add_argument("--target-evidence-request-id", "--target_evidence_request_id", default="")
     command.add_argument("--readiness-blocker-only", action="store_true")
     command.add_argument("--include-contract", action="store_true")
     command.add_argument("--include-items", action="store_true")
@@ -181,6 +185,14 @@ def add_control_query_args(command: argparse.ArgumentParser) -> None:
     command.add_argument("--include-contract", action="store_true")
     command.add_argument("--limit", type=int, default=20)
     command.add_argument("--offset", type=int, default=0)
+    command.add_argument("--pretty", action="store_true")
+
+
+def add_status_surface_args(command: argparse.ArgumentParser) -> None:
+    command.add_argument("--run-dir", "--run_dir", required=True)
+    command.add_argument("--run-id", "--run_id", default="")
+    command.add_argument("--round-id", "--round_id", default="")
+    command.add_argument("--limit", type=int, default=20)
     command.add_argument("--pretty", action="store_true")
 
 
@@ -318,43 +330,43 @@ def build_parser() -> argparse.ArgumentParser:
         "request-skill-approval",
         help="Persist one optional-analysis skill approval request for operator decision.",
     )
-    request_skill_approval_cmd.add_argument("--run-dir", required=True)
-    request_skill_approval_cmd.add_argument("--run-id", required=True)
-    request_skill_approval_cmd.add_argument("--round-id", required=True)
+    request_skill_approval_cmd.add_argument("--run-dir", "--run_dir", required=True)
+    request_skill_approval_cmd.add_argument("--run-id", "--run_id", required=True)
+    request_skill_approval_cmd.add_argument("--round-id", "--round_id", required=True)
     add_actor_role_arg(request_skill_approval_cmd)
-    request_skill_approval_cmd.add_argument("--skill-name", required=True)
-    request_skill_approval_cmd.add_argument("--requested-actor-role", default="")
+    request_skill_approval_cmd.add_argument("--skill-name", "--skill_name", required=True)
+    request_skill_approval_cmd.add_argument("--requested-actor-role", "--requested_actor_role", default="")
     request_skill_approval_cmd.add_argument("--rationale", default="")
-    request_skill_approval_cmd.add_argument("--requested-skill-arg", action="append", default=[])
-    request_skill_approval_cmd.add_argument("--evidence-ref", action="append", default=[])
-    request_skill_approval_cmd.add_argument("--basis-object-id", action="append", default=[])
-    request_skill_approval_cmd.add_argument("--request-payload-json", default="")
+    request_skill_approval_cmd.add_argument("--requested-skill-arg", "--requested_skill_arg", action="append", default=[])
+    request_skill_approval_cmd.add_argument("--evidence-ref", "--evidence_ref", action="append", default=[])
+    request_skill_approval_cmd.add_argument("--basis-object-id", "--basis_object_id", action="append", default=[])
+    request_skill_approval_cmd.add_argument("--request-payload-json", "--request_payload_json", default="")
     request_skill_approval_cmd.add_argument("--pretty", action="store_true")
 
     approve_skill_approval_cmd = sub.add_parser(
         "approve-skill-approval",
         help="Approve one pending optional-analysis skill approval request.",
     )
-    approve_skill_approval_cmd.add_argument("--run-dir", required=True)
-    approve_skill_approval_cmd.add_argument("--request-id", required=True)
+    approve_skill_approval_cmd.add_argument("--run-dir", "--run_dir", required=True)
+    approve_skill_approval_cmd.add_argument("--request-id", "--request_id", required=True)
     add_actor_role_arg(approve_skill_approval_cmd)
-    approve_skill_approval_cmd.add_argument("--approval-reason", default="")
-    approve_skill_approval_cmd.add_argument("--evidence-ref", action="append", default=[])
-    approve_skill_approval_cmd.add_argument("--basis-object-id", action="append", default=[])
-    approve_skill_approval_cmd.add_argument("--operator-note", action="append", default=[])
+    approve_skill_approval_cmd.add_argument("--approval-reason", "--approval_reason", default="")
+    approve_skill_approval_cmd.add_argument("--evidence-ref", "--evidence_ref", action="append", default=[])
+    approve_skill_approval_cmd.add_argument("--basis-object-id", "--basis_object_id", action="append", default=[])
+    approve_skill_approval_cmd.add_argument("--operator-note", "--operator_note", action="append", default=[])
     approve_skill_approval_cmd.add_argument("--pretty", action="store_true")
 
     reject_skill_approval_cmd = sub.add_parser(
         "reject-skill-approval",
         help="Reject one pending optional-analysis skill approval request.",
     )
-    reject_skill_approval_cmd.add_argument("--run-dir", required=True)
-    reject_skill_approval_cmd.add_argument("--request-id", required=True)
+    reject_skill_approval_cmd.add_argument("--run-dir", "--run_dir", required=True)
+    reject_skill_approval_cmd.add_argument("--request-id", "--request_id", required=True)
     add_actor_role_arg(reject_skill_approval_cmd)
-    reject_skill_approval_cmd.add_argument("--rejection-reason", required=True)
-    reject_skill_approval_cmd.add_argument("--evidence-ref", action="append", default=[])
-    reject_skill_approval_cmd.add_argument("--basis-object-id", action="append", default=[])
-    reject_skill_approval_cmd.add_argument("--operator-note", action="append", default=[])
+    reject_skill_approval_cmd.add_argument("--rejection-reason", "--rejection_reason", required=True)
+    reject_skill_approval_cmd.add_argument("--evidence-ref", "--evidence_ref", action="append", default=[])
+    reject_skill_approval_cmd.add_argument("--basis-object-id", "--basis_object_id", action="append", default=[])
+    reject_skill_approval_cmd.add_argument("--operator-note", "--operator_note", action="append", default=[])
     reject_skill_approval_cmd.add_argument("--pretty", action="store_true")
 
     submit_finding_cmd = sub.add_parser(
@@ -765,6 +777,42 @@ def build_parser() -> argparse.ArgumentParser:
     show_cmd.add_argument("--round-id", default="")
     show_cmd.add_argument("--tail", type=int, default=10)
     show_cmd.add_argument("--pretty", action="store_true")
+
+    council_status_cmd = sub.add_parser(
+        "show-council-status",
+        help="Show a thin council object/status surface for the selected round.",
+    )
+    add_status_surface_args(council_status_cmd)
+
+    source_surfaces_cmd = sub.add_parser(
+        "show-source-surfaces",
+        help="Show source catalog entries and prepared fetch commands without source ranking.",
+    )
+    add_status_surface_args(source_surfaces_cmd)
+
+    source_intents_cmd = sub.add_parser(
+        "show-source-acquisition-intents",
+        help="Show agent-authored source acquisition proposals for the selected round.",
+    )
+    add_status_surface_args(source_intents_cmd)
+
+    open_challenges_cmd = sub.add_parser(
+        "show-open-challenges",
+        help="Show open challenge refs from the round liveness surface.",
+    )
+    add_status_surface_args(open_challenges_cmd)
+
+    unbundled_findings_cmd = sub.add_parser(
+        "show-unbundled-findings",
+        help="Show finding refs that have not been linked into an evidence bundle.",
+    )
+    add_status_surface_args(unbundled_findings_cmd)
+
+    archive_status_cmd = sub.add_parser(
+        "show-archive-status",
+        help="Show archive DB and checkpoint snapshot status for the selected run/round.",
+    )
+    add_status_surface_args(archive_status_cmd)
 
     reporting_cmd = sub.add_parser(
         "show-reporting-state",

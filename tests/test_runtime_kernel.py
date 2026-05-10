@@ -936,7 +936,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     skill_name="fetch-youtube-video-search",
-                    actor_role="environmental-investigator",
+                    actor_role="social-investigator",
                     skill_args=[],
                     contract_mode="strict",
                 )
@@ -945,7 +945,7 @@ class RuntimeKernelTests(unittest.TestCase):
                     run_id=RUN_ID,
                     round_id=ROUND_ID,
                     skill_name="fetch-youtube-video-search",
-                    actor_role="environmental-investigator",
+                    actor_role="social-investigator",
                     skill_args=[],
                     contract_mode="strict",
                     allow_side_effects=["network-external"],

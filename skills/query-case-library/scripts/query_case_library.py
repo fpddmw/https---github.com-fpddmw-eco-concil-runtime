@@ -155,54 +155,39 @@ def overlap(query_values: list[str], row_values: list[str]) -> list[str]:
     return sorted(left & right)
 
 
-def region_score(query_region: str, row_region: str) -> tuple[float, list[str]]:
+def region_match_reasons(query_region: str, row_region: str) -> list[str]:
     query_text = maybe_text(query_region).casefold()
     row_text = maybe_text(row_region).casefold()
     if not query_text or not row_text:
-        return 0.0, []
+        return []
     if query_text == row_text:
-        return 1.4, [f"region:{row_text}"]
+        return [f"region:{row_text}"]
     if query_text in row_text or row_text in query_text:
-        return 0.8, [f"region-partial:{row_text}"]
-    return 0.0, []
+        return [f"region-partial:{row_text}"]
+    return []
 
 
-def lexical_score(query_terms: list[str], row: sqlite3.Row) -> tuple[float, list[str]]:
+def lexical_hits(query_terms: list[str], row: sqlite3.Row) -> list[str]:
     haystack = " ".join([
         maybe_text(row["topic"]),
         maybe_text(row["objective"]),
         maybe_text(row["history_summary_text"]),
         maybe_text(row["board_brief_excerpt"]),
     ]).casefold()
-    hits = [term for term in query_terms if term and term in haystack]
-    if not hits:
-        return 0.0, []
-    return min(2.0, 0.35 * len(hits)), [f"lexical:{','.join(hits[:4])}"]
-
-
-def match_tier(*, profile_match: bool, claim_overlap: list[str], metric_overlap: list[str], gap_overlap: list[str], source_overlap: list[str], region_weight: float, lexical_weight: float) -> str:
-    structured_groups = int(profile_match) + int(bool(claim_overlap)) + int(bool(metric_overlap)) + int(bool(gap_overlap)) + int(bool(source_overlap))
-    if structured_groups >= 2 or (profile_match and (claim_overlap or metric_overlap or gap_overlap)):
-        return "structured-strong"
-    if structured_groups >= 1:
-        return "structured-weak"
-    if region_weight > 0:
-        return "region"
-    if lexical_weight > 0:
-        return "lexical"
-    return "none"
+    return [term for term in query_terms if term and term in haystack]
 
 
 def compact_result(
     row: sqlite3.Row,
     *,
-    score: float,
     reasons: list[str],
+    profile_match: bool,
+    region_reasons: list[str],
+    lexical_terms: list[str],
     claim_overlap: list[str],
     metric_overlap: list[str],
     gap_overlap: list[str],
     source_overlap: list[str],
-    tier: str,
 ) -> dict[str, Any]:
     return {
         "case_id": maybe_text(row["case_id"]),
@@ -215,17 +200,16 @@ def compact_result(
         "report_basis_status": maybe_text(row["report_basis_status"]),
         "readiness_status": maybe_text(row["readiness_status"]),
         "history_summary_text": maybe_text(row["history_summary_text"]),
-        "score": round(score, 3),
         "match_reasons": reasons,
+        "match_surfaces": {
+            "profile_match": profile_match,
+            "region_reasons": region_reasons,
+            "lexical_terms": lexical_terms[:8],
+        },
         "matched_claim_types": claim_overlap,
         "matched_metric_families": metric_overlap,
         "matched_gap_types": gap_overlap,
         "matched_source_skills": source_overlap,
-        "score_components": {
-            "match_tier": tier,
-            "profile_match": maybe_text(row["profile_id"]),
-            "structured_overlap_count": len(claim_overlap) + len(metric_overlap) + len(gap_overlap) + len(source_overlap),
-        },
         "preview_excerpt": maybe_text(row["history_summary_text"])[:240],
     }
 
@@ -270,7 +254,18 @@ def query_case_library_skill(
     finally:
         connection.close()
 
-    scored_rows: list[tuple[float, dict[str, Any]]] = []
+    matched_rows: list[dict[str, Any]] = []
+    has_filters = any(
+        [
+            maybe_text(query_text),
+            maybe_text(region_label),
+            maybe_text(profile_id),
+            claim_types,
+            metric_families,
+            gap_types,
+            source_skills,
+        ]
+    )
     for row in rows:
         row_claim_types = parse_json_text(row["claim_types_json"], [])
         row_metric_families = parse_json_text(row["metric_families_json"], [])
@@ -282,60 +277,39 @@ def query_case_library_skill(
         source_overlap = overlap(source_skills, row_source_skills)
 
         reasons: list[str] = []
-        score = 0.0
         profile_match = bool(maybe_text(profile_id) and maybe_text(row["profile_id"]) == maybe_text(profile_id))
         if profile_match:
-            score += 3.0
             reasons.append(f"profile:{maybe_text(row['profile_id'])}")
         if claim_overlap:
-            score += 1.8 + (0.8 * len(claim_overlap))
             reasons.append(f"claim_types:{','.join(claim_overlap[:4])}")
         if metric_overlap:
-            score += 1.5 + (0.6 * len(metric_overlap))
             reasons.append(f"metric_families:{','.join(metric_overlap[:4])}")
         if gap_overlap:
-            score += 2.0 + (0.9 * len(gap_overlap))
             reasons.append(f"gap_types:{','.join(gap_overlap[:4])}")
         if source_overlap:
-            score += 1.0 + (0.4 * len(source_overlap))
             reasons.append(f"source_skills:{','.join(source_overlap[:4])}")
-        region_weight, region_reasons = region_score(region_label, row["region_label"])
-        score += region_weight
+        region_reasons = region_match_reasons(region_label, row["region_label"])
         reasons.extend(region_reasons)
-        lexical_weight, lexical_reasons = lexical_score(query_terms, row)
-        score += lexical_weight
-        reasons.extend(lexical_reasons)
-        tier = match_tier(
-            profile_match=profile_match,
-            claim_overlap=claim_overlap,
-            metric_overlap=metric_overlap,
-            gap_overlap=gap_overlap,
-            source_overlap=source_overlap,
-            region_weight=region_weight,
-            lexical_weight=lexical_weight,
-        )
-        if score <= 0 and query_terms:
+        matched_terms = lexical_hits(query_terms, row)
+        if matched_terms:
+            reasons.append(f"lexical:{','.join(matched_terms[:4])}")
+        if has_filters and not reasons:
             continue
-        if tier == "none" and not query_terms and not any([profile_id, region_label, claim_types, metric_families, gap_types, source_skills]):
-            tier = "lexical"
-        scored_rows.append(
-            (
-                score,
-                compact_result(
-                    row,
-                    score=score,
-                    reasons=unique_texts(reasons),
-                    claim_overlap=claim_overlap,
-                    metric_overlap=metric_overlap,
-                    gap_overlap=gap_overlap,
-                    source_overlap=source_overlap,
-                    tier=tier,
-                ),
+        matched_rows.append(
+            compact_result(
+                row,
+                reasons=unique_texts(reasons),
+                profile_match=profile_match,
+                region_reasons=region_reasons,
+                lexical_terms=matched_terms,
+                claim_overlap=claim_overlap,
+                metric_overlap=metric_overlap,
+                gap_overlap=gap_overlap,
+                source_overlap=source_overlap,
             )
         )
 
-    scored_rows.sort(key=lambda item: (-item[0], item[1]["case_id"]))
-    results = [item[1] for item in scored_rows[: max(1, limit)]]
+    results = matched_rows[: max(1, limit)]
     warnings = [] if results else [{"code": "no-results", "message": "No archived cases matched the supplied filters."}]
     payload = {
         "schema_version": "archive-case-query-v1",

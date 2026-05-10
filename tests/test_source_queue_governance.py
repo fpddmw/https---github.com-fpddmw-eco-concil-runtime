@@ -170,7 +170,7 @@ class SourceQueueGovernanceTests(unittest.TestCase):
                     selections=selections,
                 )
 
-    def test_smoke_episode_intent_adds_origin_and_transport_sources(self) -> None:
+    def test_smoke_episode_intent_does_not_auto_select_sources(self) -> None:
         selection_module, contract_module = load_modules()
         mission = {
             "topic": "June 2023 New York City smoke episode",
@@ -196,10 +196,10 @@ class SourceQueueGovernanceTests(unittest.TestCase):
             role="social-investigator",
         )
 
-        self.assertIn("fetch-nasa-firms-fire", environmental["selected_sources"])
-        self.assertIn("fetch-open-meteo-air-quality", environmental["selected_sources"])
-        self.assertIn("fetch-open-meteo-historical", environmental["selected_sources"])
-        self.assertIn("fetch-gdelt-doc-search", social_investigator["selected_sources"])
+        self.assertEqual([], environmental["selected_sources"])
+        self.assertEqual([], social_investigator["selected_sources"])
+        self.assertIn("fetch-nasa-firms-fire", environmental["allowed_sources"])
+        self.assertIn("fetch-gdelt-doc-search", social_investigator["allowed_sources"])
         self.assertIn(
             "spatiotemporal-relation-review",
             {
@@ -233,9 +233,9 @@ class SourceQueueGovernanceTests(unittest.TestCase):
         self.assertIn("fire-origin", lane_ids)
         self.assertIn("spatiotemporal-relation-review", lane_ids)
         self.assertEqual([], scope["required_source_skills"])
-        self.assertIn("fetch-nasa-firms-fire", scope["candidate_source_skills"])
+        self.assertEqual([], scope["candidate_source_skills"])
 
-    def test_lane_required_sources_raise_effective_step_budget(self) -> None:
+    def test_explicit_source_requests_control_fetch_step_budget(self) -> None:
         selection_module, _ = load_modules()
         planner_module = importlib.import_module("eco_council_runtime.kernel.source_queue.source_queue_planner")
 
@@ -254,7 +254,7 @@ class SourceQueueGovernanceTests(unittest.TestCase):
                 },
                 "source_governance": {
                     "max_selected_sources_per_role": 4,
-                    "max_source_steps_per_round": 1,
+                    "max_source_steps_per_round": 4,
                 },
                 "source_requests": [
                     {"source_skill": "fetch-gdelt-doc-search", "fetch_argv": ["echo", "{}"]},
@@ -300,9 +300,9 @@ class SourceQueueGovernanceTests(unittest.TestCase):
 
         self.assertEqual(4, len(plan["steps"]))
         self.assertEqual("mission-derived-candidate-source-review", plan["verification_scope"]["candidate_source_region_policy"])
-        self.assertEqual(1, plan["source_step_budget"]["configured_max_source_steps_per_round"])
+        self.assertEqual(4, plan["source_step_budget"]["configured_max_source_steps_per_round"])
         self.assertEqual(4, plan["source_step_budget"]["effective_max_source_steps_per_round"])
-        self.assertTrue(any(item["code"] == "source-step-budget-raised-for-required-lanes" for item in warnings))
+        self.assertFalse(any(item["code"] == "source-step-budget-raised-for-required-lanes" for item in warnings))
 
 
 if __name__ == "__main__":

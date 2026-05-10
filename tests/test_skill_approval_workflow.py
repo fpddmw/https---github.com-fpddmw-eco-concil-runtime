@@ -25,6 +25,21 @@ OPTIONAL_SKILL = "discover-discourse-issues"
 REPORTING_PUBLISH_SKILL = "publish-expert-report"
 
 
+def all_keys(value: object) -> set[str]:
+    if isinstance(value, dict):
+        keys: set[str] = set()
+        for key, child in value.items():
+            keys.add(str(key))
+            keys.update(all_keys(child))
+        return keys
+    if isinstance(value, list):
+        keys = set()
+        for child in value:
+            keys.update(all_keys(child))
+        return keys
+    return set()
+
+
 class SkillApprovalWorkflowTests(unittest.TestCase):
     def test_preflight_blocks_optional_analysis_without_approved_request(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -52,6 +67,12 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
             self.assertIn(
                 "missing-skill-approval-request-id",
                 {item["code"] for item in payload["preflight"]["issues"]},
+            )
+            self.assertIn(
+                "request-skill-approval",
+                payload["preflight"]["skill_approval"][
+                    "request_skill_approval_command_template"
+                ],
             )
 
     def test_preflight_accepts_optional_analysis_after_approval_record(self) -> None:
@@ -84,31 +105,31 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
 
             request_payload = run_kernel(
                 "request-skill-approval",
-                "--run-dir",
+                "--run_dir",
                 str(run_dir),
-                "--run-id",
+                "--run_id",
                 RUN_ID,
-                "--round-id",
+                "--round_id",
                 ROUND_ID,
-                "--skill-name",
+                "--skill_name",
                 OPTIONAL_SKILL,
-                "--requested-actor-role",
+                "--requested_actor_role",
                 "moderator",
                 "--rationale",
                 "Record approval for optional discourse discovery.",
-                "--actor-role",
+                "--actor_role",
                 "runtime-operator",
             )
             request_id = request_payload["summary"]["request_id"]
             run_kernel(
                 "approve-skill-approval",
-                "--run-dir",
+                "--run_dir",
                 str(run_dir),
-                "--request-id",
+                "--request_id",
                 request_id,
-                "--approval-reason",
+                "--approval_reason",
                 "Approved operator-owned optional audit.",
-                "--actor-role",
+                "--actor_role",
                 "runtime-operator",
             )
 
@@ -360,6 +381,77 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
             self.assertEqual(1, approval_query["summary"]["returned_object_count"])
             self.assertEqual(request_id, approval_query["objects"][0]["request_id"])
             self.assertEqual("approved", approval_query["objects"][0]["decision_status"])
+
+    def test_council_status_exposes_skill_approval_bridge_without_ranking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            request_payload = run_kernel(
+                "request-skill-approval",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                OPTIONAL_SKILL,
+                "--requested-actor-role",
+                "moderator",
+                "--rationale",
+                "Need optional discourse issue discovery for this round.",
+                "--actor-role",
+                "moderator",
+            )
+            request_id = request_payload["summary"]["request_id"]
+
+            pending_status = run_kernel(
+                "show-council-status",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            bridge = pending_status["skill_approval_bridge"]
+
+            self.assertEqual(1, pending_status["summary"]["pending_skill_approval_request_count"])
+            self.assertIn(request_id, [item["request_id"] for item in bridge["pending_requests"]])
+            self.assertIn("request-skill-approval", bridge["commands"]["request_skill_approval_template"])
+            self.assertIn("approve-skill-approval", bridge["commands"]["approve_skill_approval_template"])
+            self.assertIn("reject-skill-approval", bridge["commands"]["reject_skill_approval_template"])
+            self.assertIn("--skill-approval-request-id", bridge["commands"]["run_approved_skill_template"])
+            self.assertFalse({"score", "rank", "weight", "priority"} & all_keys(pending_status))
+
+            run_kernel(
+                "approve-skill-approval",
+                "--run-dir",
+                str(run_dir),
+                "--request-id",
+                request_id,
+                "--approval-reason",
+                "Approved optional analysis for this round.",
+                "--actor-role",
+                "runtime-operator",
+            )
+            approved_status = run_kernel(
+                "show-council-status",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            self.assertEqual(0, approved_status["summary"]["pending_skill_approval_request_count"])
+            self.assertIn(
+                request_id,
+                [
+                    item["request_id"]
+                    for item in approved_status["skill_approval_bridge"]["approved_unconsumed_requests"]
+                ],
+            )
 
     def test_run_skill_consumes_approved_skill_request(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

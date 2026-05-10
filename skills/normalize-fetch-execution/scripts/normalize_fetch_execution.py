@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -44,6 +45,127 @@ def pretty_json(data: Any, pretty: bool) -> str:
     if pretty:
         return json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True)
     return json.dumps(data, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+
+
+def kernel_run_skill_command(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    skill_name: str,
+    actor_role: str,
+    skill_args: list[str] | None = None,
+) -> str:
+    command = [
+        "python3",
+        "eco-concil-runtime/scripts/eco_runtime_kernel.py",
+        "run-skill",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--skill-name",
+        skill_name,
+        "--actor-role",
+        actor_role,
+        "--contract-mode",
+        "warn",
+    ]
+    if skill_args:
+        command.extend(["--", *skill_args])
+    return shlex.join(command)
+
+
+def signal_query_command_hints(*, run_dir: Path, run_id: str, round_id: str, actor_role: str) -> dict[str, str]:
+    return {
+        "public": kernel_run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="query-public-signals",
+            actor_role=actor_role,
+        ),
+        "formal": kernel_run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="query-formal-signals",
+            actor_role=actor_role,
+        ),
+        "environment": kernel_run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="query-environment-signals",
+            actor_role=actor_role,
+        ),
+    }
+
+
+def normalize_execution_command_hint(*, run_dir: Path, run_id: str, round_id: str, actor_role: str) -> str:
+    return kernel_run_skill_command(
+        run_dir=run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        skill_name=SKILL_NAME,
+        actor_role=actor_role,
+    )
+
+
+def next_step_hints(*, run_dir: Path, run_id: str, round_id: str, actor_role: str) -> dict[str, Any]:
+    return {
+        "normalize_fetch_execution_command": normalize_execution_command_hint(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            actor_role=actor_role,
+        ),
+        "query_commands": signal_query_command_hints(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            actor_role=actor_role,
+        ),
+        "archive_checkpoint_command": kernel_run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="archive-signal-corpus",
+            actor_role="moderator",
+        ),
+    }
+
+
+def status_normalization_state(statuses: list[dict[str, Any]]) -> dict[str, Any]:
+    normalized_count = 0
+    receipt_only_count = 0
+    receipt_only_sources: list[str] = []
+    for status in statuses:
+        if not isinstance(status, dict) or maybe_text(status.get("status")) != "completed":
+            continue
+        state = maybe_text(status.get("normalization_status"))
+        canonical_count = int(status.get("canonical_count") or 0)
+        if state == "receipt-only" or canonical_count == 0:
+            receipt_only_count += 1
+            receipt_only_sources.append(maybe_text(status.get("source_skill")))
+        else:
+            normalized_count += 1
+    if normalized_count and receipt_only_count:
+        normalization_status = "mixed-normalized-and-receipt-only"
+    elif normalized_count:
+        normalization_status = "normalized-signal-plane"
+    elif receipt_only_count:
+        normalization_status = "receipt-only"
+    else:
+        normalization_status = "no-completed-steps"
+    return {
+        "normalization_status": normalization_status,
+        "normalized_signal_step_count": normalized_count,
+        "receipt_only_step_count": receipt_only_count,
+        "receipt_only_sources": unique_texts(receipt_only_sources),
+    }
 
 
 def normalizer_script_path(skill_name: str) -> Path:
@@ -124,6 +246,8 @@ def raw_only_normalization_payload(*, source_skill: str, run_id: str, round_id: 
         "summary": {
             "skill": SKILL_NAME,
             "mode": "raw-only",
+            "normalization_status": "receipt-only",
+            "query_status": "raw-artifact-only",
             "run_id": run_id,
             "round_id": round_id,
             "source_skill": source_skill,
@@ -201,10 +325,22 @@ def execute_queue_step(
         "artifact_dir": maybe_text(step.get("artifact_dir")),
         "artifact_sha256": raw_sha256,
         "fetch_contract": fetch_contract,
+        "next_step_hints": next_step_hints(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            actor_role=actor_role,
+        ),
     }
     if step_kind == "import":
         queue_status["source_artifact_path"] = maybe_text(step.get("source_artifact_path"))
     if fetch_details is not None:
+        fetch_details["next_step_hints"] = next_step_hints(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            actor_role=actor_role,
+        )
         queue_status["detached_fetch"] = fetch_details
     return raw_artifact_path, fetch_details, queue_status
 
@@ -276,6 +412,9 @@ def execute_import_step(
         step=step,
         raw_artifact_path=raw_artifact_path,
     )
+    canonical_count = len(payload.get("canonical_ids", [])) if isinstance(payload.get("canonical_ids"), list) else 0
+    artifact_ref_count = len(payload.get("artifact_refs", [])) if isinstance(payload.get("artifact_refs"), list) else 0
+    normalization_status = "normalized-signal-plane" if canonical_count > 0 else "receipt-only"
     status = {
         "step_id": maybe_text(step.get("step_id")),
         "step_kind": maybe_text(step.get("step_kind")) or "import",
@@ -295,19 +434,27 @@ def execute_import_step(
         "artifact_sha256": maybe_text(queue_status.get("artifact_sha256")),
         "receipt_id": maybe_text(payload.get("receipt_id")),
         "batch_id": maybe_text(payload.get("batch_id")),
-        "canonical_count": len(payload.get("canonical_ids", [])) if isinstance(payload.get("canonical_ids"), list) else 0,
-        "artifact_ref_count": len(payload.get("artifact_refs", [])) if isinstance(payload.get("artifact_refs"), list) else 0,
+        "canonical_count": canonical_count,
+        "artifact_ref_count": artifact_ref_count,
+        "normalization_status": normalization_status,
         "warning_count": len(payload.get("warnings", [])) if isinstance(payload.get("warnings"), list) else 0,
         "queue_runner": queue_status,
         "normalizer_runner": {
             "status": maybe_text(payload.get("status")) or "completed",
+            "normalization_status": normalization_status,
             "receipt_id": maybe_text(payload.get("receipt_id")),
             "batch_id": maybe_text(payload.get("batch_id")),
             "actor_role": actor_role,
             "resolved_actor_role": resolved_actor_role,
-            "canonical_count": len(payload.get("canonical_ids", [])) if isinstance(payload.get("canonical_ids"), list) else 0,
-            "artifact_ref_count": len(payload.get("artifact_refs", [])) if isinstance(payload.get("artifact_refs"), list) else 0,
+            "canonical_count": canonical_count,
+            "artifact_ref_count": artifact_ref_count,
         },
+        "next_step_hints": next_step_hints(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            actor_role=actor_role,
+        ),
     }
     if maybe_text(step.get("step_kind")) == "import":
         status["source_artifact_path"] = maybe_text(step.get("source_artifact_path"))
@@ -318,6 +465,7 @@ def execute_import_step(
 
 def build_execution_payload(
     *,
+    run_dir: Path,
     run_id: str,
     round_id: str,
     actor_role: str,
@@ -330,6 +478,7 @@ def build_execution_payload(
     normalized_artifact_refs: list[dict[str, Any]],
     failure: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    normalization_state = status_normalization_state(statuses)
     payload = {
         "schema_version": "ingress-import-v2",
         "generated_at_utc": utc_now_iso(),
@@ -347,6 +496,13 @@ def build_execution_payload(
         "statuses": statuses,
         "normalized_receipt_ids": unique_texts(normalized_receipt_ids),
         "normalized_artifact_refs": normalized_artifact_refs,
+        **normalization_state,
+        "next_step_hints": next_step_hints(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            actor_role=resolved_actor_role or actor_role,
+        ),
         "execution_components": {
             "queue_runner": {
                 "status": "completed" if all(maybe_text(item.get("status")) == "completed" for item in statuses) else "failed",
@@ -482,6 +638,7 @@ def import_fetch_execution_skill(
             statuses_by_step[step_id] = failed_status
             statuses = ordered_statuses_for_plan(steps, statuses_by_step)
             partial_payload = build_execution_payload(
+                run_dir=run_dir_path,
                 run_id=run_id,
                 round_id=round_id,
                 actor_role=actor_role,
@@ -499,6 +656,7 @@ def import_fetch_execution_skill(
 
     statuses = ordered_statuses_for_plan(steps, statuses_by_step)
     payload = build_execution_payload(
+        run_dir=run_dir_path,
         run_id=run_id,
         round_id=round_id,
         actor_role=actor_role,
@@ -526,6 +684,9 @@ def import_fetch_execution_skill(
             "output_path": str(output_path),
             "execution_id": payload["execution_id"],
             "normalized_step_count": payload["completed_count"],
+            "normalization_status": payload.get("normalization_status"),
+            "normalized_signal_step_count": payload.get("normalized_signal_step_count"),
+            "receipt_only_step_count": payload.get("receipt_only_step_count"),
             "failed_step_count": payload["failed_count"],
             "actor_role": actor_role,
             "resolved_actor_role": normalized_actor_role,
@@ -541,11 +702,15 @@ def import_fetch_execution_skill(
         "canonical_ids": [payload["execution_id"]],
         "warnings": warnings,
         "execution_components": payload.get("execution_components", {}),
+        "next_step_hints": payload.get("next_step_hints", {}),
         "board_handoff": {
             "candidate_ids": [payload["execution_id"]],
             "evidence_refs": artifact_refs,
             "gap_hints": [item.get("message", "") for item in warnings[:3] if maybe_text(item.get("message"))],
             "challenge_hints": [],
+            "next_query_commands": payload.get("next_step_hints", {}).get("query_commands", {})
+            if isinstance(payload.get("next_step_hints"), dict)
+            else {},
             "suggested_next_skills": [
                 "query-public-signals",
                 "query-formal-signals",

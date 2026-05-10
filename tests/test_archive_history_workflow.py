@@ -29,6 +29,21 @@ SEARCH_RUN_ID = "run-history-search-001"
 SEARCH_ROUND_ID = "round-history-search-001"
 
 
+def all_keys(value: object) -> set[str]:
+    if isinstance(value, dict):
+        keys: set[str] = set()
+        for key, nested in value.items():
+            keys.add(str(key))
+            keys.update(all_keys(nested))
+        return keys
+    if isinstance(value, list):
+        keys = set()
+        for item in value:
+            keys.update(all_keys(item))
+        return keys
+    return set()
+
+
 def build_mission_file(root: Path, run_id: str, round_id: str) -> Path:
     mission_path = root / f"mission_{run_id}.json"
     write_json(
@@ -295,6 +310,44 @@ def approve_close_round_transition(
 
 
 class ArchiveHistoryWorkflowTests(unittest.TestCase):
+    def test_signal_corpus_archive_exposes_empty_checkpoint_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "empty-run"
+            run_dir.mkdir(parents=True)
+
+            payload = run_script(
+                script_path("archive-signal-corpus"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                HISTORICAL_RUN_ID,
+                "--round-id",
+                HISTORICAL_ROUND_ID,
+            )
+            artifact = load_json(
+                run_dir
+                / "archive"
+                / f"signal_corpus_import_{HISTORICAL_ROUND_ID}.json"
+            )
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("no-normalized-signals", payload["summary"]["checkpoint_status"])
+            self.assertEqual("checkpoint", artifact["archive_mode"])
+            self.assertEqual("no-normalized-signals", artifact["checkpoint_status"])
+            self.assertEqual(0, artifact["imported_signal_count"])
+            self.assertEqual(
+                {
+                    "public": 0,
+                    "formal": 0,
+                    "environment": 0,
+                    "fire_detection": 0,
+                    "weather": 0,
+                },
+                artifact["signal_plane_counts"],
+            )
+            self.assertTrue(payload["warnings"])
+
     def test_close_round_runtime_command_archives_terminal_round_and_exposes_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -491,10 +544,13 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             first_case = case_query_artifact["cases"][0]
             first_signal = signal_query_artifact["results"][0]
             self.assertEqual(HISTORICAL_RUN_ID, first_case["case_id"])
-            self.assertEqual("structured-strong", first_case["score_components"]["match_tier"])
+            self.assertTrue(first_case["match_surfaces"]["profile_match"])
+            self.assertNotIn("score", first_case)
+            self.assertNotIn("score_components", first_case)
             self.assertIn("air-quality", first_case["matched_metric_families"])
             self.assertEqual(HISTORICAL_RUN_ID, first_signal["run_id"])
             self.assertEqual("air-quality", first_signal["metric_family"])
+            self.assertNotIn("score", first_signal)
             self.assertEqual("missing-claim-scope", case_import_artifact["claim_scope_source"])
             self.assertEqual(
                 "missing-observation-scope",
@@ -654,6 +710,15 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
 
             retrieval_artifact = load_json(current_run_dir / "investigation" / f"history_retrieval_{CURRENT_ROUND_ID}.json")
             context_text = (current_run_dir / "investigation" / f"history_context_{CURRENT_ROUND_ID}.md").read_text(encoding="utf-8")
+            archive_status = run_kernel(
+                "show-archive-status",
+                "--run-dir",
+                str(current_run_dir),
+                "--run-id",
+                CURRENT_RUN_ID,
+                "--round-id",
+                CURRENT_ROUND_ID,
+            )
 
             self.assertEqual("completed", history_payload["status"])
             self.assertEqual("strict", history_payload["summary"]["contract_mode"])
@@ -670,6 +735,39 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertGreaterEqual(retrieval_artifact["budget"]["selected_case_count"], 1)
             self.assertGreaterEqual(retrieval_artifact["budget"]["selected_signal_count"], 1)
             self.assertEqual("smoke-transport", retrieval_artifact["history_query"]["profile_id"])
+            self.assertEqual("archive-status", archive_status["surface"])
+            self.assertEqual(
+                "normalized-signals-present",
+                archive_status["checkpoint_inputs"]["source_signal_plane"][
+                    "checkpoint_input_status"
+                ],
+            )
+            self.assertGreaterEqual(
+                archive_status["checkpoint_inputs"]["source_signal_plane"][
+                    "round_normalized_signal_count"
+                ],
+                1,
+            )
+            self.assertEqual(
+                retrieval_artifact["budget"]["selected_case_count"],
+                archive_status["checkpoint_summary"]["history_selected_case_count"],
+            )
+            self.assertEqual(
+                retrieval_artifact["budget"]["selected_signal_count"],
+                archive_status["checkpoint_summary"]["history_selected_signal_count"],
+            )
+            self.assertIn(
+                "query-signal-corpus",
+                archive_status["commands"]["query_signal_corpus"],
+            )
+            self.assertIn(
+                "query-case-library",
+                archive_status["commands"]["query_case_library"],
+            )
+            self.assertFalse(
+                {"score", "rank", "weight", "priority"}
+                & all_keys(archive_status["checkpoint_summary"])
+            )
             self.assertEqual("missing-claim-scope", retrieval_artifact["claim_scope_source"])
             self.assertEqual(
                 "missing-observation-scope",
@@ -688,6 +786,16 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 retrieval_artifact["observed_inputs"]["observation_scope_present"]
             )
             self.assertTrue(any(case["case_id"] == HISTORICAL_RUN_ID for case in retrieval_artifact["cases"]))
+            self.assertTrue(
+                all("score" not in case for case in retrieval_artifact["cases"])
+            )
+            self.assertTrue(
+                all(
+                    "score" not in excerpt
+                    for case in retrieval_artifact["cases"]
+                    for excerpt in case.get("excerpts", [])
+                )
+            )
             self.assertIn(HISTORICAL_RUN_ID, context_text)
             self.assertIn("Historical Signal Hints", context_text)
 

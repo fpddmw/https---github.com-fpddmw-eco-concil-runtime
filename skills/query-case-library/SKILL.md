@@ -1,14 +1,15 @@
 ---
 name: query-case-library
-description: Query archived historical cases from the shared case library so current rounds can retrieve analogous investigations and compact precedent summaries.
+description: Query archived historical cases from the shared case library so current rounds can retrieve evidence refs and match surfaces without ranking or recommending conclusions.
 ---
 
 # Eco Query Case Library
 
 ## Core Goal
-- Search archived cases by structured overlap and lexical cues.
-- Return compact case matches with retrieval reasons and overlap metadata.
+- Filter archived cases by structured overlap and lexical cues.
+- Return compact case matches with retrieval reasons and overlap metadata only.
 - Materialize one reusable archive query artifact for downstream history context.
+- Do not score, rank, tier, or recommend archived cases; agents decide relevance and use.
 
 ## Triggering Conditions
 - A case library archive database already exists.

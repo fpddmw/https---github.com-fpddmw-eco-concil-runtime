@@ -51,15 +51,6 @@ CREATE TABLE IF NOT EXISTS case_excerpts (
 );
 """
 
-EXCERPT_KIND_BONUS = {
-    "evidence-card": 2.2,
-    "decision-summary": 1.8,
-    "round-summary": 1.4,
-    "report-summary": 1.1,
-    "curated-summary": 0.9,
-}
-
-
 def normalize_space(value: Any) -> str:
     return " ".join(str(value).split())
 
@@ -492,20 +483,12 @@ def lexical_overlap(query_terms: list[str], text: str) -> list[str]:
     return [term for term in query_terms if term and term in haystack]
 
 
-def score_excerpt(case_row: dict[str, Any], excerpt_row: sqlite3.Row, query: dict[str, Any], query_terms: list[str]) -> tuple[float, list[str]]:
+def excerpt_match_details(excerpt_row: sqlite3.Row, query: dict[str, Any], query_terms: list[str]) -> dict[str, Any]:
     claim_overlap = overlap(query.get("claim_types", []), parse_json_text(excerpt_row["claim_types_json"], []))
     metric_overlap = overlap(query.get("metric_families", []), parse_json_text(excerpt_row["metric_families_json"], []))
     gap_overlap = overlap(query.get("gap_types", []), parse_json_text(excerpt_row["gap_types_json"], []))
     source_overlap = overlap(query.get("source_skills", []), parse_json_text(excerpt_row["source_skills_json"], []))
     lexical_hits = lexical_overlap(query_terms, excerpt_row["text"])
-    score = EXCERPT_KIND_BONUS.get(maybe_text(excerpt_row["artifact_kind"]), 0.6)
-    score += 1.0 * len(claim_overlap)
-    score += 0.8 * len(metric_overlap)
-    score += 1.1 * len(gap_overlap)
-    score += 0.4 * len(source_overlap)
-    score += min(1.2, 0.2 * len(lexical_hits))
-    if maybe_text(case_row.get("profile_id")) and maybe_text(case_row.get("profile_id")) == maybe_text(query.get("profile_id")):
-        score += 0.6
     reasons = unique_texts(
         ([f"claim_types:{','.join(claim_overlap[:3])}"] if claim_overlap else [])
         + ([f"metric_families:{','.join(metric_overlap[:3])}"] if metric_overlap else [])
@@ -513,7 +496,16 @@ def score_excerpt(case_row: dict[str, Any], excerpt_row: sqlite3.Row, query: dic
         + ([f"source_skills:{','.join(source_overlap[:3])}"] if source_overlap else [])
         + ([f"lexical:{','.join(lexical_hits[:4])}"] if lexical_hits else [])
     )
-    return score, reasons
+    return {
+        "match_reasons": reasons,
+        "matched_claim_types": claim_overlap,
+        "matched_metric_families": metric_overlap,
+        "matched_gap_types": gap_overlap,
+        "matched_source_skills": source_overlap,
+        "match_surfaces": {
+            "lexical_terms": lexical_hits[:8],
+        },
+    }
 
 
 def estimated_tokens(*parts: Any) -> int:
@@ -544,14 +536,14 @@ def render_history_context(snapshot: dict[str, Any]) -> str:
         lines.extend(f"- {maybe_text(item)}" for item in questions)
     else:
         lines.append("- None")
-    lines.extend(["", "## Similar Archived Cases"])
+    lines.extend(["", "## Archived Case Matches"])
     cases = snapshot.get("cases", []) if isinstance(snapshot.get("cases"), list) else []
     if not cases:
         lines.append("- None")
     for index, case in enumerate(cases, start=1):
         if not isinstance(case, dict):
             continue
-        lines.append(f"{index}. case_id={maybe_text(case.get('case_id'))} profile={maybe_text(case.get('profile_id'))} score={maybe_number(case.get('score')) or 0.0:.3f} tier={maybe_text(case.get('match_tier'))}")
+        lines.append(f"{index}. case_id={maybe_text(case.get('case_id'))} profile={maybe_text(case.get('profile_id'))}")
         lines.append(f"   reasons={', '.join(case.get('match_reasons', [])) if isinstance(case.get('match_reasons'), list) and case.get('match_reasons') else 'n/a'}")
         excerpts = case.get("excerpts", []) if isinstance(case.get("excerpts"), list) else []
         for excerpt_index, excerpt in enumerate(excerpts, start=1):
@@ -679,33 +671,33 @@ def materialize_history_context_skill(
                 "SELECT * FROM case_excerpts WHERE case_id = ? ORDER BY excerpt_order, excerpt_id",
                 (case_id,),
             ).fetchall()
-            scored_excerpts: list[tuple[float, dict[str, Any]]] = []
+            excerpt_items: list[dict[str, Any]] = []
             for row in excerpt_rows:
-                score, reasons = score_excerpt(case, row, history_query, query_terms)
-                scored_excerpts.append(
-                    (
-                        score,
-                        {
-                            "excerpt_id": maybe_text(row["excerpt_id"]),
-                            "artifact_kind": maybe_text(row["artifact_kind"]),
-                            "label": maybe_text(row["label"]),
-                            "text": maybe_text(row["text"]),
-                            "score": round(score, 3),
-                            "match_reasons": reasons,
-                        },
-                    )
+                excerpt_items.append(
+                    {
+                        "excerpt_id": maybe_text(row["excerpt_id"]),
+                        "artifact_kind": maybe_text(row["artifact_kind"]),
+                        "label": maybe_text(row["label"]),
+                        "text": maybe_text(row["text"]),
+                        **excerpt_match_details(row, history_query, query_terms),
+                    }
                 )
-            scored_excerpts.sort(key=lambda item: (-item[0], item[1]["excerpt_id"]))
-            selected_excerpts = [item[1] for item in scored_excerpts[:max_excerpts_per_case]]
+            matching_excerpts = [
+                item
+                for item in excerpt_items
+                if isinstance(item.get("match_reasons"), list) and item.get("match_reasons")
+            ]
+            excerpt_pool = matching_excerpts or excerpt_items
+            selected_excerpts = excerpt_pool[:max_excerpts_per_case]
             rendered_cases.append(
                 {
                     **case,
-                    "match_tier": maybe_text(case.get("score_components", {}).get("match_tier") if isinstance(case.get("score_components"), dict) else ""),
                     "excerpts": selected_excerpts,
                     "excerpt_budget": {
-                        "candidate_count": len(scored_excerpts),
+                        "candidate_count": len(excerpt_items),
                         "selected_count": len(selected_excerpts),
-                        "truncated_by_cap": len(scored_excerpts) > len(selected_excerpts),
+                        "truncated_by_cap": len(excerpt_pool) > len(selected_excerpts),
+                        "selection_basis": "matched-archive-order" if matching_excerpts else "archive-order",
                     },
                 }
             )
@@ -724,6 +716,7 @@ def materialize_history_context_skill(
     snapshot = {
         "schema_version": "archive-history-context-v1",
         "skill": SKILL_NAME,
+        "retrieval_semantics": "history context provides archived evidence refs and match surfaces only; agents decide relevance and use",
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
@@ -816,7 +809,7 @@ def materialize_history_context_skill(
             ),
             "evidence_refs": artifact_refs,
             "gap_hints": [item["message"] for item in warnings],
-            "challenge_hints": ["Historical context should inform prioritization and challenge framing, not overwrite current evidence review."] if rendered_cases or selected_signals else [],
+            "challenge_hints": ["Historical context provides archived traces only; agents decide whether they matter for current claims."] if rendered_cases or selected_signals else [],
             "suggested_next_skills": ["post-board-note", "propose-next-actions", "open-falsification-probe"],
         },
     }

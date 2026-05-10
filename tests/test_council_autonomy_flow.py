@@ -1289,6 +1289,147 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             self.assertEqual(challenge_id, task_query["objects"][0]["source_ticket_id"])
             self.assertIn(comment_id, task_query["objects"][0]["lineage"])
 
+    def test_challenge_disposition_targeting_followup_ticket_releases_source_review_constraint(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            store_readiness_opinion_records(
+                run_dir,
+                opinion_bundle={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "opinions": [
+                        {
+                            "agent_role": "moderator",
+                            "readiness_status": "ready",
+                            "sufficient_for_report_basis": True,
+                            "rationale": "The bounded report can proceed when the challenge ticket disposition is honored.",
+                            "decision_source": "agent-council",
+                            "basis_object_ids": ["evidence-bundle-transport-001"],
+                            "provenance": {"source": "unit-test"},
+                            "evidence_refs": ["evidence://bundle-transport-001"],
+                            "lineage": [],
+                        }
+                    ],
+                },
+            )
+            review_payload = run_kernel(
+                "post-review-comment",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "challenger",
+                "--author-role",
+                "challenger",
+                "--review-kind",
+                "evidence-bundle-review",
+                "--comment-text",
+                "The current bundle cannot support transport attribution without plume or trajectory evidence.",
+                "--target-kind",
+                "evidence-bundle",
+                "--target-id",
+                "evidence-bundle-transport-001",
+                "--report-risk",
+                "source-limitations",
+                "--required-followup-evidence",
+                "smoke plume or trajectory evidence",
+                "--evidence-ref",
+                "evidence://bundle-transport-001",
+            )
+            comment_id = review_payload["canonical_ids"][0]
+            followup_payload = run_script(
+                script_path("open-followup-from-review-comment"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--review-comment-id",
+                comment_id,
+            )
+            challenge_id = followup_payload["canonical_ids"][0]
+
+            blocked_payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            blocked_artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+
+            self.assertEqual(
+                "needs-more-data",
+                blocked_payload["summary"]["readiness_status"],
+            )
+            self.assertEqual(
+                1,
+                blocked_artifact["unresolved_challenger_constraint_count"],
+            )
+
+            disposition_payload = run_script(
+                script_path("submit-challenge-disposition"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--author-role",
+                "moderator",
+                "--target-kind",
+                "challenge",
+                "--target-id",
+                challenge_id,
+                "--response-to-id",
+                challenge_id,
+                "--challenge-id",
+                challenge_id,
+                "--disposition-status",
+                "accepted-as-limitation",
+                "--decided-by-role",
+                "moderator",
+                "--rationale",
+                "Accept the follow-up challenge as a stated limitation without using the bundle for attribution.",
+                "--evidence-ref",
+                "evidence://bundle-transport-001",
+            )
+
+            released_payload = run_script(
+                script_path("summarize-round-readiness"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            released_artifact = load_json(
+                reporting_path(run_dir, f"round_readiness_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("ready", released_payload["summary"]["readiness_status"])
+            self.assertEqual(
+                0,
+                released_artifact["unresolved_challenger_constraint_count"],
+            )
+            self.assertEqual(
+                disposition_payload["canonical_ids"][0],
+                released_artifact["challenger_constraints"][0][
+                    "disposition_comment_id"
+                ],
+            )
+
     def test_lead_basis_conflicting_with_constraint_withholds_freeze(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"

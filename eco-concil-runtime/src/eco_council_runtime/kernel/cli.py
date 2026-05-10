@@ -66,6 +66,14 @@ from eco_council_runtime.kernel.operator.cli_runtime_commands import (
     pretty_json,
     write_command_artifact,
 )
+from eco_council_runtime.kernel.operator.council_status import (
+    show_archive_status_surface,
+    show_council_status_surface,
+    show_open_challenges_surface,
+    show_source_acquisition_intents_surface,
+    show_source_surfaces_surface,
+    show_unbundled_findings_surface,
+)
 from eco_council_runtime.kernel.operator.run_state_view import (
     benchmark_operator_view,
     governed_execution_operator_view,
@@ -1696,6 +1704,8 @@ def main(
                 gap_id=args.gap_id,
                 proposal_id=args.proposal_id,
                 source_proposal_id=args.source_proposal_id,
+                source_skill=args.source_skill,
+                target_evidence_request_id=args.target_evidence_request_id,
                 readiness_blocker_only=args.readiness_blocker_only,
                 include_contract=args.include_contract,
                 include_items=args.include_items,
@@ -1822,6 +1832,65 @@ def main(
 
     if args.command == "materialize-reporting-exports":
         payload = materialize_reporting_exports(
+            run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+        )
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "show-council-status":
+        payload = show_council_status_surface(
+            run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+            limit=args.limit,
+        )
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "show-source-surfaces":
+        payload = show_source_surfaces_surface(
+            run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+            limit=args.limit,
+        )
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "show-source-acquisition-intents":
+        payload = show_source_acquisition_intents_surface(
+            run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+            limit=args.limit,
+        )
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "show-open-challenges":
+        payload = show_open_challenges_surface(
+            run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+            limit=args.limit,
+        )
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "show-unbundled-findings":
+        payload = show_unbundled_findings_surface(
+            run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+            limit=args.limit,
+        )
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "show-archive-status":
+        payload = show_archive_status_surface(
             run_dir,
             run_id=args.run_id,
             round_id=args.round_id,

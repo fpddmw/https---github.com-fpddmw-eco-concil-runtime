@@ -24,6 +24,7 @@ OBJECT_KIND_SUBISSUE = "subissue"
 OBJECT_KIND_INVESTIGATION_SCOPE = "investigation-scope"
 OBJECT_KIND_ROUND_BRIEF = "round-brief"
 OBJECT_KIND_EVIDENCE_REQUEST = "evidence-request"
+OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL = "source-acquisition-proposal"
 OBJECT_KIND_AGENT_POSITION = "agent-position"
 OBJECT_KIND_CONTEXT_PACKET = "context-packet"
 OBJECT_KIND_CHALLENGE_DISPOSITION = "challenge-disposition"
@@ -43,6 +44,7 @@ DYNAMIC_INVESTIGATION_OBJECT_KINDS = (
     OBJECT_KIND_INVESTIGATION_SCOPE,
     OBJECT_KIND_ROUND_BRIEF,
     OBJECT_KIND_EVIDENCE_REQUEST,
+    OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL,
     OBJECT_KIND_AGENT_POSITION,
     OBJECT_KIND_CONTEXT_PACKET,
     OBJECT_KIND_CHALLENGE_DISPOSITION,
@@ -54,6 +56,7 @@ DYNAMIC_INVESTIGATION_ID_FIELDS = {
     OBJECT_KIND_INVESTIGATION_SCOPE: "scope_id",
     OBJECT_KIND_ROUND_BRIEF: "brief_id",
     OBJECT_KIND_EVIDENCE_REQUEST: "request_id",
+    OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL: "proposal_id",
     OBJECT_KIND_AGENT_POSITION: "position_id",
     OBJECT_KIND_CONTEXT_PACKET: "packet_id",
     OBJECT_KIND_CHALLENGE_DISPOSITION: "disposition_id",
@@ -65,6 +68,7 @@ DYNAMIC_INVESTIGATION_STATUS_DEFAULTS = {
     OBJECT_KIND_INVESTIGATION_SCOPE: "candidate",
     OBJECT_KIND_ROUND_BRIEF: "draft",
     OBJECT_KIND_EVIDENCE_REQUEST: "open",
+    OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL: "proposed",
     OBJECT_KIND_AGENT_POSITION: "proposed",
     OBJECT_KIND_CONTEXT_PACKET: "materialized",
     OBJECT_KIND_CHALLENGE_DISPOSITION: "recorded",
@@ -87,6 +91,8 @@ FORBIDDEN_DYNAMIC_INVESTIGATION_FIELDS = (
     "ranked_items",
     "ranking",
     "readiness_score",
+    "recommended_conclusion",
+    "recommended_outcome",
     "recommended_source_rank",
     "score",
     "scores",
@@ -106,6 +112,7 @@ DYNAMIC_INVESTIGATION_LINEAGE_FIELDS = (
     "evidence_request_ids",
     "position_ids",
     "context_packet_ids",
+    "source_acquisition_proposal_ids",
     "supersedes_object_ids",
     "response_to_ids",
     "target_refs",
@@ -349,6 +356,63 @@ def reject_dynamic_investigation_heuristic_fields(
             )
 
 
+def normalize_query_parameters(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("source-acquisition-proposal query_parameters must be a JSON object.")
+    return dict(value)
+
+
+def validate_source_acquisition_proposal_payload(payload: dict[str, Any]) -> None:
+    source_skill = maybe_text(payload.get("source_skill"))
+    if not source_skill:
+        raise ValueError("source-acquisition-proposal requires source_skill.")
+
+    from eco_council_runtime.kernel.governance.skill_registry import (  # noqa: PLC0415
+        SKILL_LAYER_FETCH,
+        resolve_skill_policy,
+    )
+
+    policy = resolve_skill_policy(source_skill)
+    if maybe_text(policy.get("skill_layer")) != SKILL_LAYER_FETCH:
+        raise ValueError(
+            "source-acquisition-proposal source_skill must be a fetch skill, "
+            f"got `{source_skill}`."
+        )
+    author_role = maybe_text(payload.get("author_role"))
+    allowed_roles = (
+        policy.get("allowed_roles", [])
+        if isinstance(policy.get("allowed_roles"), list)
+        else []
+    )
+    if author_role not in allowed_roles:
+        raise ValueError(
+            f"source-acquisition-proposal author_role `{author_role}` cannot execute "
+            f"{source_skill}. Allowed roles: {', '.join(allowed_roles)}."
+        )
+
+    payload["query_parameters"] = normalize_query_parameters(
+        payload.get("query_parameters")
+    )
+    payload["declared_side_effects"] = normalized_text_list(
+        payload.get("declared_side_effects")
+    )
+    payload["requested_side_effect_approvals"] = normalized_text_list(
+        payload.get("requested_side_effect_approvals")
+    )
+    undeclared = [
+        value
+        for value in payload["requested_side_effect_approvals"]
+        if value not in payload["declared_side_effects"]
+    ]
+    if undeclared:
+        raise ValueError(
+            "source-acquisition-proposal requested_side_effect_approvals must be "
+            "declared first: " + ", ".join(undeclared)
+        )
+
+
 def normalized_dynamic_investigation_object_payload(
     payload: dict[str, Any],
     *,
@@ -406,6 +470,26 @@ def normalized_dynamic_investigation_object_payload(
     normalized["target"] = target
     normalized["target_kind"] = maybe_text(target.get("object_kind")) or "round"
     normalized["target_id"] = maybe_text(target.get("object_id")) or normalized_round_id
+    if normalized_kind == OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL:
+        if maybe_text(normalized.get("target_evidence_request_id")) and (
+            normalized["target_kind"] == "round"
+            or normalized["target_id"] == normalized_round_id
+        ):
+            normalized["target_kind"] = OBJECT_KIND_EVIDENCE_REQUEST
+            normalized["target_id"] = maybe_text(
+                normalized.get("target_evidence_request_id")
+            )
+            normalized["target"] = default_deliberation_target(
+                {},
+                round_id=normalized_round_id,
+                target_kind=normalized["target_kind"],
+                target_id=normalized["target_id"],
+            )
+        if (
+            normalized["target_kind"] == OBJECT_KIND_EVIDENCE_REQUEST
+            and not maybe_text(normalized.get("target_evidence_request_id"))
+        ):
+            normalized["target_evidence_request_id"] = normalized["target_id"]
 
     rationale = (
         maybe_text(normalized.get("rationale"))
@@ -456,6 +540,8 @@ def normalized_dynamic_investigation_object_payload(
     )
     normalized["object_id"] = object_id
     normalized[id_field] = maybe_text(normalized.get(id_field)) or object_id
+    if normalized_kind == OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL:
+        validate_source_acquisition_proposal_payload(normalized)
     normalized["schema_version"] = canonical_contract(normalized_kind).schema_version
     return validate_canonical_payload(normalized_kind, normalized)
 

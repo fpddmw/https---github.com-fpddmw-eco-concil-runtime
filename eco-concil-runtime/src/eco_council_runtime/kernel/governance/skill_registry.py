@@ -31,6 +31,7 @@ from eco_council_runtime.kernel.governance.role_contracts import (
     ROLE_RUNTIME_OPERATOR,
     ROLE_SOCIAL_INVESTIGATOR,
 )
+from eco_council_runtime.kernel.source_queue.source_queue_contract import SOURCE_CATALOG
 
 SKILL_LAYER_FETCH = "fetch"
 SKILL_LAYER_NORMALIZE = "normalize"
@@ -541,6 +542,15 @@ POLICIES.update(
         write_scope=WRITE_SCOPE_ARTIFACT,
     )
 )
+for _fetch_skill_name, _source_config in SOURCE_CATALOG.items():
+    if _fetch_skill_name not in POLICIES:
+        continue
+    _source_role = maybe_text(_source_config.get("role"))
+    if not _source_role:
+        continue
+    POLICIES[_fetch_skill_name]["allowed_roles"] = unique_texts(
+        [_source_role, ROLE_CHALLENGER]
+    )
 POLICIES.update(
     _group(
         NORMALIZE_SKILLS,
@@ -798,6 +808,17 @@ POLICIES.update(
             output_object_kinds=["evidence-request"],
             write_scope=WRITE_SCOPE_DELIBERATION,
         ),
+        "submit-source-acquisition-proposal": _policy(
+            skill_name="submit-source-acquisition-proposal",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[*FETCH_NORMALIZE_ROLES],
+            required_capabilities=[CAPABILITY_PROPOSAL_WRITE],
+            side_effect_scope=["artifact-write", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=["evidence-request", "challenge", "finding", "round"],
+            output_object_kinds=["source-acquisition-proposal"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+        ),
         "submit-agent-position": _policy(
             skill_name="submit-agent-position",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
@@ -884,7 +905,14 @@ POLICIES.update(
             required_capabilities=[CAPABILITY_PROBE_WRITE],
             side_effect_scope=["artifact-write", "db-read", "db-write:deliberation"],
             db_write_planes=["deliberation"],
-            input_object_kinds=["proposal", "next-action", "issue-cluster"],
+            input_object_kinds=[
+                "proposal",
+                "next-action",
+                "hypothesis",
+                "challenge",
+                "evidence-bundle",
+                "issue-cluster",
+            ],
             output_object_kinds=["probe"],
             write_scope=WRITE_SCOPE_DELIBERATION,
             requires_operator_approval=True,

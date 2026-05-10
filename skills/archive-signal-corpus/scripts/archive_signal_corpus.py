@@ -280,7 +280,10 @@ def archive_signal_corpus_skill(
     source_skills = unique_texts([row["source_skill"] for row in rows])
     metric_families = unique_texts([metric_family(row["metric"]) for row in rows if metric_family(row["metric"])])
     public_count = len([row for row in rows if maybe_text(row["plane"]) == "public"])
+    formal_count = len([row for row in rows if maybe_text(row["plane"]) == "formal"])
     environment_count = len([row for row in rows if maybe_text(row["plane"]) == "environment"])
+    fire_count = len([row for row in rows if metric_family(row["metric"]) == "fire-detection"])
+    weather_count = len([row for row in rows if metric_family(row["metric"]) == "meteorology"])
 
     warnings: list[dict[str, str]] = []
     if not signal_db.exists():
@@ -365,6 +368,10 @@ def archive_signal_corpus_skill(
     snapshot = {
         "schema_version": "archive-signal-corpus-v1",
         "skill": SKILL_NAME,
+        "archive_mode": "checkpoint",
+        "archive_scope": "normalized-signal-corpus",
+        "checkpoint_status": "imported-normalized-signals" if rows else "no-normalized-signals",
+        "history_reuse_semantics": "Archived signals are historical evidence traces only; agents decide whether and how to use them.",
         "generated_at_utc": imported_at,
         "run_id": run_id,
         "round_id": round_id,
@@ -377,7 +384,17 @@ def archive_signal_corpus_skill(
         "replaced_existing": bool(rows) and existing,
         "imported_signal_count": len(rows),
         "public_signal_count": public_count,
+        "formal_signal_count": formal_count,
         "environment_signal_count": environment_count,
+        "fire_detection_signal_count": fire_count,
+        "weather_signal_count": weather_count,
+        "signal_plane_counts": {
+            "public": public_count,
+            "formal": formal_count,
+            "environment": environment_count,
+            "fire_detection": fire_count,
+            "weather": weather_count,
+        },
         "round_ids": round_ids,
         "metric_families": metric_families,
         "source_skills": source_skills,
@@ -397,6 +414,7 @@ def archive_signal_corpus_skill(
             "import_id": import_id,
             "output_path": str(output_file),
             "db_path": str(archive_db),
+            "checkpoint_status": "imported-normalized-signals" if rows else "no-normalized-signals",
             "imported_signal_count": len(rows),
         },
         "receipt_id": "archive-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, import_id)[:20],

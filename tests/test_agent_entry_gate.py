@@ -382,9 +382,11 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("query-council-objects", social_read_surface)
             self.assertIn("--object-kind round-brief", social_read_surface)
             self.assertIn("--object-kind context-packet", social_read_surface)
+            self.assertIn("--object-kind source-acquisition-proposal", social_read_surface)
             self.assertIn("--object-kind challenge-disposition", challenger_read_surface)
             self.assertIn("materialize-context-packet", moderator_write_surface)
             self.assertIn("submit-evidence-request", social_write_surface)
+            self.assertIn("submit-source-acquisition-proposal", social_write_surface)
             self.assertIn("submit-agent-position", social_write_surface)
             self.assertIn(
                 "submit-challenge-disposition",
@@ -527,7 +529,16 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("fetch-open-meteo-air-quality", environmental_fetch_surface)
             self.assertIn("--actor-role environmental-investigator", environmental_fetch_surface)
             self.assertIn("--allow-side-effect network-external", environmental_fetch_surface)
-            self.assertIn("<skill_specific_args>", environmental_fetch_surface)
+            self.assertIn("--hourly-var pm2_5", environmental_fetch_surface)
+            self.assertNotIn("<skill_specific_args>", environmental_fetch_surface)
+            self.assertTrue(environmental_entries[0].get("fetch_command_surfaces"))
+            self.assertTrue(
+                any(
+                    entry.get("provider_modes")
+                    for entry in environmental_entries[0].get("fetch_command_surfaces", [])
+                    if isinstance(entry, dict)
+                )
+            )
             self.assertIn("normalize-fetch-execution", environmental_normalize_surface)
             self.assertIn("--actor-role environmental-investigator", environmental_normalize_surface)
             challenger_entries = [
@@ -540,6 +551,8 @@ class AgentEntryGateTests(unittest.TestCase):
             challenger_normalize_surface = "\n".join(challenger_entries[0].get("normalize_commands", []))
             self.assertIn("fetch-gdelt-doc-search", challenger_fetch_surface)
             self.assertIn("--actor-role challenger", challenger_fetch_surface)
+            self.assertIn("search --query", challenger_fetch_surface)
+            self.assertNotIn("<skill_specific_args>", challenger_fetch_surface)
             self.assertIn("normalize-fetch-execution", challenger_normalize_surface)
             self.assertIn("--actor-role challenger", challenger_normalize_surface)
             challenger_write_surface = "\n".join(challenger_entries[0].get("write_commands", []))
@@ -550,8 +563,13 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("submit-evidence-bundle", challenger_write_surface)
             self.assertIn("post-board-note", challenger_write_surface)
             self.assertIn("open-challenge-ticket", challenger_write_surface)
+            self.assertIn("--target-hypothesis-id", challenger_write_surface)
+            self.assertIn("--evidence-bundle-id", challenger_write_surface)
             self.assertIn("open-falsification-probe", challenger_write_surface)
             self.assertNotIn("request-phase-transition", challenger_write_surface)
+            environmental_write_surface = "\n".join(environmental_entries[0].get("write_commands", []))
+            self.assertIn("update-hypothesis-status", environmental_write_surface)
+            self.assertIn("finding:<finding_id>", environmental_write_surface)
             self.assertTrue(any(item["step_id"] == "submit-council-proposal" for item in entry_gate["entry_chain"]))
             self.assertTrue(any(item["step_id"] == "submit-readiness-opinion" for item in entry_gate["entry_chain"]))
             self.assertTrue(any(item["step_id"] == "request-report-basis-transition" for item in entry_gate["entry_chain"]))
@@ -648,6 +666,18 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn(
                 "submit-evidence-bundle",
                 state_payload["agent_entry"]["operator"]["submit_evidence_bundle_command_template"],
+            )
+            self.assertIn(
+                "update-hypothesis-status",
+                state_payload["agent_entry"]["operator"]["update_hypothesis_from_finding_command_template"],
+            )
+            self.assertIn(
+                "open-challenge-ticket",
+                state_payload["agent_entry"]["operator"]["open_challenge_on_hypothesis_or_bundle_command_template"],
+            )
+            self.assertIn(
+                "open-falsification-probe",
+                state_payload["agent_entry"]["operator"]["request_falsification_probe_approval_command_template"],
             )
             self.assertIn(
                 "submit-report-section-draft",
@@ -966,6 +996,9 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("post-discussion-message", operator["post_discussion_message_command_template"])
             self.assertIn("post-review-comment", operator["post_review_comment_command_template"])
             self.assertIn("submit-evidence-bundle", operator["submit_evidence_bundle_command_template"])
+            self.assertIn("update-hypothesis-status", operator["update_hypothesis_from_finding_command_template"])
+            self.assertIn("open-challenge-ticket", operator["open_challenge_on_hypothesis_or_bundle_command_template"])
+            self.assertIn("open-falsification-probe", operator["request_falsification_probe_approval_command_template"])
             self.assertIn("submit-report-section-draft", operator["submit_report_section_draft_command_template"])
             self.assertIn("request-phase-transition", operator["request_report_basis_transition_command"])
 

@@ -74,7 +74,7 @@
 7. gate 是否能在证据不足时保持 withheld，或在依据充分时 cautious freeze。
 8. report 是否只展示 evidence index、uncertainty register、residual disputes 和被承接过的依据。
 
-动态多轮调查开发计划见 `docs/openclaw-dynamic-investigation-planning-workplan.md`。真实案例不应先被写成机械化展示流程；应先真实运行、暴露问题、完成修复，再抽取一条可回放轨迹用于论文展示。
+当前后续开发计划见 `docs/openclaw-agent-autonomy-archive-workplan.md`。真实案例不应先被写成机械化展示流程；应先真实运行、暴露问题、完成修复，再抽取一条可回放轨迹用于论文展示。
 
 案例材料分层：
 
@@ -87,7 +87,7 @@
 
 ## 7. 重构收口摘要
 
-本轮重构已经收口。旧的 CI、skills 和真实案例工作计划不再作为独立计划保留；其有效基线内容并入基础文档。当前只保留一份新增开发计划：`docs/openclaw-dynamic-investigation-planning-workplan.md`。
+本轮重构已经收口。旧的 CI、skills、真实案例和动态调查规划工作计划不再作为独立计划保留；其有效基线内容并入基础文档。当前只保留一份新增开发计划：`docs/openclaw-agent-autonomy-archive-workplan.md`。
 
 完成项：
 
@@ -95,7 +95,7 @@
 2. DB/recovery/schema：DB-first recovery、schema migration hardening 和旧库升级测试已进入基线。
 3. runtime governance：approval、transition request、receipt、ledger、dead letter、operator surface 和 runtime-admin 入口完成第一轮硬化。
 4. module decomposition：顶层 `src`、`kernel/operator`、`kernel/planes`、`kernel/execution/controller`、`kernel/governance`、`kernel/archive` 已完成 package 化收敛。
-5. skills：当前 82 个 active skills 保持原子能力边界，不进入拆分；后续只在能力混杂时重新评估。
+5. skills：当前 skills 保持原子能力边界，不进入批量拆分；后续只在能力混杂时重新评估。
 6. spatiotemporal relation：relation cue/query/alternatives/evidence packet 已进入 skills baseline。
 
 当前主要验收线：
@@ -139,16 +139,18 @@
 
 唯一新增开发计划：
 
-1. `docs/openclaw-dynamic-investigation-planning-workplan.md`
+1. `docs/openclaw-agent-autonomy-archive-workplan.md`
 
 历史运行记录：
 
 1. `docs/openclaw-realcase-nyc-smoke-first-run-timeline.md`
    - 只保留第一次真实 run 的事实时间线，不作为开发计划或当前能力基线。
+2. `docs/openclaw-realcase-nyc-smoke-transport-chain-run-timeline.md`
+   - 只保留开放式 NYC smoke transport-chain run 的事实时间线和流程复盘，不作为开发计划。
 
 ## 10. 验收清单
 
-后续真实案例评测和论文展示建议至少满足；动态多轮调查部分由 `docs/openclaw-dynamic-investigation-planning-workplan.md` 独立跟踪：
+后续真实案例评测和论文展示建议至少满足；agent 自主取证、多轮 continuation 和 archive/history 复用由 `docs/openclaw-agent-autonomy-archive-workplan.md` 独立跟踪：
 
 1. 能初始化 mission/run/round。
 2. 能抓取或导入 public/environment/formal 数据。

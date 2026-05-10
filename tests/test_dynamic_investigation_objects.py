@@ -112,6 +112,103 @@ class DynamicInvestigationObjectTests(unittest.TestCase):
                     },
                 )
 
+    def test_source_acquisition_proposal_is_thin_and_queryable_by_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            record = append_dynamic_investigation_object_record(
+                run_dir,
+                object_kind="source-acquisition-proposal",
+                object_payload={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "object_kind": "source-acquisition-proposal",
+                    "author_role": "environmental-investigator",
+                    "source_skill": "fetch-open-meteo-historical",
+                    "query_parameters": {
+                        "latitude": 40.7128,
+                        "longitude": -74.0060,
+                        "start_date": "2023-06-07",
+                    },
+                    "declared_side_effects": [
+                        "network-external",
+                        "writes-artifacts",
+                    ],
+                    "requested_side_effect_approvals": [],
+                    "target_kind": "evidence-request",
+                    "target_id": "evidence-request-weather-context",
+                    "rationale": "Record the agent-selected weather context source without ranking it.",
+                    "evidence_refs": [],
+                    "provenance": {"source": "unit-test"},
+                },
+            )
+
+            query = query_council_objects(
+                run_dir,
+                object_kind="source-acquisition-proposal",
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                source_skill="fetch-open-meteo-historical",
+                target_evidence_request_id="evidence-request-weather-context",
+            )
+
+            self.assertEqual(1, query["summary"]["returned_object_count"])
+            proposal = query["objects"][0]
+            self.assertEqual(record["object"]["object_id"], proposal["object_id"])
+            self.assertEqual(record["object"]["proposal_id"], proposal["proposal_id"])
+            self.assertEqual("source-acquisition-proposal", proposal["object_kind"])
+            self.assertEqual("proposed", proposal["status"])
+            self.assertEqual(
+                "fetch-open-meteo-historical",
+                proposal["source_skill"],
+            )
+            self.assertEqual([], proposal["evidence_refs"])
+            self.assertNotIn("score", proposal)
+            self.assertNotIn("rank", proposal)
+            self.assertNotIn("priority", proposal)
+
+            status_surface = run_kernel(
+                "show-source-acquisition-intents",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            submit_template = status_surface["commands"]["submit_source_acquisition_proposal_template"]
+            self.assertIn("--author-role '<agent_role>'", submit_template)
+            self.assertIn("--query-parameters-json", submit_template)
+            self.assertIn("--rationale", submit_template)
+            self.assertNotIn("--proposal-text", submit_template)
+            self.assertEqual(1, len(status_surface["objects"]))
+            execution_surface = status_surface["objects"][0]["source_execution_surface"]
+            self.assertEqual("fetch-open-meteo-historical", execution_surface["source_skill"])
+            self.assertTrue(execution_surface["provider_modes"])
+            self.assertTrue(execution_surface["fetch_command_templates"])
+            self.assertIn("normalize-fetch-execution", execution_surface["normalize_fetch_execution_command"])
+
+    def test_source_acquisition_proposal_rejects_wrong_role_for_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            with self.assertRaisesRegex(ValueError, "cannot execute fetch-open-meteo-historical"):
+                append_dynamic_investigation_object_record(
+                    run_dir,
+                    object_kind="source-acquisition-proposal",
+                    object_payload={
+                        "run_id": RUN_ID,
+                        "round_id": ROUND_ID,
+                        "object_kind": "source-acquisition-proposal",
+                        "author_role": "social-investigator",
+                        "source_skill": "fetch-open-meteo-historical",
+                        "query_parameters": {},
+                        "target_kind": "round",
+                        "target_id": ROUND_ID,
+                        "rationale": "This role should not acquire environmental weather data.",
+                        "evidence_refs": [],
+                        "provenance": {"source": "unit-test"},
+                    },
+                )
+
     def test_kernel_submits_and_queries_dynamic_investigation_object(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"

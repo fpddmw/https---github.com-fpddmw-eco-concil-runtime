@@ -1,6 +1,6 @@
 ---
 name: archive-signal-corpus
-description: Archive one run's normalized signal-plane rows into a cross-run signal corpus SQLite store so later rounds can reuse historical public and environment signals.
+description: Checkpoint one run's normalized signal-plane rows into a cross-run signal corpus SQLite store so later rounds can inspect historical public, formal, environment, fire, and weather signal traces.
 ---
 
 # Eco Archive Signal Corpus
@@ -9,9 +9,10 @@ description: Archive one run's normalized signal-plane rows into a cross-run sig
 - Read the current run's normalized signal-plane rows.
 - Import them into one cross-run signal corpus database.
 - Emit one auditable import snapshot for the current round.
+- Allow non-terminal checkpoints; zero normalized rows are emitted as an explicit gap.
 
 ## Triggering Conditions
-- The run already contains normalized signal-plane data.
+- The run may contain normalized signal-plane data.
 - Need cross-run signal reuse rather than only per-run analytics access.
 - Need history-context assembly to search historical signals later.
 

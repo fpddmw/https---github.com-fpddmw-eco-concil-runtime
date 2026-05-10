@@ -103,7 +103,39 @@ def comment_id(comment: dict[str, Any]) -> str:
     return maybe_text(comment.get("comment_id") or comment.get("object_id"))
 
 
-def comment_references(response: dict[str, Any], target_comment_id: str) -> bool:
+def challenge_review_comment_lookup(
+    challenges: list[dict[str, Any]],
+) -> dict[str, set[str]]:
+    lookup: dict[str, set[str]] = {}
+    for challenge in challenges:
+        if not isinstance(challenge, dict):
+            continue
+        challenge_id = maybe_text(
+            challenge.get("ticket_id")
+            or challenge.get("challenge_id")
+            or challenge.get("object_id")
+        )
+        if not challenge_id:
+            continue
+        referenced_comments = unique_texts(
+            [
+                challenge.get("source_review_comment_id"),
+                *list_items(challenge.get("response_to_ids")),
+                *list_items(challenge.get("lineage")),
+                *list_items(challenge.get("source_ids")),
+            ]
+        )
+        if referenced_comments:
+            lookup.setdefault(challenge_id, set()).update(referenced_comments)
+    return lookup
+
+
+def comment_references(
+    response: dict[str, Any],
+    target_comment_id: str,
+    *,
+    challenge_review_comments: dict[str, set[str]] | None = None,
+) -> bool:
     if not target_comment_id:
         return False
     referenced_values: list[Any] = [
@@ -121,6 +153,10 @@ def comment_references(response: dict[str, Any], target_comment_id: str) -> bool
     referenced_ids = {maybe_text(value) for value in referenced_values}
     if target_comment_id in referenced_ids:
         return True
+    challenge_lookup = challenge_review_comments or {}
+    for referenced_id in referenced_ids:
+        if target_comment_id in challenge_lookup.get(referenced_id, set()):
+            return True
     thread_id = maybe_text(response.get("thread_id"))
     return bool(thread_id and thread_id == target_comment_id)
 
@@ -150,6 +186,8 @@ def normalized_constraint_disposition(comment: dict[str, Any]) -> str:
 def disposition_comments_for_constraint(
     constraint_comment: dict[str, Any],
     comments: list[dict[str, Any]],
+    *,
+    challenge_review_comments: dict[str, set[str]] | None = None,
 ) -> list[dict[str, Any]]:
     target_comment_id = comment_id(constraint_comment)
     if not target_comment_id:
@@ -161,7 +199,11 @@ def disposition_comments_for_constraint(
         disposition = normalized_constraint_disposition(candidate)
         if not disposition:
             continue
-        if not comment_references(candidate, target_comment_id):
+        if not comment_references(
+            candidate,
+            target_comment_id,
+            challenge_review_comments=challenge_review_comments,
+        ):
             continue
         if (
             disposition == "waived_by_challenger"
@@ -175,8 +217,14 @@ def disposition_comments_for_constraint(
 def latest_disposition_comment(
     constraint_comment: dict[str, Any],
     comments: list[dict[str, Any]],
+    *,
+    challenge_review_comments: dict[str, set[str]] | None = None,
 ) -> dict[str, Any] | None:
-    candidates = disposition_comments_for_constraint(constraint_comment, comments)
+    candidates = disposition_comments_for_constraint(
+        constraint_comment,
+        comments,
+        challenge_review_comments=challenge_review_comments,
+    )
     if not candidates:
         return None
     return sorted(
@@ -270,6 +318,8 @@ def basis_use_constraints_from_constraints(
 
 def challenger_constraint_state_from_review_comments(
     comments: list[dict[str, Any]],
+    *,
+    challenge_review_comments: dict[str, set[str]] | None = None,
 ) -> dict[str, Any]:
     constraint_comments = [
         comment
@@ -279,7 +329,11 @@ def challenger_constraint_state_from_review_comments(
     constraints = [
         constraint_from_comment(
             comment,
-            disposition_comment=latest_disposition_comment(comment, comments),
+            disposition_comment=latest_disposition_comment(
+                comment,
+                comments,
+                challenge_review_comments=challenge_review_comments,
+            ),
         )
         for comment in constraint_comments
     ]
@@ -327,6 +381,12 @@ def load_challenger_constraint_state(
         run_id=run_id,
         round_id=round_id,
     )
+    challenge_payload = query_council_objects(
+        run_dir,
+        object_kind="challenge",
+        run_id=run_id,
+        round_id=round_id,
+    )
     review_objects = (
         review_payload.get("objects", [])
         if isinstance(review_payload.get("objects"), list)
@@ -337,9 +397,17 @@ def load_challenger_constraint_state(
         if isinstance(disposition_payload.get("objects"), list)
         else []
     )
+    challenge_objects = (
+        challenge_payload.get("objects", [])
+        if isinstance(challenge_payload.get("objects"), list)
+        else []
+    )
     comments = [
         comment
         for comment in [*review_objects, *disposition_objects]
         if isinstance(comment, dict)
     ]
-    return challenger_constraint_state_from_review_comments(comments)
+    return challenger_constraint_state_from_review_comments(
+        comments,
+        challenge_review_comments=challenge_review_comment_lookup(challenge_objects),
+    )

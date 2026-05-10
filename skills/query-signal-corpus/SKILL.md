@@ -1,14 +1,15 @@
 ---
 name: query-signal-corpus
-description: Query archived cross-run public and environment signals from the signal corpus so current investigation rounds can reuse historical signal references.
+description: Query archived cross-run signals from the signal corpus so current investigation rounds can inspect historical signal references without ranking or recommending conclusions.
 ---
 
 # Eco Query Signal Corpus
 
 ## Core Goal
-- Search archived historical signals across prior runs.
+- Filter archived historical signals across prior runs.
 - Return compact reusable signal matches instead of forcing direct archive DB inspection.
 - Produce one stable query artifact for downstream history-context assembly.
+- Do not score, rank, tier, or recommend signals; agents decide relevance and use.
 
 ## Triggering Conditions
 - A signal corpus archive database already exists.

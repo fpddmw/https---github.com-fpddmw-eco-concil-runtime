@@ -339,8 +339,18 @@ class SourceQueueRebuildTests(unittest.TestCase):
             self.assertEqual("completed", execution["execution_components"]["queue_runner"]["status"])
             self.assertEqual("completed", execution["execution_components"]["normalizer_runner"]["status"])
             self.assertEqual("completed", payload["execution_components"]["execution_receipt"]["status"])
+            self.assertEqual("normalized-signal-plane", execution["normalization_status"])
+            self.assertIn(
+                "query-environment-signals",
+                execution["next_step_hints"]["query_commands"]["environment"],
+            )
             self.assertEqual("none", execution["statuses"][0]["queue_runner"]["fetch_contract"]["research_judgement"])
             self.assertEqual("raw-artifact", execution["statuses"][0]["queue_runner"]["fetch_contract"]["output_object_kind"])
+            detached_status = next(status for status in execution["statuses"] if status["step_kind"] == "detached-fetch")
+            self.assertIn(
+                "normalize-fetch-execution",
+                detached_status["detached_fetch"]["next_step_hints"]["normalize_fetch_execution_command"],
+            )
             self.assertNotIn("extract-claim-candidates", payload["board_handoff"]["suggested_next_skills"])
             self.assertNotIn("extract-observation-candidates", payload["board_handoff"]["suggested_next_skills"])
 

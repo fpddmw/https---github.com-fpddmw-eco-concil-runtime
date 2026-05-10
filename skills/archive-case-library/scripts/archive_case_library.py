@@ -811,6 +811,7 @@ def archive_case_library_skill(
     )
 
     publication_status = maybe_text(final_publication.get("publication_status")) or ("ready-for-release" if maybe_text(decision.get("publication_readiness")) == "ready" else "hold-release")
+    checkpoint_status = "published-case-checkpoint" if final_publication else "partial-case-checkpoint"
     case_id = maybe_text(mission.get("run_id")) or run_id
     observed_inputs = (
         dict(analysis_inputs.get("observed_inputs"))
@@ -828,6 +829,10 @@ def archive_case_library_skill(
         }
     )
     archive_payload = {
+        "archive_mode": "checkpoint",
+        "archive_scope": "case-library",
+        "checkpoint_status": checkpoint_status,
+        "history_reuse_semantics": "Archived case material is historical context only; agents decide relevance and use in the current run.",
         "topic": topic,
         "objective": objective,
         "region_label": region_label,
@@ -956,6 +961,10 @@ def archive_case_library_skill(
     snapshot = {
         "schema_version": "archive-case-library-v1",
         "skill": SKILL_NAME,
+        "archive_mode": "checkpoint",
+        "archive_scope": "case-library",
+        "checkpoint_status": checkpoint_status,
+        "history_reuse_semantics": "Archived case material is historical context only; agents decide relevance and use in the current run.",
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
@@ -1016,6 +1025,7 @@ def archive_case_library_skill(
             "db_path": str(archive_db),
             "output_path": str(output_file),
             "profile_id": profile_id,
+            "checkpoint_status": checkpoint_status,
             "excerpt_count": len(excerpts),
             "claim_scope_source": maybe_text(analysis_inputs.get("claim_scope_source"))
             or "missing-claim-scope",

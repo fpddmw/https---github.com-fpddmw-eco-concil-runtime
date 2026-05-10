@@ -31,7 +31,7 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
 1. `runtime / governance`
    - run、round、skill registry、actor role、admission、side effect、operator approval、receipt、ledger、dead letter、health、replay。
 2. `source / ingestion`
-   - source catalog、source governance、source selection、fetch/import plan、detached fetch、raw artifact 管理。
+   - source catalog、source governance、agent-led source acquisition、fetch/import plan、detached fetch、raw artifact 管理。
 3. `signal plane`
    - 将 public、formal、environment 三类输入统一归一化为 `normalized_signals` 和索引字段。
 4. `analysis plane`
@@ -47,28 +47,32 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
 
 当前主干流程：
 
-`mission -> run/round -> source governance -> fetch/import -> normalize -> query/analysis -> council deliberation -> readiness/gate -> report basis freeze -> reporting -> archive/history`
+`mission -> run/round -> scoping/round brief -> agent-led evidence acquisition -> fetch/import -> normalize -> query/analysis -> council deliberation -> readiness/gate -> report basis freeze -> reporting -> archive/history`
 
 细化为：
 
 1. `scaffold-mission-run`
    - 创建 run/round、mission、初始 board、round task scaffold。
-2. `prepare-round`
-   - 根据 mission、round tasks、source governance 生成 source selections 和 fetch plan。
-3. `fetch/import + normalize`
+2. `scoping / round brief`
+   - 在开放型 mission 缺少完整 window/region/source requests 时，moderator 先提交 investigation plan、candidate scope、round brief 和 evidence request。
+3. `agent-led evidence acquisition`
+   - investigator 根据 evidence request 和自身判断提出或执行取证动作；runtime 负责权限、side-effect approval、receipt 和 ledger。
+4. `prepare-round`
+   - 根据 mission、round tasks、source governance 和已有 coordination context 生成可审计 fetch plan。该 plan 是运行面材料，不替 agent 采信证据。
+5. `fetch/import + normalize`
    - 抓取或导入 raw artifact，并通过对应 normalizer 写入 signal plane。
-4. `query`
+6. `query`
    - investigator 通过 public/formal/environment/raw/normalized query surfaces 获取 item-level evidence basis。
-5. `council write`
+7. `council write`
    - agent 提交 finding、evidence bundle、proposal、review comment、challenge、hypothesis、readiness opinion。
-6. `optional analysis`
+8. `optional analysis`
    - 经 operator approval 后运行 helper，输出审计视图、证据覆盖摘要、议题线索、footprint、temporal cue、sufficiency note 等。
-7. `phase control`
+9. `phase control`
    - controller/gate/supervisor 读取 DB council objects，判断是否继续调查、打开新 round、冻结 report basis 或阻断报告。
-8. `reporting`
+10. `reporting`
    - report editor 基于 frozen report basis 和 DB reporting objects 生成 handoff、decision、expert report、final publication。
-9. `archive/history`
-   - close-round 后归档 signal/case，并可为新 run 物化 history context。
+11. `archive/history`
+   - close-round 或 checkpoint 后归档 signal/case，并可为新 run / 新 round 物化 history context。
 
 ## 4. 多轮调查能力
 
@@ -86,7 +90,7 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
 
 public/environment query 支持 `round_scope=current|up-to-current|all`，因此第二轮可以读取第一轮和当前轮的 normalized signals。source queue 也会记录 prior-round family memory，并支持受治理的 prior-round anchor。
 
-当前已暴露的缺口是：moderator 还没有完整的动态调查规划能力。开放型或复合型 mission 不应被初始化为单一固定时空域，而应由 moderator 在 scoping round 中产出 investigation plan、subissues、candidate scopes 和 round briefs。该能力由 `docs/openclaw-dynamic-investigation-planning-workplan.md` 独立跟踪，是当前唯一新增开发计划。
+当前已完成的基线是：开放型 mission 可以保持 `scoping-required`，moderator 可以在 scoping round 中提交 investigation plan、candidate scope、round brief、evidence request 和 context packet。最新暴露的缺口已经转向 agent 自主取证、finding 后续议程承接、多 round continuation、skill approval 衔接和 archive/history 复用。该后续工作由 `docs/openclaw-agent-autonomy-archive-workplan.md` 独立跟踪，是当前唯一新增开发计划。
 
 ## 5. Council Agent 与 Runtime Principal
 
@@ -160,8 +164,10 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 
 1. 专业环境模型较少，当前更适合“证据组织和审议”，不适合直接做强因果归因。
 2. 部分历史命名仍保留，如 `report_basis_*`、legacy analysis kind query compatibility。
-3. source queue 的 family memory 和 prior-round anchor 仍依赖部分 runtime artifact。
-4. optional-analysis helper 多为启发式视图，默认 `audit-pending`，不是专业结论模型。
+3. source-selection 冗余机制仍需简化或删除，转向 role allowed source surface + agent-led source acquisition。
+4. finding 到 evidence bundle / hypothesis / proposal / next round 的承接仍需要更低摩擦的命令封装。
+5. archive/history 能力存在，但真实案例 checkpoint/closeout 复用还没有稳定进入默认流程。
+6. optional-analysis helper 多为启发式视图，默认 `audit-pending`，不是专业结论模型。
 
 ## 8. 当前收口状态
 
@@ -185,10 +191,12 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
    - 工程原则、重构收口摘要、剩余风险和论文展示建议。
 3. `docs/openclaw-skills-refactor-checklist-v2.md`
    - skills 分层、原子能力边界、optional-analysis 降权和 relation baseline。
-4. `docs/openclaw-dynamic-investigation-planning-workplan.md`
-   - 当前唯一新增开发计划：moderator-led dynamic investigation planning、多 round 子议题治理、challenger supplemental round 和 context packet 压缩。
+4. `docs/openclaw-agent-autonomy-archive-workplan.md`
+   - 当前唯一新增开发计划：agent-led source acquisition、finding uptake、multi-round continuation、skill approval 衔接和 archive/history 复用。
 5. `docs/openclaw-realcase-nyc-smoke-first-run-timeline.md`
    - 第一次真实 run 的历史时间线；不作为开发计划或当前能力基线。
+6. `docs/openclaw-realcase-nyc-smoke-transport-chain-run-timeline.md`
+   - 开放型 NYC smoke transport-chain run 的事实时间线；用于说明当前 agent 自主调查和流程缺口。
 
 质量门基线命令：
 
