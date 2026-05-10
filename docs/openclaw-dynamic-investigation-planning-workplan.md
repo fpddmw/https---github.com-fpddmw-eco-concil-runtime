@@ -481,6 +481,13 @@ packet profiles：
 4. 第一轮不会直接执行全量 fetch。
 5. operator trace 中没有调查方向内容。
 
+当前实现状态：
+
+1. `scaffold-mission-run` 允许缺失 `window.start_utc`、`window.end_utc`、`region.label` 或 `region.geometry` 的 mission 进入初始化。
+2. 缺失初始范围时写入 `mission_scope_status.scoping_required=true` 和 `verification_scope.scope_mode=scoping-required`。
+3. scoping mode 不做 intent source auto-selection；`prepare-round` 生成空 fetch plan，并建议提交 investigation plan、scope、round brief 或 evidence-request。
+4. 显式 `artifact_imports` / `source_requests` 仍可作为人工给定输入进入任务，不被 scoping mode 删除。
+
 ### 6.2 Agent 自主调查验收
 
 必须满足：

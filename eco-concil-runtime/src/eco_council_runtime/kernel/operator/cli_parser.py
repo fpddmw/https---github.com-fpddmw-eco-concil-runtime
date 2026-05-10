@@ -196,12 +196,37 @@ def build_parser() -> argparse.ArgumentParser:
 
     start_council_cmd = sub.add_parser(
         "start-council-run",
-        help="Initialize a mission run, scaffold the first council round, prepare sources, and materialize agent entry surfaces.",
+        help=(
+            "Initialize a council run from a user mission input envelope, scaffold "
+            "the first round, prepare sources, and materialize agent entry surfaces."
+        ),
     )
     start_council_cmd.add_argument("--run-dir", required=True)
     start_council_cmd.add_argument("--run-id", required=True)
     start_council_cmd.add_argument("--round-id", required=True)
-    start_council_cmd.add_argument("--mission-path", required=True)
+    mission_input_group = start_council_cmd.add_mutually_exclusive_group(required=True)
+    mission_input_group.add_argument(
+        "--mission-path",
+        default="",
+        help=(
+            "Path to a mission input JSON. The mission is a user-facing request "
+            "envelope, not a moderator plan, evidence bundle, or factual attribution."
+        ),
+    )
+    mission_input_group.add_argument(
+        "--mission-prompt",
+        default="",
+        help=(
+            "User-facing natural-language investigation request. Runtime stores it "
+            "as a minimal mission envelope; moderator and agents perform the "
+            "subsequent scoping and investigation."
+        ),
+    )
+    start_council_cmd.add_argument(
+        "--mission-topic",
+        default="User investigation request",
+        help="Topic label to use when --mission-prompt materializes a mission input JSON.",
+    )
     add_actor_role_arg(start_council_cmd)
     start_council_cmd.add_argument("--contract-mode", default="warn", choices=CONTRACT_MODES)
     start_council_cmd.add_argument("--agent-name-prefix", default="")

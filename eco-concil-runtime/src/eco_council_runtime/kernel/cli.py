@@ -45,7 +45,7 @@ from eco_council_runtime.kernel.execution.controller import (
 from eco_council_runtime.kernel.execution.executor import SkillExecutionError, maybe_text, new_runtime_event_id, run_skill
 from eco_council_runtime.kernel.execution.gate import GateHandler
 from eco_council_runtime.kernel.core.ledger import append_ledger_event
-from eco_council_runtime.kernel.core.manifest import load_json_if_exists
+from eco_council_runtime.kernel.core.manifest import load_json_if_exists, write_json
 from eco_council_runtime.kernel.archive.post_round import (
     bootstrap_history_context_with_contract_mode,
     close_round_with_contract_mode,
@@ -87,6 +87,26 @@ from eco_council_runtime.kernel.governance.transition_requests import (
     reject_transition_request,
     store_transition_request,
 )
+
+
+def materialize_prompt_mission_input(run_dir: Any, *, run_id: str, prompt: str, topic: str) -> str:
+    request_text = maybe_text(prompt)
+    if not request_text:
+        raise ValueError("--mission-prompt must be non-empty when used.")
+    output_path = run_dir / "input" / "mission.json"
+    write_json(
+        output_path,
+        {
+            "schema_version": "1.0.0",
+            "run_id": maybe_text(run_id),
+            "topic": maybe_text(topic) or "User investigation request",
+            "objective": request_text,
+            "request_text": request_text,
+            "artifact_imports": [],
+            "source_requests": [],
+        },
+    )
+    return str(output_path.resolve())
 
 
 def main(
@@ -150,6 +170,29 @@ def main(
 
     if args.command == "start-council-run":
         init_run(run_dir, args.run_id)
+        mission_input_mode = "path"
+        mission_path = maybe_text(args.mission_path)
+        if maybe_text(getattr(args, "mission_prompt", "")):
+            try:
+                mission_path = materialize_prompt_mission_input(
+                    run_dir,
+                    run_id=args.run_id,
+                    prompt=args.mission_prompt,
+                    topic=args.mission_topic,
+                )
+            except ValueError as exc:
+                failure = {
+                    "status": "failed",
+                    "summary": {
+                        "run_id": args.run_id,
+                        "round_id": args.round_id,
+                        "contract_mode": args.contract_mode,
+                    },
+                    "message": str(exc),
+                }
+                print(pretty_json(failure, args.pretty))
+                return 1
+            mission_input_mode = "prompt"
         if (
             not isinstance(agent_entry_profile, dict)
             or not callable(hard_gate_command_builder)
@@ -175,7 +218,7 @@ def main(
                 actor_role="moderator",
                 skill_args=[
                     "--mission-path",
-                    args.mission_path,
+                    mission_path,
                     "--orchestration-mode",
                     "openclaw-agent",
                 ],
@@ -253,6 +296,8 @@ def main(
                 "round_id": args.round_id,
                 "contract_mode": args.contract_mode,
                 "orchestration_mode": "openclaw-agent",
+                "mission_input_mode": mission_input_mode,
+                "mission_path": mission_path,
                 "entry_status": entry_gate.get("summary", {}).get("entry_status")
                 if isinstance(entry_gate.get("summary"), dict)
                 else "",

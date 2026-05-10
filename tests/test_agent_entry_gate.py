@@ -214,6 +214,14 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertEqual("openclaw-agent", payload["agent_entry"]["orchestration_mode"])
             self.assertEqual("runtime-operator", payload["agent_entry"]["requested_by_role"])
             self.assertEqual(
+                "Determine whether public smoke reports are supported by physical evidence.",
+                payload["agent_entry"]["mission"]["request_text"],
+            )
+            self.assertIn(
+                "user-facing request envelope",
+                payload["agent_entry"]["mission"]["mission_input_semantics"]["meaning"],
+            )
+            self.assertEqual(
                 "runtime-operator",
                 payload["agent_entry"]["resolved_requested_by_role"],
             )
@@ -452,6 +460,14 @@ class AgentEntryGateTests(unittest.TestCase):
             social_coordination_surface = load_json(social_workspace / "council_runtime" / "coordination_surface.json")
             self.assertEqual("social-investigator", social_role_surface["role"])
             self.assertEqual("social-investigator", social_runtime_context["role"])
+            self.assertEqual(
+                entry_gate["mission"]["request_text"],
+                social_runtime_context["mission"]["request_text"],
+            )
+            self.assertIn(
+                "user-facing request envelope",
+                social_runtime_context["mission"]["mission_input_semantics"]["meaning"],
+            )
             self.assertTrue(
                 social_runtime_context["coordination_surface_path"].endswith(
                     "coordination_surface.json"

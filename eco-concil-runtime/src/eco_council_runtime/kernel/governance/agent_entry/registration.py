@@ -68,6 +68,11 @@ def write_role_workspace_context(
         if isinstance(agent_entry_gate.get("coordination_surface"), dict)
         else {}
     )
+    mission_surface = (
+        agent_entry_gate.get("mission")
+        if isinstance(agent_entry_gate.get("mission"), dict)
+        else {}
+    )
     write_json(role_surface_path, role_surface)
     write_json(coordination_surface_path, coordination_surface)
 
@@ -78,6 +83,7 @@ def write_role_workspace_context(
         "role": role,
         "run_dir": str(run_dir.resolve()),
         "mission_path": str((run_dir / "mission.json").resolve()),
+        "mission": mission_surface,
         "agent_entry_gate_path": str(agent_entry_gate_path(run_dir, round_id).resolve()),
         "role_surface_path": str(role_surface_path.resolve()),
         "coordination_surface_path": str(coordination_surface_path.resolve()),
@@ -101,6 +107,7 @@ def write_role_workspace_context(
                 f"- Coordination surface: `{coordination_surface_path.resolve()}`",
                 f"- Agent entry gate: `{agent_entry_gate_path(run_dir, round_id).resolve()}`",
                 f"- Mission: `{(run_dir / 'mission.json').resolve()}`",
+                f"- Mission request: `{maybe_text(mission_surface.get('request_text'))}`",
                 f"- Runtime health: `{(run_dir / 'runtime' / 'runtime_health.json').resolve()}`",
                 f"- Investigation board: `{(run_dir / 'board' / 'investigation_board.json').resolve()}`",
                 "",

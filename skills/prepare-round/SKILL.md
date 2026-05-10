@@ -11,12 +11,14 @@ description: Build one governed fetch plan from mission.json, round tasks, and s
 - Materialize source-selection snapshots for the current round.
 - Build one auditable fetch plan for the current round.
 - Map each selected source to either an import step or a detached-fetch step plus the correct normalizer skill.
+- Treat mission text as user request context only; it must not become a moderator plan, evidence claim, source attribution, ranking rule, or report basis.
 - Keep round-brief content as agent-visible context only; it must not become a hard agenda, ranking rule, source filter, or evidence-admission rule.
 
 ## Triggering Conditions
 - A mission has already been scaffolded into the current run.
 - The next step should create a governed fetch plan before normalization starts.
 - The workflow should not depend on direct ad hoc local seed execution.
+- In scoping mode, an empty fetch plan is valid and should hand off to dynamic investigation objects rather than auto-selecting sources from mission wording.
 
 ## Read/Write Contract
 - Reads `run_dir/mission.json`.

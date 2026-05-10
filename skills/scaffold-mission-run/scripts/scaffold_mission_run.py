@@ -24,6 +24,8 @@ from eco_council_runtime.kernel.source_queue.source_queue_contract import (  # n
     derive_verification_scope,
     intent_selected_sources,
     lane_evidence_requirements,
+    mission_input_semantics,
+    mission_requires_scoping,
     source_role,
 )
 
@@ -89,6 +91,72 @@ def role_for_source_skill(source_skill: str) -> str:
     return source_role(source_skill)
 
 
+def mission_scope_status(mission: dict[str, Any]) -> dict[str, Any]:
+    window = mission.get("window") if isinstance(mission.get("window"), dict) else {}
+    region = mission.get("region") if isinstance(mission.get("region"), dict) else {}
+    missing_fields: list[str] = []
+    if not maybe_text(window.get("start_utc")):
+        missing_fields.append("window.start_utc")
+    if not maybe_text(window.get("end_utc")):
+        missing_fields.append("window.end_utc")
+    if not maybe_text(region.get("label")):
+        missing_fields.append("region.label")
+    if not isinstance(region.get("geometry"), dict):
+        missing_fields.append("region.geometry")
+    return {
+        "scope_status": "scoping-required" if missing_fields else "bounded",
+        "scoping_required": bool(missing_fields),
+        "missing_fields": missing_fields,
+        "semantics": (
+            "Mission is a user-facing request envelope and lacks a complete "
+            "runtime verification scope; scaffold keeps the run in scoping mode "
+            "and does not auto-select intent sources."
+            if missing_fields
+            else (
+                "Mission is a user-facing request envelope with a bounded initial "
+                "verification scope supplied at ingress."
+            )
+        ),
+    }
+
+
+def scoping_verification_scope(
+    mission: dict[str, Any],
+    scope_status: dict[str, Any],
+) -> dict[str, Any]:
+    window = mission.get("window") if isinstance(mission.get("window"), dict) else {}
+    region = mission.get("region") if isinstance(mission.get("region"), dict) else {}
+    geometry = region.get("geometry") if isinstance(region.get("geometry"), dict) else {}
+    return {
+        "scope_id": "verification-scope-" + stable_hash(
+            mission.get("run_id"),
+            mission.get("topic"),
+            mission.get("objective"),
+            "scoping-required",
+        )[:12],
+        "scope_mode": "scoping-required",
+        "scope_status": scope_status,
+        "receptor_region": {
+            "label": maybe_text(region.get("label")),
+            "geometry": geometry,
+        },
+        "study_window": {
+            "start_utc": maybe_text(window.get("start_utc")),
+            "end_utc": maybe_text(window.get("end_utc")),
+        },
+        "required_evidence_lanes": [],
+        "candidate_source_region_policy": "scoping-required",
+        "transport_verification_policy": "scoping-required",
+        "lag_window": {
+            "mode": "scoping-required",
+            "minimum_hours": 0,
+            "maximum_hours": 0,
+        },
+        "required_source_skills": [],
+        "candidate_source_skills": [],
+    }
+
+
 def normalize_mission_payload(mission: dict[str, Any], mission_file: Path, run_id: str) -> dict[str, Any]:
     payload = json.loads(json.dumps(mission, ensure_ascii=True))
     if maybe_text(payload.get("run_id")) != run_id:
@@ -99,15 +167,12 @@ def normalize_mission_payload(mission: dict[str, Any], mission_file: Path, run_i
     if not topic or not objective:
         raise ValueError("Mission must include non-empty topic and objective.")
 
-    window = payload.get("window") if isinstance(payload.get("window"), dict) else {}
-    if not maybe_text(window.get("start_utc")) or not maybe_text(window.get("end_utc")):
-        raise ValueError("Mission window must include start_utc and end_utc.")
-
-    region = payload.get("region") if isinstance(payload.get("region"), dict) else {}
-    if not maybe_text(region.get("label")):
-        raise ValueError("Mission region must include a non-empty label.")
-    if not isinstance(region.get("geometry"), dict):
-        raise ValueError("Mission region must include a geometry object.")
+    payload["request_text"] = maybe_text(payload.get("request_text")) or objective
+    payload["mission_input_semantics"] = mission_input_semantics()
+    payload["window"] = payload.get("window") if isinstance(payload.get("window"), dict) else {}
+    payload["region"] = payload.get("region") if isinstance(payload.get("region"), dict) else {}
+    scope_status = mission_scope_status(payload)
+    payload["mission_scope_status"] = scope_status
 
     imports = payload.get("artifact_imports")
     if imports is None:
@@ -143,7 +208,11 @@ def normalize_mission_payload(mission: dict[str, Any], mission_file: Path, run_i
     if requests is None:
         payload["source_requests"] = []
         existing_scope = payload.get("verification_scope") if isinstance(payload.get("verification_scope"), dict) else None
-        payload["verification_scope"] = existing_scope or derive_verification_scope(payload)
+        payload["verification_scope"] = existing_scope or (
+            scoping_verification_scope(payload, scope_status)
+            if bool(scope_status.get("scoping_required"))
+            else derive_verification_scope(payload)
+        )
         return payload
     if not isinstance(requests, list):
         raise ValueError("Mission source_requests must be a JSON list when present.")
@@ -170,7 +239,11 @@ def normalize_mission_payload(mission: dict[str, Any], mission_file: Path, run_i
         )
     payload["source_requests"] = normalized_requests
     existing_scope = payload.get("verification_scope") if isinstance(payload.get("verification_scope"), dict) else None
-    payload["verification_scope"] = existing_scope or derive_verification_scope(payload)
+    payload["verification_scope"] = existing_scope or (
+        scoping_verification_scope(payload, scope_status)
+        if bool(scope_status.get("scoping_required"))
+        else derive_verification_scope(payload)
+    )
     return payload
 
 
@@ -205,8 +278,9 @@ def build_round_tasks(*, mission: dict[str, Any], run_id: str, round_id: str) ->
     for item in [*imports, *requests]:
         source_skill = maybe_text(item.get("source_skill"))
         by_role[role_for_source_skill(source_skill)].append(source_skill)
-    for role in by_role:
-        by_role[role].extend(intent_selected_sources(mission, role))
+    if not mission_requires_scoping(mission):
+        for role in by_role:
+            by_role[role].extend(intent_selected_sources(mission, role))
 
     window = mission.get("window") if isinstance(mission.get("window"), dict) else {}
     region = mission.get("region") if isinstance(mission.get("region"), dict) else {}
@@ -406,10 +480,15 @@ def scaffold_mission_run_skill(
         if isinstance(verification_scope.get("required_evidence_lanes"), list)
         else []
     )
-    intent_sources_by_role = {
-        role: intent_selected_sources(mission, role)
-        for role in ("social-investigator", "environmental-investigator")
-    }
+    scoping_required = mission_requires_scoping(mission)
+    intent_sources_by_role = (
+        {
+            role: intent_selected_sources(mission, role)
+            for role in ("social-investigator", "environmental-investigator")
+        }
+        if not scoping_required
+        else {"social-investigator": [], "environmental-investigator": []}
+    )
     role_source_counts = {
         role: len(
             {
@@ -430,6 +509,10 @@ def scaffold_mission_run_skill(
         "round_id": round_id,
         "orchestration_mode": orchestration_mode,
         "scaffold_id": scaffold_id,
+        "topic": maybe_text(mission.get("topic")),
+        "objective": maybe_text(mission.get("objective")),
+        "request_text": maybe_text(mission.get("request_text")),
+        "mission_input_semantics": mission_input_semantics(),
         "mission_path": str(mission_output_path),
         "task_path": str(task_output_path),
         "board_path": str(board_output_path),
@@ -438,6 +521,7 @@ def scaffold_mission_run_skill(
         "task_count": len(task_payload),
         "seeded_hypothesis_ids": seeded_hypothesis_ids,
         "role_source_counts": role_source_counts,
+        "mission_scope_status": mission.get("mission_scope_status", {}),
         "verification_scope": verification_scope,
         "evidence_lane_count": len(evidence_lanes),
         "verification_scope_required_lane_ids": [
@@ -450,6 +534,17 @@ def scaffold_mission_run_skill(
     write_json_file(summary_output_path, summary_payload)
 
     warnings: list[dict[str, str]] = []
+    scope_status = mission.get("mission_scope_status") if isinstance(mission.get("mission_scope_status"), dict) else {}
+    if scoping_required:
+        warnings.append(
+            {
+                "code": "mission-scope-incomplete",
+                "message": (
+                    "Mission scaffold entered scoping mode because the mission does "
+                    "not include a complete window and region."
+                ),
+            }
+        )
     if not imports and not requests and not any(intent_sources_by_role.values()):
         warnings.append(
             {
@@ -467,9 +562,26 @@ def scaffold_mission_run_skill(
         {"signal_id": "", "artifact_path": str(board_output_path), "record_locator": f"$.rounds.{round_id}", "artifact_ref": f"{board_output_path}:$.rounds.{round_id}"},
     ]
     suggested_next_skills = ["prepare-round", "summarize-board-state"]
+    if scoping_required:
+        suggested_next_skills = [
+            "submit-investigation-plan",
+            "submit-investigation-scope",
+            "submit-round-brief",
+            "prepare-round",
+            "summarize-board-state",
+        ]
     if orchestration_mode == "openclaw-agent":
         suggested_next_skills = [
             "query-board-delta",
+            *(
+                [
+                    "submit-investigation-plan",
+                    "submit-investigation-scope",
+                    "submit-round-brief",
+                ]
+                if scoping_required
+                else []
+            ),
             "materialize-history-context",
             "summarize-board-state",
             "prepare-round",
@@ -486,6 +598,9 @@ def scaffold_mission_run_skill(
             "import_source_count": len(imports),
             "request_source_count": len(requests),
             "task_count": len(task_payload),
+            "scoping_required": scoping_required,
+            "scope_status": maybe_text(scope_status.get("scope_status")),
+            "request_text": maybe_text(mission.get("request_text")),
             "seeded_hypothesis_count": len(seeded_hypothesis_ids),
             "seeded_hypothesis_ids": seeded_hypothesis_ids,
         },
@@ -497,7 +612,12 @@ def scaffold_mission_run_skill(
         "board_handoff": {
             "candidate_ids": [scaffold_id, *seeded_hypothesis_ids],
             "evidence_refs": artifact_refs,
-            "gap_hints": [item["message"] for item in warnings if item.get("code") in {"no-source-inputs", "no-hypotheses"}],
+            "gap_hints": [
+                item["message"]
+                for item in warnings
+                if item.get("code")
+                in {"mission-scope-incomplete", "no-source-inputs", "no-hypotheses"}
+            ],
             "challenge_hints": [],
             "suggested_next_skills": suggested_next_skills,
         },

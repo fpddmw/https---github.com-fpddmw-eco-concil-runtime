@@ -20,6 +20,7 @@ from eco_council_runtime.kernel.core.paths import (
     mission_scaffold_path,
     resolve_run_dir,
 )
+from eco_council_runtime.kernel.source_queue.source_queue_contract import mission_input_semantics
 from eco_council_runtime.objects.council import query_council_objects
 from eco_council_runtime.runtime_command_hints import kernel_command
 
@@ -186,9 +187,40 @@ def governance_surface(run_dir: Path, *, round_id: str) -> dict[str, Any]:
 
 def mission_surface(run_dir: Path, round_id: str) -> dict[str, Any]:
     payload = load_json_if_exists(mission_scaffold_path(run_dir, round_id)) or {}
+    mission_path = run_dir / "mission.json"
+    mission_payload = load_json_if_exists(mission_path) or {}
+    semantics = (
+        mission_payload.get("mission_input_semantics")
+        if isinstance(mission_payload.get("mission_input_semantics"), dict)
+        else mission_input_semantics()
+    )
+    scope_status = (
+        mission_payload.get("mission_scope_status")
+        if isinstance(mission_payload.get("mission_scope_status"), dict)
+        else {}
+    )
+    verification_scope = (
+        mission_payload.get("verification_scope")
+        if isinstance(mission_payload.get("verification_scope"), dict)
+        else {}
+    )
     return {
-        "present": bool(payload),
+        "present": bool(payload or mission_payload),
         "path": str(mission_scaffold_path(run_dir, round_id).resolve()),
+        "scaffold_path": str(mission_scaffold_path(run_dir, round_id).resolve()),
+        "mission_path": str(mission_path.resolve()),
+        "topic": maybe_text(mission_payload.get("topic") or payload.get("topic")),
+        "objective": maybe_text(mission_payload.get("objective") or payload.get("objective")),
+        "request_text": maybe_text(
+            mission_payload.get("request_text")
+            or payload.get("request_text")
+            or mission_payload.get("objective")
+            or payload.get("objective")
+        ),
+        "policy_profile": maybe_text(mission_payload.get("policy_profile")),
+        "mission_input_semantics": semantics,
+        "mission_scope_status": scope_status,
+        "verification_scope_mode": maybe_text(verification_scope.get("scope_mode")),
         "orchestration_mode": maybe_text(payload.get("orchestration_mode")),
         "scaffold_id": maybe_text(payload.get("scaffold_id")),
         "task_count": int(payload.get("task_count") or 0),

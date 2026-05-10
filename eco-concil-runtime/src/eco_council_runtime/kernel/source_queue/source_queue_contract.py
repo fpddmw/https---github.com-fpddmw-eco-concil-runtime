@@ -17,6 +17,43 @@ KNOWN_FETCH_SIDE_EFFECTS = (
     "destructive-write",
 )
 
+MISSION_INPUT_SEMANTICS: dict[str, Any] = {
+    "schema_version": "mission-input-semantics-v1",
+    "meaning": (
+        "A mission is a user-facing request envelope for starting a council run. "
+        "It is not the moderator's investigation plan, not an evidence bundle, "
+        "not a report basis, and not a factual attribution."
+    ),
+    "required_fields": ["schema_version", "run_id", "topic", "objective"],
+    "request_text_semantics": (
+        "request_text preserves the user's natural-language request when present; "
+        "objective may mirror it for legacy compatibility."
+    ),
+    "optional_seed_fields": [
+        "window",
+        "region",
+        "artifact_imports",
+        "source_requests",
+        "hypotheses",
+        "source_governance",
+    ],
+    "seed_field_boundary": (
+        "Optional seed fields are user/operator-provided starting context only. "
+        "They do not narrow investigator autonomy or decide evidence acceptance."
+    ),
+    "scoping_rule": (
+        "If the mission lacks a complete window and region, runtime keeps the run "
+        "in scoping mode. Moderator and agents must submit investigation-plan, "
+        "investigation-scope, round-brief, or evidence-request objects before "
+        "evidence collection is treated as scoped."
+    ),
+}
+
+
+def mission_input_semantics() -> dict[str, Any]:
+    return json.loads(json.dumps(MISSION_INPUT_SEMANTICS, ensure_ascii=True))
+
+
 def _source(
     *,
     role: str,
@@ -451,6 +488,16 @@ def mission_intent_text(mission: dict[str, Any]) -> str:
     return " ".join(part for part in parts if part).casefold()
 
 
+def mission_requires_scoping(mission: dict[str, Any]) -> bool:
+    status = mission.get("mission_scope_status")
+    if not isinstance(status, dict):
+        return False
+    value = status.get("scoping_required")
+    if isinstance(value, bool):
+        return value
+    return maybe_text(value).casefold() in {"1", "true", "yes"}
+
+
 def derive_evidence_lanes(mission: dict[str, Any]) -> list[dict[str, str]]:
     text = mission_intent_text(mission)
     lanes: list[dict[str, str]] = []
@@ -583,6 +630,8 @@ def derive_verification_scope(mission: dict[str, Any]) -> dict[str, Any]:
 
 
 def intent_selected_sources(mission: dict[str, Any], role: str) -> list[str]:
+    if mission_requires_scoping(mission):
+        return []
     lanes = [lane for lane in derive_evidence_lanes(mission) if lane.get("role") == role]
     lane_ids = {maybe_text(lane.get("lane_id")) for lane in lanes}
     values: list[str] = []
@@ -882,6 +931,7 @@ __all__ = [
     "intent_selected_sources",
     "lane_evidence_requirements",
     "mission_intent_text",
+    "mission_requires_scoping",
     "policy_profile_summary",
     "read_json_list",
     "read_json_object",

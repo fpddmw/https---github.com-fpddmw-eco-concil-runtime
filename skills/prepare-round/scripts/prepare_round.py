@@ -16,6 +16,7 @@ if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
 from eco_council_runtime.kernel.source_queue.source_queue_contract import (  # noqa: E402
+    mission_requires_scoping,
     maybe_text,
     read_json_object,
     resolve_run_dir,
@@ -45,7 +46,18 @@ def pretty_json(data: Any, pretty: bool) -> str:
     return json.dumps(data, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
 
 
-def suggested_next_skills_for_selections(selections: dict[str, dict[str, Any]]) -> list[str]:
+def suggested_next_skills_for_selections(
+    selections: dict[str, dict[str, Any]],
+    *,
+    mission: dict[str, Any],
+) -> list[str]:
+    if mission_requires_scoping(mission):
+        return [
+            "submit-investigation-plan",
+            "submit-investigation-scope",
+            "submit-round-brief",
+            "submit-evidence-request",
+        ]
     return ["normalize-fetch-execution"]
 
 
@@ -228,7 +240,10 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
         for source_skill in role_payload.get("selected_sources", [])
         if maybe_text(source_skill)
     ]
-    suggested_next_skills = suggested_next_skills_for_selections(selections)
+    suggested_next_skills = suggested_next_skills_for_selections(
+        selections,
+        mission=mission,
+    )
     suggested_next_skill_runs = suggested_next_skill_runs_for_selections(selections)
     return {
         "status": "completed",

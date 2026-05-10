@@ -238,6 +238,127 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             self.assertTrue(all(task["inputs"]["verification_scope"]["scope_id"] == scope["scope_id"] for task in tasks_payload))
             self.assertFalse(scaffold_payload["warnings"])
 
+    def test_start_council_run_allows_open_mission_to_enter_scoping(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            mission_path = run_dir / "input" / "open-river-pollution-mission.json"
+            write_json(
+                mission_path,
+                {
+                    "schema_version": "1.0.0",
+                    "run_id": RUN_ID,
+                    "topic": "United States river pollution comparison",
+                    "request_text": (
+                        "Please investigate river pollution conditions in the "
+                        "United States and return an evidence-supported conclusion."
+                    ),
+                    "objective": (
+                        "Please investigate river pollution conditions in the "
+                        "United States and return an evidence-supported conclusion."
+                    ),
+                },
+            )
+
+            payload = run_kernel(
+                "start-council-run",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+                "--no-materialize-agent-registration",
+            )
+
+            mission_artifact = load_json(run_dir / "mission.json")
+            scaffold_artifact = load_json(runtime_path(run_dir, f"mission_scaffold_{ROUND_ID}.json"))
+            fetch_plan = load_json(runtime_path(run_dir, f"fetch_plan_{ROUND_ID}.json"))
+            social_selection = load_json(
+                runtime_path(run_dir, f"source_selection_social-investigator_{ROUND_ID}.json")
+            )
+            environmental_selection = load_json(
+                runtime_path(run_dir, f"source_selection_environmental-investigator_{ROUND_ID}.json")
+            )
+            prepare_payload = payload["prepare_round"]["skill_payload"]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertTrue(mission_artifact["mission_scope_status"]["scoping_required"])
+            self.assertEqual(mission_artifact["request_text"], mission_artifact["objective"])
+            self.assertIn("mission_input_semantics", mission_artifact)
+            self.assertIn(
+                "user-facing request envelope",
+                mission_artifact["mission_input_semantics"]["meaning"],
+            )
+            self.assertEqual(
+                "scoping-required",
+                mission_artifact["verification_scope"]["scope_mode"],
+            )
+            self.assertEqual([], mission_artifact["verification_scope"]["required_evidence_lanes"])
+            self.assertTrue(scaffold_artifact["mission_scope_status"]["scoping_required"])
+            self.assertEqual(0, prepare_payload["summary"]["step_count"])
+            self.assertEqual([], fetch_plan["steps"])
+            self.assertEqual([], social_selection["selected_sources"])
+            self.assertEqual([], environmental_selection["selected_sources"])
+            self.assertEqual(
+                mission_artifact["request_text"],
+                payload["agent_entry_gate"]["agent_entry"]["mission"]["request_text"],
+            )
+            self.assertIn(
+                "not the moderator's investigation plan",
+                payload["agent_entry_gate"]["agent_entry"]["mission"]["mission_input_semantics"]["meaning"],
+            )
+            self.assertIn(
+                "submit-investigation-scope",
+                prepare_payload["board_handoff"]["suggested_next_skills"],
+            )
+            self.assertNotIn(
+                "normalize-fetch-execution",
+                prepare_payload["board_handoff"]["suggested_next_skills"],
+            )
+
+    def test_start_council_run_materializes_prompt_as_minimal_mission(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            prompt = (
+                "Please investigate the 2023 New York City smoke haze event "
+                "and return an evidence-supported conclusion."
+            )
+
+            payload = run_kernel(
+                "start-council-run",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-prompt",
+                prompt,
+                "--mission-topic",
+                "2023 New York City smoke haze event",
+                "--no-materialize-agent-registration",
+            )
+
+            input_mission = load_json(run_dir / "input" / "mission.json")
+            mission_artifact = load_json(run_dir / "mission.json")
+            prepare_payload = payload["prepare_round"]["skill_payload"]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("prompt", payload["summary"]["mission_input_mode"])
+            self.assertEqual(prompt, input_mission["request_text"])
+            self.assertEqual(prompt, mission_artifact["request_text"])
+            self.assertTrue(mission_artifact["mission_scope_status"]["scoping_required"])
+            self.assertEqual([], mission_artifact["source_requests"])
+            self.assertEqual(0, prepare_payload["summary"]["step_count"])
+            self.assertEqual(
+                prompt,
+                payload["agent_entry_gate"]["agent_entry"]["mission"]["request_text"],
+            )
+
     def test_scaffold_agent_mode_updates_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
