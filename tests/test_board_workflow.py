@@ -1103,7 +1103,7 @@ class BoardWorkflowTests(unittest.TestCase):
                 action_snapshot={
                     "run_id": RUN_ID,
                     "round_id": ROUND_ID,
-                    "ranked_actions": [
+                    "actions": [
                         {
                             "action_id": "action-followup-public-001",
                             "action_kind": "expand-public-evidence",
@@ -1533,7 +1533,7 @@ class BoardWorkflowTests(unittest.TestCase):
             )
             expected_action_ids = [
                 action["action_id"]
-                for action in next_actions_artifact["ranked_actions"][:3]
+                for action in next_actions_artifact["actions"][:3]
                 if isinstance(action, dict) and action.get("action_id")
             ]
             self.assertTrue(expected_action_ids)

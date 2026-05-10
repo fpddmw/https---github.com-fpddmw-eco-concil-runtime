@@ -88,7 +88,7 @@ def seed_governed_execution_surface_state(run_dir: Path) -> dict[str, dict[str, 
             "run_id": RUN_ID,
             "round_id": ROUND_ID,
             "generated_at_utc": "2024-01-01T00:00:00Z",
-            "ranked_actions": [
+            "actions": [
                 {
                     "action_kind": "advance-empirical-verification",
                     "priority": "high",

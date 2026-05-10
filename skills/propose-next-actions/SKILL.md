@@ -7,17 +7,17 @@ description: Optional moderator advisory skill for proposing possible next actio
 
 ## Core Goal
 - Suggest possible follow-up actions when a moderator asks for advisory help.
-- Label ranking logic as heuristic and keep it subordinate to DB-native findings, evidence bundles, proposals, and moderator judgement.
+- Keep candidate action material subordinate to DB-native findings, evidence bundles, proposals, and moderator judgement.
 - Emit a durable optional-analysis artifact that can be audited, consumed, or ignored without changing phase state.
 - Require `request-skill-approval -> approve-skill-approval -> run-skill --skill-approval-request-id` before execution.
 
 ## Triggering Conditions
-- A moderator has identified a planning question that would benefit from optional ranking support.
+- A moderator has identified a planning question that would benefit from optional candidate-action support.
 - The operator has approved this optional-analysis run for the specific round and actor role.
 - Need advisory candidates for future investigation, not a required queue before probes, readiness, report basis, or reporting.
 
 ## Read/Write Contract
-- Syncs the round into the run-local deliberation plane and prefers that state for action ranking.
+- Syncs the round into the run-local deliberation plane and prefers that state for action candidates.
 - Reads `run_dir/board/board_state_summary_<round_id>.json` by default as a compatible advisory fallback.
 - Reads `run_dir/board/board_brief_<round_id>.md` by default when present.
 - Reads evidence coverage from the run-local analysis plane first.

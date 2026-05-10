@@ -112,6 +112,21 @@ class RealcaseTransportChainAutonomyTests(unittest.TestCase):
 
         self.assertEqual("archive-status", archive["surface"])
         self.assertTrue(archive["gap_hints"])
+        self.assertEqual(
+            "missing-normalized-signals-table",
+            archive["checkpoint_inputs"]["source_signal_plane"]["checkpoint_input_status"],
+        )
+        self.assertEqual(
+            "receipt-only-evidence-present",
+            archive["checkpoint_summary"]["receipt_evidence_status"],
+        )
+        self.assertGreaterEqual(archive["checkpoint_summary"]["fetch_receipt_count"], 3)
+        source_skill_counts = archive["source_receipts"]["source_skill_counts"]
+        self.assertEqual(1, source_skill_counts["fetch-airnow-hourly-observations"])
+        self.assertEqual(1, source_skill_counts["fetch-open-meteo-historical"])
+        self.assertEqual(1, source_skill_counts["fetch-nasa-firms-fire"])
+        self.assertIn("receipt-only evidence", " ".join(archive["gap_hints"]))
+        self.assertIn("normalize-fetch-execution", archive["commands"]["normalize_fetch_execution"])
         self.assertIn("archive-signal-corpus", archive["commands"]["archive_signal_corpus_checkpoint"])
         self.assertIn("archive-case-library", archive["commands"]["archive_case_library_checkpoint"])
         self.assertIn("materialize-history-context", archive["commands"]["materialize_history_context"])

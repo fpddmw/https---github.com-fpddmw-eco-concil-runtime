@@ -21,7 +21,7 @@ def normalize_verifiability_assessment_payload(
     artifact_path: str = "",
 ) -> dict[str, Any]:
     normalized = dict(payload)
-    decision_source = maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+    decision_source = maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     normalized["schema_version"] = canonical_contract(
         OBJECT_KIND_VERIFIABILITY_ASSESSMENT
     ).schema_version
@@ -58,7 +58,7 @@ def normalize_verification_route_payload(
     artifact_path: str = "",
 ) -> dict[str, Any]:
     normalized = dict(payload)
-    decision_source = maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+    decision_source = maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     normalized["schema_version"] = canonical_contract(
         OBJECT_KIND_VERIFICATION_ROUTE
     ).schema_version

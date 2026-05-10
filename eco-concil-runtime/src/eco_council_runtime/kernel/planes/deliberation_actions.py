@@ -96,7 +96,7 @@ def normalized_action_payload(
         )[:12]
     )
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+        maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     )
     normalized["action_kind"] = maybe_text(normalized.get("action_kind")) or "follow-up"
     normalized["assigned_role"] = (
@@ -239,7 +239,7 @@ def normalized_probe_payload(
         )[:12]
     )
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+        maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     )
     normalized["probe_status"] = maybe_text(normalized.get("probe_status")) or "open"
     normalized["owner_role"] = maybe_text(normalized.get("owner_role")) or "challenger"
@@ -590,8 +590,8 @@ def moderator_action_snapshot_row_from_payload(
         "action_count": coerce_int(
             snapshot_payload.get("action_count")
             or (
-                len(snapshot_payload.get("ranked_actions", []))
-                if isinstance(snapshot_payload.get("ranked_actions"), list)
+                len(snapshot_payload.get("actions", []))
+                if isinstance(snapshot_payload.get("actions"), list)
                 else 0
             )
         ),
@@ -599,6 +599,12 @@ def moderator_action_snapshot_row_from_payload(
         "record_locator": maybe_text(record_locator) or "$",
         "raw_json": json_text(snapshot_payload),
     }
+
+
+def action_items_from_snapshot(snapshot_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    actions = snapshot_payload.get("actions", [])
+    return [item for item in actions if isinstance(item, dict)] if isinstance(actions, list) else []
+
 
 def falsification_probe_snapshot_row_from_payload(
     snapshot_payload: dict[str, Any],
@@ -645,7 +651,7 @@ def build_moderator_action_payload(
     payload["generated_at_utc"] = (
         maybe_text(payload.get("generated_at_utc")) or action_generated_at or utc_now_iso()
     )
-    payload["ranked_actions"] = [
+    payload["actions"] = [
         cleaned_wrapper_record(
             dict(action),
             metadata_fields=("action_rank", "artifact_path", "record_locator"),
@@ -760,11 +766,7 @@ def store_moderator_action_records(
     run_id = maybe_text(snapshot_payload.get("run_id"))
     round_id = maybe_text(snapshot_payload.get("round_id"))
     generated_at_utc = maybe_text(snapshot_payload.get("generated_at_utc")) or utc_now_iso()
-    ranked_actions = (
-        snapshot_payload.get("ranked_actions", [])
-        if isinstance(snapshot_payload.get("ranked_actions"), list)
-        else []
-    )
+    actions = action_items_from_snapshot(snapshot_payload)
     normalized_actions = [
         normalized_action_payload(
             action,
@@ -775,11 +777,11 @@ def store_moderator_action_records(
             source_skill=maybe_text(snapshot_payload.get("skill")),
             artifact_path=artifact_path,
         )
-        for index, action in enumerate(ranked_actions)
+        for index, action in enumerate(actions)
         if isinstance(action, dict)
     ]
     snapshot_payload["generated_at_utc"] = generated_at_utc
-    snapshot_payload["ranked_actions"] = normalized_actions
+    snapshot_payload["actions"] = normalized_actions
     snapshot_payload["action_count"] = len(normalized_actions)
     connection, _db_file = connect_db(run_dir_path, db_path)
     try:
@@ -796,7 +798,7 @@ def store_moderator_action_records(
                         generated_at_utc=generated_at_utc,
                         action_rank=index,
                         artifact_path=artifact_path,
-                        record_locator=f"$.ranked_actions[{index}]",
+                        record_locator=f"$.actions[{index}]",
                     ),
                 )
     finally:

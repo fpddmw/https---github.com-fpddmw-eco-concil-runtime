@@ -84,7 +84,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             },
         )
 
-    def test_agent_proposal_queue_takes_priority_over_heuristic_actions(self) -> None:
+    def test_agent_proposal_queue_takes_priority_over_fallback_actions(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
             proposal_bundle = store_council_proposal_records(
@@ -127,7 +127,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             artifact = load_json(
                 investigation_path(run_dir, f"next_actions_{ROUND_ID}.json")
             )
-            first_action = artifact["ranked_actions"][0]
+            first_action = artifact["actions"][0]
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual("agent-proposal-execution", artifact["agenda_source"])
@@ -200,7 +200,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             artifact = load_json(
                 investigation_path(run_dir, f"next_actions_{ROUND_ID}.json")
             )
-            first_action = artifact["ranked_actions"][0]
+            first_action = artifact["actions"][0]
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual("review-actor-posture", first_action["action_kind"])
@@ -236,7 +236,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             )
             self.assertEqual("actor-001", query_payload["objects"][0]["target_actor_id"])
 
-    def test_next_actions_default_to_proposal_authority_when_heuristic_queue_exists(
+    def test_next_actions_default_to_proposal_authority_when_fallback_candidates_exist(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -258,7 +258,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 "--category",
                 "analysis",
                 "--note-text",
-                "Heuristic next-action pressure is present, but proposal authority should still win.",
+                "Fallback next-action pressure is present, but proposal authority should still win.",
                 "--linked-artifact-ref",
                 coverage_ref,
             )
@@ -273,7 +273,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 "--title",
                 "Smoke over NYC needs one more route review",
                 "--statement",
-                "The round still exposes routing pressure that would normally produce heuristic next actions.",
+                "The round still exposes routing pressure that would normally produce fallback next actions.",
                 "--status",
                 "active",
                 "--owner-role",
@@ -325,14 +325,14 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             artifact = load_json(
                 investigation_path(run_dir, f"next_actions_{ROUND_ID}.json")
             )
-            first_action = artifact["ranked_actions"][0]
+            first_action = artifact["actions"][0]
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual("agent-proposal-execution", artifact["agenda_source"])
             self.assertEqual(1, artifact["proposal_action_count"])
-            self.assertEqual(0, artifact["heuristic_action_count"])
-            self.assertGreaterEqual(artifact["observed_heuristic_action_count"], 1)
-            self.assertGreaterEqual(artifact["suppressed_heuristic_action_count"], 1)
+            self.assertEqual(0, artifact["fallback_action_count"])
+            self.assertGreaterEqual(artifact["observed_fallback_action_count"], 1)
+            self.assertGreaterEqual(artifact["suppressed_fallback_action_count"], 1)
             self.assertEqual("issue-proposal", first_action["target"]["object_id"])
             self.assertIn(proposal_id, first_action["lineage"])
 
@@ -1957,7 +1957,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 query_payload["objects"][0]["decision_source"],
             )
 
-    def test_probe_opening_defaults_to_proposal_authority_over_db_backed_heuristic_action(
+    def test_probe_opening_defaults_to_proposal_authority_over_db_backed_fallback_action(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1967,25 +1967,25 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
                 action_snapshot={
                     "run_id": RUN_ID,
                     "round_id": ROUND_ID,
-                    "ranked_actions": [
+                    "actions": [
                         {
                             "action_kind": "clarify-verification-route",
                             "priority": "high",
                             "assigned_role": "moderator",
-                            "objective": "Fallback route review for ticket-heuristic.",
-                            "reason": "Heuristic fallback still sees unresolved routing ambiguity.",
-                            "decision_source": "heuristic-fallback",
+                            "objective": "Fallback route review for ticket-fallback.",
+                            "reason": "Runtime fallback still sees unresolved routing ambiguity.",
+                            "decision_source": "runtime-fallback",
                             "provenance": {"source": "unit-test"},
-                            "evidence_refs": ["evidence://heuristic-route"],
+                            "evidence_refs": ["evidence://fallback-route"],
                             "lineage": [],
                             "probe_candidate": True,
                             "controversy_gap": "verification-routing-gap",
                             "recommended_lane": "verification",
                             "target": {
                                 "object_kind": "challenge-ticket",
-                                "object_id": "ticket-heuristic",
-                                "hypothesis_id": "hypothesis-heuristic",
-                                "claim_id": "claim-heuristic",
+                                "object_id": "ticket-fallback",
+                                "hypothesis_id": "hypothesis-fallback",
+                                "claim_id": "claim-fallback",
                             },
                         }
                     ],
@@ -2049,7 +2049,7 @@ class CouncilAutonomyFlowTests(unittest.TestCase):
             self.assertEqual(1, artifact["suppressed_fallback_probe_candidate_count"])
             self.assertEqual("ticket-proposal", probe["target_ticket_id"])
             self.assertEqual("hypothesis-proposal", probe["target_hypothesis_id"])
-            self.assertNotEqual("ticket-heuristic", probe["target_ticket_id"])
+            self.assertNotEqual("ticket-fallback", probe["target_ticket_id"])
             self.assertEqual("agent-council", probe["decision_source"])
             self.assertEqual("agent-council", probe["policy_source"])
             self.assertEqual("agent-council-proposal-v1", probe["policy_profile"])

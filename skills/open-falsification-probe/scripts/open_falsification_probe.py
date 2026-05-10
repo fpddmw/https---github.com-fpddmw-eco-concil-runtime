@@ -25,12 +25,13 @@ from eco_council_runtime.deliberation_target_semantics import (  # noqa: E402
     source_proposal_id_from_payload,
 )
 from eco_council_runtime.kernel.governance.fallback.common import (  # noqa: E402
+    action_items,
     maybe_text,
     resolve_path,
     unique_texts,
 )
 from eco_council_runtime.kernel.governance.fallback.context import (  # noqa: E402
-    load_ranked_actions_context,
+    load_action_candidates_context,
 )
 from eco_council_runtime.kernel.governance.fallback.contracts import (  # noqa: E402
     d1_contract_fields_from_payload,
@@ -374,7 +375,7 @@ def build_probe(
         or "Probe the current contradiction or uncertainty."
     )
     probe_type = probe_type_for_action(action)
-    decision_source = maybe_text(action.get("decision_source")) or "heuristic-fallback"
+    decision_source = maybe_text(action.get("decision_source")) or "runtime-fallback"
     policy_source = maybe_text(action.get("policy_source")) or decision_source
     policy_profile = maybe_text(action.get("policy_profile"))
     policy_owner = maybe_text(action.get("policy_owner"))
@@ -496,11 +497,7 @@ def open_falsification_probe_skill(
         },
     )
     if isinstance(next_actions_wrapper, dict):
-        fallback_actions = (
-            next_actions_wrapper.get("ranked_actions", [])
-            if isinstance(next_actions_wrapper.get("ranked_actions"), list)
-            else []
-        )
+        fallback_actions = action_items(next_actions_wrapper)
         action_source = (
             maybe_text(next_actions_wrapper.get("action_source"))
             or maybe_text(next_actions_context.get("source"))
@@ -514,7 +511,7 @@ def open_falsification_probe_skill(
             },
         )
     else:
-        action_context = load_ranked_actions_context(
+        action_context = load_action_candidates_context(
             run_dir_path,
             run_id=run_id,
             round_id=round_id,
@@ -556,11 +553,7 @@ def open_falsification_probe_skill(
                 }
             )
             warnings.extend(context_warnings)
-            fallback_actions = (
-                action_context.get("ranked_actions", [])
-                if isinstance(action_context.get("ranked_actions"), list)
-                else []
-            )
+            fallback_actions = action_items(action_context)
             action_source = "derived-from-deliberation"
 
     normalized_mode = normalize_council_execution_mode(council_execution_mode)

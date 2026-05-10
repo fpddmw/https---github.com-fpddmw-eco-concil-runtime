@@ -952,7 +952,7 @@ class SpatiotemporalRelationTaxonomyTests(unittest.TestCase):
                 "round_id": ROUND_ID,
                 "generated_at_utc": "2026-05-02T00:00:00Z",
                 "action_source": "unit-test",
-                "ranked_actions": [
+                "actions": [
                     {
                         "action_id": "action-review-relation-001",
                         "run_id": RUN_ID,
@@ -1087,7 +1087,7 @@ class SpatiotemporalRelationTaxonomyTests(unittest.TestCase):
                 "round_id": ROUND_ID,
                 "generated_at_utc": "2026-05-02T00:00:00Z",
                 "action_source": "unit-test",
-                "ranked_actions": [
+                "actions": [
                     {
                         "action_id": "action-relation-followup-001",
                         "run_id": RUN_ID,

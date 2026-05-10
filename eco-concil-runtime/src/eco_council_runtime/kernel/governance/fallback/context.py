@@ -348,7 +348,7 @@ def load_d1_shared_context(
     }
 
 
-def load_ranked_actions_context(
+def load_action_candidates_context(
     run_dir: str | Path,
     *,
     run_id: str,
@@ -366,7 +366,7 @@ def load_ranked_actions_context(
         board_brief_path=board_brief_path,
         coverage_path=coverage_path,
     )
-    ranked_actions = build_actions(
+    actions = build_actions(
         shared_context.get("board_state", {}),
         (
             shared_context.get("coverages", [])
@@ -405,7 +405,7 @@ def load_ranked_actions_context(
         ),
         maybe_text(shared_context.get("board_brief_text")),
     )[: max(1, max_actions)]
-    for action in ranked_actions:
+    for action in actions:
         action.setdefault("run_id", run_id)
         action.setdefault("round_id", round_id)
     board_counts = (
@@ -443,5 +443,5 @@ def load_ranked_actions_context(
             )
             else "empirical-support-fallback"
         ),
-        "ranked_actions": ranked_actions,
+        "actions": actions,
     }

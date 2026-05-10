@@ -147,7 +147,7 @@ def normalize_formal_public_link_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+        maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     )
     cluster_ids = unique_texts(list_items(normalized.get("cluster_ids")))
     claim_ids = unique_texts(list_items(normalized.get("claim_ids")))
@@ -257,7 +257,7 @@ def normalize_representation_gap_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+        maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     )
     cluster_ids = unique_texts(list_items(normalized.get("cluster_ids")))
     claim_ids = unique_texts(list_items(normalized.get("claim_ids")))
@@ -351,7 +351,7 @@ def normalize_diffusion_edge_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+        maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     )
     linkage_ids = unique_texts(list_items(normalized.get("linkage_ids")))
     cluster_ids = unique_texts(list_items(normalized.get("cluster_ids")))

@@ -19,7 +19,7 @@ OBJECT_KIND_STANCE_GROUP = "stance-group"
 OBJECT_KIND_VERIFIABILITY_ASSESSMENT = "verifiability-assessment"
 OBJECT_KIND_VERIFICATION_ROUTE = "verification-route"
 
-HEURISTIC_DECISION_SOURCE = "heuristic-fallback"
+RUNTIME_FALLBACK_DECISION_SOURCE = "runtime-fallback"
 HELPER_DECISION_SOURCE_APPROVED_VIEW = "approved-helper-view"
 HELPER_DECISION_SOURCE_MANUAL_OR_MODERATOR_DEFINED = "manual-or-moderator-defined"
 HELPER_DECISION_SOURCE_AGENT_SUBMITTED_FINDING = "agent-submitted-finding"
@@ -216,7 +216,7 @@ def helper_governance_metadata(
     }
 
 
-def build_heuristic_wrapper_provenance(
+def build_runtime_fallback_wrapper_provenance(
     *,
     skill_name: str,
     output_path: str,
@@ -228,7 +228,7 @@ def build_heuristic_wrapper_provenance(
     parent_source: str = "",
     extra: dict[str, Any] | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    decision_source = HEURISTIC_DECISION_SOURCE
+    decision_source = RUNTIME_FALLBACK_DECISION_SOURCE
     return decision_source, normalized_provenance(
         {},
         source_skill=skill_name,
@@ -463,7 +463,7 @@ __all__ = (
     "OBJECT_KIND_STANCE_GROUP",
     "OBJECT_KIND_VERIFIABILITY_ASSESSMENT",
     "OBJECT_KIND_VERIFICATION_ROUTE",
-    "HEURISTIC_DECISION_SOURCE",
+    "RUNTIME_FALLBACK_DECISION_SOURCE",
     "HELPER_DECISION_SOURCE_APPROVED_VIEW",
     "HELPER_DECISION_SOURCE_MANUAL_OR_MODERATOR_DEFINED",
     "HELPER_DECISION_SOURCE_AGENT_SUBMITTED_FINDING",
@@ -481,7 +481,7 @@ __all__ = (
     "canonical_evidence_refs",
     "normalized_provenance",
     "helper_governance_metadata",
-    "build_heuristic_wrapper_provenance",
+    "build_runtime_fallback_wrapper_provenance",
     "merged_lineage",
     "claim_candidate_confidence",
     "claim_cluster_confidence",

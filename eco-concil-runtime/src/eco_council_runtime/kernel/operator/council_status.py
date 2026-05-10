@@ -242,6 +242,67 @@ def _history_reuse_status(retrieval_path: Path, retrieval: Any) -> dict[str, Any
     }
 
 
+def _compact_receipt(payload: dict[str, Any], path: Path) -> dict[str, Any]:
+    artifact_refs = payload.get("artifact_refs", []) if isinstance(payload.get("artifact_refs"), list) else []
+    summary = payload.get("summary", {}) if isinstance(payload.get("summary"), dict) else {}
+    compact: dict[str, Any] = {
+        "receipt_id": maybe_text(payload.get("receipt_id")),
+        "skill_name": maybe_text(payload.get("skill_name")) or maybe_text(summary.get("skill")),
+        "status": maybe_text(payload.get("status")),
+        "artifact_ref_count": len(artifact_refs),
+        "path": str(path.resolve()),
+    }
+    record_count = summary.get("record_count")
+    if isinstance(record_count, int):
+        compact["record_count"] = record_count
+    return {key: value for key, value in compact.items() if value not in ("", [], {}, 0)}
+
+
+def _source_receipt_status(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any]:
+    receipts_dir = run_dir / "runtime" / "receipts"
+    import_execution_path = run_dir / "runtime" / f"import_execution_{round_id}.json"
+    import_execution = load_json_if_exists(import_execution_path) or {}
+    if not isinstance(import_execution, dict):
+        import_execution = {}
+    receipts: list[dict[str, Any]] = []
+    if receipts_dir.exists():
+        for path in sorted(receipts_dir.glob("*.json")):
+            payload = load_json_if_exists(path) or {}
+            if not isinstance(payload, dict):
+                continue
+            if maybe_text(payload.get("run_id")) != run_id or maybe_text(payload.get("round_id")) != round_id:
+                continue
+            skill_name = maybe_text(payload.get("skill_name"))
+            if not (skill_name.startswith("fetch-") or skill_name in SOURCE_CATALOG):
+                continue
+            receipts.append(_compact_receipt(payload, path))
+    source_skill_counts: dict[str, int] = {}
+    for receipt in receipts:
+        skill_name = maybe_text(receipt.get("skill_name")) or "<empty>"
+        source_skill_counts[skill_name] = source_skill_counts.get(skill_name, 0) + 1
+    return {
+        "receipts_dir": str(receipts_dir.resolve()),
+        "fetch_receipt_count": len(receipts),
+        "source_skill_counts": dict(sorted(source_skill_counts.items())),
+        "sample_receipts": receipts[:20],
+        "import_execution": {
+            "present": bool(import_execution_path.exists()),
+            "path": str(import_execution_path.resolve()),
+            "normalization_status": maybe_text(import_execution.get("normalization_status")),
+            "completed_count": int(import_execution.get("completed_count") or 0),
+            "failed_count": int(import_execution.get("failed_count") or 0),
+            "normalized_signal_step_count": int(import_execution.get("normalized_signal_step_count") or 0),
+            "receipt_only_step_count": int(import_execution.get("receipt_only_step_count") or 0),
+            "receipt_only_sources": (
+                import_execution.get("receipt_only_sources", [])
+                if isinstance(import_execution.get("receipt_only_sources"), list)
+                else []
+            ),
+        },
+        "semantics": "Fetch receipts are auditable evidence traces; they are not normalized signal rows until a normalizer writes canonical queryable records.",
+    }
+
+
 def show_archive_status_surface(
     run_dir: Path,
     *,
@@ -264,12 +325,24 @@ def show_archive_status_surface(
         round_id=resolved_round_id,
     )
     history_reuse = _history_reuse_status(retrieval_path, retrieval)
+    source_receipts = _source_receipt_status(
+        run_dir,
+        run_id=resolved_run_id,
+        round_id=resolved_round_id,
+    )
     signal_payload = signal_snapshot.get("payload", {}) if isinstance(signal_snapshot.get("payload"), dict) else {}
     imported_signal_count = int(signal_payload.get("imported_signal_count") or 0)
     gap_hints = []
     if maybe_text(source_signal_plane.get("checkpoint_input_status")) != "normalized-signals-present":
         gap_hints.append(
             "No normalized signals are available for the selected round in the source signal plane."
+        )
+    if (
+        int(source_receipts.get("fetch_receipt_count") or 0) > 0
+        and maybe_text(source_signal_plane.get("checkpoint_input_status")) != "normalized-signals-present"
+    ):
+        gap_hints.append(
+            "Fetch receipts exist for the selected round, but they are currently receipt-only evidence for archive/query purposes."
         )
     if signal_snapshot.get("present") and imported_signal_count == 0:
         gap_hints.append("No normalized signals were archived in the latest signal corpus checkpoint.")
@@ -296,6 +369,14 @@ def show_archive_status_surface(
             "history_retrieval_present": bool(history_reuse.get("present")),
             "history_selected_case_count": int(history_reuse.get("selected_case_count") or 0),
             "history_selected_signal_count": int(history_reuse.get("selected_signal_count") or 0),
+            "fetch_receipt_count": int(source_receipts.get("fetch_receipt_count") or 0),
+            "receipt_evidence_status": (
+                "normalized-signals-present"
+                if maybe_text(source_signal_plane.get("checkpoint_input_status")) == "normalized-signals-present"
+                else "receipt-only-evidence-present"
+                if int(source_receipts.get("fetch_receipt_count") or 0) > 0
+                else "no-fetch-receipts-observed"
+            ),
         },
         "databases": {
             "case_library": {
@@ -322,8 +403,19 @@ def show_archive_status_surface(
             },
         },
         "history_reuse": history_reuse,
+        "source_receipts": source_receipts,
         "gap_hints": gap_hints,
         "commands": {
+            "normalize_fetch_execution": run_skill_command(
+                run_dir=run_dir,
+                run_id=resolved_run_id,
+                round_id=resolved_round_id,
+                skill_name="normalize-fetch-execution",
+                contract_mode="warn",
+                actor_role="<source_owner_role>",
+            )
+            if resolved_run_id and resolved_round_id
+            else "",
             "archive_signal_corpus_checkpoint": run_skill_command(
                 run_dir=run_dir,
                 run_id=resolved_run_id,
@@ -965,6 +1057,7 @@ def show_council_status_surface(
             "checkpoint_summary": archive.get("checkpoint_summary", {}),
             "checkpoint_inputs": archive.get("checkpoint_inputs", {}),
             "history_reuse": archive.get("history_reuse", {}),
+            "source_receipts": archive.get("source_receipts", {}),
             "databases": archive.get("databases", {}),
             "gap_hints": archive.get("gap_hints", []),
             "commands": archive.get("commands", {}),

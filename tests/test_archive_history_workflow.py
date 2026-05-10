@@ -515,6 +515,14 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             )
             case_db_path = (root / "archives" / "eco_case_library.sqlite").resolve().as_posix()
             signal_db_path = (root / "archives" / "eco_signal_corpus.sqlite").resolve().as_posix()
+            connection = sqlite3.connect(case_db_path)
+            try:
+                excerpt_rows = connection.execute(
+                    "SELECT text FROM case_excerpts WHERE case_id = ?",
+                    (HISTORICAL_RUN_ID,),
+                ).fetchall()
+            finally:
+                connection.close()
 
             self.assertEqual("completed", signal_archive["status"])
             self.assertEqual("completed", case_archive["status"])
@@ -547,6 +555,8 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertTrue(first_case["match_surfaces"]["profile_match"])
             self.assertNotIn("score", first_case)
             self.assertNotIn("score_components", first_case)
+            self.assertTrue(excerpt_rows)
+            self.assertTrue(all("score" not in row[0].casefold() for row in excerpt_rows))
             self.assertIn("air-quality", first_case["matched_metric_families"])
             self.assertEqual(HISTORICAL_RUN_ID, first_signal["run_id"])
             self.assertEqual("air-quality", first_signal["metric_family"])
@@ -735,6 +745,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             self.assertGreaterEqual(retrieval_artifact["budget"]["selected_case_count"], 1)
             self.assertGreaterEqual(retrieval_artifact["budget"]["selected_signal_count"], 1)
             self.assertEqual("smoke-transport", retrieval_artifact["history_query"]["profile_id"])
+            self.assertNotIn("priority_leg_ids", retrieval_artifact["history_query"])
             self.assertEqual("archive-status", archive_status["surface"])
             self.assertEqual(
                 "normalized-signals-present",
@@ -817,7 +828,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 HISTORICAL_ROUND_ID,
             )
             expected_questions = [
-                next_actions_artifact["ranked_actions"][0]["objective"],
+                next_actions_artifact["actions"][0]["objective"],
                 probes_artifact["probes"][0]["falsification_question"],
             ]
 
@@ -929,7 +940,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
                 CURRENT_ROUND_ID,
             )
             expected_questions = [
-                next_actions_artifact["ranked_actions"][0]["objective"],
+                next_actions_artifact["actions"][0]["objective"],
                 probes_artifact["probes"][0]["falsification_question"],
             ]
 

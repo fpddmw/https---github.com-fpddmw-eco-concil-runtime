@@ -30,6 +30,7 @@ from eco_council_runtime.kernel.operator.surfaces import (  # noqa: E402
     load_report_basis_freeze_wrapper,
     load_round_readiness_wrapper,
 )
+from eco_council_runtime.kernel.governance.fallback.common import action_items  # noqa: E402
 
 MAX_CASES = 3
 MAX_EXCERPTS_PER_CASE = 2
@@ -95,6 +96,10 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def action_candidates(next_actions: dict[str, Any]) -> list[dict[str, Any]]:
+    return action_items(next_actions)
 
 
 def parse_json_text(raw: Any, default: Any) -> Any:
@@ -377,7 +382,7 @@ def build_history_query(
         + [maybe_text(item.get("statement") or item.get("title")) for item in active_hypotheses[:4] if isinstance(item, dict) and (maybe_number(item.get("confidence")) or 1.0) < 0.65]
     )
     open_questions = unique_texts(
-        [maybe_text(item.get("objective")) for item in next_actions.get("ranked_actions", [])[:4] if isinstance(item, dict)]
+        [maybe_text(item.get("objective")) for item in action_candidates(next_actions)[:4]]
         + [maybe_text(item.get("falsification_question")) for item in probes.get("probes", [])[:4] if isinstance(item, dict)]
         + [maybe_text(item) for item in readiness.get("gate_reasons", [])[:4] if maybe_text(item)]
     )
@@ -389,7 +394,6 @@ def build_history_query(
         "metric_families": metric_families,
         "gap_types": gap_types,
         "source_skills": source_skills,
-        "priority_leg_ids": [],
         "alternative_hypotheses": alternatives,
     }
     current_context = {

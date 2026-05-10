@@ -681,7 +681,7 @@ def build_packets(
             for object_kind, rows in sorted(council_basis.items())
         },
         "caveats": [
-            "Helper and heuristic outputs are not direct report_basis unless cited through DB council/reporting objects.",
+            "Helper and fallback outputs are not direct report_basis unless cited through DB council/reporting objects.",
             "Frozen evidence refs identify citation candidates; report conclusions require finding, evidence bundle, proposal, or report section basis.",
         ],
         "report_basis_input_policy": report_basis_input_policy(),

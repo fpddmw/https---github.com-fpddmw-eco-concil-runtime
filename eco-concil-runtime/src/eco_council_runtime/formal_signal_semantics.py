@@ -709,7 +709,7 @@ def build_formal_signal_semantics(
     taxonomy_metadata = formal_signal_semantics_taxonomy_metadata()
 
     return {
-        "decision_source": "heuristic-fallback",
+        "decision_source": "runtime-fallback",
         "typing_method": "formal-signal-semantics-v1",
         "typing_status": "candidate-labels-only",
         "taxonomy_version": taxonomy_metadata["taxonomy_version"],

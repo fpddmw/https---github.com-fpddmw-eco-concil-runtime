@@ -50,7 +50,7 @@ FACADE_PUBLIC_SYMBOLS = {
     ),
     "eco_council_runtime.objects.analysis": (
         "canonical_evidence_refs",
-        "build_heuristic_wrapper_provenance",
+        "build_runtime_fallback_wrapper_provenance",
     ),
     "eco_council_runtime.contracts": (
         "canonical_contract",
@@ -208,7 +208,7 @@ SPLIT_MODULE_PUBLIC_SYMBOLS = {
         "write_command_artifact",
     ),
     "eco_council_runtime.objects.analysis.common": (
-        "build_heuristic_wrapper_provenance",
+        "build_runtime_fallback_wrapper_provenance",
         "canonical_evidence_refs",
         "helper_governance_metadata",
         "maybe_text",

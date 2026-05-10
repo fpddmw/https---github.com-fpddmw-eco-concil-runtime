@@ -223,7 +223,7 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
             author_name="Fixture Community Coalition",
             attributes={"submitterType": "community"},
         )
-        self.assertEqual("heuristic-fallback", semantics["decision_source"])
+        self.assertEqual("runtime-fallback", semantics["decision_source"])
         self.assertEqual("candidate-labels-only", semantics["typing_status"])
         self.assertEqual(FORMAL_PUBLIC_TAXONOMY_VERSION, semantics["taxonomy_version"])
         self.assertEqual(FORMAL_PUBLIC_TAXONOMY_AUDIT_STATUS, semantics["taxonomy_status"])

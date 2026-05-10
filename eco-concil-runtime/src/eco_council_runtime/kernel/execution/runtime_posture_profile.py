@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from eco_council_runtime.kernel.execution.executor import maybe_text
+from eco_council_runtime.kernel.governance.fallback.common import action_items
 from eco_council_runtime.kernel.governance.transition_requests import TRANSITION_KIND_OPEN_INVESTIGATION_ROUND
 from eco_council_runtime.runtime_command_hints import kernel_command, run_skill_command
 from eco_council_runtime.kernel.execution.runtime_round_profile import default_next_round_id_builder
@@ -115,13 +116,8 @@ def default_supervisor_classification(controller: dict[str, Any]) -> dict[str, s
 
 
 def default_supervisor_top_actions(next_actions: dict[str, Any]) -> list[dict[str, str]]:
-    ranked_actions = (
-        next_actions.get("ranked_actions", [])
-        if isinstance(next_actions.get("ranked_actions"), list)
-        else []
-    )
     results: list[dict[str, str]] = []
-    for action in ranked_actions[:3]:
+    for action in action_items(next_actions)[:3]:
         if not isinstance(action, dict):
             continue
         results.append(

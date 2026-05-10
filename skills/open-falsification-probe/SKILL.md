@@ -1,6 +1,6 @@
 ---
 name: open-falsification-probe
-description: Open compact falsification probes from the next-action queue so contradiction-heavy or low-confidence board targets become explicit probe objects.
+description: Open compact falsification probes from next-action candidates so contradiction-heavy or low-confidence board targets become explicit probe objects.
 ---
 
 # Eco Open Falsification Probe
@@ -12,7 +12,7 @@ description: Open compact falsification probes from the next-action queue so con
 - Emit a durable investigation artifact for challenger and moderator workflows.
 
 ## Triggering Conditions
-- A ranked action queue contains contradiction-heavy or low-confidence targets.
+- Next-action candidates contain contradiction-heavy or low-confidence targets.
 - Need explicit probe objects instead of leaving falsification work implicit in notes or challenges.
 - Need a bridge artifact between D1 action planning and D2 readiness gating.
 

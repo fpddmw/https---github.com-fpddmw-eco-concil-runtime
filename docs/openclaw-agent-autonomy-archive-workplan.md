@@ -320,3 +320,13 @@ Role-local command templates：
 1. P5 checkpoint archive。
 2. P6 status CLI。
 3. 历史 NYC run archive import 与 history context 回归。
+
+## 7. 当前交付进展
+
+已完成的补充收口：
+
+1. receipt-level evidence 已在 operator status / realcase 回归中显式区分可归一化证据与 `receipt-only` evidence，避免 agent 在暂不支持 normalize 的 provider 上反复试错。
+2. next-actions 运行面已从 `ranked_actions` 收口为 `actions`，artifact locator 同步改为 `$.actions`；runtime 不再产出排序队列字段。
+3. action fallback 语义已改为候选/兜底来源，不再用 `heuristic_action_count`、`heuristic-fallback` 或旧 wrapper provenance 名称作为公开运行面。
+4. probe、readiness、round opening、orchestration、archive/history、report-basis 等 downstream skills 均改为读取 `actions`，由 agent 自主组合、采信和追问证据。
+5. 全量 `python3 -m unittest discover tests` 已通过，当前回归覆盖 342 个测试。

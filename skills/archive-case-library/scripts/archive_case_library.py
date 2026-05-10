@@ -33,6 +33,7 @@ from eco_council_runtime.kernel.operator.surfaces import (  # noqa: E402
     load_reporting_handoff_wrapper,
     load_round_readiness_wrapper,
 )
+from eco_council_runtime.kernel.governance.fallback.common import action_items  # noqa: E402
 
 SIGNAL_TABLE = "normalized_signals"
 
@@ -357,8 +358,7 @@ def choose_region_label(mission: dict[str, Any], claim_scopes: list[dict[str, An
 
 def open_questions(next_actions: dict[str, Any], probes: dict[str, Any], readiness: dict[str, Any]) -> list[str]:
     questions: list[str] = []
-    ranked_actions = next_actions.get("ranked_actions", []) if isinstance(next_actions.get("ranked_actions"), list) else []
-    for action in ranked_actions[:4]:
+    for action in action_items(next_actions)[:4]:
         if not isinstance(action, dict):
             continue
         objective = maybe_text(action.get("objective")) or maybe_text(action.get("reason"))
@@ -589,7 +589,6 @@ def build_excerpts(
         claim_id = maybe_text(detail.get("claim_id") or coverage.get("claim_id"))
         text = (
             f"coverage_id={coverage_id} claim_id={claim_id} readiness={maybe_text(detail.get('readiness') or coverage.get('readiness'))} "
-            f"score={maybe_number(detail.get('coverage_score') or coverage.get('coverage_score')) or 0.0:.2f} "
             f"support_links={int(detail.get('support_link_count') or coverage.get('support_link_count') or 0)} "
             f"contradiction_links={int(detail.get('contradiction_link_count') or coverage.get('contradiction_link_count') or 0)}"
         )

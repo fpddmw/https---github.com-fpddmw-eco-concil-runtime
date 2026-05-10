@@ -21,6 +21,7 @@ from eco_council_runtime.objects.council import (  # noqa: E402
     query_council_objects,
 )
 from eco_council_runtime.kernel.governance.fallback.common import (  # noqa: E402
+    action_items,
     maybe_text,
     resolve_path,
 )
@@ -802,7 +803,7 @@ def summarize_round_readiness_skill(
     )
     next_actions_artifact_present = bool(next_actions_context.get("artifact_present"))
     next_actions_present = bool(next_actions_context.get("payload_present"))
-    next_actions = next_actions_payload if isinstance(next_actions_payload, dict) else {"ranked_actions": [], "action_count": 0}
+    next_actions = next_actions_payload if isinstance(next_actions_payload, dict) else {"actions": [], "action_count": 0}
     probes_context = load_falsification_probe_wrapper(
         run_dir_path,
         run_id=run_id,
@@ -891,11 +892,12 @@ def summarize_round_readiness_skill(
         agenda_counts.get("stakeholder_deliberation_issue_count") or 0
     )
     open_probes = len([item for item in probes.get("probes", []) if isinstance(item, dict) and maybe_text(item.get("probe_status")) not in {"closed", "cancelled"}]) if isinstance(probes.get("probes"), list) else 0
+    next_action_items = action_items(next_actions)
     blocking_actions = [
         item
-        for item in next_actions.get("ranked_actions", [])
-        if isinstance(item, dict) and action_is_readiness_blocker(item)
-    ] if isinstance(next_actions.get("ranked_actions"), list) else []
+        for item in next_action_items
+        if action_is_readiness_blocker(item)
+    ]
     high_priority_actions = len(
         [
             item
@@ -984,8 +986,7 @@ def summarize_round_readiness_skill(
     readiness_lineage = unique_texts(
         [
             item.get("action_id")
-            for item in next_actions.get("ranked_actions", [])
-            if isinstance(item, dict)
+            for item in next_action_items
         ]
         + [
             item.get("probe_id")
@@ -996,9 +997,7 @@ def summarize_round_readiness_skill(
     readiness_evidence_refs = unique_texts(
         collected_evidence_refs(coverages)
         + collected_evidence_refs(
-            next_actions.get("ranked_actions", [])
-            if isinstance(next_actions.get("ranked_actions"), list)
-            else []
+            next_action_items
         )
         + collected_evidence_refs(
             probes.get("probes", [])

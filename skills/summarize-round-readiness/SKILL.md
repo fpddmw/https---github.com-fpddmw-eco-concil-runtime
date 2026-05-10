@@ -8,13 +8,13 @@ description: Optional moderator advisory skill for summarizing readiness evidenc
 ## Core Goal
 - Compile a reviewable readiness assessment only when a moderator requests optional advisory support.
 - Prefer explicit council readiness opinions, findings, evidence bundles, probes, and unresolved blockers stored in DB.
-- Label heuristic aggregation as advisory; formal phase movement still requires moderator transition request and operator approval.
+- Label fallback aggregation as advisory; formal phase movement still requires moderator transition request and operator approval.
 - Require `request-skill-approval -> approve-skill-approval -> run-skill --skill-approval-request-id` before execution.
 
 ## Triggering Conditions
 - A moderator needs an auditable readiness summary before deciding whether to request a phase transition.
 - The operator has approved this optional-analysis run for the current round and actor role.
-- Need to aggregate existing DB-native council objects without letting heuristic readiness become the phase owner.
+- Need to aggregate existing DB-native council objects without letting fallback readiness become the phase owner.
 
 ## Read/Write Contract
 - Syncs the round into the run-local deliberation plane and prefers that state for readiness evaluation.

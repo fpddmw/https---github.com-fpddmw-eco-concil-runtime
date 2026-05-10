@@ -8,7 +8,7 @@ description: Optional moderator advisory skill for materializing an auditable or
 ## Core Goal
 - Materialize an explicit advisory plan only when a moderator requests optional planning help.
 - Read DB-backed council state and compatible exports without turning them into a runtime-owned default queue.
-- Record any heuristic planning basis as audit material, including why a probe or readiness suggestion is proposed.
+- Record fallback planning basis as audit material, including which state gaps or caveats led to each advisory item.
 - Keep this skill outside the default controller path; controller execution remains transition-request driven.
 - Require `request-skill-approval -> approve-skill-approval -> run-skill --skill-approval-request-id` before execution.
 
@@ -16,7 +16,7 @@ description: Optional moderator advisory skill for materializing an auditable or
 - A moderator explicitly asks for advisory planning after reviewing DB-native findings, evidence bundles, proposals, or readiness opinions.
 - The operator approves this optional-analysis run for the current round and requested actor role.
 - Need a reviewable planning suggestion, not a committed phase transition or controller plan.
-- Need an explicit `phase_decision_basis` that labels heuristic assumptions and missing-input caveats.
+- Need an explicit `phase_decision_basis` that labels fallback assumptions and missing-input caveats.
 
 ## Read/Write Contract
 - Reads `run_dir/board/investigation_board.json` by default.

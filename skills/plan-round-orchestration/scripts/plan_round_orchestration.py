@@ -33,6 +33,7 @@ from eco_council_runtime.kernel.execution.governed_council_execution import (  #
 from eco_council_runtime.kernel.execution.governed_execution_action_semantics import (  # noqa: E402
     action_is_readiness_blocker,
 )
+from eco_council_runtime.kernel.governance.fallback.common import action_items  # noqa: E402
 from eco_council_runtime.kernel.governance.fallback.context import load_d1_shared_context  # noqa: E402
 from eco_council_runtime.kernel.governance.proposal_actions import (  # noqa: E402
     action_from_council_proposal,
@@ -208,9 +209,8 @@ def board_snapshot(round_state: dict[str, Any] | None, board_summary: dict[str, 
 
 
 def top_actions(next_actions: dict[str, Any]) -> list[dict[str, str]]:
-    ranked_actions = next_actions.get("ranked_actions", []) if isinstance(next_actions.get("ranked_actions"), list) else []
     rows: list[dict[str, str]] = []
-    for action in ranked_actions[:3]:
+    for action in action_items(next_actions)[:3]:
         if not isinstance(action, dict):
             continue
         rows.append(
@@ -803,11 +803,7 @@ def plan_round_orchestration_skill(
         if isinstance(next_actions_context.get("payload"), dict)
         else {}
     )
-    next_action_rows = (
-        next_actions.get("ranked_actions", [])
-        if isinstance(next_actions.get("ranked_actions"), list)
-        else []
-    )
+    next_action_rows = action_items(next_actions)
     readiness_context = load_round_readiness_wrapper(
         run_dir_path,
         run_id=run_id,

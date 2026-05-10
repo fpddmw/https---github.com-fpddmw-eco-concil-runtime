@@ -34,7 +34,7 @@ def normalize_issue_cluster_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+        maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     )
     cluster_id = (
         maybe_text(normalized.get("cluster_id"))
@@ -182,7 +182,7 @@ def normalize_stance_group_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+        maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     )
     cluster_id = (
         maybe_text(normalized.get("cluster_id"))
@@ -298,7 +298,7 @@ def normalize_concern_facet_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+        maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     )
     cluster_id = (
         maybe_text(normalized.get("cluster_id"))
@@ -403,7 +403,7 @@ def normalize_actor_profile_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+        maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     )
     cluster_id = (
         maybe_text(normalized.get("cluster_id"))
@@ -513,7 +513,7 @@ def normalize_evidence_citation_type_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+        maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     )
     cluster_id = (
         maybe_text(normalized.get("cluster_id"))
@@ -620,7 +620,7 @@ def normalize_controversy_map_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or "heuristic-fallback"
+        maybe_text(normalized.get("decision_source")) or "runtime-fallback"
     )
     claim_ids = unique_texts(list_items(normalized.get("claim_ids")))
     source_signal_ids = unique_texts(list_items(normalized.get("source_signal_ids")))

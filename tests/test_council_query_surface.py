@@ -35,7 +35,7 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
         action_snapshot={
             "run_id": RUN_ID,
             "round_id": ROUND_ID,
-            "ranked_actions": [
+            "actions": [
                 {
                     "action_kind": "advance-empirical-verification",
                     "priority": "high",
@@ -43,7 +43,7 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
                     "objective": "Advance smoke verification.",
                     "reason": "Coverage is still incomplete.",
                     "readiness_blocker": True,
-                    "decision_source": "heuristic-fallback",
+                    "decision_source": "runtime-fallback",
                     "issue_label": "air-quality-smoke",
                     "source_proposal_id": "proposal-seeded-route-001",
                     "provenance": {"source": "unit-test"},
@@ -71,7 +71,7 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
                     "objective": "Prepare the next council review once blockers are cleared.",
                     "reason": "A structured review step should remain visible after the blocking action.",
                     "readiness_blocker": False,
-                    "decision_source": "heuristic-fallback",
+                    "decision_source": "runtime-fallback",
                     "issue_label": "air-quality-smoke",
                     "provenance": {"source": "unit-test"},
                     "evidence_refs": [],
@@ -122,7 +122,7 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
                     "priority": "high",
                     "probe_goal": "Test the strongest smoke claim.",
                     "falsification_question": "Do observations contradict the public smoke narrative?",
-                    "decision_source": "heuristic-fallback",
+                    "decision_source": "runtime-fallback",
                     "issue_label": "air-quality-smoke",
                     "source_proposal_id": "proposal-seeded-route-001",
                     "provenance": {"source": "unit-test"},
@@ -148,7 +148,7 @@ def seed_council_query_state(run_dir: Path) -> dict[str, str]:
                     "priority": "medium",
                     "probe_goal": "Test whether proposal-target-001 remains justified.",
                     "falsification_question": "What evidence would invalidate proposal-target-001?",
-                    "decision_source": "heuristic-fallback",
+                    "decision_source": "runtime-fallback",
                     "issue_label": "air-quality-smoke",
                     "provenance": {"source": "unit-test"},
                     "evidence_refs": [],

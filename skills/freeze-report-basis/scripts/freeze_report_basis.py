@@ -17,6 +17,7 @@ RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
     sys.path.insert(0, str(RUNTIME_SRC))
 
+from eco_council_runtime.kernel.governance.fallback.common import action_items  # noqa: E402
 from eco_council_runtime.kernel.governance.fallback.context import load_d1_shared_context  # noqa: E402
 from eco_council_runtime.objects.council import query_council_objects  # noqa: E402
 from eco_council_runtime.challenger_constraints import (  # noqa: E402
@@ -787,7 +788,8 @@ def freeze_report_basis_skill(
         if isinstance(next_actions_context.get("payload"), dict)
         else None
     )
-    next_actions = next_actions_payload if isinstance(next_actions_payload, dict) else {"ranked_actions": []}
+    next_actions = next_actions_payload if isinstance(next_actions_payload, dict) else {"actions": []}
+    next_action_items = action_items(next_actions)
     brief_text = maybe_text(load_text_if_exists(board_brief_file))
     shared_observed_inputs = (
         shared_context.get("observed_inputs")
@@ -1114,9 +1116,9 @@ def freeze_report_basis_skill(
             "controversy_gap": maybe_text(item.get("controversy_gap")),
             "recommended_lane": maybe_text(item.get("recommended_lane")),
         }
-        for item in next_actions.get("ranked_actions", [])
+        for item in next_action_items
         if isinstance(item, dict) and action_is_readiness_blocker(item)
-    ][:4] if isinstance(next_actions.get("ranked_actions"), list) else []
+    ][:4]
     challenger_constraint_risks = [
         {
             "action_id": maybe_text(constraint.get("constraint_id")),

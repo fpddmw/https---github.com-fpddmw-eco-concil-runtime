@@ -12,7 +12,7 @@ description: Submit one structured readiness opinion directly into the deliberat
 
 ## Triggering Conditions
 - Need to record that a round is ready, blocked, or still needs more data.
-- Need a council-visible readiness object instead of relying on heuristic readiness summaries alone.
+- Need a council-visible readiness object instead of relying on fallback readiness summaries alone.
 - Need to preserve which basis objects support the readiness posture.
 
 ## Read/Write Contract

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Propose a ranked next-action queue from board and evidence artifacts."""
+"""Propose advisory next-action candidates from board and evidence artifacts."""
 
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ if str(RUNTIME_SRC) not in sys.path:
 from eco_council_runtime.objects.council import (  # noqa: E402
     query_council_objects,
 )
-from eco_council_runtime.kernel.governance.fallback.common import maybe_text  # noqa: E402
+from eco_council_runtime.kernel.governance.fallback.common import action_items, maybe_text  # noqa: E402
 from eco_council_runtime.kernel.governance.fallback.context import (  # noqa: E402
-    load_ranked_actions_context,
+    load_action_candidates_context,
 )
 from eco_council_runtime.kernel.governance.fallback.contracts import (  # noqa: E402
     d1_contract_fields_from_payload,
@@ -172,7 +172,7 @@ def propose_next_actions_skill(
         f"investigation/next_actions_{round_id}.json",
     )
 
-    action_context = load_ranked_actions_context(
+    action_context = load_action_candidates_context(
         run_dir_path,
         run_id=run_id,
         round_id=round_id,
@@ -181,11 +181,7 @@ def propose_next_actions_skill(
         coverage_path=coverage_path,
         max_actions=max_actions,
     )
-    heuristic_actions = (
-        action_context.get("ranked_actions", [])
-        if isinstance(action_context.get("ranked_actions"), list)
-        else []
-    )
+    fallback_actions = action_items(action_context)
     proposal_actions = load_council_proposal_actions(
         run_dir_path,
         run_id=run_id,
@@ -194,11 +190,11 @@ def propose_next_actions_skill(
     normalized_mode = normalize_council_execution_mode(council_execution_mode)
     resolved_action_queue = resolve_council_action_queue(
         proposal_actions,
-        heuristic_actions,
+        fallback_actions,
         council_execution_mode=normalized_mode,
         max_actions=max_actions,
     )
-    ranked_actions = resolved_action_queue["selected_actions"]
+    actions = resolved_action_queue["selected_actions"]
     action_source = maybe_text(action_context.get("action_source"))
     if resolved_action_queue["resolution"] == COUNCIL_EXECUTION_MODE_PROPOSAL_AUGMENTED:
         action_source = "agent-proposal-augmented"
@@ -233,46 +229,46 @@ def propose_next_actions_skill(
         "board_brief_path": maybe_text(action_context.get("board_brief_file")),
         "coverage_path": maybe_text(action_context.get("coverage_file")),
         **contract_fields,
-        "action_count": len(ranked_actions),
+        "action_count": len(actions),
         "proposal_action_count": int(
             resolved_action_queue["included_proposal_action_count"]
         ),
-        "heuristic_action_count": int(
+        "fallback_action_count": int(
             resolved_action_queue["included_fallback_action_count"]
         ),
         "observed_proposal_action_count": int(
             resolved_action_queue["observed_proposal_action_count"]
         ),
-        "observed_heuristic_action_count": int(
+        "observed_fallback_action_count": int(
             resolved_action_queue["observed_fallback_action_count"]
         ),
-        "suppressed_heuristic_action_count": int(
+        "suppressed_fallback_action_count": int(
             resolved_action_queue["suppressed_fallback_action_count"]
         ),
         "agenda_counts": action_context.get("agenda_counts", {})
         if isinstance(action_context.get("agenda_counts"), dict)
         else {},
         "agenda_source_counts": summarize_action_counts(
-            ranked_actions,
+            actions,
             field_name="agenda_source",
         ),
         "policy_source_counts": summarize_action_counts(
-            ranked_actions,
+            actions,
             field_name="policy_source",
         ),
         "policy_profile_counts": summarize_action_counts(
-            ranked_actions,
+            actions,
             field_name="policy_profile",
         ),
         "controversy_gap_counts": summarize_action_counts(
-            ranked_actions,
+            actions,
             field_name="controversy_gap",
         ),
         "recommended_lane_counts": summarize_action_counts(
-            ranked_actions,
+            actions,
             field_name="recommended_lane",
         ),
-        "ranked_actions": ranked_actions,
+        "actions": actions,
     }
     wrapper = store_moderator_action_records(
         run_dir_path,
@@ -287,16 +283,14 @@ def propose_next_actions_skill(
     write_json_file(output_file, wrapper)
 
     persisted_actions = (
-        wrapper.get("ranked_actions", [])
-        if isinstance(wrapper.get("ranked_actions"), list)
-        else []
+        action_items(wrapper)
     )
     artifact_refs = [
         {
             "signal_id": "",
             "artifact_path": str(output_file),
-            "record_locator": "$.ranked_actions",
-            "artifact_ref": f"{output_file}:$.ranked_actions",
+            "record_locator": "$.actions",
+            "artifact_ref": f"{output_file}:$.actions",
         }
     ]
     canonical_ids = [
@@ -311,7 +305,7 @@ def propose_next_actions_skill(
             "run_id": run_id,
             "round_id": round_id,
             "output_path": str(output_file),
-            "action_count": len(ranked_actions),
+            "action_count": len(actions),
             "board_state_source": contract_fields["board_state_source"],
             "coverage_source": contract_fields["coverage_source"],
             "db_path": contract_fields["db_path"],
@@ -329,7 +323,7 @@ def propose_next_actions_skill(
             "candidate_ids": canonical_ids,
             "evidence_refs": artifact_refs,
             "gap_hints": []
-            if ranked_actions
+            if actions
             else [
                 "No next actions could be proposed from the current board and controversy-routing context."
             ],
@@ -338,7 +332,7 @@ def propose_next_actions_skill(
             ]
             if any(
                 isinstance(action, dict) and bool(action.get("probe_candidate"))
-                for action in ranked_actions
+                for action in actions
             )
             else [],
             "suggested_next_skills": [
@@ -352,7 +346,7 @@ def propose_next_actions_skill(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Propose a ranked next-action queue from board and evidence artifacts."
+        description="Propose advisory next-action candidates from board and evidence artifacts."
     )
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--run-id", required=True)

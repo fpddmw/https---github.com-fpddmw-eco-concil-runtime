@@ -32,6 +32,7 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (  # noqa: E402
     store_round_transition_record,
     store_round_task_snapshot,
 )
+from eco_council_runtime.kernel.governance.fallback.common import action_items  # noqa: E402
 from eco_council_runtime.kernel.operator.surfaces import load_next_actions_wrapper  # noqa: E402
 from eco_council_runtime.kernel.source_queue.source_queue_contract import source_role  # noqa: E402
 from eco_council_runtime.kernel.source_queue.source_queue_history import (  # noqa: E402
@@ -376,9 +377,8 @@ def next_action_tasks(
     action_limit: int,
     timestamp: str,
 ) -> list[dict[str, Any]]:
-    ranked_actions = next_actions.get("ranked_actions", []) if isinstance(next_actions.get("ranked_actions"), list) else []
     results: list[dict[str, Any]] = []
-    for action in ranked_actions[: max(0, action_limit)]:
+    for action in action_items(next_actions)[: max(0, action_limit)]:
         if not isinstance(action, dict):
             continue
         target = action.get("target", {}) if isinstance(action.get("target"), dict) else {}
@@ -499,9 +499,8 @@ def build_followup_round_tasks(
         if isinstance(coordination_context, dict)
         else {}
     )
-    ranked_actions = next_actions.get("ranked_actions", []) if isinstance(next_actions.get("ranked_actions"), list) else []
     role_actions = {
-        role: [item for item in ranked_actions if isinstance(item, dict) and maybe_text(item.get("assigned_role")) == role]
+        role: [item for item in action_items(next_actions) if maybe_text(item.get("assigned_role")) == role]
         for role in SOURCE_SELECTION_ROLES
     }
 

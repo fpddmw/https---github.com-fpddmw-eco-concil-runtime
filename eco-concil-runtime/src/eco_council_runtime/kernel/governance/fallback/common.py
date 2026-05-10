@@ -63,6 +63,11 @@ def unique_texts(values: list[Any]) -> list[str]:
     return results
 
 
+def action_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    actions = payload.get("actions", [])
+    return [item for item in actions if isinstance(item, dict)] if isinstance(actions, list) else []
+
+
 def stable_hash(*parts: Any) -> str:
     joined = "||".join(maybe_text(part) for part in parts)
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()

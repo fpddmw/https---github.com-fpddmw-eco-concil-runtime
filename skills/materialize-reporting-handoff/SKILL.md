@@ -13,14 +13,14 @@ description: Materialize DB-backed reporting packets from frozen evidence basis 
 
 ## Triggering Conditions
 - A round has a frozen DB evidence basis or an explicitly withheld reporting state that must be explained.
-- Need one downstream handoff without letting reporting logic re-read heuristic helper artifacts as report basis.
+- Need one downstream handoff without letting reporting logic re-read optional helper artifacts as report basis.
 - Need a clear packet boundary between evidence citation, decision posture, and final report structure.
 
 ## Read/Write Contract
 - Reads report-basis-freeze, readiness, board, and supervisor state through DB-first wrappers.
 - Reads `run_dir/report_basis/frozen_report_basis_<round_id>.json`, `run_dir/reporting/round_readiness_<round_id>.json`, `run_dir/board/board_brief_<round_id>.md`, and `run_dir/runtime/supervisor_state_<round_id>.json` only as compatible exports when needed.
 - Writes canonical reporting handoff rows and `run_dir/reporting/reporting_handoff_<round_id>.json` as a rebuildable export.
-- Helper or heuristic cues remain audit material unless a DB finding, evidence bundle, proposal, readiness opinion, report section draft, or report basis explicitly cites them.
+- Helper and fallback cues remain audit material unless a DB finding, evidence bundle, proposal, readiness opinion, report section draft, or report basis explicitly cites them.
 
 ## Required Input
 - `run_dir`

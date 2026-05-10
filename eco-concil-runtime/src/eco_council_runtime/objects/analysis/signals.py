@@ -4,7 +4,7 @@ from typing import Any
 
 from eco_council_runtime.contracts import canonical_contract, validate_canonical_payload
 from .common import (
-    HEURISTIC_DECISION_SOURCE,
+    RUNTIME_FALLBACK_DECISION_SOURCE,
     LEGACY_PUBLIC_REFS_FIELD,
     OBJECT_KIND_CLAIM_CANDIDATE,
     OBJECT_KIND_CLAIM_CLUSTER,
@@ -31,7 +31,7 @@ def normalize_claim_candidate_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or HEURISTIC_DECISION_SOURCE
+        maybe_text(normalized.get("decision_source")) or RUNTIME_FALLBACK_DECISION_SOURCE
     )
     source_signal_ids = unique_texts(list_items(normalized.get("source_signal_ids")))
     evidence_citation_types = unique_texts(
@@ -129,7 +129,7 @@ def normalize_claim_cluster_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or HEURISTIC_DECISION_SOURCE
+        maybe_text(normalized.get("decision_source")) or RUNTIME_FALLBACK_DECISION_SOURCE
     )
     member_claim_ids = unique_texts(list_items(normalized.get("member_claim_ids")))
     source_signal_ids = unique_texts(list_items(normalized.get("source_signal_ids")))
@@ -242,7 +242,7 @@ def normalize_claim_scope_payload(
 ) -> dict[str, Any]:
     normalized = dict(payload)
     decision_source = (
-        maybe_text(normalized.get("decision_source")) or HEURISTIC_DECISION_SOURCE
+        maybe_text(normalized.get("decision_source")) or RUNTIME_FALLBACK_DECISION_SOURCE
     )
     claim_id = maybe_text(normalized.get("claim_id"))
     normalized["schema_version"] = canonical_contract(
@@ -268,7 +268,7 @@ def normalize_claim_scope_payload(
     normalized["matching_eligibility_reason"] = maybe_text(
         normalized.get("matching_eligibility_reason")
     )
-    normalized["method"] = maybe_text(normalized.get("method")) or "heuristic-scope"
+    normalized["method"] = maybe_text(normalized.get("method")) or "fallback-scope"
     normalized["matching_tags"] = unique_texts(
         list_items(normalized.get("matching_tags"))
     )

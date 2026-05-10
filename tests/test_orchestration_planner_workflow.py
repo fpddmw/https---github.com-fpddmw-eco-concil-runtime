@@ -424,7 +424,7 @@ class OrchestrationPlannerWorkflowTests(unittest.TestCase):
                     "controversy_gap_counts": {
                         "cross-platform-diffusion": 1,
                     },
-                    "ranked_actions": [
+                    "actions": [
                         {
                             "action_id": "action-diffusion-001",
                             "action_kind": "trace-cross-platform-diffusion",
