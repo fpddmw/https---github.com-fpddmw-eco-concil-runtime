@@ -59,7 +59,237 @@ def object_ref(object_kind: str, payload: dict[str, Any]) -> str:
     return f"{object_kind}:{identifier}" if identifier else ""
 
 
-def compact_object(object_kind: str, payload: dict[str, Any]) -> dict[str, Any]:
+def object_agent_role(payload: dict[str, Any], *, fallback: str = "<agent_role>") -> str:
+    return (
+        maybe_text(payload.get("agent_role"))
+        or maybe_text(payload.get("author_role"))
+        or maybe_text(payload.get("owner_role"))
+        or fallback
+    )
+
+
+def continuation_payload_for_ref(object_ref_value: str) -> dict[str, Any]:
+    return {
+        "round_mode": "continuation",
+        "primary_focus_refs": [object_ref_value],
+        "continuation_basis": "moderator-selected unresolved ref",
+        "closure_reason_if_not_continuing": (
+            "<report-ready|no-actionable-path|human-paused|out-of-scope>"
+        ),
+    }
+
+
+def carry_to_next_round_command_template(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    next_round_id: str,
+    object_ref_value: str,
+) -> str:
+    return kernel_command(
+        "request-phase-transition",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--transition-kind",
+        "open-investigation-round",
+        "--target-round-id",
+        maybe_text(next_round_id) or "<target_round_id>",
+        "--source-round-id",
+        round_id,
+        "--request-payload-json",
+        json.dumps(
+            continuation_payload_for_ref(object_ref_value),
+            ensure_ascii=True,
+            sort_keys=True,
+        ),
+        "--rationale",
+        "<moderator_continuation_rationale>",
+        actor_role="moderator",
+    )
+
+
+def object_handoff_commands(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    next_round_id: str,
+    object_kind: str,
+    payload: dict[str, Any],
+) -> dict[str, str]:
+    identifier = object_id_for_kind(object_kind, payload)
+    object_ref_value = f"{object_kind}:{identifier}" if identifier else ""
+    if not object_ref_value:
+        return {}
+
+    handoff_commands: dict[str, str] = {
+        "carry_to_next_round_command_template": carry_to_next_round_command_template(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
+            object_ref_value=object_ref_value,
+        )
+    }
+    agent_role = object_agent_role(payload)
+
+    if object_kind == "finding":
+        handoff_commands[
+            "submit_evidence_bundle_from_finding_command_template"
+        ] = kernel_command(
+            "submit-evidence-bundle",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--actor-role",
+            agent_role,
+            "--agent-role",
+            agent_role,
+            "--bundle-kind",
+            "evidence-bundle",
+            "--title",
+            "<bundle_title>",
+            "--summary",
+            "<bundle_summary>",
+            "--rationale",
+            "<agent_bundle_rationale>",
+            "--target-kind",
+            "finding",
+            "--target-id",
+            identifier,
+            "--basis-object-id",
+            identifier,
+            "--finding-id",
+            identifier,
+            "--evidence-ref",
+            "<finding_evidence_ref>",
+            "--provenance-json",
+            "{\"source\":\"agent-follow-up\"}",
+        )
+        handoff_commands[
+            "update_hypothesis_from_finding_command_template"
+        ] = run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="update-hypothesis-status",
+            actor_role=agent_role,
+            contract_mode="warn",
+            skill_args=[
+                "--title",
+                "<provisional_hypothesis_title>",
+                "--statement",
+                "<hypothesis_statement>",
+                "--status",
+                "active",
+                "--owner-role",
+                agent_role,
+                "--linked-artifact-ref",
+                f"finding:{identifier}",
+                "--evidence-ref",
+                "<finding_evidence_ref>",
+            ],
+        )
+    elif object_kind == "evidence-request":
+        handoff_commands[
+            "submit_source_acquisition_proposal_for_request_command_template"
+        ] = run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="submit-source-acquisition-proposal",
+            actor_role="<agent_role>",
+            contract_mode="warn",
+            skill_args=[
+                "--author-role",
+                "<agent_role>",
+                "--source-skill",
+                "<source_skill>",
+                "--query-parameters-json",
+                "<query_parameters_json>",
+                "--target-kind",
+                "evidence-request",
+                "--target-id",
+                identifier,
+                "--target-evidence-request-id",
+                identifier,
+                "--rationale",
+                "<agent_source_acquisition_rationale>",
+                "--provenance-json",
+                "{\"source\":\"agent-follow-up\"}",
+            ],
+        )
+    elif object_kind == "source-acquisition-proposal":
+        handoff_commands[
+            "update_source_acquisition_proposal_status_command_template"
+        ] = run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="update-source-acquisition-proposal-status",
+            actor_role="<actor_role>",
+            contract_mode="warn",
+            skill_args=[
+                "--object-id",
+                identifier,
+                "--status",
+                "<proposed|approved-for-execution|executed|withdrawn|rejected>",
+                "--actor-role",
+                "<actor_role>",
+                "--status-rationale",
+                "<status_rationale>",
+                "--evidence-ref",
+                "<evidence_ref>",
+                "--provenance-json",
+                "{\"source\":\"agent-follow-up\"}",
+            ],
+        )
+    elif object_kind == "hypothesis":
+        handoff_commands[
+            "open_challenge_on_hypothesis_command_template"
+        ] = run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="open-challenge-ticket",
+            actor_role="challenger",
+            contract_mode="warn",
+            skill_args=[
+                "--title",
+                "<challenge_title>",
+                "--challenge-statement",
+                "<challenge_statement>",
+                "--target-hypothesis-id",
+                identifier,
+                "--owner-role",
+                "challenger",
+                "--linked-artifact-ref",
+                f"hypothesis:{identifier}",
+                "--required-followup-evidence",
+                "<followup_evidence_need>",
+            ],
+        )
+
+    return handoff_commands
+
+
+def compact_object(
+    object_kind: str,
+    payload: dict[str, Any],
+    *,
+    run_dir: Path | None = None,
+    run_id: str = "",
+    round_id: str = "",
+    next_round_id: str = "<target_round_id>",
+) -> dict[str, Any]:
     identifier = object_id_for_kind(object_kind, payload)
     compact: dict[str, Any] = {
         "object_kind": object_kind,
@@ -90,7 +320,19 @@ def compact_object(object_kind: str, payload: dict[str, Any]) -> dict[str, Any]:
             compact[field_name] = value
     evidence_refs = text_list(payload.get("evidence_refs"))
     if evidence_refs:
+        compact["evidence_refs"] = evidence_refs[:10]
         compact["evidence_ref_count"] = len(evidence_refs)
+    if run_dir is not None and run_id and round_id:
+        handoff_commands = object_handoff_commands(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
+            object_kind=object_kind,
+            payload=payload,
+        )
+        if handoff_commands:
+            compact["handoff_commands"] = handoff_commands
     return {
         key: value
         for key, value in compact.items()
@@ -158,11 +400,22 @@ def bundled_finding_ids(bundles: list[dict[str, Any]]) -> set[str]:
 
 def liveness_ref_set(
     *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    next_round_id: str,
     object_kind: str,
     objects: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     return [
-        compact_object(object_kind, item)
+        compact_object(
+            object_kind,
+            item,
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
+        )
         for item in objects
         if isinstance(item, dict) and object_id_for_kind(object_kind, item)
     ]
@@ -272,30 +525,58 @@ def build_round_liveness_surface(
 
     unresolved_sets = {
         "open_evidence_requests": liveness_ref_set(
+            run_dir=run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
             object_kind="evidence-request",
             objects=open_evidence_requests,
         ),
         "unbundled_findings": liveness_ref_set(
+            run_dir=run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
             object_kind="finding",
             objects=unbundled_findings,
         ),
         "pending_source_acquisition_proposals": liveness_ref_set(
+            run_dir=run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
             object_kind="source-acquisition-proposal",
             objects=pending_source_proposals,
         ),
         "open_board_tasks": liveness_ref_set(
+            run_dir=run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
             object_kind="board-task",
             objects=open_tasks,
         ),
         "active_hypotheses": liveness_ref_set(
+            run_dir=run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
             object_kind="hypothesis",
             objects=active_hypotheses,
         ),
         "not_ready_readiness_opinions": liveness_ref_set(
+            run_dir=run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
             object_kind="readiness-opinion",
             objects=not_ready_readiness,
         ),
         "open_challenges": liveness_ref_set(
+            run_dir=run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
             object_kind="challenge",
             objects=open_challenges,
         ),
@@ -331,6 +612,11 @@ def build_round_liveness_surface(
         "ordering_semantics": (
             "Objects are shown in storage/query order only, not salience or "
             "evidence strength order."
+        ),
+        "handoff_semantics": (
+            "Per-object handoff commands are copyable object-local templates. "
+            "They do not select a source, decide evidence adoption, or require "
+            "a fixed next-round agenda."
         ),
         "counts": {
             key + "_count": len(value)

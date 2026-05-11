@@ -819,6 +819,18 @@ POLICIES.update(
             output_object_kinds=["source-acquisition-proposal"],
             write_scope=WRITE_SCOPE_DELIBERATION,
         ),
+        "update-source-acquisition-proposal-status": _policy(
+            skill_name="update-source-acquisition-proposal-status",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[ROLE_MODERATOR, *FETCH_NORMALIZE_ROLES],
+            required_capabilities=[CAPABILITY_PROPOSAL_WRITE],
+            side_effect_scope=["artifact-write", "db-read", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=["source-acquisition-proposal", "fetch-receipt"],
+            output_object_kinds=["source-acquisition-proposal"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+            default_actor_role_hint=ROLE_MODERATOR,
+        ),
         "submit-agent-position": _policy(
             skill_name="submit-agent-position",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,

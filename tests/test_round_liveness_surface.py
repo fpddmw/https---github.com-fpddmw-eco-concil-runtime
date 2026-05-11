@@ -19,6 +19,7 @@ if str(RUNTIME_SRC) not in sys.path:
 
 from eco_council_runtime.kernel.governance.round_liveness import (  # noqa: E402
     build_round_liveness_surface,
+    compact_object,
 )
 
 RUN_ID = "run-round-liveness-001"
@@ -102,6 +103,58 @@ def submit_finding(run_dir: Path, request_id: str) -> str:
 
 
 class RoundLivenessSurfaceTests(unittest.TestCase):
+    def test_compact_object_exposes_object_local_handoffs_without_choice_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            proposal = compact_object(
+                "source-acquisition-proposal",
+                {
+                    "proposal_id": "proposal-001",
+                    "status": "proposed",
+                    "author_role": "social-investigator",
+                    "source_skill": "query-public-signals",
+                },
+                run_dir=run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+            )
+            hypothesis = compact_object(
+                "hypothesis",
+                {
+                    "hypothesis_id": "hypothesis-001",
+                    "status": "active",
+                    "owner_role": "environmental-investigator",
+                },
+                run_dir=run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+            )
+
+            self.assertIn(
+                "update-source-acquisition-proposal-status",
+                proposal["handoff_commands"][
+                    "update_source_acquisition_proposal_status_command_template"
+                ],
+            )
+            self.assertIn(
+                "source-acquisition-proposal:proposal-001",
+                proposal["handoff_commands"]["carry_to_next_round_command_template"],
+            )
+            self.assertIn(
+                "open-challenge-ticket",
+                hypothesis["handoff_commands"][
+                    "open_challenge_on_hypothesis_command_template"
+                ],
+            )
+            self.assertIn(
+                "hypothesis:hypothesis-001",
+                hypothesis["handoff_commands"]["carry_to_next_round_command_template"],
+            )
+            self.assertFalse(
+                {"score", "rank", "weight", "priority"}
+                & set(all_keys({"proposal": proposal, "hypothesis": hypothesis}))
+            )
+
     def test_liveness_surface_lists_unresolved_refs_without_scoring_or_ranking(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -196,6 +249,7 @@ class RoundLivenessSurfaceTests(unittest.TestCase):
             self.assertEqual("round-liveness-surface-v1", liveness["schema_version"])
             self.assertEqual("unresolved-refs-present", liveness["liveness_status"])
             self.assertIn("does not rank, score", liveness["semantics"])
+            self.assertIn("object-local templates", liveness["handoff_semantics"])
             self.assertIn(
                 f"evidence-request:{request_id}",
                 liveness["unresolved_refs"],
@@ -230,6 +284,50 @@ class RoundLivenessSurfaceTests(unittest.TestCase):
                     item["object_ref"]
                     for item in unresolved_sets["unbundled_findings"]
                     if isinstance(item, dict)
+                ],
+            )
+            finding_item = next(
+                item
+                for item in unresolved_sets["unbundled_findings"]
+                if isinstance(item, dict) and item.get("object_id") == finding_id
+            )
+            self.assertIn("receipt://airnow/test-001", finding_item["evidence_refs"])
+            finding_handoff = finding_item["handoff_commands"]
+            self.assertIn(
+                "submit-evidence-bundle",
+                finding_handoff["submit_evidence_bundle_from_finding_command_template"],
+            )
+            self.assertIn(
+                f"--finding-id {finding_id}",
+                finding_handoff["submit_evidence_bundle_from_finding_command_template"],
+            )
+            self.assertIn(
+                "update-hypothesis-status",
+                finding_handoff["update_hypothesis_from_finding_command_template"],
+            )
+            self.assertIn(
+                f"finding:{finding_id}",
+                finding_handoff["update_hypothesis_from_finding_command_template"],
+            )
+            self.assertIn(
+                f"finding:{finding_id}",
+                finding_handoff["carry_to_next_round_command_template"],
+            )
+            evidence_request_item = next(
+                item
+                for item in unresolved_sets["open_evidence_requests"]
+                if isinstance(item, dict) and item.get("object_id") == request_id
+            )
+            self.assertIn(
+                "submit-source-acquisition-proposal",
+                evidence_request_item["handoff_commands"][
+                    "submit_source_acquisition_proposal_for_request_command_template"
+                ],
+            )
+            self.assertIn(
+                f"--target-evidence-request-id {request_id}",
+                evidence_request_item["handoff_commands"][
+                    "submit_source_acquisition_proposal_for_request_command_template"
                 ],
             )
             self.assertEqual(

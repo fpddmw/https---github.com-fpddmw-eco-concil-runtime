@@ -97,6 +97,10 @@ class RealcaseTransportChainAutonomyTests(unittest.TestCase):
         self.assertIn("request-phase-transition", liveness["continuation"]["request_open_round_command_template"])
         self.assertIn("open-investigation-round", liveness["continuation"]["request_open_round_command_template"])
         self.assertIn("primary_focus_refs", liveness["continuation"]["request_open_round_command_template"])
+        self.assertIn(
+            "--requested-skill-arg=<skill_arg>",
+            status["skill_approval_bridge"]["commands"]["request_skill_approval_template"],
+        )
         self.assertFalse({"score", "rank", "weight", "priority"} & all_keys(status))
 
     def test_archive_status_exposes_checkpoint_gap_and_commands(self) -> None:
@@ -130,6 +134,85 @@ class RealcaseTransportChainAutonomyTests(unittest.TestCase):
         self.assertIn("archive-signal-corpus", archive["commands"]["archive_signal_corpus_checkpoint"])
         self.assertIn("archive-case-library", archive["commands"]["archive_case_library_checkpoint"])
         self.assertIn("materialize-history-context", archive["commands"]["materialize_history_context"])
+
+    def test_realcase_archive_checkpoint_preserves_receipt_only_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            working_run_dir = Path(tmpdir) / RUN_ID
+            shutil.copytree(RUN_DIR, working_run_dir)
+
+            signal_archive = run_script(
+                script_path("archive-signal-corpus"),
+                "--run-dir",
+                str(working_run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            case_archive = run_script(
+                script_path("archive-case-library"),
+                "--run-dir",
+                str(working_run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            archive_status = run_kernel(
+                "show-archive-status",
+                "--run-dir",
+                str(working_run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            signal_artifact = load_json(
+                working_run_dir / "archive" / f"signal_corpus_import_{ROUND_ID}.json"
+            )
+            case_artifact = load_json(
+                working_run_dir / "archive" / f"case_library_import_{ROUND_ID}.json"
+            )
+
+            self.assertEqual("completed", signal_archive["status"])
+            self.assertEqual("completed", case_archive["status"])
+            self.assertEqual(
+                "no-normalized-signals",
+                signal_archive["summary"]["checkpoint_status"],
+            )
+            self.assertEqual(
+                "missing-normalized-signals-table",
+                signal_archive["summary"]["checkpoint_input_status"],
+            )
+            self.assertEqual(
+                "missing-normalized-signals-table",
+                signal_artifact["checkpoint_input_status"],
+            )
+            self.assertEqual(
+                "partial-case-checkpoint",
+                case_archive["summary"]["checkpoint_status"],
+            )
+            self.assertEqual(
+                "missing-normalized-signals-table",
+                case_archive["summary"]["checkpoint_input_status"],
+            )
+            self.assertEqual(
+                "missing-normalized-signals-table",
+                case_artifact["checkpoint_input_status"],
+            )
+            self.assertEqual(
+                "receipt-only-evidence-present",
+                archive_status["checkpoint_summary"]["receipt_evidence_status"],
+            )
+            self.assertTrue(archive_status["checkpoint_summary"]["case_library_checkpoint_present"])
+            self.assertEqual(
+                "no-normalized-signals",
+                archive_status["checkpoint_summary"]["signal_corpus_checkpoint_status"],
+            )
+            self.assertEqual(1, archive_status["databases"]["case_library"]["cases"]["count"])
+            self.assertEqual(0, archive_status["databases"]["signal_corpus"]["corpus_signals"]["count"])
+            self.assertIn("receipt-only evidence", " ".join(archive_status["gap_hints"]))
 
     def test_realcase_round_001_can_open_round_002_with_unresolved_refs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

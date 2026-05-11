@@ -211,6 +211,78 @@ def normalize_execution_policy(
     }
 
 
+def skill_approval_request_command(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    skill_name: str,
+    requested_by_role: str,
+    requested_actor_role: str,
+    skill_args: list[Any],
+    rationale: str = "<approval_rationale>",
+) -> str:
+    command = [
+        "python3",
+        "eco-concil-runtime/scripts/eco_runtime_kernel.py",
+        "request-skill-approval",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--actor-role",
+        requested_by_role,
+        "--skill-name",
+        skill_name,
+        "--requested-actor-role",
+        requested_actor_role,
+        "--rationale",
+        rationale,
+    ]
+    for item in skill_args:
+        text = maybe_text(item)
+        if text:
+            command.append(f"--requested-skill-arg={text}")
+    return shlex.join(command)
+
+
+def approved_skill_run_command_template(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    skill_name: str,
+    actor_role: str,
+    contract_mode: str,
+    skill_args: list[Any],
+) -> str:
+    command = [
+        "python3",
+        "eco-concil-runtime/scripts/eco_runtime_kernel.py",
+        "run-skill",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--skill-name",
+        skill_name,
+        "--actor-role",
+        actor_role,
+        "--contract-mode",
+        contract_mode,
+        "--skill-approval-request-id",
+        "<request_id>",
+    ]
+    args = [maybe_text(item) for item in skill_args if maybe_text(item)]
+    if args:
+        command.extend(["--", *args])
+    return shlex.join(command)
+
+
 def build_contract_context(
     run_dir: Path,
     *,
@@ -295,28 +367,25 @@ def resolve_skill_approval_context(
     resolved_actor_role = maybe_text(access_policy.get("resolved_actor_role")) or maybe_text(
         actor_role
     )
+    request_command_template = skill_approval_request_command(
+        run_dir=run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        skill_name=skill_name,
+        requested_by_role=resolved_actor_role,
+        requested_actor_role=resolved_actor_role,
+        skill_args=execution_skill_args or [],
+    )
+    run_approved_command_template = approved_skill_run_command_template(
+        run_dir=run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        skill_name=skill_name,
+        actor_role=resolved_actor_role,
+        contract_mode=contract_mode,
+        skill_args=execution_skill_args or [],
+    )
     if not normalized_request_id:
-        request_command_template = shlex.join(
-            [
-                "python3",
-                "eco-concil-runtime/scripts/eco_runtime_kernel.py",
-                "request-skill-approval",
-                "--run-dir",
-                str(run_dir),
-                "--run-id",
-                run_id,
-                "--round-id",
-                round_id,
-                "--actor-role",
-                resolved_actor_role,
-                "--skill-name",
-                skill_name,
-                "--requested-actor-role",
-                resolved_actor_role,
-                "--rationale",
-                "<approval_rationale>",
-            ]
-        )
         return [
             issue(
                 "missing-skill-approval-request-id",
@@ -334,6 +403,10 @@ def resolve_skill_approval_context(
             "request_id": "",
             "skill_layer": skill_layer,
             "request_skill_approval_command_template": request_command_template,
+            "run_approved_skill_command_template": run_approved_command_template,
+            "requested_skill_args": [
+                maybe_text(item) for item in (execution_skill_args or []) if maybe_text(item)
+            ],
         }
     try:
         request = resolve_skill_approval_for_execution(
@@ -359,6 +432,8 @@ def resolve_skill_approval_context(
             "request_id": normalized_request_id,
             "skill_layer": skill_layer,
             "message": str(exc),
+            "request_skill_approval_command_template": request_command_template,
+            "run_approved_skill_command_template": run_approved_command_template,
         }
     return [], {
         "required": True,
@@ -367,6 +442,7 @@ def resolve_skill_approval_context(
         "skill_layer": skill_layer,
         "request": request,
         "contract_mode": contract_mode,
+        "run_approved_skill_command_template": run_approved_command_template,
     }
 
 

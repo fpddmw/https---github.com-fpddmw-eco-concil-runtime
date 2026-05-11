@@ -689,6 +689,7 @@ def agent_entry_operator_view(
         "query_round_briefs_command": maybe_text(entry_commands.get("query_round_briefs_command")),
         "query_evidence_requests_command": maybe_text(entry_commands.get("query_evidence_requests_command")),
         "query_source_acquisition_proposals_command": maybe_text(entry_commands.get("query_source_acquisition_proposals_command")),
+        "update_source_acquisition_proposal_status_command_template": maybe_text(entry_commands.get("update_source_acquisition_proposal_status_command_template")),
         "query_agent_positions_command": maybe_text(entry_commands.get("query_agent_positions_command")),
         "query_context_packets_command": maybe_text(entry_commands.get("query_context_packets_command")),
         "query_report_section_drafts_command": maybe_text(entry_commands.get("query_report_section_drafts_command")),

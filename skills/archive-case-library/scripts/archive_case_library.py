@@ -232,6 +232,41 @@ def load_signal_rows(signal_db: Path, run_id: str) -> list[sqlite3.Row]:
         connection.close()
 
 
+def signal_plane_input_status(
+    signal_db: Path,
+    *,
+    run_id: str,
+    rows: list[sqlite3.Row],
+) -> dict[str, str]:
+    if not signal_db.exists():
+        return {
+            "code": "missing-signal-plane",
+            "checkpoint_input_status": "missing-signal-plane",
+            "message": "Case library import found no signal-plane database for this run.",
+        }
+    connection = sqlite3.connect(signal_db)
+    try:
+        if not table_exists(connection, SIGNAL_TABLE):
+            return {
+                "code": "missing-normalized-signals-table",
+                "checkpoint_input_status": "missing-normalized-signals-table",
+                "message": "Case library import found no normalized_signals table for this run.",
+            }
+    finally:
+        connection.close()
+    if not rows:
+        return {
+            "code": "no-signal-rows",
+            "checkpoint_input_status": "no-normalized-signals-for-run",
+            "message": f"Case library import found no normalized signal rows for run_id={run_id}.",
+        }
+    return {
+        "code": "normalized-signals-present",
+        "checkpoint_input_status": "normalized-signals-present",
+        "message": "",
+    }
+
+
 def canonical_metric(metric: Any) -> str:
     text = maybe_text(metric).casefold().replace(".", "_").replace("-", "_")
     if text in {"pm25", "pm2_5", "pm2_5_", "pm2_5m"}:
@@ -741,7 +776,13 @@ def archive_case_library_skill(
             else {}
         )
         role_reports.append(report_payload)
-    signal_rows = load_signal_rows((run_dir_path / "analytics" / "signal_plane.sqlite").resolve(), run_id)
+    signal_db_path = (run_dir_path / "analytics" / "signal_plane.sqlite").resolve()
+    signal_rows = load_signal_rows(signal_db_path, run_id)
+    signal_input_status = signal_plane_input_status(
+        signal_db_path,
+        run_id=run_id,
+        rows=signal_rows,
+    )
 
     claim_scopes = [
         scope
@@ -843,10 +884,18 @@ def archive_case_library_skill(
         "alternative_hypotheses": alternatives,
         "open_questions": questions,
         "selected_evidence_refs": selected_evidence_refs,
+        "checkpoint_input_status": maybe_text(
+            signal_input_status.get("checkpoint_input_status")
+        ),
     }
 
     if not signal_rows:
-        warnings.append({"code": "missing-signal-plane", "message": "Case library import found no normalized signal rows for this run."})
+        warnings.append(
+            {
+                "code": maybe_text(signal_input_status.get("code")),
+                "message": maybe_text(signal_input_status.get("message")),
+            }
+        )
     if not final_decision_summary:
         warnings.append({"code": "missing-decision-summary", "message": "Case library import could not find a final decision-style summary and fell back to board/report text."})
 
@@ -963,6 +1012,9 @@ def archive_case_library_skill(
         "archive_mode": "checkpoint",
         "archive_scope": "case-library",
         "checkpoint_status": checkpoint_status,
+        "checkpoint_input_status": maybe_text(
+            signal_input_status.get("checkpoint_input_status")
+        ),
         "history_reuse_semantics": "Archived case material is historical context only; agents decide relevance and use in the current run.",
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
@@ -1025,6 +1077,9 @@ def archive_case_library_skill(
             "output_path": str(output_file),
             "profile_id": profile_id,
             "checkpoint_status": checkpoint_status,
+            "checkpoint_input_status": maybe_text(
+                signal_input_status.get("checkpoint_input_status")
+            ),
             "excerpt_count": len(excerpts),
             "claim_scope_source": maybe_text(analysis_inputs.get("claim_scope_source"))
             or "missing-claim-scope",

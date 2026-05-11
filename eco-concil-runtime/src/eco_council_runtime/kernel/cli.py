@@ -1864,6 +1864,10 @@ def main(
             run_dir,
             run_id=args.run_id,
             round_id=args.round_id,
+            author_role=args.author_role,
+            source_skill=args.source_skill,
+            status=args.status,
+            target_evidence_request_id=args.target_evidence_request_id,
             limit=args.limit,
         )
         print(pretty_json(payload, args.pretty))

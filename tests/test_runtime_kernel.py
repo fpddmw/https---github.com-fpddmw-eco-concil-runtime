@@ -957,6 +957,52 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertIn("network-external", approved["allowed_side_effects"])
             self.assertFalse(approved["block_execution"])
 
+    def test_preflight_skill_approval_handoff_preserves_requested_args(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.governance.runtime_governance import (
+                preflight_skill_execution,
+            )
+
+            skill_args = [
+                "--action-id",
+                "action-001",
+                "--basis-object-id",
+                "hypothesis-001",
+            ]
+            payload = preflight_skill_execution(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                skill_name="open-falsification-probe",
+                actor_role="challenger",
+                skill_args=skill_args,
+                contract_mode="strict",
+            )
+
+            self.assertTrue(payload["block_execution"])
+            self.assertIn(
+                "missing-skill-approval-request-id",
+                {item["code"] for item in payload["issues"]},
+            )
+            approval = payload["skill_approval"]
+            self.assertEqual("missing-request-id", approval["status"])
+            request_command = approval["request_skill_approval_command_template"]
+            run_command = approval["run_approved_skill_command_template"]
+            self.assertIn("request-skill-approval", request_command)
+            self.assertIn("--requested-skill-arg=--action-id", request_command)
+            self.assertIn("--requested-skill-arg=action-001", request_command)
+            self.assertIn("--requested-skill-arg=--basis-object-id", request_command)
+            self.assertIn("--requested-skill-arg=hypothesis-001", request_command)
+            self.assertEqual(skill_args, approval["requested_skill_args"])
+            self.assertIn("--skill-approval-request-id '<request_id>'", run_command)
+            self.assertLess(
+                run_command.index("--skill-approval-request-id"),
+                run_command.index("-- --action-id"),
+            )
+
     def test_registered_skill_allowed_roles_have_required_capabilities(self) -> None:
         ensure_runtime_src_on_path()
 

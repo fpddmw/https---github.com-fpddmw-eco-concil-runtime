@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.kernel.core.ledger import load_ledger_tail
 from eco_council_runtime.kernel.core.manifest import load_json_if_exists
 from eco_council_runtime.kernel.core.paths import cursor_path, manifest_path
 from eco_council_runtime.kernel.execution.executor import maybe_text
@@ -18,7 +19,10 @@ from eco_council_runtime.kernel.source_queue.source_queue_contract import (
     source_capability_hints,
 )
 from eco_council_runtime.kernel.source_queue.source_queue_execution import render_fetch_argv
-from eco_council_runtime.objects.council import query_council_objects
+from eco_council_runtime.objects.council import (
+    SOURCE_ACQUISITION_PROPOSAL_STATUSES,
+    query_council_objects,
+)
 from eco_council_runtime.runtime_command_hints import kernel_command, run_skill_command
 
 
@@ -496,6 +500,63 @@ def _status_object_query_command(run_dir: Path, run_id: str, round_id: str, obje
     return kernel_command("query-council-objects", *args)
 
 
+def _query_parameter_lookup(query_parameters: Any) -> dict[str, str]:
+    if not isinstance(query_parameters, dict):
+        return {}
+    lookup: dict[str, str] = {}
+    for key, value in query_parameters.items():
+        normalized_key = maybe_text(key).replace("-", "_")
+        if not normalized_key:
+            continue
+        if isinstance(value, (dict, list)):
+            text = ""
+        else:
+            text = maybe_text(value)
+        if text:
+            lookup[normalized_key] = text
+    latitude = lookup.get("latitude") or lookup.get("lat")
+    longitude = lookup.get("longitude") or lookup.get("lon") or lookup.get("lng")
+    if latitude and longitude and "location" not in lookup:
+        lookup["location"] = f"{latitude},{longitude}"
+    bbox = lookup.get("bbox") or lookup.get("bounding_box")
+    if not bbox:
+        west = lookup.get("west") or lookup.get("min_lon")
+        south = lookup.get("south") or lookup.get("min_lat")
+        east = lookup.get("east") or lookup.get("max_lon")
+        north = lookup.get("north") or lookup.get("max_lat")
+        if west and south and east and north:
+            lookup["bbox"] = f"{west},{south},{east},{north}"
+    return lookup
+
+
+def _proposal_template_args(
+    template: list[Any],
+    *,
+    query_parameters: Any,
+) -> list[str]:
+    lookup = _query_parameter_lookup(query_parameters)
+    args = [maybe_text(item) for item in template if maybe_text(item)]
+    filled: list[str] = []
+    for index, arg in enumerate(args):
+        if not (arg.startswith("<") and arg.endswith(">")):
+            filled.append(arg)
+            continue
+        previous = args[index - 1] if index > 0 else ""
+        option_key = previous.removeprefix("--").replace("-", "_") if previous.startswith("--") else ""
+        placeholder_key = arg.strip("<>").replace("-", "_").replace(",", "_").lower()
+        value = ""
+        if option_key:
+            value = lookup.get(option_key, "")
+        if not value and placeholder_key in {"latitude_longitude", "lat_longitude", "lat_lon"}:
+            value = lookup.get("location", "")
+        if not value and placeholder_key in {"west_south_east_north", "min_lon_min_lat_max_lon_max_lat"}:
+            value = lookup.get("bbox", "")
+        if not value:
+            value = lookup.get(placeholder_key, "")
+        filled.append(value or arg)
+    return filled
+
+
 def _source_intent_execution_surface(
     run_dir: Path,
     *,
@@ -506,11 +567,43 @@ def _source_intent_execution_surface(
     source_skill = maybe_text(intent.get("source_skill"))
     author_role = maybe_text(intent.get("author_role")) or "<agent_role>"
     capability_hints = source_capability_hints(source_skill)
+    query_parameters = (
+        intent.get("query_parameters", {})
+        if isinstance(intent.get("query_parameters"), dict)
+        else {}
+    )
     templates = (
         capability_hints.get("fetch_argument_templates", [])
         if isinstance(capability_hints.get("fetch_argument_templates"), list)
         else []
     )
+    filled_templates = [
+        _proposal_template_args(template, query_parameters=query_parameters)
+        for template in templates
+        if isinstance(template, list)
+    ]
+    declared_side_effects = _text_list(intent.get("declared_side_effects"))
+    requested_side_effect_approvals = _text_list(
+        intent.get("requested_side_effect_approvals")
+    )
+    missing_requested_side_effect_approvals = [
+        item for item in declared_side_effects if item not in requested_side_effect_approvals
+    ]
+    preflight_commands = [
+        run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name=source_skill,
+            contract_mode="warn",
+            actor_role=author_role,
+            timeout_seconds=900.0,
+            retry_budget=1,
+            skill_args=[maybe_text(arg) for arg in template if maybe_text(arg)],
+        )
+        for template in filled_templates
+        if source_skill
+    ]
     fetch_commands = [
         run_skill_command(
             run_dir=run_dir,
@@ -521,20 +614,52 @@ def _source_intent_execution_surface(
             actor_role=author_role,
             timeout_seconds=900.0,
             retry_budget=1,
-            allow_side_effects=["network-external"],
+            allow_side_effects=requested_side_effect_approvals,
             skill_args=[maybe_text(arg) for arg in template if maybe_text(arg)],
         )
-        for template in templates
-        if isinstance(template, list) and source_skill
+        for template in filled_templates
+        if source_skill
     ]
     return {
         "source_skill": source_skill,
+        "object_id": maybe_text(intent.get("object_id")),
         "author_role": author_role,
+        "status": maybe_text(intent.get("status")),
+        "target_kind": maybe_text(intent.get("target_kind")),
+        "target_id": maybe_text(intent.get("target_id")),
+        "query_parameters": query_parameters,
+        "declared_side_effects": declared_side_effects,
+        "requested_side_effect_approvals": requested_side_effect_approvals,
+        "missing_requested_side_effect_approvals": missing_requested_side_effect_approvals,
         "provider_modes": capability_hints.get("provider_modes", [])
         if isinstance(capability_hints.get("provider_modes"), list)
         else [],
         "fetch_argument_templates": templates,
+        "proposal_argument_templates": filled_templates,
+        "preflight_fetch_command_templates": preflight_commands,
         "fetch_command_templates": fetch_commands,
+        "status_update_command_template": run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="update-source-acquisition-proposal-status",
+            contract_mode="warn",
+            actor_role="<actor_role>",
+            skill_args=[
+                "--object-id",
+                maybe_text(intent.get("object_id")) or "<source_acquisition_proposal_id>",
+                "--status",
+                "<proposed|approved-for-execution|executed|withdrawn|rejected>",
+                "--actor-role",
+                "<actor_role>",
+                "--status-rationale",
+                "<status_update_rationale>",
+                "--evidence-ref",
+                "<receipt_or_artifact_ref>",
+            ],
+        )
+        if run_id and round_id
+        else "",
         "normalize_fetch_execution_command": run_skill_command(
             run_dir=run_dir,
             run_id=run_id,
@@ -579,6 +704,77 @@ def _compact_skill_approval_request(request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _recent_blocked_skill_approval_intents(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, tuple[str, ...], str]] = set()
+    for event in reversed(load_ledger_tail(run_dir, limit=200)):
+        if maybe_text(event.get("event_type")) != "skill-preflight":
+            continue
+        if maybe_text(event.get("run_id")) != maybe_text(run_id):
+            continue
+        if maybe_text(event.get("round_id")) != maybe_text(round_id):
+            continue
+        preflight = event.get("preflight") if isinstance(event.get("preflight"), dict) else {}
+        if not bool(preflight.get("block_execution")):
+            continue
+        skill_approval = (
+            preflight.get("skill_approval")
+            if isinstance(preflight.get("skill_approval"), dict)
+            else {}
+        )
+        if not bool(skill_approval.get("required")):
+            continue
+        approval_status = maybe_text(skill_approval.get("status"))
+        if approval_status not in {"missing-request-id", "invalid-request"}:
+            continue
+        skill_args = _text_list(preflight.get("skill_args"))
+        key = (
+            maybe_text(preflight.get("skill_name")) or maybe_text(event.get("skill_name")),
+            maybe_text(preflight.get("resolved_actor_role"))
+            or maybe_text(event.get("actor_role")),
+            tuple(skill_args),
+            approval_status,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(
+            {
+                "event_id": maybe_text(event.get("event_id")),
+                "skill_name": key[0],
+                "actor_role": key[1],
+                "contract_mode": maybe_text(event.get("contract_mode")),
+                "approval_status": approval_status,
+                "blocking_issue_codes": [
+                    maybe_text(item.get("code"))
+                    for item in preflight.get("issues", [])
+                    if isinstance(item, dict)
+                    and (
+                        bool(item.get("blocking"))
+                        or maybe_text(item.get("severity")) == "error"
+                    )
+                    and maybe_text(item.get("code"))
+                ],
+                "requested_skill_args": skill_args,
+                "request_skill_approval_command_template": maybe_text(
+                    skill_approval.get("request_skill_approval_command_template")
+                ),
+                "run_approved_skill_command_template": maybe_text(
+                    skill_approval.get("run_approved_skill_command_template")
+                ),
+            }
+        )
+        if len(results) >= _safe_limit(limit):
+            break
+    return results
+
+
 def _skill_approval_bridge_surface(
     run_dir: Path,
     *,
@@ -603,6 +799,11 @@ def _skill_approval_bridge_surface(
         if isinstance(request, dict)
         and maybe_text(request.get("request_status")) == SKILL_REQUEST_STATUS_APPROVED
     ]
+    blocked_helper_intents = _recent_blocked_skill_approval_intents(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
     return {
         "semantics": (
             "Skill approval bridge exposes operator-gated helper status and "
@@ -611,6 +812,7 @@ def _skill_approval_bridge_surface(
         ),
         "pending_requests": pending_requests,
         "approved_unconsumed_requests": approved_unconsumed_requests,
+        "blocked_helper_intents": blocked_helper_intents,
         "commands": {
             "query_skill_approval_requests": maybe_text(
                 transitions.get("query_skill_approval_requests_command")
@@ -629,6 +831,7 @@ def _skill_approval_bridge_surface(
                 "<requested_actor_role>",
                 "--rationale",
                 "<approval_rationale>",
+                "--requested-skill-arg=<skill_arg>",
                 actor_role="<requesting_role>",
             )
             if run_id and round_id
@@ -676,6 +879,10 @@ def show_source_acquisition_intents_surface(
     *,
     run_id: str = "",
     round_id: str = "",
+    author_role: str = "",
+    source_skill: str = "",
+    status: str = "",
+    target_evidence_request_id: str = "",
     limit: int = 20,
 ) -> dict[str, Any]:
     resolved_run_id, resolved_round_id = _resolved_ids(run_dir, run_id, round_id)
@@ -684,6 +891,10 @@ def show_source_acquisition_intents_surface(
         object_kind="source-acquisition-proposal",
         run_id=resolved_run_id,
         round_id=resolved_round_id,
+        agent_role=author_role,
+        source_skill=source_skill,
+        status=status,
+        target_evidence_request_id=target_evidence_request_id,
         limit=_safe_limit(limit),
     )
     objects = proposals.get("objects", []) if isinstance(proposals.get("objects"), list) else []
@@ -706,6 +917,13 @@ def show_source_acquisition_intents_surface(
         "run_id": resolved_run_id,
         "round_id": resolved_round_id,
         "semantics": "Source acquisition proposals are agent-authored intents; runtime lists them without selecting or ranking sources.",
+        "filters": {
+            "author_role": maybe_text(author_role),
+            "source_skill": maybe_text(source_skill),
+            "status": maybe_text(status),
+            "target_evidence_request_id": maybe_text(target_evidence_request_id),
+        },
+        "supported_statuses": list(SOURCE_ACQUISITION_PROPOSAL_STATUSES),
         "summary": proposals.get("summary", {}) if isinstance(proposals.get("summary"), dict) else {},
         "objects": surfaced_objects,
         "commands": {
@@ -741,6 +959,28 @@ def show_source_acquisition_intents_surface(
                     "network-external",
                     "--evidence-ref",
                     "<artifact_ref>",
+                ],
+            )
+            if resolved_run_id and resolved_round_id
+            else "",
+            "update_source_acquisition_proposal_status_template": run_skill_command(
+                run_dir=run_dir,
+                run_id=resolved_run_id,
+                round_id=resolved_round_id,
+                skill_name="update-source-acquisition-proposal-status",
+                contract_mode="warn",
+                actor_role="<actor_role>",
+                skill_args=[
+                    "--object-id",
+                    "<source_acquisition_proposal_id>",
+                    "--status",
+                    "<proposed|approved-for-execution|executed|withdrawn|rejected>",
+                    "--actor-role",
+                    "<actor_role>",
+                    "--status-rationale",
+                    "<status_update_rationale>",
+                    "--evidence-ref",
+                    "<receipt_or_artifact_ref>",
                 ],
             )
             if resolved_run_id and resolved_round_id
@@ -1038,6 +1278,11 @@ def show_council_status_surface(
                 transitions.get("summary", {}).get("pending_skill_approval_request_count") or 0
             )
             if isinstance(transitions.get("summary"), dict)
+            else 0,
+            "blocked_helper_intent_count": len(
+                skill_approval_bridge.get("blocked_helper_intents", [])
+            )
+            if isinstance(skill_approval_bridge.get("blocked_helper_intents"), list)
             else 0,
             "source_acquisition_intent_count": int(
                 source_intents.get("summary", {}).get("matching_object_count") or 0

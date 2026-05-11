@@ -795,6 +795,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show agent-authored source acquisition proposals for the selected round.",
     )
     add_status_surface_args(source_intents_cmd)
+    source_intents_cmd.add_argument("--author-role", "--author_role", default="")
+    source_intents_cmd.add_argument("--source-skill", "--source_skill", default="")
+    source_intents_cmd.add_argument("--status", default="")
+    source_intents_cmd.add_argument(
+        "--target-evidence-request-id",
+        "--target_evidence_request_id",
+        default="",
+    )
 
     open_challenges_cmd = sub.add_parser(
         "show-open-challenges",

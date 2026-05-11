@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _workflow_support import run_kernel, runtime_src_path
+from _workflow_support import run_kernel, run_script, runtime_src_path, script_path
 
 RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
@@ -128,12 +128,13 @@ class DynamicInvestigationObjectTests(unittest.TestCase):
                         "latitude": 40.7128,
                         "longitude": -74.0060,
                         "start_date": "2023-06-07",
+                        "end_date": "2023-06-08",
                     },
                     "declared_side_effects": [
                         "network-external",
                         "writes-artifacts",
                     ],
-                    "requested_side_effect_approvals": [],
+                    "requested_side_effect_approvals": ["network-external"],
                     "target_kind": "evidence-request",
                     "target_id": "evidence-request-weather-context",
                     "rationale": "Record the agent-selected weather context source without ranking it.",
@@ -174,8 +175,23 @@ class DynamicInvestigationObjectTests(unittest.TestCase):
                 RUN_ID,
                 "--round-id",
                 ROUND_ID,
+                "--author-role",
+                "environmental-investigator",
+                "--source-skill",
+                "fetch-open-meteo-historical",
+                "--status",
+                "proposed",
+                "--target-evidence-request-id",
+                "evidence-request-weather-context",
             )
             submit_template = status_surface["commands"]["submit_source_acquisition_proposal_template"]
+            self.assertEqual("environmental-investigator", status_surface["filters"]["author_role"])
+            self.assertEqual("fetch-open-meteo-historical", status_surface["filters"]["source_skill"])
+            self.assertEqual("proposed", status_surface["filters"]["status"])
+            self.assertEqual(
+                "evidence-request-weather-context",
+                status_surface["filters"]["target_evidence_request_id"],
+            )
             self.assertIn("--author-role '<agent_role>'", submit_template)
             self.assertIn("--query-parameters-json", submit_template)
             self.assertIn("--rationale", submit_template)
@@ -185,7 +201,112 @@ class DynamicInvestigationObjectTests(unittest.TestCase):
             self.assertEqual("fetch-open-meteo-historical", execution_surface["source_skill"])
             self.assertTrue(execution_surface["provider_modes"])
             self.assertTrue(execution_surface["fetch_command_templates"])
+            self.assertIn("40.7128,-74.006", execution_surface["fetch_command_templates"][0])
+            self.assertIn("--start-date 2023-06-07", execution_surface["fetch_command_templates"][0])
+            self.assertIn("--end-date 2023-06-08", execution_surface["fetch_command_templates"][0])
+            self.assertIn(
+                "--allow-side-effect network-external",
+                execution_surface["fetch_command_templates"][0],
+            )
+            self.assertNotIn(
+                "--allow-side-effect writes-artifacts",
+                execution_surface["fetch_command_templates"][0],
+            )
+            self.assertNotIn(
+                "--allow-side-effect",
+                execution_surface["preflight_fetch_command_templates"][0],
+            )
+            self.assertEqual(
+                ["writes-artifacts"],
+                execution_surface["missing_requested_side_effect_approvals"],
+            )
+            self.assertEqual(
+                "2023-06-07",
+                execution_surface["query_parameters"]["start_date"],
+            )
+            self.assertIn("update-source-acquisition-proposal-status", execution_surface["status_update_command_template"])
+            self.assertIn(
+                proposal["object_id"],
+                execution_surface["status_update_command_template"],
+            )
             self.assertIn("normalize-fetch-execution", execution_surface["normalize_fetch_execution_command"])
+
+            status_update = run_script(
+                script_path("update-source-acquisition-proposal-status"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--object-id",
+                proposal["object_id"],
+                "--status",
+                "executed",
+                "--actor-role",
+                "environmental-investigator",
+                "--status-rationale",
+                "Fetch completed; agents still decide whether to use the evidence.",
+                "--evidence-ref",
+                "receipt://fetch/open-meteo/001",
+                "--lineage-id",
+                "fetch-execution-open-meteo-001",
+                "--provenance-json",
+                json.dumps({"source": "unit-test-status"}, ensure_ascii=True, sort_keys=True),
+            )
+            self.assertEqual("completed", status_update["status"])
+            self.assertEqual("executed", status_update["summary"]["status"])
+            self.assertEqual("proposed", status_update["summary"]["previous_status"])
+
+            executed_query = query_council_objects(
+                run_dir,
+                object_kind="source-acquisition-proposal",
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                status="executed",
+                source_skill="fetch-open-meteo-historical",
+            )
+            self.assertEqual(1, executed_query["summary"]["returned_object_count"])
+            executed = executed_query["objects"][0]
+            self.assertEqual(proposal["object_id"], executed["object_id"])
+            self.assertEqual("executed", executed["status"])
+            self.assertEqual(
+                "environmental-investigator",
+                executed["status_updated_by_role"],
+            )
+            self.assertIn("receipt://fetch/open-meteo/001", executed["evidence_refs"])
+            self.assertIn("fetch-execution-open-meteo-001", executed["lineage"])
+            self.assertEqual("unit-test-status", executed["provenance"]["source"])
+            self.assertEqual(1, len(executed["status_updates"]))
+            self.assertNotIn("score", executed)
+            self.assertNotIn("rank", executed)
+            self.assertNotIn("priority", executed)
+
+            proposed_query = query_council_objects(
+                run_dir,
+                object_kind="source-acquisition-proposal",
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                status="proposed",
+            )
+            self.assertEqual(0, proposed_query["summary"]["returned_object_count"])
+
+            executed_surface = run_kernel(
+                "show-source-acquisition-intents",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--status",
+                "executed",
+            )
+            self.assertIn("executed", executed_surface["supported_statuses"])
+            self.assertIn(
+                "update-source-acquisition-proposal-status",
+                executed_surface["commands"]["update_source_acquisition_proposal_status_template"],
+            )
 
     def test_source_acquisition_proposal_rejects_wrong_role_for_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

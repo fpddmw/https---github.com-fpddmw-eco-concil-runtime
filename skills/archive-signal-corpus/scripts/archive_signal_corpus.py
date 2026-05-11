@@ -218,6 +218,41 @@ def load_signal_rows(signal_db: Path, run_id: str) -> list[sqlite3.Row]:
         connection.close()
 
 
+def signal_plane_input_status(
+    signal_db: Path,
+    *,
+    run_id: str,
+    rows: list[sqlite3.Row],
+) -> dict[str, str]:
+    if not signal_db.exists():
+        return {
+            "code": "missing-signal-plane",
+            "checkpoint_input_status": "missing-signal-plane",
+            "message": f"No normalized signal-plane database was found at {signal_db}.",
+        }
+    connection = sqlite3.connect(signal_db)
+    try:
+        if not table_exists(connection, SIGNAL_TABLE):
+            return {
+                "code": "missing-normalized-signals-table",
+                "checkpoint_input_status": "missing-normalized-signals-table",
+                "message": f"No normalized_signals table was found in {signal_db}.",
+            }
+    finally:
+        connection.close()
+    if not rows:
+        return {
+            "code": "no-signal-rows",
+            "checkpoint_input_status": "no-normalized-signals-for-run",
+            "message": f"No normalized_signals rows were available for run_id={run_id}.",
+        }
+    return {
+        "code": "normalized-signals-present",
+        "checkpoint_input_status": "normalized-signals-present",
+        "message": "",
+    }
+
+
 def infer_topic(mission: dict[str, Any], board_brief_text: str, run_id: str) -> str:
     topic = maybe_text(mission.get("topic"))
     if topic:
@@ -286,10 +321,14 @@ def archive_signal_corpus_skill(
     weather_count = len([row for row in rows if metric_family(row["metric"]) == "meteorology"])
 
     warnings: list[dict[str, str]] = []
-    if not signal_db.exists():
-        warnings.append({"code": "missing-signal-plane", "message": f"No normalized signal-plane database was found at {signal_db}."})
-    elif not rows:
-        warnings.append({"code": "no-signal-rows", "message": f"No normalized_signals rows were available for run_id={run_id}."})
+    input_status = signal_plane_input_status(signal_db, run_id=run_id, rows=rows)
+    if maybe_text(input_status.get("code")) != "normalized-signals-present":
+        warnings.append(
+            {
+                "code": maybe_text(input_status.get("code")),
+                "message": maybe_text(input_status.get("message")),
+            }
+        )
 
     connection = connect_archive_db(archive_db)
     try:
@@ -378,6 +417,9 @@ def archive_signal_corpus_skill(
         "import_id": import_id,
         "db_path": str(archive_db),
         "source_db_path": str(signal_db),
+        "checkpoint_input_status": maybe_text(
+            input_status.get("checkpoint_input_status")
+        ),
         "topic": topic,
         "objective": objective,
         "region_label": region_label,
@@ -415,6 +457,9 @@ def archive_signal_corpus_skill(
             "output_path": str(output_file),
             "db_path": str(archive_db),
             "checkpoint_status": "imported-normalized-signals" if rows else "no-normalized-signals",
+            "checkpoint_input_status": maybe_text(
+                input_status.get("checkpoint_input_status")
+            ),
             "imported_signal_count": len(rows),
         },
         "receipt_id": "archive-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, import_id)[:20],

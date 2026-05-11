@@ -387,6 +387,8 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("materialize-context-packet", moderator_write_surface)
             self.assertIn("submit-evidence-request", social_write_surface)
             self.assertIn("submit-source-acquisition-proposal", social_write_surface)
+            self.assertIn("update-source-acquisition-proposal-status", social_write_surface)
+            self.assertIn("update-source-acquisition-proposal-status", moderator_write_surface)
             self.assertIn("submit-agent-position", social_write_surface)
             self.assertIn(
                 "submit-challenge-disposition",
@@ -406,6 +408,12 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn(
                 "--object-kind context-packet",
                 state_payload["agent_entry"]["operator"]["query_context_packets_command"],
+            )
+            self.assertIn(
+                "update-source-acquisition-proposal-status",
+                state_payload["agent_entry"]["operator"][
+                    "update_source_acquisition_proposal_status_command_template"
+                ],
             )
 
     def test_start_council_run_scaffolds_prepare_and_registration_plan(self) -> None:
@@ -599,6 +607,10 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             self.assertIn(
                 "request-skill-approval",
+                state_payload["agent_entry"]["operator"]["request_optional_analysis_approval_command_template"],
+            )
+            self.assertIn(
+                "--requested-skill-arg=<skill_arg>",
                 state_payload["agent_entry"]["operator"]["request_optional_analysis_approval_command_template"],
             )
             approved_optional_command = state_payload["agent_entry"]["operator"]["run_approved_optional_analysis_command_template"]
@@ -975,6 +987,7 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("skill-approval-request", operator["query_skill_approval_requests_command"])
             self.assertIn("skill-approval", operator["query_skill_approvals_command"])
             self.assertIn("request-skill-approval", operator["request_optional_analysis_approval_command_template"])
+            self.assertIn("--requested-skill-arg=<skill_arg>", operator["request_optional_analysis_approval_command_template"])
             self.assertIn("approve-skill-approval", operator["approve_skill_approval_command_template"])
             self.assertIn("--skill-approval-request-id", operator["run_approved_optional_analysis_command_template"])
             self.assertLess(
@@ -1025,6 +1038,7 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("query-council-objects", runbook_text)
             self.assertIn("request-phase-transition", runbook_text)
             self.assertIn("request-skill-approval", runbook_text)
+            self.assertIn("--requested-skill-arg=<skill_arg>", runbook_text)
             self.assertIn("--skill-approval-request-id '<request_id>'", runbook_text)
             self.assertLess(
                 runbook_text.index("--skill-approval-request-id '<request_id>'"),

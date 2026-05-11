@@ -249,6 +249,7 @@ def transition_request_state(
             "<requested_actor_role>",
             "--rationale",
             "<rationale>",
+            "--requested-skill-arg=<skill_arg>",
             actor_role="moderator",
         ),
         "approve_skill_approval_request_command_template": kernel_command(

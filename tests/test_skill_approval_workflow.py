@@ -385,6 +385,29 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
     def test_council_status_exposes_skill_approval_bridge_without_ranking(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
+            blocked_preflight = run_kernel_process(
+                "preflight-skill",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                "open-falsification-probe",
+                "--actor-role",
+                "challenger",
+                "--contract-mode",
+                "warn",
+                "--",
+                "--action-id",
+                "action-approval-bridge-001",
+                "--basis-object-id",
+                "hypothesis-approval-bridge-001",
+                auto_actor_role=False,
+            )
+            self.assertEqual(1, blocked_preflight.returncode)
+
             request_payload = run_kernel(
                 "request-skill-approval",
                 "--run-dir",
@@ -417,6 +440,27 @@ class SkillApprovalWorkflowTests(unittest.TestCase):
 
             self.assertEqual(1, pending_status["summary"]["pending_skill_approval_request_count"])
             self.assertIn(request_id, [item["request_id"] for item in bridge["pending_requests"]])
+            self.assertEqual(1, pending_status["summary"]["blocked_helper_intent_count"])
+            blocked_intent = bridge["blocked_helper_intents"][0]
+            self.assertEqual("open-falsification-probe", blocked_intent["skill_name"])
+            self.assertEqual("challenger", blocked_intent["actor_role"])
+            self.assertEqual(
+                [
+                    "--action-id",
+                    "action-approval-bridge-001",
+                    "--basis-object-id",
+                    "hypothesis-approval-bridge-001",
+                ],
+                blocked_intent["requested_skill_args"],
+            )
+            self.assertIn(
+                "--requested-skill-arg=--action-id",
+                blocked_intent["request_skill_approval_command_template"],
+            )
+            self.assertIn(
+                "--skill-approval-request-id '<request_id>'",
+                blocked_intent["run_approved_skill_command_template"],
+            )
             self.assertIn("request-skill-approval", bridge["commands"]["request_skill_approval_template"])
             self.assertIn("approve-skill-approval", bridge["commands"]["approve_skill_approval_template"])
             self.assertIn("reject-skill-approval", bridge["commands"]["reject_skill_approval_template"])

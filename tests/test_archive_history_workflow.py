@@ -333,8 +333,13 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual("no-normalized-signals", payload["summary"]["checkpoint_status"])
+            self.assertEqual(
+                "missing-signal-plane",
+                payload["summary"]["checkpoint_input_status"],
+            )
             self.assertEqual("checkpoint", artifact["archive_mode"])
             self.assertEqual("no-normalized-signals", artifact["checkpoint_status"])
+            self.assertEqual("missing-signal-plane", artifact["checkpoint_input_status"])
             self.assertEqual(0, artifact["imported_signal_count"])
             self.assertEqual(
                 {
