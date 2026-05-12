@@ -143,6 +143,33 @@ class DynamicInvestigationSkillTests(unittest.TestCase):
                 "--provenance-json",
                 json.dumps({"source": "unit-test"}, ensure_ascii=True, sort_keys=True),
             )
+            synthesis = run_script(
+                script_path("submit-round-synthesis"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--author-role",
+                "moderator",
+                "--synthesis-text",
+                "Round has one open evidence request and one candidate follow-up path.",
+                "--stage-conclusion",
+                "Continue only if agents can acquire source-specific evidence.",
+                "--rationale",
+                "Record the stage conclusion without fixing the next agenda.",
+                "--covered-object-ref",
+                request["canonical_ids"][0],
+                "--unresolved-object-ref",
+                request["canonical_ids"][0],
+                "--next-round-candidate-ref",
+                request["canonical_ids"][0],
+                "--known-fact",
+                "No accepted report conclusion has been frozen.",
+                "--provenance-json",
+                json.dumps({"source": "unit-test"}, ensure_ascii=True, sort_keys=True),
+            )
 
             query = run_kernel(
                 "query-council-objects",
@@ -194,6 +221,29 @@ class DynamicInvestigationSkillTests(unittest.TestCase):
                 disposition_query["objects"][0]["disposition_status"],
             )
 
+            synthesis_query = run_kernel(
+                "query-council-objects",
+                "--run-dir",
+                str(run_dir),
+                "--object-kind",
+                "round-synthesis",
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            self.assertEqual(1, synthesis_query["summary"]["returned_object_count"])
+            self.assertEqual(
+                synthesis["canonical_ids"][0],
+                synthesis_query["objects"][0]["object_id"],
+            )
+            self.assertEqual(
+                ["No accepted report conclusion has been frozen."],
+                synthesis_query["objects"][0]["known_facts"],
+            )
+            self.assertNotIn("score", synthesis_query["objects"][0])
+            self.assertNotIn("priority", synthesis_query["objects"][0])
+
     def test_dynamic_coordination_skill_rejects_heuristic_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -227,6 +277,7 @@ class DynamicInvestigationSkillTests(unittest.TestCase):
             "submit-investigation-plan",
             "submit-investigation-scope",
             "submit-round-brief",
+            "submit-round-synthesis",
             "materialize-context-packet",
             "submit-evidence-request",
             "submit-agent-position",

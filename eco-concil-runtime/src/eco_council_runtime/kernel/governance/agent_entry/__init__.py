@@ -31,6 +31,7 @@ COORDINATION_OBJECT_KINDS = (
     "subissue",
     "investigation-scope",
     "round-brief",
+    "round-synthesis",
     "evidence-request",
     "source-acquisition-proposal",
     "agent-position",
@@ -386,6 +387,70 @@ def coordination_object_ref(payload: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def round_opening_context_surface(run_dir: Path, *, round_id: str) -> dict[str, Any]:
+    transition_path = run_dir / "runtime" / f"round_transition_{round_id}.json"
+    task_path = run_dir / "investigation" / f"round_tasks_{round_id}.json"
+    transition = load_json_if_exists(transition_path) or {}
+    tasks_payload = load_json_if_exists(task_path) or []
+    task_context: dict[str, Any] = {}
+    if isinstance(tasks_payload, list):
+        for task in tasks_payload:
+            if not isinstance(task, dict):
+                continue
+            inputs = task.get("inputs", {}) if isinstance(task.get("inputs"), dict) else {}
+            candidate = (
+                inputs.get("round_coordination_context")
+                if isinstance(inputs.get("round_coordination_context"), dict)
+                else {}
+            )
+            if candidate:
+                task_context = candidate
+                break
+    if not isinstance(transition, dict):
+        transition = {}
+    primary_focus_refs = text_list(transition.get("primary_focus_refs")) or text_list(
+        task_context.get("primary_focus_refs")
+    )
+    context_packet_id = maybe_text(transition.get("context_packet_id")) or maybe_text(
+        task_context.get("context_packet_id")
+    )
+    round_brief_id = maybe_text(transition.get("round_brief_id")) or maybe_text(
+        task_context.get("round_brief_id")
+    )
+    return {
+        key: value
+        for key, value in {
+            "present": bool(transition or task_context),
+            "source": "round-transition-artifact"
+            if transition
+            else "round-task-context"
+            if task_context
+            else "missing",
+            "transition_artifact_path": str(transition_path.resolve()),
+            "task_artifact_path": str(task_path.resolve()),
+            "transition_id": maybe_text(transition.get("transition_id")),
+            "transition_request_id": maybe_text(
+                transition.get("transition_request_id")
+            ),
+            "source_round_id": maybe_text(transition.get("source_round_id"))
+            or maybe_text(task_context.get("source_round_id")),
+            "round_mode": maybe_text(transition.get("round_mode"))
+            or maybe_text(task_context.get("round_mode")),
+            "primary_focus_refs": primary_focus_refs,
+            "target_challenge_id": maybe_text(transition.get("target_challenge_id"))
+            or maybe_text(task_context.get("target_challenge_id")),
+            "context_packet_id": context_packet_id,
+            "round_brief_id": round_brief_id,
+            "semantics": (
+                "Round opening context is a handoff surface only; it does not "
+                "restrict agent write surfaces, source selection, evidence "
+                "acceptance, or investigator autonomy."
+            ),
+        }.items()
+        if value not in ("", [], {})
+    }
+
+
 def coordination_surface(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any]:
     object_sets: dict[str, Any] = {}
     warnings: list[dict[str, str]] = []
@@ -430,6 +495,10 @@ def coordination_surface(run_dir: Path, *, run_id: str, round_id: str) -> dict[s
         "round_id": round_id,
         "semantics": COORDINATION_HINT_SEMANTICS,
         "ordering_semantics": "Objects are exposed in deterministic generated_at order only, not salience or evidence strength order.",
+        "round_opening_context": round_opening_context_surface(
+            run_dir,
+            round_id=round_id,
+        ),
         "latest_round_brief": latest_round_brief,
         "context_packet": context_packet
         or (
@@ -644,6 +713,11 @@ def agent_entry_operator_view(
         if isinstance(coordination.get("context_packet"), dict)
         else {}
     )
+    round_opening_context = (
+        coordination.get("round_opening_context")
+        if isinstance(coordination.get("round_opening_context"), dict)
+        else {}
+    )
     round_liveness = (
         gate.get("round_liveness_surface")
         if isinstance(gate.get("round_liveness_surface"), dict)
@@ -661,6 +735,21 @@ def agent_entry_operator_view(
         "entry_status": maybe_text(gate.get("entry_status")) or "",
         "orchestration_mode": maybe_text(gate.get("orchestration_mode")) or "",
         "coordination_surface_present": bool(coordination),
+        "round_opening_context_present": bool(
+            round_opening_context.get("present")
+        ),
+        "round_opening_source_round_id": maybe_text(
+            round_opening_context.get("source_round_id")
+        ),
+        "round_opening_round_mode": maybe_text(
+            round_opening_context.get("round_mode")
+        ),
+        "round_opening_primary_focus_refs": round_opening_context.get(
+            "primary_focus_refs",
+            [],
+        )
+        if isinstance(round_opening_context.get("primary_focus_refs"), list)
+        else [],
         "latest_round_brief_id": maybe_text(latest_round_brief.get("object_id")),
         "active_context_packet_id": maybe_text(context_packet.get("object_id")),
         "round_liveness_status": maybe_text(continuation.get("status")),
@@ -687,9 +776,11 @@ def agent_entry_operator_view(
         "query_subissues_command": maybe_text(entry_commands.get("query_subissues_command")),
         "query_investigation_scopes_command": maybe_text(entry_commands.get("query_investigation_scopes_command")),
         "query_round_briefs_command": maybe_text(entry_commands.get("query_round_briefs_command")),
+        "query_round_syntheses_command": maybe_text(entry_commands.get("query_round_syntheses_command")),
         "query_evidence_requests_command": maybe_text(entry_commands.get("query_evidence_requests_command")),
         "query_source_acquisition_proposals_command": maybe_text(entry_commands.get("query_source_acquisition_proposals_command")),
         "update_source_acquisition_proposal_status_command_template": maybe_text(entry_commands.get("update_source_acquisition_proposal_status_command_template")),
+        "link_source_acquisition_execution_command_template": maybe_text(entry_commands.get("link_source_acquisition_execution_command_template")),
         "query_agent_positions_command": maybe_text(entry_commands.get("query_agent_positions_command")),
         "query_context_packets_command": maybe_text(entry_commands.get("query_context_packets_command")),
         "query_report_section_drafts_command": maybe_text(entry_commands.get("query_report_section_drafts_command")),

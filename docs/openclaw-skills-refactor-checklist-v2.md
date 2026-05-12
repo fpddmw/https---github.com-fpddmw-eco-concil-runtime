@@ -4,7 +4,7 @@
 
 本文描述当前 skills 体系、分层和治理边界。文件名保留历史路径，但本文不再是迁移清单或统一扩展计划。
 
-当前 active skills：`90`。
+当前 active skills：`94`。
 
 分层统计：
 
@@ -12,7 +12,7 @@
 2. `normalize`: 17
 3. `query`: 9
 4. `optional-analysis`: 17
-5. `deliberation-write`: 17
+5. `deliberation-write`: 21
 6. `reporting`: 8
 7. `state-transition`: 4
 8. `runtime-admin`: 2
@@ -58,6 +58,7 @@
 2. 不写 board judgement。
 3. 不判断 claim true/false。
 4. 受 source governance、side-effect policy 和 admission 控制。
+5. 普通合法 fetch 不强制要求先有 proposal；proposal 只用于跨 agent 协调、审批、跨轮承接或显式议会记录。
 
 ### 3.2 Normalize
 
@@ -67,6 +68,7 @@
 2. 写入 `normalized_signals`。
 3. 保留 provenance、artifact ref、record locator、quality flags、metadata。
 4. 为 public/formal/environment query 提供统一 DB surface。
+5. `normalize-fetch-execution` 负责把已执行 fetch plan 中可归一化的 receipt/artifact 写入 signal plane；无法归一化时必须保持 `receipt-only` 语义。
 
 边界：
 
@@ -136,12 +138,20 @@
 14. `summarize-board-state`
 15. `materialize-board-brief`
 16. `materialize-context-packet`
+17. `submit-source-acquisition-proposal`
+18. `update-source-acquisition-proposal-status`
+19. `submit-round-synthesis`
+20. `link-source-acquisition-execution`
+21. `open-followup-from-review-comment`
 
 职责：
 
 1. 把 agent 判断落成 DB council object。
 2. 将 evidence refs、lineage、provenance 固化。
 3. 支持 controller/gate/supervisor 从 DB 读取议会状态。
+4. source-acquisition proposal 是薄议会对象，不是 source 推荐系统；只记录 source skill、query parameters、side effects、target refs、rationale、evidence refs、lineage、provenance 和生命周期状态。
+5. round synthesis 是 moderator 阶段性记录，不是 agenda scheduler；只记录阶段结论、已覆盖 refs、未解决 refs、证据缺口和候选 continuation refs。
+6. source acquisition execution link 只把 proposal、fetch receipt、normalization receipt、normalized signal refs 和 artifact refs 串成 lineage，不执行取证、不归一化、不判断采信。
 
 ### 3.6 Reporting
 
@@ -195,6 +205,7 @@
 4. report basis freeze 到 final publication 的报告链。
 5. 多轮 round carryover 与 cross-round query。
 6. optional-analysis 的审计与降权机制。
+7. agent-led source acquisition、proposal lifecycle、round liveness handoff 和 archive/history evidence-ref reuse。
 
 ### 不应过度宣称的能力
 
@@ -238,7 +249,7 @@
 
 ## 7. Agent 自主调查链路
 
-agent 自主取证、finding 后续议程承接、多轮 continuation 和 archive/history 复用不在本文中继续展开，独立计划见 `docs/openclaw-agent-autonomy-archive-workplan.md`。skills 层只提供原子能力和 role-governed surfaces，不负责把开放型 mission 直接硬编码成固定调查剧本，也不负责替 agent 排序 source 或采信证据。
+agent 自主取证、finding 后续议程承接、多轮 continuation 和 archive/history 复用的详细进展见 `docs/openclaw-agent-autonomy-archive-workplan.md`。skills 层只提供原子能力和 role-governed surfaces，不负责把开放型 mission 直接硬编码成固定调查剧本，也不负责替 agent 排序 source 或采信证据。
 
 以下是后续真实案例需要观察的 skills 能力节点，不是固定脚本，也不要求每次运行都按相同顺序成功出现：
 
@@ -258,6 +269,17 @@ agent 自主取证、finding 后续议程承接、多轮 continuation 和 archiv
 14. archive/history 能在 checkpoint 或 closeout 后提供历史 evidence refs。
 15. `freeze-report-basis` 只能消费被承接过的 DB basis。
 16. reporting handoff / decision / expert reports / final publication 能保留 evidence index 和 residual disputes。
+
+当前已进入基线的链路：
+
+1. `submit-source-acquisition-proposal` 记录 agent 自主选择的 source skill 和 query parameters。
+2. `update-source-acquisition-proposal-status` 记录 `proposed|approved-for-execution|executed|withdrawn|rejected` 生命周期，不执行取证、不判断采信。
+3. `show-source-acquisition-intents` 暴露 preflight/fetch/status-update command templates，执行命令只携带 proposal 明确请求的 side-effect approvals。
+4. `open-investigation-round` carry `primary_focus_refs` 到下一轮；这些 refs 是 handoff context，不限制 agent read/write/source surface。
+5. `materialize-history-context`、`query-case-library`、`query-signal-corpus` 暴露历史 evidence refs 和 match surfaces；history 不生成当前 run 结论。
+6. fetch receipt 在未归一化前保持 `receipt-only`，并通过 status surface 显示 normalizer 和后续 query hints。
+7. `submit-round-synthesis` 提供 moderator 阶段性结论入口；`round_liveness.closing_checklist` 只列 observed gaps 和 copyable commands，不排序、不固定下一轮议程。
+8. `link-source-acquisition-execution` 将 agent-authored source proposal 与 receipt / normalized signal refs 建立审计 lineage，不把 linked refs 提升为 accepted evidence。
 
 ## 8. 当前结论
 

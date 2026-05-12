@@ -23,6 +23,7 @@ OBJECT_KIND_INVESTIGATION_PLAN = "investigation-plan"
 OBJECT_KIND_SUBISSUE = "subissue"
 OBJECT_KIND_INVESTIGATION_SCOPE = "investigation-scope"
 OBJECT_KIND_ROUND_BRIEF = "round-brief"
+OBJECT_KIND_ROUND_SYNTHESIS = "round-synthesis"
 OBJECT_KIND_EVIDENCE_REQUEST = "evidence-request"
 OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL = "source-acquisition-proposal"
 OBJECT_KIND_AGENT_POSITION = "agent-position"
@@ -43,6 +44,7 @@ DYNAMIC_INVESTIGATION_OBJECT_KINDS = (
     OBJECT_KIND_SUBISSUE,
     OBJECT_KIND_INVESTIGATION_SCOPE,
     OBJECT_KIND_ROUND_BRIEF,
+    OBJECT_KIND_ROUND_SYNTHESIS,
     OBJECT_KIND_EVIDENCE_REQUEST,
     OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL,
     OBJECT_KIND_AGENT_POSITION,
@@ -55,6 +57,7 @@ DYNAMIC_INVESTIGATION_ID_FIELDS = {
     OBJECT_KIND_SUBISSUE: "subissue_id",
     OBJECT_KIND_INVESTIGATION_SCOPE: "scope_id",
     OBJECT_KIND_ROUND_BRIEF: "brief_id",
+    OBJECT_KIND_ROUND_SYNTHESIS: "synthesis_id",
     OBJECT_KIND_EVIDENCE_REQUEST: "request_id",
     OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL: "proposal_id",
     OBJECT_KIND_AGENT_POSITION: "position_id",
@@ -67,6 +70,7 @@ DYNAMIC_INVESTIGATION_STATUS_DEFAULTS = {
     OBJECT_KIND_SUBISSUE: "proposed",
     OBJECT_KIND_INVESTIGATION_SCOPE: "candidate",
     OBJECT_KIND_ROUND_BRIEF: "draft",
+    OBJECT_KIND_ROUND_SYNTHESIS: "recorded",
     OBJECT_KIND_EVIDENCE_REQUEST: "open",
     OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL: "proposed",
     OBJECT_KIND_AGENT_POSITION: "proposed",
@@ -117,6 +121,15 @@ DYNAMIC_INVESTIGATION_LINEAGE_FIELDS = (
     "response_to_ids",
     "target_refs",
     "delta_refs",
+    "covered_object_refs",
+    "resolved_object_refs",
+    "unresolved_object_refs",
+    "evidence_gap_refs",
+    "next_round_candidate_refs",
+    "fetch_receipt_refs",
+    "normalization_receipt_refs",
+    "normalized_signal_refs",
+    "execution_artifact_refs",
 )
 
 

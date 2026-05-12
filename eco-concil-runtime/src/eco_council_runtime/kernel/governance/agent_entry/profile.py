@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from eco_council_runtime.kernel.execution.executor import maybe_text
+from eco_council_runtime.kernel.governance.claim_strength import claim_strength_obligations
 from eco_council_runtime.kernel.governance.role_contracts import (
     ROLE_CHALLENGER,
     ROLE_ENVIRONMENTAL_INVESTIGATOR,
@@ -32,6 +33,10 @@ from eco_council_runtime.kernel.governance.transition_requests import (
 )
 from eco_council_runtime.kernel.execution.runtime_round_profile import default_next_round_id_builder
 from eco_council_runtime.kernel.source_queue.source_queue_contract import source_capability_hints
+from eco_council_runtime.kernel.source_queue.source_queue_profile import (
+    source_family_workflows_for_skills,
+    source_queue_profile,
+)
 from eco_council_runtime.runtime_command_hints import kernel_command, run_skill_command
 
 EntryStatusEvaluator = Callable[..., tuple[str, list[dict[str, str]]]]
@@ -45,6 +50,7 @@ COORDINATION_READ_OBJECT_KINDS = (
     "subissue",
     "investigation-scope",
     "round-brief",
+    "round-synthesis",
     "evidence-request",
     "source-acquisition-proposal",
     "agent-position",
@@ -67,9 +73,11 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "submit-investigation-plan",
             "submit-investigation-scope",
             "submit-round-brief",
+            "submit-round-synthesis",
             "materialize-context-packet",
             "submit-evidence-request",
             "update-source-acquisition-proposal-status",
+            "link-source-acquisition-execution",
             "submit-agent-position",
             "update-hypothesis-status",
             "submit-challenge-disposition",
@@ -98,6 +106,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "submit-evidence-request",
             "submit-source-acquisition-proposal",
             "update-source-acquisition-proposal-status",
+            "link-source-acquisition-execution",
             "submit-agent-position",
             "update-hypothesis-status",
             "submit-council-proposal",
@@ -119,6 +128,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "submit-evidence-request",
             "submit-source-acquisition-proposal",
             "update-source-acquisition-proposal-status",
+            "link-source-acquisition-execution",
             "submit-agent-position",
             "update-hypothesis-status",
             "submit-council-proposal",
@@ -141,6 +151,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "submit-evidence-request",
             "submit-source-acquisition-proposal",
             "update-source-acquisition-proposal-status",
+            "link-source-acquisition-execution",
             "submit-agent-position",
             "submit-council-proposal",
             "submit-readiness-opinion",
@@ -173,6 +184,33 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "analysis_kinds": [],
     },
 ]
+
+
+def skill_use_discipline() -> dict[str, Any]:
+    return {
+        "schema_version": "agent-skill-use-discipline-v1",
+        "purpose": (
+            "Keep agents autonomous while preventing tool mistakes from becoming "
+            "overconfident council conclusions."
+        ),
+        "core_principles": [
+            "Skills expose capability surfaces; they do not decide truth, source sufficiency, report readiness, or evidence acceptance.",
+            "A zero, failed, blocked, no-op, or receipt-only skill result is an attempt result, not proof that no real-world evidence exists.",
+            "Before saying data cannot be found or evidence cannot be combined, explain the skill, parameters, coverage, and unresolved alternatives in one concise sentence.",
+            "Use same-family follow-up skills, preflight commands, linting, metadata, availability checks, or revised parameters when the evidence need remains live.",
+            "Weak or bounded reports are allowed only after the moderator records limitations and why live actionable routes are not being continued.",
+        ],
+        "lightweight_negative_claim_template": (
+            "Under <skill> with <query/window/bbox/provider-mode>, this attempt returned "
+            "<zero/failed/receipt-only>. This does not rule out <untried routes>; next "
+            "I will <revise/switch/ask moderator/bound the claim>."
+        ),
+        "autonomy_boundary": (
+            "This is not a form requirement, source ranking, evidence weighting, or "
+            "fixed agenda. It is a short reasoning discipline for moments when a "
+            "tool result might otherwise be mistaken for a research conclusion."
+        ),
+    }
 
 
 def unique_texts(values: list[Any]) -> list[str]:
@@ -372,6 +410,7 @@ def fetch_skill_command_surfaces(
     surfaces: list[dict[str, Any]] = []
     for skill_name in skill_names:
         capability_hints = source_capability_hints(skill_name)
+        queue_profile = source_queue_profile(skill_name)
         commands = layer_skill_commands(
             run_dir=run_dir,
             run_id=run_id,
@@ -384,11 +423,25 @@ def fetch_skill_command_surfaces(
         surfaces.append(
             {
                 "skill_name": skill_name,
+                "skill_use_card": capability_hints.get("skill_use_card", {})
+                if isinstance(capability_hints.get("skill_use_card"), dict)
+                else {},
                 "provider_modes": capability_hints.get("provider_modes", [])
                 if isinstance(capability_hints.get("provider_modes"), list)
                 else [],
                 "fetch_argument_templates": capability_hints.get("fetch_argument_templates", [])
                 if isinstance(capability_hints.get("fetch_argument_templates"), list)
+                else [],
+                "source_queue_profile": queue_profile,
+                "source_family_ids": queue_profile.get("source_family_ids", [])
+                if isinstance(queue_profile.get("source_family_ids"), list)
+                else [],
+                "workflow_role": maybe_text(queue_profile.get("workflow_role")),
+                "downstream_hints": queue_profile.get("downstream_hints", [])
+                if isinstance(queue_profile.get("downstream_hints"), list)
+                else [],
+                "attempt_review_questions": queue_profile.get("attempt_review_questions", [])
+                if isinstance(queue_profile.get("attempt_review_questions"), list)
                 else [],
                 "commands": commands,
             }
@@ -462,6 +515,9 @@ def default_role_entry_points(
             contract_mode=contract_mode,
             actor_role=role,
             skill_names=grouped_skill_names.get(SKILL_LAYER_FETCH, []),
+        )
+        source_family_workflows = source_family_workflows_for_skills(
+            grouped_skill_names.get(SKILL_LAYER_FETCH, [])
         )
         fetch_commands = [
             command
@@ -594,6 +650,33 @@ def default_role_entry_points(
                         ],
                     )
                 )
+            elif skill_name == "submit-round-synthesis":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--author-role",
+                            role,
+                            "--synthesis-text",
+                            "<round_stage_synthesis>",
+                            "--stage-conclusion",
+                            "<stage_conclusion>",
+                            "--rationale",
+                            "<moderator_synthesis_rationale>",
+                            "--unresolved-object-ref",
+                            "<object_kind:object_id>",
+                            "--next-round-candidate-ref",
+                            "<object_kind:object_id>",
+                            "--provenance-json",
+                            "{\"source\":\"<provenance_source>\"}",
+                        ],
+                    )
+                )
             elif skill_name == "materialize-context-packet":
                 role_write_commands.append(
                     run_skill_command(
@@ -699,6 +782,35 @@ def default_role_entry_points(
                             "<why_this_lifecycle_update_is_being_recorded>",
                             "--evidence-ref",
                             "<receipt_or_artifact_ref>",
+                            "--provenance-json",
+                            "{\"source\":\"<provenance_source>\"}",
+                        ],
+                    )
+                )
+            elif skill_name == "link-source-acquisition-execution":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--object-id",
+                            "<source_acquisition_proposal_id>",
+                            "--actor-role",
+                            role,
+                            "--status",
+                            "executed",
+                            "--status-rationale",
+                            "<why_these_execution_refs_belong_to_the_proposal>",
+                            "--fetch-receipt-ref",
+                            "<fetch_receipt_ref>",
+                            "--normalized-signal-ref",
+                            "<normalized_signal_ref>",
+                            "--artifact-ref",
+                            "<artifact_ref>",
                             "--provenance-json",
                             "{\"source\":\"<provenance_source>\"}",
                         ],
@@ -1187,6 +1299,28 @@ def default_role_entry_points(
                 "skills_by_layer": grouped_skill_names,
                 "fetch_commands": fetch_commands,
                 "fetch_command_surfaces": fetch_command_surfaces,
+                "source_family_workflows": source_family_workflows,
+                "source_family_workflow_semantics": (
+                    "These workflows describe optional same-family data-dependency "
+                    "paths such as search-to-detail or recon-to-table-pull. They "
+                    "do not rank sources, select evidence, or fix the agenda; the "
+                    "role remains responsible for choosing queries, follow-up "
+                    "skills, and evidence adoption."
+                ),
+                "skill_use_discipline": skill_use_discipline(),
+                "acquisition_attempt_review_policy": {
+                    "semantics": (
+                        "A failed, blocked, receipt-only, executed-without-normalized-refs, "
+                        "or zero-signal attempt is not by itself evidence that no source path exists."
+                    ),
+                    "required_owner_reflection": (
+                        "Before abandoning a source family, the role should record "
+                        "whether to revise query terms, change window/parameters, "
+                        "use a same-family follow-up skill, switch provider, or "
+                        "state an explicit source-limit rationale."
+                    ),
+                },
+                "claim_strength_obligations": claim_strength_obligations(),
                 "normalize_commands": normalize_commands,
                 "read_commands": [*role_read_commands, *role_coordination_read_commands],
                 "coordination_read_commands": role_coordination_read_commands,
@@ -1212,6 +1346,7 @@ def default_agent_entry_operator_notes(
     notes = [
         "Agent entry now exposes role capability surfaces instead of a default investigation sequence owned by runtime kernel.",
         "Moderator remains the only role that can request phase transitions; runtime-operator approval is still required before committed state changes.",
+        "Claim-strength obligations are procedural only: weak reports require explicit limitations and non-continuation rationale; strong claims require council-visible refs and challenger review path.",
     ]
     if maybe_text(mission.get("orchestration_mode")) == "openclaw-agent":
         notes.append("Mission scaffold already marks this round as `openclaw-agent`, so the operator-visible entry chain is explicitly enabled.")
@@ -1412,6 +1547,12 @@ def default_agent_entry_operator_commands(
             round_id=round_id,
             object_kind="round-brief",
         ),
+        "query_round_syntheses_command": query_coordination_object_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind="round-synthesis",
+        ),
         "query_evidence_requests_command": query_coordination_object_command(
             run_dir=run_dir,
             run_id=run_id,
@@ -1442,6 +1583,28 @@ def default_agent_entry_operator_commands(
                 "<lifecycle_update_rationale>",
                 "--evidence-ref",
                 "<receipt_or_artifact_ref>",
+            ],
+        ),
+        "link_source_acquisition_execution_command_template": run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="link-source-acquisition-execution",
+            actor_role=ROLE_MODERATOR,
+            contract_mode=contract_mode,
+            skill_args=[
+                "--object-id",
+                "<source_acquisition_proposal_id>",
+                "--actor-role",
+                ROLE_MODERATOR,
+                "--status",
+                "executed",
+                "--status-rationale",
+                "<execution_lineage_rationale>",
+                "--fetch-receipt-ref",
+                "<fetch_receipt_ref>",
+                "--normalized-signal-ref",
+                "<normalized_signal_ref>",
             ],
         ),
         "query_agent_positions_command": query_coordination_object_command(

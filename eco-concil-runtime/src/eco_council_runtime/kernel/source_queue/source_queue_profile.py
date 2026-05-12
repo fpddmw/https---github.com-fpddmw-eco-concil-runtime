@@ -172,6 +172,310 @@ RUNTIME_ARCHIVE_SKILLS = {
     "materialize-history-context",
 }
 
+SOURCE_FAMILY_WORKFLOWS: list[dict[str, object]] = [
+    {
+        "family_id": "gdelt-public-record",
+        "label": "GDELT public record workflow",
+        "semantics": (
+            "Agent-owned source-family workflow. DOC search is useful for topical "
+            "reconnaissance and article lists; Events, Mentions, and GKG exports "
+            "are the row-level follow-up surfaces for shared UTC windows. This is "
+            "not a source ranking or runtime-owned agenda."
+        ),
+        "workflow_steps": [
+            {
+                "step_id": "doc-recon",
+                "role": "topical/domain reconnaissance or article-list discovery",
+                "skill_names": ["fetch-gdelt-doc-search"],
+                "output": "DOC article/timeline artifacts",
+                "followup_when": (
+                    "Use follow-up table pulls when the question needs fuller row "
+                    "coverage, actor/source context, mention context, or recovery "
+                    "from query-sensitive DOC results."
+                ),
+            },
+            {
+                "step_id": "three-table-window",
+                "role": "row-level public record pulls over an agent-chosen UTC window",
+                "skill_names": [
+                    "fetch-gdelt-events",
+                    "fetch-gdelt-mentions",
+                    "fetch-gdelt-gkg",
+                ],
+                "output": "GDELT export manifests and zip artifacts",
+                "followup_when": (
+                    "Use after DOC recon, after a known event window is scoped, or "
+                    "when DOC query syntax/caps make article search insufficient."
+                ),
+            },
+        ],
+        "normalizer_skills": [
+            "normalize-gdelt-doc-public-signals",
+            "normalize-gdelt-events-public-signals",
+            "normalize-gdelt-mentions-public-signals",
+            "normalize-gdelt-gkg-public-signals",
+        ],
+        "attempt_review_questions": [
+            "Was the query syntax accepted by the provider, or should it be linted/rephrased?",
+            "Was the returned artifact a narrow DOC result that should trigger table-window follow-up?",
+            "Should the agent revise terms, broaden/narrow the window, or switch to Events/Mentions/GKG?",
+            "If a DOC search returned zero rows, did the agent avoid treating that as absence of Events/Mentions/GKG or official records?",
+        ],
+    },
+    {
+        "family_id": "youtube-public-discourse",
+        "label": "YouTube public discourse workflow",
+        "semantics": (
+            "Agent-owned discovery-to-comments workflow. Video search finds "
+            "candidate videos; comment fetch tests public response language for "
+            "agent-selected videos."
+        ),
+        "workflow_steps": [
+            {
+                "step_id": "video-discovery",
+                "role": "candidate video discovery from agent-authored topical queries",
+                "skill_names": ["fetch-youtube-video-search"],
+                "output": "video IDs and metadata artifacts",
+                "followup_when": "Use comment fetch when public discourse evidence matters.",
+            },
+            {
+                "step_id": "comment-depth",
+                "role": "comment collection for selected video IDs",
+                "skill_names": ["fetch-youtube-comments"],
+                "output": "comment artifacts for selected videos",
+                "followup_when": "Use after selecting videos whose comment surfaces are relevant.",
+            },
+        ],
+        "normalizer_skills": [
+            "normalize-youtube-video-public-signals",
+            "normalize-youtube-comments-public-signals",
+        ],
+        "attempt_review_questions": [
+            "Did the search query miss likely creator, location, event, or date language?",
+            "Did candidate videos exist but comments remain unfetched?",
+            "Should video selection be revised before abandoning the source family?",
+            "If search or comments returned zero rows, did the agent record whether query wording, selected videos, disabled comments, or time filters caused the gap?",
+        ],
+    },
+    {
+        "family_id": "regulationsgov-policy-comments",
+        "label": "Regulations.gov policy comment workflow",
+        "semantics": (
+            "Agent-owned list-to-detail workflow. The comments list stage discovers "
+            "candidate comment IDs; detail fetch enriches selected comments where "
+            "full text or attachments are needed."
+        ),
+        "workflow_steps": [
+            {
+                "step_id": "comment-list",
+                "role": "comment discovery by docket/document, agency, or time window",
+                "skill_names": ["fetch-regulationsgov-comments"],
+                "output": "comment list artifacts with IDs",
+                "followup_when": "Use detail fetch when list rows are insufficient for evidence review.",
+            },
+            {
+                "step_id": "comment-detail",
+                "role": "full detail and attachment enrichment for selected comments",
+                "skill_names": ["fetch-regulationsgov-comment-detail"],
+                "output": "comment detail artifacts",
+                "followup_when": "Use after selecting comment IDs from list artifacts.",
+            },
+        ],
+        "normalizer_skills": [
+            "normalize-regulationsgov-comments-public-signals",
+            "normalize-regulationsgov-comment-detail-public-signals",
+        ],
+        "attempt_review_questions": [
+            "Was the filter mode/date field appropriate for the policy question?",
+            "Did the list stage return IDs that require detail enrichment?",
+            "Should docket/document/agency constraints be revised before stopping?",
+            "If no comments were returned, did the agent distinguish docket/filter limits from absence of policy discussion?",
+        ],
+    },
+    {
+        "family_id": "bluesky-public-discourse",
+        "label": "Bluesky public discourse workflow",
+        "semantics": (
+            "Agent-owned social discourse fetch workflow. Search, author-feed, and "
+            "thread/cascade modes are alternate paths within the same skill, not a "
+            "runtime-selected order."
+        ),
+        "workflow_steps": [
+            {
+                "step_id": "post-or-thread-fetch",
+                "role": "search, author-feed, or thread/cascade collection",
+                "skill_names": ["fetch-bluesky-cascade"],
+                "output": "post and reply artifacts",
+                "followup_when": (
+                    "Use a different mode or query when one mode is too narrow or "
+                    "cannot observe the discourse surface."
+                ),
+            },
+        ],
+        "normalizer_skills": ["normalize-bluesky-cascade-public-signals"],
+        "attempt_review_questions": [
+            "Did the selected mode match the evidence need: search, author-feed, or thread/cascade?",
+            "Should handles, hashtags, location terms, or event terms be revised?",
+            "If output was sparse, did the agent consider another mode before calling the source exhausted?",
+        ],
+    },
+    {
+        "family_id": "openaq-observation",
+        "label": "OpenAQ observation workflow",
+        "semantics": (
+            "Agent-owned metadata-to-measurement workflow. Metadata discovery, API "
+            "measurements, and S3 archive backfill are related OpenAQ paths; empty "
+            "measurement windows should prompt metadata/window/parameter review."
+        ),
+        "workflow_steps": [
+            {
+                "step_id": "metadata-or-measurements",
+                "role": "station/parameter discovery, API measurement fetch, or archive backfill",
+                "skill_names": ["fetch-openaq"],
+                "output": "OpenAQ metadata or measurement artifacts",
+                "followup_when": (
+                    "Use metadata discovery before measurements when location or "
+                    "parameter IDs are not known; use archive backfill when API "
+                    "windows do not cover the needed period."
+                ),
+            },
+        ],
+        "normalizer_skills": ["normalize-openaq-observation-signals"],
+        "attempt_review_questions": [
+            "Were location IDs, parameter IDs, and datetime bounds grounded in provider metadata?",
+            "Should the agent use archive backfill instead of API measurements?",
+            "If measurements were empty, did the agent distinguish API-window limits from archive or metadata routes?",
+        ],
+    },
+    {
+        "family_id": "environment-observation-crosscheck",
+        "label": "Environmental observation cross-check workflow",
+        "semantics": (
+            "Agent-owned complementary observation workflow. AirNow, Open-Meteo, "
+            "NASA FIRMS, and USGS are direct evidence surfaces that can cross-check "
+            "receptor conditions, weather/transport context, source-region fire "
+            "activity, or hydrologic context. The runtime does not choose which "
+            "surface proves a claim."
+        ),
+        "workflow_steps": [
+            {
+                "step_id": "direct-observation-or-model-context",
+                "role": "direct observation, modeled context, or source-region evidence",
+                "skill_names": [
+                    "fetch-airnow-hourly-observations",
+                    "fetch-open-meteo-air-quality",
+                    "fetch-open-meteo-historical",
+                    "fetch-open-meteo-flood",
+                    "fetch-nasa-firms-fire",
+                    "fetch-usgs-water-iv",
+                ],
+                "output": "environmental observation artifacts",
+                "followup_when": (
+                    "Use another compatible environmental source when one provider "
+                    "does not cover the place, parameter, or time window."
+                ),
+            },
+        ],
+        "normalizer_skills": [
+            "normalize-airnow-observation-signals",
+            "normalize-open-meteo-air-quality-signals",
+            "normalize-open-meteo-historical-signals",
+            "normalize-open-meteo-flood-signals",
+            "normalize-nasa-firms-fire-observation-signals",
+            "normalize-usgs-water-observation-signals",
+        ],
+        "attempt_review_questions": [
+            "Was the provider's spatial/time/parameter coverage actually compatible with the evidence need?",
+            "Should another environmental surface be used for cross-checking?",
+            "For FIRMS, did the agent check product availability before interpreting zero rows?",
+            "If a source-region or receptor claim remains live, did the agent revise product, bbox, window, metric, or provider before stopping?",
+        ],
+    },
+]
+
+
+def _unique_texts(values: Iterable[object]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = " ".join(str(value).split()) if value is not None else ""
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
+
+
+def _workflow_step_skills(workflow: dict[str, object]) -> list[str]:
+    return _unique_texts(
+        skill_name
+        for step in workflow.get("workflow_steps", [])
+        if isinstance(step, dict)
+        for skill_name in step.get("skill_names", [])
+        if isinstance(skill_name, str)
+    )
+
+
+def _workflow_memberships(skill_name: str) -> list[dict[str, object]]:
+    memberships: list[dict[str, object]] = []
+    for workflow in SOURCE_FAMILY_WORKFLOWS:
+        steps = workflow.get("workflow_steps", [])
+        if not isinstance(steps, list):
+            continue
+        for index, step in enumerate(steps):
+            if not isinstance(step, dict):
+                continue
+            step_skill_names = [
+                item for item in step.get("skill_names", []) if isinstance(item, str)
+            ]
+            if skill_name not in step_skill_names:
+                continue
+            later_skill_names = _unique_texts(
+                later_skill
+                for later_step in steps[index + 1 :]
+                if isinstance(later_step, dict)
+                for later_skill in later_step.get("skill_names", [])
+                if isinstance(later_skill, str)
+            )
+            memberships.append(
+                {
+                    "family_id": str(workflow.get("family_id", "")),
+                    "label": str(workflow.get("label", "")),
+                    "step_id": str(step.get("step_id", "")),
+                    "workflow_role": str(step.get("role", "")),
+                    "downstream_hints": later_skill_names,
+                    "attempt_review_questions": workflow.get("attempt_review_questions", []),
+                }
+            )
+    return memberships
+
+
+def source_family_workflows_for_skills(skill_names: Iterable[str]) -> list[dict[str, object]]:
+    available = set(_unique_texts(skill_names))
+    workflows: list[dict[str, object]] = []
+    for workflow in SOURCE_FAMILY_WORKFLOWS:
+        related_fetch_skills = _workflow_step_skills(workflow)
+        available_fetch_skills = [skill for skill in related_fetch_skills if skill in available]
+        if not available_fetch_skills:
+            continue
+        workflows.append(
+            {
+                "family_id": workflow.get("family_id"),
+                "label": workflow.get("label"),
+                "semantics": workflow.get("semantics"),
+                "ordering_semantics": (
+                    "Workflow steps describe data-dependency possibilities only; "
+                    "they are not priority, score, or required agenda order."
+                ),
+                "available_fetch_skills": available_fetch_skills,
+                "related_fetch_skills": related_fetch_skills,
+                "workflow_steps": workflow.get("workflow_steps", []),
+                "normalizer_skills": workflow.get("normalizer_skills", []),
+                "attempt_review_questions": workflow.get("attempt_review_questions", []),
+            }
+        )
+    return workflows
+
 
 def _profile(
     *,
@@ -182,6 +486,10 @@ def _profile(
     notes: str,
     requires_explicit_approval: bool = False,
     default_chain_eligible: bool = False,
+    source_family_ids: list[str] | None = None,
+    workflow_role: str = "",
+    downstream_hints: list[str] | None = None,
+    attempt_review_questions: list[object] | None = None,
 ) -> dict[str, object]:
     if queue_status == "bridge":
         governed_execution_behavior = "governed-bridge"
@@ -200,8 +508,12 @@ def _profile(
         "governed_execution_behavior": governed_execution_behavior,
         "default_chain_eligible": bool(default_chain_eligible),
         "requires_explicit_approval": bool(requires_explicit_approval),
-        # Source queue metadata must not emit implied analysis chains.
-        "downstream_hints": [],
+        "source_family_ids": list(source_family_ids or []),
+        "workflow_role": workflow_role,
+        # Optional source-family hints are agent-owned data-dependency context.
+        # They must not become runtime-selected source queues or agenda locks.
+        "downstream_hints": list(downstream_hints or []),
+        "attempt_review_questions": list(attempt_review_questions or []),
         "notes": notes,
     }
 
@@ -260,6 +572,33 @@ def source_queue_profile(skill_name: str) -> dict[str, object]:
         return _optional_analysis_profile(skill_name)
 
     if skill_name in FETCH_SKILLS:
+        memberships = _workflow_memberships(skill_name)
+        source_family_ids = _unique_texts(
+            item.get("family_id")
+            for item in memberships
+            if isinstance(item, dict)
+        )
+        workflow_role = "; ".join(
+            _unique_texts(
+                item.get("workflow_role")
+                for item in memberships
+                if isinstance(item, dict)
+            )
+        )
+        downstream_hints = _unique_texts(
+            hint
+            for item in memberships
+            if isinstance(item, dict)
+            for hint in item.get("downstream_hints", [])
+            if isinstance(hint, str)
+        )
+        attempt_review_questions = _unique_texts(
+            question
+            for item in memberships
+            if isinstance(item, dict)
+            for question in item.get("attempt_review_questions", [])
+            if isinstance(question, str)
+        )
         return _profile(
             queue_status="capability",
             stage="fetch",
@@ -269,6 +608,10 @@ def source_queue_profile(skill_name: str) -> dict[str, object]:
                 "Fetch capability for raw source collection. It writes raw artifacts "
                 "or receipts and carries no default investigation judgement."
             ),
+            source_family_ids=source_family_ids,
+            workflow_role=workflow_role,
+            downstream_hints=downstream_hints,
+            attempt_review_questions=attempt_review_questions,
         )
 
     if skill_name.startswith("normalize-"):
@@ -385,4 +728,8 @@ def source_queue_profile_summary(skill_entries: Iterable[dict[str, object]]) -> 
     }
 
 
-__all__ = ["source_queue_profile", "source_queue_profile_summary"]
+__all__ = [
+    "source_family_workflows_for_skills",
+    "source_queue_profile",
+    "source_queue_profile_summary",
+]

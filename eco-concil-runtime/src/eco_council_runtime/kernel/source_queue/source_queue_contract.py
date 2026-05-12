@@ -285,6 +285,164 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
     ),
 }
 
+DEFAULT_FETCH_SKILL_USE_CARD: dict[str, Any] = {
+    "card_version": "skill-use-card-v1",
+    "semantics": (
+        "A fetch skill retrieves or materializes raw evidence. It does not decide "
+        "claim truth, source sufficiency, report readiness, or evidence acceptance."
+    ),
+    "before_using": [
+        "State the evidence need in plain language before choosing parameters.",
+        "Check provider mode, time coverage, spatial coverage, and required identifiers.",
+        "Use dry-run, lint, metadata, availability, or config probes when the skill offers them.",
+    ],
+    "zero_or_failed_result_discipline": [
+        "Treat zero, failed, blocked, or receipt-only output as an attempt result, not proof that the real-world evidence is absent.",
+        "Before abandoning the route, consider revised terms, window, bbox, provider mode, same-family follow-up skills, or a different source family.",
+        "If stopping, record the source-limit rationale and the claim boundary that remains unresolved.",
+    ],
+    "autonomy_boundary": (
+        "This card is guidance for agent reasoning. It is not source ranking, "
+        "weighting, or a fixed agenda."
+    ),
+}
+
+SOURCE_USE_CARDS: dict[str, dict[str, Any]] = {
+    "fetch-gdelt-doc-search": {
+        "what_this_skill_is": (
+            "GDELT DOC API article/timeline reconnaissance over indexed web documents."
+        ),
+        "what_this_skill_is_not": (
+            "It is not the raw Events, Mentions, or GKG table export layer; it is "
+            "not an official-record classifier; domain filters are URL filters, "
+            "not proof that a source is official or unofficial."
+        ),
+        "before_using": [
+            "Lint agent-authored queries when syntax is complex or provider-specific operators are used.",
+            "Prefer compact topical searches before exact-domain searches when the source universe is uncertain.",
+            "Use source/title/url/snippet metadata to reason about source type instead of relying only on domain filters.",
+        ],
+        "zero_or_failed_result_discipline": [
+            "A zero DOC result may mean the query, date window, domain filter, or DOC index path was too narrow.",
+            "It does not mean GDELT Events, Mentions, or GKG have no relevant rows.",
+            "It does not mean official or public records do not exist outside this DOC query.",
+        ],
+        "same_family_followups": [
+            "fetch-gdelt-events",
+            "fetch-gdelt-mentions",
+            "fetch-gdelt-gkg",
+        ],
+        "common_traps": [
+            "Using search-engine `site:` syntax instead of GDELT `domain:` or `domainis:`.",
+            "Treating exact-domain zero rows as absence of official evidence.",
+            "Using one highly compound query where several compact searches would be more robust.",
+        ],
+    },
+    "fetch-gdelt-events": {
+        "what_this_skill_is": "GDELT 2.0 Events export-file retrieval for a UTC snapshot range.",
+        "what_this_skill_is_not": "It is not a topical article search and does not itself classify or summarize events.",
+        "before_using": [
+            "Dry-run the historical UTC range and keep max-files bounded.",
+            "Plan downstream normalization/filtering before drawing item-level conclusions.",
+        ],
+        "zero_or_failed_result_discipline": [
+            "A missing or failed export pull is an acquisition issue for that range or cap.",
+            "It is not evidence that no public record or event signal exists.",
+        ],
+        "same_family_followups": ["fetch-gdelt-doc-search", "fetch-gdelt-mentions", "fetch-gdelt-gkg"],
+    },
+    "fetch-gdelt-mentions": {
+        "what_this_skill_is": "GDELT 2.0 Global Mentions export-file retrieval for a UTC snapshot range.",
+        "what_this_skill_is_not": "It is not a standalone article search and does not by itself settle salience.",
+        "before_using": [
+            "Dry-run the historical UTC range and keep max-files bounded.",
+            "Use after DOC or Events context when mention/source context is needed.",
+        ],
+        "zero_or_failed_result_discipline": [
+            "A failed range pull is an acquisition limitation for that range or cap.",
+            "It is not evidence that no mention context exists.",
+        ],
+        "same_family_followups": ["fetch-gdelt-doc-search", "fetch-gdelt-events", "fetch-gdelt-gkg"],
+    },
+    "fetch-gdelt-gkg": {
+        "what_this_skill_is": "GDELT 2.0 GKG export-file retrieval for knowledge-graph rows in a UTC range.",
+        "what_this_skill_is_not": "It is not the DOC article API and does not itself produce issue conclusions.",
+        "before_using": [
+            "Dry-run the historical UTC range and keep max-files bounded.",
+            "Use after a scoped time window exists or when DOC query sensitivity is limiting evidence discovery.",
+        ],
+        "zero_or_failed_result_discipline": [
+            "A failed GKG pull is a table acquisition limitation for that range or cap.",
+            "It is not evidence that no topical public signal exists.",
+        ],
+        "same_family_followups": ["fetch-gdelt-doc-search", "fetch-gdelt-events", "fetch-gdelt-mentions"],
+    },
+    "fetch-nasa-firms-fire": {
+        "what_this_skill_is": "NASA FIRMS area/csv active-fire detection retrieval for one bbox, source, and date window.",
+        "what_this_skill_is_not": "It does not geocode place names, run country-scale scans, classify severity, or prove smoke transport by itself.",
+        "before_using": [
+            "Run check-config with availability probing when the date window is historical or source coverage is uncertain.",
+            "Choose NRT or SP sources based on provider availability, not on the command template alone.",
+            "For historical windows, expect SP products to be the usual candidate when availability covers the requested dates.",
+        ],
+        "zero_or_failed_result_discipline": [
+            "Zero rows can mean the selected product does not cover the requested date, the bbox is too narrow, or the window/source is mismatched.",
+            "Zero rows from an unavailable product are not evidence that no fires existed.",
+            "If source attribution depends on this lane, revise product, bbox, or window before abandoning the route.",
+        ],
+        "common_traps": [
+            "Using NRT products for historical cases without checking availability.",
+            "Interpreting fire detections as transport causation without weather/receptor corroboration.",
+        ],
+    },
+    "fetch-youtube-video-search": {
+        "what_this_skill_is": "YouTube video discovery for agent-authored queries and publication windows.",
+        "what_this_skill_is_not": "It is not a public-discourse conclusion and does not fetch comment language.",
+        "zero_or_failed_result_discipline": [
+            "Weak search results may reflect query wording, channel scope, language, or date filters.",
+            "If discourse semantics matter, selected videos usually require fetch-youtube-comments follow-up.",
+        ],
+        "same_family_followups": ["fetch-youtube-comments"],
+    },
+    "fetch-youtube-comments": {
+        "what_this_skill_is": "YouTube comment/reply retrieval for selected video IDs.",
+        "what_this_skill_is_not": "It does not discover videos by itself and cannot represent platform-wide discourse.",
+        "before_using": ["Ground video IDs in video-search artifacts or another explicit source."],
+        "zero_or_failed_result_discipline": [
+            "Zero comments may reflect disabled comments, selected videos, or filters.",
+            "It is not evidence that no YouTube discourse exists unless discovery and selection limits are explicit.",
+        ],
+    },
+    "fetch-regulationsgov-comments": {
+        "what_this_skill_is": "Regulations.gov comment-list discovery by docket/document/agency/time filters.",
+        "what_this_skill_is_not": "It is not full comment-detail enrichment and does not derive issue, stance, or concern labels.",
+        "zero_or_failed_result_discipline": [
+            "Zero list rows may reflect docket/document/agency or date-field constraints.",
+            "If list rows are found and full text matters, use fetch-regulationsgov-comment-detail.",
+        ],
+        "same_family_followups": ["fetch-regulationsgov-comment-detail"],
+    },
+    "fetch-regulationsgov-comment-detail": {
+        "what_this_skill_is": "Regulations.gov detail retrieval for selected comment IDs.",
+        "what_this_skill_is_not": "It does not discover the relevant docket or comment universe by itself.",
+        "before_using": ["Ground comment IDs in list artifacts or another explicit source."],
+        "zero_or_failed_result_discipline": [
+            "A failed detail fetch is a limitation for selected IDs, not proof that the docket lacks relevant comments.",
+        ],
+    },
+    "fetch-openaq": {
+        "what_this_skill_is": "OpenAQ metadata, API measurement, or archive-backfill retrieval.",
+        "what_this_skill_is_not": "It is not an exposure conclusion and does not infer coverage sufficiency.",
+        "before_using": [
+            "Use metadata discovery before measurements when location or parameter IDs are uncertain.",
+            "Consider archive backfill when API windows do not cover the needed period.",
+        ],
+        "zero_or_failed_result_discipline": [
+            "Zero measurements may reflect wrong location IDs, parameter IDs, window, or API/archive mode.",
+        ],
+    },
+}
+
 _GDELT_EXPORT_HINT = {
     "provider_modes": [
         {
@@ -333,6 +491,8 @@ SOURCE_CAPABILITY_HINTS: dict[str, dict[str, Any]] = {
         ],
         "fetch_argument_templates": [
             ["search", "--query", "<query>", "--mode", "artlist", "--format", "json", "--start-datetime", "<YYYYMMDDHHMMSS>", "--end-datetime", "<YYYYMMDDHHMMSS>", "--max-records", "<1-250>"],
+            ["lint-query", "--query", "<query>", "--domain-is", "<example.gov>"],
+            ["search", "--query", "<compact_query>", "--domain-is", "<example.gov>", "--domain-is", "<another.gov>", "--mode", "artlist", "--format", "json", "--start-datetime", "<YYYYMMDDHHMMSS>", "--end-datetime", "<YYYYMMDDHHMMSS>", "--max-records", "<1-250>", "--continue-on-query-error"],
         ],
     },
     "fetch-gdelt-events": _GDELT_EXPORT_HINT,
@@ -473,7 +633,7 @@ SOURCE_CAPABILITY_HINTS: dict[str, dict[str, Any]] = {
         "provider_modes": [
             {
                 "mode": "nrt",
-                "time_coverage": "NASA FIRMS near-real-time active fire source ids for short inclusive date windows",
+                "time_coverage": "NASA FIRMS near-real-time active fire source ids for recent inclusive date windows only when provider availability covers them",
                 "time_args": ["--start-date", "--end-date"],
             },
             {
@@ -483,7 +643,10 @@ SOURCE_CAPABILITY_HINTS: dict[str, dict[str, Any]] = {
             },
         ],
         "fetch_argument_templates": [
-            ["fetch", "--source", "VIIRS_NOAA20_NRT", "--bbox", "<west,south,east,north>", "--start-date", "<YYYY-MM-DD>", "--end-date", "<YYYY-MM-DD>", "--dry-run"],
+            ["check-config", "--probe-map-key", "--probe-source", "ALL"],
+            ["fetch", "--source", "VIIRS_SNPP_SP", "--bbox", "<west,south,east,north>", "--start-date", "<YYYY-MM-DD>", "--end-date", "<YYYY-MM-DD>", "--check-availability", "--dry-run"],
+            ["fetch", "--source", "VIIRS_NOAA20_SP", "--bbox", "<west,south,east,north>", "--start-date", "<YYYY-MM-DD>", "--end-date", "<YYYY-MM-DD>", "--check-availability", "--dry-run"],
+            ["fetch", "--source", "VIIRS_NOAA20_NRT", "--bbox", "<west,south,east,north>", "--start-date", "<recent-YYYY-MM-DD>", "--end-date", "<recent-YYYY-MM-DD>", "--check-availability", "--dry-run"],
         ],
     },
 }
@@ -626,8 +789,21 @@ def source_config(source_skill: str) -> dict[str, Any]:
 def source_capability_hints(source_skill: str) -> dict[str, Any]:
     hints = SOURCE_CAPABILITY_HINTS.get(maybe_text(source_skill))
     if not isinstance(hints, dict):
-        return {"provider_modes": [], "fetch_argument_templates": []}
-    return json.loads(json.dumps(hints, ensure_ascii=True))
+        hints = {"provider_modes": [], "fetch_argument_templates": []}
+    payload = json.loads(json.dumps(hints, ensure_ascii=True))
+    skill_name = maybe_text(source_skill)
+    card = dict(DEFAULT_FETCH_SKILL_USE_CARD)
+    specific = SOURCE_USE_CARDS.get(skill_name)
+    if isinstance(specific, dict):
+        for key, value in specific.items():
+            if key in {"before_using", "zero_or_failed_result_discipline"}:
+                card[key] = unique_texts(
+                    list(card.get(key, [])) + list(value if isinstance(value, list) else [value])
+                )
+            else:
+                card[key] = value
+    payload["skill_use_card"] = card
+    return payload
 
 
 def source_role(source_skill: str) -> str:

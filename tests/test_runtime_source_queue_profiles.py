@@ -42,6 +42,7 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
         )
 
         for entry in registry["skills"]:
+            skill_name = entry["skill_name"]
             profile = entry["source_queue_profile"]
             self.assertTrue(profile["source_queue_ready"])
             self.assertTrue(profile["queue_status"])
@@ -50,7 +51,15 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
             self.assertTrue(profile["default_invocation"])
             self.assertTrue(profile["governed_execution_behavior"])
             self.assertIn("notes", profile)
-            self.assertEqual([], profile["downstream_hints"])
+            self.assertIn("source_family_ids", profile)
+            self.assertIn("workflow_role", profile)
+            self.assertIn("downstream_hints", profile)
+            self.assertIn("attempt_review_questions", profile)
+            if profile["stage"] == "fetch":
+                self.assertTrue(profile["source_family_ids"], skill_name)
+                self.assertTrue(profile["attempt_review_questions"], skill_name)
+            else:
+                self.assertEqual([], profile["downstream_hints"])
             self.assertFalse(profile["default_chain_eligible"])
             self.assertNotEqual("planned-step", profile["default_invocation"])
 
@@ -83,6 +92,31 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
 
         self.assertEqual("capability", profiles["normalize-airnow-observation-signals"]["queue_status"])
         self.assertEqual("normalize", profiles["normalize-airnow-observation-signals"]["stage"])
+
+        self.assertEqual(
+            ["gdelt-public-record"],
+            profiles["fetch-gdelt-doc-search"]["source_family_ids"],
+        )
+        self.assertIn(
+            "fetch-gdelt-events",
+            profiles["fetch-gdelt-doc-search"]["downstream_hints"],
+        )
+        self.assertIn(
+            "fetch-gdelt-mentions",
+            profiles["fetch-gdelt-doc-search"]["downstream_hints"],
+        )
+        self.assertIn(
+            "fetch-gdelt-gkg",
+            profiles["fetch-gdelt-doc-search"]["downstream_hints"],
+        )
+        self.assertIn(
+            "fetch-youtube-comments",
+            profiles["fetch-youtube-video-search"]["downstream_hints"],
+        )
+        self.assertIn(
+            "fetch-regulationsgov-comment-detail",
+            profiles["fetch-regulationsgov-comments"]["downstream_hints"],
+        )
 
         self.assertEqual("advisory", profiles["query-public-signals"]["queue_status"])
         self.assertEqual("query", profiles["query-public-signals"]["stage"])

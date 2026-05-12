@@ -489,6 +489,108 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             self.assertTrue(any(item.get("code") == "raw-only-ingest" for item in payload["warnings"]))
             self.assertTrue(Path(status["artifact_path"]).exists())
 
+    def test_receipt_driven_normalization_materializes_fetch_payload_into_signal_plane(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            receipt_id = "runtime-receipt-airnow-direct-001"
+            write_json(
+                run_dir / "runtime" / "receipts" / f"{receipt_id}.json",
+                {
+                    "schema_version": "runtime-receipt-v2",
+                    "receipt_id": receipt_id,
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "skill_name": "fetch-airnow-hourly-observations",
+                    "status": "completed",
+                    "artifact_refs": [],
+                    "summary": {},
+                    "skill_payload": {
+                        "command": "fetch",
+                        "ok": True,
+                        "payload": {
+                            "schema_version": "fetch-airnow-hourly-observations-v1",
+                            "source_skill": "fetch-airnow-hourly-observations",
+                            "generated_at_utc": "2023-06-07T20:00:00Z",
+                            "records": [
+                                {
+                                    "site_name": "Brooklyn PS 314",
+                                    "parameter_name": "PM2.5",
+                                    "aqi_value": 413,
+                                    "unit": "aqi",
+                                    "observed_at_utc": "2023-06-07T19:00:00Z",
+                                    "latitude": 40.641,
+                                    "longitude": -73.956,
+                                    "country_code": "US",
+                                }
+                            ],
+                        },
+                    },
+                },
+            )
+
+            payload = run_script(
+                script_path("normalize-fetch-execution"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "environmental-investigator",
+                "--receipt-id",
+                receipt_id,
+            )
+            execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
+            status = execution["statuses"][0]
+            rows = normalized_rows_for_source(run_dir, "fetch-airnow-hourly-observations")
+
+            self.assertEqual("normalized-signal-plane", execution["normalization_status"])
+            self.assertEqual(1, execution["normalized_signal_step_count"])
+            self.assertEqual("receipt-normalize", status["step_kind"])
+            self.assertEqual("normalized-signal-plane", status["normalization_status"])
+            self.assertEqual(receipt_id, status["source_receipt_id"])
+            self.assertEqual(1, status["canonical_count"])
+            self.assertEqual(1, len(status["normalized_signal_refs"]))
+            self.assertTrue(Path(status["artifact_path"]).exists())
+            self.assertEqual(1, len(rows))
+            self.assertEqual("environment", rows[0]["plane"])
+            self.assertEqual("fetch-airnow-hourly-observations", rows[0]["source_skill"])
+            self.assertIn("--receipt-id", payload["next_step_hints"]["normalize_runtime_receipt_command"])
+
+            replay_payload = run_script(
+                script_path("normalize-fetch-execution"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "environmental-investigator",
+                "--receipt-id",
+                receipt_id,
+            )
+            second_replay_payload = run_script(
+                script_path("normalize-fetch-execution"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "environmental-investigator",
+                "--receipt-id",
+                receipt_id,
+            )
+
+            self.assertNotEqual(payload["receipt_id"], replay_payload["receipt_id"])
+            self.assertEqual(replay_payload["receipt_id"], second_replay_payload["receipt_id"])
+            self.assertEqual(0, replay_payload["summary"]["newly_completed_receipt_count"])
+            self.assertEqual(1, replay_payload["summary"]["skipped_completed_receipt_count"])
+
     def test_gdelt_export_normalizers_write_row_level_signals_into_signal_plane(self) -> None:
         events_module = load_skill_module("normalize-gdelt-events-public-signals")
         mentions_module = load_skill_module("normalize-gdelt-mentions-public-signals")

@@ -28,29 +28,36 @@ set +a
 ```bash
 python3 scripts/fetch_nasa_firms_fire.py check-config \
   --probe-map-key \
+  --probe-source ALL \
   --pretty
 ```
 
-2. Dry-run the request plan first.
+2. For historical investigations, select a source only after checking product
+   availability. NRT products are for recent near-real-time windows; SP products
+   are usually the historical candidates when provider availability covers the
+   requested dates.
+
+3. Dry-run the request plan first.
 
 ```bash
 python3 scripts/fetch_nasa_firms_fire.py fetch \
-  --source VIIRS_NOAA20_NRT \
+  --source VIIRS_SNPP_SP \
   --bbox 115.8,-8.9,116.3,-8.3 \
-  --start-date 2026-03-01 \
-  --end-date 2026-03-08 \
+  --start-date 2023-06-01 \
+  --end-date 2023-06-08 \
+  --check-availability \
   --dry-run \
   --pretty
 ```
 
-3. Run the fetch with validation and operational logs.
+4. Run the fetch with validation and operational logs.
 
 ```bash
 python3 scripts/fetch_nasa_firms_fire.py fetch \
-  --source VIIRS_NOAA20_NRT \
+  --source VIIRS_SNPP_SP \
   --bbox 115.8,-8.9,116.3,-8.3 \
-  --start-date 2026-03-01 \
-  --end-date 2026-03-08 \
+  --start-date 2023-06-01 \
+  --end-date 2023-06-08 \
   --check-availability \
   --output ./data/firms/fetch-nasa-firms-fire.json \
   --log-level INFO \
@@ -83,6 +90,20 @@ python3 scripts/fetch_nasa_firms_fire.py fetch \
 - Do not embed geocoding, world-scale scans, country queries, alert thresholds, or fire classification logic.
 - Use OpenClaw orchestration, not this script, for recurring jobs or multi-area fan-out.
 
+## Agent Reasoning Guide
+- This skill verifies active-fire detections inside an explicit bbox, product
+  source, and date window. It cannot by itself prove smoke transport, source
+  causation, severity, or exposure.
+- Always check product availability when the date window is historical or source
+  coverage is uncertain. A zero result from an unavailable NRT product is a
+  parameter failure, not evidence that no fires existed.
+- If a source-origin or transport claim remains live after zero rows, revise the
+  product, bbox, or window, or cross-check with weather/receptor evidence before
+  recording a source-limit rationale.
+- Keep place-name geocoding and multi-region fan-out outside this skill. The
+  agent or moderator should define candidate regions and run separate atomic
+  calls.
+
 ## References
 - `references/env.md`
 - `references/nasa-firms-api-notes.md`
@@ -110,12 +131,19 @@ Use these templates directly in OpenClaw and only replace bracketed placeholders
 
 ```text
 Use $fetch-nasa-firms-fire.
+First check product availability when the date window is historical or uncertain:
+python3 scripts/fetch_nasa_firms_fire.py check-config \
+  --probe-map-key \
+  --probe-source ALL \
+  --pretty
+
 Run:
 python3 scripts/fetch_nasa_firms_fire.py fetch \
   --source [FIRMS_SOURCE] \
   --bbox [WEST,SOUTH,EAST,NORTH] \
   --start-date [YYYY-MM-DD] \
   --end-date [YYYY-MM-DD] \
+  --check-availability \
   --dry-run \
   --pretty
 Return only the JSON result.
@@ -146,6 +174,7 @@ python3 scripts/fetch_nasa_firms_fire.py fetch \
   --bbox [WEST,SOUTH,EAST,NORTH] \
   --start-date [YYYY-MM-DD] \
   --end-date [YYYY-MM-DD] \
+  --check-availability \
   --pretty
 Check validation_summary.total_issue_count and validation_summary.ok.
 Return JSON plus one-line pass/fail verdict.

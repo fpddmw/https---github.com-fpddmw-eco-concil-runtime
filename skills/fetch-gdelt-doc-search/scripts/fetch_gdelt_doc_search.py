@@ -7,6 +7,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -37,6 +38,7 @@ TS_FORMAT_HELP = "YYYYMMDDHHMMSS"
 RETRIABLE_HTTP_CODES = {429, 500, 502, 503, 504}
 DOC_API_MAX_RECORDS_LIMIT = 250
 DOC_API_TIMELINE_SMOOTH_LIMIT = 30
+DOC_API_QUERY_LENGTH_WARN_LIMIT = 240
 RESERVED_DOC_PARAM_KEYS = {
     "query",
     "mode",
@@ -49,6 +51,13 @@ RESERVED_DOC_PARAM_KEYS = {
     "timelinesmooth",
 }
 JSON_BODY_EXCERPT_LIMIT = 300
+DOMAIN_PATTERN = re.compile(
+    r"^(?=.{1,253}$)([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$"
+)
+UNSUPPORTED_QUERY_OPERATOR_SUGGESTIONS = {
+    "site": "GDELT DOC does not support site:. Use --domain-is example.gov or query operator domainis:example.gov.",
+    "inurl": "GDELT DOC does not support inurl:. Use domain:/domainis: filters plus content terms.",
+}
 
 
 @dataclass(frozen=True)
@@ -129,6 +138,80 @@ def parse_timestamp(raw: str) -> datetime:
             f"Invalid timestamp {raw!r}. Use UTC format {TS_FORMAT} (YYYYMMDDHHMMSS)."
         ) from exc
     return parsed.replace(tzinfo=timezone.utc)
+
+
+def lint_doc_query(query: str) -> dict[str, Any]:
+    normalized = query.strip()
+    errors: list[dict[str, str]] = []
+    warnings: list[dict[str, str]] = []
+    for match in re.finditer(r"(?<![\w-])([A-Za-z][A-Za-z0-9_-]*):", normalized):
+        operator = match.group(1).casefold()
+        suggestion = UNSUPPORTED_QUERY_OPERATOR_SUGGESTIONS.get(operator)
+        if suggestion:
+            errors.append(
+                {
+                    "code": f"unsupported-operator-{operator}",
+                    "operator": operator,
+                    "message": suggestion,
+                }
+            )
+    if len(normalized) > DOC_API_QUERY_LENGTH_WARN_LIMIT:
+        warnings.append(
+            {
+                "code": "long-query",
+                "message": (
+                    f"Query is {len(normalized)} characters. GDELT DOC may reject long "
+                    "or highly compound queries; split official domains/agencies into "
+                    "separate invocations."
+                ),
+            }
+        )
+    or_group_count = len(
+        re.findall(r"\([^()]*\bOR\b[^()]*\)", normalized, flags=re.IGNORECASE)
+    )
+    if or_group_count > 1:
+        warnings.append(
+            {
+                "code": "multiple-or-blocks",
+                "message": (
+                    "GDELT DOC documents OR blocks as non-nestable. Multiple OR blocks "
+                    "joined with AND are fragile; prefer one compact topic query plus "
+                    "--domain-is splits."
+                ),
+            }
+        )
+    return {"ok": not errors, "errors": errors, "warnings": warnings}
+
+
+def validate_domain(value: str, option_name: str) -> str:
+    domain = (
+        value.strip()
+        .lower()
+        .removeprefix("http://")
+        .removeprefix("https://")
+        .split("/", 1)[0]
+    )
+    if not domain or not DOMAIN_PATTERN.match(domain):
+        raise ValueError(
+            f"{option_name} must be a bare domain like example.gov, got: {value!r}"
+        )
+    return domain
+
+
+def domain_filters(args: argparse.Namespace) -> list[str]:
+    filters: list[str] = []
+    for value in getattr(args, "domain", []):
+        filters.append(f"domain:{validate_domain(value, '--domain')}")
+    for value in getattr(args, "domain_is", []):
+        filters.append(f"domainis:{validate_domain(value, '--domain-is')}")
+    return filters
+
+
+def compose_query(base_query: str, domain_filter: str = "") -> str:
+    query = base_query.strip()
+    if domain_filter:
+        query = f"{domain_filter} {query}" if query else domain_filter
+    return query.strip()
 
 
 def normalize_base_url(value: str) -> str:
@@ -371,15 +454,34 @@ def validate_search_args(args: argparse.Namespace) -> None:
                 f"--timeline-smooth cannot exceed {DOC_API_TIMELINE_SMOOTH_LIMIT}."
             )
 
+    candidate_queries = [compose_query(args.query, item) for item in domain_filters(args)] or [
+        args.query.strip()
+    ]
+    lint_errors: list[dict[str, str]] = []
+    lint_warnings: list[dict[str, str]] = []
+    for candidate_query in candidate_queries:
+        lint = lint_doc_query(candidate_query)
+        lint_errors.extend(lint["errors"])
+        lint_warnings.extend(lint["warnings"])
+    if lint_errors:
+        raise ValueError(
+            "GDELT DOC query lint failed: " + json.dumps(lint_errors, ensure_ascii=False)
+        )
+    if lint_warnings and args.lint_mode == "strict":
+        raise ValueError(
+            "GDELT DOC query lint warnings in strict mode: "
+            + json.dumps(lint_warnings, ensure_ascii=False)
+        )
 
-def build_search_params(args: argparse.Namespace) -> dict[str, str]:
+
+def build_search_params(args: argparse.Namespace, query: str | None = None) -> dict[str, str]:
     extra_params = parse_key_value_args(args.param, "--param")
     for key in extra_params:
         if key.strip().lower() in RESERVED_DOC_PARAM_KEYS:
             raise ValueError(f"--param cannot override reserved key: {key!r}")
 
     params: dict[str, str] = {
-        "query": args.query.strip(),
+        "query": (query if query is not None else args.query).strip(),
         "mode": args.mode.strip(),
         "format": args.format.strip(),
     }
@@ -409,10 +511,56 @@ def parse_json_response(payload_bytes: bytes) -> Any:
         return json.loads(text)
     except json.JSONDecodeError as exc:
         excerpt = " ".join(text.split())[:JSON_BODY_EXCERPT_LIMIT]
+        failure_class = "provider-non-json"
+        lowered = excerpt.casefold()
+        if "too short" in lowered or "too long" in lowered:
+            failure_class = "provider-query-length"
+        if "too common" in lowered or "one or more of your keywords" in lowered:
+            failure_class = "provider-query-invalid"
         raise RuntimeError(
-            "DOC API returned non-JSON content while format=json. "
+            f"DOC API returned non-JSON content while format=json ({failure_class}). "
             f"body_excerpt={excerpt!r}"
         ) from exc
+
+
+def article_identity(article: Any) -> str:
+    if not isinstance(article, dict):
+        return json.dumps(article, ensure_ascii=True, sort_keys=True)
+    return str(
+        article.get("url")
+        or article.get("title")
+        or json.dumps(article, ensure_ascii=True, sort_keys=True)
+    )
+
+
+def merge_json_payloads(batches: list[dict[str, Any]]) -> dict[str, Any]:
+    articles: list[Any] = []
+    seen: set[str] = set()
+    timeline: list[Any] = []
+    for batch in batches:
+        payload = batch.get("data")
+        if not isinstance(payload, dict):
+            continue
+        batch_articles = payload.get("articles")
+        if isinstance(batch_articles, list):
+            for article in batch_articles:
+                identity = article_identity(article)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                articles.append(article)
+        for key in ("timeline", "timelinevol", "timelinevolraw"):
+            values = payload.get(key)
+            if isinstance(values, list):
+                timeline.extend(values)
+    merged: dict[str, Any] = {
+        "query": str(batches[0].get("query", "")) if batches else "",
+        "articles": articles,
+        "batches": batches,
+    }
+    if timeline:
+        merged["timeline"] = timeline
+    return merged
 
 
 def print_json(payload: dict[str, Any], pretty: bool) -> None:
@@ -456,31 +604,105 @@ def command_check_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_lint_query(args: argparse.Namespace) -> int:
+    queries = [compose_query(args.query, item) for item in domain_filters(args)] or [
+        args.query.strip()
+    ]
+    query_results = [{"query": query, **lint_doc_query(query)} for query in queries]
+    payload = {
+        "ok": all(result["ok"] for result in query_results),
+        "source": "gdelt-doc-api",
+        "query_count": len(query_results),
+        "queries": query_results,
+        "guidance": {
+            "official_domain_filter": (
+                "Use domainis:example.gov or --domain-is example.gov, not site:example.gov."
+            ),
+            "split_strategy": (
+                "Use repeated --domain-is values to run one compact query per official domain "
+                "and merge results."
+            ),
+        },
+    }
+    print_json(payload, pretty=args.pretty)
+    return 0 if payload["ok"] else 2
+
+
 def command_search(args: argparse.Namespace) -> int:
     logger = build_logger(level=args.log_level, log_file=args.log_file)
     config = build_runtime_config(args)
     validate_search_args(args)
-    params = build_search_params(args)
-    request_url = f"{config.doc_api_base_url}?{parse.urlencode(params)}"
-
     client = RetryableHttpClient(config=config, logger=logger)
-    payload_bytes, headers = client.get_bytes(request_url)
     json_requested = args.format.strip().lower() == "json"
-    parsed_json: Any | None = None
+    queries = [compose_query(args.query, item) for item in domain_filters(args)] or [
+        args.query.strip()
+    ]
+    batches: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    headers: dict[str, str] = {}
+    raw_payload_bytes: bytes | None = None
+    for query in queries:
+        params = build_search_params(args, query=query)
+        request_url = f"{config.doc_api_base_url}?{parse.urlencode(params)}"
+        try:
+            payload_bytes, headers = client.get_bytes(request_url)
+            raw_payload_bytes = payload_bytes
+            parsed_json: Any | None = None
+            if json_requested:
+                parsed_json = parse_json_response(payload_bytes)
+            batches.append(
+                {
+                    "ok": True,
+                    "query": query,
+                    "request_url": request_url,
+                    "content_type": headers.get("content-type"),
+                    "data": parsed_json,
+                }
+            )
+        except Exception as exc:
+            if not args.continue_on_query_error:
+                raise
+            errors.append({"query": query, "message": str(exc)})
+
+    if not batches and errors:
+        raise RuntimeError(
+            "All GDELT DOC query batches failed: " + json.dumps(errors, ensure_ascii=False)
+        )
+
+    merged_json: Any | None = None
     if json_requested:
-        parsed_json = parse_json_response(payload_bytes)
+        if len(batches) == 1 and not errors:
+            merged_json = batches[0]["data"]
+        else:
+            merged_json = merge_json_payloads(batches)
+            if isinstance(merged_json, dict) and errors:
+                merged_json["query_errors"] = errors
 
     output_file = args.output.strip()
     if output_file:
         output_path = Path(output_file).expanduser().resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_bytes(payload_bytes)
+        if json_requested:
+            output_path.write_text(
+                json.dumps(merged_json, ensure_ascii=False, indent=2 if args.pretty else None),
+                encoding="utf-8",
+            )
+            bytes_written = output_path.stat().st_size
+        else:
+            if raw_payload_bytes is None:
+                raise RuntimeError("No response payload was available to write.")
+            output_path.write_bytes(raw_payload_bytes)
+            bytes_written = len(raw_payload_bytes)
         result = {
             "ok": True,
             "source": "gdelt-doc-api",
-            "request_url": request_url,
+            "request_url": batches[0]["request_url"] if batches else "",
+            "request_urls": [batch["request_url"] for batch in batches],
+            "query_count": len(queries),
+            "successful_query_count": len(batches),
+            "query_errors": errors,
             "content_type": headers.get("content-type"),
-            "bytes_written": len(payload_bytes),
+            "bytes_written": bytes_written,
             "output_path": str(output_path),
         }
         print_json(result, pretty=args.pretty)
@@ -490,14 +712,19 @@ def command_search(args: argparse.Namespace) -> int:
         result = {
             "ok": True,
             "source": "gdelt-doc-api",
-            "request_url": request_url,
+            "request_url": batches[0]["request_url"] if batches else "",
+            "request_urls": [batch["request_url"] for batch in batches],
+            "query_count": len(queries),
+            "successful_query_count": len(batches),
+            "query_errors": errors,
             "content_type": headers.get("content-type"),
-            "data": parsed_json,
+            "data": merged_json,
         }
         print_json(result, pretty=args.pretty)
         return 0
 
-    print(decode_text(payload_bytes))
+    if raw_payload_bytes is not None:
+        print(decode_text(raw_payload_bytes))
     return 0
 
 
@@ -568,6 +795,22 @@ def build_parser() -> argparse.ArgumentParser:
     add_runtime_config_args(check)
     check.add_argument("--pretty", action="store_true", help="Pretty-print JSON output.")
 
+    lint = sub.add_parser("lint-query", help="Validate a GDELT DOC query locally before a remote call.")
+    lint.add_argument("--query", required=True, help="DOC API query string.")
+    lint.add_argument(
+        "--domain",
+        action="append",
+        default=[],
+        help="Add a GDELT domain: filter. Repeat to validate split per-domain queries.",
+    )
+    lint.add_argument(
+        "--domain-is",
+        action="append",
+        default=[],
+        help="Add an exact GDELT domainis: filter. Repeat to validate split per-domain queries.",
+    )
+    lint.add_argument("--pretty", action="store_true", help="Pretty-print JSON output.")
+
     search = sub.add_parser(
         "search",
         aliases=["doc-search"],
@@ -576,6 +819,29 @@ def build_parser() -> argparse.ArgumentParser:
     add_runtime_config_args(search)
     add_logging_args(search)
     search.add_argument("--query", required=True, help="DOC API query string.")
+    search.add_argument(
+        "--domain",
+        action="append",
+        default=[],
+        help="Add a GDELT domain: filter. Repeat to run one query per domain and merge JSON article results.",
+    )
+    search.add_argument(
+        "--domain-is",
+        action="append",
+        default=[],
+        help="Add an exact GDELT domainis: filter. Repeat to run one query per domain and merge JSON article results.",
+    )
+    search.add_argument(
+        "--lint-mode",
+        choices=["warn", "strict"],
+        default="warn",
+        help="Treat query lint warnings as non-fatal warnings or fatal errors.",
+    )
+    search.add_argument(
+        "--continue-on-query-error",
+        action="store_true",
+        help="For split domain queries, keep successful batches and record failed batches in query_errors.",
+    )
     search.add_argument(
         "--mode",
         default="artlist",
@@ -636,6 +902,8 @@ def main() -> int:
     try:
         if args.command == "check-config":
             return command_check_config(args)
+        if args.command == "lint-query":
+            return command_lint_query(args)
         if args.command in {"search", "doc-search"}:
             return command_search(args)
         raise ValueError(f"Unknown command: {args.command}")

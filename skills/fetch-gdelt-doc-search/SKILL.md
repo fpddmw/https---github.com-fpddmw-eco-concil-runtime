@@ -55,7 +55,31 @@ python3 scripts/fetch_gdelt_doc_search.py search \
   --pretty
 ```
 
-4. Persist raw API payload to a file for downstream tools.
+4. Lint a query before a remote call, especially when an agent authored it.
+
+```bash
+python3 scripts/fetch_gdelt_doc_search.py lint-query \
+  --query 'site:airnow.gov smoke' \
+  --pretty
+```
+
+5. Search exact official/news domains with GDELT's `domainis:` operator. Do not use `site:`.
+
+```bash
+python3 scripts/fetch_gdelt_doc_search.py search \
+  --query 'smoke wildfire "New York City"' \
+  --domain-is airnow.gov \
+  --domain-is epa.gov \
+  --mode artlist \
+  --format json \
+  --start-datetime 20230605000000 \
+  --end-datetime 20230609000000 \
+  --max-records 50 \
+  --output ./data/gdelt-doc/official-smoke.json \
+  --pretty
+```
+
+6. Persist raw API payload to a file for downstream tools.
 
 ```bash
 python3 scripts/fetch_gdelt_doc_search.py search \
@@ -72,6 +96,8 @@ python3 scripts/fetch_gdelt_doc_search.py search \
 - Respect `Retry-After` when present on retriable responses.
 - Throttle request frequency with a minimum interval between requests.
 - Validate query/time parameter combinations before remote calls.
+- Lint provider-specific query syntax before remote calls, including blocking unsupported `site:` usage.
+- Support repeated `--domain` / `--domain-is` filters by running one query per domain and merging JSON article results.
 - Validate DOC constraints (`MAXRECORDS<=250`, `TIMELINESMOOTH<=30`).
 - Emit JSON results while writing operational logs to stderr and optional log file.
 
@@ -79,10 +105,26 @@ python3 scripts/fetch_gdelt_doc_search.py search \
 - Keep only DOC API retrieval in this skill.
 - Keep atomic operations only; do not add internal scheduler/polling loops.
 
+## Agent Reasoning Guide
+- This skill is for GDELT DOC API article lists and timeline-style
+  reconnaissance over indexed web documents. It is not the raw
+  Events/Mentions/GKG export-table layer.
+- `domain:` and `domainis:` are URL-domain filters. They are useful for exact
+  source slices, but they are not official-record categories and should not be
+  the only way an agent distinguishes official, media, or community material.
+- A zero DOC result can mean the query, date window, domain filter, language, or
+  DOC index path was too narrow. It does not mean GDELT Events, Mentions, GKG,
+  or non-GDELT sources have no relevant records.
+- If DOC output is zero, narrow, or only reconnaissance-level while the evidence
+  need remains live, revise/lint the query or use same-family follow-up skills:
+  `fetch-gdelt-events`, `fetch-gdelt-mentions`, and `fetch-gdelt-gkg`.
+- Avoid turning a provider query failure into a council conclusion. Record the
+  query/window/domain limits before saying a public-record route is exhausted.
+
 ## References
 - `references/env.md`
 - `references/gdelt-data-sources.md`
-- `references/fetch-gdelt-doc-search.md`
+- `references/gdelt-doc-search.md`
 - `references/gdelt-limitations.md`
 - `references/openclaw-chaining-templates.md`
 

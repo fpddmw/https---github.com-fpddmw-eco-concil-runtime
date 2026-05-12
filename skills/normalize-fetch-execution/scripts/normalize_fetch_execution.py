@@ -23,6 +23,7 @@ from eco_council_runtime.kernel.source_queue.source_queue_contract import (  # n
     maybe_text,
     read_json_object,
     resolve_run_dir,
+    source_normalizer_skill,
     stable_hash,
     unique_texts,
     utc_now_iso,
@@ -114,6 +115,21 @@ def normalize_execution_command_hint(*, run_dir: Path, run_id: str, round_id: st
     )
 
 
+def normalize_receipt_command_hint(*, run_dir: Path, run_id: str, round_id: str, actor_role: str, receipt_ref: str = "") -> str:
+    skill_args: list[str] = []
+    if receipt_ref:
+        option = "--receipt-path" if "/" in receipt_ref or receipt_ref.endswith(".json") else "--receipt-id"
+        skill_args.extend([option, receipt_ref])
+    return kernel_run_skill_command(
+        run_dir=run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        skill_name=SKILL_NAME,
+        actor_role=actor_role,
+        skill_args=skill_args,
+    )
+
+
 def next_step_hints(*, run_dir: Path, run_id: str, round_id: str, actor_role: str) -> dict[str, Any]:
     return {
         "normalize_fetch_execution_command": normalize_execution_command_hint(
@@ -121,6 +137,13 @@ def next_step_hints(*, run_dir: Path, run_id: str, round_id: str, actor_role: st
             run_id=run_id,
             round_id=round_id,
             actor_role=actor_role,
+        ),
+        "normalize_runtime_receipt_command": normalize_receipt_command_hint(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            actor_role=actor_role,
+            receipt_ref="<runtime_receipt_id_or_path>",
         ),
         "query_commands": signal_query_command_hints(
             run_dir=run_dir,
@@ -388,6 +411,249 @@ def run_normalizer_for_step(
         )
 
 
+def receipt_step_id(receipt_ref: str) -> str:
+    return "receipt-normalize-" + stable_hash(receipt_ref)[:16]
+
+
+def strip_json_ref(value: str) -> str:
+    text = maybe_text(value)
+    if ".json:" in text:
+        return text.split(".json:", 1)[0] + ".json"
+    return text
+
+
+def resolve_receipt_path(run_dir: Path, receipt_ref: str) -> Path:
+    ref = strip_json_ref(receipt_ref)
+    candidate = Path(ref).expanduser()
+    if candidate.is_absolute() or candidate.suffix == ".json" or "/" in ref:
+        if not candidate.is_absolute():
+            candidate = run_dir / candidate
+        return candidate.resolve()
+    return (run_dir / "runtime" / "receipts" / f"{ref}.json").resolve()
+
+
+def artifact_path_candidates_from_receipt(receipt: dict[str, Any]) -> list[str]:
+    candidates: list[Any] = []
+
+    def collect_ref(value: Any) -> None:
+        if isinstance(value, dict):
+            candidates.append(value.get("artifact_path"))
+            candidates.append(value.get("path"))
+            candidates.append(value.get("output_path"))
+            candidates.append(value.get("artifact_ref"))
+        elif isinstance(value, str):
+            candidates.append(value)
+
+    for ref in receipt.get("artifact_refs", []) if isinstance(receipt.get("artifact_refs"), list) else []:
+        collect_ref(ref)
+
+    summary = receipt.get("summary") if isinstance(receipt.get("summary"), dict) else {}
+    collect_ref(summary)
+
+    skill_payload = receipt.get("skill_payload") if isinstance(receipt.get("skill_payload"), dict) else {}
+    for ref in skill_payload.get("artifact_refs", []) if isinstance(skill_payload.get("artifact_refs"), list) else []:
+        collect_ref(ref)
+    collect_ref(skill_payload.get("summary") if isinstance(skill_payload.get("summary"), dict) else {})
+
+    for artifacts in (
+        skill_payload.get("artifacts"),
+        skill_payload.get("payload", {}).get("artifacts")
+        if isinstance(skill_payload.get("payload"), dict)
+        else None,
+    ):
+        if isinstance(artifacts, dict):
+            candidates.extend(artifacts.values())
+        elif isinstance(artifacts, list):
+            candidates.extend(artifacts)
+
+    return unique_texts([strip_json_ref(item) for item in candidates if maybe_text(item)])
+
+
+def existing_artifact_path_from_receipt(receipt: dict[str, Any], *, run_dir: Path) -> Path | None:
+    for raw_candidate in artifact_path_candidates_from_receipt(receipt):
+        candidate = Path(raw_candidate).expanduser()
+        if not candidate.is_absolute():
+            candidate = run_dir / candidate
+        candidate = candidate.resolve()
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+def normalizable_payload_from_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
+    skill_payload = receipt.get("skill_payload") if isinstance(receipt.get("skill_payload"), dict) else {}
+    nested_payload = skill_payload.get("payload") if isinstance(skill_payload.get("payload"), dict) else {}
+    for candidate in (nested_payload, skill_payload):
+        if not isinstance(candidate, dict):
+            continue
+        for key in ("records", "articles", "downloads"):
+            if key in candidate:
+                return candidate
+    return skill_payload if isinstance(skill_payload, dict) else dict(receipt)
+
+
+def materialize_receipt_artifact(
+    *,
+    run_dir: Path,
+    round_id: str,
+    receipt: dict[str, Any],
+    receipt_path: Path,
+    source_skill: str,
+) -> tuple[Path, dict[str, Any]]:
+    existing_path = existing_artifact_path_from_receipt(receipt, run_dir=run_dir)
+    if existing_path is not None:
+        return existing_path, {
+            "mode": "existing-artifact",
+            "receipt_path": str(receipt_path),
+            "artifact_path": str(existing_path),
+        }
+
+    receipt_id = maybe_text(receipt.get("receipt_id")) or receipt_path.stem
+    safe_source = "".join(char if char.isalnum() else "-" for char in source_skill).strip("-") or "source"
+    artifact_path = (
+        run_dir
+        / "raw"
+        / round_id
+        / "receipt-materialized"
+        / f"{receipt_id}-{safe_source}.json"
+    ).resolve()
+    payload = normalizable_payload_from_receipt(receipt)
+    write_json_file(artifact_path, payload)
+    return artifact_path, {
+        "mode": "materialized-from-receipt-payload",
+        "receipt_path": str(receipt_path),
+        "artifact_path": str(artifact_path),
+    }
+
+
+def execute_receipt_normalization(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    receipt_ref: str,
+    actor_role: str,
+    resolved_actor_role: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    receipt_path = resolve_receipt_path(run_dir, receipt_ref)
+    receipt = read_json_object(receipt_path)
+    receipt_id = maybe_text(receipt.get("receipt_id")) or receipt_path.stem
+    skill_payload = receipt.get("skill_payload") if isinstance(receipt.get("skill_payload"), dict) else {}
+    source_skill = maybe_text(receipt.get("skill_name")) or maybe_text(skill_payload.get("source_skill"))
+    if not source_skill:
+        nested = skill_payload.get("payload")
+        if isinstance(nested, dict):
+            source_skill = maybe_text(nested.get("source_skill"))
+    if not source_skill:
+        raise RuntimeError(f"Could not determine source skill for receipt {receipt_ref}.")
+
+    normalizer_skill = source_normalizer_skill(source_skill)
+    raw_artifact_path, materialization = materialize_receipt_artifact(
+        run_dir=run_dir,
+        round_id=round_id,
+        receipt=receipt,
+        receipt_path=receipt_path,
+        source_skill=source_skill,
+    )
+    step = {
+        "step_id": receipt_step_id(receipt_id),
+        "step_kind": "receipt-normalize",
+        "role": resolved_actor_role,
+        "source_skill": source_skill,
+        "normalizer_skill": normalizer_skill,
+        "normalizer_args": [],
+    }
+    payload = run_normalizer_for_step(
+        run_dir=run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        step=step,
+        raw_artifact_path=raw_artifact_path,
+    )
+    canonical_ids = (
+        [maybe_text(item) for item in payload.get("canonical_ids", []) if maybe_text(item)]
+        if isinstance(payload.get("canonical_ids"), list)
+        else []
+    )
+    artifact_refs = (
+        [item for item in payload.get("artifact_refs", []) if isinstance(item, dict)]
+        if isinstance(payload.get("artifact_refs"), list)
+        else []
+    )
+    canonical_count = len(canonical_ids)
+    artifact_ref_count = len(artifact_refs)
+    normalization_status = "normalized-signal-plane" if canonical_count > 0 else "receipt-only"
+    raw_sha256 = file_sha256(raw_artifact_path)
+    warnings = [
+        item
+        for item in payload.get("warnings", [])
+        if isinstance(item, dict) and maybe_text(item.get("message"))
+    ] if isinstance(payload.get("warnings"), list) else []
+    if materialization.get("mode") == "materialized-from-receipt-payload":
+        warnings.append(
+            {
+                "code": "receipt-payload-materialized",
+                "message": (
+                    "No existing raw artifact path was found in the receipt; "
+                    "the receipt payload was materialized as a raw artifact before normalization."
+                ),
+            }
+        )
+    status = {
+        "step_id": maybe_text(step.get("step_id")),
+        "step_kind": "receipt-normalize",
+        "status": "completed",
+        "components": {
+            "queue_runner": "receipt-reused",
+            "normalizer_runner": "completed",
+            "execution_receipt": "pending",
+        },
+        "role": resolved_actor_role,
+        "actor_role": actor_role,
+        "resolved_actor_role": resolved_actor_role,
+        "source_skill": source_skill,
+        "normalizer_skill": normalizer_skill,
+        "artifact_path": str(raw_artifact_path),
+        "artifact_sha256": raw_sha256,
+        "source_receipt_id": receipt_id,
+        "source_receipt_ref": str(receipt_path),
+        "receipt_id": maybe_text(payload.get("receipt_id")),
+        "batch_id": maybe_text(payload.get("batch_id")),
+        "canonical_count": canonical_count,
+        "artifact_ref_count": artifact_ref_count,
+        "normalization_status": normalization_status,
+        "normalized_signal_refs": canonical_ids,
+        "normalized_batch_ref": maybe_text(payload.get("batch_id")),
+        "warning_count": len(warnings),
+        "receipt_materialization": materialization,
+        "queue_runner": {
+            "status": "completed",
+            "component": "receipt-reuse",
+            "source_receipt_id": receipt_id,
+            "source_receipt_ref": str(receipt_path),
+            "artifact_path": str(raw_artifact_path),
+            "artifact_sha256": raw_sha256,
+        },
+        "normalizer_runner": {
+            "status": maybe_text(payload.get("status")) or "completed",
+            "normalization_status": normalization_status,
+            "receipt_id": maybe_text(payload.get("receipt_id")),
+            "batch_id": maybe_text(payload.get("batch_id")),
+            "actor_role": actor_role,
+            "resolved_actor_role": resolved_actor_role,
+            "canonical_count": canonical_count,
+            "artifact_ref_count": artifact_ref_count,
+        },
+        "next_step_hints": next_step_hints(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            actor_role=actor_role,
+        ),
+    }
+    return status, {**payload, "warnings": warnings}
+
+
 def execute_import_step(
     *,
     run_dir: Path,
@@ -437,6 +703,14 @@ def execute_import_step(
         "canonical_count": canonical_count,
         "artifact_ref_count": artifact_ref_count,
         "normalization_status": normalization_status,
+        "normalized_signal_refs": [
+            maybe_text(item)
+            for item in payload.get("canonical_ids", [])
+            if maybe_text(item)
+        ]
+        if isinstance(payload.get("canonical_ids"), list)
+        else [],
+        "normalized_batch_ref": maybe_text(payload.get("batch_id")),
         "warning_count": len(payload.get("warnings", [])) if isinstance(payload.get("warnings"), list) else 0,
         "queue_runner": queue_status,
         "normalizer_runner": {
@@ -546,10 +820,12 @@ def import_fetch_execution_skill(
     round_id: str,
     *,
     actor_role: str,
+    receipt_refs: list[str] | None = None,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     plan_path = (run_dir_path / "runtime" / f"fetch_plan_{round_id}.json").resolve()
     output_path = (run_dir_path / "runtime" / f"import_execution_{round_id}.json").resolve()
+    receipt_refs = unique_texts(list(receipt_refs or []))
 
     normalized_actor_role = normalize_actor_role(actor_role) or maybe_text(actor_role)
     if not normalized_actor_role:
@@ -558,11 +834,20 @@ def import_fetch_execution_skill(
             "so fetch and normalization can be limited to the actor's assigned steps."
         )
     plan_role_labels = actor_role_labels(normalized_actor_role)
-    plan = read_json_object(plan_path)
-    ensure_fetch_plan_inputs_match(run_dir=run_dir_path, round_id=round_id, plan=plan)
+    plan_missing = not plan_path.exists()
+    if plan_missing:
+        plan = {
+            "schema_version": "fetch-plan-missing-placeholder-v1",
+            "run_id": run_id,
+            "round_id": round_id,
+            "steps": [],
+        }
+    else:
+        plan = read_json_object(plan_path)
+        ensure_fetch_plan_inputs_match(run_dir=run_dir_path, round_id=round_id, plan=plan)
     steps = [item for item in plan.get("steps", []) if isinstance(item, dict)] if isinstance(plan.get("steps"), list) else []
     owned_steps = [step for step in steps if actor_owns_step(normalized_actor_role, step)]
-    plan_sha256 = file_sha256(plan_path)
+    plan_sha256 = file_sha256(plan_path) if plan_path.exists() else stable_hash("missing-fetch-plan", run_id, round_id)
 
     existing_payload = load_existing_execution(output_path)
     statuses_by_step = existing_execution_statuses(existing_payload)
@@ -581,7 +866,17 @@ def import_fetch_execution_skill(
         if isinstance(item, dict)
     ]
     warnings: list[dict[str, str]] = []
-    if not owned_steps:
+    if plan_missing and receipt_refs:
+        warnings.append(
+            {
+                "code": "receipt-driven-normalization-without-fetch-plan",
+                "message": (
+                    "No prepared fetch plan was found; only the supplied runtime receipts "
+                    "were normalized."
+                ),
+            }
+        )
+    if not owned_steps and not receipt_refs:
         warnings.append(
             {
                 "code": "no-owned-fetch-plan-steps",
@@ -594,6 +889,8 @@ def import_fetch_execution_skill(
 
     newly_completed_step_ids: list[str] = []
     skipped_step_ids: list[str] = []
+    newly_completed_receipt_refs: list[str] = []
+    skipped_receipt_refs: list[str] = []
     for step in owned_steps:
         step_id = maybe_text(step.get("step_id")) or "unknown-step"
         existing_status = statuses_by_step.get(step_id)
@@ -654,6 +951,62 @@ def import_fetch_execution_skill(
             write_json_file(output_path, partial_payload)
             raise RuntimeError(f"Import execution failed at {step_id}: {exc}") from exc
 
+    for receipt_ref in receipt_refs:
+        try:
+            receipt_path = resolve_receipt_path(run_dir_path, receipt_ref)
+            receipt_payload = read_json_object(receipt_path)
+            receipt_id = maybe_text(receipt_payload.get("receipt_id")) or receipt_path.stem
+            step_id = receipt_step_id(receipt_id)
+            existing_status = statuses_by_step.get(step_id)
+            if isinstance(existing_status, dict) and maybe_text(existing_status.get("status")) == "completed":
+                skipped_receipt_refs.append(receipt_ref)
+                continue
+            status, payload = execute_receipt_normalization(
+                run_dir=run_dir_path,
+                run_id=run_id,
+                round_id=round_id,
+                receipt_ref=str(receipt_path),
+                actor_role=actor_role,
+                resolved_actor_role=normalized_actor_role,
+            )
+            statuses_by_step[step_id] = status
+            newly_completed_receipt_refs.append(receipt_ref)
+            normalized_receipt_ids.append(maybe_text(payload.get("receipt_id")))
+            if isinstance(payload.get("artifact_refs"), list):
+                normalized_artifact_refs.extend(item for item in payload["artifact_refs"] if isinstance(item, dict))
+            if isinstance(payload.get("warnings"), list):
+                warnings.extend(item for item in payload["warnings"] if isinstance(item, dict) and maybe_text(item.get("message")))
+        except Exception as exc:  # noqa: BLE001
+            step_id = receipt_step_id(receipt_ref)
+            failed_status = {
+                "step_id": step_id,
+                "step_kind": "receipt-normalize",
+                "status": "failed",
+                "role": normalized_actor_role,
+                "actor_role": actor_role,
+                "resolved_actor_role": normalized_actor_role,
+                "source_receipt_ref": receipt_ref,
+                "reason": str(exc),
+            }
+            statuses_by_step[step_id] = failed_status
+            statuses = ordered_statuses_for_plan(steps, statuses_by_step)
+            partial_payload = build_execution_payload(
+                run_dir=run_dir_path,
+                run_id=run_id,
+                round_id=round_id,
+                actor_role=actor_role,
+                resolved_actor_role=normalized_actor_role,
+                actor_plan_roles=plan_role_labels,
+                plan_path=plan_path,
+                plan_sha256=plan_sha256,
+                statuses=statuses,
+                normalized_receipt_ids=normalized_receipt_ids,
+                normalized_artifact_refs=normalized_artifact_refs,
+                failure={"step_id": step_id, "receipt_ref": receipt_ref, "message": str(exc)},
+            )
+            write_json_file(output_path, partial_payload)
+            raise RuntimeError(f"Receipt-driven normalization failed at {receipt_ref}: {exc}") from exc
+
     statuses = ordered_statuses_for_plan(steps, statuses_by_step)
     payload = build_execution_payload(
         run_dir=run_dir_path,
@@ -675,49 +1028,58 @@ def import_fetch_execution_skill(
     write_json_file(output_path, payload)
 
     artifact_refs = [{"signal_id": "", "artifact_path": str(output_path), "record_locator": "$", "artifact_ref": f"{output_path}:$"}]
-    return {
+    summary = {
+        "skill": SKILL_NAME,
+        "run_id": run_id,
+        "round_id": round_id,
+        "output_path": str(output_path),
+        "execution_id": payload["execution_id"],
+        "normalized_step_count": payload["completed_count"],
+        "normalization_status": payload.get("normalization_status"),
+        "normalized_signal_step_count": payload.get("normalized_signal_step_count"),
+        "receipt_only_step_count": payload.get("receipt_only_step_count"),
+        "failed_step_count": payload["failed_count"],
+        "actor_role": actor_role,
+        "resolved_actor_role": normalized_actor_role,
+        "actor_plan_roles": plan_role_labels,
+        "owned_step_count": len(owned_steps),
+        "receipt_ref_count": len(receipt_refs),
+        "newly_completed_step_count": len(newly_completed_step_ids),
+        "newly_completed_receipt_count": len(newly_completed_receipt_refs),
+        "skipped_completed_step_count": len(skipped_step_ids),
+        "skipped_completed_receipt_count": len(skipped_receipt_refs),
+        "total_plan_step_count": len(steps),
+    }
+    board_handoff = {
+        "candidate_ids": [payload["execution_id"]],
+        "evidence_refs": artifact_refs,
+        "gap_hints": [item.get("message", "") for item in warnings[:3] if maybe_text(item.get("message"))],
+        "challenge_hints": [],
+        "next_query_commands": payload.get("next_step_hints", {}).get("query_commands", {})
+        if isinstance(payload.get("next_step_hints"), dict)
+        else {},
+        "suggested_next_skills": [
+            "query-public-signals",
+            "query-formal-signals",
+            "query-environment-signals",
+        ],
+    }
+    result_payload = {
         "status": "completed",
-        "summary": {
-            "skill": SKILL_NAME,
-            "run_id": run_id,
-            "round_id": round_id,
-            "output_path": str(output_path),
-            "execution_id": payload["execution_id"],
-            "normalized_step_count": payload["completed_count"],
-            "normalization_status": payload.get("normalization_status"),
-            "normalized_signal_step_count": payload.get("normalized_signal_step_count"),
-            "receipt_only_step_count": payload.get("receipt_only_step_count"),
-            "failed_step_count": payload["failed_count"],
-            "actor_role": actor_role,
-            "resolved_actor_role": normalized_actor_role,
-            "actor_plan_roles": plan_role_labels,
-            "owned_step_count": len(owned_steps),
-            "newly_completed_step_count": len(newly_completed_step_ids),
-            "skipped_completed_step_count": len(skipped_step_ids),
-            "total_plan_step_count": len(steps),
-        },
-        "receipt_id": "ingress-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, payload["execution_id"])[:20],
+        "summary": summary,
         "batch_id": "ingressbatch-" + stable_hash(SKILL_NAME, run_id, round_id, output_path.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [payload["execution_id"]],
         "warnings": warnings,
         "execution_components": payload.get("execution_components", {}),
         "next_step_hints": payload.get("next_step_hints", {}),
-        "board_handoff": {
-            "candidate_ids": [payload["execution_id"]],
-            "evidence_refs": artifact_refs,
-            "gap_hints": [item.get("message", "") for item in warnings[:3] if maybe_text(item.get("message"))],
-            "challenge_hints": [],
-            "next_query_commands": payload.get("next_step_hints", {}).get("query_commands", {})
-            if isinstance(payload.get("next_step_hints"), dict)
-            else {},
-            "suggested_next_skills": [
-                "query-public-signals",
-                "query-formal-signals",
-                "query-environment-signals",
-            ],
-        },
+        "board_handoff": board_handoff,
     }
+    result_payload["receipt_id"] = (
+        "ingress-receipt-"
+        + stable_hash(SKILL_NAME, run_id, round_id, pretty_json(result_payload, pretty=False))[:20]
+    )
+    return result_payload
 
 
 def parse_args() -> argparse.Namespace:
@@ -726,6 +1088,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--actor-role", default="", help="Actor executing this role-owned fetch/normalize slice.")
+    parser.add_argument(
+        "--receipt-id",
+        action="append",
+        default=[],
+        help="Runtime receipt id to normalize without requiring a fetch-plan step.",
+    )
+    parser.add_argument(
+        "--receipt-path",
+        action="append",
+        default=[],
+        help="Runtime receipt path to normalize without requiring a fetch-plan step.",
+    )
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
 
@@ -738,6 +1112,7 @@ def main() -> int:
         run_id=args.run_id,
         round_id=args.round_id,
         actor_role=actor_role,
+        receipt_refs=[*args.receipt_id, *args.receipt_path],
     )
     print(pretty_json(payload, args.pretty))
     return 0

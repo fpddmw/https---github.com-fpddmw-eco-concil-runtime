@@ -31,14 +31,38 @@ def runtime_health_payload(run_dir: Path, *, round_id: str = "") -> dict[str, An
         for event in filtered_events
         if maybe_text(event.get("dead_letter_id")) not in closed_dead_letter_ids
     ]
+    completed_keys_after: set[tuple[str, str, str, str, str]] = set()
+    superseded_blocked_event_ids: set[str] = set()
+    for event in reversed(filtered_events):
+        key = (
+            maybe_text(event.get("run_id")),
+            maybe_text(event.get("round_id")),
+            maybe_text(event.get("event_type")),
+            maybe_text(event.get("skill_name")),
+            maybe_text(event.get("actor_role")),
+        )
+        if not key[3]:
+            continue
+        status = maybe_text(event.get("status"))
+        if status == "completed":
+            completed_keys_after.add(key)
+        elif status == "blocked" and key in completed_keys_after:
+            event_id = maybe_text(event.get("event_id"))
+            if event_id:
+                superseded_blocked_event_ids.add(event_id)
     failed_events = [event for event in unresolved_events if maybe_text(event.get("status")) == "failed"]
-    blocked_events = [event for event in unresolved_events if maybe_text(event.get("status")) == "blocked"]
+    blocked_events = [
+        event
+        for event in unresolved_events
+        if maybe_text(event.get("status")) == "blocked"
+        and maybe_text(event.get("event_id")) not in superseded_blocked_event_ids
+    ]
     degraded_events = [
         event for event in filtered_events if maybe_text(event.get("status")) in {"completed-with-warnings", "degraded"}
     ]
     receipt_conflict_events = [
         event
-        for event in filtered_events
+        for event in unresolved_events
         if isinstance(event.get("failure"), dict)
         and maybe_text(event["failure"].get("error_code"))
         == "receipt-payload-hash-conflict"

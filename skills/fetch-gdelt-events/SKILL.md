@@ -81,6 +81,19 @@ python3 scripts/fetch_gdelt_events.py fetch \
 - Keep one concrete file-table fetch implementation: `Events` export (`*.export.CSV.zip`).
 - Keep atomic operations only; do not add internal scheduler/polling loops.
 
+## Agent Reasoning Guide
+- This skill retrieves GDELT Events export files for a UTC snapshot range. It is
+  a row-level follow-up surface, not a topical article search and not a
+  conclusion generator.
+- Use it when DOC Search is too query-sensitive, when a shared UTC event window
+  is already scoped, or when actor/event rows are needed for later filtering and
+  normalization.
+- Dry-run historical ranges and keep `--max-files` bounded. A failed or empty
+  pull is an acquisition/window/cap limitation, not evidence that no public
+  record or event signal exists.
+- Pair this skill with `normalize-gdelt-events-public-signals` before relying on
+  DB-backed signal queries.
+
 ## References
 - `references/gdelt-data-sources.md`
 - `references/gdelt-limitations.md`

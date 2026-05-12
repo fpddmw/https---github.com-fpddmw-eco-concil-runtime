@@ -381,14 +381,18 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             self.assertIn("query-council-objects", social_read_surface)
             self.assertIn("--object-kind round-brief", social_read_surface)
+            self.assertIn("--object-kind round-synthesis", social_read_surface)
             self.assertIn("--object-kind context-packet", social_read_surface)
             self.assertIn("--object-kind source-acquisition-proposal", social_read_surface)
             self.assertIn("--object-kind challenge-disposition", challenger_read_surface)
             self.assertIn("materialize-context-packet", moderator_write_surface)
+            self.assertIn("submit-round-synthesis", moderator_write_surface)
             self.assertIn("submit-evidence-request", social_write_surface)
             self.assertIn("submit-source-acquisition-proposal", social_write_surface)
             self.assertIn("update-source-acquisition-proposal-status", social_write_surface)
+            self.assertIn("link-source-acquisition-execution", social_write_surface)
             self.assertIn("update-source-acquisition-proposal-status", moderator_write_surface)
+            self.assertIn("link-source-acquisition-execution", moderator_write_surface)
             self.assertIn("submit-agent-position", social_write_surface)
             self.assertIn(
                 "submit-challenge-disposition",
@@ -406,6 +410,10 @@ class AgentEntryGateTests(unittest.TestCase):
                 state_payload["agent_entry"]["operator"]["query_round_briefs_command"],
             )
             self.assertIn(
+                "--object-kind round-synthesis",
+                state_payload["agent_entry"]["operator"]["query_round_syntheses_command"],
+            )
+            self.assertIn(
                 "--object-kind context-packet",
                 state_payload["agent_entry"]["operator"]["query_context_packets_command"],
             )
@@ -413,6 +421,12 @@ class AgentEntryGateTests(unittest.TestCase):
                 "update-source-acquisition-proposal-status",
                 state_payload["agent_entry"]["operator"][
                     "update_source_acquisition_proposal_status_command_template"
+                ],
+            )
+            self.assertIn(
+                "link-source-acquisition-execution",
+                state_payload["agent_entry"]["operator"][
+                    "link_source_acquisition_execution_command_template"
                 ],
             )
 
@@ -532,6 +546,16 @@ class AgentEntryGateTests(unittest.TestCase):
                 if isinstance(entry, dict) and entry.get("role") == "environmental-investigator"
             ]
             self.assertEqual(1, len(environmental_entries))
+            self.assertEqual(
+                "claim-strength-obligations-v1",
+                environmental_entries[0]["claim_strength_obligations"][
+                    "schema_version"
+                ],
+            )
+            self.assertIn(
+                "weak reports require explicit limitations",
+                "\n".join(entry_gate["operator_notes"]),
+            )
             environmental_fetch_surface = "\n".join(environmental_entries[0].get("fetch_commands", []))
             environmental_normalize_surface = "\n".join(environmental_entries[0].get("normalize_commands", []))
             self.assertIn("fetch-open-meteo-air-quality", environmental_fetch_surface)
@@ -547,6 +571,15 @@ class AgentEntryGateTests(unittest.TestCase):
                     if isinstance(entry, dict)
                 )
             )
+            self.assertTrue(environmental_entries[0].get("source_family_workflows"))
+            self.assertIn(
+                "environment-observation-crosscheck",
+                [
+                    item.get("family_id")
+                    for item in environmental_entries[0].get("source_family_workflows", [])
+                    if isinstance(item, dict)
+                ],
+            )
             self.assertIn("normalize-fetch-execution", environmental_normalize_surface)
             self.assertIn("--actor-role environmental-investigator", environmental_normalize_surface)
             challenger_entries = [
@@ -555,12 +588,39 @@ class AgentEntryGateTests(unittest.TestCase):
                 if isinstance(entry, dict) and entry.get("role") == "challenger"
             ]
             self.assertEqual(1, len(challenger_entries))
+            self.assertIn(
+                "causal_or_source_attribution",
+                [
+                    item.get("strength")
+                    for item in challenger_entries[0]["claim_strength_obligations"][
+                        "claim_strengths"
+                    ]
+                    if isinstance(item, dict)
+                ],
+            )
             challenger_fetch_surface = "\n".join(challenger_entries[0].get("fetch_commands", []))
             challenger_normalize_surface = "\n".join(challenger_entries[0].get("normalize_commands", []))
             self.assertIn("fetch-gdelt-doc-search", challenger_fetch_surface)
             self.assertIn("--actor-role challenger", challenger_fetch_surface)
             self.assertIn("search --query", challenger_fetch_surface)
             self.assertNotIn("<skill_specific_args>", challenger_fetch_surface)
+            self.assertIn(
+                "gdelt-public-record",
+                [
+                    item.get("family_id")
+                    for item in challenger_entries[0].get("source_family_workflows", [])
+                    if isinstance(item, dict)
+                ],
+            )
+            gdelt_doc_surface = next(
+                entry
+                for entry in challenger_entries[0].get("fetch_command_surfaces", [])
+                if isinstance(entry, dict)
+                and entry.get("skill_name") == "fetch-gdelt-doc-search"
+            )
+            self.assertIn("fetch-gdelt-events", gdelt_doc_surface["downstream_hints"])
+            self.assertIn("fetch-gdelt-mentions", gdelt_doc_surface["downstream_hints"])
+            self.assertIn("fetch-gdelt-gkg", gdelt_doc_surface["downstream_hints"])
             self.assertIn("normalize-fetch-execution", challenger_normalize_surface)
             self.assertIn("--actor-role challenger", challenger_normalize_surface)
             challenger_write_surface = "\n".join(challenger_entries[0].get("write_commands", []))

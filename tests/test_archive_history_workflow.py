@@ -803,6 +803,26 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             )
             self.assertTrue(any(case["case_id"] == HISTORICAL_RUN_ID for case in retrieval_artifact["cases"]))
             self.assertTrue(
+                any(case.get("selected_evidence_refs") for case in retrieval_artifact["cases"])
+            )
+            self.assertEqual(
+                retrieval_artifact["budget"]["selected_case_count"],
+                len(archive_status["history_reuse"]["case_matches"]),
+            )
+            self.assertEqual(
+                retrieval_artifact["budget"]["selected_signal_count"],
+                len(archive_status["history_reuse"]["signal_hints"]),
+            )
+            self.assertTrue(archive_status["history_reuse"]["archive_evidence_refs"])
+            self.assertEqual(
+                len(archive_status["history_reuse"]["archive_evidence_refs"]),
+                archive_status["checkpoint_summary"]["history_archive_evidence_ref_count"],
+            )
+            self.assertFalse(
+                {"score", "rank", "weight", "priority"}
+                & all_keys(archive_status["history_reuse"])
+            )
+            self.assertTrue(
                 all("score" not in case for case in retrieval_artifact["cases"])
             )
             self.assertTrue(
@@ -814,6 +834,7 @@ class ArchiveHistoryWorkflowTests(unittest.TestCase):
             )
             self.assertIn(HISTORICAL_RUN_ID, context_text)
             self.assertIn("Historical Signal Hints", context_text)
+            self.assertIn("evidence_refs=", context_text)
 
     def test_archive_case_library_reads_db_backed_actions_and_probes_when_exports_are_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

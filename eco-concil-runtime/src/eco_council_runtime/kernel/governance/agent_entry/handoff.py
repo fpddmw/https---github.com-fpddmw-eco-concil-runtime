@@ -264,6 +264,39 @@ def default_agent_entry_chain(
             ),
         },
         {
+            "step_id": "submit-round-synthesis",
+            "mode": "governed-write",
+            "objective": (
+                "When unresolved refs remain or a stage boundary is reached, the "
+                "moderator records a round synthesis before deciding report-basis, "
+                "closure, or continuation."
+            ),
+            "command": run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                skill_name="submit-round-synthesis",
+                actor_role="moderator",
+                contract_mode=contract_mode,
+                skill_args=[
+                    "--author-role",
+                    "moderator",
+                    "--synthesis-text",
+                    "<round_stage_synthesis>",
+                    "--stage-conclusion",
+                    "<stage_conclusion>",
+                    "--rationale",
+                    "<moderator_synthesis_rationale>",
+                    "--unresolved-object-ref",
+                    "<object_kind:object_id>",
+                    "--next-round-candidate-ref",
+                    "<object_kind:object_id>",
+                    "--provenance-json",
+                    "{\"source\":\"agent-entry-handoff\"}",
+                ],
+            ),
+        },
+        {
             "step_id": "request-report-basis-transition",
             "mode": "runtime-gate",
             "objective": "When the moderator considers the round promotable, file an explicit report-basis transition request before operator review.",
@@ -314,7 +347,7 @@ def default_agent_entry_chain(
         {
             "step_id": "open-follow-up-round",
             "mode": "governed-write",
-            "objective": "If the round remains open, the moderator must file an explicit next-round transition request before operator approval and follow-up round creation.",
+            "objective": "If actionable unresolved refs remain after round synthesis, the moderator must file an explicit next-round transition request before operator approval and follow-up round creation.",
             "command": kernel_command(
                 "request-phase-transition",
                 "--run-dir",

@@ -102,6 +102,61 @@ def submit_finding(run_dir: Path, request_id: str) -> str:
     return str(payload["summary"]["object_id"])
 
 
+def submit_failed_source_attempt(run_dir: Path, request_id: str) -> str:
+    proposal = run_script(
+        script_path("submit-source-acquisition-proposal"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--author-role",
+        "social-investigator",
+        "--source-skill",
+        "fetch-gdelt-doc-search",
+        "--query-parameters-json",
+        "{\"query\":\"smoke haze New York City\"}",
+        "--target-kind",
+        "evidence-request",
+        "--target-id",
+        request_id,
+        "--target-evidence-request-id",
+        request_id,
+        "--rationale",
+        "Agent-selected public record attempt for a topical search.",
+        "--provenance-json",
+        "{\"source\":\"unit-test\"}",
+    )
+    proposal_id = str(
+        proposal.get("object_id")
+        or proposal.get("summary", {}).get("object_id")
+        or proposal.get("summary", {}).get("proposal_id")
+    )
+    run_script(
+        script_path("update-source-acquisition-proposal-status"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--object-id",
+        proposal_id,
+        "--status",
+        "failed",
+        "--actor-role",
+        "social-investigator",
+        "--status-rationale",
+        "Provider rejected the query syntax.",
+        "--evidence-ref",
+        "receipt://fetch/gdelt-doc/failed-001",
+        "--provenance-json",
+        "{\"source\":\"unit-test\"}",
+    )
+    return proposal_id
+
+
 class RoundLivenessSurfaceTests(unittest.TestCase):
     def test_compact_object_exposes_object_local_handoffs_without_choice_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -134,6 +189,12 @@ class RoundLivenessSurfaceTests(unittest.TestCase):
                 "update-source-acquisition-proposal-status",
                 proposal["handoff_commands"][
                     "update_source_acquisition_proposal_status_command_template"
+                ],
+            )
+            self.assertIn(
+                "link-source-acquisition-execution",
+                proposal["handoff_commands"][
+                    "link_source_acquisition_execution_command_template"
                 ],
             )
             self.assertIn(
@@ -278,6 +339,44 @@ class RoundLivenessSurfaceTests(unittest.TestCase):
                 "--request-payload-json",
                 liveness["continuation"]["request_open_round_command_template"],
             )
+            closing = liveness["closing_checklist"]
+            self.assertEqual("round-closing-checklist-v1", closing["schema_version"])
+            self.assertIn("does not rank work", closing["semantics"])
+            self.assertEqual(
+                "claim-strength-obligations-v1",
+                liveness["claim_strength_obligations"]["schema_version"],
+            )
+            self.assertEqual(
+                "claim-strength-obligations-v1",
+                closing["claim_strength_obligations"]["schema_version"],
+            )
+            self.assertIn(
+                "submit-round-synthesis",
+                closing["items"][0]["command_template"],
+            )
+            claim_strength_item = next(
+                item
+                for item in closing["items"]
+                if item.get("item_id") == "review-claim-strength-and-report-boundary"
+            )
+            self.assertEqual("review-required", claim_strength_item["state"])
+            self.assertTrue(claim_strength_item["weak_report_allowed"])
+            self.assertIn(
+                "prematurely",
+                claim_strength_item["required_moderator_record"],
+            )
+            self.assertIn(
+                "link-source-acquisition-execution",
+                [
+                    item["command_template"]
+                    for item in closing["items"]
+                    if item.get("item_id") == "link-source-acquisition-execution"
+                ][0],
+            )
+            self.assertIn(
+                "--object-kind round-synthesis",
+                liveness["query_commands"]["round-synthesis"],
+            )
             self.assertIn(
                 f"finding:{finding_id}",
                 [
@@ -359,12 +458,23 @@ class RoundLivenessSurfaceTests(unittest.TestCase):
             )
             self.assertEqual("source-surfaces", source_surfaces["surface"])
             self.assertTrue(source_surfaces["catalog"])
+            self.assertTrue(source_surfaces["source_family_workflows"])
             self.assertEqual("source-surfaces", source_surfaces_alias["surface"])
             catalog_entry = source_surfaces["catalog"][0]
             self.assertIn("provider_modes", catalog_entry)
             self.assertIn("fetch_argument_templates", catalog_entry)
+            self.assertIn("source_queue_profile", catalog_entry)
             self.assertTrue(catalog_entry["provider_modes"])
             self.assertTrue(catalog_entry["fetch_argument_templates"])
+            source_catalog = {entry["source_skill"]: entry for entry in source_surfaces["catalog"]}
+            self.assertIn(
+                "fetch-gdelt-events",
+                source_catalog["fetch-gdelt-doc-search"]["downstream_hints"],
+            )
+            self.assertIn(
+                "fetch-youtube-comments",
+                source_catalog["fetch-youtube-video-search"]["downstream_hints"],
+            )
             self.assertEqual("archive-status", archive_status["surface"])
             self.assertTrue(archive_status["gap_hints"])
             for payload_part in (council_status, unbundled_status, source_surfaces):
@@ -427,6 +537,63 @@ class RoundLivenessSurfaceTests(unittest.TestCase):
             self.assertNotIn(f"finding:{finding_id}", unbundled_refs)
             self.assertEqual(0, liveness["counts"]["unbundled_findings_count"])
             self.assertIn(f"evidence-request:{request_id}", liveness["unresolved_refs"])
+
+    def test_nonproductive_source_attempt_requires_owner_reflection_before_closure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            run_kernel("init-run", "--run-dir", str(run_dir), "--run-id", RUN_ID)
+            request_id = submit_open_evidence_request(run_dir)
+            proposal_id = submit_failed_source_attempt(run_dir, request_id)
+
+            liveness = build_round_liveness_surface(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+            )
+            proposal_ref = f"source-acquisition-proposal:{proposal_id}"
+            self.assertIn(proposal_ref, liveness["unresolved_refs"])
+            self.assertIn(
+                proposal_ref,
+                [
+                    item["object_ref"]
+                    for item in liveness["unresolved_sets"][
+                        "source_acquisition_attempts_needing_review"
+                    ]
+                    if isinstance(item, dict)
+                ],
+            )
+            self.assertEqual(
+                1,
+                liveness["counts"][
+                    "source_acquisition_attempts_needing_review_count"
+                ],
+            )
+            review_item = next(
+                item
+                for item in liveness["closing_checklist"]["items"]
+                if item.get("item_id")
+                == "review-nonproductive-source-acquisition-attempts"
+            )
+            self.assertEqual("review-required", review_item["state"])
+            self.assertIn(proposal_ref, review_item["attempt_refs"])
+            self.assertIn("same-family", review_item["owner_required_action"])
+            self.assertIn("no-actionable-path", review_item["moderator_boundary"])
+            claim_strength_item = next(
+                item
+                for item in liveness["closing_checklist"]["items"]
+                if item.get("item_id") == "review-claim-strength-and-report-boundary"
+            )
+            self.assertEqual("review-required", claim_strength_item["state"])
+            self.assertIn(
+                proposal_ref,
+                claim_strength_item["source_attempt_review_refs"],
+            )
+            self.assertIn(
+                "source-attribution",
+                liveness["claim_strength_obligations"]["report_boundary"][
+                    "strong_report"
+                ],
+            )
 
 
 if __name__ == "__main__":

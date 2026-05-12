@@ -13,6 +13,7 @@ description: Query compact formal-signal rows from the unified signal plane data
 ## Triggering Conditions
 - Need formal-record evidence without reopening raw comment artifacts.
 - Need docket-, agency-, submitter-, or keyword-scoped formal input for linkage, representation, or policy-record review.
+- Do not use this surface for official physical measurements merely because the provider is official; official air, weather, fire, water, or sensor observations belong in `query-environment-signals`.
 - Need issue-, stance-, concern-, citation-, or route-scoped formal input only when those optional typed fields already exist in DB.
 - Need compact references for moderator, investigator, report-editor, or challenger work.
 - Need to reopen prior-round formal evidence while staying inside the same run.

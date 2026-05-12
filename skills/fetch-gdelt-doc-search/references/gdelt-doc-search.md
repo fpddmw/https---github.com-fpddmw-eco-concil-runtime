@@ -40,6 +40,31 @@ You provide explicit query expressions:
 ```
 
 You can combine DOC operators in `query`, for example `sourcelang:`, `sourcecountry:`, `imagetag:`.
+For source domains, use GDELT's domain operators:
+
+```text
+domain:cnn.com
+```
+
+```text
+domainis:un.org
+```
+
+Do not use search-engine syntax such as `site:airnow.gov`; the DOC API treats that as an unsupported query token.
+
+## Query Linting and Domain Splitting
+
+Run a local lint before submitting an agent-authored query:
+
+```bash
+python3 scripts/fetch_gdelt_doc_search.py lint-query \
+  --query 'smoke wildfire "New York City"' \
+  --domain-is airnow.gov \
+  --domain-is epa.gov \
+  --pretty
+```
+
+Repeated `--domain` or `--domain-is` values are executed as separate compact DOC queries and merged into one JSON artifact. This is preferred over long expressions such as `(domainis:a.gov OR domainis:b.gov) AND (...)`, because GDELT is sensitive to long or highly compound queries.
 
 ## Script Mapping
 
@@ -65,5 +90,21 @@ python3 scripts/fetch_gdelt_doc_search.py search \
   --start-datetime 20260301000000 \
   --end-datetime 20260308000000 \
   --timeline-smooth 5 \
+  --pretty
+```
+
+Exact-domain split search:
+
+```bash
+python3 scripts/fetch_gdelt_doc_search.py search \
+  --query 'smoke wildfire "New York City"' \
+  --domain-is airnow.gov \
+  --domain-is nyc.gov \
+  --mode artlist \
+  --format json \
+  --start-datetime 20230605000000 \
+  --end-datetime 20230609000000 \
+  --max-records 50 \
+  --output ./data/gdelt-doc/official-smoke.json \
   --pretty
 ```

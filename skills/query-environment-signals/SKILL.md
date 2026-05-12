@@ -13,6 +13,7 @@ description: Query compact environment-signal rows from the unified signal plane
 ## Triggering Conditions
 - Need physical observations without reading raw provider payloads.
 - Need mission-window filtering for air, weather, hydrology, or fire signals.
+- Use this surface for official physical measurements such as AirNow observations; official provenance should be carried in provider/source metadata, not by moving the observation into the formal plane.
 - Need compact evidence refs for findings, evidence bundles, board review, or challenge work.
 - Need to reopen prior-round physical evidence while staying inside the same run.
 

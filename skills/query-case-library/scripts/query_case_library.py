@@ -200,6 +200,10 @@ def compact_result(
         "report_basis_status": maybe_text(row["report_basis_status"]),
         "readiness_status": maybe_text(row["readiness_status"]),
         "history_summary_text": maybe_text(row["history_summary_text"]),
+        "selected_evidence_refs": parse_json_text(
+            row["selected_evidence_refs_json"],
+            [],
+        )[:20],
         "match_reasons": reasons,
         "match_surfaces": {
             "profile_match": profile_match,

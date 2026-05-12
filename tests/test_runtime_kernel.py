@@ -382,7 +382,7 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertTrue(event["execution_input_hash"])
             self.assertTrue(event["payload_hash"])
 
-    def test_kernel_does_not_prepend_runtime_flags_to_standalone_fetch_skills(self) -> None:
+    def test_kernel_captures_standalone_fetch_output_without_runtime_flags(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             run_dir = root / "run"
@@ -428,9 +428,24 @@ class RuntimeKernelTests(unittest.TestCase):
                 )
 
             argv = run_mock.call_args.args[0]
-            self.assertEqual([sys.executable, str(fake_script), "fetch", "--location", "40.7128,-74.0060"], argv)
+            self.assertEqual(
+                [
+                    sys.executable,
+                    str(fake_script),
+                    "fetch",
+                    "--location",
+                    "40.7128,-74.0060",
+                    "--output",
+                    payload["event"]["command_snapshot"]["runtime_output_capture"]["injected_output_path"],
+                ],
+                argv,
+            )
             self.assertNotIn("--run-dir", argv)
             self.assertEqual(argv, payload["event"]["command_snapshot"]["argv"])
+            self.assertEqual(
+                "runtime raw-artifact capture for later normalization; not source selection",
+                payload["event"]["command_snapshot"]["runtime_output_capture"]["injection_semantics"],
+            )
 
     def test_kernel_loads_skill_config_env_without_overriding_process_env(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1700,6 +1715,7 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                     "skill_name": "test-skill",
                     "status": "failed",
                     "dead_letter_id": dead_letter["dead_letter_id"],
+                    "failure": {"error_code": "receipt-payload-hash-conflict"},
                 },
             )
 
@@ -1716,8 +1732,52 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             self.assertEqual("closed", closed["resolution_status"])
             self.assertEqual(1, before["summary"]["open_dead_letter_count"])
             self.assertEqual(1, before["summary"]["failed_event_count"])
+            self.assertEqual(1, before["summary"]["receipt_conflict_count"])
             self.assertEqual(0, after["summary"]["open_dead_letter_count"])
             self.assertEqual(0, after["summary"]["failed_event_count"])
+            self.assertEqual(0, after["summary"]["receipt_conflict_count"])
+            self.assertEqual("green", after["alert_status"])
+
+    def test_runtime_health_ignores_blocked_event_superseded_by_success(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.core.ledger import append_ledger_event
+            from eco_council_runtime.kernel.operator.operations import runtime_health_payload
+
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": "runtimeevt-blocked-open-challenge",
+                    "event_type": "skill-execution",
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "actor_role": "challenger",
+                    "skill_name": "open-challenge-ticket",
+                    "status": "blocked",
+                },
+            )
+            before = runtime_health_payload(run_dir, round_id=ROUND_ID)
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": "runtimeevt-completed-open-challenge",
+                    "event_type": "skill-execution",
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "actor_role": "challenger",
+                    "skill_name": "open-challenge-ticket",
+                    "status": "completed",
+                },
+            )
+            after = runtime_health_payload(run_dir, round_id=ROUND_ID)
+
+            self.assertEqual(1, before["summary"]["blocked_event_count"])
+            self.assertEqual("red", before["alert_status"])
+            self.assertEqual(0, after["summary"]["blocked_event_count"])
             self.assertEqual("green", after["alert_status"])
 
     def test_default_admission_policy_keeps_writes_inside_run_surface(self) -> None:

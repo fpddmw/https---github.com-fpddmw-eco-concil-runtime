@@ -89,6 +89,9 @@ def environment_signal_taxonomy_metadata() -> dict[str, Any]:
 
 
 SIGNAL_CONTRACTS: dict[str, CanonicalContract] = {
+    # Formal records are policy/procedure records, not every official source.
+    # Official physical observations such as AirNow still use
+    # environment-observation-signal with provider provenance.
     "formal-comment-signal": _contract(
         "formal-comment-signal",
         plane=PLANE_SIGNAL,

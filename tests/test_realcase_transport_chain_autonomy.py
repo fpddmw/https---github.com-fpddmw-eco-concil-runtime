@@ -129,6 +129,27 @@ class RealcaseTransportChainAutonomyTests(unittest.TestCase):
         self.assertEqual(1, source_skill_counts["fetch-airnow-hourly-observations"])
         self.assertEqual(1, source_skill_counts["fetch-open-meteo-historical"])
         self.assertEqual(1, source_skill_counts["fetch-nasa-firms-fire"])
+        receipt_normalizers = {
+            item["skill_name"]: item["normalization"]["normalizer_skill"]
+            for item in archive["source_receipts"]["sample_receipts"]
+            if isinstance(item, dict) and isinstance(item.get("normalization"), dict)
+        }
+        self.assertEqual(
+            "normalize-airnow-observation-signals",
+            receipt_normalizers["fetch-airnow-hourly-observations"],
+        )
+        self.assertIn(
+            "normalize-fetch-execution",
+            archive["source_receipts"]["sample_receipts"][0]["normalization"][
+                "normalize_fetch_execution_command_template"
+            ],
+        )
+        self.assertIn(
+            "query-normalized-signal",
+            archive["source_receipts"]["sample_receipts"][0]["normalization"][
+                "query_normalized_signal_after_normalization_command_template"
+            ],
+        )
         self.assertIn("receipt-only evidence", " ".join(archive["gap_hints"]))
         self.assertIn("normalize-fetch-execution", archive["commands"]["normalize_fetch_execution"])
         self.assertIn("archive-signal-corpus", archive["commands"]["archive_signal_corpus_checkpoint"])
@@ -267,6 +288,36 @@ class RealcaseTransportChainAutonomyTests(unittest.TestCase):
                 )
             )
             task_context = round2_tasks[0]["inputs"]["round_coordination_context"]
+            agent_entry = run_kernel(
+                "materialize-agent-entry-gate",
+                "--run-dir",
+                str(working_run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                target_round_id,
+            )["agent_entry"]
+            source_surface = run_kernel(
+                "show-source-surfaces",
+                "--run-dir",
+                str(working_run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                target_round_id,
+                "--limit",
+                "200",
+            )
+            run_state = run_kernel(
+                "show-run-state",
+                "--run-dir",
+                str(working_run_dir),
+                "--round-id",
+                target_round_id,
+            )
+            round_opening_context = agent_entry["coordination_surface"][
+                "round_opening_context"
+            ]
 
             self.assertEqual("completed", payload["status"])
             self.assertEqual(target_round_id, payload["summary"]["round_id"])
@@ -275,6 +326,202 @@ class RealcaseTransportChainAutonomyTests(unittest.TestCase):
             self.assertEqual(focus_refs, transition_artifact["primary_focus_refs"])
             self.assertEqual(focus_refs, task_context["primary_focus_refs"])
             self.assertIn("does not restrict", task_context["semantics"])
+            self.assertEqual(focus_refs, round_opening_context["primary_focus_refs"])
+            self.assertEqual(ROUND_ID, round_opening_context["source_round_id"])
+            self.assertEqual("continuation", round_opening_context["round_mode"])
+            self.assertIn("does not restrict", round_opening_context["semantics"])
+            self.assertTrue(
+                run_state["agent_entry"]["operator"]["round_opening_context_present"]
+            )
+            self.assertEqual(
+                ROUND_ID,
+                run_state["agent_entry"]["operator"]["round_opening_source_round_id"],
+            )
+            self.assertEqual(
+                "continuation",
+                run_state["agent_entry"]["operator"]["round_opening_round_mode"],
+            )
+            self.assertEqual(
+                focus_refs,
+                run_state["agent_entry"]["operator"]["round_opening_primary_focus_refs"],
+            )
+            self.assertEqual(0, source_surface["fetch_plan"]["step_count"])
+            source_catalog = {entry["source_skill"]: entry for entry in source_surface["catalog"]}
+            self.assertIn("fetch-gdelt-doc-search", source_catalog)
+            self.assertIn("fetch-nasa-firms-fire", source_catalog)
+            self.assertIn("fetch-open-meteo-historical", source_catalog)
+            self.assertFalse(
+                {"score", "rank", "weight", "priority"}
+                & all_keys({"agent_entry": agent_entry, "source_surface": source_surface})
+            )
+
+    def test_realcase_round_002_accepts_agent_source_acquisition_without_runtime_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            working_run_dir = Path(tmpdir) / RUN_ID
+            shutil.copytree(RUN_DIR, working_run_dir)
+
+            target_round_id = "round-002"
+            evidence_request_id = "evidence-request-dfe196ae4634"
+            focus_refs = [
+                "finding:finding-38401351d52e",
+                "challenge:challenge-38c1d2bb31df",
+                f"evidence-request:{evidence_request_id}",
+            ]
+            transition_request_id = request_and_approve_transition(
+                working_run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="open-investigation-round",
+                target_round_id=target_round_id,
+                source_round_id=ROUND_ID,
+                rationale="Open continuation round for agent-authored source acquisition smoke.",
+                request_payload={
+                    "round_mode": "continuation",
+                    "primary_focus_refs": focus_refs,
+                    "continuation_basis": "moderator-selected unresolved refs",
+                },
+            )
+            run_script(
+                script_path("open-investigation-round"),
+                "--run-dir",
+                str(working_run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                target_round_id,
+                "--source-round-id",
+                ROUND_ID,
+                "--transition-request-id",
+                transition_request_id,
+                "--round-mode",
+                "continuation",
+                "--primary-focus-ref",
+                focus_refs[0],
+                "--primary-focus-ref",
+                focus_refs[1],
+            )
+
+            proposal = run_script(
+                script_path("submit-source-acquisition-proposal"),
+                "--run-dir",
+                str(working_run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                target_round_id,
+                "--author-role",
+                "environmental-investigator",
+                "--source-skill",
+                "fetch-open-meteo-historical",
+                "--query-parameters-json",
+                json.dumps(
+                    {
+                        "latitude": "40.7128",
+                        "longitude": "-74.0060",
+                        "start_date": "2023-06-07",
+                        "end_date": "2023-06-08",
+                    },
+                    sort_keys=True,
+                ),
+                "--target-kind",
+                "evidence-request",
+                "--target-id",
+                evidence_request_id,
+                "--target-evidence-request-id",
+                evidence_request_id,
+                "--rationale",
+                "Agent-selected weather context to investigate the carried smoke-transport uncertainty.",
+                "--declared-side-effect",
+                "network-external",
+                "--requested-side-effect-approval",
+                "network-external",
+                "--provenance-json",
+                "{\"source\":\"round-002-realcase-smoke\"}",
+            )
+            intents = run_kernel(
+                "show-source-acquisition-intents",
+                "--run-dir",
+                str(working_run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                target_round_id,
+                "--author-role",
+                "environmental-investigator",
+                "--source-skill",
+                "fetch-open-meteo-historical",
+                "--status",
+                "proposed",
+                "--target-evidence-request-id",
+                evidence_request_id,
+            )
+            status = run_kernel(
+                "show-council-status",
+                "--run-dir",
+                str(working_run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                target_round_id,
+            )
+            source_surface = run_kernel(
+                "show-source-surfaces",
+                "--run-dir",
+                str(working_run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                target_round_id,
+                "--limit",
+                "200",
+            )
+
+            self.assertEqual("completed", proposal["status"])
+            self.assertEqual(
+                "source-acquisition-proposal",
+                proposal["summary"]["object_kind"],
+            )
+            self.assertEqual("source-acquisition-intents", intents["surface"])
+            self.assertEqual(1, len(intents["objects"]))
+            intent = intents["objects"][0]
+            self.assertEqual(
+                proposal["summary"]["object_id"],
+                intent["object_id"],
+            )
+            self.assertEqual("environmental-investigator", intent["author_role"])
+            self.assertEqual("fetch-open-meteo-historical", intent["source_skill"])
+            self.assertEqual(evidence_request_id, intent["target_evidence_request_id"])
+            execution_surface = intent["source_execution_surface"]
+            self.assertTrue(execution_surface["preflight_fetch_command_templates"])
+            self.assertTrue(execution_surface["fetch_command_templates"])
+            self.assertIn("40.7128,-74.0060", execution_surface["fetch_command_templates"][0])
+            self.assertIn("--start-date 2023-06-07", execution_surface["fetch_command_templates"][0])
+            self.assertIn("--end-date 2023-06-08", execution_surface["fetch_command_templates"][0])
+            self.assertIn(
+                "--allow-side-effect network-external",
+                execution_surface["fetch_command_templates"][0],
+            )
+            self.assertEqual(
+                1,
+                status["summary"]["source_acquisition_intent_count"],
+            )
+            self.assertEqual(
+                1,
+                status["round_liveness"]["counts"][
+                    "pending_source_acquisition_proposals_count"
+                ],
+            )
+            self.assertEqual(0, source_surface["fetch_plan"]["step_count"])
+            self.assertFalse(
+                {"score", "rank", "weight", "priority"}
+                & all_keys(
+                    {
+                        "intents": intents,
+                        "status": status,
+                        "source_surface": source_surface,
+                    }
+                )
+            )
 
 
 if __name__ == "__main__":

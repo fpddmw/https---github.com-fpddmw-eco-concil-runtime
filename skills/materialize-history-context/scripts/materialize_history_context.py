@@ -549,6 +549,16 @@ def render_history_context(snapshot: dict[str, Any]) -> str:
             continue
         lines.append(f"{index}. case_id={maybe_text(case.get('case_id'))} profile={maybe_text(case.get('profile_id'))}")
         lines.append(f"   reasons={', '.join(case.get('match_reasons', [])) if isinstance(case.get('match_reasons'), list) and case.get('match_reasons') else 'n/a'}")
+        selected_evidence_refs = (
+            case.get("selected_evidence_refs")
+            if isinstance(case.get("selected_evidence_refs"), list)
+            else []
+        )
+        if selected_evidence_refs:
+            lines.append(
+                "   evidence_refs="
+                + ", ".join(maybe_text(ref) for ref in selected_evidence_refs[:8] if maybe_text(ref))
+            )
         excerpts = case.get("excerpts", []) if isinstance(case.get("excerpts"), list) else []
         for excerpt_index, excerpt in enumerate(excerpts, start=1):
             if not isinstance(excerpt, dict):

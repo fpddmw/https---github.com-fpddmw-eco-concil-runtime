@@ -28,6 +28,9 @@ TEXT_FIELDS = (
     "summary",
     "summary_text",
     "brief_text",
+    "synthesis_text",
+    "stage_conclusion",
+    "moderator_boundary",
     "request_text",
     "scope_text",
     "claim_summary",
@@ -62,6 +65,7 @@ LIST_FIELDS = (
     "source_hints",
     "boundary_notes",
     "source_boundary_notes",
+    "known_facts",
     "limitations",
     "open_challenge_refs",
     "primary_focus_refs",
@@ -73,6 +77,11 @@ LIST_FIELDS = (
     "delta_refs",
     "source_refs",
     "response_to_ids",
+    "covered_object_refs",
+    "resolved_object_refs",
+    "unresolved_object_refs",
+    "evidence_gap_refs",
+    "next_round_candidate_refs",
 )
 
 LIST_ARG_FLAGS = {
@@ -82,6 +91,7 @@ LIST_ARG_FLAGS = {
     "source_hints": "source-hint",
     "boundary_notes": "boundary-note",
     "source_boundary_notes": "source-boundary-note",
+    "known_facts": "known-fact",
     "limitations": "limitation",
     "open_challenge_refs": "open-challenge-ref",
     "primary_focus_refs": "primary-focus-ref",
@@ -93,6 +103,11 @@ LIST_ARG_FLAGS = {
     "delta_refs": "delta-ref",
     "source_refs": "source-ref",
     "response_to_ids": "response-to-id",
+    "covered_object_refs": "covered-object-ref",
+    "resolved_object_refs": "resolved-object-ref",
+    "unresolved_object_refs": "unresolved-object-ref",
+    "evidence_gap_refs": "evidence-gap-ref",
+    "next_round_candidate_refs": "next-round-candidate-ref",
 }
 
 

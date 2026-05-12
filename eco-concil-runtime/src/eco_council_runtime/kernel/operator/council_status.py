@@ -19,6 +19,10 @@ from eco_council_runtime.kernel.source_queue.source_queue_contract import (
     source_capability_hints,
 )
 from eco_council_runtime.kernel.source_queue.source_queue_execution import render_fetch_argv
+from eco_council_runtime.kernel.source_queue.source_queue_profile import (
+    source_family_workflows_for_skills,
+    source_queue_profile,
+)
 from eco_council_runtime.objects.council import (
     SOURCE_ACQUISITION_PROPOSAL_STATUSES,
     query_council_objects,
@@ -224,6 +228,84 @@ def _latest_snapshot(run_dir: Path, prefix: str, round_id: str = "") -> dict[str
     }
 
 
+def _unique_history_texts(values: list[Any], *, limit: int = 20) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _compact_history_case(case: dict[str, Any]) -> dict[str, Any]:
+    excerpts = case.get("excerpts", []) if isinstance(case.get("excerpts"), list) else []
+    selected_evidence_refs = _unique_history_texts(
+        case.get("selected_evidence_refs")
+        if isinstance(case.get("selected_evidence_refs"), list)
+        else [],
+        limit=20,
+    )
+    return {
+        key: value
+        for key, value in {
+            "case_id": maybe_text(case.get("case_id")),
+            "run_id": maybe_text(case.get("run_id")),
+            "profile_id": maybe_text(case.get("profile_id")),
+            "region_label": maybe_text(case.get("region_label")),
+            "match_reasons": _unique_history_texts(
+                case.get("match_reasons")
+                if isinstance(case.get("match_reasons"), list)
+                else [],
+                limit=10,
+            ),
+            "matched_claim_types": _unique_history_texts(
+                case.get("matched_claim_types")
+                if isinstance(case.get("matched_claim_types"), list)
+                else [],
+                limit=10,
+            ),
+            "matched_metric_families": _unique_history_texts(
+                case.get("matched_metric_families")
+                if isinstance(case.get("matched_metric_families"), list)
+                else [],
+                limit=10,
+            ),
+            "selected_evidence_refs": selected_evidence_refs,
+            "excerpt_count": len(excerpts),
+        }.items()
+        if value not in ("", [], {}, 0)
+    }
+
+
+def _compact_history_signal(signal: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in {
+            "signal_id": maybe_text(signal.get("signal_id")),
+            "run_id": maybe_text(signal.get("run_id")),
+            "round_id": maybe_text(signal.get("round_id")),
+            "plane": maybe_text(signal.get("plane")),
+            "source_skill": maybe_text(signal.get("source_skill")),
+            "metric_family": maybe_text(signal.get("metric_family")),
+            "metric": maybe_text(signal.get("metric")),
+            "title": maybe_text(signal.get("title")),
+            "artifact_ref": maybe_text(signal.get("artifact_ref")),
+            "match_reasons": _unique_history_texts(
+                signal.get("match_reasons")
+                if isinstance(signal.get("match_reasons"), list)
+                else [],
+                limit=10,
+            ),
+        }.items()
+        if value not in ("", [], {})
+    }
+
+
 def _history_reuse_status(retrieval_path: Path, retrieval: Any) -> dict[str, Any]:
     payload = retrieval if isinstance(retrieval, dict) else {}
     budget = payload.get("budget", {}) if isinstance(payload.get("budget"), dict) else {}
@@ -232,29 +314,111 @@ def _history_reuse_status(retrieval_path: Path, retrieval: Any) -> dict[str, Any
         if isinstance(payload.get("history_query"), dict)
         else {}
     )
+    cases = [
+        _compact_history_case(item)
+        for item in payload.get("cases", [])
+        if isinstance(item, dict)
+    ][:20] if isinstance(payload.get("cases"), list) else []
+    signals = [
+        _compact_history_signal(item)
+        for item in payload.get("signals", [])
+        if isinstance(item, dict)
+    ][:20] if isinstance(payload.get("signals"), list) else []
+    case_evidence_refs = _unique_history_texts(
+        [
+            ref
+            for case in cases
+            if isinstance(case.get("selected_evidence_refs"), list)
+            for ref in case.get("selected_evidence_refs", [])
+        ],
+        limit=50,
+    )
+    signal_evidence_refs = _unique_history_texts(
+        [
+            signal.get("artifact_ref")
+            for signal in signals
+            if isinstance(signal, dict)
+        ],
+        limit=50,
+    )
+    context_path = retrieval_path.with_name(
+        retrieval_path.name.replace("history_retrieval_", "history_context_")
+    ).with_suffix(".md")
     return {
         "present": bool(retrieval_path.exists()),
         "path": str(retrieval_path.resolve()),
+        "history_context_path": str(context_path.resolve()),
         "selected_case_count": int(budget.get("selected_case_count") or 0),
         "selected_signal_count": int(budget.get("selected_signal_count") or 0),
         "history_query": {
             "profile_id": maybe_text(history_query.get("profile_id")),
             "region_label": maybe_text(history_query.get("region_label")),
-            "query_text": maybe_text(history_query.get("query_text")),
+            "query_text": maybe_text(history_query.get("query_text"))
+            or maybe_text(history_query.get("query")),
         },
+        "case_matches": cases,
+        "signal_hints": signals,
+        "case_evidence_refs": case_evidence_refs,
+        "signal_evidence_refs": signal_evidence_refs,
+        "archive_evidence_refs": _unique_history_texts(
+            case_evidence_refs + signal_evidence_refs,
+            limit=80,
+        ),
         "semantics": "History retrieval exposes prior evidence refs and excerpts only; it does not create current-run conclusions.",
     }
 
 
-def _compact_receipt(payload: dict[str, Any], path: Path) -> dict[str, Any]:
+def _compact_receipt(
+    payload: dict[str, Any],
+    path: Path,
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
     artifact_refs = payload.get("artifact_refs", []) if isinstance(payload.get("artifact_refs"), list) else []
     summary = payload.get("summary", {}) if isinstance(payload.get("summary"), dict) else {}
+    skill_name = maybe_text(payload.get("skill_name")) or maybe_text(summary.get("skill"))
+    source_spec = SOURCE_CATALOG.get(skill_name, {})
+    normalizer_skill = maybe_text(source_spec.get("normalizer_skill"))
+    normalization: dict[str, Any] = {
+        "support": "normalizer-available" if normalizer_skill else "receipt-only-no-normalizer",
+        "normalizer_skill": normalizer_skill,
+        "semantics": (
+            "A fetch receipt becomes queryable signal evidence only after a normalizer "
+            "writes canonical rows into the run signal plane."
+        ),
+    }
+    if normalizer_skill and run_id and round_id:
+        normalization["normalize_fetch_execution_command_template"] = run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="normalize-fetch-execution",
+            contract_mode="warn",
+            actor_role=maybe_text(source_spec.get("role")) or "<source_owner_role>",
+        )
+        normalization["query_normalized_signal_after_normalization_command_template"] = (
+            run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=round_id,
+                skill_name="query-normalized-signal",
+                contract_mode="warn",
+                actor_role=maybe_text(source_spec.get("role")) or "<agent_role>",
+                skill_args=[
+                    "--signal-id",
+                    "<normalized_signal_id>",
+                ],
+            )
+        )
     compact: dict[str, Any] = {
         "receipt_id": maybe_text(payload.get("receipt_id")),
-        "skill_name": maybe_text(payload.get("skill_name")) or maybe_text(summary.get("skill")),
+        "skill_name": skill_name,
         "status": maybe_text(payload.get("status")),
         "artifact_ref_count": len(artifact_refs),
         "path": str(path.resolve()),
+        "normalization": normalization,
     }
     record_count = summary.get("record_count")
     if isinstance(record_count, int):
@@ -279,7 +443,15 @@ def _source_receipt_status(run_dir: Path, *, run_id: str, round_id: str) -> dict
             skill_name = maybe_text(payload.get("skill_name"))
             if not (skill_name.startswith("fetch-") or skill_name in SOURCE_CATALOG):
                 continue
-            receipts.append(_compact_receipt(payload, path))
+            receipts.append(
+                _compact_receipt(
+                    payload,
+                    path,
+                    run_dir=run_dir,
+                    run_id=run_id,
+                    round_id=round_id,
+                )
+            )
     source_skill_counts: dict[str, int] = {}
     for receipt in receipts:
         skill_name = maybe_text(receipt.get("skill_name")) or "<empty>"
@@ -373,6 +545,11 @@ def show_archive_status_surface(
             "history_retrieval_present": bool(history_reuse.get("present")),
             "history_selected_case_count": int(history_reuse.get("selected_case_count") or 0),
             "history_selected_signal_count": int(history_reuse.get("selected_signal_count") or 0),
+            "history_archive_evidence_ref_count": len(
+                history_reuse.get("archive_evidence_refs", [])
+            )
+            if isinstance(history_reuse.get("archive_evidence_refs"), list)
+            else 0,
             "fetch_receipt_count": int(source_receipts.get("fetch_receipt_count") or 0),
             "receipt_evidence_status": (
                 "normalized-signals-present"
@@ -649,13 +826,39 @@ def _source_intent_execution_surface(
                 "--object-id",
                 maybe_text(intent.get("object_id")) or "<source_acquisition_proposal_id>",
                 "--status",
-                "<proposed|approved-for-execution|executed|withdrawn|rejected>",
+                "<proposed|approved-for-execution|fetched|normalized|receipt-only|failed|blocked|withdrawn|rejected>",
                 "--actor-role",
                 "<actor_role>",
                 "--status-rationale",
                 "<status_update_rationale>",
                 "--evidence-ref",
                 "<receipt_or_artifact_ref>",
+            ],
+        )
+        if run_id and round_id
+        else "",
+        "link_execution_lineage_command_template": run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="link-source-acquisition-execution",
+            contract_mode="warn",
+            actor_role="<actor_role>",
+            skill_args=[
+                "--object-id",
+                maybe_text(intent.get("object_id")) or "<source_acquisition_proposal_id>",
+                "--actor-role",
+                "<actor_role>",
+                "--status-rationale",
+                "<execution_lineage_rationale>",
+                "--fetch-receipt-ref",
+                "<fetch_receipt_ref>",
+                "--normalization-receipt-ref",
+                "<normalization_receipt_ref>",
+                "--normalized-signal-ref",
+                "<normalized_signal_ref>",
+                "--artifact-ref",
+                "<artifact_ref>",
             ],
         )
         if run_id and round_id
@@ -974,13 +1177,37 @@ def show_source_acquisition_intents_surface(
                     "--object-id",
                     "<source_acquisition_proposal_id>",
                     "--status",
-                    "<proposed|approved-for-execution|executed|withdrawn|rejected>",
+                    "<proposed|approved-for-execution|fetched|normalized|receipt-only|failed|blocked|withdrawn|rejected>",
                     "--actor-role",
                     "<actor_role>",
                     "--status-rationale",
                     "<status_update_rationale>",
                     "--evidence-ref",
                     "<receipt_or_artifact_ref>",
+                ],
+            )
+            if resolved_run_id and resolved_round_id
+            else "",
+            "link_source_acquisition_execution_template": run_skill_command(
+                run_dir=run_dir,
+                run_id=resolved_run_id,
+                round_id=resolved_round_id,
+                skill_name="link-source-acquisition-execution",
+                contract_mode="warn",
+                actor_role="<actor_role>",
+                skill_args=[
+                    "--object-id",
+                    "<source_acquisition_proposal_id>",
+                    "--actor-role",
+                    "<actor_role>",
+                    "--status-rationale",
+                    "<execution_lineage_rationale>",
+                    "--fetch-receipt-ref",
+                    "<fetch_receipt_ref>",
+                    "--normalization-receipt-ref",
+                    "<normalization_receipt_ref>",
+                    "--normalized-signal-ref",
+                    "<normalized_signal_ref>",
                 ],
             )
             if resolved_run_id and resolved_round_id
@@ -1066,6 +1293,7 @@ def show_source_surfaces_surface(
         if not isinstance(entry, dict):
             continue
         capability_hints = source_capability_hints(source_skill)
+        queue_profile = source_queue_profile(source_skill)
         catalog_entries.append(
             {
                 "source_skill": source_skill,
@@ -1087,6 +1315,14 @@ def show_source_surfaces_surface(
                 "fetch_argument_templates": capability_hints.get("fetch_argument_templates", [])
                 if isinstance(capability_hints.get("fetch_argument_templates"), list)
                 else [],
+                "source_queue_profile": queue_profile,
+                "source_family_ids": queue_profile.get("source_family_ids", [])
+                if isinstance(queue_profile.get("source_family_ids"), list)
+                else [],
+                "workflow_role": maybe_text(queue_profile.get("workflow_role")),
+                "downstream_hints": queue_profile.get("downstream_hints", [])
+                if isinstance(queue_profile.get("downstream_hints"), list)
+                else [],
             }
         )
     return {
@@ -1095,6 +1331,14 @@ def show_source_surfaces_surface(
         "run_id": resolved_run_id,
         "round_id": resolved_round_id,
         "semantics": "This surface exposes source capabilities and prepared fetch commands; it does not rank, select, or validate evidence.",
+        "source_family_workflow_semantics": (
+            "Source-family workflows are optional agent-owned data-dependency maps "
+            "for cases like recon-to-table-pull or list-to-detail. They do not "
+            "rank sources, select evidence, or fix a council agenda."
+        ),
+        "source_family_workflows": source_family_workflows_for_skills(
+            [source_skill for source_skill, entry in SOURCE_CATALOG.items() if isinstance(entry, dict)]
+        ),
         "mission_window": fetch_plan.get("run", {}).get("window", {})
         if isinstance(fetch_plan.get("run"), dict)
         else {},

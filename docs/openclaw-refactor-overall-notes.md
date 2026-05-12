@@ -23,6 +23,8 @@
    - 关键流程应能在 artifact 缺失时从 DB 恢复。
 8. `explicit basis selection`
    - 证据选择、排除、排序、lead basis 和报告依据权重必须来自显式 agent/council/reporting 对象；skill 和 helper 只能暴露候选项或结构化线索。
+9. `thin runtime surfaces`
+   - runtime 只展示权限、对象状态、refs、receipt、ledger 和可执行命令模板；不把 agenda、source 选择、证据权重或结论采信写成运行时规则。
 
 ## 3. 非目标
 
@@ -43,6 +45,7 @@
 5. challenger 能阻止过度结论。
 6. report basis freeze 使报告依据可审计。
 7. archive/history 支持跨案例复用。
+8. agent-led source acquisition 和 round liveness continuation 可让开放型 mission 自然进入后续取证轮，而不是依赖 runtime-selected source。
 
 ## 5. 论文贡献表述建议
 
@@ -74,7 +77,7 @@
 7. gate 是否能在证据不足时保持 withheld，或在依据充分时 cautious freeze。
 8. report 是否只展示 evidence index、uncertainty register、residual disputes 和被承接过的依据。
 
-当前后续开发计划见 `docs/openclaw-agent-autonomy-archive-workplan.md`。真实案例不应先被写成机械化展示流程；应先真实运行、暴露问题、完成修复，再抽取一条可回放轨迹用于论文展示。
+当前收尾计划和进展见 `docs/openclaw-agent-autonomy-archive-workplan.md`。真实案例不应先被写成机械化展示流程；应先真实运行、暴露问题、完成修复，再抽取一条可回放轨迹用于论文展示。
 
 案例材料分层：
 
@@ -97,6 +100,8 @@
 4. module decomposition：顶层 `src`、`kernel/operator`、`kernel/planes`、`kernel/execution/controller`、`kernel/governance`、`kernel/archive` 已完成 package 化收敛。
 5. skills：当前 skills 保持原子能力边界，不进入批量拆分；后续只在能力混杂时重新评估。
 6. spatiotemporal relation：relation cue/query/alternatives/evidence packet 已进入 skills baseline。
+7. agent autonomy：source acquisition proposal、proposal status lifecycle、source execution lineage、round synthesis、round liveness object handoff / closing checklist、approval-gated helper handoff、archive checkpoint/history reuse 和 receipt-only normalization hints 已进入基线。
+8. 真实案例：NYC smoke transport-chain 已覆盖 `round-001 -> round-002` continuation，以及 round-002 中 agent-authored source-acquisition proposal；验证 source surface 仍是 capability catalog，不产生 runtime-selected source 或排序队列。
 
 当前主要验收线：
 
@@ -150,7 +155,7 @@
 
 ## 10. 验收清单
 
-后续真实案例评测和论文展示建议至少满足；agent 自主取证、多轮 continuation 和 archive/history 复用由 `docs/openclaw-agent-autonomy-archive-workplan.md` 独立跟踪：
+后续真实案例评测和论文展示建议至少满足；agent 自主取证、多轮 continuation 和 archive/history 复用的进展由 `docs/openclaw-agent-autonomy-archive-workplan.md` 记录：
 
 1. 能初始化 mission/run/round。
 2. 能抓取或导入 public/environment/formal 数据。
@@ -164,3 +169,8 @@
 10. 能 freeze 或 withhold report basis。
 11. 能生成 final publication。
 12. 能说明 helper 输出为什么不是直接结论。
+13. source acquisition proposal 由 agent 明确提交，runtime 只校验权限、side-effect approval 和 receipt，不排序 source。
+14. 存在 unresolved refs 时，moderator 能打开 continuation round；carried refs 是 handoff context，不是固定议程。
+15. archive/history 输出历史 evidence refs 和 match surfaces，不把历史结论套用到当前 run。
+16. moderator 能提交 `round-synthesis` 记录阶段性结论；closing checklist 只展示 observed gaps 和命令模板，不排议程顺序。
+17. source acquisition execution lineage 能把 proposal、receipt、normalized signal refs 串联成审计链，但不执行取证、不判断采信。

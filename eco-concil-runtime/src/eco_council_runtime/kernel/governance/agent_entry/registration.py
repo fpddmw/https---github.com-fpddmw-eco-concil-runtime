@@ -112,6 +112,14 @@ def write_role_workspace_context(
                 f"- Investigation board: `{(run_dir / 'board' / 'investigation_board.json').resolve()}`",
                 "",
                 "Use these generated runtime artifacts as the role contract surface.",
+                "",
+                "## Skill Use Discipline",
+                "",
+                "- Skills provide capability surfaces and evidence artifacts; they do not decide truth, sufficiency, or report readiness.",
+                "- Treat zero, failed, blocked, no-op, or receipt-only outputs as attempt results, not proof that real-world evidence is absent.",
+                "- Before saying data cannot be found or evidence cannot be combined, state the skill, parameters, coverage, and untried follow-up routes in one concise sentence.",
+                "- Use same-family follow-up skills, preflight commands, linting, metadata checks, availability probes, or revised parameters when the evidence need remains live.",
+                "- This discipline preserves agent autonomy; it is not source ranking, evidence scoring, or a fixed agenda.",
             ]
         )
         + "\n",

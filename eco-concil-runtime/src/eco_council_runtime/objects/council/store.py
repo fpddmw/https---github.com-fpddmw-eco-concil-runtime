@@ -38,6 +38,11 @@ from eco_council_runtime.kernel.planes.deliberation_plane import maybe_text, utc
 SOURCE_ACQUISITION_PROPOSAL_STATUSES = (
     "proposed",
     "approved-for-execution",
+    "fetched",
+    "normalized",
+    "receipt-only",
+    "failed",
+    "blocked",
     "executed",
     "withdrawn",
     "rejected",
@@ -471,6 +476,7 @@ def update_dynamic_investigation_object_status(
     evidence_refs: list[Any] | None = None,
     lineage: list[Any] | None = None,
     provenance: dict[str, Any] | None = None,
+    payload_updates: dict[str, Any] | None = None,
     artifact_path: str = "",
     record_locator: str = "$.object",
     db_path: str = "",
@@ -538,6 +544,19 @@ def update_dynamic_investigation_object_status(
     }
 
     payload = dict(existing)
+    if isinstance(payload_updates, dict):
+        immutable_fields = {
+            "object_kind",
+            "run_id",
+            "round_id",
+            "object_id",
+            "proposal_id",
+            "synthesis_id",
+        }
+        for key, value in payload_updates.items():
+            if key in immutable_fields:
+                continue
+            payload[key] = value
     payload["status"] = normalized_status
     payload["status_updated_at_utc"] = now
     payload["status_updated_by_role"] = status_update["updated_by_role"]

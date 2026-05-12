@@ -103,6 +103,12 @@ challenger 尝试 `open-falsification-probe` 时，preflight 正确阻断了未�
 
 需要明确：任何 governed fetch 或 artifact import 成功后，都应向 agent 暴露下一步 normalize/query command hint；如果某 provider 暂不支持 normalize，也应显式标注为 receipt-only evidence，而不是让 agent 反复试错。
 
+### 3.10 弱报告不能成为过早放弃调查的出口
+
+弱报告或 bounded report 可以生成，但不能因为若干 fetch 失败、zero-signal 或 receipt-only 就直接放弃调查。若仍存在可行动的 unresolved refs、source-family follow-up、参数修正、替代 provider、hypothesis/challenge 验证路线，moderator 应主持 continuation round 或记录为什么当前不继续。
+
+正确方向不是为每类议题预设确认条件，而是要求议会在收口前显式记录 claim strength、limitations、unresolved refs 和 non-continuation rationale。runtime 只暴露这一程序性义务，不判断证据质量、不引入 topic taxonomy、不做 source 排序。
+
 ## 4. 实施计划
 
 ### P0：常驻文档与术语收口
@@ -203,6 +209,7 @@ challenger 尝试 `open-falsification-probe` 时，preflight 正确阻断了未�
 3. 若 moderator 不继续，必须显式记录 `no-actionable-path`、`human-paused`、`out-of-scope` 或 `report-ready`，不能静默停下。
 4. `open-investigation-round` 消费 target refs、challenge id、context packet id、round mode。
 5. 新 round 的 brief 只作为 coordination hint。
+6. 弱报告允许收口，但必须显式声明 claim strength、limitations、unresolved refs 和不继续调查的理由；强 relational / causal / source-attribution claim 必须引用议会可见 refs 并保留 challenger review 或 continuation path。
 
 验收：
 
@@ -210,6 +217,7 @@ challenger 尝试 `open-falsification-probe` 时，preflight 正确阻断了未�
 2. round-002 可以读取 round-001 findings/challenges/tasks。
 3. runtime 不因 brief 外发现拒绝 agent 输出。
 4. 存在可行动的后续调查路线时，流程不会以 coordination freeze point 静默停住。
+5. weak / bounded report 不会被用作跳过可行动调查路线的捷径。
 
 ### P4：Skill approval request 衔接
 
@@ -329,7 +337,7 @@ Role-local command templates：
 2. next-actions 运行面已从 `ranked_actions` 收口为 `actions`，artifact locator 同步改为 `$.actions`；runtime 不再产出排序队列字段。
 3. action fallback 语义已改为候选/兜底来源，不再用 `heuristic_action_count`、`heuristic-fallback` 或旧 wrapper provenance 名称作为公开运行面。
 4. probe、readiness、round opening、orchestration、archive/history、report-basis 等 downstream skills 均改为读取 `actions`，由 agent 自主组合、采信和追问证据。
-5. 全量 `python3 -m unittest discover tests` 已通过，当前回归覆盖 342 个测试。
+5. 全量 `python3 -m unittest discover tests` 已通过，当前回归覆盖 346 个测试。
 6. source-acquisition intent surface 已支持按 `author_role`、`source_skill`、`status`、`target_evidence_request_id` 过滤，并把 agent 明确提交的 `query_parameters` 填入 fetch command templates；runtime 只展示可执行命令面，不选择 source、不排序 source、不判断证据采信。
 7. source-acquisition intent surface 已区分 preflight fetch command 与带 side-effect approval 的执行 command：执行 command 只携带 proposal 明确请求的 `requested_side_effect_approvals`，并列出已声明但尚未请求的 side effects，避免 runtime 替 agent 或 operator 默认授权。
 8. archive checkpoint 已在 NYC smoke transport-chain 实案 temp copy 上回归：`archive-signal-corpus` 明确区分 `missing-normalized-signals-table` 与空 rows，`archive-case-library` 可产出 `partial-case-checkpoint`，`show-archive-status` 保留 `receipt-only-evidence-present`，不把 receipt-only fetch 伪装成可查询 normalized signals。
@@ -337,3 +345,11 @@ Role-local command templates：
 10. approval-gated skill 的 preflight handoff 已保留当前 `skill_args`：阻断 payload 中的 `request_skill_approval_command_template` 会生成带 `--requested-skill-arg=...` 的正式 approval request，审批后运行模板继续要求 `--skill-approval-request-id`；operator council status 的 approval bridge 也显式提示 requested skill args 入口。
 11. operator council status 已展示最近被 approval gate 阻断的 helper intents：从 `skill-preflight` ledger 读取 `missing-request-id` / `invalid-request` 阻断，暴露 skill、actor、requested args、approval request command 和 approved-run command；show-run-state 与 operator runbook 的 approval request 模板也统一包含 `--requested-skill-arg=<skill_arg>`。
 12. round liveness unresolved objects 已增加对象局部 handoff commands：open evidence request 可生成 source-acquisition proposal 模板，unbundled finding 可生成 evidence bundle / hypothesis 模板，hypothesis 可生成 challenge 模板，任意 unresolved ref 可生成 continuation request 模板；这些命令只携带对象 ref、证据 ref 和占位参数，不替 agent 选择 source、采信证据或固定下一轮议程。
+13. history context 现在把 archived case 的 `selected_evidence_refs` 从 case-library query 带入 retrieval artifact、markdown context 和 `show-archive-status.history_reuse`；archive status 同时暴露 compact `case_matches`、`signal_hints` 和 `archive_evidence_refs`，只作为历史证据线索，不生成当前 run 结论。
+14. source receipt status 已增加 per-receipt normalization hints：若 source catalog 声明 normalizer，则显示 normalizer skill、`normalize-fetch-execution` 模板和归一化后的 `query-normalized-signal` 模板；未归一化前仍保持 receipt-only evidence 语义，不伪装成可查询 normalized signal。
+15. NYC smoke transport-chain 实案已回归 round-001 -> round-002 continuation：round-002 agent entry 和 `show-run-state` operator 摘要均读取 `round_opening_context` 中的 `source_round_id`、`round_mode` 和 `primary_focus_refs`，同时 source surface 仍保持 capability-based catalog，不因 carried refs 变成 runtime-selected source 或固定调查议程。
+16. NYC smoke transport-chain round-002 已增加 agent-authored source-acquisition proposal smoke：environmental investigator 可在 continuation round 中自主提交 `fetch-open-meteo-historical` proposal，operator/status 只展示 proposal、preflight/fetch command templates 和 pending source intent，不生成 source 排序或 runtime-selected fetch plan。
+17. `round-synthesis` 已作为薄 dynamic council object 进入基线：moderator 可用 `submit-round-synthesis` 记录阶段性结论、known facts、未解决 refs、evidence gaps 和候选 continuation refs；该对象不做 report-basis freeze、不固定下一轮议程、不判断证据采信。
+18. `link-source-acquisition-execution` 已进入 source-acquisition lifecycle：它只把 proposal 与 fetch receipt、normalization receipt、normalized signal refs、artifact refs 建立审计 lineage，并把 refs 追加到 proposal envelope；不执行 fetch/normalize、不排序 source、不提升证据采信。
+19. `round_liveness.closing_checklist` 已提供 moderator 收口面：列出是否已记录 synthesis、是否还有 unresolved refs、pending source-acquisition lineage、not-ready readiness 等 observed gaps 和 copyable commands；该 checklist 是稳定展示序列，不是权重排序或自动 round scheduler。
+20. `claim-strength obligation` 已进入 agent entry 和 round liveness：弱报告可以生成，但必须记录 claim strength、limitations、unresolved refs 和 non-continuation rationale；强 relational / causal / source-attribution claim 需要议会可见 refs 与 challenger review path。该机制不引入议题模板、source 排序、evidence score 或 runtime 采信判断。

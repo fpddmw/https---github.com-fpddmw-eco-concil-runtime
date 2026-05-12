@@ -23,6 +23,18 @@ description: Update the lifecycle status of an existing source-acquisition propo
 - `status`
 - `actor_role`
 
+Supported source-acquisition statuses are:
+- `proposed`
+- `approved-for-execution`
+- `fetched`
+- `normalized`
+- `receipt-only`
+- `failed`
+- `blocked`
+- `executed` for legacy records that do not distinguish fetch vs normalization
+- `withdrawn`
+- `rejected`
+
 ## Useful Optional Input
 - `status_rationale`
 - `evidence_ref`

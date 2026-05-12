@@ -166,6 +166,10 @@ DELIBERATION_CONTRACTS: dict[str, CanonicalContract] = {
         "round-brief",
         schema_version="round-brief-v1",
     ),
+    "round-synthesis": _dynamic_investigation_contract(
+        "round-synthesis",
+        schema_version="round-synthesis-v1",
+    ),
     "evidence-request": _dynamic_investigation_contract(
         "evidence-request",
         schema_version="evidence-request-v1",

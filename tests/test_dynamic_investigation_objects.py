@@ -229,6 +229,14 @@ class DynamicInvestigationObjectTests(unittest.TestCase):
                 proposal["object_id"],
                 execution_surface["status_update_command_template"],
             )
+            self.assertIn(
+                "link-source-acquisition-execution",
+                execution_surface["link_execution_lineage_command_template"],
+            )
+            self.assertIn(
+                proposal["object_id"],
+                execution_surface["link_execution_lineage_command_template"],
+            )
             self.assertIn("normalize-fetch-execution", execution_surface["normalize_fetch_execution_command"])
 
             status_update = run_script(
@@ -282,6 +290,88 @@ class DynamicInvestigationObjectTests(unittest.TestCase):
             self.assertNotIn("rank", executed)
             self.assertNotIn("priority", executed)
 
+            lineage_link = run_script(
+                script_path("link-source-acquisition-execution"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--object-id",
+                proposal["object_id"],
+                "--actor-role",
+                "environmental-investigator",
+                "--status-rationale",
+                "Link the fetch and normalized signal refs without deciding evidence acceptance.",
+                "--fetch-receipt-ref",
+                "receipt://fetch/open-meteo/001",
+                "--normalization-receipt-ref",
+                "receipt://normalize/open-meteo/001",
+                "--normalized-signal-ref",
+                "signal://open-meteo/weather/001",
+                "--artifact-ref",
+                "artifact://fetch/open-meteo/raw-001",
+                "--provenance-json",
+                json.dumps({"source": "unit-test-lineage"}, ensure_ascii=True, sort_keys=True),
+            )
+            self.assertEqual("completed", lineage_link["status"])
+            self.assertEqual("normalized", lineage_link["summary"]["status"])
+            self.assertEqual(1, lineage_link["summary"]["fetch_receipt_ref_count"])
+            self.assertEqual(1, lineage_link["summary"]["normalization_receipt_ref_count"])
+            self.assertEqual(1, lineage_link["summary"]["normalized_signal_ref_count"])
+
+            linked_query = query_council_objects(
+                run_dir,
+                object_kind="source-acquisition-proposal",
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                status="normalized",
+                source_skill="fetch-open-meteo-historical",
+            )
+            linked = linked_query["objects"][0]
+            self.assertEqual(1, len(linked["execution_links"]))
+            self.assertIn("receipt://fetch/open-meteo/001", linked["fetch_receipt_refs"])
+            self.assertIn(
+                "receipt://normalize/open-meteo/001",
+                linked["normalization_receipt_refs"],
+            )
+            self.assertIn("signal://open-meteo/weather/001", linked["normalized_signal_refs"])
+            self.assertIn(
+                "artifact://fetch/open-meteo/raw-001",
+                linked["execution_artifact_refs"],
+            )
+            self.assertIn("signal://open-meteo/weather/001", linked["evidence_refs"])
+            self.assertNotIn("score", linked)
+            self.assertNotIn("rank", linked)
+            self.assertNotIn("priority", linked)
+
+            appended_lineage_link = run_script(
+                script_path("link-source-acquisition-execution"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--object-id",
+                proposal["object_id"],
+                "--actor-role",
+                "environmental-investigator",
+                "--status-rationale",
+                "Append a second normalized signal ref without reusing the first link receipt identity.",
+                "--fetch-receipt-ref",
+                "receipt://fetch/open-meteo/001",
+                "--normalization-receipt-ref",
+                "receipt://normalize/open-meteo/001",
+                "--normalized-signal-ref",
+                "signal://open-meteo/weather/002",
+                "--provenance-json",
+                json.dumps({"source": "unit-test-lineage"}, ensure_ascii=True, sort_keys=True),
+            )
+            self.assertNotEqual(lineage_link["receipt_id"], appended_lineage_link["receipt_id"])
+            self.assertEqual("normalized", appended_lineage_link["summary"]["status"])
+
             proposed_query = query_council_objects(
                 run_dir,
                 object_kind="source-acquisition-proposal",
@@ -300,12 +390,17 @@ class DynamicInvestigationObjectTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--status",
-                "executed",
+                "normalized",
             )
             self.assertIn("executed", executed_surface["supported_statuses"])
+            self.assertIn("normalized", executed_surface["supported_statuses"])
             self.assertIn(
                 "update-source-acquisition-proposal-status",
                 executed_surface["commands"]["update_source_acquisition_proposal_status_template"],
+            )
+            self.assertIn(
+                "link-source-acquisition-execution",
+                executed_surface["commands"]["link_source_acquisition_execution_template"],
             )
 
     def test_source_acquisition_proposal_rejects_wrong_role_for_source(self) -> None:

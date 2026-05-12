@@ -63,6 +63,71 @@ def build_skill_subprocess_command(
     return command
 
 
+def _argument_present(argv: list[str], option: str) -> bool:
+    normalized = maybe_text(option)
+    return any(maybe_text(item) == normalized for item in argv)
+
+
+def _safe_path_fragment(value: str) -> str:
+    fragment = "".join(char if char.isalnum() else "-" for char in maybe_text(value))
+    return fragment.strip("-") or "artifact"
+
+
+def maybe_inject_runtime_capture_output(
+    *,
+    run_dir: Path,
+    round_id: str,
+    skill_name: str,
+    skill_args: list[str],
+) -> tuple[list[str], dict[str, str]]:
+    """Add the catalog-declared raw artifact output path for direct fetch runs.
+
+    This is an operational capture boundary only. It does not select sources or
+    decide evidence uptake; it makes direct fetch receipts normalizeable later.
+    """
+    argv = [maybe_text(item) for item in skill_args if maybe_text(item)]
+    if not argv or argv[0] != "fetch":
+        return argv, {}
+    try:
+        from eco_council_runtime.kernel.source_queue.source_queue_contract import (  # noqa: PLC0415
+            source_config,
+            source_runtime_output_arg,
+            source_runtime_output_mode,
+        )
+    except Exception:  # noqa: BLE001
+        return argv, {}
+
+    try:
+        config = source_config(skill_name)
+        output_arg = source_runtime_output_arg(skill_name)
+        output_mode = source_runtime_output_mode(skill_name)
+    except Exception:  # noqa: BLE001
+        return argv, {}
+    if not output_arg or output_mode not in {"file", "dir"}:
+        return argv, {}
+    if _argument_present(argv, output_arg):
+        return argv, {}
+
+    suffix = maybe_text(config.get("default_suffix")) or ".json"
+    hash_part = stable_hash(skill_name, round_id, json.dumps(argv, ensure_ascii=True, sort_keys=True))[:12]
+    base = (
+        run_dir
+        / "raw"
+        / round_id
+        / "direct-fetch"
+        / f"{_safe_path_fragment(skill_name)}-{hash_part}"
+    ).resolve()
+    output_path = base.with_suffix(suffix) if output_mode == "file" else base
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    argv = [*argv, output_arg, str(output_path)]
+    return argv, {
+        "injected_output_arg": output_arg,
+        "injected_output_mode": output_mode,
+        "injected_output_path": str(output_path),
+        "injection_semantics": "runtime raw-artifact capture for later normalization; not source selection",
+    }
+
+
 def skill_config_env_path(script_path: Path) -> Path | None:
     if script_path.parent.name != "scripts":
         return None
@@ -137,6 +202,12 @@ def run_skill(
     if contract_mode not in CONTRACT_MODES:
         raise ValueError(f"Unsupported contract_mode: {contract_mode}")
     root = workspace or workspace_root()
+    skill_args, runtime_output_capture = maybe_inject_runtime_capture_output(
+        run_dir=run_dir,
+        round_id=round_id,
+        skill_name=skill_name,
+        skill_args=skill_args,
+    )
     preflight = preflight_skill_execution(
         run_dir,
         run_id=run_id,
@@ -178,6 +249,8 @@ def run_skill(
         "actor_role": actor_role,
         "skill_approval_request_id": maybe_text(skill_approval_request_id),
     }
+    if runtime_output_capture:
+        command_snapshot["runtime_output_capture"] = runtime_output_capture
     env, loaded_env_files = build_skill_subprocess_env(
         script_path=script_path,
         actor_role=actor_role,
