@@ -1,4 +1,4 @@
 interface:
   display_name: "Open Challenge Ticket"
   short_description: "Open a challenge ticket on the local board"
-  default_prompt: "Use $open-challenge-ticket to open a challenge ticket on the current round's board state. Preserve target ids, linked evidence refs, and evidence_bundle_id values so challenger concerns remain tied to DB-backed findings and evidence bundles."
+  default_prompt: "Use $open-challenge-ticket to open a challenge ticket on the current round's board state when a claim, hypothesis, finding, or evidence bundle needs explicit testing. Treat the ticket as review pressure, not proof of falsity or source selection. Preserve target ids, linked evidence refs, and evidence_bundle_id values so later dispositions and readiness opinions can cite DB-backed material."

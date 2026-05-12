@@ -15,3 +15,12 @@ This skill:
 4. Creates a claimed board task linked to that challenge ticket and review comment.
 
 It does not close or waive the review comment. A later challenger readiness opinion or explicit resolved comment status must handle waiver.
+
+## Agent Reasoning Guide
+- This skill converts a report-risk comment into visible follow-up work. It does
+  not decide that the review comment is correct, resolved, or waived.
+- The generated challenge/task remains procedural scaffolding until an agent
+  writes findings, dispositions, or readiness opinions that cite the relevant
+  evidence.
+- If the source review comment lacks DB-backed evidence refs, preserve that as a
+  limitation instead of treating it as substantive proof.

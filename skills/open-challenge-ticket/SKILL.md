@@ -48,6 +48,14 @@ description: Open a challenge ticket on the local investigation board, preserve 
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- A challenge ticket creates review pressure. It is not proof that the target
+  finding, hypothesis, or bundle is false.
+- The ticket should identify what must be tested, bounded, or contradicted, and
+  later resolution should cite DB-backed evidence or a challenge disposition.
+- Open tickets should constrain over-strong readiness/report claims, but they do
+  not select sources or fix the next investigation agenda.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`

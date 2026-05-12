@@ -38,5 +38,15 @@ description: Submit a thin agent-position coordination object into the deliberat
 - Writes one runtime-local submission artifact.
 - Returns `canonical_ids`, `artifact_refs`, and a DB query handoff.
 
+## Agent Reasoning Guide
+- Use this skill to make an agent's provisional stance visible to the council.
+  It is not a finding, report basis, or automatic adoption of the cited
+  evidence.
+- A `needs-more-evidence` or withheld position is a limitation statement, not
+  proof that evidence does not exist.
+- State what the agent believes, what remains unresolved, and which refs should
+  be inspected next; downstream synthesis must cite this object explicitly
+  before it affects conclusions.
+
 ## Scripts
 - `scripts/submit_agent_position.py`

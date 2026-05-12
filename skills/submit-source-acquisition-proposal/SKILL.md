@@ -38,5 +38,15 @@ description: Submit a thin source-acquisition proposal so an investigator or cha
 - Writes one runtime-local submission artifact.
 - Returns `canonical_ids`, `artifact_refs`, and query handoff commands.
 
+## Agent Reasoning Guide
+- A source-acquisition proposal records an investigator's intended fetch route.
+  It is not source selection by the runtime and not evidence acceptance.
+- Query parameters should be concrete enough for later execution and lineage
+  linking. If a first query fails, revise parameters or use a complementary
+  skill before treating the route as exhausted.
+- Fetch and normalization results must later be linked by
+  `link-source-acquisition-execution` or another explicit lineage object before
+  downstream agents rely on them.
+
 ## Scripts
 - `scripts/submit_source_acquisition_proposal.py`

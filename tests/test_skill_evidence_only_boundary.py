@@ -50,6 +50,34 @@ P3_HISTORY_HELPER_AND_REPORTING_SKILLS = [
     "materialize-final-publication",
 ]
 
+COUNCIL_WRITE_AND_TRANSITION_SKILLS = [
+    "claim-board-task",
+    "close-challenge-ticket",
+    "freeze-report-basis",
+    "link-source-acquisition-execution",
+    "materialize-board-brief",
+    "materialize-context-packet",
+    "open-challenge-ticket",
+    "open-followup-from-review-comment",
+    "open-investigation-round",
+    "post-board-note",
+    "prepare-round",
+    "scaffold-mission-run",
+    "submit-agent-position",
+    "submit-challenge-disposition",
+    "submit-council-proposal",
+    "submit-evidence-request",
+    "submit-investigation-plan",
+    "submit-investigation-scope",
+    "submit-readiness-opinion",
+    "submit-round-brief",
+    "submit-round-synthesis",
+    "submit-source-acquisition-proposal",
+    "summarize-board-state",
+    "update-hypothesis-status",
+    "update-source-acquisition-proposal-status",
+]
+
 
 def skill_doc_text(skill_name: str) -> str:
     return (SKILLS_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
@@ -176,6 +204,7 @@ class SkillEvidenceOnlyBoundaryTests(unittest.TestCase):
         skill_names = {
             *evidence_only_skill_names(),
             *P3_HISTORY_HELPER_AND_REPORTING_SKILLS,
+            *COUNCIL_WRITE_AND_TRANSITION_SKILLS,
         }
 
         for skill_name in sorted(skill_names):
@@ -184,6 +213,36 @@ class SkillEvidenceOnlyBoundaryTests(unittest.TestCase):
                     "\n## Agent Reasoning Guide\n",
                     "\n" + skill_doc_text(skill_name),
                 )
+
+    def test_council_write_docs_preserve_autonomy_and_non_adoption_boundaries(self) -> None:
+        expectations = {
+            "scaffold-mission-run": ["starting context", "not a moderator plan"],
+            "link-source-acquisition-execution": ["lineage", "not evidence"],
+            "open-investigation-round": ["not hard agenda", "source choices"],
+            "materialize-context-packet": ["refs-only", "not evidence rejection"],
+            "submit-readiness-opinion": ["does not move", "not proof"],
+            "submit-round-synthesis": ["unresolved refs", "continuation round"],
+            "submit-source-acquisition-proposal": [
+                "not source selection",
+                "revise parameters",
+            ],
+            "summarize-board-state": ["visibility snapshot", "not a readiness"],
+        }
+
+        for skill_name in COUNCIL_WRITE_AND_TRANSITION_SKILLS:
+            raw_text = skill_doc_text(skill_name).lower()
+            text = " ".join(raw_text.split())
+            with self.subTest(skill=skill_name):
+                self.assertIn("## agent reasoning guide", raw_text)
+                self.assertTrue(
+                    "not " in text
+                    or "does not" in text
+                    or "do not" in text
+                    or "cannot" in text,
+                    text,
+                )
+                for phrase in expectations.get(skill_name, []):
+                    self.assertIn(phrase, text)
 
     def test_fetch_skill_use_cards_keep_zero_result_discipline(self) -> None:
         for skill_name in FETCH_SKILLS:

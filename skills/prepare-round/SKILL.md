@@ -42,6 +42,15 @@ description: Build one governed fetch plan from mission.json, round tasks, and s
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- This skill prepares queue-compatible fetch/import surfaces. It does not compile
+  the user's mission into a fixed moderator plan or decide source selection for
+  agents.
+- An empty fetch plan in scoping mode is a valid handoff to agent-led
+  investigation, not evidence that no source can be used.
+- Source selections and round briefs are context surfaces only; investigators
+  may propose, revise, or run allowed source skills through role authority.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

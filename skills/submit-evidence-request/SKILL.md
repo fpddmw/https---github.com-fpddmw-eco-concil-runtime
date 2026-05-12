@@ -38,5 +38,15 @@ description: Submit a thin evidence-request coordination object into the deliber
 - Writes one runtime-local submission artifact.
 - Returns `canonical_ids`, `artifact_refs`, and a DB query handoff.
 
+## Agent Reasoning Guide
+- Use this skill to state what kind of evidence the council wants to seek. It
+  does not decide that the evidence exists, is sufficient, or must come from a
+  particular source.
+- Source hints are optional navigation aids, not source routing instructions.
+  Investigators may choose other skills or combine multiple skills with
+  rationale.
+- An unanswered request should stay visible as an open gap or follow-up route;
+  it is not proof of absence.
+
 ## Scripts
 - `scripts/submit_evidence_request.py`

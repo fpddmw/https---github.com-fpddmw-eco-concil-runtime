@@ -1,4 +1,4 @@
 interface:
   display_name: "Eco Open Investigation Round"
   short_description: "Open a follow-up round and carry unresolved state forward"
-  default_prompt: "Use $open-investigation-round to open one follow-up investigation round, preserve the prior round on the board, carry forward unresolved hypotheses and tasks, and materialize the next round task scaffold."
+  default_prompt: "Use $open-investigation-round when live actionable routes remain and the moderator chooses continuation. Preserve the prior round, carry forward unresolved hypotheses/tasks/focus refs, and materialize the next task scaffold. Treat carried refs as handoff context, not a hard agenda or source choice; agents may revise them with rationale."

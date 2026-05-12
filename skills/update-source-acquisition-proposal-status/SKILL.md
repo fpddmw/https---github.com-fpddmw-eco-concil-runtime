@@ -46,5 +46,14 @@ Supported source-acquisition statuses are:
 - Writes one runtime-local status update artifact.
 - Returns `canonical_ids`, `artifact_refs`, and query handoff commands.
 
+## Agent Reasoning Guide
+- This skill updates lifecycle state on a proposal envelope. It does not judge
+  the substantive value of the source or normalize raw evidence.
+- `failed`, `blocked`, or `receipt-only` is not proof that the source has no
+  relevant data. It usually means the query, permission, fetch, or
+  normalization path needs inspection.
+- Use status updates with lineage refs so later agents can decide whether to
+  retry, revise parameters, switch skills, or cite normalized signals.
+
 ## Scripts
 - `scripts/update_source_acquisition_proposal_status.py`

@@ -46,6 +46,15 @@ description: Append a compact human-readable investigation note to the local boa
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- A board note is human-readable context only. It is not a canonical finding,
+  hypothesis judgement, readiness opinion, challenge disposition, or report
+  basis.
+- Use canonical write skills when the council needs a judgement, evidence
+  request, proposal, challenge, or readiness posture.
+- Empty or informal notes should never be used as proof that an issue has been
+  investigated or resolved.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

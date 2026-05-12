@@ -40,6 +40,14 @@ description: Summarize the current round's investigation board into a compact JS
 - `deliberation_sync`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- A board summary is a visibility snapshot. It is not a readiness decision,
+  evidence ranking, or agenda lock.
+- Counts and next-step hints help agents find active work; they do not prove
+  that absent items have no supporting evidence.
+- If open challenges, active hypotheses, or unclaimed tasks remain, downstream
+  roles should inspect the underlying board refs before closing the round.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

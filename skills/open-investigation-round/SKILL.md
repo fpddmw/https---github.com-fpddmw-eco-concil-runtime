@@ -56,5 +56,13 @@ description: Moderator-controlled council-state skill that opens one follow-up i
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- This skill opens a continuation round and carries unresolved state forward. It
+  does not decide the next round's factual conclusion or source choices.
+- `primary_focus_refs`, challenge ids, and context packet ids are handoff
+  context, not hard agenda locks; agents may revise them with rationale.
+- Use this when live actionable routes remain. If the council does not continue,
+  the moderator should record the report boundary and non-continuation rationale.
+
 ## Scripts
 - `scripts/open_investigation_round.py`

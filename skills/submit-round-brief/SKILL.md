@@ -41,5 +41,14 @@ description: Submit a thin round-brief coordination object into the deliberation
 - Writes one runtime-local submission artifact.
 - Returns `canonical_ids`, `artifact_refs`, and a DB query handoff.
 
+## Agent Reasoning Guide
+- A round brief gives agents context for one round. It does not lock the
+  agenda, reject other source routes, or decide report readiness.
+- `requested_outputs`, `invited_roles`, and focus refs are coordination hints.
+  Agents may add routes, challenge the brief, or revise the scope with
+  rationale.
+- If a brief exposes gaps, agents should use it to continue investigation, not
+  to justify a weak closeout without attempting live routes.
+
 ## Scripts
 - `scripts/submit_round_brief.py`

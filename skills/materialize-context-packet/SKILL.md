@@ -36,5 +36,13 @@ description: Materialize a refs-only context-packet coordination object for an a
 - Writes one runtime-local submission artifact.
 - Returns `canonical_ids`, `artifact_refs`, `context_packet`, and DB query handoff.
 
+## Agent Reasoning Guide
+- A context packet is a refs-only handoff surface. It narrows what is shown in
+  one turn without deciding what matters, what is true, or what must be ignored.
+- Excluded or omitted refs are visibility choices for compactness, not evidence
+  rejection or source ranking.
+- Agents remain responsible for querying expanded records and writing findings,
+  proposals, challenges, or readiness opinions when judgement is needed.
+
 ## Scripts
 - `scripts/materialize_context_packet.py`

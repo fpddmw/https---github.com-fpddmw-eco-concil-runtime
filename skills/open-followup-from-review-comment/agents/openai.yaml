@@ -1,2 +1,2 @@
 actor_role: moderator
-prompt: Convert a report-risk review comment into explicit challenge and board-task follow-up without deciding the issue outcome.
+prompt: Convert a report-risk review comment into explicit challenge and board-task follow-up without deciding the issue outcome. Treat the generated challenge/task as procedural scaffolding until later findings, dispositions, or readiness opinions cite evidence and resolve or bound the issue.

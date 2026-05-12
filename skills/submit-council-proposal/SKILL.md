@@ -67,6 +67,16 @@ description: Submit one structured council proposal directly into the deliberati
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- A proposal is an explicit council judgement object written after supporting
+  findings, evidence bundles, or review objects exist. It is not a substitute
+  for those upstream evidence records.
+- `confidence` is the author's stated posture, not a runtime evidence weight,
+  source rank, or automatic report-basis decision.
+- If evidence is weak or incomplete, the proposal should expose limitations,
+  unresolved refs, and follow-up needs instead of closing investigation by
+  omission.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`

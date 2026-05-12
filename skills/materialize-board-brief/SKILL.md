@@ -42,6 +42,14 @@ description: Materialize the current round's investigation board into a compact 
 - `deliberation_sync`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- A board brief is a human-readable export of visible board state. It is not a
+  finding, readiness opinion, source selector, or phase-transition instruction.
+- Empty counts or missing sections can reflect board sync, round selection, or
+  object-type visibility limits, not absence of evidence or live issues.
+- Agents should use the brief to decide what to inspect next, then write
+  canonical council objects for any judgement.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

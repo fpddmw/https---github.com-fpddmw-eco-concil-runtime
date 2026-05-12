@@ -40,5 +40,13 @@ description: Submit a thin investigation-plan coordination object into the delib
 - Writes one runtime-local submission artifact.
 - Returns `canonical_ids`, `artifact_refs`, and a DB query handoff.
 
+## Agent Reasoning Guide
+- Treat the plan as coordination material, not a fixed agenda or runtime
+  command sequence.
+- Agents may refine the plan when retrieved evidence, failed queries, or new
+  hypotheses expose a better route.
+- Open questions are investigation routes, not conclusions. If routes remain
+  live, carry them into round synthesis or a continuation round.
+
 ## Scripts
 - `scripts/submit_investigation_plan.py`

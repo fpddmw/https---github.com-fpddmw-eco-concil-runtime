@@ -41,5 +41,16 @@ description: Link an agent-authored source-acquisition proposal to fetch receipt
 - Writes one runtime-local lineage artifact.
 - `normalized` means signal-plane refs are linked; `fetched` and `receipt-only` remain audit lineage and should not be read as queryable normalized evidence.
 
+## Agent Reasoning Guide
+- This skill records lineage from an agent-authored proposal to execution
+  receipts and normalized refs. It does not validate query design or decide that
+  linked evidence is accepted.
+- `receipt-only`, `fetched`, and `normalized` are execution states, not evidence
+  quality labels. Agents should inspect the linked artifacts before using them
+  in findings or report basis.
+- If normalized refs are absent, treat that as a lineage/normalization gap and
+  record follow-up or claim-boundary limits rather than saying the source has no
+  data.
+
 ## Scripts
 - `scripts/link_source_acquisition_execution.py`

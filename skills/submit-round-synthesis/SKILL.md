@@ -43,5 +43,15 @@ description: Submit a thin moderator-authored round synthesis that records stage
 - Writes one runtime-local submission artifact.
 - Returns `canonical_ids`, `artifact_refs`, and a DB query handoff.
 
+## Agent Reasoning Guide
+- A round synthesis is moderator coordination about what is known, unresolved,
+  and available for continuation. It is not source ranking or evidence
+  acceptance.
+- Known facts should point to cited refs. Unresolved refs and evidence gaps
+  should remain visible so continuation can act on them.
+- Candidate continuation refs are live routes, not a fixed agenda. If useful
+  routes remain, the moderator should decide whether to open a continuation
+  round instead of silently closing.
+
 ## Scripts
 - `scripts/submit_round_synthesis.py`

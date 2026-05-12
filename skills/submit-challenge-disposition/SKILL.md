@@ -40,5 +40,14 @@ description: Submit a thin challenge-disposition coordination object into the de
 - Writes one runtime-local submission artifact.
 - Returns `canonical_ids`, `artifact_refs`, and a DB query handoff.
 
+## Agent Reasoning Guide
+- Use this skill to record how the council treats a challenge procedurally. It
+  does not prove the challenged claim true or false by itself.
+- `upheld`, `resolved`, `unresolved`, or `rejected` are governance states. They
+  constrain later readiness/report-basis use only when downstream objects cite
+  the disposition and its evidence refs.
+- If a challenge remains unresolved, carry it into synthesis or follow-up work
+  rather than treating it as absence of data.
+
 ## Scripts
 - `scripts/submit_challenge_disposition.py`

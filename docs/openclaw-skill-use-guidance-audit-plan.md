@@ -113,9 +113,6 @@ Under <skill> with <query/window/bbox/provider-mode>, this attempt returned
 3. runtime 生成层已经存在 `skill_use_discipline` 和 fetch skill 的
    `skill_use_card`，新 agent workspace 可看到轻量的 skill 使用纪律。
 4. 已验证：
-   - `quick_validate.py skills/fetch-*/` 通过
-   - `quick_validate.py skills/normalize-* skills/query-*` 通过
-   - `quick_validate.py skills/*` 通过
    - `compileall` 通过
    - `unittest tests.test_runtime_source_queue_profiles tests.test_agent_entry_gate` 通过
    - `unittest tests.test_gdelt_doc_query_safety tests.test_nasa_firms_fetch_skill` 通过
@@ -123,6 +120,7 @@ Under <skill> with <query/window/bbox/provider-mode>, this attempt returned
    - `unittest tests.test_signal_plane_workflow tests.test_formal_public_workflow tests.test_diffusion_workflow tests.test_council_query_surface tests.test_reporting_query_surface tests.test_archive_history_workflow tests.test_spatiotemporal_relation_taxonomy` 通过
    - `unittest tests.test_dynamic_investigation_skills tests.test_skill_evidence_only_boundary` 通过
    - `unittest tests.test_reporting_workflow tests.test_reporting_publish_workflow tests.test_reporting_contracts tests.test_milestone_package tests.test_optional_analysis_guardrails tests.test_analysis_workflow` 通过
+   - `unittest discover tests` 通过
    - `git diff --check` 通过
 
 ## 5.1 本次查证依据
@@ -320,7 +318,7 @@ Reporting / publish 链路已完成统一边界审计：
 - `publish-council-decision`
 - `publish-expert-report`
 
-其余 council write / transition skills 待后续专项审计：
+Council write / transition 链路已完成统一边界审计：
 
 - `claim-board-task`
 - `close-challenge-ticket`
@@ -333,8 +331,6 @@ Reporting / publish 链路已完成统一边界审计：
 - `open-investigation-round`
 - `post-board-note`
 - `prepare-round`
-- `publish-council-decision`
-- `publish-expert-report`
 - `scaffold-mission-run`
 - `submit-agent-position`
 - `submit-challenge-disposition`

@@ -52,6 +52,16 @@ description: Submit one structured readiness opinion directly into the deliberat
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- A readiness opinion is one role's stated posture about whether a claim,
+  round, or report basis can move forward. It does not move the council phase
+  by itself.
+- `blocked` or `needs-more-data` is a gap declaration, not proof that evidence
+  does not exist. It should name the missing route or unresolved refs whenever
+  possible.
+- `ready` should cite basis objects and limits. It should not hide unresolved
+  challenges or unnormalized fetch receipts.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

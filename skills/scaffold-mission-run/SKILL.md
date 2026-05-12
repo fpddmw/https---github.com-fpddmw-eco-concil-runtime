@@ -57,6 +57,15 @@ description: Scaffold one mission-driven run by materializing mission.json, firs
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Treat the mission as the user's request envelope. It is not a moderator plan,
+  source selection, evidence bundle, or factual conclusion.
+- Seeded hypotheses, source requests, artifact imports, window, and region are
+  starting context only. Agents may revise, narrow, reject, or extend them with
+  explicit rationale.
+- Missing scope means the run needs scoping work; it does not mean the mission
+  is invalid or that no evidence exists.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

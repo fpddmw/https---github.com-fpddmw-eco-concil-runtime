@@ -41,5 +41,13 @@ description: Submit a thin investigation-scope coordination object into the deli
 - Writes one runtime-local submission artifact.
 - Returns `canonical_ids`, `artifact_refs`, and a DB query handoff.
 
+## Agent Reasoning Guide
+- Scope records what the council currently thinks should be bounded. It is
+  revisable and must not be treated as the whole truth of the mission.
+- Unknown or partial spatial, temporal, object, metric, or comparison scope is
+  a reason to continue scoping, not a reason to stop investigation.
+- Later findings, evidence requests, or synthesis objects should cite scope
+  refs when they rely on them.
+
 ## Scripts
 - `scripts/submit_investigation_scope.py`

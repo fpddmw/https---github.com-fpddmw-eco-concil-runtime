@@ -51,6 +51,15 @@ Calls without evidence refs return `status=blocked` and do not mutate the board.
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- A hypothesis card is a council working object. It is not a report conclusion
+  unless later findings, proposals, or reports explicitly adopt it.
+- Status changes must remain tied to evidence refs or accepted proposal refs.
+  `active`, `retired`, or `rejected` is not proof of truth or absence by
+  itself.
+- Use the card to keep origin, alternative, and follow-up hypotheses visible so
+  later rounds can test them rather than losing them in freeform notes.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

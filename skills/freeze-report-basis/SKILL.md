@@ -52,6 +52,15 @@ description: Freeze the current round into a DB-backed report evidence basis aft
 - The emitted artifact also records `basis_selection_mode`, `basis_counts`, `selected_basis_object_ids`, and `frozen_basis` so downstream layers can read controversy objects directly instead of only reading coverage rows.
 - The emitted artifact also records `basis_object_kind=report-basis-freeze`, `transition_semantics=freeze-report-basis`, and `report_basis_selection_mode=freeze-report-basis-v1`.
 
+## Agent Reasoning Guide
+- This skill freezes already recorded DB-backed report basis after moderator
+  request and operator approval. It does not create new investigation findings or
+  make runtime the research judge.
+- A frozen basis must preserve claim-strength limits, unresolved refs, and
+  non-continuation rationale when live routes are not carried forward.
+- Missing fallback artifacts should be treated as export/input limitations, not
+  as evidence absence.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

@@ -50,6 +50,15 @@ description: Claim or upsert a board follow-up task on the local investigation b
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- This skill organizes follow-up work on the board. It does not prove a claim,
+  decide evidence sufficiency, or make the task owner accept a conclusion.
+- A claimed task is procedural accountability only. The task outcome still needs
+  a finding, evidence bundle, challenge disposition, readiness opinion, or round
+  synthesis before it affects report boundaries.
+- Empty or sparse board state can reflect missing sync, round selection, or
+  prior object creation, not absence of live investigation work.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

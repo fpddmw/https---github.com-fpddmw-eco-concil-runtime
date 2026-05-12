@@ -44,6 +44,14 @@ description: Close a challenge ticket on the local investigation board, preserve
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Closing a challenge is a council workflow action, not proof that the challenged
+  claim is true or false.
+- The resolution should cite the finding, evidence bundle, disposition, or
+  readiness object that actually carries the reasoning.
+- If the issue is only being deferred or bounded out of the report, record that
+  limitation instead of treating closure as substantive resolution.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 
