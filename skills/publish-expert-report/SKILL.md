@@ -44,6 +44,15 @@ description: Publish a canonical expert report from a role-specific draft while 
 - The emitted canonical report preserves normalized reporting-chain trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `decision_source`, `expert_report_draft_source`, `db_path`, and `observed_inputs`.
 - The canonical report preserves `report_packet`, section draft refs, evidence index, uncertainty register, residual disputes, and policy recommendations from the draft.
 
+## Agent Reasoning Guide
+- Treat publish as promotion of an existing draft into a canonical report
+  artifact. It does not advance investigation state, add findings, or override
+  unresolved disputes.
+- Preserve overwrite guards, operator approval, evidence index, uncertainty, and
+  residual disputes from the draft.
+- If the draft is weak or blocked, publish should carry those limitations rather
+  than presenting unsupported completeness.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`

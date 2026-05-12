@@ -1,5 +1,12 @@
 # AirNow Hourly AQ Obs File Notes
 
+## Official Reference Basis
+
+- AirNow Hourly AQ Obs fact sheet:
+  - `https://s3-us-west-1.amazonaws.com/files.airnowtech.org/airnow/docs/HourlyAQObsFactSheet.pdf`
+- AirNow hourly data fact sheet, data-use caveats, and file-host notes:
+  - `https://docs.airnowapi.org/docs/HourlyDataFactSheet.pdf`
+
 ## Data Source
 
 - Official AirNow file-product host:
@@ -14,6 +21,7 @@ This skill builds URL paths from UTC hour values and fetches plain text CSV file
 - The hourly filename hour is in UTC/GMT.
 - `ValidDate` + `ValidTime` in each row represent the beginning of the measurement hour.
 - Files are updated hourly and may be revised for data completeness.
+- AirNow documents recent-file updates and preliminary-data caveats; agents should avoid converting a single recent sparse file into a factual absence claim.
 
 ## Input Filters Used By This Skill
 

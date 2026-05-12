@@ -4,6 +4,9 @@
 
 - Historical archive endpoint:
   - `https://archive-api.open-meteo.com/v1/archive`
+- Official API documentation:
+  - `https://open-meteo.com/en/docs/historical-weather-api`
+- Provider caveat: the historical API is based on reanalysis/model datasets that combine observations and model estimates. It is not a raw station dump.
 
 ## Request Parameters Used By This Skill
 

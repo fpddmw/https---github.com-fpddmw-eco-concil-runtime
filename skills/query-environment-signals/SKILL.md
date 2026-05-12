@@ -55,6 +55,16 @@ description: Query compact environment-signal rows from the unified signal plane
 - `board_handoff`
   - Suggested next steps are lookup, finding, evidence bundle, or discussion writes.
 
+## Agent Reasoning Guide
+- Treat this as a read-only query over environment rows already visible in
+  `normalized_signals`. It does not re-fetch, normalize, infer exposure,
+  evaluate representativeness, or decide readiness.
+- Empty results can reflect missing normalization, wrong run/round,
+  `round_scope`, source, metric, time, bbox, or quality filters. They do not
+  prove that the physical condition or observation is absent.
+- Use returned item-level `evidence_refs` and `evidence_basis` when filing a
+  finding, evidence bundle, challenge, or source-acquisition follow-up.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

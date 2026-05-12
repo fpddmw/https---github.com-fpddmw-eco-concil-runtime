@@ -26,7 +26,7 @@ The agent remains responsible for:
 | Regulations.gov policy comments | `fetch-regulationsgov-comments`, `fetch-regulationsgov-comment-detail` | Comment list fetch discovers IDs by docket/document/agency/time window. Detail fetch enriches selected comments and attachments when list rows are insufficient. |
 | Bluesky public discourse | `fetch-bluesky-cascade` | Search, author-feed, and thread/cascade modes are alternate paths inside the same skill. Agents should revise mode, handles, hashtags, or event terms before treating weak output as a source limit. |
 | OpenAQ observations | `fetch-openaq` | Metadata discovery, API measurements, and S3 archive backfill are related paths. Empty measurement windows should prompt location/parameter/window review or archive backfill. |
-| Environmental cross-check | `fetch-airnow-hourly-observations`, `fetch-open-meteo-air-quality`, `fetch-open-meteo-historical`, `fetch-open-meteo-flood`, `fetch-nasa-firms-fire`, `fetch-usgs-water-iv` | These are complementary direct evidence surfaces. Agents may cross-check receptor observations, model/weather context, source-region fire activity, or hydrologic context. Runtime does not decide which source proves a claim. |
+| Environmental cross-check | `fetch-airnow-hourly-observations`, `fetch-open-meteo-air-quality`, `fetch-open-meteo-historical`, `fetch-open-meteo-flood`, `fetch-nasa-firms-fire`, `fetch-usgs-water-iv` | These are complementary evidence surfaces, not interchangeable proof channels. AirNow/OpenAQ expose station/provider observations; Open-Meteo exposes modeled weather, air-quality, or discharge context; FIRMS exposes active-fire detections; USGS IV exposes station hydrology in supported USGS coverage. Agents may cross-check receptor observations, modeled context, source-region fire activity, or hydrologic context. Runtime does not decide which source proves a claim. |
 
 ## Acquisition Attempt Review
 
@@ -56,6 +56,23 @@ The goal is to protect agent autonomy by keeping attention on investigation
 rather than compliance paperwork, while preventing a tool misuse from being
 converted into a confident council conclusion.
 
+## Signal Plane Reads
+
+Normalize and query skills are also limited acquisition surfaces:
+
+1. Normalize writes lineage, artifact refs, ingest receipts, and DB-backed signal
+   rows. No-row normalization output should first be read as artifact/schema,
+   mapping, allowlist, parser, or source-pairing scope, not as proof that source
+   evidence is absent or useless.
+2. Query reads only visible DB/archive/board state. Empty query output should
+   first be read as run/round, `round_scope`, filter, normalization, archive
+   import, or provenance visibility scope, not as proof that real-world evidence
+   does not exist.
+3. Query results become council evidence only when an agent carries the returned
+   item-level `evidence_refs` and `evidence_basis` into a finding, evidence
+   bundle, challenge, proposal, readiness opinion, synthesis, or report-basis
+   object.
+
 ## Skill Use Cards
 
 Generated role surfaces expose a `skill_use_card` for fetch skills. The card is
@@ -78,6 +95,13 @@ Examples:
 - YouTube and Regulations.gov are multi-step families. Search/list stages
   discover candidates; comment/detail stages provide deeper evidence when
   discourse or full-text semantics matter.
+- AirNow/Open-Meteo/USGS environmental skills have different observation
+  surfaces. Station observations, modeled grid fields, and hydrology discharge
+  products should not be substituted for each other without stating the
+  coverage limitation.
+- Bluesky search is query-sensitive and not an exhaustive discourse universe.
+  Weak output should trigger alternate terms, author/feed/list modes, or an
+  explicit source-limit rationale.
 
 ## Closing Rule
 

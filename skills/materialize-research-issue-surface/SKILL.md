@@ -14,5 +14,16 @@ description: Optional-analysis helper for DB-backed research issue surfaces. It 
 - Reads `run_dir/analytics/signal_plane.sqlite` and optional approved input artifact.
 - Writes `run_dir/analytics/research_issue_surface_<round_id>.json`
 
+## Agent Reasoning Guide
+- Treat output as approval-scoped advisory/audit material. Candidate issue
+  records are review surfaces, not controversy conclusions, claim candidates, or
+  report prose.
+- Empty or sparse surfaces can reflect missing normalized rows, filters, source
+  coverage, or upstream issue-hint scope. They do not prove that research issues
+  are absent.
+- A council agent must carry useful issue candidates into a finding, evidence
+  bundle, challenge, proposal, readiness opinion, or synthesis before downstream
+  use.
+
 ## Scripts
 - `scripts/materialize_research_issue_surface.py`

@@ -29,6 +29,16 @@ description: Optional-analysis helper for DB-backed environment signal aggregati
 - `output_path`
 - `limit`
 
+## Agent Reasoning Guide
+- Treat output as approval-scoped advisory/audit material. It summarizes visible
+  normalized environment rows; it does not match claims, rank sources, score
+  sufficiency, or decide readiness.
+- Empty or narrow aggregation can reflect missing normalization, filters,
+  `round_id`, DB path, or source coverage. It is not proof that environmental
+  evidence is absent.
+- A council agent must carry useful cues into a finding, evidence bundle,
+  challenge, proposal, readiness opinion, or synthesis before downstream use.
+
 ## References
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`
 

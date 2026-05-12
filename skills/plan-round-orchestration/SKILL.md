@@ -50,6 +50,15 @@ description: Optional moderator advisory skill for materializing an auditable or
 - `board_handoff`
 - The emitted plan artifact also records `phase_decision_basis`, including agenda counts, controversy-gap counts, and probe-stage / posture reason codes.
 
+## Agent Reasoning Guide
+- Treat output as optional moderator advisory material. It is not the controller's
+  default plan, a source queue, a phase transition, or report-basis authority.
+- Missing-input caveats and fallback assumptions are part of the result. Do not
+  convert a sparse plan into `no-actionable-path`, readiness, or phase movement.
+- Moderator and runtime-operator actions remain explicit: transition requests,
+  approvals, source proposals, findings, challenges, and readiness opinions must
+  carry any plan item before downstream use.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-refactor-overall-notes.md`

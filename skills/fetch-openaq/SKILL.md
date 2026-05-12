@@ -173,3 +173,12 @@ python3 scripts/openaq_router.py fetch \
 - Fetch writes or emits raw artifacts/receipts only.
 - Normalization belongs to `normalize-openaq-observation-signals`.
 - Measurement interpretation, station representativeness, exposure inference, and policy conclusions belong to investigator findings or approved optional-analysis, not this fetch skill.
+
+## Agent Reasoning Guide
+- Use metadata discovery before measurements when location IDs, sensor IDs, or
+  parameter IDs are uncertain.
+- Use archive backfill when the API measurement path does not cover the needed
+  historical window or when provider API output appears unexpectedly sparse.
+- Zero measurements can reflect wrong IDs, parameter mismatch, date bounds, API
+  coverage, or archive/API mode choice. Treat that as an acquisition diagnosis,
+  not as proof that observations do not exist.

@@ -14,5 +14,15 @@ description: Optional-analysis helper for comparing formal-record and public-dis
 - Reads `run_dir/analytics/signal_plane.sqlite`
 - Writes `run_dir/analytics/formal_public_footprints_<round_id>.json`
 
+## Agent Reasoning Guide
+- Treat output as approval-scoped advisory/audit material. Footprint overlap or
+  absence cues are not alignment scores, paired discourse links,
+  representation findings, or report conclusions.
+- Empty or narrow comparison can reflect missing normalization, source-family
+  coverage, filters, or archive/import scope. It is not proof that a public or
+  formal footprint is absent.
+- A council agent must carry useful cues into a finding, evidence bundle,
+  challenge, proposal, readiness opinion, or synthesis before downstream use.
+
 ## Scripts
 - `scripts/compare_formal_public_footprints.py`

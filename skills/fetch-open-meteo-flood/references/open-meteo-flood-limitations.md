@@ -10,6 +10,7 @@
 
 - Flood data is based on GloFAS reanalysis and forecast products, not raw in-situ gauge feeds.
 - Returned coordinates may be snapped to the hydrological grid and differ slightly from the requested coordinates.
+- Official documentation notes that the closest river may not be selected correctly at 5 km resolution; nearby coordinate checks can be needed when river identity matters.
 - Ensemble mode can expand the response with many additional `river_discharge_memberNN` series, which increases payload size significantly.
 
 ## Skill Safety Caps

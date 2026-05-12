@@ -81,6 +81,18 @@ python3 scripts/fetch_gdelt_mentions.py fetch \
 - Keep one concrete file-table fetch implementation: `Global Mentions` (`*.mentions.CSV.zip`).
 - Keep atomic operations only; do not add internal scheduler/polling loops.
 
+## Agent Reasoning Guide
+- This skill retrieves GDELT Global Mentions export files for a UTC snapshot
+  range. It is a row-level follow-up surface for mention/source context, not a
+  standalone article search or salience conclusion.
+- Use it after DOC reconnaissance, Events context, or a scoped time window when
+  the council needs source/mention rows that DOC results do not provide.
+- Dry-run historical ranges and keep `--max-files` bounded. A failed or sparse
+  pull is an acquisition/window/cap limitation, not proof that no mention context
+  exists.
+- Pair this skill with `normalize-gdelt-mentions-public-signals` before relying
+  on DB-backed public-signal queries.
+
 ## References
 - `references/gdelt-data-sources.md`
 - `references/gdelt-limitations.md`

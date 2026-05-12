@@ -1,5 +1,10 @@
 # USGS Water IV API Notes
 
+- Official service documentation:
+  - `https://waterservices.usgs.gov/docs/instantaneous-values/instantaneous-values-details/`
+- Water Services migration notice:
+  - `https://waterdata.usgs.gov/blog/api-waterservices-decom/`
+
 - Endpoint:
   - `https://waterservices.usgs.gov/nwis/iv/`
 - Recommended eco-council query style:
@@ -34,3 +39,9 @@
 - Useful variable codes for the first eco-council integration:
   - `00060` -> discharge / streamflow
   - `00065` -> gage height
+
+## Agent-facing Caveats
+
+- Every IV query needs one major filter such as `sites` or `bBox`; do not mix major filters in one request.
+- Parameter codes are five-character numeric codes, and not every parameter is served at every site.
+- Returned IV records may include provisional or operational data; use them as evidence inputs with provenance, not final regulatory adjudication.

@@ -1,4 +1,4 @@
 interface:
   display_name: "YouTube Comments Fetch"
   short_description: "Fetch YouTube public comments by video and time window"
-  default_prompt: "Use $fetch-youtube-comments to fetch YouTube public comment threads and replies for discovered videos with time-window filtering, validation, retries, and JSON artifacts."
+  default_prompt: "Use $fetch-youtube-comments to fetch public comment threads and replies for selected video IDs. It does not discover videos; keep the video selection source visible and do not treat zero comments as absence of YouTube discourse without checking selection and filters."

@@ -78,6 +78,15 @@ python3 scripts/fetch_regulationsgov_comments.py fetch \
 - Keep operations request-driven; do not add built-in scheduler/polling loops.
 - Preserve simple downstream integration by returning JSON and optional JSONL artifact.
 
+## Agent Reasoning Guide
+- This skill discovers comment list rows. It does not fetch all detail fields,
+  attachments, issue labels, stance, concern, or policy conclusions.
+- If list rows are relevant but insufficient for evidence review, follow with
+  `fetch-regulationsgov-comment-detail` for selected comment IDs.
+- Zero rows may reflect docket/document/agency filters, `posted` versus
+  `last-modified` mode, date bounds, or search terms. Record those limits before
+  saying the policy-comment route has no data.
+
 ## References
 - `references/env.md`
 - `references/regulationsgov-api-notes.md`

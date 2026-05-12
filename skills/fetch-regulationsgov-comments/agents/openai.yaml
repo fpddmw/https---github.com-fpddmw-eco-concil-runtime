@@ -1,4 +1,4 @@
 interface:
   display_name: "Regulations.gov Comments Fetch"
   short_description: "Fetch Regulations.gov comments with validation logs"
-  default_prompt: "Use $fetch-regulationsgov-comments to fetch Regulations.gov comments by time window with robust retries, validation, and JSONL output."
+  default_prompt: "Use $fetch-regulationsgov-comments to discover Regulations.gov comment list rows by docket/document/agency/time filters. If full text or attachments matter, follow selected IDs with $fetch-regulationsgov-comment-detail; zero rows require filter/date-mode review before claiming no data."

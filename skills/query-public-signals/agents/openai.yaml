@@ -1,4 +1,4 @@
 interface:
   display_name: "Query Public Signals"
   short_description: "Query compact public signals from the unified signal plane"
-  default_prompt: "Use $query-public-signals to query compact public-signal rows from the unified signal plane with run, round, source, kind, time, and keyword filters. Use the returned item-level evidence_refs and evidence_basis for findings or evidence bundles; do not infer claims while querying."
+  default_prompt: "Use $query-public-signals to query compact public-signal rows already normalized into the unified signal plane. Use returned item-level evidence_refs and evidence_basis for findings or bundles; empty results can mean DB/filter/round_scope/normalization limits, not absence of public discourse or records."

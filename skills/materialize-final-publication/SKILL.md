@@ -53,6 +53,15 @@ description: Assemble one decision-maker final report from canonical reporting p
 - The emitted final publication preserves normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `decision_source`, `report_basis_source`, `supervisor_state_source`, role-report sources, `db_path`, and `observed_inputs`.
 - The emitted final publication includes `decision_maker_report`, `evidence_index`, `uncertainty_register`, `residual_disputes`, and `policy_recommendations`. It must not present optional helper cues as findings unless they are cited by DB reporting or council basis objects.
 
+## Agent Reasoning Guide
+- Treat final publication as assembly of canonical reporting outputs under
+  explicit approval. It does not create new investigation conclusions or erase
+  withheld/continue posture.
+- Preserve evidence index, uncertainty register, residual disputes, supervisor
+  audit state, and role-report provenance.
+- Optional helper cues may appear only when already cited by DB reporting or
+  council basis objects; otherwise they remain audit context.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`

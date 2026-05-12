@@ -22,6 +22,7 @@ These caps are local safeguards. Raise them only when there is a clear downstrea
 - Historical data is model/reanalysis driven, not a raw station dump.
 - Returned coordinates may be snapped to the model grid and differ slightly from the requested coordinates.
 - Local timezones can introduce daylight-saving effects in hourly point counts. Use `GMT` for deterministic hour counts across locations.
+- Official documentation notes multiple historical datasets with different spatial resolution and availability windows; model choice can affect long-period comparisons and council claims.
 
 ## Scope Boundaries
 

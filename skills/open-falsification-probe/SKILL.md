@@ -48,6 +48,16 @@ description: Open compact falsification probes from next-action candidates so co
 - `board_handoff`
 - The emitted artifact also carries normalized D1 trace metadata in `action_source`, `board_state_source`, `coverage_source`, `db_path`, and `observed_inputs`, including explicit `next_actions_artifact_present` handling on both artifact and fallback paths.
 
+## Agent Reasoning Guide
+- Treat a falsification probe as an explicit test target, not as proof that a
+  claim is false, weak, or ready to close.
+- The skill does not select professional tools or run the investigation. It
+  preserves target ids, evidence refs, and governance follow-up so challengers
+  and moderators can act.
+- Empty or sparse probes can reflect missing next-action inputs, filters, DB
+  sync gaps, or lack of contradiction-heavy candidates. They do not close live
+  challenges or unresolved hypotheses.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

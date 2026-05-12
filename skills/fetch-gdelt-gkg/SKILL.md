@@ -81,6 +81,19 @@ python3 scripts/fetch_gdelt_gkg.py fetch \
 - Keep one concrete file-table fetch implementation: `GKG` (`*.gkg.csv.zip`).
 - Keep atomic operations only; do not add internal scheduler/polling loops.
 
+## Agent Reasoning Guide
+- This skill retrieves GDELT GKG export files for a UTC snapshot range. It is a
+  row-level knowledge-graph surface, not the DOC article API and not an issue or
+  report-conclusion generator.
+- Use it after a scoped time window exists, after DOC reconnaissance, or when DOC
+  query sensitivity/caps make article search insufficient for discovering
+  topical public signals.
+- Dry-run historical ranges and keep `--max-files` bounded. A failed or sparse
+  pull is an acquisition/window/cap limitation, not proof that no topical public
+  signal exists.
+- Pair this skill with `normalize-gdelt-gkg-public-signals` before relying on
+  DB-backed public-signal queries.
+
 ## References
 - `references/gdelt-data-sources.md`
 - `references/gdelt-limitations.md`

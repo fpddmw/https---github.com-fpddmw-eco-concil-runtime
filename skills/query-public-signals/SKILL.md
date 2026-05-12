@@ -48,6 +48,16 @@ description: Query compact public-signal rows from the unified signal plane data
 - `board_handoff`
   - Suggested next steps are lookup, finding, evidence bundle, or discussion writes.
 
+## Agent Reasoning Guide
+- Treat this as a read-only query over public rows already visible in
+  `normalized_signals`. It does not re-fetch, normalize, infer claims, assess
+  representativeness, or decide readiness.
+- Empty results can reflect missing normalization, wrong run/round,
+  `round_scope`, source, signal kind, time, keyword, or platform filters. They do
+  not prove that public discourse or public records are absent.
+- Use returned item-level `evidence_refs` and `evidence_basis` when filing a
+  finding, evidence bundle, challenge, or source-acquisition follow-up.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

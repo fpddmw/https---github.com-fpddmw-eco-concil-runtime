@@ -1,2 +1,2 @@
 name: query-spatiotemporal-relations
-default_prompt: "Use $query-spatiotemporal-relations to inspect DB-backed spatiotemporal relation cues. Treat returned rows as candidate relation evidence only; do not infer causality, transport, source attribution, or report readiness."
+default_prompt: "Use $query-spatiotemporal-relations to inspect DB-backed spatiotemporal relation cues. Treat rows as candidate relation evidence only; empty results can mean missing cue materialization or filters, and never prove no relation. Do not infer causality, transport, source attribution, or report readiness."

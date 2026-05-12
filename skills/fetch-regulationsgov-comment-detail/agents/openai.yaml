@@ -1,4 +1,4 @@
 interface:
   display_name: "Regulations.gov Comment Detail Fetch"
   short_description: "Fetch Regulations.gov comment details with retries"
-  default_prompt: "Use $fetch-regulationsgov-comment-detail to fetch Regulations.gov comment details by IDs with retries, validation, and JSONL output."
+  default_prompt: "Use $fetch-regulationsgov-comment-detail to enrich selected Regulations.gov comment IDs with detail payloads. It does not discover the docket or comment universe; keep upstream list artifacts visible."

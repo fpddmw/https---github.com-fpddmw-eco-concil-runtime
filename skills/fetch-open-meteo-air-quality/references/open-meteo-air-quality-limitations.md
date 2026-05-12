@@ -12,6 +12,7 @@
 - European-only variables such as `ammonia` or pollen fields are not globally available.
 - Coverage combines CAMS Europe and CAMS Global, and `domains=auto` may switch data provenance by location and time.
 - This skill validates structure and timing only; it does not infer exposure risk or source attribution.
+- Domain-specific availability means missing fields or sparse rows may be a model/domain limitation rather than evidence that pollutants were absent.
 
 ## Scope Boundaries
 

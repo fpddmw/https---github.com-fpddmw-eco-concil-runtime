@@ -48,6 +48,15 @@ description: Materialize DB-backed reporting packets from frozen evidence basis 
 - The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `report_basis_source`, `readiness_source`, `board_brief_source`, `supervisor_state_source`, `db_path`, and `observed_inputs`, including explicit artifact-versus-materialized flags for each upstream input.
 - The emitted handoff includes `evidence_packet`, `decision_packet`, `report_packet`, `evidence_index`, `uncertainty_register`, `residual_disputes`, and `policy_recommendations`.
 
+## Agent Reasoning Guide
+- Treat reporting handoff as a rebuildable packet view over DB-backed frozen or
+  withheld reporting state. It does not reopen investigation, add new evidence,
+  or promote optional helper cues into report basis.
+- Missing packet sections or withheld posture should preserve blockers,
+  uncertainty, and residual disputes instead of being smoothed into readiness.
+- Downstream decision/report skills must keep evidence refs, basis ids, and
+  uncertainty boundaries visible.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-refactor-overall-notes.md`

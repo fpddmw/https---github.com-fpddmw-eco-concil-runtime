@@ -86,6 +86,20 @@ python3 scripts/fetch_open_meteo_flood.py fetch \
 - Do not embed alert thresholds, geocoding, polling loops, or flood interpretation logic.
 - If recurring execution is needed, let OpenClaw orchestrate repeated calls externally.
 
+## Agent Reasoning Guide
+- Use this skill for modeled GloFAS river-discharge context at explicit
+  coordinates and dates. It does not observe a local gauge and does not classify
+  flood severity or damage by itself.
+- Coordinate choice is a substantive assumption because the provider returns a
+  nearby modeled river cell. If river identity matters, test nearby coordinates
+  or cross-check with `fetch-usgs-water-iv` where USGS stations are relevant.
+- Zero, low, or sparse discharge can reflect grid-cell selection, date/model
+  availability, ensemble settings, or requested variables. Treat that as
+  hydrology-model scope information, not as proof that flood conditions were
+  absent.
+- Keep meteorology background in `fetch-open-meteo-historical`; this skill only
+  fetches river-discharge variables.
+
 ## References
 - `references/env.md`
 - `references/open-meteo-flood-api-notes.md`

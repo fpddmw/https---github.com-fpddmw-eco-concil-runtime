@@ -14,5 +14,15 @@ description: Optional-analysis helper for typed actor, concern, citation, and st
 - Reads `run_dir/analytics/signal_plane.sqlite` and optional issue-surface artifact.
 - Writes `run_dir/analytics/research_issue_views_<round_id>.json`
 
+## Agent Reasoning Guide
+- Treat output as approval-scoped advisory/audit material. Typed actor, concern,
+  citation, and stance cues are projections for review, not conclusions, report
+  prose, or taxonomy defaults.
+- Empty or sparse projections can reflect missing issue surfaces, normalized
+  rows, filters, or metadata coverage. They do not prove that actors, concerns,
+  citations, or stances are absent.
+- A council agent must carry useful cues into a finding, evidence bundle,
+  challenge, proposal, readiness opinion, or synthesis before downstream use.
+
 ## Scripts
 - `scripts/project_research_issue_views.py`

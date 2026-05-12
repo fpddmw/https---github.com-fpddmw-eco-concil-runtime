@@ -1,4 +1,4 @@
 interface:
   display_name: "USGS Water IV Fetch"
   short_description: "Fetch USGS Water Services instantaneous values"
-  default_prompt: "Use $fetch-usgs-water-iv to fetch USGS Water Services instantaneous hydrology observations for a bbox or site list, then write the full JSON payload to the assigned raw artifact path."
+  default_prompt: "Use $fetch-usgs-water-iv to fetch USGS station-based instantaneous hydrology observations for one bbox or site list. Empty rows can reflect site coverage, parameter codes, site status, time range, or Water Services migration issues; do not treat them as absence of flood or streamflow conditions."

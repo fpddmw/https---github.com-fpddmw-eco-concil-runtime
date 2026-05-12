@@ -79,6 +79,19 @@ The full raw payload also keeps request metadata, transport stats, validation ou
 - This skill treats file data as preliminary and for analysis support, not regulatory decisions.
 - This skill is the canonical AirNow fetch interface for this repository.
 
+## Agent Reasoning Guide
+- Use this skill for station-observation evidence inside an explicit UTC window,
+  bbox, and pollutant list. It observes AirNow-reporting monitors, not all
+  possible air-quality measurements in the real world.
+- Treat AirNow files as preliminary and update-sensitive. Recent files may be
+  revised, and not every site reports every parameter every hour.
+- A zero or sparse result can reflect bbox bounds, site coverage, parameter
+  reporting gaps, file availability, or recent-file revision timing. Do not
+  turn one empty pull into a council claim that no pollution episode occurred.
+- If the receptor-air-quality need remains live, revise bbox/window/parameters
+  or pair this with `fetch-openaq` station/provider discovery and
+  `fetch-open-meteo-air-quality` modeled background context.
+
 ## References
 - `references/env.md`
 - `references/airnow-hourly-obs-api-notes.md`

@@ -73,6 +73,14 @@ python3 scripts/fetch_regulationsgov_comment_detail.py fetch \
 - Do not include comments list discovery logic in this skill.
 - Do not include internal scheduling/polling loops.
 
+## Agent Reasoning Guide
+- This skill enriches selected comment IDs. It does not discover the docket,
+  document, or comment universe by itself.
+- A failed detail fetch is a limitation for the selected IDs, not evidence that
+  the docket lacks relevant comments.
+- Keep the upstream list artifact or comment-ID rationale visible so later agents
+  can audit why those comments were selected.
+
 ## References
 - `references/env.md`
 - `references/regulationsgov-detail-api-notes.md`

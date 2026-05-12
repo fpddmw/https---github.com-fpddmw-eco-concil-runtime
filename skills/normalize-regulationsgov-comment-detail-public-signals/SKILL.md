@@ -41,6 +41,18 @@ description: Normalize fetch-regulationsgov-comment-detail results into provider
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Treat normalization as lineage-preserving translation from one raw artifact
+  into provider-field formal signal rows. It does not derive issue labels,
+  stance, concern facets, citation types, route hints, board judgement, or report
+  conclusions.
+- Zero `canonical_ids` or warnings can reflect artifact shape, unsupported
+  provider fields, parser coverage, detail/list mismatch, duplicate replacement,
+  or a fetch/normalizer mismatch. It is not proof that formal records are absent.
+- Before using a no-row result as a limitation, inspect `warnings`,
+  `artifact_refs`, source skill pairing, and record locators; rerun the correct
+  normalizer or fetch path when the evidence need remains live.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-refactor-overall-notes.md`

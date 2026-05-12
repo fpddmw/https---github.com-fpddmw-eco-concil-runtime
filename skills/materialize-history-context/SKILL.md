@@ -59,6 +59,16 @@ description: Build retrieval-ready history context for the current round by quer
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Treat history context as retrieval support, not as a current-run conclusion,
+  source ranking, or default investigation plan.
+- Empty history matches can reflect archive coverage, lexical mismatch, filters,
+  or missing prior imports. They do not prove that no analogous case or signal
+  exists.
+- When history suggests a useful parameter, source family, or caution, carry that
+  as a rationale in the current run and keep factual claims tied to current-run
+  evidence refs.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

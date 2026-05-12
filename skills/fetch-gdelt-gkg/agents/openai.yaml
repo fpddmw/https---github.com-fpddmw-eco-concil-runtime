@@ -1,4 +1,4 @@
 interface:
   display_name: "GDELT GKG Fetch"
   short_description: "Fetch GDELT GKG files with retries and logs"
-  default_prompt: "Use $fetch-gdelt-gkg to resolve and fetch GDELT GKG export files by latest or historical time range with validation and logs."
+  default_prompt: "Use $fetch-gdelt-gkg to resolve and fetch row-level GDELT GKG exports for a UTC window. Use it when DOC reconnaissance is too narrow or topical knowledge-graph rows are needed; normalize before drawing DB-backed conclusions."

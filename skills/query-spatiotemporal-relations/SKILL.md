@@ -14,5 +14,14 @@ description: Query DB-backed spatiotemporal relation cues from the analysis plan
 - Reads analysis result tables in `run_dir/analytics/signal_plane.sqlite`
 - Writes no DB rows.
 
+## Agent Reasoning Guide
+- Treat returned rows as candidate relation cues that must be carried by a
+  challenge, finding, evidence packet, or review note before downstream use.
+- Empty results can reflect missing cue materialization, wrong relation id,
+  source/target filters, role filters, or analysis-plane import gaps. They do
+  not prove that no spatiotemporal relationship exists.
+- Do not infer causality, transport, source attribution, readiness, or report
+  basis from this query surface alone.
+
 ## Scripts
 - `scripts/query_spatiotemporal_relations.py`

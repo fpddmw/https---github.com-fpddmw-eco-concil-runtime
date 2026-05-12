@@ -4,6 +4,9 @@
 
 - Flood endpoint:
   - `https://flood-api.open-meteo.com/v1/flood`
+- Official API documentation:
+  - `https://open-meteo.com/en/docs/flood-api`
+- Provider caveat: the API is based on GloFAS reanalysis and forecast products and returns modeled river discharge for the largest river in a nearby grid area.
 
 ## Request Parameters Used By This Skill
 

@@ -1,3 +1,4 @@
 name: materialize-spatiotemporal-relation-evidence-packet
 role: report-editor
 summary: Build cautious, report-basis-mediated packets for spatiotemporal relation cues and objections.
+default_prompt: "Use $materialize-spatiotemporal-relation-evidence-packet to organize DB-backed relation cues, objections, and uncertainty into a cautious evidence packet. Do not treat the packet as causality, transport proof, source attribution, or direct report basis unless basis objects are explicitly written."

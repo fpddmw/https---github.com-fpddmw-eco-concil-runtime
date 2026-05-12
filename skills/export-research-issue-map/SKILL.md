@@ -14,5 +14,15 @@ description: Optional-analysis export helper for research issue navigation maps.
 - Reads issue surface/view artifacts.
 - Writes `run_dir/analytics/research_issue_map_<round_id>.json`
 
+## Agent Reasoning Guide
+- Treat output as approval-scoped navigation material. Nodes and edges are not a
+  controversy conclusion graph, influence model, phase decision, or report
+  basis.
+- Empty or sparse maps can reflect missing issue-surface inputs, filters, or
+  projection scope. They do not prove that research issues are absent.
+- A council agent must carry useful map cues into a finding, challenge,
+  proposal, readiness opinion, synthesis, or report-basis object before
+  downstream use.
+
 ## Scripts
 - `scripts/export_research_issue_map.py`

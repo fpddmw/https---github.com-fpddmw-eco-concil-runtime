@@ -50,6 +50,20 @@ description: Execute the current actor's slice of one prepared fetch-plan throug
 - `board_handoff`
 - `execution_components`
 
+## Agent Reasoning Guide
+- This skill bridges fetch receipts/artifacts into raw storage and normalized
+  signal-plane rows where a normalizer exists. It is not an analysis, discovery,
+  ranking, or readiness skill.
+- `receipt-only` or `executed-without-normalized-refs` output means lineage was
+  preserved but DB signal rows were not created. It does not mean the underlying
+  source evidence is useless or absent.
+- If normalization returns no rows, inspect whether the source artifact shape,
+  source skill mapping, or chosen normalizer matched the receipt before using the
+  result as a limitation in council reasoning.
+- When the evidence need remains live, prefer a targeted normalizer rerun,
+  `query-raw-record`, or a revised fetch/source-acquisition proposal over a
+  negative finding based only on import execution status.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`

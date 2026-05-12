@@ -1,4 +1,4 @@
 interface:
   display_name: "Query Normalized Signal"
   short_description: "Inspect one normalized signal by id"
-  default_prompt: "Use $query-normalized-signal to inspect one canonical signal from the unified signal plane by signal_id and return compact fields plus item-level evidence_refs and evidence_basis, adding raw JSON only when explicitly requested."
+  default_prompt: "Use $query-normalized-signal to inspect one signal-plane row by signal_id or metadata filters and return compact fields plus evidence_refs/evidence_basis. Empty lookup means id/filter/DB/normalization mismatch before it means source absence; add raw JSON only when explicitly requested."

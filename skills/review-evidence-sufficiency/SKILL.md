@@ -42,6 +42,15 @@ description: Optional-analysis DB-backed evidence sufficiency review helper. It 
 - `review`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- This helper summarizes already visible DB-backed evidence and caveats. It does
+  not decide truth, rank sources, score sufficiency, or close an investigation.
+- A sufficiency gap from this helper should become a challenge, evidence request,
+  source acquisition proposal, readiness opinion, or moderator synthesis before
+  it affects report boundaries.
+- If the helper sees no rows, first check whether fetch/normalize/query lineage
+  is missing. Do not treat an empty helper input as absence of evidence.
+
 ## Side Effects
 - `db-read`
 - `writes-artifacts`

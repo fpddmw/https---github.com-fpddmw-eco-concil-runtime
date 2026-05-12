@@ -84,6 +84,15 @@ python3 scripts/fetch_youtube_video_search.py search \
 - Let OpenClaw decide query strategy and iterate by repeated invocations.
 - Do not embed scheduler/polling loops or comment fetching in this skill.
 
+## Agent Reasoning Guide
+- This skill discovers candidate videos. It does not fetch comment language and
+  does not represent platform-wide public discourse by itself.
+- If the investigation needs discourse semantics, choose relevant video IDs and
+  follow with `fetch-youtube-comments`.
+- Sparse or zero search output may reflect query wording, creator/channel scope,
+  language, publish window, or API index behavior. Revise those before treating
+  YouTube as exhausted.
+
 ## References
 - `references/env.md`
 - `references/youtube-search-api-notes.md`

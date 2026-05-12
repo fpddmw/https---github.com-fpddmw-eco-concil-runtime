@@ -48,6 +48,16 @@ description: Optional moderator advisory skill for proposing possible next actio
 - `board_handoff`
 - The emitted artifact also carries normalized D1 trace metadata in `board_state_source`, `coverage_source`, `db_path`, and `observed_inputs`, including explicit `*_artifact_present` and `*_present` flags.
 
+## Agent Reasoning Guide
+- Treat output as optional moderator advisory material. Candidate actions do not
+  become a required queue, source selection, phase gate, or readiness posture.
+- Empty or sparse actions can reflect missing DB-backed council state, coverage
+  imports, filters, or approved input scope. They do not prove that no
+  actionable path exists.
+- A moderator or investigator must carry useful candidates into a source
+  acquisition proposal, evidence request, challenge, probe, readiness opinion, or
+  synthesis before downstream use.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-refactor-overall-notes.md`

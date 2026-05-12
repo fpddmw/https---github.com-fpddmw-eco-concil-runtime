@@ -40,6 +40,17 @@ description: Normalize fetch-airnow-hourly-observations results into unified env
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Treat normalization as lineage-preserving translation from one raw artifact
+  into canonical signal-plane rows. It does not decide whether an environmental
+  condition happened, mattered, or supports a council claim.
+- Zero `canonical_ids` or warnings can reflect artifact shape, unsupported
+  provider fields, metric allowlists, parser coverage, duplicate replacement, or
+  a fetch/normalizer mismatch. It is not proof that observations do not exist.
+- Before using a no-row result as a limitation, inspect `warnings`,
+  `artifact_refs`, source skill pairing, and record locators; rerun the correct
+  normalizer or fetch path when the evidence need remains live.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

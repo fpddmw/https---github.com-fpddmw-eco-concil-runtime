@@ -44,6 +44,15 @@ description: Draft a decision memo from reporting packets so the moderator can f
 - The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `report_basis_source`, `db_path`, and `observed_inputs`, preserving upstream trace fields from the reporting chain.
 - The emitted decision draft includes `decision_packet` and `memo_sections` for decision-maker report assembly.
 
+## Agent Reasoning Guide
+- Treat this as a draft from reporting packets, not a new investigation or
+  independent factual adjudication.
+- A finalize or continue posture must follow the handoff, frozen basis,
+  uncertainty register, residual disputes, and blockers. Do not hide live
+  unresolved routes inside polished memo prose.
+- Publication and phase movement still require the appropriate publish or
+  transition workflow and approvals.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`

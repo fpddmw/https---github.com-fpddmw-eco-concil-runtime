@@ -55,6 +55,16 @@ description: Checkpoint one run's board, reporting, report-basis, finding, chall
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Treat archived cases as historical context for later retrieval. Archiving does
+  not finalize the current run, validate its conclusions, or make its posture
+  transferable to future runs.
+- Partial or non-terminal checkpoints are allowed. Missing report, readiness, or
+  basis artifacts should be preserved as archive caveats, not silently converted
+  into case completion.
+- Future agents must still ground current-run claims in current-run evidence
+  refs; archived cases can inform queries, parameters, or cautionary boundaries.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

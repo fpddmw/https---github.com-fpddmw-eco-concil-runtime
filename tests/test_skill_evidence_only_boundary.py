@@ -26,6 +26,39 @@ from eco_council_runtime.kernel.governance.skill_registry import (  # noqa: E402
     skill_registry_snapshot,
     validate_skill_output_boundary,
 )
+from eco_council_runtime.kernel.source_queue.source_queue_contract import (  # noqa: E402
+    source_capability_hints,
+)
+
+
+SKILLS_ROOT = Path(__file__).resolve().parents[1] / "skills"
+
+P3_HISTORY_HELPER_AND_REPORTING_SKILLS = [
+    "archive-case-library",
+    "archive-signal-corpus",
+    "materialize-history-context",
+    "plan-round-orchestration",
+    "propose-next-actions",
+    "open-falsification-probe",
+    "summarize-round-readiness",
+    "materialize-reporting-handoff",
+    "materialize-spatiotemporal-relation-evidence-packet",
+    "draft-council-decision",
+    "draft-expert-report",
+    "publish-expert-report",
+    "publish-council-decision",
+    "materialize-final-publication",
+]
+
+
+def skill_doc_text(skill_name: str) -> str:
+    return (SKILLS_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
+
+
+def agent_metadata_text(skill_name: str) -> str:
+    return (SKILLS_ROOT / skill_name / "agents" / "openai.yaml").read_text(
+        encoding="utf-8"
+    )
 
 
 class SkillEvidenceOnlyBoundaryTests(unittest.TestCase):
@@ -138,6 +171,147 @@ class SkillEvidenceOnlyBoundaryTests(unittest.TestCase):
             skill_boundary_violations("submit-council-proposal", payload),
         )
         validate_skill_output_boundary("submit-council-proposal", payload)
+
+    def test_fetch_normalize_query_and_helper_docs_have_reasoning_guides(self) -> None:
+        skill_names = {
+            *evidence_only_skill_names(),
+            *P3_HISTORY_HELPER_AND_REPORTING_SKILLS,
+        }
+
+        for skill_name in sorted(skill_names):
+            with self.subTest(skill=skill_name):
+                self.assertIn(
+                    "\n## Agent Reasoning Guide\n",
+                    "\n" + skill_doc_text(skill_name),
+                )
+
+    def test_fetch_skill_use_cards_keep_zero_result_discipline(self) -> None:
+        for skill_name in FETCH_SKILLS:
+            with self.subTest(skill=skill_name):
+                card = source_capability_hints(skill_name)["skill_use_card"]
+                self.assertEqual("skill-use-card-v1", card["card_version"])
+
+                zero_text = " ".join(card["zero_or_failed_result_discipline"]).lower()
+                self.assertIn("not proof", zero_text)
+                self.assertIn("revise", zero_text)
+                self.assertIn("source-limit rationale", zero_text)
+
+                autonomy_text = str(card["autonomy_boundary"]).lower()
+                self.assertIn("not source ranking", autonomy_text)
+                self.assertIn("fixed agenda", autonomy_text)
+
+    def test_normalize_docs_explain_no_row_is_not_absence(self) -> None:
+        skill_names = [*NORMALIZE_SKILLS, "normalize-fetch-execution"]
+
+        for skill_name in skill_names:
+            text = skill_doc_text(skill_name).lower()
+            with self.subTest(skill=skill_name):
+                self.assertIn("## agent reasoning guide", text)
+                self.assertTrue(
+                    "not proof" in text or "does not mean" in text,
+                    text,
+                )
+                self.assertTrue("artifact" in text or "receipt" in text, text)
+                self.assertTrue(
+                    "normalizer" in text or "normalization" in text,
+                    text,
+                )
+
+                prompt = agent_metadata_text(skill_name).lower()
+                self.assertTrue(
+                    "no-row" in prompt
+                    or "receipt-only" in prompt
+                    or "not absence" in prompt,
+                    prompt,
+                )
+
+    def test_query_docs_explain_empty_result_visibility_limits(self) -> None:
+        for skill_name in QUERY_SKILLS:
+            raw_text = skill_doc_text(skill_name).lower()
+            text = " ".join(raw_text.split())
+            with self.subTest(skill=skill_name):
+                self.assertIn("## agent reasoning guide", raw_text)
+                self.assertIn("empty", text)
+                self.assertTrue(
+                    "does not prove" in text
+                    or "do not prove" in text
+                    or "does not mean" in text,
+                    text,
+                )
+                self.assertTrue(
+                    "filter" in text
+                    or "round_scope" in text
+                    or "archive" in text
+                    or "provenance" in text,
+                    text,
+                )
+
+                prompt = agent_metadata_text(skill_name).lower()
+                self.assertTrue(
+                    "empty" in prompt
+                    or "no matches" in prompt
+                    or "visibility" in prompt,
+                    prompt,
+                )
+
+    def test_optional_analysis_docs_require_advisory_uptake(self) -> None:
+        for skill_name in OPTIONAL_ANALYSIS_SKILLS:
+            raw_text = skill_doc_text(skill_name).lower()
+            text = " ".join(raw_text.split())
+            with self.subTest(skill=skill_name):
+                self.assertIn("## agent reasoning guide", raw_text)
+                self.assertTrue(
+                    "advisory" in text
+                    or "approval-scoped" in text
+                    or "navigation material" in text,
+                    text,
+                )
+                self.assertTrue(
+                    "before downstream use" in text
+                    or "explicitly cites" in text
+                    or "explicitly cited" in text
+                    or "before it affects" in text,
+                    text,
+                )
+                self.assertTrue(
+                    "do not" in text
+                    or "does not" in text
+                    or "not " in text
+                    or "cannot" in text,
+                    text,
+                )
+
+    def test_history_and_reporting_docs_preserve_non_conclusion_boundaries(self) -> None:
+        expectations = {
+            "archive-case-library": ["historical context", "not a conclusion"],
+            "archive-signal-corpus": [
+                "historical traces",
+                "not a claim that no source evidence existed",
+            ],
+            "materialize-history-context": ["not as a current-run conclusion"],
+            "open-falsification-probe": ["not as proof"],
+            "summarize-round-readiness": ["cannot move a", "advisory"],
+            "materialize-reporting-handoff": ["does not reopen", "helper cues"],
+            "materialize-spatiotemporal-relation-evidence-packet": [
+                "not transport proof",
+                "causality proof",
+            ],
+            "draft-council-decision": ["not a new investigation"],
+            "draft-expert-report": ["must not add new findings"],
+            "publish-expert-report": ["does not advance investigation"],
+            "publish-council-decision": ["does not reopen investigation"],
+            "materialize-final-publication": [
+                "does not create new investigation conclusions"
+            ],
+        }
+
+        for skill_name, required_phrases in expectations.items():
+            raw_text = skill_doc_text(skill_name).lower()
+            text = " ".join(raw_text.split())
+            with self.subTest(skill=skill_name):
+                self.assertIn("## agent reasoning guide", raw_text)
+                for phrase in required_phrases:
+                    self.assertIn(phrase, text)
 
 
 if __name__ == "__main__":

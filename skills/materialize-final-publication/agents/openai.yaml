@@ -1,4 +1,4 @@
 interface:
   display_name: "Eco Materialize Final Publication"
   short_description: "Assemble one decision-maker final report"
-  default_prompt: "Use $materialize-final-publication to assemble one decision-maker environmental policy report from canonical decisions, expert reports, reporting packets, frozen DB evidence basis, and supervisor audit state."
+  default_prompt: "Use $materialize-final-publication to assemble one decision-maker environmental policy report from canonical decisions, expert reports, reporting packets, frozen DB evidence basis, and supervisor audit state. Preserve uncertainty and residual disputes; do not create new investigation conclusions."

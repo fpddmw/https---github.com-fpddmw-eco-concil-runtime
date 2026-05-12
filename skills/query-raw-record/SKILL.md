@@ -39,6 +39,15 @@ description: Look up one raw record by signal_id or artifact path and record loc
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Treat this as provenance inspection for one normalized signal or artifact
+  locator. It returns a small raw slice, not a complete source-family search.
+- Empty lookup can reflect wrong `signal_id`, artifact path, record locator,
+  missing artifact registration, or missing normalization. It does not prove that
+  the provider record or evidence family is absent.
+- Use this for audit, challenge, or ambiguity resolution before making a
+  stronger council statement from a normalized row.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

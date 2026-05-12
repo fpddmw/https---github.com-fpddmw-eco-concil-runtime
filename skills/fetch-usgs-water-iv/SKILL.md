@@ -93,6 +93,20 @@ Each item in `records` is one site-parameter-timestamp observation with fields:
 - This skill does not need an API key.
 - This skill supports `file://` base URLs for deterministic local fixture testing.
 
+## Agent Reasoning Guide
+- Use this skill for USGS station-based instantaneous hydrology observations
+  inside one bbox or explicit site list. It observes available USGS-served
+  sites and requested parameter codes, not all rivers or all flood conditions.
+- Keep the major filter explicit: bbox and site-list modes answer different
+  acquisition questions. Use site lists when the relevant gauge is already
+  known.
+- A zero or sparse result can reflect bbox size, site status, parameter
+  availability, time range, provisional data limits, or lack of USGS coverage.
+  Do not treat it as proof that streamflow or flood impacts were absent.
+- The upstream Water Services platform is scheduled for decommissioning in early
+  2027. Treat endpoint failures or migration warnings as provider-interface
+  issues before converting them into council evidence limits.
+
 ## References
 - `references/env.md`
 - `references/usgs-water-iv-api-notes.md`

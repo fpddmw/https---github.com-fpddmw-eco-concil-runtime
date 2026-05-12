@@ -91,6 +91,20 @@ python3 scripts/fetch_open_meteo_historical.py fetch \
 - Do not embed geocoding, polling loops, scheduler logic, or flood API handling.
 - If recurring execution is needed, let OpenClaw orchestrate repeated calls externally.
 
+## Agent Reasoning Guide
+- Use this skill for modeled/reanalysis meteorological context at explicit
+  coordinates and dates. It is not a station-observation feed and does not prove
+  local exposure, ecological harm, or source attribution by itself.
+- Keep `timezone GMT` when cross-location or cross-skill hour alignment matters.
+  Local timezones can change hourly row counts around daylight-saving
+  transitions.
+- Sparse or failed output can reflect invalid variables, model/date
+  availability, coordinate grid snapping, quota/access mode, or overly broad
+  requests. Treat that as acquisition scope information, not as weather absence.
+- For air-quality episodes, pair this skill with receptor observations
+  (`fetch-airnow-hourly-observations` or `fetch-openaq`) and modeled pollutant
+  background (`fetch-open-meteo-air-quality`) before making council claims.
+
 ## References
 - `references/env.md`
 - `references/open-meteo-api-notes.md`

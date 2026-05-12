@@ -40,6 +40,18 @@ description: Normalize fetch-bluesky-cascade thread and post results into unifie
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Treat normalization as lineage-preserving translation from one raw artifact
+  into canonical signal-plane rows. It does not infer public opinion, stance,
+  representativeness, issue salience, or council claim support.
+- Zero `canonical_ids` or warnings can reflect artifact shape, unsupported
+  provider fields, parser coverage, thread/post structure, duplicate
+  replacement, or a fetch/normalizer mismatch. It is not proof that discourse is
+  absent.
+- Before using a no-row result as a limitation, inspect `warnings`,
+  `artifact_refs`, source skill pairing, and record locators; rerun the correct
+  normalizer or fetch path when the evidence need remains live.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

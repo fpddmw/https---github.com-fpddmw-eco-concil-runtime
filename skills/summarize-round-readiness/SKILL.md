@@ -51,6 +51,15 @@ description: Optional moderator advisory skill for summarizing readiness evidenc
 - `board_handoff`
 - The emitted artifact also carries normalized D1/D2 trace metadata in `board_state_source`, `coverage_source`, `db_path`, and `observed_inputs`, including explicit `*_artifact_present` and `*_present` flags for board, action, probe, and coverage inputs.
 
+## Agent Reasoning Guide
+- This is an advisory readiness summary for moderator review. It cannot move a
+  phase, freeze a report basis, or decide that live investigation routes are
+  exhausted.
+- Readiness must remain claim-strength scoped. A strong causal/source-attribution
+  claim may need more evidence even when a bounded descriptive report is possible.
+- Empty or fallback inputs should be labeled as input limitations, not converted
+  into evidence absence or report readiness.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-refactor-overall-notes.md`

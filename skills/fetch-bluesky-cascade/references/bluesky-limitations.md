@@ -28,6 +28,7 @@ From official Bluesky docs:
 - `com.atproto.server.createSession`: `30 / 5 minutes` and `300 / day` (account scoped).
 
 Reference:
+- `https://docs.bsky.app/docs/advanced-guides/rate-limits`
 - `https://raw.githubusercontent.com/bluesky-social/bsky-docs/main/docs/advanced-guides/rate-limits.md`
 
 ## Endpoint Availability Nuance

@@ -1,4 +1,4 @@
 interface:
   display_name: "Open-Meteo Flood Fetch"
   short_description: "Fetch historical and forecast flood signals"
-  default_prompt: "Use $fetch-open-meteo-flood to fetch Open-Meteo river discharge data for a specified date window and coordinates."
+  default_prompt: "Use $fetch-open-meteo-flood to fetch modeled GloFAS river-discharge context for explicit coordinates and dates. Coordinate/grid-cell selection matters; do not treat low or missing modeled discharge as absence of flooding without checking river selection and, where relevant, USGS gauge evidence."

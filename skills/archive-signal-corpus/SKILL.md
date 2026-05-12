@@ -41,6 +41,16 @@ description: Checkpoint one run's normalized signal-plane rows into a cross-run 
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Treat archived signals as historical traces for later retrieval. Archiving does
+  not score signal quality, prove source importance, or make historical signals
+  evidence for a future run by default.
+- Zero archived rows should preserve an explicit gap. It can reflect missing
+  normalization, wrong DB path, or a run with no signal-plane data; it is not a
+  claim that no source evidence existed.
+- Future agents may reuse archived refs as leads, but current-run findings still
+  need current-run evidence refs or an explicit historical-comparison rationale.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

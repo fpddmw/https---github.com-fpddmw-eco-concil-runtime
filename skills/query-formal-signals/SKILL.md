@@ -58,6 +58,16 @@ description: Query compact formal-signal rows from the unified signal plane data
 - `board_handoff`
   - Suggested next steps are lookup, finding, evidence bundle, or discussion writes.
 
+## Agent Reasoning Guide
+- Treat this as a read-only query over formal rows already visible in
+  `normalized_signals`. It does not re-fetch, normalize, or derive missing issue,
+  stance, concern, citation, submitter type, or route metadata.
+- Empty results can reflect missing normalization, wrong run/round,
+  `round_scope`, source, docket, agency, time, keyword, or optional typed
+  metadata filters. They do not prove that formal records or comments are absent.
+- Use returned item-level `evidence_refs` and `evidence_basis` when filing a
+  finding, evidence bundle, challenge, or source-acquisition follow-up.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-refactor-overall-notes.md`

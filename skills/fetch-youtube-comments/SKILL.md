@@ -90,6 +90,16 @@ python3 scripts/fetch_youtube_comments.py fetch \
 - Do not perform video discovery in this skill.
 - Do not embed scheduler/polling loops.
 
+## Agent Reasoning Guide
+- This skill deepens evidence for selected video IDs. It does not discover the
+  video universe and cannot support platform-wide conclusions without a visible
+  selection rationale.
+- Zero comments can mean comments are disabled, selected videos are wrong, time
+  filters are too narrow, or replies were not requested. It does not by itself
+  show that no YouTube discourse exists.
+- When comments matter to the council claim, keep the video-search artifact or
+  other video-ID source linked so later agents can audit the selection.
+
 ## References
 - `references/env.md`
 - `references/youtube-comments-api-notes.md`

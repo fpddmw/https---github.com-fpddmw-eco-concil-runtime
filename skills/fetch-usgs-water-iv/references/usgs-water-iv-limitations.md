@@ -6,4 +6,4 @@
 - Records can contain provisional qualifiers. Treat them as operational evidence, not final regulatory-grade adjudication.
 - Site coverage is limited to USGS-served sites and the parameter codes actually available at those sites.
 - Very broad bbox or long-window requests can return large payloads. Use parameter, site type, site status, and time filters aggressively.
-- The current Water Services site announces decommissioning in early 2027 and migration to `api.waterdata.usgs.gov`. This skill currently targets the existing Water Services endpoint and can be migrated later.
+- The current Water Services site announces decommissioning in Q1 2027 and migration to `api.waterdata.usgs.gov`; intentional degradation is not expected before August 2026 according to the USGS migration notice checked on 2026-05-12. This skill currently targets the existing Water Services endpoint and can be migrated later.

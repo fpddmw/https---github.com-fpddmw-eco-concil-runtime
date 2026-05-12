@@ -4,6 +4,9 @@
 
 - Air-quality endpoint:
   - `https://air-quality-api.open-meteo.com/v1/air-quality`
+- Official API documentation:
+  - `https://open-meteo.com/en/docs/air-quality-api`
+- Provider caveat: the API exposes modeled CAMS air-quality fields. CAMS Europe and CAMS Global differ in region, resolution, temporal cadence, and availability.
 
 ## Request Parameters Used By This Skill
 

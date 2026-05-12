@@ -48,6 +48,14 @@ description: Draft a chapterized role-specific report from reporting packets, se
 - The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `reporting_handoff_source`, `decision_source`, `board_brief_source`, `db_path`, and `observed_inputs`, preserving upstream trace fields from the reporting chain.
 - The emitted draft includes `report_packet`, `report_sections`, `section_draft_refs`, `evidence_index`, `uncertainty_register`, `residual_disputes`, and `policy_recommendations`.
 
+## Agent Reasoning Guide
+- Treat this as role-specific report drafting from reporting packets and section
+  drafts. It must not add new findings, erase uncertainty, or convert optional
+  helper cues into report conclusions.
+- Keep role focus, evidence index, residual disputes, and next actions visible.
+  Weak or bounded sections are preferable to unsupported completeness.
+- Canonical publication remains a separate governed publish step.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`

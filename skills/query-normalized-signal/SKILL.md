@@ -46,6 +46,15 @@ description: Look up normalized signals by signal_id or metadata index from the 
 - `board_handoff`
   - Suggested next steps are raw lookup, finding, evidence bundle, or discussion writes.
 
+## Agent Reasoning Guide
+- Treat this as targeted inspection of rows already present in the signal plane.
+  It does not re-fetch, normalize, or judge whether a signal supports a claim.
+- Empty lookup can reflect a wrong `signal_id`, wrong metadata filter, missing
+  normalization, wrong DB path, or round/run mismatch. It does not prove that the
+  underlying source record is absent.
+- Use `include_raw_json` sparingly. Prefer `query-raw-record` for provenance
+  review when the raw provider slice matters.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

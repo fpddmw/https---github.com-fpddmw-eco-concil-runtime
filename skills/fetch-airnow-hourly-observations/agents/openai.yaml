@@ -1,4 +1,4 @@
 interface:
   display_name: "AirNow Hourly Obs Fetch"
   short_description: "Fetch AirNow hourly AQ observations"
-  default_prompt: "Use $fetch-airnow-hourly-observations to fetch AirNow hourly AQ observations for a UTC window and bbox, then write the full JSON payload to the assigned raw artifact path."
+  default_prompt: "Use $fetch-airnow-hourly-observations to fetch preliminary AirNow station observations for an explicit UTC window, bbox, and pollutant list. Empty or sparse rows can reflect monitor coverage, parameters, file timing, or bbox limits; do not treat them as absence of an air-quality episode without follow-up."

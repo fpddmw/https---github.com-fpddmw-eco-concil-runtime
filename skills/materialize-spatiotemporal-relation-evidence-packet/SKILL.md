@@ -17,5 +17,14 @@ description: Build a report-basis-mediated packet from DB-backed spatiotemporal 
 - Writes `run_dir/reporting/spatiotemporal_relation_evidence_packet_<round_id>.json`.
 - With `--write-basis-objects`, also writes DB-backed finding, evidence bundle, and report section draft records.
 
+## Agent Reasoning Guide
+- Treat the packet as cautious evidence organization around relation cues,
+  objections, and uncertainty. It is not transport proof, causality proof, source
+  attribution, or exclusion of local alternatives.
+- Without `--write-basis-objects`, the artifact remains an export and should not
+  be treated as direct frozen report basis.
+- If written into basis objects, preserve challenger objections, rejected
+  alternatives, uncertainty, and item-level evidence refs.
+
 ## Scripts
 - `scripts/materialize_spatiotemporal_relation_evidence_packet.py`

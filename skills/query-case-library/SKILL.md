@@ -47,6 +47,15 @@ description: Query archived historical cases from the shared case library so cur
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Treat returned cases as historical hints with evidence refs, not as current-run
+  proof, source ranking, or recommended conclusions.
+- Empty or sparse matches can reflect missing archives, filters that are too
+  narrow, lexical mismatch, excluded case ids, or archive import gaps. It does
+  not prove that no analogous case exists.
+- When reusing historical context, record which current-run evidence need it
+  informs and keep the current run's findings tied to current-run evidence refs.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

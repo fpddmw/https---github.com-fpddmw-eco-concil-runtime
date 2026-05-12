@@ -14,5 +14,15 @@ description: Optional-analysis helper that turns DB-backed spatiotemporal relati
 - Reads analysis result tables in `run_dir/analytics/signal_plane.sqlite`
 - Writes `run_dir/analytics/spatiotemporal_relation_alternative_reviews_<round_id>.json`
 
+## Agent Reasoning Guide
+- Treat output as approval-scoped advisory material for challengers. Objection
+  candidates do not open or close challenges and do not disprove a relation by
+  themselves.
+- Empty or sparse alternatives can reflect missing relation cues, filters, or
+  analysis-plane import scope. They do not prove that no counter-explanation
+  exists.
+- A council agent must carry useful alternatives into a challenge, probe, review
+  comment, finding, or evidence packet before downstream use.
+
 ## Scripts
 - `scripts/review_spatiotemporal_relation_alternatives.py`

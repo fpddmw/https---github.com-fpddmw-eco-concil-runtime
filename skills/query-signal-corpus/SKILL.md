@@ -45,6 +45,15 @@ description: Query archived cross-run signals from the signal corpus so current 
 - `warnings`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Treat returned historical signals as reusable hints with archived refs, not as
+  current-run proof, source ranking, or recommended conclusions.
+- Empty or sparse matches can reflect missing archives, filters that are too
+  narrow, lexical mismatch, excluded run ids, or archive import gaps. It does not
+  prove that no analogous signal exists.
+- When reusing historical signal context, keep current-run findings tied to
+  current-run evidence refs and document any history-derived parameter choices.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

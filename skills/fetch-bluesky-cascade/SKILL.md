@@ -93,6 +93,21 @@ python3 scripts/fetch_bluesky_cascade.py fetch \
 - If periodic polling is needed, orchestrate repeated invocations externally.
 - If `public.api.bsky.app` returns route-level `403`, the script automatically retries with `--base-url https://api.bsky.app`. Manual override is still allowed.
 
+## Agent Reasoning Guide
+- Use this skill for Bluesky seed-post and reply-thread artifacts under an
+  explicit query/feed/list/author mode and UTC window. It is not a representative
+  public-opinion sample and does not infer sentiment, stance, or issue salience.
+- Search is query-sensitive and may not page through the complete universe of
+  matching posts. Weak search output should prompt alternate terms, hashtags,
+  author/feed/list modes, or authenticated access when appropriate.
+- Zero, blocked, or sparse cascades can reflect endpoint host behavior,
+  authentication, provider filtering, pagination, thread deletion/blocking, or
+  overly narrow terms. Treat that as acquisition scope, not as absence of public
+  discourse.
+- Normalize with `normalize-bluesky-cascade-public-signals` before relying on
+  DB-backed public-signal queries or linking item-level evidence refs into
+  council findings.
+
 ## References
 - `references/env.md`
 - `references/bluesky-api-notes.md`

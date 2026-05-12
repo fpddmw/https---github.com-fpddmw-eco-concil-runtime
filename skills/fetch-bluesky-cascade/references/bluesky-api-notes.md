@@ -15,6 +15,7 @@ This skill uses HTTP XRPC endpoints defined in official AT Protocol lexicons and
 
 References:
 - API Hosts and Auth:
+  - `https://docs.bsky.app/docs/advanced-guides/api-directory`
   - `https://raw.githubusercontent.com/bluesky-social/bsky-docs/main/docs/advanced-guides/api-directory.mdx`
 - Session endpoint lexicon:
   - `https://raw.githubusercontent.com/bluesky-social/atproto/main/lexicons/com/atproto/server/createSession.json`
@@ -50,6 +51,7 @@ The script fetches seed posts from one of these endpoints:
 
 References:
 - `searchPosts`:
+  - `https://docs.bsky.app/docs/api/app-bsky-feed-search-posts`
   - `https://raw.githubusercontent.com/bluesky-social/atproto/main/lexicons/app/bsky/feed/searchPosts.json`
 - `getAuthorFeed`:
   - `https://raw.githubusercontent.com/bluesky-social/atproto/main/lexicons/app/bsky/feed/getAuthorFeed.json`
@@ -82,3 +84,4 @@ Reference:
   - Fallback: `indexedAt`
 - For `searchPosts`, optional server-side `since/until` can also be sent unless `--disable-server-time-filter` is used.
 - The script still enforces client-side time filtering for deterministic behavior.
+- Treat search windows as acquisition filters. The API docs and lexicons do not make `searchPosts` an exhaustive discourse universe.

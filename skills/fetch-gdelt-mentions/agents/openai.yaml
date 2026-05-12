@@ -1,4 +1,4 @@
 interface:
   display_name: "GDELT Mentions Fetch"
   short_description: "Fetch GDELT mentions files with retries and logs"
-  default_prompt: "Use $fetch-gdelt-mentions to resolve and fetch GDELT Global Mentions export files by latest or historical time range with validation and logs."
+  default_prompt: "Use $fetch-gdelt-mentions to resolve and fetch row-level GDELT Global Mentions exports for a UTC window. Use it for mention/source context after DOC or Events scoping; normalize before treating rows as DB-backed evidence."

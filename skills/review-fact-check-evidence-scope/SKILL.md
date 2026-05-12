@@ -34,6 +34,16 @@ description: Optional-analysis helper for structured verification scope review. 
 - `verification_scope_json` may provide the structured scope as a JSON object or path.
 - Legacy `geographic_scope`, `lag_assumptions`, `metric_requirements`, and `source_requirements` are accepted only as compatibility inputs and do not replace required role/class fields.
 
+## Agent Reasoning Guide
+- Treat output as approval-scoped scope review. It emits caveats about whether
+  available evidence matches the requested verification scope; it does not decide
+  factual outcome, route assignment, readiness, or report conclusions.
+- Empty or weak coverage can reflect the explicit scope, missing normalization,
+  filters, or excluded inference rules. It is not proof that the fact question is
+  false or unanswerable.
+- A council agent must carry useful caveats into a finding, evidence bundle,
+  challenge, proposal, readiness opinion, or synthesis before downstream use.
+
 ## References
 - `../../docs/openclaw-skills-refactor-checklist-v2.md`
 

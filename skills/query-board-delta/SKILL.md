@@ -43,6 +43,16 @@ description: Read compact round-scoped investigation board deltas, return event 
 - `deliberation_sync`
 - `board_handoff`
 
+## Agent Reasoning Guide
+- Treat this as a compact read surface over visible board state. It is not a
+  canonical finding, readiness decision, source selector, or phase gate.
+- Empty or short deltas can mean the board has not been initialized, the cursor
+  is too recent, the round filter is wrong, or DB-only recovery is active. It
+  does not mean the investigation has no evidence or no live issues.
+- Use write skills such as `submit-agent-position`, `open-challenge-ticket`, or
+  `submit-round-synthesis` when an agent needs to turn board context into an
+  auditable council judgement.
+
 ## References
 - `../../docs/openclaw-project-overview.md`
 

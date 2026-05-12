@@ -89,6 +89,19 @@ python3 scripts/fetch_open_meteo_air_quality.py fetch \
 - Do not embed geocoding, station merging, alert thresholds, or AQI interpretation logic.
 - Use OpenClaw orchestration, not this script, for recurring jobs or multi-step fusion with OpenAQ.
 
+## Agent Reasoning Guide
+- Use this skill for modeled air-quality background fields at explicit
+  coordinates and dates. It is not a station measurement feed and does not prove
+  personal exposure, health effect, source causation, or regulatory status.
+- Domain choice matters. `auto`, `cams_europe`, and `cams_global` can imply
+  different model provenance, resolution, and variable availability.
+- Zero, missing, or sparse fields can reflect variable/domain/date availability,
+  grid-cell selection, timezone alignment, or provider access limits. Treat that
+  as a model-scope limitation, not as absence of pollutants.
+- For council findings, cross-check modeled background with station evidence
+  from `fetch-airnow-hourly-observations` or `fetch-openaq` when receptor
+  observations are material.
+
 ## References
 - `references/env.md`
 - `references/open-meteo-air-quality-api-notes.md`
