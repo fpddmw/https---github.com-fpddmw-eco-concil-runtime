@@ -57,8 +57,8 @@ description: Optional-analysis DB-backed evidence sufficiency review helper. It 
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-refactor-overall-notes.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/review_evidence_sufficiency.py`

@@ -55,7 +55,7 @@ description: Publish a canonical expert report from a role-specific draft while 
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/publish_expert_report.py`

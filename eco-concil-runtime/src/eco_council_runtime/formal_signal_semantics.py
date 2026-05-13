@@ -341,7 +341,7 @@ FORMAL_PUBLIC_TAXONOMY_VERSION = "formal-public-taxonomy-freeze-2026-04-29"
 FORMAL_PUBLIC_TAXONOMY_AUDIT_STATUS = "default-frozen; approval-required; audit-pending"
 FORMAL_PUBLIC_TAXONOMY_APPROVAL_REF = "required:approved_taxonomy_record"
 FORMAL_PUBLIC_TAXONOMY_AUDIT_REF = (
-    "docs/openclaw-skills-refactor-checklist-v2.md#34-optional-analysis"
+    "docs/openclaw-project-overview.md#skill-分层与治理边界"
 )
 
 FORMAL_PUBLIC_TAXONOMY_FAMILY_RECORDS: tuple[dict[str, Any], ...] = (

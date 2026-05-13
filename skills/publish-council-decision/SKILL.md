@@ -59,7 +59,7 @@ description: Publish a canonical council decision from the current decision draf
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/publish_council_decision.py`

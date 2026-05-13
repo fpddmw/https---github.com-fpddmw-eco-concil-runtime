@@ -21,12 +21,44 @@ The agent remains responsible for:
 
 | Family | Fetch skills | Multi-layer need |
 | --- | --- | --- |
-| GDELT public record | `fetch-gdelt-doc-search`, `fetch-gdelt-events`, `fetch-gdelt-mentions`, `fetch-gdelt-gkg` | DOC search is query-sensitive recon and article/timeline discovery. Events/Mentions/GKG are row-level follow-up surfaces for shared UTC windows. A failed or narrow DOC result should prompt query linting/rephrasing or table-window pulls, not abandonment. |
-| YouTube public discourse | `fetch-youtube-video-search`, `fetch-youtube-comments` | Video search discovers candidate videos. Comment fetch deepens public response evidence for selected video IDs. Search results without comment collection may be incomplete if discourse semantics are needed. |
+| GDELT public record | `fetch-gdelt-doc-search`, `fetch-gdelt-events`, `fetch-gdelt-mentions`, `fetch-gdelt-gkg` | DOC search is query-sensitive recon and article/timeline discovery. Events/Mentions/GKG are row-level follow-up surfaces for shared UTC windows. A failed or narrow DOC result should prompt query linting/rephrasing or table-window pulls, not abandonment. Events `AvgTone`, Mentions `MentionDocTone`, and GKG `V2Tone` are media/document tone cues, not public sentiment by themselves. |
+| YouTube public discourse | `fetch-youtube-video-search`, `fetch-youtube-comments` | Video search discovers candidate videos. Comment fetch deepens public response evidence for selected video IDs. Search results without comment collection may be incomplete if discourse semantics, sample affect, or public-response issues are needed. |
 | Regulations.gov policy comments | `fetch-regulationsgov-comments`, `fetch-regulationsgov-comment-detail` | Comment list fetch discovers IDs by docket/document/agency/time window. Detail fetch enriches selected comments and attachments when list rows are insufficient. |
 | Bluesky public discourse | `fetch-bluesky-cascade` | Search, author-feed, and thread/cascade modes are alternate paths inside the same skill. Agents should revise mode, handles, hashtags, or event terms before treating weak output as a source limit. |
 | OpenAQ observations | `fetch-openaq` | Metadata discovery, API measurements, and S3 archive backfill are related paths. Empty measurement windows should prompt location/parameter/window review or archive backfill. |
 | Environmental cross-check | `fetch-airnow-hourly-observations`, `fetch-open-meteo-air-quality`, `fetch-open-meteo-historical`, `fetch-open-meteo-flood`, `fetch-nasa-firms-fire`, `fetch-usgs-water-iv` | These are complementary evidence surfaces, not interchangeable proof channels. AirNow/OpenAQ expose station/provider observations; Open-Meteo exposes modeled weather, air-quality, or discharge context; FIRMS exposes active-fire detections; USGS IV exposes station hydrology in supported USGS coverage. Agents may cross-check receptor observations, modeled context, source-region fire activity, or hydrologic context. Runtime does not decide which source proves a claim. |
+
+## Public Discourse Deepening
+
+`public-discourse-sample-analysis` is an optional deepening lane, not a runtime
+round type and not a source-selection rule. It may be recorded in a round brief,
+evidence request, synthesis, or continuation focus when the council wants to
+move beyond public visibility into sample-level issues, affect, media tone, or
+source narratives.
+
+Use these boundaries:
+
+1. `social_sample_affect`
+   - Use YouTube comments, Bluesky posts/replies, or formal public comments.
+   - Claims must stay inside the sampled platform/query/window.
+2. `gdelt_media_tone`
+   - Use GDELT Events `AvgTone`, Mentions `MentionDocTone`, GKG `V2Tone`, or DOC
+     timeline tone modes.
+   - These describe media/document tone, not public sentiment.
+3. `source_narrative`
+   - Use public/formal/media texts to record how sources are described or
+     hypothesized.
+   - Physical source attribution still requires environmental evidence.
+4. `cross_source_comparison`
+   - Compare media tone, public-response affect, formal comments, and source
+     narratives as advisory cues.
+   - Do not infer representativeness, causal truth, or source proof from overlap.
+
+Desired optional-analysis surfaces for this lane include corpus materialization,
+sample coverage audit, annotation aggregation, GDELT tone enrichment, cross-source
+comparison, and report handoff. Their outputs remain advisory until a council
+agent cites them in a finding, evidence bundle, challenge, readiness opinion,
+synthesis, or report-basis object.
 
 ## Acquisition Attempt Review
 
@@ -89,6 +121,8 @@ Examples:
 - GDELT DOC Search is article/timeline reconnaissance. It is not the raw
   Events/Mentions/GKG layer, and `domainis:` is a URL filter rather than an
   official-record category.
+- GDELT tone fields are media/document tone cues. They should be kept separate
+  from YouTube/Bluesky/formal-comment sample affect.
 - NASA FIRMS requires product/date compatibility checks. NRT products are not a
   safe default for historical cases; availability should be checked before zero
   rows affect source-attribution reasoning.

@@ -79,7 +79,7 @@ description: Submit one structured council proposal directly into the deliberati
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/submit_council_proposal.py`

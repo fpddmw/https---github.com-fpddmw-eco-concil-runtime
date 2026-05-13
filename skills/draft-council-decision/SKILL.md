@@ -55,7 +55,7 @@ description: Draft a decision memo from reporting packets so the moderator can f
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/draft_council_decision.py`

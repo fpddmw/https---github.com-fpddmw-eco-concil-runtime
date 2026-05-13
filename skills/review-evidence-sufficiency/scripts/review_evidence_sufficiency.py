@@ -490,7 +490,7 @@ def review_evidence_sufficiency_skill(
         decision_source=HELPER_DECISION_SOURCE_APPROVED_VIEW,
         rubric_version=maybe_text(rubric_version) or "evidence-sufficiency-rubric-v0.1",
         approval_ref="required:skill_approval_request",
-        audit_ref="docs/openclaw-skills-refactor-checklist-v2.md#34-optional-analysis",
+        audit_ref="docs/openclaw-project-overview.md#skill-分层与治理边界",
         rule_trace=["db-council-object-presence-review", "report-basis-citation-review"],
         caveats=[
             "This helper does not score readiness or prove claims.",

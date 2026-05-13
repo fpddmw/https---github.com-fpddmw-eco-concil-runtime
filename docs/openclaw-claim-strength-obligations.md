@@ -38,6 +38,36 @@ Runtime does not judge whether those refs are enough. It only exposes the
 obligation so moderator, investigators, challenger, and report editor have a
 shared closing boundary.
 
+## Public Discourse And Tone Claims
+
+Public discourse claims require explicit sample and source-family boundaries.
+
+Allowed bounded forms include:
+
+1. “In this YouTube comments sample, health-risk concern appears frequently.”
+2. “In this Bluesky query sample, Canada wildfire narratives recur.”
+3. “In this GDELT media/document sample, tone indicators are mostly negative.”
+4. “GDELT media tone and social sample affect point in similar/different
+   directions, within their respective samples.”
+
+Unsupported upgrades include:
+
+1. Treating YouTube, Bluesky, GDELT, or Regulations.gov samples as general public
+   opinion without an explicit representative design.
+2. Treating GDELT `AvgTone`, `MentionDocTone`, `V2Tone`, DOC `timelinetone`, or
+   GCAM cues as public sentiment.
+3. Treating public source narratives as physical source attribution.
+4. Treating zero or sparse public-signal output as proof that a concern or
+   narrative is absent.
+
+When a report needs stronger language, the council should keep three lanes
+separate:
+
+1. `gdelt_media_tone`: media/document tone.
+2. `social_sample_affect`: sample-level public expression from comments/posts.
+3. `physical_source_attribution`: environmental evidence for actual origin or
+   transport claims.
+
 ## Closing Surface
 
 The round liveness surface now includes:

@@ -64,7 +64,7 @@ description: Assemble one decision-maker final report from canonical reporting p
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/materialize_final_publication.py`

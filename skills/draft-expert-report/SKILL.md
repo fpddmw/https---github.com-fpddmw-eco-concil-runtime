@@ -58,7 +58,7 @@ description: Draft a chapterized role-specific report from reporting packets, se
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/draft_expert_report.py`

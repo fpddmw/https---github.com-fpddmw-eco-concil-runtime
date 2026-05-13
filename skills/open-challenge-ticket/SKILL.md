@@ -58,7 +58,7 @@ description: Open a challenge ticket on the local investigation board, preserve 
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/open_challenge_ticket.py`

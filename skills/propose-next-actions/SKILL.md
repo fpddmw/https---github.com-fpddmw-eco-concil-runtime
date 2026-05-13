@@ -60,8 +60,8 @@ description: Optional moderator advisory skill for proposing possible next actio
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-refactor-overall-notes.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/propose_next_actions.py`

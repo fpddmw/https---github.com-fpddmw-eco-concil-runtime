@@ -66,7 +66,7 @@ description: Execute the current actor's slice of one prepared fetch-plan throug
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/normalize_fetch_execution.py`

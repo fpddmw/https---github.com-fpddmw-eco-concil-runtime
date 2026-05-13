@@ -40,7 +40,7 @@ description: Optional-analysis helper for DB-backed environment signal aggregati
   challenge, proposal, readiness opinion, or synthesis before downstream use.
 
 ## References
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/aggregate_environment_evidence.py`

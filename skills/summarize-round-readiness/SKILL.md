@@ -62,8 +62,8 @@ description: Optional moderator advisory skill for summarizing readiness evidenc
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-refactor-overall-notes.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/summarize_round_readiness.py`

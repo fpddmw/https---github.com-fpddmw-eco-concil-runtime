@@ -61,8 +61,8 @@ description: Optional moderator advisory skill for materializing an auditable or
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-refactor-overall-notes.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/plan_round_orchestration.py`

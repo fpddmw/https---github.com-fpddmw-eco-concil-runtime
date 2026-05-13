@@ -55,8 +55,8 @@ description: Normalize fetch-regulationsgov-comments results into provider-field
 
 ## References
 - `../../docs/openclaw-project-overview.md`
-- `../../docs/openclaw-refactor-overall-notes.md`
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/normalize_regulationsgov_comments_public_signals.py`

@@ -15,6 +15,23 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
 3. `database` 是议会状态、调查对象和报告依据的主要状态源。
 4. `artifact` 是导出、handoff、调试和人类阅读材料，不作为唯一事实源。
 
+### 工程护栏
+
+1. `DB-first`
+   - 议会状态、调查对象、报告依据优先写 DB；artifact 只作为导出、handoff 和调试材料。
+2. `governed autonomy`
+   - agent 可以自主调查和提议，但高影响执行必须受 role、approval、side-effect policy 约束。
+3. `evidence-backed judgement`
+   - finding、proposal、hypothesis、challenge、readiness、report section 必须引用 evidence refs。
+4. `helper demotion`
+   - optional-analysis/helper 默认是 audit/advisory，不是结论、证据权重或 phase gate。
+5. `challenger first-class`
+   - 反证、替代解释和不确定性必须是一等议会对象。
+6. `report basis freeze`
+   - 报告正文必须来自 frozen/reporting basis，而不是临时 helper artifact。
+7. `thin runtime surfaces`
+   - runtime 只展示权限、对象状态、refs、receipt、ledger 和可执行命令模板；不把 agenda、source 选择、证据权重或结论采信写成运行时规则。
+
 ### 概念模型和代码角色模型
 
 必须显式区分两层，避免把 runtime 的治理主体误读为议会 agent：
@@ -152,6 +169,39 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 3. 每个 helper 输出必须标注 source/provenance、caveats、audit status；helper 不提供强制采信结论。
 4. 报告正文必须引用 finding/evidence bundle/proposal/report section/report basis 等 DB-backed basis。
 
+### Skill 分层与治理边界
+
+当前 skills 按职责分为：
+
+1. `fetch`
+   - 只抓取或导入 raw provider payload / runtime-captured artifact；不写 board judgement、不判断 claim true/false。
+2. `normalize`
+   - 只把 raw artifact 转为 `normalized_signals`，保留 provenance、artifact ref、record locator、quality flags 和 metadata；不做事实判断或 readiness。
+3. `query`
+   - 返回 item-level `evidence_refs`、`evidence_basis` 和 source provenance，供 investigator 写 finding/evidence bundle。
+4. `optional-analysis`
+   - approval-gated advisory helper view，可帮助审视覆盖、议题、footprint、temporal cue、sufficiency note；默认不能直接作为 phase gate 或 report basis。
+5. `deliberation-write`
+   - 才能把调查判断写成议会对象，例如 finding、evidence request、source-acquisition proposal、challenge、readiness opinion。
+6. `reporting`
+   - 只能消费 frozen/reporting basis，不回写调查状态。
+7. `state-transition`
+   - 必须经 moderator transition request 和 runtime-operator approval，不走普通 skill approval。
+
+普通合法 fetch 不强制先有 proposal；`source-acquisition-proposal` 只在需要跨 agent 协调、审批、跨轮承接或显式议会记录时使用。source catalog 和 role source surface 是权限面，不是 runtime-selected source queue。
+
+### 公共舆情深化 Lane
+
+公共舆情深化是 `optional deepening lane`，不是新的 round type。它可在 round brief、round synthesis、evidence request 或 continuation 的 `primary_focus_refs` 中被 moderator 或 investigator 显式提出，语义是从已采集或待采集的公共文本样本中分析样本内议题、情绪、媒体 tone 和公共来源叙事。
+
+该 lane 的治理边界：
+
+1. YouTube comments、Bluesky posts/replies、formal comments 等文本样本可用于 `social_sample_affect`，但只能声明样本内结果。
+2. GDELT Events/Mentions/GKG/DOC tone 属于 `gdelt_media_tone` 或 media/public-record narrative tone，不能直接代表公众情绪。
+3. GDELT GKG `V2Tone` 当前只最低限度保留 tone score；后续需要拆出 positive、negative、polarity、activity density、word count 等分量，并评估结构化 `GCAM` cue。
+4. 公共来源叙事和物理来源归因必须分开；前者由 `social-investigator` 调查，后者必须由 `environmental-investigator` 验证。
+5. 后续完整能力应包括 corpus materialization、coverage audit、annotation aggregation、GDELT tone enrichment、cross-source comparison 和 report handoff；这些都保持 optional-analysis/advisory 属性。
+
 ## 7. 当前能力边界
 
 已具备：
@@ -187,24 +237,16 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
 
 ## 9. 文档地图
 
-当前文档分为基础文档、唯一新增开发计划和历史运行记录。
+当前 docs 以基础文档为主；历史工作计划、迁移清单、真实 run timeline 和临时审计计划的有效常驻内容已并入基础文档。公共舆情深化保留为当前专项工作文档。
 
 1. `docs/openclaw-project-overview.md`
-   - 项目总览、主工作流、能力边界和当前收口状态。
-2. `docs/openclaw-refactor-overall-notes.md`
-   - 工程原则、重构收口摘要、剩余风险和论文展示建议。
-3. `docs/openclaw-skills-refactor-checklist-v2.md`
-   - skills 分层、原子能力边界、optional-analysis 降权和 relation baseline。
-4. `docs/openclaw-agent-autonomy-archive-workplan.md`
-   - 当前收尾计划和进展记录：agent-led source acquisition、finding uptake、multi-round continuation、skill approval 衔接、archive/history 复用和真实案例回归。
-5. `docs/openclaw-source-family-workflows.md`
+   - 项目定位、概念模型/代码角色模型、主工作流、多轮能力、agent/runtime principal、数据契约、skill 分层、公共舆情深化 lane、当前能力边界和质量门。
+2. `docs/openclaw-source-family-workflows.md`
    - fetch skill 的多层工作流说明；用于帮助 agent 理解同一信源家族内的 search/detail/table/backfill 关系，不作为 source 排序或议程脚本。
-6. `docs/openclaw-claim-strength-obligations.md`
+3. `docs/openclaw-claim-strength-obligations.md`
    - 弱报告、强 claim 和 unresolved refs 收口边界；用于防止过早放弃调查，同时不引入议题模板或证据打分。
-7. `docs/openclaw-realcase-nyc-smoke-first-run-timeline.md`
-   - 第一次真实 run 的历史时间线；不作为开发计划或当前能力基线。
-8. `docs/openclaw-realcase-nyc-smoke-transport-chain-run-timeline.md`
-   - 开放型 NYC smoke transport-chain run 的事实时间线；用于说明当前 agent 自主调查和流程缺口。
+4. `docs/openclaw-public-discourse-deepening-workplan.md`
+   - 当前专项工作文档；定义公共舆情深化 lane、GDELT tone 边界、样本内分析能力和后续实施批次。
 
 质量门基线命令：
 

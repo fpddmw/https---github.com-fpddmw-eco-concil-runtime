@@ -45,7 +45,7 @@ description: Optional-analysis helper for structured verification scope review. 
   challenge, proposal, readiness opinion, or synthesis before downstream use.
 
 ## References
-- `../../docs/openclaw-skills-refactor-checklist-v2.md`
+- `../../docs/openclaw-project-overview.md`
 
 ## Scripts
 - `scripts/review_fact_check_evidence_scope.py`
