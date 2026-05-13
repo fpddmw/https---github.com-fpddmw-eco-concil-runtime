@@ -7,6 +7,7 @@ from typing import Any
 from eco_council_runtime.kernel.core.manifest import load_json_if_exists, utc_now_iso, write_json
 from eco_council_runtime.kernel.core.paths import agent_entry_gate_path, resolve_run_dir
 from eco_council_runtime.kernel.execution.executor import maybe_text
+from eco_council_runtime.runtime_command_hints import kernel_command
 
 
 def role_identity(role: str) -> str:
@@ -90,6 +91,34 @@ def write_role_workspace_context(
         "source_selection_path": str(source_selection_path.resolve()),
         "runtime_health_path": str((run_dir / "runtime" / "runtime_health.json").resolve()),
         "investigation_board_path": str((run_dir / "board" / "investigation_board.json").resolve()),
+        "show_council_status_command": kernel_command(
+            "show-council-status",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--pretty",
+        ),
+        "show_run_state_command": kernel_command(
+            "show-run-state",
+            "--run-dir",
+            str(run_dir),
+            "--round-id",
+            round_id,
+            "--pretty",
+        ),
+        "refresh_agent_entry_gate_command": kernel_command(
+            "materialize-agent-entry-gate",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--pretty",
+        ),
     }
     write_json(runtime_context_path, context_payload)
 
@@ -110,8 +139,11 @@ def write_role_workspace_context(
                 f"- Mission request: `{maybe_text(mission_surface.get('request_text'))}`",
                 f"- Runtime health: `{(run_dir / 'runtime' / 'runtime_health.json').resolve()}`",
                 f"- Investigation board: `{(run_dir / 'board' / 'investigation_board.json').resolve()}`",
+                f"- Current council status: `{context_payload['show_council_status_command']}`",
+                f"- Refresh entry gate snapshot: `{context_payload['refresh_agent_entry_gate_command']}`",
                 "",
                 "Use these generated runtime artifacts as the role contract surface.",
+                "The agent entry gate is a snapshot. Before moderator closeout, report-basis, or continuation decisions, inspect the current council status or refresh the gate so unresolved refs, source-attempt results, and readiness opinions are current.",
                 "",
                 "## Skill Use Discipline",
                 "",

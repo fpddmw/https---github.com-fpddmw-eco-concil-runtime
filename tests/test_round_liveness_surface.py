@@ -482,6 +482,64 @@ class RoundLivenessSurfaceTests(unittest.TestCase):
                     {"score", "rank", "weight", "priority"} & set(all_keys(payload_part))
                 )
 
+    def test_show_run_state_uses_live_liveness_when_entry_gate_snapshot_is_stale(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            run_kernel("init-run", "--run-dir", str(run_dir), "--run-id", RUN_ID)
+            gate_payload = run_kernel(
+                "materialize-agent-entry-gate",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--pretty",
+            )
+            self.assertEqual(
+                0,
+                gate_payload["agent_entry"]["round_liveness_surface"][
+                    "unresolved_ref_count"
+                ],
+            )
+
+            request_id = submit_open_evidence_request(run_dir)
+            state = run_kernel(
+                "show-run-state",
+                "--run-dir",
+                str(run_dir),
+                "--round-id",
+                ROUND_ID,
+                "--pretty",
+            )
+
+            stale_gate_liveness = state["agent_entry"]["gate"][
+                "round_liveness_surface"
+            ]
+            live_liveness = state["agent_entry"]["current_round_liveness_surface"]
+            operator = state["agent_entry"]["operator"]
+
+            self.assertEqual(0, stale_gate_liveness["unresolved_ref_count"])
+            self.assertEqual(1, live_liveness["unresolved_ref_count"])
+            self.assertIn(
+                f"evidence-request:{request_id}",
+                live_liveness["unresolved_refs"],
+            )
+            self.assertEqual(1, operator["round_unresolved_ref_count"])
+            self.assertTrue(operator["entry_gate_liveness_stale"])
+            self.assertTrue(operator["continuation_decision_required"])
+            self.assertTrue(
+                operator["round_synthesis_required_before_continuation_decision"]
+            )
+            self.assertIn(
+                "show-council-status",
+                operator["show_council_status_command"],
+            )
+            self.assertIn(
+                "request-phase-transition",
+                operator["request_continuation_round_command_template"],
+            )
+
     def test_finding_leaves_unbundled_set_after_explicit_bundle_submission(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"

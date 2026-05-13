@@ -114,9 +114,38 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def read_json(path: Path) -> Any:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+def read_json_or_jsonl(path: Path) -> Any:
+    text = path.read_text(encoding="utf-8")
+    if not text.strip():
+        return []
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        records: list[Any] = []
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSONL at line {line_number}: {path}") from exc
+        return records
+
+
+def extract_records(payload: Any) -> list[Any] | None:
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return None
+    for candidate in (
+        payload.get("records"),
+        payload.get("items"),
+        payload.get("data", {}).get("records") if isinstance(payload.get("data"), dict) else None,
+        payload.get("payload", {}).get("records") if isinstance(payload.get("payload"), dict) else None,
+    ):
+        if isinstance(candidate, list):
+            return candidate
+    return None
 
 
 def file_sha256(path: Path) -> str:
@@ -205,12 +234,13 @@ def build_signals(
     query_text_override: str,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     warnings: list[dict[str, str]] = []
-    if not isinstance(payload, list):
-        warnings.append({"code": "invalid-payload", "message": "Expected the artifact payload to be a list of search hits."})
+    records = extract_records(payload)
+    if records is None:
+        warnings.append({"code": "invalid-payload", "message": "Expected the artifact payload to contain a list of search hits."})
         return [], warnings
     captured_at = utc_now_iso()
     signals: list[dict[str, Any]] = []
-    for index, item in enumerate(payload):
+    for index, item in enumerate(records):
         if not isinstance(item, dict):
             continue
         video = item.get("video") if isinstance(item.get("video"), dict) else {}
@@ -272,7 +302,7 @@ def normalize_youtube_video_public_signals(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     artifact_file = Path(artifact_path).expanduser().resolve()
-    payload = read_json(artifact_file)
+    payload = read_json_or_jsonl(artifact_file)
     artifact_sha256 = file_sha256(artifact_file)
     signals, warnings = build_signals(payload, run_id, round_id, artifact_file, artifact_sha256, query_text_override)
     batch_id = "sigbatch-" + stable_hash(SKILL_NAME, run_id, round_id, artifact_sha256)[:16]

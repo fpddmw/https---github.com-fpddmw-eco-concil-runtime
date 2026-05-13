@@ -107,6 +107,16 @@ def decode_json(text: str, default: Any) -> Any:
         return default
 
 
+def split_artifact_ref(artifact_ref: str) -> tuple[str, str]:
+    text = maybe_text(artifact_ref)
+    if not text:
+        return "", ""
+    if ":$" in text:
+        path, locator_tail = text.split(":$", 1)
+        return path, "$" + locator_tail
+    return text, ""
+
+
 def lookup_raw_record_skill(run_dir: str, signal_id: str, artifact_path: str, record_locator: str, db_path: str) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     connection, db_file = connect_db(run_dir_path, db_path)
@@ -166,9 +176,12 @@ def lookup_raw_record_skill(run_dir: str, signal_id: str, artifact_path: str, re
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Look up one raw record through signal-plane provenance stored in local SQLite.")
     parser.add_argument("--run-dir", required=True)
+    parser.add_argument("--run-id", default="", help=argparse.SUPPRESS)
+    parser.add_argument("--round-id", default="", help=argparse.SUPPRESS)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--signal-id", default="")
     group.add_argument("--artifact-path", default="")
+    group.add_argument("--artifact-ref", default="")
     parser.add_argument("--record-locator", default="")
     parser.add_argument("--db-path", default="")
     parser.add_argument("--pretty", action="store_true")
@@ -177,11 +190,16 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    artifact_path = args.artifact_path
+    record_locator = args.record_locator
+    if args.artifact_ref:
+        artifact_path, parsed_locator = split_artifact_ref(args.artifact_ref)
+        record_locator = record_locator or parsed_locator
     payload = lookup_raw_record_skill(
         run_dir=args.run_dir,
         signal_id=args.signal_id,
-        artifact_path=args.artifact_path,
-        record_locator=args.record_locator,
+        artifact_path=artifact_path,
+        record_locator=record_locator,
         db_path=args.db_path,
     )
     print(pretty_json(payload, args.pretty))

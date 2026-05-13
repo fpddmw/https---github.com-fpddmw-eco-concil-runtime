@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -366,6 +367,56 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             self.assertEqual(1, raw_payload["result_count"])
             self.assertEqual("vid-001", raw_payload["results"][0]["raw_record"]["video_id"])
 
+    def test_youtube_video_normalizer_accepts_jsonl_search_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            youtube_path = root / "youtube_videos.jsonl"
+            rows = [
+                {
+                    "query": "nyc smoke wildfire",
+                    "video_id": "vid-001",
+                    "video": {
+                        "id": "vid-001",
+                        "title": "Smoke over New York City",
+                        "description": "Wildfire smoke over NYC skyline.",
+                        "channel_title": "City Desk",
+                        "published_at": "2023-06-07T13:00:00Z",
+                        "default_language": "en",
+                        "statistics": {"view_count": 1250},
+                    },
+                },
+                {
+                    "query": "nyc smoke wildfire",
+                    "video_id": "vid-002",
+                    "video": {
+                        "id": "vid-002",
+                        "title": "New York air quality warning",
+                        "description": "Officials discuss air quality impacts.",
+                        "channel_title": "Metro News",
+                        "published_at": "2023-06-08T13:00:00Z",
+                        "default_language": "en",
+                        "statistics": {"view_count": 800},
+                    },
+                },
+            ]
+            youtube_path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+            normalize_payload = run_script(
+                script_path("normalize-youtube-video-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(youtube_path),
+            )
+
+            self.assertEqual("completed", normalize_payload["status"])
+            self.assertEqual(2, len(normalize_payload["canonical_ids"]))
+
     def test_environment_signal_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -550,6 +601,20 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 "public-discourse-signal",
                 raw_payload["results"][0]["evidence_basis"]["basis_object_kind"],
             )
+            artifact_ref = raw_payload["results"][0]["artifact_ref"]
+            raw_by_ref_payload = run_script(
+                script_path("query-raw-record"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-ref",
+                artifact_ref,
+            )
+            self.assertEqual(1, raw_by_ref_payload["result_count"])
+            self.assertEqual(signal_id, raw_by_ref_payload["results"][0]["signal_id"])
 
             db_path = run_dir / "analytics" / "signal_plane.sqlite"
             self.assertTrue(db_path.exists())

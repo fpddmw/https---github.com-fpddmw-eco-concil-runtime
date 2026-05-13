@@ -662,6 +662,7 @@ def agent_entry_operator_view(
     contract_mode: str = "warn",
     agent_entry_profile: dict[str, Any] | None = None,
     hard_gate_command_builder: HardGateCommandBuilder | None = None,
+    current_round_liveness: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     profile = resolved_agent_entry_profile(agent_entry_profile)
     operator_commands_builder = profile_callable(profile, "operator_commands_builder")
@@ -718,17 +719,70 @@ def agent_entry_operator_view(
         if isinstance(coordination.get("round_opening_context"), dict)
         else {}
     )
-    round_liveness = (
+    gate_round_liveness = (
         gate.get("round_liveness_surface")
         if isinstance(gate.get("round_liveness_surface"), dict)
+        else {}
+    )
+    round_liveness = (
+        current_round_liveness
+        if isinstance(current_round_liveness, dict)
         else build_round_liveness_surface(run_dir, run_id=run_id, round_id=round_id)
         if run_id and round_id
         else {}
+    )
+    gate_unresolved_refs = (
+        gate_round_liveness.get("unresolved_refs", [])
+        if isinstance(gate_round_liveness.get("unresolved_refs"), list)
+        else []
+    )
+    current_unresolved_refs = (
+        round_liveness.get("unresolved_refs", [])
+        if isinstance(round_liveness.get("unresolved_refs"), list)
+        else []
     )
     continuation = (
         round_liveness.get("continuation")
         if isinstance(round_liveness.get("continuation"), dict)
         else {}
+    )
+    closing_checklist = (
+        round_liveness.get("closing_checklist")
+        if isinstance(round_liveness.get("closing_checklist"), dict)
+        else {}
+    )
+    gate_closing_checklist = (
+        gate_round_liveness.get("closing_checklist")
+        if isinstance(gate_round_liveness.get("closing_checklist"), dict)
+        else {}
+    )
+    gate_continuation = (
+        gate_round_liveness.get("continuation")
+        if isinstance(gate_round_liveness.get("continuation"), dict)
+        else {}
+    )
+    continuation_decision_required = bool(
+        continuation.get("continuation_decision_required")
+    ) or bool(closing_checklist.get("continuation_decision_required"))
+    round_synthesis_required = bool(
+        continuation.get("round_synthesis_required_before_continuation_decision")
+    ) or bool(closing_checklist.get("round_synthesis_required"))
+    gate_continuation_decision_required = bool(
+        gate_continuation.get("continuation_decision_required")
+    ) or bool(gate_closing_checklist.get("continuation_decision_required"))
+    gate_round_synthesis_required = bool(
+        gate_continuation.get("round_synthesis_required_before_continuation_decision")
+    ) or bool(gate_closing_checklist.get("round_synthesis_required"))
+    gate_liveness_stale = bool(
+        gate
+        and gate_round_liveness
+        and (
+            maybe_text(gate_continuation.get("status"))
+            != maybe_text(continuation.get("status"))
+            or set(gate_unresolved_refs) != set(current_unresolved_refs)
+            or gate_continuation_decision_required != continuation_decision_required
+            or gate_round_synthesis_required != round_synthesis_required
+        )
     )
     return {
         "entry_gate_present": bool(gate),
@@ -752,14 +806,24 @@ def agent_entry_operator_view(
         else [],
         "latest_round_brief_id": maybe_text(latest_round_brief.get("object_id")),
         "active_context_packet_id": maybe_text(context_packet.get("object_id")),
+        "round_liveness_source": "live-deliberation-plane" if run_id and round_id else "",
+        "entry_gate_round_liveness_status": maybe_text(gate_continuation.get("status")),
+        "entry_gate_unresolved_ref_count": int(
+            gate_round_liveness.get("unresolved_ref_count") or 0
+        )
+        if gate_round_liveness
+        else 0,
+        "entry_gate_liveness_stale": gate_liveness_stale,
         "round_liveness_status": maybe_text(continuation.get("status")),
         "round_unresolved_ref_count": int(round_liveness.get("unresolved_ref_count") or 0),
-        "round_unresolved_refs": round_liveness.get("unresolved_refs", [])
-        if isinstance(round_liveness.get("unresolved_refs"), list)
-        else [],
+        "round_unresolved_refs": current_unresolved_refs,
+        "continuation_decision_required": continuation_decision_required,
+        "round_synthesis_required_before_continuation_decision": round_synthesis_required,
         "entry_gate_path": str(agent_entry_gate_path(run_dir, round_id).resolve()) if round_id else "",
         "mission_scaffold_path": str(mission_scaffold_path(run_dir, round_id).resolve()) if round_id else "",
         "recommended_entry_skills": gate.get("recommended_entry_skills", []) if isinstance(gate.get("recommended_entry_skills"), list) else [],
+        "show_run_state_command": maybe_text(entry_commands.get("show_run_state_command")),
+        "show_council_status_command": maybe_text(entry_commands.get("show_council_status_command")),
         "materialize_agent_entry_gate_command": maybe_text(entry_commands.get("materialize_agent_entry_gate_command")),
         "refresh_agent_entry_gate_command": maybe_text(entry_commands.get("refresh_agent_entry_gate_command")),
         "read_board_delta_command": maybe_text(entry_commands.get("read_board_delta_command")),
@@ -824,8 +888,14 @@ def agent_entry_state(
     if not round_id:
         return {}
     gate = load_json_if_exists(agent_entry_gate_path(run_dir, round_id)) or {}
+    current_round_liveness = (
+        build_round_liveness_surface(run_dir, run_id=run_id, round_id=round_id)
+        if run_id and round_id
+        else {}
+    )
     return {
         "gate": gate,
+        "current_round_liveness_surface": current_round_liveness,
         "operator": agent_entry_operator_view(
             run_dir,
             run_id=run_id,
@@ -834,6 +904,7 @@ def agent_entry_state(
             contract_mode=contract_mode,
             agent_entry_profile=agent_entry_profile,
             hard_gate_command_builder=hard_gate_command_builder,
+            current_round_liveness=current_round_liveness,
         ),
     }
 

@@ -501,7 +501,23 @@ class AgentEntryGateTests(unittest.TestCase):
                 "agent-entry-coordination-surface-v1",
                 social_coordination_surface["schema_version"],
             )
+            self.assertIn(
+                "show-council-status",
+                social_runtime_context["show_council_status_command"],
+            )
+            self.assertIn(
+                "materialize-agent-entry-gate",
+                social_runtime_context["refresh_agent_entry_gate_command"],
+            )
+            self.assertIn(
+                "show-council-status",
+                social_role_surface["runtime_status_commands"]["show_council_status"],
+            )
             self.assertTrue((social_workspace / "COUNCIL_RUNTIME.md").exists())
+            self.assertIn(
+                "agent entry gate is a snapshot",
+                (social_workspace / "COUNCIL_RUNTIME.md").read_text(encoding="utf-8"),
+            )
             self.assertIn("openclaw agents add", registration["register_all_command"])
             self.assertIn("openclaw agents set-identity", registration["register_all_command"])
             self.assertNotIn(" --identity ", registration["register_all_command"])
@@ -648,6 +664,10 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn(
                 "materialize-agent-entry-gate",
                 state_payload["agent_entry"]["operator"]["refresh_agent_entry_gate_command"],
+            )
+            self.assertIn(
+                "show-council-status",
+                state_payload["agent_entry"]["operator"]["show_council_status_command"],
             )
             self.assertIn(
                 "--actor-role runtime-operator",

@@ -591,6 +591,65 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
             self.assertEqual(0, replay_payload["summary"]["newly_completed_receipt_count"])
             self.assertEqual(1, replay_payload["summary"]["skipped_completed_receipt_count"])
 
+    def test_receipt_driven_normalization_accepts_skill_payload_data_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            receipt_id = "runtime-receipt-gdelt-doc-direct-001"
+            write_json(
+                run_dir / "runtime" / "receipts" / f"{receipt_id}.json",
+                {
+                    "schema_version": "runtime-receipt-v2",
+                    "receipt_id": receipt_id,
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "skill_name": "fetch-gdelt-doc-search",
+                    "status": "completed",
+                    "artifact_refs": [],
+                    "summary": {},
+                    "skill_payload": {
+                        "ok": True,
+                        "source": "gdelt-doc",
+                        "data": {
+                            "articles": [
+                                {
+                                    "title": "Wildfire smoke covers New York City",
+                                    "url": "https://example.test/nyc-smoke",
+                                    "domain": "example.test",
+                                    "seendate": "20230607120000",
+                                    "seendate_text": "2023-06-07 12:00:00",
+                                }
+                            ]
+                        },
+                    },
+                },
+            )
+
+            payload = run_script(
+                script_path("normalize-fetch-execution"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "social-investigator",
+                "--receipt-id",
+                receipt_id,
+            )
+            execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
+            status = execution["statuses"][0]
+            rows = normalized_rows_for_source(run_dir, "fetch-gdelt-doc-search")
+
+            self.assertEqual("normalized-signal-plane", execution["normalization_status"])
+            self.assertEqual("normalized-signal-plane", status["normalization_status"])
+            self.assertEqual(1, status["canonical_count"])
+            self.assertEqual(1, len(rows))
+            self.assertEqual("public", rows[0]["plane"])
+            self.assertEqual("Wildfire smoke covers New York City", rows[0]["title"])
+            self.assertTrue(payload["canonical_ids"])
+
     def test_gdelt_export_normalizers_write_row_level_signals_into_signal_plane(self) -> None:
         events_module = load_skill_module("normalize-gdelt-events-public-signals")
         mentions_module = load_skill_module("normalize-gdelt-mentions-public-signals")

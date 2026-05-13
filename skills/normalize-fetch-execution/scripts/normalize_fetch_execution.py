@@ -483,7 +483,8 @@ def existing_artifact_path_from_receipt(receipt: dict[str, Any], *, run_dir: Pat
 def normalizable_payload_from_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
     skill_payload = receipt.get("skill_payload") if isinstance(receipt.get("skill_payload"), dict) else {}
     nested_payload = skill_payload.get("payload") if isinstance(skill_payload.get("payload"), dict) else {}
-    for candidate in (nested_payload, skill_payload):
+    data_payload = skill_payload.get("data") if isinstance(skill_payload.get("data"), dict) else {}
+    for candidate in (nested_payload, data_payload, skill_payload):
         if not isinstance(candidate, dict):
             continue
         for key in ("records", "articles", "downloads"):

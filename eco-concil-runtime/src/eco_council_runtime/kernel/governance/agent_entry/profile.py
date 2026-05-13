@@ -1321,6 +1321,36 @@ def default_role_entry_points(
                     ),
                 },
                 "claim_strength_obligations": claim_strength_obligations(),
+                "runtime_status_commands": {
+                    "show_council_status": kernel_command(
+                        "show-council-status",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        run_id,
+                        "--round-id",
+                        round_id,
+                        "--pretty",
+                    ),
+                    "show_run_state": kernel_command(
+                        "show-run-state",
+                        "--run-dir",
+                        str(run_dir),
+                        "--round-id",
+                        round_id,
+                        "--pretty",
+                    ),
+                    "refresh_agent_entry_gate": kernel_command(
+                        "materialize-agent-entry-gate",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        run_id,
+                        "--round-id",
+                        round_id,
+                        "--pretty",
+                    ),
+                },
                 "normalize_commands": normalize_commands,
                 "read_commands": [*role_read_commands, *role_coordination_read_commands],
                 "coordination_read_commands": role_coordination_read_commands,
@@ -1372,6 +1402,24 @@ def default_agent_entry_operator_commands(
     if not run_id or not round_id:
         return {}
     return {
+        "show_run_state_command": kernel_command(
+            "show-run-state",
+            "--run-dir",
+            str(run_dir),
+            "--round-id",
+            round_id,
+            "--pretty",
+        ),
+        "show_council_status_command": kernel_command(
+            "show-council-status",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--pretty",
+        ),
         "materialize_agent_entry_gate_command": kernel_command(
             "materialize-agent-entry-gate",
             "--run-dir",
