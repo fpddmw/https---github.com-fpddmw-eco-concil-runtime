@@ -12,6 +12,11 @@ description: Fetch YouTube public comment threads and replies for discovered or 
 - Return machine-readable JSON and optionally save JSONL artifacts.
 - Keep execution observable with structured logs and optional log file.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - Configure runtime via environment variables (see `references/env.md`).
 - Start from `assets/config.example.env` and keep real secrets in `assets/config.env`.
@@ -34,7 +39,7 @@ python3 scripts/fetch_youtube_comments.py check-config --pretty
 
 ```bash
 python3 scripts/fetch_youtube_comments.py fetch \
-  --video-ids-file ./data/youtube-videos/candidates.jsonl \
+  --video-ids-file ./runs/manual-fetch-artifacts/youtube-videos/candidates.jsonl \
   --start-datetime 2026-03-01T00:00:00Z \
   --end-datetime 2026-03-08T00:00:00Z \
   --max-videos 5 \
@@ -47,7 +52,7 @@ python3 scripts/fetch_youtube_comments.py fetch \
 
 ```bash
 python3 scripts/fetch_youtube_comments.py fetch \
-  --video-ids-file ./data/youtube-videos/candidates.jsonl \
+  --video-ids-file ./runs/manual-fetch-artifacts/youtube-videos/candidates.jsonl \
   --start-datetime 2026-03-01T00:00:00Z \
   --end-datetime 2026-03-08T00:00:00Z \
   --time-field published \
@@ -57,7 +62,7 @@ python3 scripts/fetch_youtube_comments.py fetch \
   --max-thread-pages 10 \
   --max-reply-pages 20 \
   --max-comments 2000 \
-  --output-dir ./data/youtube-comments \
+  --output-dir ./runs/manual-fetch-artifacts/youtube-comments \
   --log-level INFO \
   --log-file ./logs/fetch-youtube-comments.log \
   --pretty

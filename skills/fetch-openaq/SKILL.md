@@ -13,6 +13,11 @@ description: Retrieve OpenAQ raw artifacts through explicit metadata discovery, 
 - Keep credentials and region configuration in environment variables.
 - Return raw provider payloads plus `fetch_contract` metadata only; this skill does not normalize, analyze, route, score, or write board judgement.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - `OPENAQ_API_KEY` (required for API requests).
 - `OPENAQ_REGION` (optional for S3 endpoint selection, defaults to `us-east-1` when unset).
@@ -131,7 +136,7 @@ Download one archived file by key:
 ```bash
 python3 scripts/openaq_s3_fetch.py download \
   --key records/csv.gz/locationid=2178/year=2022/month=05/location-2178-20220503.csv.gz \
-  --output ./data/location-2178-20220503.csv.gz
+  --output ./runs/manual-fetch-artifacts/location-2178-20220503.csv.gz
 ```
 
 ## Auto Routing

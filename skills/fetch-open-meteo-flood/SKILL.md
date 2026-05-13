@@ -11,6 +11,11 @@ description: Fetch Open-Meteo Flood API daily river-discharge data for specified
 - Return machine-readable JSON with request metadata, transport info, validation summary, and normalized records.
 - Keep runtime observable with structured logs and optional log file output.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - Configure runtime by environment variables (see `references/env.md`).
 - Start from `assets/config.example.env`.
@@ -55,7 +60,7 @@ python3 scripts/fetch_open_meteo_flood.py fetch \
   --ensemble \
   --cell-selection nearest \
   --timezone GMT \
-  --output ./data/open-meteo/fetch-open-meteo-flood.json \
+  --output ./runs/manual-fetch-artifacts/open-meteo/fetch-open-meteo-flood.json \
   --log-level INFO \
   --log-file ./logs/fetch-open-meteo-flood.log \
   --pretty

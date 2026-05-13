@@ -16,6 +16,11 @@ description: Fetch Bluesky seed posts and expand reply-thread cascades in config
 - Return machine-readable JSON and optional artifact files.
 - Keep execution observable with structured logs.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - Configure runtime via environment variables (see `references/env.md`).
 - Start from `assets/config.example.env`.
@@ -63,7 +68,7 @@ python3 scripts/fetch_bluesky_cascade.py fetch \
   --max-threads 40 \
   --thread-depth 8 \
   --thread-parent-height 5 \
-  --output-dir ./data/bluesky-cascade \
+  --output-dir ./runs/manual-fetch-artifacts/bluesky-cascade \
   --log-level INFO \
   --log-file ./logs/fetch-bluesky-cascade.log \
   --pretty

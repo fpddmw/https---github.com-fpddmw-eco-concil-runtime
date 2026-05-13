@@ -12,6 +12,11 @@ description: Fetch GDELT 2.0 Global Mentions export snapshots from lastupdate/ma
 - Persist downloaded files and return machine-readable JSON manifest.
 - Keep runtime observable with structured logs and optional log file.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - Configure runtime by environment variables (see `references/env.md`).
 - Start from `assets/config.example.env`.
@@ -54,11 +59,11 @@ python3 scripts/fetch_gdelt_mentions.py fetch \
 python3 scripts/fetch_gdelt_mentions.py fetch \
   --mode latest \
   --max-files 1 \
-  --output-dir ./data/gdelt-mentions \
+  --output-dir ./runs/manual-fetch-artifacts/gdelt-mentions \
   --preview-lines 2 \
   --validate-structure \
   --expected-columns 16 \
-  --quarantine-dir ./data/gdelt-mentions-quarantine \
+  --quarantine-dir ./runs/manual-fetch-artifacts/gdelt-mentions-quarantine \
   --log-level INFO \
   --log-file ./logs/fetch-gdelt-mentions.log \
   --pretty

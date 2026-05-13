@@ -12,6 +12,11 @@ description: Query GDELT DOC 2.0 API using explicit query/mode/format/time param
 - Return structured JSON envelopes and optionally write raw response bytes.
 - Keep runtime observable with structured logs and optional log file.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - Configure runtime by environment variables (see `references/env.md`).
 - Start from `assets/config.example.env`.
@@ -75,7 +80,7 @@ python3 scripts/fetch_gdelt_doc_search.py search \
   --start-datetime 20230605000000 \
   --end-datetime 20230609000000 \
   --max-records 50 \
-  --output ./data/gdelt-doc/official-smoke.json \
+  --output ./runs/manual-fetch-artifacts/gdelt-doc/official-smoke.json \
   --pretty
 ```
 
@@ -87,7 +92,7 @@ python3 scripts/fetch_gdelt_doc_search.py search \
   --mode artlist \
   --format json \
   --timespan 1week \
-  --output ./data/gdelt-doc/wildfire.json \
+  --output ./runs/manual-fetch-artifacts/gdelt-doc/wildfire.json \
   --pretty
 ```
 

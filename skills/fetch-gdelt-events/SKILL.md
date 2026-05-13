@@ -12,6 +12,11 @@ description: Fetch GDELT 2.0 Events export snapshots from lastupdate/masterfilel
 - Persist downloaded files and return machine-readable JSON manifest.
 - Keep runtime observable with structured logs and optional log file.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - Configure runtime by environment variables (see `references/env.md`).
 - Start from `assets/config.example.env`.
@@ -54,11 +59,11 @@ python3 scripts/fetch_gdelt_events.py fetch \
 python3 scripts/fetch_gdelt_events.py fetch \
   --mode latest \
   --max-files 1 \
-  --output-dir ./data/gdelt-events \
+  --output-dir ./runs/manual-fetch-artifacts/gdelt-events \
   --preview-lines 3 \
   --validate-structure \
   --expected-columns 61 \
-  --quarantine-dir ./data/gdelt-events-quarantine \
+  --quarantine-dir ./runs/manual-fetch-artifacts/gdelt-events-quarantine \
   --log-level INFO \
   --log-file ./logs/fetch-gdelt-events.log \
   --pretty

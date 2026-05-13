@@ -12,6 +12,11 @@ description: Fetch Regulations.gov v4 comments in configurable time windows with
 - Return machine-readable JSON and optionally save JSONL records locally.
 - Keep execution observable with structured logs and optional log file.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - Configure runtime with environment variables (see `references/env.md`).
 - Start from `assets/config.example.env` and keep the real API key in `assets/config.env`.
@@ -52,8 +57,8 @@ python3 scripts/fetch_regulationsgov_comments.py fetch \
   --agency-id EPA \
   --max-pages 3 \
   --max-records 300 \
-  --output-dir ./data/regulationsgov-comments \
-  --quarantine-dir ./data/regulationsgov-comments-quarantine \
+  --output-dir ./runs/manual-fetch-artifacts/regulationsgov-comments \
+  --quarantine-dir ./runs/manual-fetch-artifacts/regulationsgov-comments-quarantine \
   --log-level INFO \
   --log-file ./logs/fetch-regulationsgov-comments.log \
   --pretty

@@ -16,6 +16,11 @@ description: Fetch USGS Water Services Instantaneous Values JSON for one boundin
 - When eco-council or OpenClaw assigns a raw artifact path, write this skill's full JSON payload to that exact path with `--output`.
 - Do not treat dry-run output as collected evidence.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - Configure runtime by environment variables in `references/env.md`.
 - Start from `assets/config.example.env`.
@@ -59,7 +64,7 @@ python3 scripts/fetch_usgs_water_iv.py fetch \
   --parameter-code 00065 \
   --site-type ST \
   --site-status active \
-  --output ./data/usgs-water-iv.json \
+  --output ./runs/manual-fetch-artifacts/usgs-water-iv.json \
   --pretty
 ```
 
@@ -72,7 +77,7 @@ python3 scripts/fetch_usgs_water_iv.py fetch \
   --period P1D \
   --parameter-code 00060 \
   --parameter-code 00065 \
-  --output ./data/usgs-water-iv-sites.json \
+  --output ./runs/manual-fetch-artifacts/usgs-water-iv-sites.json \
   --pretty
 ```
 

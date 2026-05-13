@@ -12,6 +12,11 @@ description: Fetch Regulations.gov v4 comment detail resources by comment IDs wi
 - Return machine-readable JSON and optionally save JSONL artifacts.
 - Keep execution observable with structured logs and optional log file.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - Configure runtime with environment variables (see `references/env.md`).
 - Start from `assets/config.example.env` and keep the real API key in `assets/config.env`.
@@ -45,11 +50,11 @@ python3 scripts/fetch_regulationsgov_comment_detail.py fetch \
 
 ```bash
 python3 scripts/fetch_regulationsgov_comment_detail.py fetch \
-  --comment-ids-file ./data/regulationsgov-comments/comments-window.jsonl \
+  --comment-ids-file ./runs/manual-fetch-artifacts/regulationsgov-comments/comments-window.jsonl \
   --max-comments 100 \
   --include attachments \
-  --output-dir ./data/regulationsgov-comment-details \
-  --quarantine-dir ./data/regulationsgov-comment-details-quarantine \
+  --output-dir ./runs/manual-fetch-artifacts/regulationsgov-comment-details \
+  --quarantine-dir ./runs/manual-fetch-artifacts/regulationsgov-comment-details-quarantine \
   --no-fail-on-item-error \
   --log-level INFO \
   --log-file ./logs/reggov-comment-detail-fetch.log \

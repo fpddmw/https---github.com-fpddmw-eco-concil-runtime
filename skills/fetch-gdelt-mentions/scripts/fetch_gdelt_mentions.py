@@ -1010,7 +1010,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fetch.add_argument(
         "--output-dir",
-        default="./data/gdelt-mentions",
+        default="./runs/manual-fetch-artifacts/gdelt-mentions",
         help="Directory for downloaded .mentions.CSV.zip files.",
     )
     fetch.add_argument(

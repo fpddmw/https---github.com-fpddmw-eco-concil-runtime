@@ -16,6 +16,11 @@ description: Fetch AirNow Hourly AQ Obs file products from official AirNow file 
 - When eco-council or OpenClaw assigns a raw artifact path, write this skill's full JSON payload to that exact path with `--output`.
 - Do not treat dry-run output as collected evidence.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - Configure runtime by environment variables (see `references/env.md`).
 - Start from `assets/config.example.env`.
@@ -57,7 +62,7 @@ python3 scripts/fetch_airnow_hourly_observations.py fetch \
   --parameter PM25 \
   --parameter OZONE \
   --parameter NO2 \
-  --output ./data/airnow-hourly-obs.json \
+  --output ./runs/manual-fetch-artifacts/airnow-hourly-obs.json \
   --pretty
 ```
 

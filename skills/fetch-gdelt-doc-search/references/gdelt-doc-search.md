@@ -105,6 +105,6 @@ python3 scripts/fetch_gdelt_doc_search.py search \
   --start-datetime 20230605000000 \
   --end-datetime 20230609000000 \
   --max-records 50 \
-  --output ./data/gdelt-doc/official-smoke.json \
+  --output ./runs/manual-fetch-artifacts/gdelt-doc/official-smoke.json \
   --pretty
 ```

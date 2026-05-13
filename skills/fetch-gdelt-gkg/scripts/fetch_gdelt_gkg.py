@@ -1010,7 +1010,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fetch.add_argument(
         "--output-dir",
-        default="./data/gdelt-gkg",
+        default="./runs/manual-fetch-artifacts/gdelt-gkg",
         help="Directory for downloaded .gkg.csv.zip files.",
     )
     fetch.add_argument(

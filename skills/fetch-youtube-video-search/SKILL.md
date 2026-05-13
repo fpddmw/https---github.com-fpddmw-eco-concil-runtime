@@ -12,6 +12,11 @@ description: Search YouTube videos for topical/domain discovery using explicit q
 - Return machine-readable JSON and optionally save JSONL candidate artifacts.
 - Keep execution observable with structured logs and optional log file.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - Configure runtime via environment variables (see `references/env.md`).
 - Start from `assets/config.example.env` and keep real secrets in `assets/config.env`.
@@ -55,7 +60,7 @@ python3 scripts/fetch_youtube_video_search.py search \
   --max-pages 4 \
   --max-results 120 \
   --comment-count-min 20 \
-  --output-dir ./data/youtube-videos \
+  --output-dir ./runs/manual-fetch-artifacts/youtube-videos \
   --log-level INFO \
   --log-file ./logs/fetch-youtube-video-search.log \
   --pretty

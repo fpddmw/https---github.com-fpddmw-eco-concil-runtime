@@ -1860,7 +1860,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search.add_argument(
         "--output-dir",
-        default="./data/youtube-videos",
+        default="./runs/manual-fetch-artifacts/youtube-videos",
         help="Output directory for saved JSONL.",
     )
     search.add_argument("--output-file", default="", help="Optional explicit output JSONL path.")

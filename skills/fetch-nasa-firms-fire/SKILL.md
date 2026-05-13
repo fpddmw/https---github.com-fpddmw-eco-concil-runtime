@@ -11,6 +11,11 @@ description: Fetch NASA FIRMS active fire detections from the area/csv endpoint 
 - Return machine-readable JSON with request metadata, chunk transport details, validation summary, and normalized fire records.
 - Keep runtime observable with structured stderr logs and optional file logs.
 
+## Artifact Placement
+- In council/runtime runs, write fetched artifacts under the assigned run path, usually `runs/<run-id>/raw/<round-id>/direct-fetch/`, using `--output`, `--output-dir`, and related path flags.
+- `./runs/manual-fetch-artifacts/...` examples are for ad-hoc manual probes only.
+- Never write fetch outputs to repo-root `data/`.
+
 ## Required Environment
 - `NASA_FIRMS_MAP_KEY` is required for remote requests.
 - Start from `assets/config.example.env` and keep the real key in `assets/config.env`.
@@ -59,7 +64,7 @@ python3 scripts/fetch_nasa_firms_fire.py fetch \
   --start-date 2023-06-01 \
   --end-date 2023-06-08 \
   --check-availability \
-  --output ./data/firms/fetch-nasa-firms-fire.json \
+  --output ./runs/manual-fetch-artifacts/firms/fetch-nasa-firms-fire.json \
   --log-level INFO \
   --log-file ./logs/fetch-nasa-firms-fire.log \
   --pretty

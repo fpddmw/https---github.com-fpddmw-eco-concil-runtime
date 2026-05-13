@@ -1361,7 +1361,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fetch.add_argument(
         "--output-dir",
-        default="./data/regulationsgov-comments",
+        default="./runs/manual-fetch-artifacts/regulationsgov-comments",
         help="Directory for saved JSONL files when --save-response is enabled.",
     )
     fetch.add_argument(

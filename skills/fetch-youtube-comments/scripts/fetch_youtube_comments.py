@@ -2248,7 +2248,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fetch.add_argument(
         "--output-dir",
-        default="./data/youtube-comments",
+        default="./runs/manual-fetch-artifacts/youtube-comments",
         help="Output directory for saved JSONL.",
     )
     fetch.add_argument("--output-file", default="", help="Optional explicit output JSONL path.")
