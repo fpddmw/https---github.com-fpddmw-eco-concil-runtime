@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,6 @@ from eco_council_runtime.kernel.planes.signal import (  # noqa: E402
     maybe_number,
     maybe_text,
     pretty_json,
-    read_json,
     stable_hash,
     utc_now_iso,
 )
@@ -28,6 +28,23 @@ from eco_council_runtime.kernel.planes.signal import (  # noqa: E402
 SKILL_NAME = "normalize-youtube-comments-public-signals"
 SOURCE_SKILL = "fetch-youtube-comments"
 PLANE = "public"
+
+
+def read_comment_artifact(artifact_file: Path) -> dict[str, Any]:
+    text = artifact_file.read_text(encoding="utf-8")
+    if artifact_file.suffix.lower() == ".jsonl":
+        records = [
+            json.loads(line)
+            for line in text.splitlines()
+            if line.strip()
+        ]
+        return {"records": records, "artifact_format": "jsonl"}
+    payload = json.loads(text)
+    if isinstance(payload, list):
+        return {"records": payload, "artifact_format": "json-array"}
+    if isinstance(payload, dict):
+        return payload
+    return {"records": [], "artifact_format": "unsupported"}
 
 
 def build_signals(payload: Any, run_id: str, round_id: str, artifact_file: Path, artifact_sha256: str) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
@@ -103,7 +120,7 @@ def build_signals(payload: Any, run_id: str, round_id: str, artifact_file: Path,
 
 def normalize_youtube_comments(run_dir: str, run_id: str, round_id: str, artifact_path: str, db_path: str) -> dict[str, Any]:
     artifact_file = Path(artifact_path).expanduser().resolve()
-    artifact_payload = read_json(artifact_file)
+    artifact_payload = read_comment_artifact(artifact_file)
     artifact_sha256 = file_sha256(artifact_file)
     signals, warnings = build_signals(artifact_payload, run_id, round_id, artifact_file, artifact_sha256)
     return finalize_normalization(

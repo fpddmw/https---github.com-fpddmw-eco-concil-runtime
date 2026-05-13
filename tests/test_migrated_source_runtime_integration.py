@@ -655,6 +655,9 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
         mentions_module = load_skill_module("normalize-gdelt-mentions-public-signals")
         gkg_module = load_skill_module("normalize-gdelt-gkg-public-signals")
 
+        self.assertEqual(61, len(events_module.EVENT_FIELDS))
+        self.assertIn("ActionGeo_ADM2Code", events_module.EVENT_FIELDS)
+
         specs = [
             {
                 "source_skill": "fetch-gdelt-events",

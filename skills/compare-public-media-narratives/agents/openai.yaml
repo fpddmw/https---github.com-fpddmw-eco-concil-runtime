@@ -1,0 +1,4 @@
+interface:
+  display_name: "Compare Public Media Narratives"
+  short_description: "Optional-analysis public/media narrative comparison"
+  default_prompt: "Use $compare-public-media-narratives only after approval. Compare sampled discourse lanes as advisory cues; do not score alignment, infer public opinion, or make source-attribution conclusions."

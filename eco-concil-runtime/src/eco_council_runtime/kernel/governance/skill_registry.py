@@ -219,6 +219,11 @@ OPTIONAL_ANALYSIS_SKILLS = [
     "apply-approved-formal-public-taxonomy",
     "compare-formal-public-footprints",
     "identify-representation-audit-cues",
+    "materialize-public-discourse-corpus",
+    "audit-public-discourse-sample-coverage",
+    "aggregate-public-discourse-annotations",
+    "compare-public-media-narratives",
+    "summarize-public-discourse-sample",
     "detect-temporal-cooccurrence-cues",
     "review-spatiotemporal-relation-alternatives",
     "review-evidence-sufficiency",
@@ -334,6 +339,46 @@ OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
         "caveats": [
             "Representation audit cues are prompts for human review, not findings.",
             "No severity score may be emitted by this helper.",
+        ],
+    },
+    "materialize-public-discourse-corpus": {
+        "rule_id": "HEUR-PUBLIC-DISCOURSE-CORPUS-001",
+        "destination": "public/formal discourse corpus materialization helper",
+        "caveats": [
+            "The corpus defines a DB-visible text sample only and cannot infer general public opinion.",
+            "GDELT tone rows must remain media/document tone, not public response sentiment.",
+        ],
+    },
+    "audit-public-discourse-sample-coverage": {
+        "rule_id": "HEUR-PUBLIC-DISCOURSE-COVERAGE-001",
+        "destination": "public discourse sample coverage audit helper",
+        "caveats": [
+            "Coverage cues are prompts for human review, not representation findings.",
+            "Zero rows may reflect unrun fetches, filters, API limits, import scope, or normalization gaps.",
+        ],
+    },
+    "aggregate-public-discourse-annotations": {
+        "rule_id": "HEUR-PUBLIC-DISCOURSE-ANNOTATION-001",
+        "destination": "sample-level public discourse annotation aggregation helper",
+        "caveats": [
+            "Annotation distributions describe only annotated items inside the selected sample.",
+            "Sample fractions are not public-opinion estimates.",
+        ],
+    },
+    "compare-public-media-narratives": {
+        "rule_id": "HEUR-PUBLIC-MEDIA-NARRATIVE-COMPARE-001",
+        "destination": "public/media narrative comparison helper",
+        "caveats": [
+            "Cross-source cues are advisory comparisons, not alignment scores or source-attribution findings.",
+            "GDELT media tone, social sample affect, and formal comment samples must remain separate.",
+        ],
+    },
+    "summarize-public-discourse-sample": {
+        "rule_id": "HEUR-PUBLIC-DISCOURSE-SUMMARY-001",
+        "destination": "public discourse sample summary handoff helper",
+        "caveats": [
+            "The summary is advisory handoff material and does not create findings or report basis.",
+            "Report-facing use requires explicit council object uptake.",
         ],
     },
     "detect-temporal-cooccurrence-cues": {

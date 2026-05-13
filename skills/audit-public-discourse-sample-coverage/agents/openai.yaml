@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit Public Discourse Sample Coverage"
+  short_description: "Optional-analysis public discourse sample coverage audit"
+  default_prompt: "Use $audit-public-discourse-sample-coverage only after approval. Emit source-family coverage cues and limitations; do not make representation findings, absence claims, or report conclusions."

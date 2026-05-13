@@ -1,0 +1,31 @@
+---
+name: summarize-public-discourse-sample
+description: Optional-analysis helper for summarizing a public discourse sample from approved corpus, coverage, annotation, and comparison artifacts without writing deliberation conclusions.
+---
+
+# Summarize Public Discourse Sample
+
+## Core Goal
+- Read DB-backed public/formal signals and approved public discourse helper artifacts.
+- Emit a compact sample summary with sample definition, distributions, media tone, example refs, warnings, and board handoff.
+- Avoid report-ready conclusions, public-opinion inference, source attribution, source ranking, or phase-gate posture.
+
+## Read/Write Contract
+- Reads `run_dir/analytics/signal_plane.sqlite`
+- Optionally reads approved public discourse corpus, coverage audit, annotation aggregation, and public/media narrative comparison artifacts
+- Writes `run_dir/analytics/public_discourse_sample_summary_<round_id>.json`
+- Defaults to `--round-scope current`; use `--round-scope run` only when the
+  council-approved sample intentionally spans multiple rounds in one run.
+
+## Agent Reasoning Guide
+- Treat the summary as advisory handoff material. It assembles approved helper
+  outputs and DB refs, but it does not create findings, evidence bundles,
+  readiness decisions, or report-basis objects.
+- Keep sample boundaries visible: YouTube/Bluesky affect is sample-local, GDELT
+  tone is media/document tone, formal comments are policy-record samples, and
+  physical source attribution belongs to the environmental evidence lane.
+- A council agent must cite the returned refs in a finding, evidence bundle,
+  challenge, readiness opinion, or synthesis before downstream use.
+
+## Scripts
+- `scripts/summarize_public_discourse_sample.py`

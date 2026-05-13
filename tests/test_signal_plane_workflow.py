@@ -14,6 +14,68 @@ ROUND2_ID = "round-signal-002"
 
 
 class SignalPlaneWorkflowTests(unittest.TestCase):
+    def test_youtube_comment_jsonl_artifact_normalizes_to_public_signal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            comments_path = Path(tmpdir) / "youtube_comments.jsonl"
+            comments_path.write_text(
+                json.dumps(
+                    {
+                        "video_id": "abc123def45",
+                        "thread_id": "thread-001",
+                        "comment_id": "comment-001",
+                        "parent_comment_id": "",
+                        "comment_type": "top_level",
+                        "channel_id": "channel-001",
+                        "author_display_name": "Fixture Viewer",
+                        "author_channel_id": "author-001",
+                        "author_channel_url": "https://example.test/author",
+                        "published_at": "2023-06-07T18:00:00Z",
+                        "updated_at": "2023-06-07T18:00:00Z",
+                        "text_display": "The smoke made it hard to breathe in NYC.",
+                        "text_original": "The smoke made it hard to breathe in NYC.",
+                        "like_count": 3,
+                        "viewer_rating": "none",
+                        "can_rate": True,
+                        "time_field_used": "published",
+                        "source": {"video_id": "abc123def45", "order": "time"},
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            normalize_payload = run_script(
+                script_path("normalize-youtube-comments-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(comments_path),
+            )
+
+            self.assertEqual("completed", normalize_payload["status"])
+            self.assertEqual(1, len(normalize_payload["canonical_ids"]))
+            with sqlite3.connect(run_dir / "analytics" / "signal_plane.sqlite") as connection:
+                connection.row_factory = sqlite3.Row
+                row = connection.execute(
+                    """
+                    SELECT source_skill, signal_kind, body_text, metadata_json
+                    FROM normalized_signals
+                    WHERE signal_id = ?
+                    """,
+                    (normalize_payload["canonical_ids"][0],),
+                ).fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual("fetch-youtube-comments", row["source_skill"])
+            self.assertEqual("comment", row["signal_kind"])
+            self.assertIn("hard to breathe", row["body_text"])
+            self.assertIn("abc123def45", row["metadata_json"])
+
     def test_formal_signal_roundtrip_and_filters(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

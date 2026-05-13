@@ -21,6 +21,8 @@ from eco_council_runtime.kernel.planes.gdelt_export_normalizer import (  # noqa:
     gkg_tone_score,
     iter_rows_for_download,
     parse_compact_utc,
+    parse_gkg_gcam_cues,
+    parse_gkg_v2_tone_parts,
     raw_row_record,
     record_locator,
     split_multi_value,
@@ -159,7 +161,11 @@ def build_row_signal(
         summary_bits.append("persons=" + ", ".join(v2_persons))
     if v2_orgs:
         summary_bits.append("orgs=" + ", ".join(v2_orgs))
-    tone = gkg_tone_score(field_text(columns, "V2Tone"))
+    v2_tone_raw = field_text(columns, "V2Tone")
+    tone = gkg_tone_score(v2_tone_raw)
+    v2_tone_parts = parse_gkg_v2_tone_parts(v2_tone_raw)
+    gcam_raw = field_text(columns, "GCAM")
+    gcam_cues = parse_gkg_gcam_cues(gcam_raw)
     if tone is not None:
         summary_bits.append(f"tone={tone}")
     signal_id = "sig-" + stable_hash(run_id, round_id, SOURCE_SKILL, row_artifact_sha256, record_id, row_index)[:16]
@@ -206,6 +212,14 @@ def build_row_signal(
             "v2persons": field_text(columns, "V2Persons"),
             "organizations": field_text(columns, "Organizations"),
             "v2organizations": field_text(columns, "V2Organizations"),
+            "gdelt_tone_kind": "gdelt_media_tone",
+            "tone_metric_name": "V2Tone",
+            "tone_semantics": "media_or_document_tone_not_public_response_sentiment",
+            "v2_tone_raw": v2_tone_raw,
+            "v2_tone_parts": v2_tone_parts,
+            "gcam_raw": gcam_raw,
+            "gcam_cues": gcam_cues,
+            "gcam_semantics": "provider_emotion_psychology_cues_for_audit_not_public_response_sentiment",
             "quotations": field_text(columns, "Quotations"),
             "all_names": field_text(columns, "AllNames"),
             "amounts": field_text(columns, "Amounts"),

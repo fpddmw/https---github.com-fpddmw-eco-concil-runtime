@@ -6,7 +6,7 @@ description: Normalize fetch-youtube-comments results into unified public signal
 # Eco Normalize YouTube Comments Public Signals
 
 ## Core Goal
-- Read one `fetch-youtube-comments` raw artifact.
+- Read one `fetch-youtube-comments` raw JSON artifact or saved JSONL records artifact.
 - Convert comment-thread records into canonical public signals.
 - Write normalized rows into the unified signal plane.
 - Return compact receipts, artifact refs, signal ids, and query-oriented handoff.

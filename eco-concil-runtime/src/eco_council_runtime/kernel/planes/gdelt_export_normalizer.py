@@ -97,11 +97,75 @@ def split_multi_value(value: Any, *, delimiter: str = ";", limit: int = 0) -> li
 
 
 def gkg_tone_score(value: Any) -> float | None:
+    parts = parse_gkg_v2_tone_parts(value)
+    tone = parts.get("tone")
+    return float(tone) if isinstance(tone, (int, float)) else None
+
+
+def parse_gkg_v2_tone_parts(value: Any) -> dict[str, Any]:
     text = maybe_text(value)
     if not text:
-        return None
-    first = text.split(",", 1)[0]
-    return maybe_number(first)
+        return {}
+    names = [
+        "tone",
+        "positive_score",
+        "negative_score",
+        "polarity",
+        "activity_reference_density",
+        "self_group_reference_density",
+        "word_count",
+    ]
+    values = [maybe_number(part) for part in text.split(",")]
+    parts: dict[str, Any] = {"raw": text, "field_count": len(values)}
+    for index, name in enumerate(names):
+        if index >= len(values) or values[index] is None:
+            continue
+        value_number = float(values[index])
+        if name == "word_count" and value_number.is_integer():
+            parts[name] = int(value_number)
+        else:
+            parts[name] = value_number
+    return parts
+
+
+def parse_gkg_gcam_cues(value: Any, *, limit: int = 200) -> dict[str, Any]:
+    text = maybe_text(value)
+    if not text:
+        return {}
+    dimensions: list[dict[str, Any]] = []
+    unparsed: list[str] = []
+    word_count: int | None = None
+    entries = [maybe_text(part) for part in text.replace(";", ",").split(",") if maybe_text(part)]
+    for entry in entries:
+        if ":" not in entry:
+            unparsed.append(entry)
+            continue
+        key, raw_value = entry.split(":", 1)
+        code = maybe_text(key)
+        number = maybe_number(raw_value)
+        if not code or number is None:
+            unparsed.append(entry)
+            continue
+        if code.casefold() == "wc":
+            word_count_float = float(number)
+            word_count = int(word_count_float) if word_count_float.is_integer() else int(round(word_count_float))
+            continue
+        if len(dimensions) < max(1, int(limit or 200)):
+            dimensions.append({"dimension": code, "value": float(number)})
+    result: dict[str, Any] = {
+        "raw": text,
+        "entry_count": len(entries),
+        "dimension_count": len(dimensions),
+        "dimensions": dimensions,
+    }
+    if word_count is not None:
+        result["word_count"] = word_count
+    if unparsed:
+        result["unparsed_entries"] = unparsed[:20]
+        result["unparsed_count"] = len(unparsed)
+    if len(entries) > len(dimensions) + (1 if word_count is not None else 0) + len(unparsed):
+        result["truncated"] = True
+    return result
 
 
 def record_locator(member_name: str, row_index: int) -> str:
@@ -225,6 +289,8 @@ __all__ = [
     "gkg_tone_score",
     "iter_rows_for_download",
     "parse_compact_utc",
+    "parse_gkg_gcam_cues",
+    "parse_gkg_v2_tone_parts",
     "raw_row_record",
     "record_locator",
     "split_multi_value",

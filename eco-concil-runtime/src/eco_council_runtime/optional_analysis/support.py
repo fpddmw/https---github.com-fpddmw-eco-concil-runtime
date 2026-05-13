@@ -71,6 +71,11 @@ OPTIONAL_ANALYSIS_RULE_IDS: dict[str, str] = {
     "apply-approved-formal-public-taxonomy": "HEUR-TAXONOMY-APPLY-001",
     "compare-formal-public-footprints": "HEUR-FORMAL-PUBLIC-FOOTPRINT-001",
     "identify-representation-audit-cues": "HEUR-REPRESENTATION-AUDIT-001",
+    "materialize-public-discourse-corpus": "HEUR-PUBLIC-DISCOURSE-CORPUS-001",
+    "audit-public-discourse-sample-coverage": "HEUR-PUBLIC-DISCOURSE-COVERAGE-001",
+    "aggregate-public-discourse-annotations": "HEUR-PUBLIC-DISCOURSE-ANNOTATION-001",
+    "compare-public-media-narratives": "HEUR-PUBLIC-MEDIA-NARRATIVE-COMPARE-001",
+    "summarize-public-discourse-sample": "HEUR-PUBLIC-DISCOURSE-SUMMARY-001",
     "detect-temporal-cooccurrence-cues": "HEUR-SPATIOTEMPORAL-RELATION-001",
     "review-spatiotemporal-relation-alternatives": "HEUR-SPATIOTEMPORAL-ALTERNATIVES-001",
 }

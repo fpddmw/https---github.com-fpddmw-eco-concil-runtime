@@ -1,0 +1,4 @@
+interface:
+  display_name: "Materialize Public Discourse Corpus"
+  short_description: "Optional-analysis public/formal discourse corpus materialization"
+  default_prompt: "Use $materialize-public-discourse-corpus only after approval. Build a DB-backed sample with explicit boundaries; do not infer general public opinion, rank sources, or make report conclusions."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Summarize Public Discourse Sample"
+  short_description: "Optional-analysis public discourse sample summary handoff"
+  default_prompt: "Use $summarize-public-discourse-sample only after approval. Summarize approved sample artifacts and refs for council uptake; do not make report-ready conclusions, infer public opinion, or assign source attribution."

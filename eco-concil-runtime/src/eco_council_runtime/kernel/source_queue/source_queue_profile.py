@@ -35,6 +35,11 @@ OPTIONAL_ANALYSIS_SKILLS = {
     "apply-approved-formal-public-taxonomy",
     "compare-formal-public-footprints",
     "identify-representation-audit-cues",
+    "materialize-public-discourse-corpus",
+    "audit-public-discourse-sample-coverage",
+    "aggregate-public-discourse-annotations",
+    "compare-public-media-narratives",
+    "summarize-public-discourse-sample",
     "detect-temporal-cooccurrence-cues",
     "review-spatiotemporal-relation-alternatives",
     "plan-round-orchestration",
@@ -87,6 +92,30 @@ OPTIONAL_ANALYSIS_NOTES = {
     "identify-representation-audit-cues": (
         "Approval-gated representation audit cue helper. It emits human-review "
         "prompts, not representation findings."
+    ),
+    "materialize-public-discourse-corpus": (
+        "Approval-gated public discourse corpus helper. It materializes a "
+        "DB-visible sample with explicit boundaries and does not infer public "
+        "opinion or report conclusions."
+    ),
+    "audit-public-discourse-sample-coverage": (
+        "Approval-gated public discourse coverage audit helper. It emits "
+        "source-family coverage cues and limitations, not representation "
+        "findings or absence claims."
+    ),
+    "aggregate-public-discourse-annotations": (
+        "Approval-gated public discourse annotation aggregation helper. It "
+        "summarizes sample labels only and does not infer public opinion."
+    ),
+    "compare-public-media-narratives": (
+        "Approval-gated public/media narrative comparison helper. It compares "
+        "sample lanes as advisory cues without alignment scores or attribution "
+        "conclusions."
+    ),
+    "summarize-public-discourse-sample": (
+        "Approval-gated public discourse sample summary helper. It assembles "
+        "approved sample artifacts into advisory board handoff material and "
+        "does not create report-ready conclusions."
     ),
     "detect-temporal-cooccurrence-cues": (
         "Approval-gated temporal co-occurrence helper. It is descriptive only and "
