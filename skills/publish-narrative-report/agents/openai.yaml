@@ -1,0 +1,5 @@
+name: publish-narrative-report
+description: Publish a validated narrative report artifact.
+interface:
+  input: runtime arguments
+  output: canonical JSON and Markdown narrative report artifacts

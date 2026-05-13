@@ -13,6 +13,7 @@ from eco_council_runtime.kernel.governance.transition_requests.common import (
     ROLE_MODERATOR,
     ROLE_RUNTIME_OPERATOR,
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+    TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
     connect_db,
     json_text,
     maybe_text,
@@ -598,7 +599,10 @@ def resolve_transition_request_for_execution(
         raise ValueError(
             f"Transition request {request_id} belongs to run `{maybe_text(request.get('run_id'))}`, not `{maybe_text(run_id)}`."
         )
-    if expected_kind == TRANSITION_KIND_OPEN_INVESTIGATION_ROUND:
+    if expected_kind in {
+        TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+        TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
+    }:
         expected_source_round_id = maybe_text(source_round_id)
         expected_target_round_id = maybe_text(target_round_id) or maybe_text(round_id)
         if maybe_text(request.get("round_id")) != expected_source_round_id:

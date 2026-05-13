@@ -1,0 +1,13 @@
+name: open-report-writing-round
+description: Open a report-editor-only round from an approved transition request.
+interface:
+  input: runtime arguments
+  output: round transition and report-writing task artifacts
+default_prompt: |
+  Open a reporting-only round after the moderator has closed or bounded the
+  investigation. The task should register only report-editor work. Do not
+  schedule investigators, fetches, normalization, or new evidence adoption.
+
+  The report-editor task must ask for a human-readable narrative report:
+  conclusion first, then evidence and reasoning, limitations, decision use, and
+  audit trail. The task should not ask for a runtime-object dump.

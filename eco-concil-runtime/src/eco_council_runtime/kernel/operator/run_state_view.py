@@ -43,6 +43,7 @@ from eco_council_runtime.kernel.governance.transition_requests import (
     TRANSITION_KIND_CLOSE_ROUND,
     TRANSITION_KIND_FREEZE_REPORT_BASIS,
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+    TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
     latest_transition_request,
     load_transition_requests,
 )
@@ -315,6 +316,35 @@ def transition_request_state(
             "<rationale>",
             actor_role="moderator",
         ),
+        "request_report_writing_round_command_template": kernel_command(
+            "request-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--transition-kind",
+            TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
+            "--target-round-id",
+            "<target_round_id>",
+            "--source-round-id",
+            round_id,
+            "--request-payload-json",
+            json.dumps(
+                {
+                    "round_mode": "report-writing",
+                    "basis_round_id": round_id,
+                    "reporting_basis_refs": ["<final-publication|council-decision|report-basis:object_id>"],
+                    "scope": "report-editor-only narrative report production from existing council basis",
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+            ),
+            "--rationale",
+            "<moderator_report_writing_rationale>",
+            actor_role="moderator",
+        ),
         "request_close_round_command_template": kernel_command(
             "request-phase-transition",
             "--run-dir",
@@ -441,6 +471,17 @@ def governed_execution_operator_view(
             run_id=run_id,
             round_id=round_id,
             transition_kind=TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+            request_status=REQUEST_STATUS_APPROVED,
+        )
+        if round_id and run_id
+        else None
+    )
+    approved_report_writing_request = (
+        latest_transition_request(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            transition_kind=TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
             request_status=REQUEST_STATUS_APPROVED,
         )
         if round_id and run_id
@@ -606,6 +647,39 @@ def governed_execution_operator_view(
             if round_id and run_id
             else ""
         ),
+        "request_report_writing_round_command": (
+            kernel_command(
+                "request-phase-transition",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                run_id,
+                "--round-id",
+                round_id,
+                "--transition-kind",
+                TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
+                "--target-round-id",
+                suggested_next_round_id or "<target_round_id>",
+                "--source-round-id",
+                round_id,
+                "--request-payload-json",
+                json.dumps(
+                    {
+                        "round_mode": "report-writing",
+                        "basis_round_id": round_id,
+                        "reporting_basis_refs": ["<final-publication|council-decision|report-basis:object_id>"],
+                        "scope": "report-editor-only narrative report production from existing council basis",
+                    },
+                    ensure_ascii=True,
+                    sort_keys=True,
+                ),
+                "--rationale",
+                "<moderator_report_writing_rationale>",
+                actor_role="moderator",
+            )
+            if round_id and run_id
+            else ""
+        ),
         "approve_transition_request_command_template": (
             kernel_command(
                 "approve-phase-transition",
@@ -697,6 +771,24 @@ def governed_execution_operator_view(
                 ],
             )
             if round_id and run_id and suggested_next_round_id and isinstance(approved_open_request, dict)
+            else ""
+        ),
+        "open_report_writing_round_command": (
+            run_skill_command(
+                run_dir=run_dir,
+                run_id=run_id,
+                round_id=suggested_next_round_id or "<target_round_id>",
+                skill_name="open-report-writing-round",
+                actor_role="moderator",
+                contract_mode="warn",
+                skill_args=[
+                    "--source-round-id",
+                    round_id,
+                    "--transition-request-id",
+                    maybe_text(approved_report_writing_request.get("request_id")),
+                ],
+            )
+            if round_id and run_id and suggested_next_round_id and isinstance(approved_report_writing_request, dict)
             else ""
         ),
         "query_readiness_blockers_command": (

@@ -7,6 +7,7 @@ from typing import Callable
 from eco_council_runtime.kernel.governance.transition_requests import (
     TRANSITION_KIND_CLOSE_ROUND,
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+    TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
     TRANSITION_KIND_FREEZE_REPORT_BASIS,
 )
 from eco_council_runtime.runtime_command_hints import kernel_command, run_skill_command
@@ -135,6 +136,49 @@ def default_agent_entry_hard_gate_commands(
             ),
             "--rationale",
             "<rationale>",
+            actor_role="moderator",
+        ),
+        "open_report_writing_round": run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=next_round_id,
+            skill_name="open-report-writing-round",
+            actor_role="moderator",
+            contract_mode=contract_mode,
+            skill_args=[
+                "--source-round-id",
+                round_id,
+                "--transition-request-id",
+                "<approved_request_id>",
+            ],
+        ),
+        "request_open_report_writing_round": kernel_command(
+            "request-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--transition-kind",
+            TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
+            "--target-round-id",
+            next_round_id,
+            "--source-round-id",
+            round_id,
+            "--request-payload-json",
+            json.dumps(
+                {
+                    "round_mode": "report-writing",
+                    "basis_round_id": round_id,
+                    "reporting_basis_refs": ["<final-publication|council-decision|report-basis:object_id>"],
+                    "scope": "report-editor-only narrative report production from existing council basis",
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+            ),
+            "--rationale",
+            "<moderator_report_writing_rationale>",
             actor_role="moderator",
         ),
         "approve_transition_request": kernel_command(

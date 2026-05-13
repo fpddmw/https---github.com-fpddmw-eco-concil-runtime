@@ -12,6 +12,7 @@ from eco_council_runtime.kernel.governance.transition_requests.common import (
     REQUEST_STATUS_PENDING,
     ROLE_RUNTIME_OPERATOR,
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+    TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
     maybe_text,
     normalize_actor_role,
     normalize_transition_kind,
@@ -57,12 +58,16 @@ def transition_request_payload(
     normalized_kind = normalize_transition_kind(transition_kind)
     spec = transition_kind_spec(normalized_kind)
     created = maybe_text(created_at_utc) or utc_now_iso()
+    target_required_transition_kinds = {
+        TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+        TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
+    }
     normalized_target_round_id = (
         maybe_text(target_round_id)
-        or (maybe_text(round_id) if normalized_kind != TRANSITION_KIND_OPEN_INVESTIGATION_ROUND else "")
+        or (maybe_text(round_id) if normalized_kind not in target_required_transition_kinds else "")
     )
-    if normalized_kind == TRANSITION_KIND_OPEN_INVESTIGATION_ROUND and not normalized_target_round_id:
-        raise ValueError("Open investigation round requests require a target_round_id.")
+    if normalized_kind in target_required_transition_kinds and not normalized_target_round_id:
+        raise ValueError(f"{normalized_kind} requests require a target_round_id.")
     resolved_requested_by_role = normalize_actor_role(requested_by_role) or maybe_text(
         requested_by_role
     )

@@ -28,8 +28,9 @@ from eco_council_runtime.kernel.governance.skill_registry import (
 )
 from eco_council_runtime.kernel.governance.transition_requests import (
     TRANSITION_KIND_CLOSE_ROUND,
-    TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
     TRANSITION_KIND_FREEZE_REPORT_BASIS,
+    TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+    TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
 )
 from eco_council_runtime.kernel.execution.runtime_round_profile import default_next_round_id_builder
 from eco_council_runtime.kernel.source_queue.source_queue_contract import source_capability_hints
@@ -44,6 +45,13 @@ RoleEntryBuilder = Callable[..., list[dict[str, Any]]]
 RecommendedSkillsBuilder = Callable[..., list[str]]
 OperatorNotesBuilder = Callable[..., list[str]]
 OperatorCommandsBuilder = Callable[..., dict[str, str]]
+
+REPORT_WRITING_ROUND_MODES = {
+    "report-writing",
+    "reporting",
+    "narrative-report",
+    "narrative-reporting",
+}
 
 COORDINATION_READ_OBJECT_KINDS = (
     "investigation-plan",
@@ -90,6 +98,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "transition_kinds": [
             TRANSITION_KIND_FREEZE_REPORT_BASIS,
             TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+            TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
             TRANSITION_KIND_CLOSE_ROUND,
         ],
     },
@@ -177,6 +186,9 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "materialize-reporting-handoff",
             "draft-council-decision",
             "draft-expert-report",
+            "draft-narrative-report",
+            "validate-narrative-report",
+            "publish-narrative-report",
             "publish-expert-report",
             "publish-council-decision",
             "materialize-final-publication",
@@ -223,6 +235,60 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def load_json_if_exists(path: Path) -> Any | None:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
+def round_opening_mode(run_dir: Path, round_id: str) -> str:
+    transition = load_json_if_exists(run_dir / "runtime" / f"round_transition_{round_id}.json")
+    if isinstance(transition, dict):
+        mode = maybe_text(transition.get("round_mode"))
+        if mode:
+            return mode
+        context = transition.get("coordination_context")
+        if isinstance(context, dict):
+            mode = maybe_text(context.get("round_mode"))
+            if mode:
+                return mode
+
+    tasks = load_json_if_exists(run_dir / "investigation" / f"round_tasks_{round_id}.json")
+    if isinstance(tasks, list):
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+            inputs = task.get("inputs") if isinstance(task.get("inputs"), dict) else {}
+            context = (
+                inputs.get("round_coordination_context")
+                if isinstance(inputs.get("round_coordination_context"), dict)
+                else {}
+            )
+            mode = maybe_text(context.get("round_mode")) or maybe_text(task.get("round_mode"))
+            if mode:
+                return mode
+    return ""
+
+
+def role_definitions_for_round(
+    *,
+    run_dir: Path,
+    round_id: str,
+    role_definitions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    mode = round_opening_mode(run_dir, round_id).casefold()
+    if mode not in REPORT_WRITING_ROUND_MODES:
+        return role_definitions
+    return [
+        deepcopy(definition)
+        for definition in role_definitions
+        if maybe_text(definition.get("role")) == ROLE_REPORT_EDITOR
+    ]
 
 
 def allowed_skills_by_layer(role: str) -> dict[str, list[str]]:
@@ -504,7 +570,13 @@ def default_role_entry_points(
     role_definitions: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
-    for definition in role_definitions:
+    effective_role_definitions = role_definitions_for_round(
+        run_dir=run_dir,
+        round_id=round_id,
+        role_definitions=role_definitions,
+    )
+    active_round_mode = round_opening_mode(run_dir, round_id)
+    for definition in effective_role_definitions:
         role = maybe_text(definition.get("role"))
         role_metadata = role_contract(role)
         grouped_skill_names = allowed_skills_by_layer(role)
@@ -1061,6 +1133,32 @@ def default_role_entry_points(
                         skill_args=["--task-id", "<task_id>", "--claimed-by-role", ROLE_MODERATOR],
                     )
                 )
+            elif skill_name == "draft-narrative-report":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--basis-round-id",
+                            "<source_or_frozen_basis_round_id>",
+                        ],
+                    )
+                )
+            elif skill_name in {"validate-narrative-report", "publish-narrative-report"}:
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                    )
+                )
             else:
                 role_write_commands.append(
                     run_skill_command(
@@ -1281,6 +1379,38 @@ def default_role_entry_points(
                         actor_role=ROLE_MODERATOR,
                     )
                 )
+            elif transition_kind == TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND:
+                transition_commands.append(
+                    kernel_command(
+                        "request-phase-transition",
+                        "--run-dir",
+                        str(run_dir),
+                        "--run-id",
+                        run_id,
+                        "--round-id",
+                        round_id,
+                        "--transition-kind",
+                        transition_kind,
+                        "--target-round-id",
+                        next_round_id,
+                        "--source-round-id",
+                        round_id,
+                        "--request-payload-json",
+                        json.dumps(
+                            {
+                                "round_mode": "report-writing",
+                                "basis_round_id": round_id,
+                                "reporting_basis_refs": ["<final-publication|council-decision|report-basis:object_id>"],
+                                "scope": "report-editor-only narrative report production from existing council basis",
+                            },
+                            ensure_ascii=True,
+                            sort_keys=True,
+                        ),
+                        "--rationale",
+                        "<moderator_report_writing_rationale>",
+                        actor_role=ROLE_MODERATOR,
+                    )
+                )
         results.append(
             {
                 "role": role,
@@ -1321,6 +1451,13 @@ def default_role_entry_points(
                     ),
                 },
                 "claim_strength_obligations": claim_strength_obligations(),
+                "round_mode": maybe_text(active_round_mode),
+                "entry_mode_note": (
+                    "Reporting-only round: only report-editor is scheduled; investigation agents are not registered for this round."
+                    if maybe_text(active_round_mode).casefold()
+                    in REPORT_WRITING_ROUND_MODES
+                    else ""
+                ),
                 "runtime_status_commands": {
                     "show_council_status": kernel_command(
                         "show-council-status",
@@ -1378,6 +1515,9 @@ def default_agent_entry_operator_notes(
         "Moderator remains the only role that can request phase transitions; runtime-operator approval is still required before committed state changes.",
         "Claim-strength obligations are procedural only: weak reports require explicit limitations and non-continuation rationale; strong claims require council-visible refs and challenger review path.",
     ]
+    # This note is intentionally mode-agnostic here; the role surface carries the
+    # exact report-writing mode once a report-only round is opened.
+    notes.append("A report-writing round is a reporting-only continuation: it should register report-editor only and consume existing council/reporting basis, not reopen investigation.")
     if maybe_text(mission.get("orchestration_mode")) == "openclaw-agent":
         notes.append("Mission scaffold already marks this round as `openclaw-agent`, so the operator-visible entry chain is explicitly enabled.")
     if int(analysis.get("matching_result_set_count") or 0) > 0:
@@ -1389,7 +1529,7 @@ def default_agent_entry_operator_notes(
         notes.append("Structured `proposal / readiness-opinion` submissions should remain the primary council write path; board notes stay human-readable only.")
     if status == "needs-operator-review":
         notes.append("Resolve runtime health alerts or dead letters before trusting agent-guided next steps.")
-    return notes[:5]
+    return notes[:6]
 
 
 def default_agent_entry_operator_commands(
@@ -1401,6 +1541,10 @@ def default_agent_entry_operator_commands(
 ) -> dict[str, str]:
     if not run_id or not round_id:
         return {}
+    next_round_id = default_next_round_id_builder(
+        run_dir=run_dir,
+        current_round_id=round_id,
+    )
     return {
         "show_run_state_command": kernel_command(
             "show-run-state",
@@ -1808,6 +1952,49 @@ def default_agent_entry_operator_commands(
             "--rationale",
             "<rationale>",
             actor_role=ROLE_MODERATOR,
+        ),
+        "request_report_writing_round_command_template": kernel_command(
+            "request-phase-transition",
+            "--run-dir",
+            str(run_dir),
+            "--run-id",
+            run_id,
+            "--round-id",
+            round_id,
+            "--transition-kind",
+            TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
+            "--target-round-id",
+            next_round_id,
+            "--source-round-id",
+            round_id,
+            "--request-payload-json",
+            json.dumps(
+                {
+                    "round_mode": "report-writing",
+                    "basis_round_id": round_id,
+                    "reporting_basis_refs": ["<final-publication|council-decision|report-basis:object_id>"],
+                    "scope": "report-editor-only narrative report production from existing council basis",
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+            ),
+            "--rationale",
+            "<moderator_report_writing_rationale>",
+            actor_role=ROLE_MODERATOR,
+        ),
+        "open_report_writing_round_after_approval_command_template": run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=next_round_id,
+            skill_name="open-report-writing-round",
+            actor_role=ROLE_MODERATOR,
+            contract_mode=contract_mode,
+            skill_args=[
+                "--source-round-id",
+                round_id,
+                "--transition-request-id",
+                "<approved_request_id>",
+            ],
         ),
         "approve_transition_request_command_template": kernel_command(
             "approve-phase-transition",

@@ -858,6 +858,8 @@ def agent_entry_operator_view(
         "reject_skill_approval_command_template": maybe_text(entry_commands.get("reject_skill_approval_command_template")),
         "run_approved_optional_analysis_command_template": maybe_text(entry_commands.get("run_approved_optional_analysis_command_template")),
         "request_report_basis_transition_command": maybe_text(entry_commands.get("request_report_basis_transition_command")),
+        "request_report_writing_round_command_template": maybe_text(entry_commands.get("request_report_writing_round_command_template")),
+        "open_report_writing_round_after_approval_command_template": maybe_text(entry_commands.get("open_report_writing_round_after_approval_command_template")),
         "approve_transition_request_command_template": maybe_text(entry_commands.get("approve_transition_request_command_template")),
         "reject_transition_request_command_template": maybe_text(entry_commands.get("reject_transition_request_command_template")),
         "submit_council_proposal_command_template": maybe_text(entry_commands.get("submit_council_proposal_command_template")),
@@ -872,6 +874,8 @@ def agent_entry_operator_view(
         "request_continuation_round_command_template": maybe_text(continuation.get("request_open_round_command_template")),
         "open_continuation_round_after_approval_command_template": maybe_text(continuation.get("open_round_after_approval_command_template")),
         "open_next_round_command_template": maybe_text(handoff_commands.get("open_next_round")),
+        "request_open_report_writing_round_command_template": maybe_text(handoff_commands.get("request_open_report_writing_round")),
+        "open_report_writing_round_command_template": maybe_text(handoff_commands.get("open_report_writing_round")),
         "return_to_supervisor_command": maybe_text(handoff_commands.get("supervise_round")),
     }
 

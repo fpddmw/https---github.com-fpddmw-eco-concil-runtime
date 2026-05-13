@@ -1,0 +1,5 @@
+name: validate-narrative-report
+description: Validate structural traceability of a narrative report draft.
+interface:
+  input: runtime arguments
+  output: narrative report validation artifact

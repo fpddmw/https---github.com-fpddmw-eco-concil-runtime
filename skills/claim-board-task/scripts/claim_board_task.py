@@ -585,6 +585,7 @@ def claim_board_task_skill(
     gap_hints: list[str] = []
     if not maybe_text(existing.get("task_text")):
         gap_hints.append("This claimed task still has no detail text describing the expected follow-up.")
+    board_revision = max(0, int(write_summary.get("board_revision") or 0))
     return {
         "status": "completed",
         "summary": {
@@ -592,7 +593,7 @@ def claim_board_task_skill(
             "run_id": run_id,
             "round_id": round_id,
             "board_path": str(board_file),
-            "board_revision": max(0, int(write_summary.get("board_revision") or 0)),
+            "board_revision": board_revision,
             "event_id": event_id,
             "task_id": resolved_task_id,
             "operation": operation,
@@ -601,7 +602,8 @@ def claim_board_task_skill(
             "db_path": maybe_text(write_summary.get("db_path")),
             "write_surface": maybe_text(write_summary.get("write_surface")) or "deliberation-plane",
         },
-        "receipt_id": "board-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, resolved_task_id)[:20],
+        "receipt_id": "board-receipt-"
+        + stable_hash(SKILL_NAME, run_id, round_id, resolved_task_id, operation, board_revision, event_id)[:20],
         "batch_id": "boardbatch-" + stable_hash(SKILL_NAME, run_id, round_id, event_id)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [resolved_task_id],

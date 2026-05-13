@@ -108,6 +108,15 @@ STATE_TRANSITION_PROFILES = {
             "follow-up round."
         ),
     },
+    "open-report-writing-round": {
+        "stage": "transition",
+        "queue_role": "report-writing-round-request-consumer",
+        "default_invocation": "approved-transition-request",
+        "notes": (
+            "Consumes an already approved transition request to open a reporting-only "
+            "round for report-editor work from frozen or canonical reporting basis."
+        ),
+    },
     "freeze-report-basis": {
         "stage": "transition",
         "queue_role": "evidence-basis-freeze",
@@ -161,6 +170,9 @@ REPORTING_SKILLS = {
     "materialize-spatiotemporal-relation-evidence-packet",
     "draft-council-decision",
     "draft-expert-report",
+    "draft-narrative-report",
+    "validate-narrative-report",
+    "publish-narrative-report",
     "publish-expert-report",
     "publish-council-decision",
     "materialize-final-publication",
@@ -565,7 +577,11 @@ def source_queue_profile(skill_name: str) -> dict[str, object]:
             default_invocation=str(data["default_invocation"]),
             notes=str(data["notes"]),
             requires_explicit_approval=skill_name
-            in {"open-investigation-round", "freeze-report-basis"},
+            in {
+                "open-investigation-round",
+                "open-report-writing-round",
+                "freeze-report-basis",
+            },
         )
 
     if skill_name in OPTIONAL_ANALYSIS_SKILLS:
@@ -668,6 +684,7 @@ def source_queue_profile(skill_name: str) -> dict[str, object]:
                 "materialize-reporting-handoff",
                 "materialize-spatiotemporal-relation-evidence-packet",
                 "draft-council-decision",
+                "publish-narrative-report",
                 "publish-expert-report",
                 "publish-council-decision",
                 "materialize-final-publication",

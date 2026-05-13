@@ -29,6 +29,7 @@ DECISION_STATUS_APPROVED = "approved"
 DECISION_STATUS_REJECTED = "rejected"
 
 TRANSITION_KIND_OPEN_INVESTIGATION_ROUND = "open-investigation-round"
+TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND = "open-report-writing-round"
 TRANSITION_KIND_FREEZE_REPORT_BASIS = "freeze-report-basis"
 TRANSITION_KIND_CLOSE_ROUND = "close-round"
 
@@ -36,6 +37,9 @@ TRANSITION_KIND_ALIASES = {
     "open-round": TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
     "open-investigation-round": TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
     "open-follow-up-round": TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+    "open-report-writing-round": TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
+    "open-reporting-round": TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
+    "open-report-round": TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
     "freeze-report-basis": TRANSITION_KIND_FREEZE_REPORT_BASIS,
     "report-basis-freeze": TRANSITION_KIND_FREEZE_REPORT_BASIS,
     "close": TRANSITION_KIND_CLOSE_ROUND,
@@ -47,6 +51,11 @@ TRANSITION_KIND_SPECS: dict[str, dict[str, str]] = {
         "requested_surface": "skill",
         "requested_action": "open-follow-up-round",
         "requested_command_name": "open-investigation-round",
+    },
+    TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND: {
+        "requested_surface": "skill",
+        "requested_action": "open-report-writing-round",
+        "requested_command_name": "open-report-writing-round",
     },
     TRANSITION_KIND_FREEZE_REPORT_BASIS: {
         "requested_surface": "skill",
@@ -211,6 +220,7 @@ __all__ = (
     "DECISION_STATUS_APPROVED",
     "DECISION_STATUS_REJECTED",
     "TRANSITION_KIND_OPEN_INVESTIGATION_ROUND",
+    "TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND",
     "TRANSITION_KIND_FREEZE_REPORT_BASIS",
     "TRANSITION_KIND_CLOSE_ROUND",
     "TRANSITION_KIND_ALIASES",

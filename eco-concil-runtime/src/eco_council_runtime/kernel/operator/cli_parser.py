@@ -20,6 +20,7 @@ from eco_council_runtime.kernel.governance.transition_requests import (
     TRANSITION_KIND_CLOSE_ROUND,
     TRANSITION_KIND_FREEZE_REPORT_BASIS,
     TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+    TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
 )
 from eco_council_runtime.kernel.operator.operations import PERMISSION_PROFILES
 from eco_council_runtime.kernel.planes.analysis_plane import analysis_kind_names
@@ -288,6 +289,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         choices=[
             TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+            TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
             TRANSITION_KIND_FREEZE_REPORT_BASIS,
             TRANSITION_KIND_CLOSE_ROUND,
         ],
