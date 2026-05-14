@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from eco_council_runtime.kernel.operator.admission_policy import *
+from eco_council_runtime.kernel.operator.case_run_package import *
 from eco_council_runtime.kernel.operator.dead_letters import *
 from eco_council_runtime.kernel.operator.operations_common import *
 from eco_council_runtime.kernel.operator.runbook import *
@@ -41,4 +42,5 @@ __all__ = (
     "refresh_runtime_surfaces",
     "operator_runbook_markdown",
     "materialize_operator_runbook",
+    "materialize_case_run_package",
 )

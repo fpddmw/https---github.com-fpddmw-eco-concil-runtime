@@ -631,6 +631,16 @@ def build_parser() -> argparse.ArgumentParser:
     add_actor_role_arg(operator_runbook_cmd)
     operator_runbook_cmd.add_argument("--pretty", action="store_true")
 
+    case_run_package_cmd = sub.add_parser(
+        "materialize-case-run-package",
+        help="Write one operator-visible case-run package manifest for demonstration, archive, and review.",
+    )
+    case_run_package_cmd.add_argument("--run-dir", required=True)
+    case_run_package_cmd.add_argument("--run-id", default="")
+    case_run_package_cmd.add_argument("--round-id", default="")
+    add_actor_role_arg(case_run_package_cmd)
+    case_run_package_cmd.add_argument("--pretty", action="store_true")
+
     agent_entry_cmd = sub.add_parser("materialize-agent-entry-gate", help="Write one operator-visible agent entry gate contract for the selected round.")
     agent_entry_cmd.add_argument("--run-dir", required=True)
     agent_entry_cmd.add_argument("--run-id", required=True)

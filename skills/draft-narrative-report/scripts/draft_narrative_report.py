@@ -626,6 +626,13 @@ def contains_any(text: str, needles: tuple[str, ...]) -> bool:
     return any(needle.lower() in lowered for needle in needles)
 
 
+def is_nyc_smoke_context(*texts: str) -> bool:
+    return contains_any(
+        " ".join(maybe_text(text) for text in texts),
+        ("nyc", "new york", "\u7ebd\u7ea6", "pm2.5", "smoke episode", "\u70df\u973e"),
+    )
+
+
 def build_key_takeaways(
     *,
     bottom_line: str,
@@ -634,7 +641,7 @@ def build_key_takeaways(
     language: str,
 ) -> list[str]:
     if is_zh(language):
-        if contains_any(bottom_line, ("nyc", "纽约", "pm2.5", "smoke episode", "烟霾")):
+        if is_nyc_smoke_context(bottom_line):
             return unique_texts(
                 [
                     "这次报告最稳妥的结论不是“已经锁定具体起火点”，而是：纽约在 2023 年 6 月 6 日至 9 日经历了一次时间边界清楚、强度突出的 PM2.5 烟霾过程。",
@@ -651,12 +658,22 @@ def build_key_takeaways(
                 "报告可用于有限复盘和后续调查设计；更强结论需要新的议会证据基础。",
             ]
         )
+    if is_nyc_smoke_context(bottom_line, social_line, boundary_line):
+        return unique_texts(
+            [
+                f"The strongest conclusion is bounded: {bottom_line}",
+                "The environmental lane connects receptor timing, wind context, and regional fire activity; it supports transport compatibility, not specific-fire attribution.",
+                f"The public-discourse lane adds visibility context: {social_line}" if social_line else "",
+                f"The main limit is explicit: {boundary_line}" if boundary_line else "",
+            ]
+        )
     return unique_texts(
         [
             f"The strongest conclusion is bounded: {bottom_line}",
-            "The environmental lane connects receptor timing, wind context, and regional fire activity; it supports transport compatibility, not specific-fire attribution.",
-            f"The public-discourse lane adds visibility context: {social_line}" if social_line else "",
+            "The evidence lanes should be read by their recorded roles: environmental or formal records constrain context, while public-discourse material remains sample-bound.",
+            f"The public or formal discourse lane adds semantic context inside its sample or record boundary: {social_line}" if social_line else "",
             f"The main limit is explicit: {boundary_line}" if boundary_line else "",
+            "Use the report for bounded review and follow-up planning, not for unrecorded causal, attribution, representativeness, or policy upgrades.",
         ]
     )
 
@@ -667,7 +684,7 @@ def build_zh_narrative_account(
     social_line: str,
     environmental_detail: str,
 ) -> list[str]:
-    if not contains_any(bottom_line, ("nyc", "纽约", "pm2.5", "smoke episode", "烟霾")):
+    if not is_nyc_smoke_context(bottom_line):
         paragraphs = [
             (
                 "这份报告的主线不是简单罗列各对象结论，而是把议会已经确认的中心判断、支撑证据、"
@@ -707,6 +724,23 @@ def build_zh_narrative_account(
 
 
 def build_en_narrative_account(*, bottom_line: str, social_line: str, environmental_detail: str) -> list[str]:
+    if not is_nyc_smoke_context(bottom_line, social_line, environmental_detail):
+        paragraphs = [
+            (
+                "The report follows the recorded council basis rather than a fixed event script: it states the bounded conclusion, "
+                "then explains which evidence lanes support that conclusion and where the evidence stops."
+            ),
+            first_text([environmental_detail, bottom_line]),
+        ]
+        if social_line:
+            paragraphs.append(
+                "The public, media, or formal-record lane adds semantic and governance context inside the cited sample or record boundary. "
+                f"{social_line}"
+            )
+        paragraphs.append(
+            "The result is a decision-support synthesis of recorded council objects, not a new investigation finding or an upgrade in claim strength."
+        )
+        return unique_texts(paragraphs)
     paragraphs = [
         (
             "The report follows a bounded chain of reasoning: first establish the receptor-side episode in New York, "
@@ -734,7 +768,7 @@ def build_zh_evidence_chain(
     social_line: str,
     limitation_line: str,
 ) -> list[str]:
-    if not contains_any(bottom_line, ("nyc", "纽约", "pm2.5", "smoke episode", "烟霾")):
+    if not is_nyc_smoke_context(bottom_line):
         paragraphs = [
             "证据链的第一层是议会已经接受的中心判断；报告正文应先说明它回答了什么问题，而不是先展示对象编号。",
             "第二层是支撑该判断的证据线：报告需要解释这些证据分别承担什么作用，以及它们如何共同约束结论强度。",
@@ -787,6 +821,24 @@ def build_en_evidence_chain(
     social_line: str,
     limitation_line: str,
 ) -> list[str]:
+    if not is_nyc_smoke_context(bottom_line, environmental_detail, social_line):
+        paragraphs = [
+            "The first evidence layer is the recorded council basis: findings, bundles, positions, readiness opinions, and reporting-basis refs define what this report can say.",
+            "The environmental or physical-observation lane contributes context only where it has cited DB-backed basis; it should not become causal or source attribution without explicit supporting evidence.",
+            "The formal, policy, media, or public-discourse lane contributes semantic and governance context inside its cited sample or record boundary; it is not a representative public-opinion estimate by itself.",
+        ]
+        if environmental_detail:
+            paragraphs.append(f"The recorded evidence detail adds context: {environmental_detail}")
+        elif bottom_line:
+            paragraphs.append(bottom_line)
+        if social_line:
+            paragraphs.append(f"The public or formal lane adds bounded context: {social_line}")
+        paragraphs.append(
+            "Together, these lanes support a bounded synthesis rather than a complete causal reconstruction or policy determination."
+        )
+        if limitation_line:
+            paragraphs.append(f"The explicit boundary is: {limitation_line}")
+        return unique_texts(paragraphs)
     paragraphs = [
         "The first evidence layer is the receptor record: it establishes the timing and severity of the New York PM2.5 episode.",
         "The second layer is transport context: wind direction and regional fire activity make a regional smoke intrusion compatible with the receptor pattern, without proving a single source fire.",
@@ -885,6 +937,61 @@ def public_tone_metric_label(metric: str, language: str) -> str:
     }.get(metric, metric)
 
 
+def public_source_family_label(value: str, language: str) -> str:
+    labels = {
+        "gdelt-public-record": ("GDELT public records", "GDELT 公共记录"),
+        "youtube-public-discourse": ("YouTube public-discourse sample", "YouTube 公共讨论样本"),
+        "bluesky-public-discourse": ("Bluesky public-discourse sample", "Bluesky 公共讨论样本"),
+        "regulationsgov-formal-comments": ("Regulations.gov formal comments", "Regulations.gov 正式意见样本"),
+        "formal-record": ("formal records", "正式记录"),
+        "public-discourse": ("public-discourse records", "公共讨论记录"),
+    }
+    english, chinese = labels.get(value, (value, value))
+    return chinese if is_zh(language) else english
+
+
+def public_lane_label(value: str, language: str) -> str:
+    labels = {
+        "gdelt_doc_recon": ("GDELT DOC discovery cues", "GDELT DOC 检索线索"),
+        "gdelt_doc_tone_aggregate": ("GDELT DOC aggregate tone signals", "GDELT DOC 聚合语气信号"),
+        "gdelt_media_tone": ("GDELT media/document tone rows", "GDELT 媒体/文档语气行"),
+        "public_visibility": ("public visibility records", "公共可见性记录"),
+        "social_sample_affect": ("social text sample", "社交文本样本"),
+        "formal_public_comment_sample": ("formal comment sample", "正式意见样本"),
+        "formal_record_text": ("formal record text", "正式记录文本"),
+        "public_discourse_text": ("public-discourse text", "公共讨论文本"),
+    }
+    english, chinese = labels.get(value, (value, value))
+    return chinese if is_zh(language) else english
+
+
+def count_phrase(
+    items: list[Any],
+    *,
+    key_name: str,
+    labeler: Any,
+    language: str,
+    max_items: int = 5,
+) -> str:
+    rows = sorted(
+        [item for item in items if isinstance(item, dict)],
+        key=lambda item: int(item.get("signal_count") or 0),
+        reverse=True,
+    )
+    parts: list[str] = []
+    for item in rows:
+        label_text = maybe_text(item.get(key_name))
+        count = int(item.get("signal_count") or 0)
+        if not label_text or count <= 0:
+            continue
+        if is_zh(language):
+            parts.append(f"{labeler(label_text, language)} {count} 条")
+        else:
+            noun = "record" if count == 1 else "records"
+            parts.append(f"{labeler(label_text, language)} {count} {noun}")
+    return "、".join(parts[:max_items]) if is_zh(language) else ", ".join(parts[:max_items])
+
+
 def build_public_discourse_addendum(
     *,
     summary: dict[str, Any],
@@ -894,8 +1001,18 @@ def build_public_discourse_addendum(
     if not summary:
         return {}
     sample_count = int(summary.get("sample_count") or 0)
-    source_skill_counts = count_lookup(list_items(summary.get("source_skill_counts")), "source_skill")
-    lane_counts = count_lookup(list_items(summary.get("discourse_lane_counts")), "discourse_lane")
+    source_family_summary = count_phrase(
+        list_items(summary.get("source_family_counts")),
+        key_name="source_family",
+        labeler=public_source_family_label,
+        language=language,
+    )
+    lane_summary = count_phrase(
+        list_items(summary.get("discourse_lane_counts")),
+        key_name="discourse_lane",
+        labeler=public_lane_label,
+        language=language,
+    )
     gdelt_tone = list_items(summary.get("gdelt_media_tone_summary"))
     affect = list_items(summary.get("social_affect_distribution"))
     issues = list_items(summary.get("issue_distribution"))
@@ -906,23 +1023,21 @@ def build_public_discourse_addendum(
         paragraphs = [
             (
                 "本报告将新增的公共舆情摘要作为样本内舆情深化补充，而不是作为总体民意结论。"
-                f"它汇总了 {sample_count} 条已归一化公共语料："
-                f"GDELT 公共记录 {source_skill_counts.get('fetch-gdelt-doc-search', 0) + source_skill_counts.get('fetch-gdelt-events', 0) + source_skill_counts.get('fetch-gdelt-mentions', 0) + source_skill_counts.get('fetch-gdelt-gkg', 0)} 条，"
-                f"其中 DOC 检索线索 {lane_counts.get('gdelt_doc_recon', 0)} 条、DOC 聚合语气信号 {lane_counts.get('gdelt_doc_tone_aggregate', 0)} 条、Events/Mentions/GKG 数值语气行 {lane_counts.get('gdelt_media_tone', 0)} 条；"
-                f"YouTube 公共样本 {source_skill_counts.get('fetch-youtube-video-search', 0) + source_skill_counts.get('fetch-youtube-comments', 0)} 条，"
-                f"其中视频可见性 {lane_counts.get('public_visibility', 0)} 条、评论表达样本 {lane_counts.get('social_sample_affect', 0)} 条。"
+                f"它汇总了 {sample_count} 条已归一化公共/正式记录。"
+                f"来源家族构成：{source_family_summary or '摘要未提供来源家族计数'}；"
+                f"样本通道构成：{lane_summary or '摘要未提供样本通道计数'}。"
             ),
             (
                 "在 bounded annotation worker 产出的候选标注基础上，样本内可见的公众表达主要包括："
                 f"{distribution_phrase(affect, language=language) or '未形成可用 affect 分布'}；"
                 f"议题线索主要包括：{distribution_phrase(issues, language=language) or '未形成可用 issue 分布'}。"
-                "这些数字可以作为样本内结构性观察；由于标签可能非互斥、样本也不是随机抽样，它们不是纽约公众或全平台用户的总体比例，"
+                "这些数字可以作为样本内结构性观察；由于标签可能非互斥、样本也不是随机抽样，它们不是受影响人群或全平台用户的总体比例，"
                 "也不应相加解释为 100% 的意见构成。"
             ),
             (
                 f"来源叙事方面，候选标注记录了：{distribution_phrase(narratives, language=language, max_items=3) or '未形成可用来源叙事分布'}，"
-                "且该叙事同时出现在 GDELT DOC 检索线索层、GDELT 数值语气层和 YouTube 评论样本中。"
-                "这可以作为样本内来源叙事结构，说明公共文本如何谈论来源，但不能替代环境线的物理归因验证。"
+                "这可以作为样本内来源叙事结构，说明公共或正式文本如何谈论来源、责任或成因，"
+                "但不能替代环境线的物理来源归因验证。"
             ),
         ]
         if gdelt_tone:
@@ -937,26 +1052,43 @@ def build_public_discourse_addendum(
                 + "。这些是媒体/文档语气，不是公众情绪。"
             )
         paragraphs.append(
-            "因此，公共讨论线可以从“公开视频可见性”深化为“公共可见性 + 样本内健康风险/防护/信息求助与来源叙事结构”。"
-            "但报告主结论不应升级：这些比例只描述本轮样本，不是代表性公众情绪比例，也不能用舆情来源叙事证明具体火场来源。"
+            "因此，公共讨论线可以从可见性记录深化为样本内议题、情绪线索与来源叙事结构。"
+            "但报告主结论不应升级：这些比例只描述本轮样本，不是代表性公众情绪比例，"
+            "也不能用公共来源叙事证明具体物理来源。"
         )
         status = "advisory-addendum"
     else:
         paragraphs = [
             (
                 "The supplied public discourse summary can enter the report only as a sample-local addendum. "
-                f"It summarizes {sample_count} normalized public-discourse records across GDELT public records and YouTube public-discourse samples."
+                f"It summarizes {sample_count} normalized public or formal records. "
+                f"Source-family mix: {source_family_summary or 'not supplied'}; sample-lane mix: {lane_summary or 'not supplied'}."
             ),
             (
                 f"Bounded annotation-worker candidate labels show sample-local affect cues such as {distribution_phrase(affect, language=language) or 'no usable affect distribution'} "
                 f"and issue cues such as {distribution_phrase(issues, language=language) or 'no usable issue distribution'}. "
-                "These are annotated-sample structure descriptors; labels may be non-exclusive and must not be read as population estimates."
+                "These are annotated-sample structure descriptors; labels may be non-exclusive, should not be summed to 100%, and must not be read as population estimates."
+            ),
+            (
+                f"Source-narrative candidate labels include {distribution_phrase(narratives, language=language, max_items=3) or 'no usable source-narrative distribution'}. "
+                "They describe how sampled public or formal records talk about sources, responsibility, or causes; they are not physical source attribution."
             ),
             (
                 "The addendum may deepen the public-discourse lane from visibility-only to sample-local issue, affect, and source-narrative structure, "
                 "but it must not strengthen source attribution or public-opinion claims."
             ),
         ]
+        if gdelt_tone:
+            tone_parts = [
+                f"{public_tone_metric_label(maybe_text(item.get('metric')), language)} average {item.get('average_value')}"
+                for item in gdelt_tone
+                if isinstance(item, dict) and maybe_text(item.get("metric"))
+            ]
+            paragraphs.append(
+                "GDELT tone can describe media or document tone: "
+                + ", ".join(tone_parts[:3])
+                + ". It is not public sentiment."
+            )
         status = "advisory-addendum"
     return section(
         "public-discourse-deepening",
@@ -1000,11 +1132,10 @@ def build_en_closure_narrative(*, synthesis_line: str, readiness_lines: list[str
         paragraphs.append(f"The moderator synthesis records: {synthesis_line}")
     if readiness_lines:
         paragraphs.append(
-            "The readiness opinions narrow the reportable claims to receptor timing/severity, transport-compatible context, "
-            "and bounded public visibility."
+            "The readiness opinions narrow the reportable claims to recorded evidence lanes, visible limitations, and council-adopted boundaries."
         )
     paragraphs.append(
-        "Closure therefore means the frozen basis can support a bounded, auditable report; stronger attribution would require another investigation round."
+        "Closure therefore means the frozen basis can support a bounded, auditable report; stronger causal, attribution, representativeness, or policy claims would require another investigation round."
     )
     return unique_texts(paragraphs)
 
@@ -1169,7 +1300,7 @@ def draft_narrative_report(
     )
     if not evidence_narrative:
         evidence_narrative = basis_text or finding_text
-    if is_zh(report_language) and contains_any(bottom_line, ("nyc", "纽约", "pm2.5", "smoke episode", "烟霾")):
+    if is_zh(report_language) and is_nyc_smoke_context(bottom_line):
         decision_implications = [
             "本报告适合用于有限的态势复盘和议会交接：它说明当前记录基础支持什么、哪些推理只是相容而非定论，以及哪些陈述必须保持边界。",
             "除非后续调查轮补充明确证据，否则不要把本报告用作具体火场来源、代表性公众情绪或完整因果输送路径的证明。",
@@ -1182,7 +1313,7 @@ def draft_narrative_report(
     else:
         decision_implications = [
             "Use this report for bounded situational review and council handoff: it explains what the recorded basis supports, where the reasoning is compatible rather than conclusive, and which claims should remain limited.",
-            "Do not use this report as proof of a specific source fire, representative public sentiment, or a complete causal transport pathway unless a later investigation round adds explicit supporting evidence.",
+            "Do not use this report as proof of a specific physical source, representative public sentiment, complete causal pathway, or policy conclusion unless a later investigation round adds explicit supporting evidence.",
         ]
     if any(
         "back trajectories" in text
@@ -1237,7 +1368,7 @@ def draft_narrative_report(
         if is_zh(report_language)
         else build_en_closure_narrative(synthesis_line=synthesis_line, readiness_lines=readiness_text)
     )
-    if is_zh(report_language) and contains_any(bottom_line, ("nyc", "纽约", "pm2.5", "smoke episode", "烟霾")):
+    if is_zh(report_language) and is_nyc_smoke_context(bottom_line):
         limitation_narrative = [
             (
                 "这份报告最重要的限制，是它只能说明“相容的区域输送背景”，不能说明“已经证明具体源头”。"
@@ -1261,11 +1392,17 @@ def draft_narrative_report(
             f"当前主要边界是：{boundary_line}" if boundary_line else "当前主要边界来自议会记录本身：没有引用的内容不能被当作已经证明。",
             "因此，弱报告可以成立，但必须明确说明弱在哪里；更强判断需要由后续调查轮补充新的证据基础。",
         ]
-    else:
+    elif is_nyc_smoke_context(bottom_line, social_line, boundary_line):
         limitation_narrative = [
             "The central limitation is source attribution: the evidence supports compatibility with regional transport, not proof of a specific origin.",
             "The public-discourse evidence shows visible contemporaneous records and sample-local label structure, not representative public sentiment.",
             "The report is usable as a bounded synthesis, but stronger attribution or policy claims would require further investigation.",
+        ]
+    else:
+        limitation_narrative = [
+            "The central limitation is claim scope: the report can restate and connect recorded council/reporting basis, but it cannot add unrecorded facts or upgrade causal strength.",
+            "Public, media, and formal-record material supports bounded semantic or governance context where cited; it is not representative public sentiment or physical source attribution by itself.",
+            "The report is usable as a bounded synthesis, but stronger causal, attribution, representativeness, or policy claims require further investigation and council adoption.",
         ]
     public_discourse_addendum = build_public_discourse_addendum(
         summary=public_summary,
@@ -1281,7 +1418,7 @@ def draft_narrative_report(
                     "这份报告的中心判断是：纽约在 2023 年 6 月 6 日至 9 日经历了一次时间边界清楚、强度突出的烟霾过程；"
                     "现有环境证据支持它与区域烟雾输送相容，但还不足以把烟霾负荷归因到某一个具体火场。"
                     if is_zh(report_language)
-                    and contains_any(bottom_line, ("nyc", "纽约", "pm2.5", "smoke episode", "烟霾"))
+                    and is_nyc_smoke_context(bottom_line)
                     else f"这份报告的中心判断是：{bottom_line}"
                     if is_zh(report_language)
                     else f"Bottom line: {bottom_line}"
@@ -1290,17 +1427,17 @@ def draft_narrative_report(
                     "议会的论证链由三部分组成：纽约受体 PM2.5 时间线确认事件本身，风向和加拿大东部 FIRMS 火点提供区域输送背景，"
                     "公开视频记录补充公众可见性和影响线索。三者相互补强，但各自的边界不同。"
                     if is_zh(report_language)
-                    and contains_any(bottom_line, ("nyc", "纽约", "pm2.5", "smoke episode", "烟霾"))
+                    and is_nyc_smoke_context(bottom_line)
                     else "议会的论证链应被理解为：先明确已记录结论，再说明各证据线如何支撑它，最后保留不能升级的边界。"
                     if is_zh(report_language)
-                    else f"The council also records a public-discourse lane: {social_line}"
+                    else f"The council also records a bounded public, media, or formal-record lane: {social_line}"
                     if social_line and social_line != bottom_line
-                    else ""
+                    else "The evidence lanes should be read by their recorded roles: physical/environmental evidence, public-discourse samples, and formal or policy records each carry different claim boundaries."
                 ),
                 (
                     "因此，本报告适合用于有限复盘和后续调查设计；它不应被用作具体源火场、代表性公众情绪或完整烟羽路径的证明。"
                     if is_zh(report_language)
-                    and contains_any(bottom_line, ("nyc", "纽约", "pm2.5", "smoke episode", "烟霾"))
+                    and is_nyc_smoke_context(bottom_line)
                     else "因此，本报告适合用于有限复盘和后续调查设计；它不应被用作超出议会记录边界的更强事实判断。"
                     if is_zh(report_language)
                     else "The report is intentionally bounded to recorded council artifacts and their cited refs; it does not add new evidence or upgrade claim confidence during report writing."

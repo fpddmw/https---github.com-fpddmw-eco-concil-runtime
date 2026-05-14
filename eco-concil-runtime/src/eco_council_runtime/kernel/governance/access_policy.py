@@ -158,6 +158,10 @@ WRITE_KERNEL_COMMAND_POLICIES = {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
     },
+    "materialize-case-run-package": {
+        "allowed_roles": [ROLE_RUNTIME_OPERATOR],
+        "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,
+    },
     "materialize-agent-entry-gate": {
         "allowed_roles": [ROLE_RUNTIME_OPERATOR],
         "default_actor_role_hint": ROLE_RUNTIME_OPERATOR,

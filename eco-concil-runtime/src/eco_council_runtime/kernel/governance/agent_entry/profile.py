@@ -71,6 +71,17 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     {
         "role": ROLE_MODERATOR,
         "focus": "Own the study boundary, review cross-role findings, and file governed transition requests after human-auditable council deliberation.",
+        "role_boundary_guidance": {
+            "schema_version": "role-boundary-guidance-v1",
+            "claim_boundary_focus": [
+                "Organize agenda, scope, and transition proposals without deciding source sufficiency by runtime fiat.",
+                "Keep evidence adoption, limitations, and report readiness council-visible and challengeable.",
+            ],
+            "coordination_expectations": [
+                "Use investigator positions, challenger review, and recorded limitations before requesting phase transitions.",
+                "Keep optional public-discourse deepening as a council-adopted lane, not a mandatory runtime sequence.",
+            ],
+        },
         "read_skills": [
             "query-board-delta",
             "query-public-signals",
@@ -105,6 +116,18 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     {
         "role": ROLE_ENVIRONMENTAL_INVESTIGATOR,
         "focus": "Fetch, normalize, query, and analyze environmental evidence, then submit structured findings or challenge supporting basis back to the council.",
+        "role_boundary_guidance": {
+            "schema_version": "role-boundary-guidance-v1",
+            "claim_boundary_focus": [
+                "Separate environmental compatibility, timing, and receptor-side conditions from specific physical source attribution.",
+                "Treat source-specific attribution as a strong claim requiring trajectory, plume, chemistry, professional attribution model, or equivalent council-visible support.",
+                "Do not convert public, media, or formal-record source narratives into physical source proof without environmental verification.",
+            ],
+            "coordination_expectations": [
+                "Respond to social or formal source-narrative cues with compatibility, limitation, or verification status.",
+                "Submit explicit limitations when the basis supports conditions or associations but not causal transport or source proof.",
+            ],
+        },
         "read_skills": [
             "query-board-delta",
             "query-environment-signals",
@@ -127,6 +150,18 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     {
         "role": ROLE_SOCIAL_INVESTIGATOR,
         "focus": "Fetch, normalize, query, and analyze public discourse, community, formal record, and policy evidence. For affect/stance labels, use bounded annotation-worker artifacts and own sample/basis/uptake rather than personally authoring every label.",
+        "role_boundary_guidance": {
+            "schema_version": "role-boundary-guidance-v1",
+            "claim_boundary_focus": [
+                "Describe public visibility, issue cues, affect cues, source-narrative cues, and sample boundaries without upgrading samples into representative public opinion.",
+                "Use bounded annotation-worker artifacts and taxonomy checks for affect or stance labels; own the sample, basis, and uptake into council findings.",
+                "Treat source narratives in public discourse as claims to route for environmental verification, not physical source attribution.",
+            ],
+            "coordination_expectations": [
+                "Ask environmental-investigator to verify whether public source narratives are physically supported.",
+                "Mark sample-local patterns, platform or provider limits, and optional analysis status before report handoff.",
+            ],
+        },
         "read_skills": [
             "query-board-delta",
             "query-public-signals",
@@ -149,6 +184,18 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     {
         "role": ROLE_CHALLENGER,
         "focus": "Surface contradiction pressure, open challenge/probe work, and submit counter-findings without owning phase transitions. For public-discourse labels, review sample boundaries, taxonomy fit, ambiguous clusters, outliers, and report wording rather than relabeling every item.",
+        "role_boundary_guidance": {
+            "schema_version": "role-boundary-guidance-v1",
+            "claim_boundary_focus": [
+                "Review claim boundary, sample boundary, taxonomy fit, outliers, extrapolation risk, and report wording.",
+                "Challenge causal attribution, representative public-opinion claims, and policy conclusions when the recorded basis does not support them.",
+                "For non-GDELT public-discourse material, pressure-test sample and labeling logic rather than relabeling every item.",
+            ],
+            "coordination_expectations": [
+                "Open challenge tickets or falsification probes when stronger wording needs new evidence.",
+                "Record whether limitations are sufficient, need follow-up, or should be excluded from report basis.",
+            ],
+        },
         "read_skills": [
             "query-board-delta",
             "query-public-signals",
@@ -176,6 +223,18 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     {
         "role": ROLE_REPORT_EDITOR,
         "focus": "Read frozen evidence basis and reporting state, then draft or publish reporting artifacts without mutating investigation status.",
+        "role_boundary_guidance": {
+            "schema_version": "role-boundary-guidance-v1",
+            "claim_boundary_focus": [
+                "Consume frozen evidence basis, reporting handoff, and council-adopted limitations only; do not reopen investigation through report prose.",
+                "Distinguish sample-local discourse structure from representative public opinion.",
+                "Distinguish public source narratives from physical source attribution and keep unsupported causal or policy claims out of final reports.",
+            ],
+            "coordination_expectations": [
+                "Surface missing challenger review, public-discourse carry, or environmental attribution support as limitations rather than conclusions.",
+                "Use narrative validation before publication when public, attribution, or policy wording appears in the draft.",
+            ],
+        },
         "read_skills": [
             "query-board-delta",
             "query-formal-signals",
@@ -1415,6 +1474,11 @@ def default_role_entry_points(
             {
                 "role": role,
                 "focus": maybe_text(definition.get("focus")),
+                "role_boundary_guidance": (
+                    deepcopy(definition.get("role_boundary_guidance"))
+                    if isinstance(definition.get("role_boundary_guidance"), dict)
+                    else {}
+                ),
                 "role_kind": maybe_text(role_metadata.get("role_kind")),
                 "conceptual_role": maybe_text(role_metadata.get("conceptual_role")),
                 "conceptual_note": maybe_text(role_metadata.get("conceptual_note")),

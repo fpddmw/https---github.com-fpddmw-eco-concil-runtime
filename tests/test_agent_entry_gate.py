@@ -484,6 +484,28 @@ class AgentEntryGateTests(unittest.TestCase):
             social_coordination_surface = load_json(social_workspace / "council_runtime" / "coordination_surface.json")
             self.assertEqual("social-investigator", social_role_surface["role"])
             self.assertEqual("social-investigator", social_runtime_context["role"])
+            social_entry = next(
+                entry
+                for entry in entry_gate["role_entry_points"]
+                if isinstance(entry, dict) and entry.get("role") == "social-investigator"
+            )
+            self.assertEqual(
+                "role-boundary-guidance-v1",
+                social_entry["role_boundary_guidance"]["schema_version"],
+            )
+            self.assertEqual(
+                social_entry["role_boundary_guidance"],
+                social_role_surface["role_boundary_guidance"],
+            )
+            social_boundary_surface = "\n".join(
+                [
+                    *social_entry["role_boundary_guidance"]["claim_boundary_focus"],
+                    *social_entry["role_boundary_guidance"]["coordination_expectations"],
+                ]
+            )
+            self.assertIn("sample boundaries", social_boundary_surface)
+            self.assertIn("environmental-investigator", social_boundary_surface)
+            self.assertIn("not physical source attribution", social_boundary_surface)
             self.assertEqual(
                 entry_gate["mission"]["request_text"],
                 social_runtime_context["mission"]["request_text"],
@@ -574,6 +596,15 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             environmental_fetch_surface = "\n".join(environmental_entries[0].get("fetch_commands", []))
             environmental_normalize_surface = "\n".join(environmental_entries[0].get("normalize_commands", []))
+            environmental_boundary_surface = "\n".join(
+                [
+                    *environmental_entries[0]["role_boundary_guidance"]["claim_boundary_focus"],
+                    *environmental_entries[0]["role_boundary_guidance"]["coordination_expectations"],
+                ]
+            )
+            self.assertIn("specific physical source attribution", environmental_boundary_surface)
+            self.assertIn("trajectory", environmental_boundary_surface)
+            self.assertIn("public, media, or formal-record source narratives", environmental_boundary_surface)
             self.assertIn("fetch-open-meteo-air-quality", environmental_fetch_surface)
             self.assertIn("--actor-role environmental-investigator", environmental_fetch_surface)
             self.assertIn("--allow-side-effect network-external", environmental_fetch_surface)
@@ -604,6 +635,29 @@ class AgentEntryGateTests(unittest.TestCase):
                 if isinstance(entry, dict) and entry.get("role") == "challenger"
             ]
             self.assertEqual(1, len(challenger_entries))
+            challenger_boundary_surface = "\n".join(
+                [
+                    *challenger_entries[0]["role_boundary_guidance"]["claim_boundary_focus"],
+                    *challenger_entries[0]["role_boundary_guidance"]["coordination_expectations"],
+                ]
+            )
+            self.assertIn("representative public-opinion claims", challenger_boundary_surface)
+            self.assertIn("relabeling every item", challenger_boundary_surface)
+            report_editor_entries = [
+                entry
+                for entry in entry_gate["role_entry_points"]
+                if isinstance(entry, dict) and entry.get("role") == "report-editor"
+            ]
+            self.assertEqual(1, len(report_editor_entries))
+            report_editor_boundary_surface = "\n".join(
+                [
+                    *report_editor_entries[0]["role_boundary_guidance"]["claim_boundary_focus"],
+                    *report_editor_entries[0]["role_boundary_guidance"]["coordination_expectations"],
+                ]
+            )
+            self.assertIn("frozen evidence basis", report_editor_boundary_surface)
+            self.assertIn("sample-local discourse structure", report_editor_boundary_surface)
+            self.assertIn("physical source attribution", report_editor_boundary_surface)
             self.assertIn(
                 "causal_or_source_attribution",
                 [
@@ -1117,12 +1171,109 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("--actor-role moderator", runbook_text)
             self.assertIn("query-council-objects", runbook_text)
             self.assertIn("request-phase-transition", runbook_text)
+            self.assertIn("open-report-writing-round", runbook_text)
             self.assertIn("request-skill-approval", runbook_text)
             self.assertIn("--requested-skill-arg=<skill_arg>", runbook_text)
             self.assertIn("--skill-approval-request-id '<request_id>'", runbook_text)
             self.assertLess(
                 runbook_text.index("--skill-approval-request-id '<request_id>'"),
                 runbook_text.index("-- --example-arg"),
+            )
+            self.assertIn("## Case Run Start Checklist", runbook_text)
+            self.assertIn("operator surfaces only", runbook_text)
+            self.assertIn("start-council-run", runbook_text)
+            self.assertIn("## Report Publication Checklist", runbook_text)
+            self.assertIn("show-reporting-state", runbook_text)
+            self.assertIn("draft-narrative-report", runbook_text)
+            self.assertIn("validate-narrative-report", runbook_text)
+            self.assertIn("publish-narrative-report", runbook_text)
+            self.assertIn("materialize-final-publication", runbook_text)
+            self.assertIn("## Case Archive Checklist", runbook_text)
+            self.assertIn("show-archive-status", runbook_text)
+            self.assertIn("bootstrap-history-context", runbook_text)
+            self.assertIn("close-round", runbook_text)
+            self.assertIn("materialize-case-run-package", runbook_text)
+
+    def test_materialize_case_run_package_lists_review_artifacts_without_deciding_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            run_kernel("init-run", "--run-dir", str(run_dir), "--run-id", RUN_ID)
+            write_json(
+                run_dir / "mission.json",
+                {
+                    "schema_version": "1.0.0",
+                    "run_id": RUN_ID,
+                    "topic": "Case package fixture",
+                    "objective": "Package existing case artifacts for operator review.",
+                },
+            )
+            write_json(
+                run_dir / "reporting" / f"narrative_report_{ROUND_ID}.json",
+                {
+                    "schema_version": "narrative-report-v1",
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "status": "canonical-published",
+                    "sections": [],
+                },
+            )
+            (run_dir / "reporting" / f"narrative_report_{ROUND_ID}.md").write_text(
+                "# Case package fixture\n",
+                encoding="utf-8",
+            )
+            write_json(
+                run_dir / "analytics" / f"public_discourse_sample_summary_{ROUND_ID}.json",
+                {
+                    "schema_version": "optional-analysis-public-discourse-sample-summary-v1",
+                    "skill": "summarize-public-discourse-sample",
+                    "status": "completed",
+                },
+            )
+
+            payload = run_kernel(
+                "materialize-case-run-package",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--pretty",
+            )
+            package = load_json(runtime_path(run_dir, f"case_run_package_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("case-run-package-manifest-v1", package["schema_version"])
+            self.assertIn("does not copy evidence", package["package_semantics"])
+            self.assertIn("source ranking", package["does_not_decide"])
+            self.assertIn("report readiness", package["does_not_decide"])
+            self.assertIn("mission", package["artifact_groups"])
+            self.assertIn("runtime", package["artifact_groups"])
+            self.assertIn("reporting", package["artifact_groups"])
+            self.assertIn("analytics", package["artifact_groups"])
+            reporting_entries = package["artifact_groups"]["reporting"]
+            self.assertTrue(
+                any(
+                    entry["artifact_kind"] == "narrative-report-json"
+                    and entry["exists"]
+                    for entry in reporting_entries
+                )
+            )
+            analytics_entries = package["artifact_groups"]["analytics"]
+            self.assertTrue(
+                any(entry["artifact_kind"] == "public-discourse-analysis" for entry in analytics_entries)
+            )
+            self.assertIn(
+                "materialize-runtime-health",
+                package["operator_commands"]["refresh_runtime_health"],
+            )
+            self.assertIn(
+                "materialize-case-run-package",
+                package["operator_commands"]["rebuild_case_run_package"],
+            )
+            self.assertTrue(
+                any(slot["slot_id"] == "report" for slot in package["screenshot_slots"])
             )
 
 

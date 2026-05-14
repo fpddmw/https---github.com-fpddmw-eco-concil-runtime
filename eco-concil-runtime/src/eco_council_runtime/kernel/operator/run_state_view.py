@@ -10,6 +10,7 @@ from eco_council_runtime.kernel.core.paths import (
     admission_policy_path,
     benchmark_compare_path,
     benchmark_manifest_path,
+    case_run_package_path,
     controller_state_path,
     cursor_path,
     history_bootstrap_state_path,
@@ -1341,6 +1342,7 @@ def operations_state(run_dir: Path, selected_round_id: str) -> dict[str, Any]:
     )
     dead_letters = load_dead_letters(run_dir, round_id=selected_round_id, limit=20)
     runbook_path = operator_runbook_path(run_dir, selected_round_id) if selected_round_id else operator_runbook_path(run_dir)
+    package_path = case_run_package_path(run_dir, selected_round_id) if selected_round_id else case_run_package_path(run_dir)
     run_id = maybe_text(admission_policy.get("run_id"))
     materialize_policy_command = (
         kernel_command(
@@ -1367,6 +1369,7 @@ def operations_state(run_dir: Path, selected_round_id: str) -> dict[str, Any]:
             "admission_policy_path": str(admission_policy_path(run_dir).resolve()),
             "runtime_health_path": str(runtime_health_path(run_dir).resolve()),
             "operator_runbook_path": str(runbook_path.resolve()),
+            "case_run_package_path": str(package_path.resolve()),
             "materialize_admission_policy_command": materialize_policy_command,
             "materialize_runtime_health_command": kernel_command(
                 "materialize-runtime-health",
@@ -1378,6 +1381,13 @@ def operations_state(run_dir: Path, selected_round_id: str) -> dict[str, Any]:
                 "materialize-operator-runbook",
                 "--run-dir",
                 str(run_dir),
+                *(["--round-id", selected_round_id] if selected_round_id else []),
+            ),
+            "materialize_case_run_package_command": kernel_command(
+                "materialize-case-run-package",
+                "--run-dir",
+                str(run_dir),
+                *(["--run-id", run_id] if run_id else []),
                 *(["--round-id", selected_round_id] if selected_round_id else []),
             ),
             "show_dead_letters_command": f"show-dead-letters --run-dir {run_dir}{f' --round-id {selected_round_id}' if selected_round_id else ''}",

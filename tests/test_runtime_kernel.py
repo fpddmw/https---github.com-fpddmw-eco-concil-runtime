@@ -1679,6 +1679,15 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             self.assertEqual(1, payload["summary"]["open_dead_letter_count"])
             self.assertTrue(payload["operations"]["operator"]["admission_policy_path"].endswith("admission_policy.json"))
             self.assertTrue(payload["operations"]["operator"]["operator_runbook_path"].endswith(f"operator_runbook_{ROUND_ID}.md"))
+            self.assertTrue(payload["operations"]["operator"]["case_run_package_path"].endswith(f"case_run_package_{ROUND_ID}.json"))
+            self.assertIn(
+                "materialize-case-run-package",
+                payload["operations"]["operator"]["materialize_case_run_package_command"],
+            )
+            self.assertIn(
+                "--actor-role runtime-operator",
+                payload["operations"]["operator"]["materialize_case_run_package_command"],
+            )
             self.assertEqual("test-skill", payload["operations"]["dead_letters"][0]["source_name"])
 
     def test_resolve_dead_letter_closes_operator_health_alert(self) -> None:

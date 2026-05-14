@@ -124,6 +124,60 @@ def prepare_hold_round(run_dir: Path, root: Path) -> None:
     run_script(script_path("draft-council-decision"), "--run-dir", str(run_dir), "--run-id", RUN_ID, "--round-id", ROUND_ID)
 
 
+def minimal_narrative_draft() -> dict[str, object]:
+    sections = []
+    for index, section_id in enumerate(
+        (
+            "executive-summary",
+            "key-points",
+            "what-happened",
+            "evidence-basis",
+            "council-reasoning",
+            "limitations",
+            "decision-implications",
+        ),
+        start=1,
+    ):
+        sections.append(
+            {
+                "section_id": section_id,
+                "title": section_id.replace("-", " ").title(),
+                "status": "limitations-visible" if section_id == "limitations" else "draft",
+                "paragraphs": [f"Reader-facing paragraph {index} with bounded report language."],
+                "evidence_refs": ["signal:test-report-quality-001"],
+            }
+        )
+    return {
+        "schema_version": "narrative-report-draft-v1",
+        "template_version": "test-template",
+        "draft_id": "narrative-report-draft-quality-test",
+        "run_id": RUN_ID,
+        "round_id": ROUND_ID,
+        "basis_round_id": ROUND_ID,
+        "title": "Bounded Test Narrative Report",
+        "status": "draft",
+        "claim_boundary": {
+            "summary": "Claims are limited to recorded council/reporting artifacts and cited refs.",
+            "forbidden_claims": ["new factual claim not present in council/reporting basis"],
+        },
+        "sections": sections,
+        "reader_guidance": {"primary_audience": "human reviewer"},
+        "evidence_refs": ["signal:test-report-quality-001"],
+        "audit_refs": ["signal:test-report-quality-001"],
+        "source_material": {
+            "reporting_artifacts": [],
+            "council_object_counts": {},
+            "public_discourse_summary": {},
+        },
+    }
+
+
+def write_narrative_draft(run_dir: Path, draft: dict[str, object]) -> Path:
+    draft_path = reporting_path(run_dir, f"narrative_report_draft_{ROUND_ID}.json")
+    write_json(draft_path, draft)
+    return draft_path
+
+
 class ReportingPublishWorkflowTests(unittest.TestCase):
     def test_show_reporting_state_recovers_db_first_reporting_surface(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -733,6 +787,294 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             )
             self.assertEqual("blocked", second_publication["status"])
             self.assertTrue(any(item["code"] == "overwrite-blocked" for item in second_publication["warnings"]))
+
+    def test_narrative_validator_blocks_representative_public_opinion_upgrade(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][0]["paragraphs"] = [
+                "Overall public opinion shows that affected residents were mostly angry about the event."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertEqual("invalid", validation["status"])
+            self.assertIn(
+                "unsupported-public-opinion-claim",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_blocks_sample_percentages_without_public_discourse_basis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "The sample-local issue distribution says health-risk labels appear in 60% of the sample."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "sample-distribution-without-public-discourse-basis",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_blocks_gdelt_tone_as_public_sentiment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "GDELT V2Tone proves public sentiment was negative across the issue."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "gdelt-tone-public-sentiment",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_blocks_source_narrative_as_physical_attribution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "The source narrative proves physical source attribution to a specific fire."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "source-narrative-as-physical-attribution",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_warns_when_public_helper_is_not_carried(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"].append(
+                {
+                    "section_id": "public-discourse-deepening",
+                    "title": "Public Discourse Addendum",
+                    "status": "advisory-addendum",
+                    "paragraphs": [
+                        "The supplied public discourse summary is used only as sample-local addendum material."
+                    ],
+                    "evidence_refs": ["signal:test-public-summary-001"],
+                }
+            )
+            draft["source_material"] = {
+                "reporting_artifacts": [],
+                "council_object_counts": {
+                    "finding": 0,
+                    "evidence-bundle": 0,
+                    "proposal": 0,
+                    "agent-position": 0,
+                    "readiness-opinion": 0,
+                    "round-synthesis": 0,
+                },
+                "public_discourse_summary": {
+                    "path": "analytics/public_discourse_sample_summary_test.json",
+                    "summary_id": "public-summary-not-carried",
+                    "status": "completed",
+                    "advisory_only": True,
+                },
+            }
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("valid", validation["status"])
+            self.assertIn(
+                "optional-analysis-not-carried",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_warns_when_public_summary_contract_is_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            summary_path = analytics_path(run_dir, "public_discourse_sample_summary_incomplete.json")
+            write_json(
+                summary_path,
+                {
+                    "schema_version": "optional-analysis-public-discourse-sample-summary-v1",
+                    "skill": "summarize-public-discourse-sample",
+                    "status": "completed",
+                    "summary_id": "public-summary-incomplete",
+                    "sample_count": 2,
+                    "social_affect_distribution": [
+                        {"label": "concern", "annotated_signal_count": 1, "sample_fraction": 0.5}
+                    ],
+                },
+            )
+            draft = minimal_narrative_draft()
+            draft["sections"].append(
+                {
+                    "section_id": "public-discourse-deepening",
+                    "title": "Public Discourse Addendum",
+                    "status": "advisory-addendum",
+                    "paragraphs": [
+                        "Sample-local concern labels appear in about 50% of the annotated sample."
+                    ],
+                    "evidence_refs": ["signal:test-public-summary-001"],
+                }
+            )
+            draft["source_material"]["public_discourse_summary"] = {
+                "path": "analytics/public_discourse_sample_summary_incomplete.json",
+                "summary_id": "public-summary-incomplete",
+                "status": "completed",
+                "advisory_only": True,
+            }
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+            issue_codes = [item["code"] for item in validation["issues"]]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("valid", validation["status"])
+            self.assertIn("public-summary-contract-incomplete", issue_codes)
+            self.assertIn("public-summary-policy-boundary-missing", issue_codes)
+
+    def test_narrative_validator_accepts_complete_public_summary_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            summary_path = analytics_path(run_dir, "public_discourse_sample_summary_complete.json")
+            write_json(
+                summary_path,
+                {
+                    "schema_version": "optional-analysis-public-discourse-sample-summary-v1",
+                    "skill": "summarize-public-discourse-sample",
+                    "status": "completed",
+                    "summary_id": "public-summary-complete",
+                    "sample_definition": {
+                        "run_id": RUN_ID,
+                        "round_id": ROUND_ID,
+                        "round_scope": "current",
+                        "sample_boundary": "DB-visible normalized public/formal text sample only",
+                    },
+                    "sample_count": 2,
+                    "source_family_counts": [
+                        {"source_family": "youtube-public-discourse", "signal_count": 2}
+                    ],
+                    "discourse_lane_counts": [
+                        {"discourse_lane": "social_sample_affect", "signal_count": 2}
+                    ],
+                    "social_affect_distribution": [
+                        {"label": "concern", "annotated_signal_count": 1, "sample_fraction": 0.5}
+                    ],
+                    "distribution_use_policy": {
+                        "schema_version": "public-discourse-distribution-use-policy-v1",
+                        "label_sets_are_non_exclusive": True,
+                        "sample_fractions_are_sample_local": True,
+                        "do_not_sum_to_population_opinion": True,
+                        "requires_council_uptake_before_reporting": True,
+                        "gdelt_tone_boundary": "media_or_document_tone_not_public_sentiment",
+                        "source_narrative_boundary": "public_source_narrative_cue_not_physical_source_attribution",
+                    },
+                    "warnings": [],
+                    "evidence_refs": ["signal:test-public-summary-001"],
+                },
+            )
+            draft = minimal_narrative_draft()
+            draft["sections"].append(
+                {
+                    "section_id": "public-discourse-deepening",
+                    "title": "Public Discourse Addendum",
+                    "status": "advisory-addendum",
+                    "paragraphs": [
+                        "Sample-local concern labels appear in about 50% of the annotated sample."
+                    ],
+                    "evidence_refs": ["signal:test-public-summary-001"],
+                }
+            )
+            draft["source_material"]["public_discourse_summary"] = {
+                "path": "analytics/public_discourse_sample_summary_complete.json",
+                "summary_id": "public-summary-complete",
+                "status": "completed",
+                "advisory_only": True,
+            }
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+            issue_codes = [item["code"] for item in validation["issues"]]
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("valid", validation["status"])
+            self.assertNotIn("public-summary-contract-incomplete", issue_codes)
+            self.assertNotIn("public-summary-policy-boundary-missing", issue_codes)
 
 
 if __name__ == "__main__":

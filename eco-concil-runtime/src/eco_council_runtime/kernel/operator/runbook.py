@@ -26,8 +26,9 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
         REQUEST_STATUS_PENDING,
         REQUEST_STATUS_REJECTED,
         TRANSITION_KIND_CLOSE_ROUND,
-        TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
         TRANSITION_KIND_FREEZE_REPORT_BASIS,
+        TRANSITION_KIND_OPEN_INVESTIGATION_ROUND,
+        TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND,
         load_transition_requests,
     )
 
@@ -42,6 +43,8 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
     dead_letters = health.get("open_dead_letters", []) if isinstance(health.get("open_dead_letters"), list) else []
     rollback_policy = policy.get("rollback_policy", {}) if isinstance(policy.get("rollback_policy"), dict) else {}
     run_id = maybe_text(manifest.get("run_id"))
+    display_run_id = run_id or "<run_id>"
+    display_round_id = maybe_text(round_id) or "<round_id>"
     transition_requests = (
         load_transition_requests(run_dir, run_id=run_id, round_id=round_id, limit=20)
         if run_id and round_id
@@ -102,6 +105,15 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
         f"- Refresh health surface: `{kernel_command('materialize-runtime-health', '--run-dir', str(run_dir), *(['--round-id', round_id] if round_id else []))}`",
         f"- Rebuild runbook: `{kernel_command('materialize-operator-runbook', '--run-dir', str(run_dir), *(['--round-id', round_id] if round_id else []))}`",
         "",
+        "## Case Run Start Checklist",
+        "",
+        "These checklists are operator surfaces only; they do not set agenda, rank sources, score evidence, or decide report readiness.",
+        "",
+        f"1. Start a council run from the user-facing mission envelope: `{kernel_command('start-council-run', '--run-dir', str(run_dir), '--run-id', display_run_id, '--round-id', display_round_id, '--mission-path', '<mission.json>', actor_role='runtime-operator')}`",
+        f"1. Inspect the runtime and agent entry surfaces before agents begin: `{kernel_command('show-run-state', '--run-dir', str(run_dir), '--round-id', display_round_id, '--tail', '20')}`",
+        f"1. Refresh the agent entry gate after mission or round-surface changes: `{kernel_command('materialize-agent-entry-gate', '--run-dir', str(run_dir), '--run-id', display_run_id, '--round-id', display_round_id)}`",
+        f"1. Register agents from the generated registration plan, then use the role workspaces under `{str((run_dir / 'supervisor' / 'openclaw-workspaces').resolve())}`.",
+        "",
     ]
     if run_id and round_id:
         lines.extend(
@@ -120,6 +132,7 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
                 f"- Moderator request report-basis freeze: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_FREEZE_REPORT_BASIS, '--rationale', '<rationale>', actor_role='moderator')}`",
                 f"- Moderator request close-round: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_CLOSE_ROUND, '--rationale', '<rationale>', actor_role='moderator')}`",
                 f"- Moderator request follow-up round: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_OPEN_INVESTIGATION_ROUND, '--target-round-id', '<target_round_id>', '--source-round-id', round_id, '--rationale', '<rationale>', actor_role='moderator')}`",
+                f"- Moderator request report-writing round: `{kernel_command('request-phase-transition', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-kind', TRANSITION_KIND_OPEN_REPORT_WRITING_ROUND, '--target-round-id', '<report_round_id>', '--source-round-id', round_id, '--request-payload-json', json.dumps({'round_mode': 'report-writing', 'basis_round_id': round_id, 'reporting_basis_refs': ['<reporting_basis_ref>'], 'scope': 'report-editor-only narrative report production from existing council basis'}, ensure_ascii=True, sort_keys=True), '--rationale', '<rationale>', actor_role='moderator')}`",
                 f"- Operator approve request: `{kernel_command('approve-phase-transition', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--approval-reason', '<approval_reason>', actor_role='runtime-operator')}`",
                 f"- Operator reject request: `{kernel_command('reject-phase-transition', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--rejection-reason', '<rejection_reason>', actor_role='runtime-operator')}`",
                 "",
@@ -133,6 +146,30 @@ def operator_runbook_markdown(run_dir: Path, *, round_id: str = "") -> str:
                 f"- Operator approve skill request: `{kernel_command('approve-skill-approval', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--approval-reason', '<approval_reason>', actor_role='runtime-operator')}`",
                 f"- Operator reject skill request: `{kernel_command('reject-skill-approval', '--run-dir', str(run_dir), '--request-id', '<request_id>', '--rejection-reason', '<rejection_reason>', actor_role='runtime-operator')}`",
                 f"- Run approved optional-analysis skill: `{run_skill_command(run_dir=run_dir, run_id=run_id, round_id=round_id, skill_name='<skill_name>', actor_role='<requested_actor_role>', contract_mode='warn', skill_args=['--example-arg', '<value>'], skill_approval_request_id='<request_id>')}`",
+                "",
+                "## Report Publication Checklist",
+                "",
+                "This checklist consumes frozen/reporting basis and validation state; it is not a path for adding new investigation evidence.",
+                "",
+                f"1. Inspect reporting state and blockers: `{kernel_command('show-reporting-state', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--pretty')}`",
+                f"1. Query reporting handoff rows: `{kernel_command('query-reporting-objects', '--run-dir', str(run_dir), '--object-kind', 'reporting-handoff', '--run-id', run_id, '--round-id', round_id)}`",
+                f"1. Draft narrative report as report-editor: `{run_skill_command(run_dir=run_dir, run_id=run_id, round_id=round_id, skill_name='draft-narrative-report', actor_role='report-editor', contract_mode='warn', skill_args=['--basis-round-id', '<basis_round_id>', '--language', '<en|zh>'])}`",
+                f"1. Validate the draft before publication: `{run_skill_command(run_dir=run_dir, run_id=run_id, round_id=round_id, skill_name='validate-narrative-report', actor_role='report-editor', contract_mode='warn', skill_args=[])}`",
+                f"1. Publish only after validation allows publication: `{run_skill_command(run_dir=run_dir, run_id=run_id, round_id=round_id, skill_name='publish-narrative-report', actor_role='report-editor', contract_mode='warn', skill_args=[])}`",
+                f"1. Materialize final publication from canonical reporting outputs: `{run_skill_command(run_dir=run_dir, run_id=run_id, round_id=round_id, skill_name='materialize-final-publication', actor_role='report-editor', contract_mode='warn', skill_args=[])}`",
+                f"1. Rebuild reporting exports for inspection: `{kernel_command('materialize-reporting-exports', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, actor_role='runtime-operator')}`",
+                f"1. Query final publication rows: `{kernel_command('query-reporting-objects', '--run-dir', str(run_dir), '--object-kind', 'final-publication', '--run-id', run_id, '--round-id', round_id)}`",
+                "",
+                "## Case Archive Checklist",
+                "",
+                "Archive steps preserve mission, timeline, final reports, key artifacts, and runtime health as case records; they do not turn archived material into newly accepted evidence.",
+                "",
+                f"1. Inspect archive/checkpoint status: `{kernel_command('show-archive-status', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--pretty')}`",
+                f"1. Bootstrap history context for later continuation or replay: `{kernel_command('bootstrap-history-context', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, actor_role='runtime-operator')}`",
+                f"1. Close a terminal round only after an approved close-round request: `{kernel_command('close-round', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, '--transition-request-id', '<request_id>', actor_role='runtime-operator')}`",
+                f"1. Refresh runtime health after archive/closeout: `{kernel_command('materialize-runtime-health', '--run-dir', str(run_dir), '--round-id', round_id, actor_role='runtime-operator')}`",
+                f"1. Materialize the case-run package manifest for demonstration/archive review: `{kernel_command('materialize-case-run-package', '--run-dir', str(run_dir), '--run-id', run_id, '--round-id', round_id, actor_role='runtime-operator')}`",
+                f"1. Rebuild this runbook after closeout: `{kernel_command('materialize-operator-runbook', '--run-dir', str(run_dir), '--round-id', round_id, actor_role='runtime-operator')}`",
                 "",
             ]
         )

@@ -36,6 +36,10 @@ description: Optional-analysis helper for aggregating sample-level public discou
 - Treat annotation distributions as advisory, approval-scoped sample descriptors.
   They describe only annotated items in the selected corpus and do not prove
   prevalence outside that corpus.
+- Preserve `distribution_use_policy`: label families can be non-exclusive,
+  `sample_fraction` is local to annotated items in the selected sample, and
+  source-narrative labels are cues for follow-up verification rather than
+  physical source attribution.
 - Annotation-worker output may carry its own `annotation_basis_ref`; manual
   agent-authored annotations require an explicit annotation basis ref. Approved
   taxonomy cues remain candidate labels for human review and are not findings by

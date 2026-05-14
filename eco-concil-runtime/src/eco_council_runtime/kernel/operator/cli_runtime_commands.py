@@ -35,6 +35,7 @@ from eco_council_runtime.kernel.governance.runtime_governance import (
 from eco_council_runtime.kernel.operator.operations import (
     load_dead_letters,
     materialize_admission_policy,
+    materialize_case_run_package,
     materialize_operator_runbook,
     materialize_runtime_health,
     resolve_dead_letter,
@@ -273,6 +274,15 @@ def handle_runtime_command(args: Any, run_dir: Path) -> int | None:
             },
             "operator_runbook_path": materialize_operator_runbook(run_dir, round_id=args.round_id),
         }
+        print(pretty_json(payload, args.pretty))
+        return 0
+
+    if args.command == "materialize-case-run-package":
+        payload = materialize_case_run_package(
+            run_dir,
+            run_id=args.run_id,
+            round_id=args.round_id,
+        )
         print(pretty_json(payload, args.pretty))
         return 0
 

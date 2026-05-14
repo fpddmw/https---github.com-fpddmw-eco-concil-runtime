@@ -360,6 +360,16 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
                 "annotation-basis://fixture/public-discourse-v1",
                 aggregation_artifact["social_affect_distribution"][0]["provenance"]["annotation_basis_refs"][0],
             )
+            self.assertTrue(
+                aggregation_artifact["distribution_use_policy"]["label_sets_are_non_exclusive"]
+            )
+            self.assertTrue(
+                aggregation_artifact["distribution_use_policy"]["sample_fractions_are_sample_local"]
+            )
+            self.assertEqual(
+                "public_source_narrative_cue_not_physical_source_attribution",
+                aggregation_artifact["distribution_use_policy"]["source_narrative_boundary"],
+            )
             self.assertNotIn("recommended_conclusion", aggregation_artifact)
             self.assertNotIn("ranked_items", aggregation_artifact)
 
@@ -431,6 +441,13 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
                 summary_artifact["cross_source_comparison"]["comparison_scope"],
             )
             self.assertTrue(summary_artifact["example_refs"])
+            self.assertTrue(
+                summary_artifact["distribution_use_policy"]["requires_council_uptake_before_reporting"]
+            )
+            self.assertEqual(
+                "media_or_document_tone_not_public_sentiment",
+                summary_artifact["distribution_use_policy"]["gdelt_tone_boundary"],
+            )
             self.assertIn("board_handoff", summary_artifact)
             self.assertIn("submit-agent-position", summary_artifact["board_handoff"]["suggested_next_skills"])
             self.assertNotIn("recommended_conclusion", summary_artifact)

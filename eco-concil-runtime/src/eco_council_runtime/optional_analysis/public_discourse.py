@@ -321,6 +321,18 @@ def _public_discourse_metadata(skill_name: str) -> dict[str, Any]:
     )
 
 
+def _distribution_use_policy() -> dict[str, Any]:
+    return {
+        "schema_version": "public-discourse-distribution-use-policy-v1",
+        "label_sets_are_non_exclusive": True,
+        "sample_fractions_are_sample_local": True,
+        "do_not_sum_to_population_opinion": True,
+        "requires_council_uptake_before_reporting": True,
+        "gdelt_tone_boundary": "media_or_document_tone_not_public_sentiment",
+        "source_narrative_boundary": "public_source_narrative_cue_not_physical_source_attribution",
+    }
+
+
 def _load_corpus_payload(corpus_path: str) -> tuple[dict[str, Any], list[dict[str, str]]]:
     if not maybe_text(corpus_path):
         return {}, []
@@ -669,6 +681,7 @@ def run_aggregate_public_discourse_annotations(
         "actor_responsibility_distribution": distributions_by_family["actor_responsibility_labels"],
         "action_orientation_distribution": distributions_by_family["action_orientation_labels"],
         "annotation_distributions": distribution_records,
+        "distribution_use_policy": _distribution_use_policy(),
         "representativeness_limits": [
             "Annotation distributions describe only annotated items inside the selected sample.",
             "Unannotated items are not negative evidence for any label.",
@@ -1197,6 +1210,7 @@ def run_summarize_public_discourse_sample(
         "source_narrative_distribution": _distribution_from_payload(aggregation_payload, "source_narrative_distribution"),
         "actor_responsibility_distribution": _distribution_from_payload(aggregation_payload, "actor_responsibility_distribution"),
         "action_orientation_distribution": _distribution_from_payload(aggregation_payload, "action_orientation_distribution"),
+        "distribution_use_policy": _distribution_use_policy(),
         "cross_source_comparison": cross_source_comparison,
         "source_narrative_cross_lane_cues": _distribution_from_payload(comparison_payload, "source_narrative_cross_lane_cues"),
         "example_refs": examples,

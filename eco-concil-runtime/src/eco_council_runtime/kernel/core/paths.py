@@ -109,6 +109,12 @@ def operator_runbook_path(run_dir: Path, round_id: str = "") -> Path:
     return runtime_dir(run_dir) / "operator_runbook.md"
 
 
+def case_run_package_path(run_dir: Path, round_id: str = "") -> Path:
+    if round_id:
+        return runtime_dir(run_dir) / f"case_run_package_{round_id}.json"
+    return runtime_dir(run_dir) / "case_run_package.json"
+
+
 def dead_letter_path(run_dir: Path, dead_letter_id: str) -> Path:
     return dead_letters_dir(run_dir) / f"{dead_letter_id}.json"
 

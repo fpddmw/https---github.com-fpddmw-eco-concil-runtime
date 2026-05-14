@@ -17,6 +17,19 @@ description: Optional-analysis helper for summarizing a public discourse sample 
 - Defaults to `--round-scope current`; use `--round-scope run` only when the
   council-approved sample intentionally spans multiple rounds in one run.
 
+## Output Contract
+- Always carries `sample_definition`, `sample_count`, `source_family_counts`,
+  `source_skill_counts`, `discourse_lane_counts`, `warnings`, and `evidence_refs`.
+- Carries annotation distributions when an approved aggregation artifact is
+  supplied: `issue_distribution`, `social_affect_distribution`,
+  `source_narrative_distribution`, `actor_responsibility_distribution`, and
+  `action_orientation_distribution`.
+- Carries `distribution_use_policy` so report writers preserve the sample-local
+  boundary: labels may be non-exclusive, sample fractions are not population
+  estimates, GDELT tone is media/document tone, and source-narrative labels are
+  cues for environmental verification rather than physical attribution.
+- The summary is advisory helper output until a council object explicitly cites it.
+
 ## Required Input
 - `run_dir`
 - `run_id`

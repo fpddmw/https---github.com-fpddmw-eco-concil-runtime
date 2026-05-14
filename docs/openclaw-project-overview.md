@@ -239,7 +239,7 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
 
 ## 9. 文档地图
 
-当前 docs 以基础文档为主；历史工作计划、迁移清单、真实 run timeline 和临时审计计划的有效常驻内容已并入基础文档。公共舆情深化保留为当前专项工作文档。
+当前 docs 以基础文档为主；历史工作计划、迁移清单、真实 run timeline 和临时审计计划的有效常驻内容已并入基础文档。毕业提交前的代码层工程收口以最终升级路径工作计划为准；实验和案例安排单独记录，不混入代码开发计划。
 
 1. `docs/openclaw-project-overview.md`
    - 项目定位、概念模型/代码角色模型、主工作流、多轮能力、agent/runtime principal、数据契约、skill 分层、公共舆情深化 lane、当前能力边界和质量门。
@@ -247,8 +247,12 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
    - fetch skill 的多层工作流说明；用于帮助 agent 理解同一信源家族内的 search/detail/table/backfill 关系，不作为 source 排序或议程脚本。
 3. `docs/openclaw-claim-strength-obligations.md`
    - 弱报告、强 claim 和 unresolved refs 收口边界；用于防止过早放弃调查，同时不引入议题模板或证据打分。
-4. `docs/openclaw-public-discourse-deepening-workplan.md`
-   - 当前专项工作文档；定义公共舆情深化 lane、GDELT tone 边界、样本内分析能力和后续实施批次。
+4. `docs/openclaw-graduation-upgrade-path-workplan.md`
+   - 毕业提交前代码层最终升级路径；整合公共舆情深化、报告质量检查、报告模板优化、agent/skill 文档收口、operator runbook 和不做事项。
+5. `docs/openclaw-experiment-case-plan.md`
+   - 毕业设计实验与案例计划；记录两主案例、两轻量验证、第二主案例风险对比、降级策略和展示材料安排。
+6. `docs/openclaw-realcase-nyc-smoke-first-run-timeline.md`
+   - NYC smoke 首次真实 run 的历史 timeline；只用于保留当次运行事实、边界和暴露问题，不作为当前能力基线或工作计划。
 
 质量门基线命令：
 
