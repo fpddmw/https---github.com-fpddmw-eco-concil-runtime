@@ -44,7 +44,13 @@
 1. 已完成多轮真实 run。
 2. 已生成中文叙事报告。
 3. 已纳入样本内公共舆情结构。
-4. 可作为第一主案例冻结。
+4. 已生成冻结基线案例包和答辩一页纸，可作为第一主案例冻结。
+
+冻结材料：
+
+1. `docs/frozen-case-packages/nyc-smoke-20230607/baseline-case-package.md`
+2. `docs/frozen-case-packages/nyc-smoke-20230607/defense-onepager.md`
+3. `runs/openclaw-realcase-nyc-smoke-skillguidance-validation-20260512/reporting/narrative_report_round-003.md`
 
 ### 2.2 主案例二：Colorado River / Glen Canyon
 
@@ -96,6 +102,14 @@
 推荐 mission：
 
 `请调查 2023 年前后科罗拉多河水资源短缺与格伦峡谷大坝运行争议，综合水文背景、公开报道、正式记录和公众讨论，分析该议题中的环境压力信号、主要治理争议、公共舆情语义结构和证据边界，并生成一份适合决策者阅读的有边界报告。`
+
+当前准备状态：
+
+1. 已创建最小用户面向 mission：`runs/openclaw-realcase-colorado-river-glen-canyon-governance-20260514/input/mission.json`。
+2. 已通过 `start-council-run` 初始化 `round-001`，run 健康状态为 `green`。
+3. 当前入口为 `scoping-required`：mission 未预设 window、region、source 或 hypotheses，后续由 moderator 和 investigators 自主提出调查边界、source proposal 和证据路线。
+4. 已生成 5 个 agent registration surfaces：`moderator`、`environmental-investigator`、`social-investigator`、`challenger`、`report-editor`。
+5. 初始 fetch plan step count 为 0，这是预期状态；不把实验计划中的可用数据线转化为 runtime source 队列。
 
 降级策略：
 

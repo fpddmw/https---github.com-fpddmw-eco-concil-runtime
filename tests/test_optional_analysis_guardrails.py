@@ -398,6 +398,131 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
             self.assertNotIn("link-claims-to-observations", artifact_text)
             self.assertNotIn("score-evidence-coverage", artifact_text)
 
+    def test_aggregate_environment_evidence_limit_does_not_truncate_statistics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            for index in range(12):
+                insert_signal(
+                    run_dir,
+                    signal_id=f"env-series-{index:03d}",
+                    plane="environment",
+                    source_skill="fetch-openaq",
+                    title="OpenAQ PM2.5",
+                    body_text="",
+                    metric="pm25",
+                    numeric_value=40.0 + index,
+                    unit="ug/m3",
+                    observed_at_utc=f"2023-06-07T{index:02d}:00:00Z",
+                    latitude=40.7,
+                    longitude=-74.0,
+                    metadata={"location_name": "NYC", "environment_signal_class": "air-quality"},
+                )
+
+            payload = run_script(
+                script_path("aggregate-environment-evidence"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--aggregation-method",
+                "time-series-summary",
+                "--limit",
+                "3",
+                "--sample-ref-limit",
+                "2",
+            )
+
+            aggregation = payload["aggregation"]
+            self.assertEqual(12, aggregation["signal_count"])
+            self.assertEqual(12, aggregation["statistics_summary"]["signal_count"])
+            self.assertEqual(3, len(aggregation["source_signal_ids"]))
+            self.assertLessEqual(len(aggregation["evidence_ref_samples"]), 2)
+            self.assertEqual(
+                "full-statistics-with-limited-output-samples",
+                aggregation["sample_definition"]["sampling_status"],
+            )
+            self.assertEqual(12, aggregation["time_series_summary"]["groups"][0]["count"])
+            artifact = load_json(
+                run_dir / "analytics" / f"environment_evidence_aggregation_{ROUND_ID}.json"
+            )
+            artifact_text = json.dumps(artifact, ensure_ascii=True, sort_keys=True)
+            self.assertNotIn("risk_score", artifact_text)
+            self.assertNotIn("source_ranking", artifact_text)
+            self.assertNotIn("readiness_decision", artifact_text)
+
+    def test_aggregate_environment_evidence_auto_summary_keeps_mixed_shapes_descriptive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            for index, value in enumerate([52.0, 54.0]):
+                insert_signal(
+                    run_dir,
+                    signal_id=f"env-air-{index:03d}",
+                    plane="environment",
+                    source_skill="fetch-airnow-hourly-observations",
+                    title="AirNow PM2.5",
+                    body_text="",
+                    metric="pm25",
+                    numeric_value=value,
+                    unit="ug/m3",
+                    observed_at_utc=f"2023-06-07T1{index}:00:00Z",
+                    latitude=40.7,
+                    longitude=-74.0,
+                    metadata={"site_name": "NYC Air", "environment_signal_class": "air-quality"},
+                )
+            for index, frp in enumerate([18.5, 21.0]):
+                insert_signal(
+                    run_dir,
+                    signal_id=f"env-fire-{index:03d}",
+                    plane="environment",
+                    source_skill="fetch-nasa-firms-fire",
+                    title="FIRMS fire detection",
+                    body_text="",
+                    metric="fire_detection_count",
+                    numeric_value=1.0,
+                    unit="count",
+                    observed_at_utc=f"2023-06-07T2{index}:00:00Z",
+                    latitude=45.0 + index,
+                    longitude=-73.0 - index,
+                    metadata={
+                        "environment_signal_class": "fire-detection",
+                        "frp": str(frp),
+                        "satellite": "NOAA-20",
+                        "instrument": "VIIRS",
+                    },
+                )
+
+            payload = run_script(
+                script_path("aggregate-environment-evidence"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--aggregation-method",
+                "auto-summary",
+            )
+
+            aggregation = payload["aggregation"]
+            self.assertIn("time-series-summary", aggregation["aggregation_methods_included"])
+            self.assertIn("point-event-summary", aggregation["aggregation_methods_included"])
+            self.assertEqual(4, aggregation["signal_count"])
+            self.assertEqual(2, aggregation["point_event_summary"]["point_event_signal_count"])
+            metadata_fields = {
+                item["field"]
+                for item in aggregation["point_event_summary"]["metadata_numeric_summary"]
+            }
+            self.assertIn("frp", metadata_fields)
+            artifact = load_json(
+                run_dir / "analytics" / f"environment_evidence_aggregation_{ROUND_ID}.json"
+            )
+            artifact_text = json.dumps(artifact, ensure_ascii=True, sort_keys=True)
+            self.assertNotIn("wildfire_risk", artifact_text)
+            self.assertNotIn("health_exposure", artifact_text)
+            self.assertNotIn("source_attribution", artifact_text)
+
     def test_formal_public_footprints_do_not_emit_alignment_scores(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"

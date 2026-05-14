@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,25 @@ from eco_council_runtime.kernel.planes.signal import (  # noqa: E402
 SKILL_NAME = "normalize-regulationsgov-comments-public-signals"
 SOURCE_SKILL = "fetch-regulationsgov-comments"
 PLANE = "formal"
+
+
+def read_json_or_jsonl(path: Path) -> dict[str, Any]:
+    if path.suffix.lower() == ".jsonl":
+        records: list[Any] = []
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                text = line.strip()
+                if not text:
+                    continue
+                records.append(json.loads(text))
+        return {"records": records, "artifact_format": "jsonl"}
+
+    payload = read_json(path)
+    if isinstance(payload, dict):
+        return payload
+    if isinstance(payload, list):
+        return {"records": payload, "artifact_format": "json-array"}
+    return {"records": [], "artifact_format": "unsupported"}
 
 
 def provider_metadata(attributes: dict[str, Any], *, artifact_sha256: str) -> dict[str, Any]:
@@ -145,7 +165,7 @@ def build_signals(payload: Any, run_id: str, round_id: str, artifact_file: Path,
 
 def normalize_regulationsgov_comments(run_dir: str, run_id: str, round_id: str, artifact_path: str, db_path: str) -> dict[str, Any]:
     artifact_file = Path(artifact_path).expanduser().resolve()
-    artifact_payload = read_json(artifact_file)
+    artifact_payload = read_json_or_jsonl(artifact_file)
     artifact_sha256 = file_sha256(artifact_file)
     signals, warnings = build_signals(artifact_payload, run_id, round_id, artifact_file, artifact_sha256)
     return finalize_normalization(

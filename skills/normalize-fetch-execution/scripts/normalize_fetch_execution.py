@@ -451,6 +451,8 @@ def artifact_path_candidates_from_receipt(receipt: dict[str, Any]) -> list[str]:
     collect_ref(summary)
 
     skill_payload = receipt.get("skill_payload") if isinstance(receipt.get("skill_payload"), dict) else {}
+    collect_ref(skill_payload.get("output_path"))
+    collect_ref(skill_payload.get("output_file"))
     for ref in skill_payload.get("artifact_refs", []) if isinstance(skill_payload.get("artifact_refs"), list) else []:
         collect_ref(ref)
     collect_ref(skill_payload.get("summary") if isinstance(skill_payload.get("summary"), dict) else {})
@@ -959,7 +961,11 @@ def import_fetch_execution_skill(
             receipt_id = maybe_text(receipt_payload.get("receipt_id")) or receipt_path.stem
             step_id = receipt_step_id(receipt_id)
             existing_status = statuses_by_step.get(step_id)
-            if isinstance(existing_status, dict) and maybe_text(existing_status.get("status")) == "completed":
+            if (
+                isinstance(existing_status, dict)
+                and maybe_text(existing_status.get("status")) == "completed"
+                and int(existing_status.get("canonical_count") or 0) > 0
+            ):
                 skipped_receipt_refs.append(receipt_ref)
                 continue
             status, payload = execute_receipt_normalization(

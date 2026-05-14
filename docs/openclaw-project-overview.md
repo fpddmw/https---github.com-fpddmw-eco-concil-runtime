@@ -204,6 +204,19 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 6. `challenger` 对舆情标注的默认职责是样本边界、taxonomy fit、ambiguous clusters、outlier examples 和报告措辞审计；不要求逐条复核所有非 GDELT 情感标签。只有报告要引用争议样本、强影响结论或可见讽刺/转述/翻译歧义时，才需要局部 item-level 复核。
 7. 当前已具备 corpus materialization、coverage audit、annotation worker、annotation aggregation、GDELT tone enrichment、cross-source comparison 和 sample summary 的初步闭环；这些输出都保持 optional-analysis/advisory 属性，必须由议会对象承接后才能进入 report basis。
 
+### 环境证据压缩 Lane
+
+环境证据压缩是 `optional analysis/helper` 能力，不是新的 round type，也不是专业环境模型。它用于把 AirNow、OpenAQ、Open-Meteo、USGS、NASA FIRMS 等 normalized environment signals 压成可读的覆盖和统计摘要，帮助 agent 避免直接读取百万级原始记录。
+
+该 lane 的治理边界：
+
+1. `query-environment-signals` 返回 item-level 环境证据 rows 和 evidence refs，适合抽查和写 finding 时引用。
+2. `aggregate-environment-evidence` 负责描述性覆盖和统计摘要，后续升级方向见 `docs/openclaw-graduation-upgrade-path-workplan.md`。
+3. 环境聚合只输出 source/metric/time/spatial coverage、数值 min/max/mean、bucket counts、缺测和样本 refs。
+4. 时序观测和点事件应按数据形态处理，而不是按 provider 写厚规则。
+5. 环境聚合不得输出风险等级、source 排序、证据权重、健康暴露评估、水资源短缺严重性、火源证明或输送/归因结论。
+6. 聚合摘要必须由 `environmental-investigator` 的 finding、evidence bundle、readiness opinion 或 moderator synthesis 显式承接后，才能进入报告依据。
+
 ## 7. 当前能力边界
 
 已具备：
@@ -214,6 +227,7 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 4. proposal-authoritative 的议会推进路径。
 5. report basis gate、freeze、reporting、archive/history。
 6. approval-gated optional-analysis helper governance。
+7. 环境侧已有 `query-environment-signals` 和基础 `aggregate-environment-evidence`，可做 item-level 查询和描述性覆盖摘要。
 
 仍有限：
 
@@ -223,6 +237,7 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 4. finding 到 evidence bundle / hypothesis / proposal / next round 的承接已有对象局部 command templates，但真实 agent uptake 仍需更多案例验证。
 5. archive/history 已能 checkpoint 并提供历史 evidence refs；更大规模 raw receipt cache 和跨案例复用策略仍需后续设计。
 6. optional-analysis helper 多为启发式视图，默认 `audit-pending`，不是专业结论模型。
+7. 现有环境聚合层仍偏覆盖摘要；对百万级时序数据需要补齐全量统计、时序 bucket、点事件摘要和小型 evidence-ref sample 输出。
 
 ## 8. 当前收口状态
 
@@ -248,10 +263,14 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
 3. `docs/openclaw-claim-strength-obligations.md`
    - 弱报告、强 claim 和 unresolved refs 收口边界；用于防止过早放弃调查，同时不引入议题模板或证据打分。
 4. `docs/openclaw-graduation-upgrade-path-workplan.md`
-   - 毕业提交前代码层最终升级路径；整合公共舆情深化、报告质量检查、报告模板优化、agent/skill 文档收口、operator runbook 和不做事项。
+   - 毕业提交前代码层最终升级路径；整合公共舆情深化、环境证据压缩层、报告质量检查、报告模板优化、agent/skill 文档收口、operator runbook 和不做事项。
 5. `docs/openclaw-experiment-case-plan.md`
    - 毕业设计实验与案例计划；记录两主案例、两轻量验证、第二主案例风险对比、降级策略和展示材料安排。
-6. `docs/openclaw-realcase-nyc-smoke-first-run-timeline.md`
+6. `docs/frozen-case-packages/nyc-smoke-20230607/baseline-case-package.md`
+   - NYC smoke 第一主案例冻结包；汇总 mission、最终报告、证据链、claim boundary、公共舆情样本结构和答辩可引用的基线结论。
+7. `docs/frozen-case-packages/nyc-smoke-20230607/defense-onepager.md`
+   - NYC smoke 答辩一页纸；用于快速展示案例定位、议会流程、环境证据、公共语义样本和边界表述。
+8. `docs/openclaw-realcase-nyc-smoke-first-run-timeline.md`
    - NYC smoke 首次真实 run 的历史 timeline；只用于保留当次运行事实、边界和暴露问题，不作为当前能力基线或工作计划。
 
 质量门基线命令：

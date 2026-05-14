@@ -35,6 +35,7 @@
 5. 公共舆情深化是 optional capability lane，不是新的固定 round type。
 6. 报告前质量检查只检查“表述是否有证据基础”，不替议会决定结论。
 7. 不引入 source 排序、证据打分、非必要启发式权重或固定议题模板。
+8. 环境数据压缩只能做描述性 coverage/statistics/index view，不替 agent 判断风险、归因或证据充分性。
 
 ## 3. 最终升级范围
 
@@ -112,7 +113,121 @@
 3. source-family workflows
    - 保持为“如何理解同一信源家族多层能力”的说明，不作为 source 排序或议程脚本。
 
-### 3.4 可复用 case-run 操作面
+### 3.4 环境证据压缩层升级
+
+目标：让百万级环境 normalized signals 可以被 agent 安全使用，避免把原始时序或点事件全量塞入上下文；同时保留原始 evidence refs 和可复核链路。
+
+当前问题：
+
+1. `query-environment-signals` 已能做 item-level 查询，但不适合承载百万级全量阅读。
+2. `aggregate-environment-evidence` 已有描述性聚合能力，但当前实现默认通过 `limit=500` 读取信号；对 USGS 这类百万级时序而言，它只是抽样覆盖摘要，不是全量压缩。
+3. AirNow / OpenAQ / USGS / Open-Meteo / FIRMS 的关键字段差异很大，不能通过厚配置和 provider 专用规则堆出一个“统一智能分析器”。
+4. 议会需要的是“可读的数据面摘要”，不是 runtime 或 skill 自动替 agent 做风险判断、来源归因、证据排序。
+
+设计原则：
+
+1. 保留 `aggregate-environment-evidence` 的原子能力定义：`descriptive environment evidence aggregation`。
+2. 不按 provider 编排议程，不规定某案例必须使用哪种 source。
+3. 不新增 source 权重、风险评分、严重性排序或 claim sufficiency 结论。
+4. 不做专业水文、烟羽、化学、暴露或归因模型。
+5. 只基于 normalized signal 共通字段和少量形态字段工作：
+   - `source_skill`
+   - `metric`
+   - `numeric_value`
+   - `observed_at_utc`
+   - `latitude` / `longitude`
+   - `evidence_refs`
+   - `record_locator`
+   - `metadata`
+6. provider 差异只允许作为薄字段别名或 metadata 展示，例如 station/site id、satellite/instrument、confidence、FRP；这些字段不得驱动结论。
+
+实现方案：
+
+1. 扩展现有 `aggregate-environment-evidence`，不新建厚 skill。
+2. 将内部代码拆成小模块，避免单文件继续膨胀：
+   - `environment_evidence/common.py`
+   - `environment_evidence/coverage.py`
+   - `environment_evidence/timeseries.py`
+   - `environment_evidence/point_events.py`
+   - `environment_evidence/output.py`
+3. `aggregate_environment_evidence.py` 只保留 CLI wrapper。
+4. `--aggregation-method` 保持为形态方法，而不是 provider 方法：
+   - `coverage-summary`
+   - `time-series-summary`
+   - `point-event-summary`
+   - `auto-summary`
+5. `--limit` 语义调整为输出/样本限制；全量统计应尽量通过 SQLite aggregation 或 chunked scan 完成。若无法全量统计，输出必须显式写 `sampling_status` 和 `sample_limit`。
+6. 增加可选过滤参数，但不引入 agenda：
+   - `--round-scope current|up-to-current|all`
+   - `--source-skill`
+   - `--metric`
+   - `--observed-after-utc`
+   - `--observed-before-utc`
+   - `--bbox`
+   - `--group-limit`
+   - `--sample-ref-limit`
+
+输出要求：
+
+1. 所有方法都输出：
+   - `sample_definition`
+   - `aggregation_method`
+   - `signal_count`
+   - `source_distribution`
+   - `metric_distribution`
+   - `time_coverage`
+   - `spatial_coverage`
+   - `quality_or_metadata_limitations`
+   - `evidence_ref_samples`
+   - `source_signal_ref_samples`
+   - `warnings`
+2. `time-series-summary` 额外输出：
+   - 按 `source_skill + station/site/location + metric` 分组的序列摘要。
+   - 每组 `count`、`first_observed_at`、`last_observed_at`、`min`、`max`、`mean`。
+   - 可选日/小时 bucket 的 `count/min/max/mean`。
+   - 极值窗口只作为 descriptive extrema，不写风险等级。
+3. `point-event-summary` 额外输出：
+   - 日期 bucket 计数。
+   - 空间包络 / bbox。
+   - point density 只能作为记录密度描述，不能写风险等级。
+   - 若存在 `frp`、`confidence`、`brightness` 等 numeric metadata，则输出 min/max/mean 和 missing count。
+   - 若存在 satellite/instrument/provider 字段，则输出分布。
+4. `auto-summary` 只根据 normalized signal 的形态选择 coverage/time-series/point-event 输出组合，不做案例语义判断。
+
+Agent 使用边界：
+
+1. `environmental-investigator` 可以读取环境聚合摘要来决定是否写 finding、evidence bundle、readiness 或继续提交 source acquisition proposal。
+2. 聚合摘要不能直接等同于 finding；必须由 agent 显式承接。
+3. `challenger` 应审查聚合摘要是否被过度解释，例如把点事件密度写成火源证明、把 PM2.5 峰值写成暴露评估、把 USGS downstream proxy 写成 direct operations record。
+4. `moderator` 可以在 round synthesis 中引用聚合摘要的覆盖边界，但不能把聚合结果当成自动收口条件。
+
+NYC smoke / Colorado River 使用建议：
+
+1. NYC smoke 已封口，不重开调查结论；可补跑环境聚合摘要作为展示材料，说明 PM2.5、风场、FIRMS 的数据覆盖和边界。
+2. 若补跑 NYC 聚合，报告措辞只可增强“证据面可读性”，不得升级为具体源火场或输送证明。
+3. Colorado River 当前 USGS 数据量大，应优先用 `time-series-summary` 把百万级记录压成站点/指标/时间覆盖和极值窗口，再由 environmental-investigator 判断它是否仍只是 downstream/tributary context。
+4. FIRMS 应使用 `point-event-summary`，不应走 time-series 逻辑。
+
+测试要求：
+
+1. 添加小型 fixture：AirNow/OpenAQ/USGS/Open-Meteo time-series，NASA FIRMS point-event。
+2. 添加混合 source fixture，验证 `auto-summary` 不把 point-event 当作连续时序。
+3. 添加大样本 synthetic fixture 或 SQLite fixture，验证全量统计不被 `limit` 截断。
+4. 验证输出不包含 claim judgement、risk score、source ranking、readiness decision。
+5. 验证 evidence refs/sample refs 被限制数量，避免生成超大 artifact。
+6. 运行：
+   - `python3 tools/quality_gate.py syntax`
+   - `python3 tools/quality_gate.py test module-decomposition runtime-governance reporting case-study`
+
+完成标准：
+
+1. 百万级环境信号可以生成小型可读摘要。
+2. agent 不需要全量读取原始 JSON / receipt / normalized rows。
+3. 聚合层保持 advisory/helper 属性。
+4. 报告可引用 agent 承接后的聚合摘要，但不能直接外推风险或归因。
+5. 代码未出现新的超大纠缠文件；若 environment aggregation 文件超过合理边界，应按上述内部模块拆分。
+
+### 3.5 可复用 case-run 操作面
 
 目标：降低第二案例执行成本，但不把 case-run 流程变成 agent 议程模板。
 
@@ -129,7 +244,7 @@
 3. 规定必须开几轮或必须得出某结论。
 4. 把 runbook 写进 runtime 作为 agenda rule。
 
-### 3.5 实验支撑与展示冻结的代码侧要求
+### 3.6 实验支撑与展示冻结的代码侧要求
 
 本文不规定具体案例；案例安排见 `docs/openclaw-experiment-case-plan.md`。代码侧只需保证实验/展示可复用：
 
@@ -138,18 +253,20 @@
 3. 报告模板能展示 `environment evidence lane`、`public discourse lane`、`formal/policy record lane`、`claim boundary`。
 4. public discourse summary 可以作为样本内结构写入报告，但不外推为总体民意。
 5. source-family workflow 文档能帮助 agent 理解多层 fetch 能力，但不固定 source 或议程。
+6. environment aggregation summary 可以作为环境证据覆盖和数值压缩面进入 agent deliberation，但不直接成为风险或归因结论。
 
 ## 4. 近期执行顺序
 
 建议执行顺序：
 
 1. 完成报告质量检查和报告模板最后收口。
-2. 检查 agent prompt / skill docs 是否仍有“总体民意”“source 排序”“固定议程”类误导表述。
-3. 冻结 NYC smoke 最终报告和展示摘要。
-4. 按实验计划启动第二主案例真实 run。
-5. 只修程序性 blocker，不在 run 中显式指导 agent 调查方向。
-6. 生成第二主案例最终叙事报告。
-7. 进入论文写作和答辩材料制作。
+2. 升级 `aggregate-environment-evidence`，补齐 time-series / point-event descriptive summary。
+3. 检查 agent prompt / skill docs 是否仍有“总体民意”“source 排序”“固定议程”“环境聚合自动给出风险结论”类误导表述。
+4. 冻结 NYC smoke 最终报告和展示摘要；如有必要，仅补充环境聚合展示材料，不升级结论。
+5. 按实验计划继续第二主案例真实 run。
+6. 只修程序性 blocker，不在 run 中显式指导 agent 调查方向。
+7. 生成第二主案例最终叙事报告。
+8. 进入论文写作和答辩材料制作。
 
 ## 5. 不做事项
 
@@ -162,6 +279,8 @@
 5. 新增复杂 continuation round 类型。
 6. 重写已有 fetch/normalize 架构。
 7. 为兼容旧架构保留大量冗余代码。
+8. 为每个 provider 编写独立厚配置或专用结论解释器。
+9. 在环境聚合层输出 wildfire risk、health exposure、water-shortage severity、transport/source attribution 等结论。
 
 ## 6. 完成标准
 
@@ -169,10 +288,11 @@
 
 1. 报告质量检查能阻止或警告主要越界表述。
 2. 报告模板能清楚呈现环境信号、舆情语义、样本内结构和 claim boundary。
-3. 至少两个主案例都能复用同一报告链路。
-4. 实验计划中的轻量验证不需要推动代码架构扩张。
-5. runtime health 绿色，关键测试通过。
-6. docs 保留基础文档、timeline、本代码升级计划和实验/案例计划，删除过时专项工作计划。
+3. 环境聚合层能把 AirNow/USGS/OpenAQ/Open-Meteo 这类时序数据和 FIRMS 这类点事件数据压成可读摘要。
+4. 至少两个主案例都能复用同一报告链路。
+5. 实验计划中的轻量验证不需要推动代码架构扩张。
+6. runtime health 绿色，关键测试通过。
+7. docs 保留基础文档、timeline、本代码升级计划和实验/案例计划，删除过时专项工作计划。
 
 论文展示完成标准：
 

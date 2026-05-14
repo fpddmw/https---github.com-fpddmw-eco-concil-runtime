@@ -7,9 +7,9 @@ description: Optional-analysis helper for DB-backed environment signal aggregati
 
 ## Core Goal
 - Read normalized environment signals from the signal-plane DB.
-- Produce descriptive source, metric, spatial, and temporal aggregation.
+- Produce descriptive coverage, time-series, and point-event summaries.
 - Preserve source signal ids, artifact refs, record locators, lineage, provenance, and optional-analysis helper governance.
-- Avoid claim matching, readiness scores, phase gates, or workflow suggestions.
+- Avoid claim matching, source ranking, evidence weighting, readiness decisions, phase gates, or workflow suggestions.
 
 ## Triggering Conditions
 - An approved optional-analysis request asks for an environment evidence aggregation view.
@@ -25,14 +25,28 @@ description: Optional-analysis helper for DB-backed environment signal aggregati
 - `round_id`
 
 ## Optional Input
-- `aggregation_method`
+- `aggregation_method`: `coverage-summary`, `time-series-summary`, `point-event-summary`, or `auto-summary`; the legacy `source-metric-day-summary` is accepted as a compatibility alias.
+- `round_scope`: `current`, `up-to-current`, or `all`
+- `source_skill`
+- `metric`
+- `observed_after_utc`
+- `observed_before_utc`
+- `bbox`
 - `output_path`
-- `limit`
+- `limit`: output/sample row limit only; statistics are computed across matched DB rows.
+- `group_limit`
+- `sample_ref_limit`
 
 ## Agent Reasoning Guide
 - Treat output as approval-scoped advisory/audit material. It summarizes visible
   normalized environment rows; it does not match claims, rank sources, score
   sufficiency, or decide readiness.
+- `time-series-summary` reports descriptive count/min/max/mean by
+  source/location/metric. These extrema are not exposure, severity, transport,
+  or attribution findings.
+- `point-event-summary` reports date buckets, spatial envelope, provider
+  metadata distribution, and numeric metadata statistics such as FIRMS FRP when
+  present. Point density is only normalized row density.
 - Empty or narrow aggregation can reflect missing normalization, filters,
   `round_id`, DB path, or source coverage. It is not proof that environmental
   evidence is absent.
