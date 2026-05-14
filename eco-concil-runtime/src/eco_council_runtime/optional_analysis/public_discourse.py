@@ -96,10 +96,13 @@ FORMAL_COMMENT_SAMPLE_SKILLS = {
     "fetch-regulationsgov-comment-detail",
 }
 GDELT_MEDIA_TONE_SKILLS = {
-    "fetch-gdelt-doc-search",
     "fetch-gdelt-events",
     "fetch-gdelt-mentions",
     "fetch-gdelt-gkg",
+}
+GDELT_TONE_LANES = {
+    "gdelt_media_tone",
+    "gdelt_doc_tone_aggregate",
 }
 ANNOTATION_LABEL_FAMILIES = {
     "issue_facets",
@@ -149,6 +152,17 @@ def public_discourse_lane(signal: dict[str, Any]) -> str:
         return "formal_public_comment_sample"
     if source_skill in GDELT_MEDIA_TONE_SKILLS:
         return "gdelt_media_tone"
+    if source_skill == "fetch-gdelt-doc-search":
+        metadata = dict_items(signal.get("metadata"))
+        metric = maybe_text(signal.get("metric"))
+        gdelt_doc_kind = maybe_text(metadata.get("gdelt_doc_kind"))
+        if (
+            gdelt_doc_kind in {"gdelt_doc_tone_aggregate", "gdelt_doc_tone_distribution"}
+            or metric in {"doc_timeline_tone", "doc_tonechart_count"}
+            or maybe_text(metadata.get("doc_mode")) in {"timelinetone", "tonechart"}
+        ):
+            return "gdelt_doc_tone_aggregate"
+        return "gdelt_doc_recon"
     if source_skill == "fetch-youtube-video-search":
         return "public_visibility"
     if maybe_text(signal.get("plane")) == "formal":
@@ -398,14 +412,16 @@ def _annotation_rows_from_path(
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     if not maybe_text(annotations_path):
         return [], []
-    if not maybe_text(annotation_basis_ref):
+    payload = _read_annotation_payload(annotations_path)
+    artifact_basis_ref = maybe_text(payload.get("annotation_basis_ref")) if isinstance(payload, dict) else ""
+    effective_basis_ref = maybe_text(annotation_basis_ref) or artifact_basis_ref
+    if not effective_basis_ref:
         return [], [
             {
                 "code": "annotation-basis-required",
-                "message": "Agent-authored annotations require --annotation-basis-ref before aggregation.",
+                "message": "Annotations require --annotation-basis-ref or artifact.annotation_basis_ref before aggregation.",
             }
         ]
-    payload = _read_annotation_payload(annotations_path)
     if isinstance(payload, dict):
         raw_rows = list_items(payload.get("annotations") or payload.get("labels"))
     elif isinstance(payload, list):
@@ -440,8 +456,8 @@ def _annotation_rows_from_path(
                     "signal_id": signal_id,
                     "label_family": family,
                     "label": label,
-                    "annotation_source": "agent-authored-annotation",
-                    "annotation_basis_ref": maybe_text(raw_row.get("annotation_basis_ref")) or maybe_text(annotation_basis_ref),
+                    "annotation_source": maybe_text(raw_row.get("annotation_source")) or "agent-authored-annotation",
+                    "annotation_basis_ref": maybe_text(raw_row.get("annotation_basis_ref")) or effective_basis_ref,
                     "audit_status": maybe_text(raw_row.get("audit_status")) or "candidate-for-human-review",
                     "evidence_refs": list_items(raw_row.get("evidence_refs")),
                 }
@@ -741,7 +757,7 @@ def _load_approved_helper_artifact(
 def _numeric_metric_summary(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
     buckets: dict[str, list[float]] = {}
     for signal in signals:
-        if public_discourse_lane(signal) != "gdelt_media_tone":
+        if public_discourse_lane(signal) not in GDELT_TONE_LANES:
             continue
         metric = maybe_text(signal.get("metric")) or "unspecified"
         value = signal.get("numeric_value")
@@ -757,7 +773,7 @@ def _numeric_metric_summary(signals: list[dict[str, Any]]) -> list[dict[str, Any
                 "min_value": min(values),
                 "max_value": max(values),
                 "average_value": round(sum(values) / len(values), 6),
-                "tone_boundary": "gdelt_media_tone_not_public_response_sentiment",
+                "tone_boundary": "gdelt_media_or_doc_tone_not_public_response_sentiment",
             }
         )
     return summaries
@@ -834,6 +850,13 @@ def run_compare_public_media_narratives(
             {
                 "code": "gdelt-tone-boundary",
                 "message": "GDELT tone is media/document tone and must not be read as public sentiment.",
+            }
+        )
+    if lane_count_map.get("gdelt_doc_tone_aggregate", 0):
+        warnings.append(
+            {
+                "code": "gdelt-doc-tone-boundary",
+                "message": "GDELT DOC tone/tonechart/timelinetone values are media/document tone aggregates, not public sentiment.",
             }
         )
     if not lane_count_map.get("social_sample_affect", 0):
@@ -1247,11 +1270,11 @@ def _corpus_warnings(signals: list[dict[str, Any]]) -> list[dict[str, str]]:
                 "message": "The matched sample has no YouTube comments or Bluesky posts; do not describe public affect from this corpus.",
             }
         )
-    if any(public_discourse_lane(signal) == "gdelt_media_tone" for signal in signals):
+    if any(public_discourse_lane(signal) in GDELT_TONE_LANES for signal in signals):
         warnings.append(
             {
                 "code": "gdelt-tone-boundary",
-                "message": "GDELT rows may support media/document tone cues, not public sentiment proportions.",
+                "message": "GDELT DOC/row tone may support media/document tone cues, not public sentiment proportions.",
             }
         )
     return warnings
@@ -1431,14 +1454,17 @@ def _coverage_warnings(signals: list[dict[str, Any]]) -> list[dict[str, str]]:
                 "message": "YouTube video candidates exist, but no YouTube comments are normalized; public-response affect is not supported from YouTube yet.",
             }
         )
-    if by_skill.get("fetch-gdelt-doc-search", 0) and not any(
+    has_doc_rows = by_skill.get("fetch-gdelt-doc-search", 0)
+    has_doc_tone = any(public_discourse_lane(signal) == "gdelt_doc_tone_aggregate" for signal in signals)
+    has_row_tone = any(
         by_skill.get(skill_name, 0)
         for skill_name in ("fetch-gdelt-events", "fetch-gdelt-mentions", "fetch-gdelt-gkg")
-    ):
+    )
+    if has_doc_rows and not has_doc_tone and not has_row_tone:
         warnings.append(
             {
                 "code": "gdelt-row-layer-not-materialized",
-                "message": "GDELT DOC rows exist, but Events/Mentions/GKG row layers are absent; media tone coverage is incomplete.",
+                "message": "GDELT DOC recon rows exist, but neither DOC tone aggregates nor Events/Mentions/GKG row layers are materialized; media/document tone coverage is incomplete.",
             }
         )
     if not any(by_skill.get(skill_name, 0) for skill_name in SOCIAL_SAMPLE_AFFECT_SKILLS):
@@ -1481,25 +1507,27 @@ def _public_discourse_missing_layer_handoff(
     if "gdelt-row-layer-not-materialized" in warning_codes:
         missing_layers.append(
             {
-                "layer_id": "gdelt-events-mentions-gkg",
+                "layer_id": "gdelt-doc-tone-or-events-mentions-gkg",
                 "gap_code": "gdelt-row-layer-not-materialized",
-                "missing_object_kind": "normalized-gdelt-row-signal",
-                "blocked_discourse_lane": "gdelt_media_tone_detail",
+                "missing_object_kind": "normalized-gdelt-tone-signal",
+                "blocked_discourse_lane": "gdelt_doc_tone_aggregate_or_gdelt_media_tone",
                 "prerequisite_source_skills": ["fetch-gdelt-doc-search"],
                 "candidate_fetch_skills": [
+                    "fetch-gdelt-doc-search",
                     "fetch-gdelt-events",
                     "fetch-gdelt-mentions",
                     "fetch-gdelt-gkg",
                 ],
                 "candidate_normalize_skills": [
+                    "normalize-gdelt-doc-public-signals",
                     "normalize-gdelt-events-public-signals",
                     "normalize-gdelt-mentions-public-signals",
                     "normalize-gdelt-gkg-public-signals",
                 ],
                 "required_configuration": [],
                 "council_handoff": (
-                    "Submit or approve source-acquisition proposals for GDELT row layers "
-                    "before treating GDELT tone coverage as complete."
+                    "Submit or approve source-acquisition proposals for DOC timelinetone/tonechart "
+                    "or GDELT Events/Mentions/GKG row layers before treating GDELT tone coverage as complete."
                 ),
             }
         )

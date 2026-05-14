@@ -9,7 +9,12 @@ This skill operates on GDELT's query API layer, not raw table file exports.
 - Retrieval styles via `mode`:
   - Article lists (for example `artlist`)
   - Timelines (for example `timelinevol`, `timelinevolraw`, `timelinetone`)
+  - Tone distributions (for example `tonechart`)
   - Other DOC modes documented by GDELT
+- DOC tone query/sort surfaces:
+  - Query operators such as `tone>5`, `tone<-5`, and `toneabs>10`
+  - Sorting such as `sort=toneasc` or `sort=tonedesc`
+  - These are media/document tone cues, not public-response sentiment.
 
 ## What This Skill Does Not Use
 

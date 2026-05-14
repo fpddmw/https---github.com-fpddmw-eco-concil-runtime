@@ -40,6 +40,7 @@ SECTION_TITLES = {
         "key-points": "Key Takeaways",
         "what-happened": "Narrative Account",
         "evidence-basis": "How The Evidence Fits",
+        "public-discourse-deepening": "Public Discourse Addendum",
         "council-reasoning": "How The Council Closed",
         "limitations": "What Remains Unproven",
         "decision-implications": "Decision Use",
@@ -52,6 +53,7 @@ SECTION_TITLES = {
         "key-points": "一页要点",
         "what-happened": "事情如何发展",
         "evidence-basis": "证据链如何支撑判断",
+        "public-discourse-deepening": "公共舆情深化补充",
         "council-reasoning": "议会为什么收口",
         "limitations": "还不能证明什么",
         "decision-implications": "决策使用建议",
@@ -289,6 +291,17 @@ def load_json_if_exists(path: Path) -> dict[str, Any]:
         return {}
     payload = json.loads(path.read_text(encoding="utf-8"))
     return payload if isinstance(payload, dict) else {}
+
+
+def load_optional_json_path(run_dir: Path, path_text: str, default_relative: str = "") -> tuple[Path | None, dict[str, Any]]:
+    if maybe_text(path_text):
+        path = resolve_path(run_dir, path_text, default_relative or maybe_text(path_text))
+    elif maybe_text(default_relative):
+        path = resolve_path(run_dir, "", default_relative)
+    else:
+        return None, {}
+    payload = load_json_if_exists(path)
+    return (path, payload) if payload else (None, {})
 
 
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
@@ -788,6 +801,142 @@ def build_en_evidence_chain(
     return unique_texts(paragraphs)
 
 
+def count_lookup(items: list[Any], key_name: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        key = maybe_text(item.get(key_name))
+        if key:
+            counts[key] = int(item.get("signal_count") or 0)
+    return counts
+
+
+PUBLIC_LABELS_ZH = {
+    "concern-or-alarm": "担忧/警觉",
+    "information-seeking": "信息求助/询问",
+    "health-risk-or-air-safety": "健康风险或空气安全",
+    "protective-behavior": "防护行为",
+    "regional-wildfire-smoke": "区域野火烟雾",
+}
+
+
+def public_label(label_text: str, language: str) -> str:
+    if is_zh(language):
+        return PUBLIC_LABELS_ZH.get(label_text, label_text)
+    return label_text
+
+
+def distribution_phrase(items: list[Any], *, language: str, max_items: int = 3) -> str:
+    parts: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        label_text = maybe_text(item.get("label"))
+        count = item.get("annotated_signal_count")
+        if not label_text or not isinstance(count, int):
+            continue
+        if is_zh(language):
+            parts.append(f"{public_label(label_text, language)} {count} 条")
+        else:
+            parts.append(f"{public_label(label_text, language)} {count} items")
+    return "、".join(parts[:max_items])
+
+
+def public_tone_metric_label(metric: str, language: str) -> str:
+    if not is_zh(language):
+        return metric
+    return {
+        "avg_tone": "GDELT Events AvgTone",
+        "mention_doc_tone": "GDELT Mentions 文档 tone",
+        "v2_tone": "GDELT GKG V2Tone",
+        "doc_timeline_tone": "GDELT DOC TimelineTone",
+        "doc_tonechart_count": "GDELT DOC ToneChart 桶内文章数",
+    }.get(metric, metric)
+
+
+def build_public_discourse_addendum(
+    *,
+    summary: dict[str, Any],
+    summary_path: Path | None,
+    language: str,
+) -> dict[str, Any]:
+    if not summary:
+        return {}
+    sample_count = int(summary.get("sample_count") or 0)
+    source_skill_counts = count_lookup(list_items(summary.get("source_skill_counts")), "source_skill")
+    lane_counts = count_lookup(list_items(summary.get("discourse_lane_counts")), "discourse_lane")
+    gdelt_tone = list_items(summary.get("gdelt_media_tone_summary"))
+    affect = list_items(summary.get("social_affect_distribution"))
+    issues = list_items(summary.get("issue_distribution"))
+    narratives = list_items(summary.get("source_narrative_distribution"))
+    refs = [f"{summary_path}:$"] if summary_path else []
+    refs.extend(unique_texts([ref for ref in list_items(summary.get("evidence_refs"))])[:8])
+    if is_zh(language):
+        paragraphs = [
+            (
+                "本报告将新增的公共舆情摘要作为样本内舆情深化补充，而不是作为总体民意结论。"
+                f"它汇总了 {sample_count} 条已归一化公共语料："
+                f"GDELT 公共记录 {source_skill_counts.get('fetch-gdelt-doc-search', 0) + source_skill_counts.get('fetch-gdelt-events', 0) + source_skill_counts.get('fetch-gdelt-mentions', 0) + source_skill_counts.get('fetch-gdelt-gkg', 0)} 条，"
+                f"其中 DOC 检索线索 {lane_counts.get('gdelt_doc_recon', 0)} 条、DOC 聚合语气信号 {lane_counts.get('gdelt_doc_tone_aggregate', 0)} 条、Events/Mentions/GKG 数值语气行 {lane_counts.get('gdelt_media_tone', 0)} 条；"
+                f"YouTube 公共样本 {source_skill_counts.get('fetch-youtube-video-search', 0) + source_skill_counts.get('fetch-youtube-comments', 0)} 条，"
+                f"其中视频可见性 {lane_counts.get('public_visibility', 0)} 条、评论表达样本 {lane_counts.get('social_sample_affect', 0)} 条。"
+            ),
+            (
+                "在由 agent 编写的候选标注基础上，样本内可见的公众表达主要包括："
+                f"{distribution_phrase(affect, language=language) or '未形成可用 affect 分布'}；"
+                f"议题线索主要包括：{distribution_phrase(issues, language=language) or '未形成可用 issue 分布'}。"
+                "这些数字描述的是被标注样本内部，不是纽约公众或全平台用户的比例。"
+            ),
+            (
+                f"来源叙事方面，候选标注记录了：{distribution_phrase(narratives, language=language, max_items=2) or '未形成可用来源叙事分布'}，"
+                "且该叙事同时出现在 GDELT DOC 检索线索层、GDELT 数值语气层和 YouTube 评论样本中。"
+                "这可以作为社会线索说明公共文本如何谈论来源，但不能替代环境线的物理归因验证。"
+            ),
+        ]
+        if gdelt_tone:
+            tone_parts = [
+                f"{public_tone_metric_label(maybe_text(item.get('metric')), language)} 平均 {item.get('average_value')}"
+                for item in gdelt_tone
+                if isinstance(item, dict) and maybe_text(item.get("metric"))
+            ]
+            paragraphs.append(
+                "GDELT tone 摘要可用于描述媒体/公共记录语气："
+                + "、".join(tone_parts[:3])
+                + "。这些是媒体/文档语气，不是公众情绪。"
+            )
+        paragraphs.append(
+            "因此，公共讨论线可以从“公开视频可见性”深化为“公共可见性 + 样本内健康风险/防护/信息求助与来源叙事线索”。"
+            "但报告主结论不应升级：仍不能声称代表性公众情绪比例，也不能用舆情来源叙事证明具体火场来源。"
+        )
+        status = "advisory-addendum"
+    else:
+        paragraphs = [
+            (
+                "The supplied public discourse summary can enter the report only as a sample-local addendum. "
+                f"It summarizes {sample_count} normalized public-discourse records across GDELT public records and YouTube public-discourse samples."
+            ),
+            (
+                f"Candidate annotations show sample-local affect cues such as {distribution_phrase(affect, language=language) or 'no usable affect distribution'} "
+                f"and issue cues such as {distribution_phrase(issues, language=language) or 'no usable issue distribution'}. "
+                "These are annotated-sample descriptors, not population estimates."
+            ),
+            (
+                "The addendum may deepen the public-discourse lane from visibility-only to sample-local issue, affect, and source-narrative cues, "
+                "but it must not strengthen source attribution or public-opinion claims."
+            ),
+        ]
+        status = "advisory-addendum"
+    return section(
+        "public-discourse-deepening",
+        label("public-discourse-deepening", language),
+        paragraphs,
+        refs,
+        status=status,
+        language=language,
+    )
+
+
 def build_zh_closure_narrative(*, synthesis_line: str, readiness_lines: list[str]) -> list[str]:
     paragraphs = [
         (
@@ -839,6 +988,7 @@ def draft_narrative_report(
     markdown_output_path: str = "",
     title: str = "",
     language: str = "en",
+    public_discourse_summary_path: str = "",
     max_items: int = 12,
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
@@ -846,6 +996,11 @@ def draft_narrative_report(
     output_file = resolve_path(run_dir_path, output_path, f"reporting/narrative_report_draft_{round_id}.json")
     markdown_file = resolve_path(run_dir_path, markdown_output_path, f"reporting/narrative_report_draft_{round_id}.md")
     report_language = normalize_language(language)
+    public_summary_path, public_summary = load_optional_json_path(
+        run_dir_path,
+        public_discourse_summary_path,
+        f"analytics/public_discourse_sample_summary_{round_id}.json" if maybe_text(public_discourse_summary_path) else "",
+    )
     reporting_basis = load_reporting_basis(run_dir_path, resolved_basis_round_id)
     object_sets = council_basis_objects(
         run_dir_path,
@@ -871,6 +1026,7 @@ def draft_narrative_report(
             *[row["ref"] for row in object_rows if row.get("ref")],
             *[ref for row in reporting_basis for ref in row.get("evidence_refs", [])],
             *[ref for row in object_rows for ref in row.get("evidence_refs", [])],
+            *([f"{public_summary_path}:$"] if public_summary_path and public_summary else []),
         ]
     )
     decision_lines = [
@@ -1078,6 +1234,11 @@ def draft_narrative_report(
             "The public-discourse evidence shows visible contemporaneous records, not representative public sentiment.",
             "The report is usable as a bounded synthesis, but stronger attribution or policy claims would require further investigation.",
         ]
+    public_discourse_addendum = build_public_discourse_addendum(
+        summary=public_summary,
+        summary_path=public_summary_path,
+        language=report_language,
+    )
     sections = [
         section(
             "executive-summary",
@@ -1140,6 +1301,7 @@ def draft_narrative_report(
             refs_from_rows([*positions, *findings, *bundles, *readinesses], fallback=all_refs[:8]),
             language=report_language,
         ),
+        *([public_discourse_addendum] if public_discourse_addendum else []),
         section(
             "council-reasoning",
             label("council-reasoning", report_language),
@@ -1175,6 +1337,7 @@ def draft_narrative_report(
         round_id,
         resolved_basis_round_id,
         report_language,
+        public_summary_path,
         all_refs[:10],
     )[:12]
     draft = {
@@ -1227,6 +1390,12 @@ def draft_narrative_report(
         "source_material": {
             "reporting_artifacts": reporting_basis,
             "council_object_counts": {kind: len(rows) for kind, rows in object_sets.items()},
+            "public_discourse_summary": {
+                "path": str(public_summary_path) if public_summary_path else "",
+                "summary_id": maybe_text(public_summary.get("summary_id")) if public_summary else "",
+                "status": maybe_text(public_summary.get("status")) if public_summary else "",
+                "advisory_only": bool(public_summary),
+            },
         },
         "audit_refs": all_refs,
         "validation_status": "not-validated",
@@ -1280,6 +1449,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--markdown-output-path", default="")
     parser.add_argument("--title", default="")
     parser.add_argument("--language", default="en")
+    parser.add_argument("--public-discourse-summary-path", default="")
     parser.add_argument("--max-items", type=int, default=12)
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()
@@ -1296,6 +1466,7 @@ def main() -> int:
         markdown_output_path=args.markdown_output_path,
         title=args.title,
         language=args.language,
+        public_discourse_summary_path=args.public_discourse_summary_path,
         max_items=args.max_items,
     )
     print(pretty_json(payload, args.pretty))

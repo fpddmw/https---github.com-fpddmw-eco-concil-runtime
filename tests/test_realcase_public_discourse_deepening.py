@@ -97,7 +97,11 @@ class RealcasePublicDiscourseDeepeningTests(unittest.TestCase):
             self.assertEqual(51, source_skill_counts["fetch-gdelt-doc-search"])
             self.assertEqual(25, source_skill_counts["fetch-youtube-video-search"])
             lane_counts = count_by(corpus_artifact["discourse_lane_counts"], "discourse_lane")
-            self.assertEqual(51 + gdelt_row_layer_count, lane_counts["gdelt_media_tone"])
+            self.assertEqual(51, lane_counts["gdelt_doc_recon"])
+            if gdelt_row_layer_count:
+                self.assertEqual(gdelt_row_layer_count, lane_counts["gdelt_media_tone"])
+            else:
+                self.assertNotIn("gdelt_media_tone", lane_counts)
             self.assertEqual(25, lane_counts["public_visibility"])
             if youtube_comment_count:
                 self.assertEqual(youtube_comment_count, lane_counts["social_sample_affect"])

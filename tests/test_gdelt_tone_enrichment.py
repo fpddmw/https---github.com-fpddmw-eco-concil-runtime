@@ -68,6 +68,104 @@ def write_gkg_fixture(root: Path) -> Path:
 
 
 class GdeltToneEnrichmentTests(unittest.TestCase):
+    def test_doc_normalizer_preserves_timelinetone_and_tonechart_as_media_tone(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            timeline_path = root / "doc_timelinetone.json"
+            tonechart_path = root / "doc_tonechart.json"
+            write_json(
+                timeline_path,
+                {
+                    "query_details": {"title": "wildfire smoke", "date_resolution": "15m"},
+                    "timeline": [
+                        {
+                            "series": "Average Tone",
+                            "data": [
+                                {"date": "20230607T170000Z", "value": -4.25},
+                                {"date": "20230607T171500Z", "value": "-3.75"},
+                            ],
+                        }
+                    ],
+                },
+            )
+            write_json(
+                tonechart_path,
+                {
+                    "query_details": {"title": "wildfire smoke"},
+                    "tonechart": [
+                        {
+                            "bin": -5,
+                            "count": 12,
+                            "toparts": [{"url": "https://example.com/a", "title": "Smoke article"}],
+                        }
+                    ],
+                },
+            )
+
+            timeline_payload = run_script(
+                script_path("normalize-gdelt-doc-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(timeline_path),
+            )
+            tonechart_payload = run_script(
+                script_path("normalize-gdelt-doc-public-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(tonechart_path),
+            )
+
+            self.assertEqual("completed", timeline_payload["status"])
+            self.assertEqual(2, timeline_payload["summary"]["signal_count"])
+            self.assertEqual("completed", tonechart_payload["status"])
+            self.assertEqual(1, tonechart_payload["summary"]["signal_count"])
+
+            with sqlite3.connect(analytics_path(run_dir, "signal_plane.sqlite")) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    """
+                    SELECT signal_kind, metric, numeric_value, observed_at_utc, metadata_json
+                    FROM normalized_signals
+                    WHERE run_id = ? AND round_id = ? AND source_skill = 'fetch-gdelt-doc-search'
+                    ORDER BY signal_kind, observed_at_utc
+                    """,
+                    (RUN_ID, ROUND_ID),
+                ).fetchall()
+
+            self.assertEqual(3, len(rows))
+            timeline_rows = [row for row in rows if row["metric"] == "doc_timeline_tone"]
+            self.assertEqual(2, len(timeline_rows))
+            self.assertEqual(-4.25, timeline_rows[0]["numeric_value"])
+            self.assertEqual("2023-06-07T17:00:00Z", timeline_rows[0]["observed_at_utc"])
+            timeline_metadata = json.loads(timeline_rows[0]["metadata_json"])
+            self.assertEqual("gdelt_doc_tone_aggregate", timeline_metadata["gdelt_doc_kind"])
+            self.assertEqual("gdelt_media_tone", timeline_metadata["gdelt_tone_kind"])
+            self.assertEqual(
+                "media_or_document_tone_not_public_response_sentiment",
+                timeline_metadata["tone_semantics"],
+            )
+
+            tonechart_row = next(row for row in rows if row["metric"] == "doc_tonechart_count")
+            tonechart_metadata = json.loads(tonechart_row["metadata_json"])
+            self.assertEqual(12, tonechart_row["numeric_value"])
+            self.assertEqual("gdelt_doc_tone_distribution", tonechart_metadata["gdelt_doc_kind"])
+            self.assertEqual(-5.0, tonechart_metadata["tone_bin"])
+            self.assertEqual(
+                "GDELT DOC tone bucket; numeric_value is article count, not tone value",
+                tonechart_metadata["tone_bin_semantics"],
+            )
+
     def test_gkg_normalizer_preserves_v2_tone_parts_as_media_tone(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

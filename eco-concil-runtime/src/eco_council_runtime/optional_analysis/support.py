@@ -73,6 +73,7 @@ OPTIONAL_ANALYSIS_RULE_IDS: dict[str, str] = {
     "identify-representation-audit-cues": "HEUR-REPRESENTATION-AUDIT-001",
     "materialize-public-discourse-corpus": "HEUR-PUBLIC-DISCOURSE-CORPUS-001",
     "audit-public-discourse-sample-coverage": "HEUR-PUBLIC-DISCOURSE-COVERAGE-001",
+    "classify-public-discourse-affect": "HEUR-PUBLIC-DISCOURSE-AFFECT-ANNOTATION-001",
     "aggregate-public-discourse-annotations": "HEUR-PUBLIC-DISCOURSE-ANNOTATION-001",
     "compare-public-media-narratives": "HEUR-PUBLIC-MEDIA-NARRATIVE-COMPARE-001",
     "summarize-public-discourse-sample": "HEUR-PUBLIC-DISCOURSE-SUMMARY-001",

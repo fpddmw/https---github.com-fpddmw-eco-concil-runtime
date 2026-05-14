@@ -126,7 +126,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     },
     {
         "role": ROLE_SOCIAL_INVESTIGATOR,
-        "focus": "Fetch, normalize, query, and analyze public discourse, community, formal record, and policy evidence, then return evidence-backed findings or proposals.",
+        "focus": "Fetch, normalize, query, and analyze public discourse, community, formal record, and policy evidence. For affect/stance labels, use bounded annotation-worker artifacts and own sample/basis/uptake rather than personally authoring every label.",
         "read_skills": [
             "query-board-delta",
             "query-public-signals",
@@ -148,7 +148,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     },
     {
         "role": ROLE_CHALLENGER,
-        "focus": "Surface contradiction pressure, open challenge/probe work, and submit counter-findings without owning phase transitions.",
+        "focus": "Surface contradiction pressure, open challenge/probe work, and submit counter-findings without owning phase transitions. For public-discourse labels, review sample boundaries, taxonomy fit, ambiguous clusters, outliers, and report wording rather than relabeling every item.",
         "read_skills": [
             "query-board-delta",
             "query-public-signals",

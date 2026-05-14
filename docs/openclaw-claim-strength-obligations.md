@@ -54,8 +54,8 @@ Unsupported upgrades include:
 
 1. Treating YouTube, Bluesky, GDELT, or Regulations.gov samples as general public
    opinion without an explicit representative design.
-2. Treating GDELT `AvgTone`, `MentionDocTone`, `V2Tone`, DOC `timelinetone`, or
-   GCAM cues as public sentiment.
+2. Treating GDELT `AvgTone`, `MentionDocTone`, `V2Tone`, DOC `timelinetone`,
+   DOC `tonechart`, `tone` / `toneabs`, or GCAM cues as public sentiment.
 3. Treating public source narratives as physical source attribution.
 4. Treating zero or sparse public-signal output as proof that a concern or
    narrative is absent.
@@ -63,7 +63,7 @@ Unsupported upgrades include:
 When a report needs stronger language, the council should keep three lanes
 separate:
 
-1. `gdelt_media_tone`: media/document tone.
+1. `gdelt_media_tone` / `gdelt_doc_tone_aggregate`: media/document tone.
 2. `social_sample_affect`: sample-level public expression from comments/posts.
 3. `physical_source_attribution`: environmental evidence for actual origin or
    transport claims.

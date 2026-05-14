@@ -22,8 +22,9 @@ description: Optional-analysis helper for summarizing a public discourse sample 
   outputs and DB refs, but it does not create findings, evidence bundles,
   readiness decisions, or report-basis objects.
 - Keep sample boundaries visible: YouTube/Bluesky affect is sample-local, GDELT
-  tone is media/document tone, formal comments are policy-record samples, and
-  physical source attribution belongs to the environmental evidence lane.
+  DOC tone aggregates and row-level tone are media/document tone, formal
+  comments are policy-record samples, and physical source attribution belongs to
+  the environmental evidence lane.
 - A council agent must cite the returned refs in a finding, evidence bundle,
   challenge, readiness opinion, or synthesis before downstream use.
 

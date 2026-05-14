@@ -35,30 +35,35 @@ NYC smoke 实案报告目前只能稳妥说明：
 | --- | --- | --- | --- |
 | YouTube 视频与评论 | `fetch-youtube-video-search`、`fetch-youtube-comments`、`normalize-youtube-video-public-signals`、`normalize-youtube-comments-public-signals` | 视频候选、评论反应、样本内情绪和问题表达 | 不是公开视频宇宙，也不是公众总体样本；comment-disabled、选择视频、时间窗都会影响结果 |
 | Bluesky 讨论链 | `fetch-bluesky-cascade`、`normalize-bluesky-cascade-public-signals` | 社交讨论、回复语义、扩散链条、平台内叙事 | 搜索高度依赖 query / mode / access；不能代表总体社媒 |
-| GDELT 新闻/公共记录 | `fetch-gdelt-doc-search`、`fetch-gdelt-events`、`fetch-gdelt-mentions`、`fetch-gdelt-gkg` 及对应 normalizer | 媒体叙事、新闻时间线、官方/媒体用语、来源假说发现 | GDELT DOC 是 recon，不是完整主表；新闻叙事不是公众意见比例 |
+| GDELT 新闻/公共记录 | `fetch-gdelt-doc-search`、`fetch-gdelt-events`、`fetch-gdelt-mentions`、`fetch-gdelt-gkg` 及对应 normalizer | 媒体叙事、新闻时间线、官方/媒体用语、来源假说发现、DOC 级 tone 聚合 | GDELT DOC `artlist` 是 recon；DOC `timelinetone` / `tonechart` 是聚合 tone；Events/Mentions/GKG 是行级 tone；新闻叙事不是公众意见比例 |
 | Regulations.gov 正式评论 | `fetch-regulationsgov-comments`、`fetch-regulationsgov-comment-detail` 及对应 normalizer | 政策/规制议题中的正式公众评论、提交人类型、政策 concern | 对即时公共事件通常不适用，除非 mission 转向政策 docket |
 
-NYC smoke 当前 run 中已有 GDELT DOC article 和 YouTube video 信号，但缺少 YouTube comments / Bluesky 这类可直接分析公众语义的文本样本。因此现有报告只能写“公共可见性”，不能写“情绪分布”。
+NYC smoke 当前 run 已补充 GDELT Events / Mentions / GKG 行级层和 YouTube comments，可用于样本内公共舆情深化验证；Bluesky 和 Regulations.gov 在该真实案例中未观察到样本。报告仍只能写“样本内表达/叙事线索”，不能写“公众总体情绪分布”。
 
 ### 3.2 GDELT Tone 现状与边界
 
-GDELT 已经提供情感极性或语气相关字段，当前项目也已有部分归一化支持，但尚未形成完整的舆情分析能力：
+GDELT 已经提供情感极性或语气相关字段，当前项目已完成一版归一化增强，但这些字段仍只能作为媒体/公共记录 tone cue：
 
-1. `normalize-gdelt-events-public-signals`
+1. `normalize-gdelt-doc-public-signals`
+   - 对 `artlist` / `articles` 输出写入 `gdelt_doc_kind="gdelt_doc_recon"`，不生成数值 tone。
+   - 对 DOC `timelinetone` 输出写入 `metric="doc_timeline_tone"` 和 `numeric_value=<Average Tone>`，并标记为 `gdelt_doc_tone_aggregate`。
+   - 对 DOC `tonechart` 输出写入 `metric="doc_tonechart_count"` 和 `numeric_value=<article count>`，在 metadata 中保留 `tone_bin`；这里的 `numeric_value` 是该 tone 桶内文章数，不是 tone 值本身。
+   - DOC query 支持 `tone>5`、`tone<-5`、`toneabs>10` 等 operator，也支持 `sort=toneasc/tonedesc`；这些仍是媒体/文档 tone，不是公众情绪。
+2. `normalize-gdelt-events-public-signals`
    - 读取 `AvgTone`。
    - 写入 `metric="avg_tone"` 和 `numeric_value=<AvgTone>`。
    - 语义是事件相关报道集合的平均 tone。
-2. `normalize-gdelt-mentions-public-signals`
+3. `normalize-gdelt-mentions-public-signals`
    - 读取 `MentionDocTone`。
    - 写入 `metric="mention_doc_tone"` 和 `numeric_value=<MentionDocTone>`。
    - 语义是 mention 所在文档的 tone。
-3. `normalize-gdelt-gkg-public-signals`
+4. `normalize-gdelt-gkg-public-signals`
    - 读取 `V2Tone`。
-   - 当前只抽取第一个 tone score，写入 `metric="v2_tone"` 和 `numeric_value=<tone>`。
-   - 尚未拆出 `positive score`、`negative score`、`polarity`、`activity density`、`self/group reference density`、`word count` 等 `V2Tone` 分量。
-   - 尚未解析或结构化 `GCAM` 的更细情绪/心理维度。
+   - 写入 `metric="v2_tone"` 和 `numeric_value=<tone>`。
+   - 已在 metadata 中拆出 `positive score`、`negative score`、`polarity`、`activity density`、`self/group reference density`、`word count` 等 `V2Tone` 分量。
+   - 已解析并结构化保留 `GCAM` 的可审计情绪/心理维度 cue。
 
-因此，当前 GDELT normalizers 不是完全没有情感字段，而是只保留了最低限度的 tone 数值。后续公共舆情深化应把 GDELT tone 作为 `media/public-record narrative tone`，不能把它直接当成 `public response sentiment`。
+因此，当前 GDELT normalizers 已具备 DOC 聚合 tone 与 Events / Mentions / GKG 行级 tone 的初步能力；后续公共舆情深化仍必须把 GDELT tone 作为 `media/public-record narrative tone`，不能把它直接当成 `public response sentiment`。GDELT DOC Search 的 `artlist` 是 recon 层；DOC `timelinetone` / `tonechart` 是聚合层；Events / Mentions / GKG 是行级层。
 
 GDELT tone 的正确用途：
 
@@ -102,12 +107,15 @@ GDELT tone 不应单独用于：
    - 判断是否需要 continuation round，或是否在当前主调查轮内继续深化。
 2. `social-investigator`
    - 自主选择公共/正式信源，提交 source acquisition proposals。
-   - 查询 normalized signals，生成样本内语义 finding。
+   - 查询 normalized signals，确定语料样本和 annotation basis。
+   - 调用/承接 bounded annotation worker 输出，并决定哪些样本内分布可提交议会。
+   - 不作为逐条情感极性标签作者。
 3. `environmental-investigator`
    - 对“公共叙事中的来源假说”进行物理证据验证。
    - 不让舆论归因替代环境归因。
 4. `challenger`
    - 审查样本外推、分类 taxonomy、误入样本、平台覆盖和结论措辞。
+   - 默认不逐条复核全部情感标签；只对争议样本、ambiguous clusters、outliers、报告引用样本或强结论依据做局部复核。
 5. `report-editor`
    - 只在 frozen basis 允许的边界内写入样本内结果。
 
@@ -145,16 +153,19 @@ GDELT tone 不应单独用于：
 2. `audit-public-discourse-sample-coverage`
    - 输出样本覆盖审计。
    - 记录抓取失败、zero rows、comment-disabled、blocked、filter 过窄、source-family 缺口等。
-3. `enrich-gdelt-tone-signals`
+3. `classify-public-discourse-affect`
+   - bounded annotation worker；对已 materialized corpus 生成 item-level affect / issue / source narrative / actor responsibility / action orientation labels。
+   - 不写 finding，不判断总体民意，不做物理归因。
+4. `enrich-gdelt-tone-signals`
    - 或直接扩展 GDELT normalizers。
    - 拆解 `AvgTone`、`MentionDocTone`、`V2Tone` 分量，并尽量保留结构化 `GCAM` cue。
-4. `aggregate-public-discourse-annotations`
-   - 汇总 agent 或 approved taxonomy 生成的 item-level annotations。
+5. `aggregate-public-discourse-annotations`
+   - 汇总 annotation worker、agent-authored annotations 或 approved taxonomy 生成的 item-level annotations。
    - 输出样本内 issue / affect / source narrative / actor responsibility / action orientation 分布。
-5. `compare-public-media-narratives`
+6. `compare-public-media-narratives`
    - 比较 social sample affect、GDELT media tone、formal public comments 的叙事差异。
    - 只输出对照线索和 evidence refs，不生成采信结论。
-6. `summarize-public-discourse-sample`
+7. `summarize-public-discourse-sample`
    - 面向议会和报告的汇总出口。
    - 读取 corpus、coverage、annotation aggregation、GDELT tone 和 cross-source comparison 结果。
 
@@ -194,7 +205,7 @@ GDELT tone 不应单独用于：
 
 ### 4.4 Taxonomy / Annotation 边界
 
-第一版不应使用全局默认 sentiment taxonomy。应采用 mission-scoped taxonomy 或 agent-authored annotation basis。
+情感极性标签不应由 `social-investigator` 逐条手写，也不应由 fetch/normalize skill 生成。应采用 bounded annotation worker，并使用 mission-scoped taxonomy 或 worker-declared annotation basis。`social-investigator` 负责选择样本、确认 basis、解释采信边界；worker 负责 item-level 标签；aggregation skill 只聚合标签。
 
 建议第一版标签族：
 
@@ -249,23 +260,52 @@ GDELT tone 不应单独用于：
 报告和 finding 必须显式区分：
 
 1. `gdelt_media_tone`
-   - 来源：GDELT Events / Mentions / GKG / DOC timelinetone。
+   - 来源：GDELT Events / Mentions / GKG 等行级 tone。
    - 描述对象：媒体报道、文档、公共记录的语气和叙事框架。
    - 允许说：新闻样本 tone 偏负/偏正/波动，报道叙事集中在某些主题。
-2. `social_sample_affect`
+2. `gdelt_doc_tone_aggregate`
+   - 来源：GDELT DOC Search 的 `tone` / `toneabs` 查询、`timelinetone`、`tonechart`、tone 排序。
+   - 描述对象：媒体报道、文档、公共记录的语气和叙事框架。
+   - 允许说：DOC 检索集合的平均 tone 时间变化、tone 桶分布、极端 tone 文章线索。
+   - 禁止说：公众情绪比例、社交平台情绪、事实归因。
+3. `social_sample_affect`
    - 来源：YouTube comments、Bluesky posts/replies、formal public comments 等文本样本。
    - 描述对象：样本内公众表达。
    - 允许说：样本内担忧、愤怒、信息求助、讽刺等标签的计数或比例。
-3. `source_narrative`
+4. `source_narrative`
    - 来源：GDELT、YouTube、Bluesky、formal comments 中出现的来源叙事。
    - 描述对象：文本如何解释或指称来源。
    - 允许说：样本内哪些来源叙事反复出现。
-4. `physical_source_attribution`
+5. `physical_source_attribution`
    - 来源：环境证据、轨迹、烟羽、火点、气象、受体观测等。
    - 描述对象：现实物理来源。
    - 必须由环境线验证，不能由 public discourse lane 独立给出强归因。
 
-### 4.6 Claim Strength 约束
+### 4.6 非 GDELT 情感/立场判断机制
+
+脱离 GDELT 后，fetch / normalize skill 不应直接判断情感极性。它们只负责保留文本、时间、作者/频道、平台、父子回复关系、engagement、source URL 和可追溯 artifact refs。情感、立场和议题分类应进入 optional-analysis 层，由 bounded annotation worker 生成 item-level labels，再由 agent 依据样本和任务边界采信：
+
+1. YouTube comments 与 Bluesky posts/replies
+   - 可作为 `social_sample_affect` 的主要文本样本。
+   - 推荐先由 `materialize-public-discourse-corpus` 固化样本，再由 `classify-public-discourse-affect` 生成 annotation artifact。
+   - `aggregate-public-discourse-annotations` 只聚合 worker / approved taxonomy / agent-authored 标签，不判断情绪。
+   - 可用标签族包括 `affect_labels`、`issue_facets`、`source_narrative_labels`、`actor_responsibility_labels`、`action_orientation_labels`。
+2. Regulations.gov comments / detail
+   - 更适合分析政策 concern、support/oppose、action orientation、issue facets 和提交人类型。
+   - 不应简单套用“正面/负面情绪”；如果评论明确表达支持或反对，应作为 stance/action orientation 处理。
+3. YouTube video search
+   - 更适合做公开视频可见性和候选视频发现。
+   - 标题/描述可作为 framing cue，但不能替代 comments 的公众表达样本。
+4. 非 GDELT 的极性输出
+   - 项目默认不生成全局 scalar sentiment score。
+   - 如 mission 需要“情感极性”，应在 annotation basis 中显式声明本轮 taxonomy，例如 `concern/alarm/frustration/anger/fear`、`neutral-information-seeking`、`support/relief/appreciation`、`humor/sarcasm`、`uncertain/ambiguous`。
+   - 讽刺、玩梗和转述必须单独标记，不得自动并入正面或负面。
+5. 治理边界
+   - 所有比例只能称为“样本内比例”。
+   - Challenger 应检查样本边界、平台偏差、查询偏差、语言偏差、taxonomy fit、ambiguous clusters、outlier examples 和报告措辞；不默认逐条复核全部标签。
+   - Moderator 只有在 annotation basis、coverage audit 和 sample summary 都被议会对象承接后，才应把舆情深化内容纳入 report basis。
+
+### 4.7 Claim Strength 约束
 
 允许的表述：
 
@@ -310,46 +350,48 @@ GDELT tone 不应单独用于：
 1. Moderator 请求普通 `open-investigation-round`。
 2. `primary_focus_refs` 指向相关 finding / report limitation / challenge。
 3. `round_mode` 仍可为 `continuation`，不新增 `sentiment-round`。
-4. 新轮中 social-investigator 负责深化公共文本样本。
+4. 新轮中 social-investigator 负责深化公共文本样本，并通过 annotation worker 生成样本内标签。
 5. 若出现物理来源假说，environmental-investigator 同步验证。
 
 ## 6. 实施阶段
 
-### P1：GDELT Tone Enrichment
+### P1：GDELT Tone Enrichment（初步完成）
 
-1. 扩展 GDELT GKG normalizer，完整拆解 `V2Tone` 分量。
-2. 在 metadata 中保留结构化 tone parts，例如 tone、positive、negative、polarity、activity density、self/group reference density、word count。
-3. 评估并结构化保留 `GCAM` 中可审计的情绪/心理维度 cue。
-4. 明确 `AvgTone`、`MentionDocTone`、`V2Tone` 属于 media/public-record tone，不属于 public response sentiment。
+1. 扩展 GDELT DOC normalizer，支持 `articles` / `artlist` recon、`timelinetone` 时间序列和 `tonechart` 分布桶。
+2. 扩展 GDELT GKG normalizer，完整拆解 `V2Tone` 分量。
+3. 在 metadata 中保留结构化 tone parts，例如 tone、positive、negative、polarity、activity density、self/group reference density、word count。
+4. 评估并结构化保留 `GCAM` 中可审计的情绪/心理维度 cue。
+5. 明确 DOC `timelinetone` / `tonechart`、`AvgTone`、`MentionDocTone`、`V2Tone` 属于 media/public-record tone，不属于 public response sentiment。
 
-### P2：公共文本样本 Corpus 与 Coverage Audit
+### P2：公共文本样本 Corpus 与 Coverage Audit（初步完成）
 
 1. 新增 `materialize-public-discourse-corpus`。
 2. 新增 `audit-public-discourse-sample-coverage`。
 3. 支持 YouTube comments、Bluesky、GDELT DOC/GKG/Mentions/Events、Regulations.gov comments/detail 的 source-family 分组。
 4. 记录 source-family coverage、query/window、去重、误入样本、失败尝试和不可外推边界。
 
-### P3：Annotation Aggregation 与 Cross-Source Comparison
+### P3：Annotation Worker、Aggregation 与 Cross-Source Comparison（初步完成）
 
-1. 新增 `aggregate-public-discourse-annotations`。
-2. 支持 agent-authored annotation JSONL 或 approved mission taxonomy。
-3. 输出 issue / affect / source narrative / actor responsibility / action orientation 的样本内分布。
-4. 新增 `compare-public-media-narratives`，比较 GDELT media tone、social sample affect 和 formal comment footprint。
+1. 新增 `classify-public-discourse-affect`，作为 bounded annotation worker 生成样本内标签。
+2. 新增 `aggregate-public-discourse-annotations`。
+3. 支持 annotation worker artifact、agent-authored annotation JSONL 或 approved mission taxonomy。
+4. 输出 issue / affect / source narrative / actor responsibility / action orientation 的样本内分布。
+5. 新增 `compare-public-media-narratives`，比较 GDELT media tone、social sample affect 和 formal comment footprint。
 
-### P4：样本摘要与报告交接
+### P4：样本摘要与报告交接（初步完成）
 
 1. 新增 `summarize-public-discourse-sample`。
 2. 支持 DB-backed query、corpus artifact、coverage audit、annotation aggregation、GDELT tone summary 和 cross-source comparison 输入。
 3. 输出样本定义、分布、GDELT media tone、social sample affect、example refs、warnings、board handoff。
 4. 不写 deliberation conclusion，只写 optional-analysis artifact。
 
-### P5：议会对象承接
+### P5：议会对象承接（待议会流程承接）
 
 1. Social-investigator 把样本摘要写入 finding / evidence bundle。
 2. Challenger 对 finding 发起 challenge 或 readiness boundary。
 3. Moderator 在 synthesis 中记录是否继续深化或允许弱收口。
 
-### P6：真实案例回归
+### P6：真实案例回归（进行中）
 
 用 NYC smoke 作为第一轮验证：
 
@@ -360,4 +402,3 @@ GDELT tone 不应单独用于：
 5. 运行 corpus、coverage audit、annotation aggregation、cross-source comparison 和样本摘要。
 6. 检查是否能生成“样本内健康担忧/防护/来源叙事”和“媒体 tone / 公众样本 affect 分离”的有限结论。
 7. 检查 challenger 是否阻止外推成公众总体。
-

@@ -21,8 +21,9 @@ description: Optional-analysis helper for materializing a DB-backed public/forma
   DB-visible text rows were available under the supplied filters; it does not
   make a finding about public opinion or issue importance.
 - YouTube comments and Bluesky posts can support `social_sample_affect` only
-  within their sampled platform/query/window. GDELT rows belong to
-  `gdelt_media_tone` or public-record narrative context, not public sentiment.
+  within their sampled platform/query/window. GDELT DOC tone aggregates and
+  GDELT Events/Mentions/GKG rows belong to `gdelt_doc_tone_aggregate` or
+  `gdelt_media_tone`, not public sentiment.
 - Empty or narrow output can reflect missing fetches, unnormalized artifacts,
   source-family gaps, API limits, or filters. A council agent must carry useful
   refs into finding, evidence bundle, challenge, readiness, or synthesis before

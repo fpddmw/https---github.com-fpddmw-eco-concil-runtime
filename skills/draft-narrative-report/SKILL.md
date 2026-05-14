@@ -21,6 +21,7 @@ description: Draft a narrative decision-support report from existing council, re
 - Reads `run_dir/reporting/expert_report_*_<basis_round_id>.json` when present.
 - Reads `run_dir/report_basis/frozen_report_basis_<basis_round_id>.json` when present.
 - Reads DB-backed council objects for the basis round.
+- Optionally reads `run_dir/analytics/public_discourse_sample_summary_<round_id>.json` or an explicit public discourse summary path as an advisory addendum source.
 - Writes `run_dir/reporting/narrative_report_draft_<round_id>.json`.
 - Writes `run_dir/reporting/narrative_report_draft_<round_id>.md`.
 
@@ -34,6 +35,7 @@ description: Draft a narrative decision-support report from existing council, re
   - `markdown_output_path`
   - `title`
   - `language` (`en`, `zh-Hans`, `zh`, `zh-CN`, `中文`)
+  - `public_discourse_summary_path`
   - `max_items`
 
 ## Output Contract
@@ -83,6 +85,11 @@ description: Draft a narrative decision-support report from existing council, re
   can be used for, what it should not be used for, and what follow-up evidence
   would be needed for stronger claims. Do not invent policy advice that the
   council did not deliberate.
+- When a public discourse summary is supplied, include it only as a bounded
+  sample-analysis addendum unless a council object has already carried it into
+  report basis. It may refine public-discourse wording from visibility-only to
+  sample-local issue/affect/source-narrative cues, but it must not create
+  public-opinion estimates, source attribution, or stronger conclusions.
 
 ## Reader-Facing Section Requirements
 - `Bottom Line` / `Executive Summary`: 2-4 sentences that state the most

@@ -22,9 +22,10 @@ description: Optional-analysis helper for comparing sampled social affect, GDELT
 - Treat cross-source cues as advisory review material. Similar labels across
   sampled lanes are not proof that a narrative is true, representative, or
   physically attributable.
-- Keep GDELT media/document tone separate from social sample affect and formal
-  comment samples. This helper can expose contrasts and gaps, but it cannot
-  decide source truth or public opinion.
+- Keep GDELT DOC tone aggregates and GDELT row-level media/document tone
+  separate from social sample affect and formal comment samples. This helper can
+  expose contrasts and gaps, but it cannot decide source truth or public
+  opinion.
 - A council agent must explicitly cite useful cues in a finding, evidence
   bundle, challenge, readiness opinion, or synthesis before downstream use.
 

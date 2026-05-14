@@ -197,10 +197,12 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 该 lane 的治理边界：
 
 1. YouTube comments、Bluesky posts/replies、formal comments 等文本样本可用于 `social_sample_affect`，但只能声明样本内结果。
-2. GDELT Events/Mentions/GKG/DOC tone 属于 `gdelt_media_tone` 或 media/public-record narrative tone，不能直接代表公众情绪。
-3. GDELT GKG `V2Tone` 当前只最低限度保留 tone score；后续需要拆出 positive、negative、polarity、activity density、word count 等分量，并评估结构化 `GCAM` cue。
+2. GDELT DOC Search 有两种不同表面：`artlist` 等文章结果属于 `gdelt_doc_recon`，用于发现新闻/公共记录线索；`tone` / `toneabs` 查询、`timelinetone`、`tonechart` 和 tone 排序属于 `gdelt_doc_tone_aggregate`。GDELT Events/Mentions/GKG 的数值 tone 属于 `gdelt_media_tone`。两类 GDELT tone 都只能描述媒体/文档语气，不能直接代表公众情绪。
+3. GDELT GKG `V2Tone` 已拆出 tone、positive、negative、polarity、activity density、self/group reference density、word count 等分量，并保留结构化 `GCAM` cue；这些仍是 provider/media-document cue，不是公众表达情绪。
 4. 公共来源叙事和物理来源归因必须分开；前者由 `social-investigator` 调查，后者必须由 `environmental-investigator` 验证。
-5. 后续完整能力应包括 corpus materialization、coverage audit、annotation aggregation、GDELT tone enrichment、cross-source comparison 和 report handoff；这些都保持 optional-analysis/advisory 属性。
+5. 情感/立场标签由 `classify-public-discourse-affect` 这样的 bounded annotation worker 产出；`social-investigator` 负责样本范围、annotation basis 和议会采信，不直接承担逐条情感标签作者身份。
+6. `challenger` 对舆情标注的默认职责是样本边界、taxonomy fit、ambiguous clusters、outlier examples 和报告措辞审计；不要求逐条复核所有非 GDELT 情感标签。只有报告要引用争议样本、强影响结论或可见讽刺/转述/翻译歧义时，才需要局部 item-level 复核。
+7. 当前已具备 corpus materialization、coverage audit、annotation worker、annotation aggregation、GDELT tone enrichment、cross-source comparison 和 sample summary 的初步闭环；这些输出都保持 optional-analysis/advisory 属性，必须由议会对象承接后才能进入 report basis。
 
 ## 7. 当前能力边界
 

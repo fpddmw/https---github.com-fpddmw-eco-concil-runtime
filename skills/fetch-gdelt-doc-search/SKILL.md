@@ -60,7 +60,31 @@ python3 scripts/fetch_gdelt_doc_search.py search \
   --pretty
 ```
 
-4. Lint a query before a remote call, especially when an agent authored it.
+4. Run DOC-level media/document tone queries when the evidence need is about
+   news/document tone rather than article discovery.
+
+```bash
+python3 scripts/fetch_gdelt_doc_search.py search \
+  --query '("New York City" OR NYC) smoke wildfire tone<-3' \
+  --mode timelinetone \
+  --format json \
+  --start-datetime 20230605000000 \
+  --end-datetime 20230609000000 \
+  --timeline-smooth 0 \
+  --pretty
+```
+
+```bash
+python3 scripts/fetch_gdelt_doc_search.py search \
+  --query '("New York City" OR NYC) smoke wildfire' \
+  --mode tonechart \
+  --format json \
+  --start-datetime 20230605000000 \
+  --end-datetime 20230609000000 \
+  --pretty
+```
+
+5. Lint a query before a remote call, especially when an agent authored it.
 
 ```bash
 python3 scripts/fetch_gdelt_doc_search.py lint-query \
@@ -68,7 +92,7 @@ python3 scripts/fetch_gdelt_doc_search.py lint-query \
   --pretty
 ```
 
-5. Search exact official/news domains with GDELT's `domainis:` operator. Do not use `site:`.
+6. Search exact official/news domains with GDELT's `domainis:` operator. Do not use `site:`.
 
 ```bash
 python3 scripts/fetch_gdelt_doc_search.py search \
@@ -84,7 +108,7 @@ python3 scripts/fetch_gdelt_doc_search.py search \
   --pretty
 ```
 
-6. Persist raw API payload to a file for downstream tools.
+7. Persist raw API payload to a file for downstream tools.
 
 ```bash
 python3 scripts/fetch_gdelt_doc_search.py search \
@@ -114,6 +138,12 @@ python3 scripts/fetch_gdelt_doc_search.py search \
 - This skill is for GDELT DOC API article lists and timeline-style
   reconnaissance over indexed web documents. It is not the raw
   Events/Mentions/GKG export-table layer.
+- DOC Search also supports media/document tone operations: query operators such
+  as `tone>5`, `tone<-5`, and `toneabs>10`; modes such as `timelinetone` and
+  `tonechart`; and tone sorting such as `sort=toneasc` / `sort=tonedesc`.
+  These describe GDELT-indexed document tone, not public response sentiment.
+- Normalize DOC `artlist` output as `gdelt_doc_recon`; normalize DOC
+  `timelinetone` / `tonechart` output as `gdelt_doc_tone_aggregate`.
 - `domain:` and `domainis:` are URL-domain filters. They are useful for exact
   source slices, but they are not official-record categories and should not be
   the only way an agent distinguishes official, media, or community material.

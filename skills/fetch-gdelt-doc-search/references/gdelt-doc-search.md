@@ -66,6 +66,36 @@ python3 scripts/fetch_gdelt_doc_search.py lint-query \
 
 Repeated `--domain` or `--domain-is` values are executed as separate compact DOC queries and merged into one JSON artifact. This is preferred over long expressions such as `(domainis:a.gov OR domainis:b.gov) AND (...)`, because GDELT is sensitive to long or highly compound queries.
 
+## DOC Tone Queries
+
+The DOC API supports document/media tone discovery directly. These are not
+public sentiment estimates; they describe the tone of indexed documents.
+
+Supported query patterns include:
+
+```text
+tone>5 wildfire smoke
+```
+
+```text
+tone<-5 wildfire smoke
+```
+
+```text
+toneabs>10 wildfire smoke
+```
+
+Useful modes and sorts:
+
+- `mode=timelinetone`: average tone over time for the query.
+- `mode=tonechart`: article counts by tone bucket, often with top article links.
+- `sort=toneasc`: most negative matching articles first.
+- `sort=tonedesc`: most positive matching articles first.
+
+OpenClaw normalizes DOC `timelinetone` as `metric="doc_timeline_tone"` and
+DOC `tonechart` as `metric="doc_tonechart_count"` with `metadata.tone_bin`.
+`doc_tonechart_count.numeric_value` is article count, not the tone value.
+
 ## Script Mapping
 
 Relative-window search:
@@ -90,6 +120,31 @@ python3 scripts/fetch_gdelt_doc_search.py search \
   --start-datetime 20260301000000 \
   --end-datetime 20260308000000 \
   --timeline-smooth 5 \
+  --pretty
+```
+
+Timeline tone:
+
+```bash
+python3 scripts/fetch_gdelt_doc_search.py search \
+  --query '("New York City" OR NYC) smoke wildfire' \
+  --mode timelinetone \
+  --format json \
+  --start-datetime 20230605000000 \
+  --end-datetime 20230609000000 \
+  --timeline-smooth 0 \
+  --pretty
+```
+
+Tone chart:
+
+```bash
+python3 scripts/fetch_gdelt_doc_search.py search \
+  --query '("New York City" OR NYC) smoke wildfire' \
+  --mode tonechart \
+  --format json \
+  --start-datetime 20230605000000 \
+  --end-datetime 20230609000000 \
   --pretty
 ```
 

@@ -115,7 +115,7 @@ ROLE_CONTRACTS = {
         "role_kind": ROLE_KIND_COUNCIL_AGENT,
         "conceptual_role": "social-investigator",
         "aliases": ["social-investigator"],
-        "description": "Fetches, normalizes, queries, and analyzes public discourse, community, formal record, and policy evidence, then writes findings/proposals.",
+        "description": "Fetches, normalizes, queries, and analyzes public discourse, community, formal record, and policy evidence; owns sample selection and council uptake for annotation-worker outputs, then writes findings/proposals.",
         "capabilities": [
             CAPABILITY_FETCH,
             CAPABILITY_NORMALIZE,
@@ -136,7 +136,7 @@ ROLE_CONTRACTS = {
         "role_kind": ROLE_KIND_COUNCIL_AGENT,
         "conceptual_role": "challenger",
         "aliases": ["challenger"],
-        "description": "Tests competing explanations, opens/closes challenges, and pushes contradiction or falsification work.",
+        "description": "Tests competing explanations, opens/closes challenges, and pushes contradiction or falsification work; for public-discourse annotations, reviews sample/taxonomy/outlier/report-boundary risks rather than relabeling every item.",
         "capabilities": [
             CAPABILITY_FETCH,
             CAPABILITY_NORMALIZE,

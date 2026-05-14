@@ -1,4 +1,4 @@
 interface:
   display_name: "GDELT DOC Search"
   short_description: "Search GDELT DOC API with retries and logs"
-  default_prompt: "Use $fetch-gdelt-doc-search to run atomic GDELT DOC article/timeline reconnaissance. DOC results are query-sensitive and separate from Events/Mentions/GKG exports; zero DOC rows or exact-domain misses are not evidence that public or official records are absent."
+  default_prompt: "Use $fetch-gdelt-doc-search to run atomic GDELT DOC article/timeline reconnaissance or DOC-level media tone queries. DOC supports artlist, timelinetone, tonechart, tone/toneabs operators, and tone sorting; DOC tone is media/document tone, not public sentiment. DOC results are query-sensitive and separate from Events/Mentions/GKG exports; zero DOC rows or exact-domain misses are not evidence that public or official records are absent."

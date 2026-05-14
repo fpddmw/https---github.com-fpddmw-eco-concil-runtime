@@ -221,6 +221,7 @@ OPTIONAL_ANALYSIS_SKILLS = [
     "identify-representation-audit-cues",
     "materialize-public-discourse-corpus",
     "audit-public-discourse-sample-coverage",
+    "classify-public-discourse-affect",
     "aggregate-public-discourse-annotations",
     "compare-public-media-narratives",
     "summarize-public-discourse-sample",
@@ -355,6 +356,15 @@ OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
         "caveats": [
             "Coverage cues are prompts for human review, not representation findings.",
             "Zero rows may reflect unrun fetches, filters, API limits, import scope, or normalization gaps.",
+        ],
+    },
+    "classify-public-discourse-affect": {
+        "rule_id": "HEUR-PUBLIC-DISCOURSE-AFFECT-ANNOTATION-001",
+        "destination": "bounded public discourse annotation worker",
+        "caveats": [
+            "Worker labels describe only items inside the selected corpus sample.",
+            "This helper is not a council agent and does not write findings or report basis.",
+            "Challenger review is boundary/taxonomy/outlier review, not mandatory item-by-item relabeling.",
         ],
     },
     "aggregate-public-discourse-annotations": {

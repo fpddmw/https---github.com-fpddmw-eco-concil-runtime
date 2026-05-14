@@ -37,6 +37,7 @@ OPTIONAL_ANALYSIS_SKILLS = {
     "identify-representation-audit-cues",
     "materialize-public-discourse-corpus",
     "audit-public-discourse-sample-coverage",
+    "classify-public-discourse-affect",
     "aggregate-public-discourse-annotations",
     "compare-public-media-narratives",
     "summarize-public-discourse-sample",
@@ -102,6 +103,12 @@ OPTIONAL_ANALYSIS_NOTES = {
         "Approval-gated public discourse coverage audit helper. It emits "
         "source-family coverage cues and limitations, not representation "
         "findings or absence claims."
+    ),
+    "classify-public-discourse-affect": (
+        "Approval-gated public discourse annotation worker. It emits sample-local "
+        "item labels for affect, issues, stance/action, and source narratives. "
+        "It is not a council agent and does not create findings or public-opinion "
+        "claims."
     ),
     "aggregate-public-discourse-annotations": (
         "Approval-gated public discourse annotation aggregation helper. It "

@@ -140,6 +140,100 @@ def seed_discourse_signals(run_dir: Path) -> None:
 
 
 class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
+    def test_gdelt_doc_tone_aggregate_uses_distinct_lane_from_doc_recon(self) -> None:
+        from eco_council_runtime.optional_analysis.public_discourse import public_discourse_lane
+
+        self.assertEqual(
+            "gdelt_doc_recon",
+            public_discourse_lane(
+                {
+                    "source_skill": "fetch-gdelt-doc-search",
+                    "metric": "",
+                    "metadata": {"gdelt_doc_kind": "gdelt_doc_recon"},
+                }
+            ),
+        )
+        self.assertEqual(
+            "gdelt_doc_tone_aggregate",
+            public_discourse_lane(
+                {
+                    "source_skill": "fetch-gdelt-doc-search",
+                    "metric": "doc_timeline_tone",
+                    "metadata": {
+                        "gdelt_doc_kind": "gdelt_doc_tone_aggregate",
+                        "doc_mode": "timelinetone",
+                    },
+                }
+            ),
+        )
+
+    def test_annotation_worker_classifies_sample_and_aggregation_consumes_basis_from_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            seed_discourse_signals(run_dir)
+
+            corpus_payload = run_script(
+                script_path("materialize-public-discourse-corpus"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            annotation_payload = run_script(
+                script_path("classify-public-discourse-affect"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--corpus-path",
+                corpus_payload["summary"]["output_path"],
+            )
+            annotation_artifact = load_json(
+                analytics_path(run_dir, f"public_discourse_affect_annotations_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", annotation_payload["status"])
+            self.assertGreater(annotation_payload["summary"]["annotation_count"], 0)
+            self.assertEqual("public-discourse-annotation-worker", annotation_artifact["annotation_worker_role"])
+            labels_by_signal = {
+                (item["signal_id"], item["label_family"], item["label"])
+                for item in annotation_artifact["annotations"]
+            }
+            self.assertIn(("sig-youtube-comment", "affect_labels", "concern"), labels_by_signal)
+            self.assertIn(("sig-youtube-comment", "issue_facets", "health-risk"), labels_by_signal)
+
+            aggregation_payload = run_script(
+                script_path("aggregate-public-discourse-annotations"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--corpus-path",
+                corpus_payload["summary"]["output_path"],
+                "--annotations-path",
+                annotation_payload["summary"]["output_path"],
+            )
+            aggregation_artifact = load_json(
+                analytics_path(run_dir, f"public_discourse_annotation_aggregation_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", aggregation_payload["status"])
+            affect_labels = {item["label"] for item in aggregation_artifact["social_affect_distribution"]}
+            self.assertIn("concern", affect_labels)
+            concern_distribution = next(
+                item for item in aggregation_artifact["social_affect_distribution"] if item["label"] == "concern"
+            )
+            self.assertIn(
+                "public-discourse-annotation-worker",
+                concern_distribution["provenance"]["annotation_sources"],
+            )
+
     def test_corpus_and_coverage_helpers_preserve_sample_boundaries(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -292,7 +386,7 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
                 comparison_artifact["social_sample_affect_summary"]["boundary"],
             )
             self.assertEqual(
-                [{"average_value": -3.5, "max_value": -3.5, "metric": "v2_tone", "min_value": -3.5, "numeric_count": 1, "tone_boundary": "gdelt_media_tone_not_public_response_sentiment"}],
+                [{"average_value": -3.5, "max_value": -3.5, "metric": "v2_tone", "min_value": -3.5, "numeric_count": 1, "tone_boundary": "gdelt_media_or_doc_tone_not_public_response_sentiment"}],
                 comparison_artifact["gdelt_media_tone_summary"],
             )
             self.assertTrue(

@@ -18,6 +18,7 @@ from .public_discourse import (
     run_materialize_public_discourse_corpus,
     run_summarize_public_discourse_sample,
 )
+from .public_discourse_annotation_worker import run_classify_public_discourse_affect
 from .relations import (
     RELATION_REJECTION_OBJECTION_MAP,
     build_spatiotemporal_relation_cues,
@@ -147,6 +148,7 @@ __all__ = (
     "run_aggregate_public_discourse_annotations",
     "run_apply_approved_formal_public_taxonomy",
     "run_audit_public_discourse_sample_coverage",
+    "run_classify_public_discourse_affect",
     "run_compare_formal_public_footprints",
     "run_compare_public_media_narratives",
     "run_detect_temporal_cooccurrence_cues",

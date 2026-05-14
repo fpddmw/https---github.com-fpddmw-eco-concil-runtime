@@ -143,6 +143,40 @@ class ReportWritingRoundWorkflowTests(unittest.TestCase):
             self.assertIn("publish-narrative-report", write_surface)
             self.assertNotIn("fetch-gdelt-doc-search", "\n".join(report_editor_entry["fetch_commands"]))
 
+            public_summary_path = run_dir / "analytics" / "public_discourse_sample_summary_test.json"
+            write_json(
+                public_summary_path,
+                {
+                    "schema_version": "optional-analysis-public-discourse-sample-summary-v1",
+                    "skill": "summarize-public-discourse-sample",
+                    "status": "completed",
+                    "summary_id": "public-summary-test",
+                    "sample_count": 3,
+                    "source_skill_counts": [
+                        {"source_skill": "fetch-gdelt-doc-search", "signal_count": 1},
+                        {"source_skill": "fetch-gdelt-gkg", "signal_count": 1},
+                        {"source_skill": "fetch-youtube-comments", "signal_count": 1},
+                    ],
+                    "discourse_lane_counts": [
+                        {"discourse_lane": "gdelt_doc_recon", "signal_count": 1},
+                        {"discourse_lane": "gdelt_media_tone", "signal_count": 1},
+                        {"discourse_lane": "social_sample_affect", "signal_count": 1},
+                    ],
+                    "social_affect_distribution": [
+                        {"label": "concern-or-alarm", "annotated_signal_count": 1}
+                    ],
+                    "issue_distribution": [
+                        {"label": "health-risk-or-air-safety", "annotated_signal_count": 1}
+                    ],
+                    "source_narrative_distribution": [
+                        {"label": "regional-wildfire-smoke", "annotated_signal_count": 1}
+                    ],
+                    "gdelt_media_tone_summary": [
+                        {"metric": "v2_tone", "average_value": -0.2}
+                    ],
+                    "evidence_refs": ["signal:test-public-discourse-001"],
+                },
+            )
             draft_payload = run_script(
                 script_path("draft-narrative-report"),
                 "--run-dir",
@@ -153,6 +187,8 @@ class ReportWritingRoundWorkflowTests(unittest.TestCase):
                 REPORT_ROUND_ID,
                 "--basis-round-id",
                 ROUND_ID,
+                "--public-discourse-summary-path",
+                "analytics/public_discourse_sample_summary_test.json",
             )
             validation_payload = run_script(
                 script_path("validate-narrative-report"),
@@ -185,6 +221,14 @@ class ReportWritingRoundWorkflowTests(unittest.TestCase):
             self.assertEqual("narrative-report-v1", published["schema_version"])
             self.assertEqual("canonical-published", published["status"])
             self.assertIn("signal:test-pm25-001", draft["evidence_refs"])
+            public_sections = [
+                section
+                for section in draft["sections"]
+                if section.get("section_id") == "public-discourse-deepening"
+            ]
+            self.assertEqual(1, len(public_sections))
+            self.assertEqual("advisory-addendum", public_sections[0]["status"])
+            self.assertIn("signal:test-public-discourse-001", public_sections[0]["evidence_refs"])
 
 
 if __name__ == "__main__":

@@ -19,11 +19,12 @@ description: Optional-analysis helper for auditing public discourse sample cover
 
 ## Agent Reasoning Guide
 - Treat coverage cues as human-review prompts. They help identify missing
-  source-family layers such as YouTube comments after video discovery or GDELT
-  Events/Mentions/GKG after DOC recon, but they remain advisory and do not prove
-  a concern or narrative is absent.
-- Keep `social_sample_affect`, `gdelt_media_tone`, formal comments, and physical
-  source attribution separate. This helper audits sample shape only.
+  source-family layers such as YouTube comments after video discovery, GDELT DOC
+  `timelinetone` / `tonechart`, or GDELT Events/Mentions/GKG after DOC recon,
+  but they remain advisory and do not prove a concern or narrative is absent.
+- Keep `social_sample_affect`, `gdelt_doc_tone_aggregate`, `gdelt_media_tone`,
+  formal comments, and physical source attribution separate. This helper audits
+  sample shape only.
 - A council agent must carry any useful gap cue into an evidence request,
   source-acquisition proposal, challenge, readiness opinion, or synthesis before
   it affects investigation posture.
