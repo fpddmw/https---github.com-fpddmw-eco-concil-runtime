@@ -383,7 +383,8 @@ def run_classify_public_discourse_affect(
             "decision_source": metadata["decision_source"],
             "rule_id": metadata["rule_id"],
         },
-        "receipt_id": "public-discourse-affect-classification-receipt-" + stable_hash(skill_name, run_id, round_id, output_file)[:20],
+        "receipt_id": "public-discourse-affect-classification-receipt-"
+        + stable_hash(skill_name, run_id, round_id, output_file, annotation_set_id)[:20],
         "batch_id": "public-discourse-affect-classification-batch-" + stable_hash(skill_name, run_id, round_id)[:16],
         "artifact_refs": [artifact_ref(output_file, "$.annotations")],
         "canonical_ids": [annotation_set_id],

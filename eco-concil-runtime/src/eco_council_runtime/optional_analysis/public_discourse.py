@@ -353,18 +353,14 @@ def _signals_from_corpus_or_db(
     )
     if not corpus_payload:
         return source_signals, {}, db_path, warnings
-    corpus_ids = {
-        maybe_text(item.get("signal_id"))
+    corpus_items = [
+        dict(item)
         for item in list_items(corpus_payload.get("corpus_items"))
-        if isinstance(item, dict)
-    }
-    if not corpus_ids:
+        if isinstance(item, dict) and maybe_text(item.get("signal_id"))
+    ]
+    if not corpus_items:
         return [], corpus_payload, db_path, warnings
-    return [
-        signal
-        for signal in source_signals
-        if maybe_text(signal.get("signal_id")) in corpus_ids
-    ], corpus_payload, db_path, warnings
+    return corpus_items[: max(1, int(limit or 500))], corpus_payload, db_path, warnings
 
 
 def _annotation_family(value: Any) -> str:
@@ -709,7 +705,8 @@ def run_aggregate_public_discourse_annotations(
             "decision_source": metadata["decision_source"],
             "rule_id": metadata["rule_id"],
         },
-        "receipt_id": "public-discourse-annotations-receipt-" + stable_hash(skill_name, run_id, round_id, output_file)[:20],
+        "receipt_id": "public-discourse-annotations-receipt-"
+        + stable_hash(skill_name, run_id, round_id, output_file, aggregation_id)[:20],
         "batch_id": "public-discourse-annotations-batch-" + stable_hash(skill_name, run_id, round_id)[:16],
         "artifact_refs": [artifact_ref(output_file, "$.annotation_distributions")],
         "canonical_ids": [aggregation_id],
@@ -958,7 +955,8 @@ def run_compare_public_media_narratives(
             "decision_source": metadata["decision_source"],
             "rule_id": metadata["rule_id"],
         },
-        "receipt_id": "public-media-narratives-receipt-" + stable_hash(skill_name, run_id, round_id, output_file)[:20],
+        "receipt_id": "public-media-narratives-receipt-"
+        + stable_hash(skill_name, run_id, round_id, output_file, comparison_id)[:20],
         "batch_id": "public-media-narratives-batch-" + stable_hash(skill_name, run_id, round_id)[:16],
         "artifact_refs": [artifact_ref(output_file, "$.source_narrative_cross_lane_cues")],
         "canonical_ids": [comparison_id],
@@ -1244,7 +1242,8 @@ def run_summarize_public_discourse_sample(
             "decision_source": metadata["decision_source"],
             "rule_id": metadata["rule_id"],
         },
-        "receipt_id": "public-discourse-summary-receipt-" + stable_hash(skill_name, run_id, round_id, output_file)[:20],
+        "receipt_id": "public-discourse-summary-receipt-"
+        + stable_hash(skill_name, run_id, round_id, output_file, summary_id)[:20],
         "batch_id": "public-discourse-summary-batch-" + stable_hash(skill_name, run_id, round_id)[:16],
         "artifact_refs": [artifact_ref(output_file, "$")],
         "canonical_ids": [summary_id],
@@ -1382,7 +1381,8 @@ def run_materialize_public_discourse_corpus(
             "decision_source": metadata["decision_source"],
             "rule_id": metadata["rule_id"],
         },
-        "receipt_id": "public-discourse-corpus-receipt-" + stable_hash(skill_name, run_id, round_id, output_file)[:20],
+        "receipt_id": "public-discourse-corpus-receipt-"
+        + stable_hash(skill_name, run_id, round_id, output_file, corpus_id)[:20],
         "batch_id": "public-discourse-corpus-batch-" + stable_hash(skill_name, run_id, round_id)[:16],
         "artifact_refs": [artifact_ref(output_file, "$.corpus_items")],
         "canonical_ids": [corpus_id],
@@ -1696,7 +1696,8 @@ def run_audit_public_discourse_sample_coverage(
             "decision_source": metadata["decision_source"],
             "rule_id": metadata["rule_id"],
         },
-        "receipt_id": "public-discourse-coverage-receipt-" + stable_hash(skill_name, run_id, round_id, output_file)[:20],
+        "receipt_id": "public-discourse-coverage-receipt-"
+        + stable_hash(skill_name, run_id, round_id, output_file, audit_id)[:20],
         "batch_id": "public-discourse-coverage-batch-" + stable_hash(skill_name, run_id, round_id)[:16],
         "artifact_refs": [artifact_ref(output_file, "$.coverage_cues")],
         "canonical_ids": [audit_id],

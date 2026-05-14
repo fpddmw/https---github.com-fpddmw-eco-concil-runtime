@@ -20,6 +20,7 @@ description: Draft a narrative decision-support report from existing council, re
 - Reads `run_dir/reporting/council_decision_<basis_round_id>.json` and draft variant when present.
 - Reads `run_dir/reporting/expert_report_*_<basis_round_id>.json` when present.
 - Reads `run_dir/report_basis/frozen_report_basis_<basis_round_id>.json` when present.
+- Reads `run_dir/analytics/public_discourse_sample_summary_<round_id>.json` when present or when supplied through `public_discourse_summary_path`.
 - Reads DB-backed council objects for the basis round.
 - Optionally reads `run_dir/analytics/public_discourse_sample_summary_<round_id>.json` or an explicit public discourse summary path as an advisory addendum source.
 - Writes `run_dir/reporting/narrative_report_draft_<round_id>.json`.
@@ -85,11 +86,16 @@ description: Draft a narrative decision-support report from existing council, re
   can be used for, what it should not be used for, and what follow-up evidence
   would be needed for stronger claims. Do not invent policy advice that the
   council did not deliberate.
-- When a public discourse summary is supplied, include it only as a bounded
-  sample-analysis addendum unless a council object has already carried it into
-  report basis. It may refine public-discourse wording from visibility-only to
-  sample-local issue/affect/source-narrative cues, but it must not create
-  public-opinion estimates, source attribution, or stronger conclusions.
+- When a public discourse summary is supplied, include it as a bounded
+  sample-analysis addendum when a council object has carried it into report
+  basis. It may refine public-discourse wording from visibility-only to
+  sample-local issue/affect/source-narrative cues. If the summary supplies
+  counts or fractions, report them as sample-local label structure, not as
+  affected-population opinion, platform-wide sentiment, or representative
+  public-opinion estimates. Make clear whether labels are non-exclusive and
+  therefore should not be summed to 100%. Do not use public-discourse labels to
+  strengthen physical source attribution or other conclusions beyond the
+  recorded basis.
 
 ## Reader-Facing Section Requirements
 - `Bottom Line` / `Executive Summary`: 2-4 sentences that state the most

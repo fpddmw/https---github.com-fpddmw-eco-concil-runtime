@@ -14,6 +14,15 @@ description: Optional-analysis helper for DB-backed public/formal discourse issu
 - Reads `run_dir/analytics/signal_plane.sqlite`
 - Writes `run_dir/analytics/discourse_issue_discovery_<round_id>.json`
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `output_path`
+- `limit`
+
 ## Agent Reasoning Guide
 - Treat output as approval-scoped advisory/audit material. Issue hints are
   reversible labels for review, not claim candidates, public consensus,

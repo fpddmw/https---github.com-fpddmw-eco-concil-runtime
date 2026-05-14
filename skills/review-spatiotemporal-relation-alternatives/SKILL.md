@@ -14,6 +14,17 @@ description: Optional-analysis helper that turns DB-backed spatiotemporal relati
 - Reads analysis result tables in `run_dir/analytics/signal_plane.sqlite`
 - Writes `run_dir/analytics/spatiotemporal_relation_alternative_reviews_<round_id>.json`
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `relation_id`
+- `relation_status`
+- `output_path`
+- `limit`
+
 ## Agent Reasoning Guide
 - Treat output as approval-scoped advisory material for challengers. Objection
   candidates do not open or close challenges and do not disprove a relation by

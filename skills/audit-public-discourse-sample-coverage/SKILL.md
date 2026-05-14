@@ -17,6 +17,16 @@ description: Optional-analysis helper for auditing public discourse sample cover
 - Defaults to `--round-scope current`; use `--round-scope run` for same-run
   regression checks where public-discourse source rows span multiple rounds.
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `round_scope`
+- `corpus_path`
+- `output_path`
+
 ## Agent Reasoning Guide
 - Treat coverage cues as human-review prompts. They help identify missing
   source-family layers such as YouTube comments after video discovery, GDELT DOC

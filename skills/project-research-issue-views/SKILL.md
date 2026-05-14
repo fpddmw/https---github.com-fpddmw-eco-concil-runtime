@@ -14,6 +14,16 @@ description: Optional-analysis helper for typed actor, concern, citation, and st
 - Reads `run_dir/analytics/signal_plane.sqlite` and optional issue-surface artifact.
 - Writes `run_dir/analytics/research_issue_views_<round_id>.json`
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `input_path`
+- `output_path`
+- `limit`
+
 ## Agent Reasoning Guide
 - Treat output as approval-scoped advisory/audit material. Typed actor, concern,
   citation, and stance cues are projections for review, not conclusions, report

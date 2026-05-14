@@ -56,6 +56,10 @@ def runtime_health_payload(run_dir: Path, *, round_id: str = "") -> dict[str, An
         for event in unresolved_events
         if maybe_text(event.get("status")) == "blocked"
         and maybe_text(event.get("event_id")) not in superseded_blocked_event_ids
+        and not (
+            maybe_text(event.get("event_type")) == "skill-preflight"
+            and not maybe_text(event.get("dead_letter_id"))
+        )
     ]
     degraded_events = [
         event for event in filtered_events if maybe_text(event.get("status")) in {"completed-with-warnings", "degraded"}

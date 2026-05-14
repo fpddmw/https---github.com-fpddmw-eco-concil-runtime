@@ -14,6 +14,15 @@ description: Optional-analysis helper for advisory evidence-lane tags. It does n
 - Reads an optional discovery artifact or DB findings.
 - Writes `run_dir/analytics/evidence_lane_suggestions_<round_id>.json`
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `input_path`
+- `output_path`
+
 ## Agent Reasoning Guide
 - Treat output as approval-scoped advisory tags. Lane suggestions do not route
   workflow, assign owners, drive source queues, set priorities, or advance

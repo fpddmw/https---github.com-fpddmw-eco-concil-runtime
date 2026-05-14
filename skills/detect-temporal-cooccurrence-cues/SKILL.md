@@ -16,6 +16,28 @@ description: Optional-analysis helper for temporal co-occurrence cues across sou
 - Writes `run_dir/analytics/temporal_cooccurrence_cues_<round_id>.json`
 - With relation scope flags, also writes `run_dir/analytics/spatiotemporal_relation_cues_<round_id>.json` and syncs it into the analysis plane.
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `output_path`
+- `relation_output_path`
+- `source_role`
+- `target_role`
+- `source_class`
+- `target_class`
+- `observed_after_utc`
+- `observed_before_utc`
+- `lag_min_hours`
+- `lag_max_hours`
+- `bbox`
+- `max_distance_km`
+- `spatial_rule`
+- `taxonomy_version`
+- `limit`
+
 ## Agent Reasoning Guide
 - Treat output as approval-scoped advisory/audit material. Temporal co-occurrence
   is a cue, not influence, causality, transport, spread, direction, or source

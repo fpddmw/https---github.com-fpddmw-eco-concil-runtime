@@ -14,6 +14,18 @@ description: Optional-analysis helper that applies an explicit approved mission-
 - Reads `run_dir/analytics/signal_plane.sqlite` and an approved taxonomy artifact.
 - Writes `run_dir/analytics/formal_public_taxonomy_labels_<round_id>.json`
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `taxonomy_path`
+- `taxonomy_version`
+- `approval_ref`
+- `output_path`
+- `limit`
+
 ## Agent Reasoning Guide
 - Treat output as approval-scoped advisory/audit material. Candidate taxonomy
   labels do not become findings, issue truth, representation conclusions, or

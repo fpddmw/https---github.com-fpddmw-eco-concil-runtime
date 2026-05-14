@@ -1780,6 +1780,37 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
             self.assertEqual(0, after["summary"]["blocked_event_count"])
             self.assertEqual("green", after["alert_status"])
 
+    def test_runtime_health_ignores_diagnostic_preflight_without_dead_letter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.core.ledger import append_ledger_event
+            from eco_council_runtime.kernel.operator.operations import runtime_health_payload
+
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": "runtimeevt-diagnostic-preflight-blocked",
+                    "event_type": "skill-preflight",
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "actor_role": "challenger",
+                    "skill_name": "open-falsification-probe",
+                    "status": "blocked",
+                    "preflight": {
+                        "block_execution": True,
+                        "issues": [{"code": "missing-skill-approval-request-id"}],
+                    },
+                },
+            )
+
+            payload = runtime_health_payload(run_dir, round_id=ROUND_ID)
+
+            self.assertEqual(0, payload["summary"]["blocked_event_count"])
+            self.assertEqual("green", payload["alert_status"])
+
     def test_default_admission_policy_keeps_writes_inside_run_surface(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

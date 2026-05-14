@@ -14,6 +14,15 @@ description: Optional-analysis helper for representation audit cues. It emits hu
 - Reads `run_dir/analytics/signal_plane.sqlite`
 - Writes `run_dir/analytics/representation_audit_cues_<round_id>.json`
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `output_path`
+- `limit`
+
 ## Agent Reasoning Guide
 - Treat output as approval-scoped advisory/audit material. Representation cues
   are prompts for human or council review, not severity scores, representation

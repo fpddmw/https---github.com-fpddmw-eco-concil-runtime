@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "draft-narrative-report"
-REPORT_TEMPLATE_VERSION = "narrative-report-template-v2"
+REPORT_TEMPLATE_VERSION = "narrative-report-template-v6"
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
@@ -135,20 +135,23 @@ def render_source_text(text: str, language: str = "en") -> str:
             "这些记录包括地方电视、全国媒体、创作者视频、直播和反应类内容，明确呈现或讨论纽约橙色天空、"
             "不安全空气、口罩使用和公众反应。因此，该证据线能说明事件在公开视频渠道中被同时期可见地讨论。"
             "但同一查询也纳入了至少一个明显无关结果，例如 “Pop Smoke - Dior (edit)”，所以它只能支持"
-            "关于可见公共讨论和查询覆盖范围的有限描述，不能代表公众意见比例、情绪分布或来源归因。"
+            "关于可见公共讨论和查询覆盖范围的有限描述；若配合后续样本摘要，可呈现样本内标签结构，"
+            "但不能代表受影响人群总体意见或来源归因。"
         )
     if "challenger review does not open a ticket" in lower:
         return (
             "质询复核没有针对该社会证据发现开启正式 challenge。原因是该发现仍停留在有限描述层面："
             "YouTube 证据线显示 6 月 7-8 日窗口内存在同时期、公开可见的纽约烟霾视频记录，并且已经显式记录"
-            "查询噪声和误入样本。这个范围足以用于有限报告基础，但不能扩展为代表性公众意见、情绪占比或来源归因。"
+            "查询噪声和误入样本。这个范围足以用于有限报告基础，但不能扩展为代表性公众意见、"
+            "总体情绪占比或来源归因。"
         )
     if "the social lane is now ready for bounded report-basis use" in lower:
         return (
             "社会证据线可以进入有限报告基础：第二轮已有与纽约烟霾相关、经过归一化的视频记录，"
             "覆盖地方电视、全国媒体、创作者、直播和反应类格式，且处于关键的 6 月 7-8 日时间窗口。"
             "该证据支持“事件在公开视听渠道中被可见讨论”的描述，但必须保留边界：它不是受影响社区的代表性样本，"
-            "查询中存在明显误入结果，也不能用于推断公众意见比例、干净情绪分类或更强的来源归因。"
+            "查询中存在明显误入结果；后续样本摘要可以给出样本内标签结构，但不能用于推断总体公众意见比例、"
+            "干净情绪分类或更强的来源归因。"
         )
     if "environmental lane is ready for report-basis use" in lower:
         return (
@@ -636,8 +639,8 @@ def build_key_takeaways(
                 [
                     "这次报告最稳妥的结论不是“已经锁定具体起火点”，而是：纽约在 2023 年 6 月 6 日至 9 日经历了一次时间边界清楚、强度突出的 PM2.5 烟霾过程。",
                     "环境证据把受体端变化、纽约上空风向和加拿大东部火点活动放在同一条解释链上；这条链支持“区域输送相容”，但还不能升级为具体火场归因。",
-                    "公共讨论证据说明，纽约橙色天空、空气不安全、口罩和公众反应在 6 月 7 日至 8 日的公开视频渠道中可见；但这不是代表性舆情样本。",
-                    "因此，报告适合支持态势复盘和下一步调查设计，不适合被当作具体火场来源、公众情绪比例或完整烟羽路径的证明。",
+                    "公共讨论证据说明，纽约橙色天空、空气不安全、口罩和公众反应在 6 月 7 日至 8 日的公开视频渠道中可见；新增舆情摘要可以呈现样本内标签结构，但不是代表性舆情样本。",
+                    "因此，报告适合支持态势复盘和下一步调查设计，不适合被当作具体火场来源、代表性公众情绪比例或完整烟羽路径的证明。",
                 ]
             )
         return unique_texts(
@@ -765,11 +768,12 @@ def build_zh_evidence_chain(
         paragraphs.append(
             "第三层是公共可见性：YouTube 采集的作用，是证明纽约烟霾在关键窗口内进入了公开视频记录，"
             "并呈现橙色天空、空气不安全、口罩和公众反应等可见线索。"
-            "但这一层不负责证明来源，也不能被解释成代表性公众情绪样本。"
+            "但这一层不负责证明来源，也不能被解释成代表性公众情绪样本；它最多支持样本内标签结构观察。"
         )
     paragraphs.append(
         "把这三层放在一起，议会能说的是：纽约烟霾过程、区域输送背景和公众可见记录彼此一致。"
         "议会不能说的是：已经证明了某个具体火场、某条完整烟羽路径，或某种代表性公众情绪分布。"
+        "公共讨论样本内的比例可以作为描述性观察保留，但不能外推为受影响人群整体怎么看。"
     )
     if limitation_line:
         paragraphs.append(f"这个边界来自记录中的限制说明：{limitation_line}")
@@ -813,11 +817,20 @@ def count_lookup(items: list[Any], key_name: str) -> dict[str, int]:
 
 
 PUBLIC_LABELS_ZH = {
+    "anger": "愤怒",
+    "canada-wildfires": "加拿大野火",
     "concern-or-alarm": "担忧/警觉",
+    "concern": "担忧",
+    "fear": "恐惧",
+    "health-risk": "健康风险",
     "information-seeking": "信息求助/询问",
     "health-risk-or-air-safety": "健康风险或空气安全",
+    "neutral-reporting": "中性报道/转述",
     "protective-behavior": "防护行为",
+    "source-origin-question": "来源/起因疑问",
     "regional-wildfire-smoke": "区域野火烟雾",
+    "uncertainty": "不确定/疑问",
+    "unknown-or-not-mentioned": "未说明或未提及来源",
 }
 
 
@@ -827,19 +840,36 @@ def public_label(label_text: str, language: str) -> str:
     return label_text
 
 
+def percentage_text(value: Any, language: str) -> str:
+    if not isinstance(value, (int, float)):
+        return ""
+    pct = value * 100
+    if is_zh(language):
+        return f"约 {pct:.1f}%"
+    return f"about {pct:.1f}%"
+
+
 def distribution_phrase(items: list[Any], *, language: str, max_items: int = 3) -> str:
     parts: list[str] = []
-    for item in items:
+    sorted_items = sorted(
+        [item for item in items if isinstance(item, dict)],
+        key=lambda item: int(item.get("annotated_signal_count") or 0),
+        reverse=True,
+    )
+    for item in sorted_items:
         if not isinstance(item, dict):
             continue
         label_text = maybe_text(item.get("label"))
         count = item.get("annotated_signal_count")
         if not label_text or not isinstance(count, int):
             continue
+        pct = percentage_text(item.get("sample_fraction"), language)
         if is_zh(language):
-            parts.append(f"{public_label(label_text, language)} {count} 条")
+            suffix = f"（样本内出现率{pct}）" if pct else ""
+            parts.append(f"{public_label(label_text, language)} {count} 条{suffix}")
         else:
-            parts.append(f"{public_label(label_text, language)} {count} items")
+            suffix = f" ({pct} sample-local occurrence)" if pct else ""
+            parts.append(f"{public_label(label_text, language)} {count} items{suffix}")
     return "、".join(parts[:max_items])
 
 
@@ -883,15 +913,16 @@ def build_public_discourse_addendum(
                 f"其中视频可见性 {lane_counts.get('public_visibility', 0)} 条、评论表达样本 {lane_counts.get('social_sample_affect', 0)} 条。"
             ),
             (
-                "在由 agent 编写的候选标注基础上，样本内可见的公众表达主要包括："
+                "在 bounded annotation worker 产出的候选标注基础上，样本内可见的公众表达主要包括："
                 f"{distribution_phrase(affect, language=language) or '未形成可用 affect 分布'}；"
                 f"议题线索主要包括：{distribution_phrase(issues, language=language) or '未形成可用 issue 分布'}。"
-                "这些数字描述的是被标注样本内部，不是纽约公众或全平台用户的比例。"
+                "这些数字可以作为样本内结构性观察；由于标签可能非互斥、样本也不是随机抽样，它们不是纽约公众或全平台用户的总体比例，"
+                "也不应相加解释为 100% 的意见构成。"
             ),
             (
-                f"来源叙事方面，候选标注记录了：{distribution_phrase(narratives, language=language, max_items=2) or '未形成可用来源叙事分布'}，"
+                f"来源叙事方面，候选标注记录了：{distribution_phrase(narratives, language=language, max_items=3) or '未形成可用来源叙事分布'}，"
                 "且该叙事同时出现在 GDELT DOC 检索线索层、GDELT 数值语气层和 YouTube 评论样本中。"
-                "这可以作为社会线索说明公共文本如何谈论来源，但不能替代环境线的物理归因验证。"
+                "这可以作为样本内来源叙事结构，说明公共文本如何谈论来源，但不能替代环境线的物理归因验证。"
             ),
         ]
         if gdelt_tone:
@@ -906,8 +937,8 @@ def build_public_discourse_addendum(
                 + "。这些是媒体/文档语气，不是公众情绪。"
             )
         paragraphs.append(
-            "因此，公共讨论线可以从“公开视频可见性”深化为“公共可见性 + 样本内健康风险/防护/信息求助与来源叙事线索”。"
-            "但报告主结论不应升级：仍不能声称代表性公众情绪比例，也不能用舆情来源叙事证明具体火场来源。"
+            "因此，公共讨论线可以从“公开视频可见性”深化为“公共可见性 + 样本内健康风险/防护/信息求助与来源叙事结构”。"
+            "但报告主结论不应升级：这些比例只描述本轮样本，不是代表性公众情绪比例，也不能用舆情来源叙事证明具体火场来源。"
         )
         status = "advisory-addendum"
     else:
@@ -917,12 +948,12 @@ def build_public_discourse_addendum(
                 f"It summarizes {sample_count} normalized public-discourse records across GDELT public records and YouTube public-discourse samples."
             ),
             (
-                f"Candidate annotations show sample-local affect cues such as {distribution_phrase(affect, language=language) or 'no usable affect distribution'} "
+                f"Bounded annotation-worker candidate labels show sample-local affect cues such as {distribution_phrase(affect, language=language) or 'no usable affect distribution'} "
                 f"and issue cues such as {distribution_phrase(issues, language=language) or 'no usable issue distribution'}. "
-                "These are annotated-sample descriptors, not population estimates."
+                "These are annotated-sample structure descriptors; labels may be non-exclusive and must not be read as population estimates."
             ),
             (
-                "The addendum may deepen the public-discourse lane from visibility-only to sample-local issue, affect, and source-narrative cues, "
+                "The addendum may deepen the public-discourse lane from visibility-only to sample-local issue, affect, and source-narrative structure, "
                 "but it must not strengthen source attribution or public-opinion claims."
             ),
         ]
@@ -1215,7 +1246,9 @@ def draft_narrative_report(
             ),
             (
                 "公共讨论证据同样需要压低用法：它能说明视频平台上存在同时期、公开可见的纽约烟霾记录，"
-                "但不能说明受影响人群整体怎么看，也不能说明某类情绪占比。查询噪声已经进入记录，因此报告不能把它包装成干净舆情样本。"
+                "也可以在新增舆情摘要基础上说明本轮样本内的情绪、议题和来源叙事标签结构。"
+                "但这些样本内比例不能说明受影响人群整体怎么看，也不能被包装成代表性情绪占比。"
+                "查询噪声已经进入记录，因此报告不能把它包装成干净舆情样本。"
             ),
             (
                 "因此，弱报告可以成立，但必须把弱点写在正文中，而不是藏在审计索引里。"
@@ -1231,7 +1264,7 @@ def draft_narrative_report(
     else:
         limitation_narrative = [
             "The central limitation is source attribution: the evidence supports compatibility with regional transport, not proof of a specific origin.",
-            "The public-discourse evidence shows visible contemporaneous records, not representative public sentiment.",
+            "The public-discourse evidence shows visible contemporaneous records and sample-local label structure, not representative public sentiment.",
             "The report is usable as a bounded synthesis, but stronger attribution or policy claims would require further investigation.",
         ]
     public_discourse_addendum = build_public_discourse_addendum(

@@ -14,6 +14,16 @@ description: Optional-analysis export helper for research issue navigation maps.
 - Reads issue surface/view artifacts.
 - Writes `run_dir/analytics/research_issue_map_<round_id>.json`
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `issue_surface_path`
+- `issue_views_path`
+- `output_path`
+
 ## Agent Reasoning Guide
 - Treat output as approval-scoped navigation material. Nodes and edges are not a
   controversy conclusion graph, influence model, phase decision, or report

@@ -18,6 +18,17 @@ description: Optional-analysis helper for comparing sampled social affect, GDELT
 - Defaults to `--round-scope current`; use `--round-scope run` only for
   approved same-run comparisons across rounds.
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `round_scope`
+- `corpus_path`
+- `aggregation_path`
+- `output_path`
+
 ## Agent Reasoning Guide
 - Treat cross-source cues as advisory review material. Similar labels across
   sampled lanes are not proof that a narrative is true, representative, or

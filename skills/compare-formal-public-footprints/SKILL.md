@@ -14,6 +14,16 @@ description: Optional-analysis helper for comparing formal-record and public-dis
 - Reads `run_dir/analytics/signal_plane.sqlite`
 - Writes `run_dir/analytics/formal_public_footprints_<round_id>.json`
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `taxonomy_labels_path`
+- `output_path`
+- `limit`
+
 ## Agent Reasoning Guide
 - Treat output as approval-scoped advisory/audit material. Footprint overlap or
   absence cues are not alignment scores, paired discourse links,

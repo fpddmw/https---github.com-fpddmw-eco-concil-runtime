@@ -14,6 +14,16 @@ description: Optional-analysis helper for DB-backed research issue surfaces. It 
 - Reads `run_dir/analytics/signal_plane.sqlite` and optional approved input artifact.
 - Writes `run_dir/analytics/research_issue_surface_<round_id>.json`
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `input_path`
+- `output_path`
+- `limit`
+
 ## Agent Reasoning Guide
 - Treat output as approval-scoped advisory/audit material. Candidate issue
   records are review surfaces, not controversy conclusions, claim candidates, or

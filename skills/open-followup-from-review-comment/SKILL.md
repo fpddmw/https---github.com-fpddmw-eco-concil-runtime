@@ -16,6 +16,18 @@ This skill:
 
 It does not close or waive the review comment. A later challenger readiness opinion or explicit resolved comment status must handle waiver.
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+- `review_comment_id`
+
+## Optional Input
+- `board_path`
+- `owner_role`
+- `priority`
+- `task_status`
+
 ## Agent Reasoning Guide
 - This skill converts a report-risk comment into visible follow-up work. It does
   not decide that the review comment is correct, resolved, or waived.

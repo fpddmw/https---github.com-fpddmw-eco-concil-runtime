@@ -17,6 +17,19 @@ description: Optional-analysis helper for summarizing a public discourse sample 
 - Defaults to `--round-scope current`; use `--round-scope run` only when the
   council-approved sample intentionally spans multiple rounds in one run.
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `round_scope`
+- `corpus_path`
+- `coverage_audit_path`
+- `aggregation_path`
+- `comparison_path`
+- `output_path`
+
 ## Agent Reasoning Guide
 - Treat the summary as advisory handoff material. It assembles approved helper
   outputs and DB refs, but it does not create findings, evidence bundles,

@@ -16,6 +16,20 @@ description: Optional-analysis helper for materializing a DB-backed public/forma
 - Defaults to `--round-scope current`; use `--round-scope run` only when an
   approved regression or continuation review needs same-run rows across rounds.
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `round_scope`
+- `source_family`
+- `discourse_lane`
+- `source_skill`
+- `query_text`
+- `limit`
+- `output_path`
+
 ## Agent Reasoning Guide
 - Treat the corpus as approval-scoped advisory/audit material. It defines which
   DB-visible text rows were available under the supplied filters; it does not

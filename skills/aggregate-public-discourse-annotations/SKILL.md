@@ -18,6 +18,20 @@ description: Optional-analysis helper for aggregating sample-level public discou
 - Defaults to `--round-scope current`; use `--round-scope run` when the
   approved corpus intentionally spans multiple rounds in the same run.
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `round_scope`
+- `corpus_path`
+- `annotations_path`
+- `taxonomy_labels_path`
+- `annotation_basis_ref`
+- `output_path`
+- `limit`
+
 ## Agent Reasoning Guide
 - Treat annotation distributions as advisory, approval-scoped sample descriptors.
   They describe only annotated items in the selected corpus and do not prove

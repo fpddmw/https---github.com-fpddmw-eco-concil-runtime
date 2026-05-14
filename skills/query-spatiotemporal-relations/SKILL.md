@@ -14,6 +14,27 @@ description: Query DB-backed spatiotemporal relation cues from the analysis plan
 - Reads analysis result tables in `run_dir/analytics/signal_plane.sqlite`
 - Writes no DB rows.
 
+## Required Input
+- `run_dir`
+- `run_id`
+- `round_id`
+
+## Optional Input
+- `result_set_id`
+- `relation_id`
+- `relation_type`
+- `relation_status`
+- `source_signal_id`
+- `target_signal_id`
+- `source_role`
+- `target_role`
+- `latest_only`
+- `include_result_sets`
+- `include_contract`
+- `limit`
+- `offset`
+- `db_path`
+
 ## Agent Reasoning Guide
 - Treat returned rows as candidate relation cues that must be carried by a
   challenge, finding, evidence packet, or review note before downstream use.
