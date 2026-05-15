@@ -1,6 +1,6 @@
 ---
 name: aggregate-environment-evidence
-description: Optional-analysis helper for DB-backed environment signal aggregation. It summarizes source, metric, spatial, and temporal coverage without claim matching or readiness scoring.
+description: Optional-analysis helper for DB-backed environment signal aggregation. It summarizes source, metric, spatial, and temporal coverage without claim matching, risk scoring, source ranking, source attribution, or readiness scoring.
 ---
 
 # Aggregate Environment Evidence
@@ -9,7 +9,7 @@ description: Optional-analysis helper for DB-backed environment signal aggregati
 - Read normalized environment signals from the signal-plane DB.
 - Produce descriptive coverage, time-series, and point-event summaries.
 - Preserve source signal ids, artifact refs, record locators, lineage, provenance, and optional-analysis helper governance.
-- Avoid claim matching, source ranking, evidence weighting, readiness decisions, phase gates, or workflow suggestions.
+- Avoid claim matching, source ranking, evidence weighting, risk scoring, physical source attribution, readiness decisions, phase gates, or workflow suggestions.
 
 ## Triggering Conditions
 - An approved optional-analysis request asks for an environment evidence aggregation view.
@@ -40,7 +40,8 @@ description: Optional-analysis helper for DB-backed environment signal aggregati
 ## Agent Reasoning Guide
 - Treat output as approval-scoped advisory/audit material. It summarizes visible
   normalized environment rows; it does not match claims, rank sources, score
-  sufficiency, or decide readiness.
+  sufficiency, score risk, assign physical source attribution, or decide
+  readiness.
 - `time-series-summary` reports descriptive count/min/max/mean by
   source/location/metric. These extrema are not exposure, severity, transport,
   or attribution findings.

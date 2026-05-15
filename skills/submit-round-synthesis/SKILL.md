@@ -30,6 +30,7 @@ description: Submit a thin moderator-authored round synthesis that records stage
 - `resolved_object_ref`
 - `unresolved_object_ref`
 - `evidence_gap_ref`
+- `route_assessment_ref`
 - `next_round_candidate_ref`
 - `open_question`
 - `limitation`
@@ -52,6 +53,11 @@ description: Submit a thin moderator-authored round synthesis that records stage
 - Candidate continuation refs are live routes, not a fixed agenda. If useful
   routes remain, the moderator should decide whether to open a continuation
   round instead of silently closing.
+- When `evidence-route-assessment` refs exist, explicitly state whether the
+  moderator accepts the source-surface mismatch, opens route discovery, pauses
+  for capability work, allows a bounded report, revises the request, or
+  disagrees. This prevents repeated rounds that reissue the same non-move while
+  still leaving agents free to choose sources.
 
 ## Scripts
 - `scripts/submit_round_synthesis.py`

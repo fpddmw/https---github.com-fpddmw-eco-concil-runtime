@@ -120,7 +120,7 @@
 当前问题：
 
 1. `query-environment-signals` 已能做 item-level 查询，但不适合承载百万级全量阅读。
-2. `aggregate-environment-evidence` 已有描述性聚合能力，但当前实现默认通过 `limit=500` 读取信号；对 USGS 这类百万级时序而言，它只是抽样覆盖摘要，不是全量压缩。
+2. `aggregate-environment-evidence` 需要支撑百万级 normalized signals 的描述性压缩；`limit` 只能限制输出样本，不能截断统计口径。
 3. AirNow / OpenAQ / USGS / Open-Meteo / FIRMS 的关键字段差异很大，不能通过厚配置和 provider 专用规则堆出一个“统一智能分析器”。
 4. 议会需要的是“可读的数据面摘要”，不是 runtime 或 skill 自动替 agent 做风险判断、来源归因、证据排序。
 

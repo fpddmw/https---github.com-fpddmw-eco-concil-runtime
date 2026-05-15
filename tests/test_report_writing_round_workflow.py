@@ -228,6 +228,9 @@ class ReportWritingRoundWorkflowTests(unittest.TestCase):
             transition = load_json(runtime_path(run_dir, f"round_transition_{REPORT_ROUND_ID}.json"))
             draft = load_json(run_dir / "reporting" / f"narrative_report_draft_{REPORT_ROUND_ID}.json")
             published = load_json(run_dir / "reporting" / f"narrative_report_{REPORT_ROUND_ID}.json")
+            draft_markdown = (run_dir / "reporting" / f"narrative_report_draft_{REPORT_ROUND_ID}.md").read_text(
+                encoding="utf-8"
+            )
 
             self.assertEqual("report-writing", transition["round_mode"])
             self.assertEqual("completed", draft_payload["status"])
@@ -237,6 +240,25 @@ class ReportWritingRoundWorkflowTests(unittest.TestCase):
             self.assertEqual("narrative-report-v1", published["schema_version"])
             self.assertEqual("canonical-published", published["status"])
             self.assertIn("signal:test-pm25-001", draft["evidence_refs"])
+            section_ids = [section.get("section_id") for section in draft["sections"]]
+            self.assertEqual("audit-trail", section_ids[-1])
+            for section_id in [
+                "executive-summary",
+                "key-points",
+                "what-happened",
+                "evidence-basis",
+                "council-reasoning",
+                "limitations",
+                "decision-implications",
+                "audit-trail",
+            ]:
+                self.assertIn(section_id, section_ids)
+            audit_section = draft["sections"][-1]
+            self.assertEqual("traceability-index", audit_section["status"])
+            self.assertEqual("ref-list", audit_section["presentation"])
+            self.assertIn("signal:test-pm25-001", audit_section["evidence_refs"])
+            self.assertEqual("audit-trail", published["sections"][-1]["section_id"])
+            self.assertEqual(1, draft_markdown.count("## Audit Trail"))
             public_sections = [
                 section
                 for section in draft["sections"]

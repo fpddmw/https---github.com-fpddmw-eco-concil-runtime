@@ -157,6 +157,47 @@ def submit_failed_source_attempt(run_dir: Path, request_id: str) -> str:
     return proposal_id
 
 
+def submit_route_assessment(run_dir: Path, request_id: str) -> str:
+    payload = run_script(
+        script_path("submit-evidence-route-assessment"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--author-role",
+        "environmental-investigator",
+        "--assessment-type",
+        "source-surface-mismatch",
+        "--evidence-need-summary",
+        "Need reservoir operations records, not only hydrologic observation rows.",
+        "--current-surface-summary",
+        "Visible source surface has observation time series but not decision records.",
+        "--route-judgment",
+        "no-actionable-current-route",
+        "--source-surface-status",
+        "wrong-source-family",
+        "--recommended-next-step",
+        "route-discovery-continuation",
+        "--target-kind",
+        "evidence-request",
+        "--target-id",
+        request_id,
+        "--target-evidence-request-id",
+        request_id,
+        "--considered-source-skill",
+        "fetch-usgs-water-iv",
+        "--alternate-route",
+        "Find an official operations or formal-record source surface.",
+        "--rationale",
+        "Repeating the same observation-source request would not answer the decision-record evidence need.",
+        "--provenance-json",
+        "{\"source\":\"unit-test\"}",
+    )
+    return str(payload["summary"]["object_id"])
+
+
 class RoundLivenessSurfaceTests(unittest.TestCase):
     def test_compact_object_exposes_object_local_handoffs_without_choice_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -651,6 +692,50 @@ class RoundLivenessSurfaceTests(unittest.TestCase):
                 liveness["claim_strength_obligations"]["report_boundary"][
                     "strong_report"
                 ],
+            )
+
+    def test_route_assessment_requires_moderator_response_before_repeat_rounds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            run_kernel("init-run", "--run-dir", str(run_dir), "--run-id", RUN_ID)
+            request_id = submit_open_evidence_request(run_dir)
+            assessment_id = submit_route_assessment(run_dir, request_id)
+
+            liveness = build_round_liveness_surface(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+            )
+            assessment_ref = f"evidence-route-assessment:{assessment_id}"
+            self.assertIn(assessment_ref, liveness["unresolved_refs"])
+            self.assertIn(
+                assessment_ref,
+                [
+                    item["object_ref"]
+                    for item in liveness["unresolved_sets"][
+                        "route_assessments_needing_moderator_response"
+                    ]
+                    if isinstance(item, dict)
+                ],
+            )
+            self.assertEqual(
+                1,
+                liveness["counts"][
+                    "route_assessments_needing_moderator_response_count"
+                ],
+            )
+            route_item = next(
+                item
+                for item in liveness["closing_checklist"]["items"]
+                if item.get("item_id") == "respond-to-evidence-route-assessments"
+            )
+            self.assertEqual("response-required", route_item["state"])
+            self.assertIn(assessment_ref, route_item["route_assessment_refs"])
+            self.assertIn("route-discovery continuation", route_item["moderator_required_action"])
+            self.assertIn("repeated non-move", route_item["response_boundary"])
+            self.assertIn(
+                "evidence-route-assessment",
+                liveness["query_commands"]["evidence-route-assessment"],
             )
 
 

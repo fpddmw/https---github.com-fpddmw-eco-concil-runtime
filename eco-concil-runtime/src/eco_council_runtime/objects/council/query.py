@@ -20,6 +20,7 @@ from .payloads import (
     OBJECT_KIND_DISCUSSION_MESSAGE,
     OBJECT_KIND_EVIDENCE_BUNDLE,
     OBJECT_KIND_EVIDENCE_REQUEST,
+    OBJECT_KIND_EVIDENCE_ROUTE_ASSESSMENT,
     OBJECT_KIND_FINDING,
     OBJECT_KIND_HYPOTHESIS,
     OBJECT_KIND_INVESTIGATION_PLAN,
@@ -224,6 +225,7 @@ _DYNAMIC_INVESTIGATION_QUERY_OBJECT_KINDS = (
     OBJECT_KIND_ROUND_SYNTHESIS,
     OBJECT_KIND_EVIDENCE_REQUEST,
     OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL,
+    OBJECT_KIND_EVIDENCE_ROUTE_ASSESSMENT,
     OBJECT_KIND_AGENT_POSITION,
     OBJECT_KIND_CHALLENGE_DISPOSITION,
     OBJECT_KIND_CONTEXT_PACKET,
@@ -242,6 +244,16 @@ for _dynamic_object_kind in _DYNAMIC_INVESTIGATION_QUERY_OBJECT_KINDS:
                 "source_skill": "json_extract(raw_json, '$.source_skill')",
                 "target_evidence_request_id": (
                     "json_extract(raw_json, '$.target_evidence_request_id')"
+                ),
+            }
+        )
+    if _dynamic_object_kind == OBJECT_KIND_EVIDENCE_ROUTE_ASSESSMENT:
+        filter_columns.update(
+            {
+                "assessment_type": "json_extract(raw_json, '$.assessment_type')",
+                "route_judgment": "json_extract(raw_json, '$.route_judgment')",
+                "source_surface_status": (
+                    "json_extract(raw_json, '$.source_surface_status')"
                 ),
             }
         )

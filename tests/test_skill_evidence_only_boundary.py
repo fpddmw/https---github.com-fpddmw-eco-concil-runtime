@@ -67,6 +67,7 @@ COUNCIL_WRITE_AND_TRANSITION_SKILLS = [
     "submit-challenge-disposition",
     "submit-council-proposal",
     "submit-evidence-request",
+    "submit-evidence-route-assessment",
     "submit-investigation-plan",
     "submit-investigation-scope",
     "submit-readiness-opinion",
@@ -226,6 +227,10 @@ class SkillEvidenceOnlyBoundaryTests(unittest.TestCase):
                 "not source selection",
                 "revise parameters",
             ],
+            "submit-evidence-route-assessment": [
+                "not refusal to investigate",
+                "not source ranking",
+            ],
             "summarize-board-state": ["visibility snapshot", "not a readiness"],
         }
 
@@ -339,6 +344,35 @@ class SkillEvidenceOnlyBoundaryTests(unittest.TestCase):
                     or "cannot" in text,
                     text,
                 )
+
+    def test_environment_aggregation_and_report_prompts_preserve_claim_boundaries(self) -> None:
+        env_doc = " ".join(
+            skill_doc_text("aggregate-environment-evidence").lower().split()
+        )
+        env_prompt = agent_metadata_text("aggregate-environment-evidence").lower()
+        for phrase in [
+            "claim matching",
+            "risk scoring",
+            "source ranking",
+            "physical source attribution",
+            "readiness scoring",
+        ]:
+            with self.subTest(surface="aggregate-environment-evidence", phrase=phrase):
+                self.assertIn(phrase, env_doc)
+                self.assertIn(phrase, env_prompt)
+
+        report_prompt = " ".join(
+            agent_metadata_text("draft-narrative-report").lower().split()
+        )
+        for phrase in [
+            "frozen/reporting basis",
+            "council-carried helper outputs",
+            "sample-local discourse structure",
+            "representative public",
+            "physical source attribution",
+        ]:
+            with self.subTest(surface="draft-narrative-report", phrase=phrase):
+                self.assertIn(phrase, report_prompt)
 
     def test_history_and_reporting_docs_preserve_non_conclusion_boundaries(self) -> None:
         expectations = {

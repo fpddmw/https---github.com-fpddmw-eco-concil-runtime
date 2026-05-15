@@ -64,7 +64,8 @@ OPTIONAL_ANALYSIS_NOTES = {
     ),
     "aggregate-environment-evidence": (
         "Approval-gated DB-backed environment aggregation helper. It summarizes "
-        "source, metric, spatial, and temporal coverage without claim matching."
+        "source, metric, spatial, and temporal coverage without claim matching, "
+        "risk scoring, source ranking, or source attribution."
     ),
     "review-fact-check-evidence-scope": (
         "Approval-gated explicit scope review helper. It requires question, place, "
@@ -195,6 +196,7 @@ DELIBERATION_WRITE_SKILLS = {
     "submit-round-brief": "coordination-brief-write",
     "materialize-context-packet": "coordination-context-packet-write",
     "submit-evidence-request": "coordination-evidence-request-write",
+    "submit-evidence-route-assessment": "coordination-route-assessment-write",
     "submit-agent-position": "coordination-agent-position-write",
     "submit-challenge-disposition": "coordination-challenge-disposition-write",
     "summarize-board-state": "derived-board-export",

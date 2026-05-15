@@ -7,6 +7,8 @@ description: Validate narrative report draft structure, claim-boundary presence,
 
 ## Core Goal
 - Check that a narrative report draft has required sections, visible claim boundaries, and citation/audit refs.
+- Require the report template sections through `Audit Trail`, so JSON and
+  Markdown publications both keep a stable traceability index.
 - Check that the report is reader-facing enough to avoid a pure object-summary
   dump.
 - Check common claim-boundary hazards before publication: representative public
@@ -14,6 +16,13 @@ description: Validate narrative report draft structure, claim-boundary presence,
   treated as public sentiment, public source narratives used as physical
   attribution, attribution claims without visible basis, and advisory helper
   output that has not been carried by council/report-basis objects.
+- Allow general public-opinion wording only when the mission itself records an
+  explicit representative sampling or survey design.
+- Warn when public-discourse percentages omit sample-local and non-exclusive
+  label boundaries, even when an approved summary exists.
+- Warn when any optional-analysis helper artifact, including environment
+  aggregation, appears in report prose or refs without a visible council or
+  report-basis carrier.
 - Keep validation structural and procedural.
 - Avoid scoring, weighting, ranking, or deciding evidentiary truth.
 

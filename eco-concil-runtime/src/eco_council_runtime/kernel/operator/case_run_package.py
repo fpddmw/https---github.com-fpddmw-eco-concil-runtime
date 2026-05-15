@@ -82,6 +82,121 @@ def _existing_count(groups: dict[str, list[dict[str, Any]]]) -> int:
     )
 
 
+def _existing_artifact_kinds(groups: dict[str, list[dict[str, Any]]]) -> set[str]:
+    return {
+        maybe_text(entry.get("artifact_kind"))
+        for entries in groups.values()
+        for entry in entries
+        if isinstance(entry, dict) and bool(entry.get("exists"))
+    }
+
+
+def _checklist_item(
+    *,
+    checklist_id: str,
+    title: str,
+    purpose: str,
+    artifact_kinds: list[str],
+    command_keys: list[str],
+    existing_kinds: set[str],
+    optional: bool = False,
+) -> dict[str, Any]:
+    observed = [kind for kind in artifact_kinds if kind in existing_kinds]
+    missing = [kind for kind in artifact_kinds if kind not in existing_kinds]
+    return {
+        "checklist_id": checklist_id,
+        "title": title,
+        "purpose": purpose,
+        "artifact_kinds": artifact_kinds,
+        "observed_artifact_kinds": observed,
+        "missing_artifact_kinds": missing,
+        "command_keys": command_keys,
+        "optional": bool(optional),
+        "status": "complete" if not missing else "partial" if observed or optional else "not-started",
+    }
+
+
+def _operator_checklists(
+    artifact_groups: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    existing_kinds = _existing_artifact_kinds(artifact_groups)
+    return [
+        _checklist_item(
+            checklist_id="case-run-start",
+            title="Case Run Start Checklist",
+            purpose=(
+                "Human/operator review of mission, runbook, runtime health, and "
+                "agent-entry surfaces before or during a case run."
+            ),
+            artifact_kinds=[
+                "mission",
+                "operator-runbook",
+                "runtime-health",
+                "agent-entry-gate",
+                "audit-ledger",
+            ],
+            command_keys=["refresh_runtime_health", "refresh_operator_runbook"],
+            existing_kinds=existing_kinds,
+        ),
+        _checklist_item(
+            checklist_id="report-publication",
+            title="Report Publication Checklist",
+            purpose=(
+                "Report-editor review of draft, validation, published report, and "
+                "final publication artifacts from frozen/reporting basis only."
+            ),
+            artifact_kinds=[
+                "narrative-report-draft-json",
+                "narrative-report-validation",
+                "narrative-report-json",
+                "narrative-report-md",
+                "final-publication",
+            ],
+            command_keys=["show_reporting_state"],
+            existing_kinds=existing_kinds,
+        ),
+        _checklist_item(
+            checklist_id="case-archive",
+            title="Case Archive Checklist",
+            purpose=(
+                "Archive review of closeout state, history bootstrap, archive "
+                "artifacts, runtime health, and rebuildable package metadata."
+            ),
+            artifact_kinds=[
+                "round-close-state",
+                "history-bootstrap-state",
+                "archive-artifact",
+                "archive-db",
+                "runtime-health",
+            ],
+            command_keys=[
+                "show_archive_status",
+                "refresh_runtime_health",
+                "rebuild_case_run_package",
+            ],
+            existing_kinds=existing_kinds,
+            optional=True,
+        ),
+        _checklist_item(
+            checklist_id="showcase-review",
+            title="Showcase Review Checklist",
+            purpose=(
+                "Demonstration review of final report, runtime health, public "
+                "discourse addenda, and descriptive environment aggregation artifacts."
+            ),
+            artifact_kinds=[
+                "narrative-report-md",
+                "runtime-health",
+                "public-discourse-analysis",
+                "environment-evidence-aggregation",
+            ],
+            command_keys=["show_reporting_state", "refresh_runtime_health"],
+            existing_kinds=existing_kinds,
+            optional=True,
+        ),
+    ]
+
+
 def materialize_case_run_package(
     run_dir: Path,
     *,
@@ -130,6 +245,11 @@ def materialize_case_run_package(
             ),
             *_glob_entries(
                 run_dir,
+                "analytics/environment_evidence_aggregation_*",
+                artifact_kind="environment-evidence-aggregation",
+            ),
+            *_glob_entries(
+                run_dir,
                 "analytics/*relation*",
                 artifact_kind="environment-or-relation-analysis",
             ),
@@ -159,6 +279,11 @@ def materialize_case_run_package(
             "It lists artifacts and commands but does not copy evidence, rank sources, "
             "select evidence, decide report readiness, or fix an investigation agenda."
         ),
+        "checklist_semantics": (
+            "Checklists are human/operator review aids for case execution, reporting, archive, "
+            "and demonstration packaging. They do not prescribe sources, agent order, round count, "
+            "or conclusions."
+        ),
         "does_not_decide": [
             "truth",
             "source selection",
@@ -168,6 +293,7 @@ def materialize_case_run_package(
             "case conclusion",
         ],
         "artifact_groups": artifact_groups,
+        "operator_checklists": _operator_checklists(artifact_groups),
         "screenshot_slots": [
             {"slot_id": "report", "suggested_artifact_kind": "narrative-report-md"},
             {"slot_id": "runtime-health", "suggested_artifact_kind": "runtime-health"},

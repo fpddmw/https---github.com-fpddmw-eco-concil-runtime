@@ -121,6 +121,15 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
         self.assertEqual("advisory", profiles["query-public-signals"]["queue_status"])
         self.assertEqual("query", profiles["query-public-signals"]["stage"])
 
+        aggregate_notes = profiles["aggregate-environment-evidence"]["notes"].lower()
+        for phrase in [
+            "claim matching",
+            "risk scoring",
+            "source ranking",
+            "source attribution",
+        ]:
+            self.assertIn(phrase, aggregate_notes)
+
         self.assertEqual("transition", profiles["open-investigation-round"]["queue_status"])
         self.assertEqual("round-transition-request-consumer", profiles["open-investigation-round"]["queue_role"])
 

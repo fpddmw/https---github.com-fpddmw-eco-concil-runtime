@@ -26,6 +26,7 @@ OBJECT_KIND_ROUND_BRIEF = "round-brief"
 OBJECT_KIND_ROUND_SYNTHESIS = "round-synthesis"
 OBJECT_KIND_EVIDENCE_REQUEST = "evidence-request"
 OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL = "source-acquisition-proposal"
+OBJECT_KIND_EVIDENCE_ROUTE_ASSESSMENT = "evidence-route-assessment"
 OBJECT_KIND_AGENT_POSITION = "agent-position"
 OBJECT_KIND_CONTEXT_PACKET = "context-packet"
 OBJECT_KIND_CHALLENGE_DISPOSITION = "challenge-disposition"
@@ -47,6 +48,7 @@ DYNAMIC_INVESTIGATION_OBJECT_KINDS = (
     OBJECT_KIND_ROUND_SYNTHESIS,
     OBJECT_KIND_EVIDENCE_REQUEST,
     OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL,
+    OBJECT_KIND_EVIDENCE_ROUTE_ASSESSMENT,
     OBJECT_KIND_AGENT_POSITION,
     OBJECT_KIND_CONTEXT_PACKET,
     OBJECT_KIND_CHALLENGE_DISPOSITION,
@@ -60,6 +62,7 @@ DYNAMIC_INVESTIGATION_ID_FIELDS = {
     OBJECT_KIND_ROUND_SYNTHESIS: "synthesis_id",
     OBJECT_KIND_EVIDENCE_REQUEST: "request_id",
     OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL: "proposal_id",
+    OBJECT_KIND_EVIDENCE_ROUTE_ASSESSMENT: "assessment_id",
     OBJECT_KIND_AGENT_POSITION: "position_id",
     OBJECT_KIND_CONTEXT_PACKET: "packet_id",
     OBJECT_KIND_CHALLENGE_DISPOSITION: "disposition_id",
@@ -73,6 +76,7 @@ DYNAMIC_INVESTIGATION_STATUS_DEFAULTS = {
     OBJECT_KIND_ROUND_SYNTHESIS: "recorded",
     OBJECT_KIND_EVIDENCE_REQUEST: "open",
     OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL: "proposed",
+    OBJECT_KIND_EVIDENCE_ROUTE_ASSESSMENT: "recorded",
     OBJECT_KIND_AGENT_POSITION: "proposed",
     OBJECT_KIND_CONTEXT_PACKET: "materialized",
     OBJECT_KIND_CHALLENGE_DISPOSITION: "recorded",
@@ -117,6 +121,7 @@ DYNAMIC_INVESTIGATION_LINEAGE_FIELDS = (
     "position_ids",
     "context_packet_ids",
     "source_acquisition_proposal_ids",
+    "evidence_route_assessment_ids",
     "supersedes_object_ids",
     "response_to_ids",
     "target_refs",
@@ -126,6 +131,10 @@ DYNAMIC_INVESTIGATION_LINEAGE_FIELDS = (
     "unresolved_object_refs",
     "evidence_gap_refs",
     "next_round_candidate_refs",
+    "target_evidence_request_ids",
+    "route_assessment_refs",
+    "capability_gap_refs",
+    "rejected_route_refs",
     "fetch_receipt_refs",
     "normalization_receipt_refs",
     "normalized_signal_refs",
@@ -503,6 +512,27 @@ def normalized_dynamic_investigation_object_payload(
             and not maybe_text(normalized.get("target_evidence_request_id"))
         ):
             normalized["target_evidence_request_id"] = normalized["target_id"]
+    if normalized_kind == OBJECT_KIND_EVIDENCE_ROUTE_ASSESSMENT:
+        target_request_ids = normalized_text_list(
+            normalized.get("target_evidence_request_ids")
+        )
+        if target_request_ids and (
+            normalized["target_kind"] == "round"
+            or normalized["target_id"] == normalized_round_id
+        ):
+            normalized["target_kind"] = OBJECT_KIND_EVIDENCE_REQUEST
+            normalized["target_id"] = target_request_ids[0]
+            normalized["target"] = default_deliberation_target(
+                {},
+                round_id=normalized_round_id,
+                target_kind=normalized["target_kind"],
+                target_id=normalized["target_id"],
+            )
+        if normalized["target_kind"] == OBJECT_KIND_EVIDENCE_REQUEST:
+            target_request_ids = normalized_text_list(
+                [normalized["target_id"], *target_request_ids]
+            )
+        normalized["target_evidence_request_ids"] = target_request_ids
 
     rationale = (
         maybe_text(normalized.get("rationale"))
@@ -1040,6 +1070,8 @@ __all__ = (
     "OBJECT_KIND_INVESTIGATION_SCOPE",
     "OBJECT_KIND_ROUND_BRIEF",
     "OBJECT_KIND_EVIDENCE_REQUEST",
+    "OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL",
+    "OBJECT_KIND_EVIDENCE_ROUTE_ASSESSMENT",
     "OBJECT_KIND_AGENT_POSITION",
     "OBJECT_KIND_CONTEXT_PACKET",
     "OBJECT_KIND_CHALLENGE_DISPOSITION",

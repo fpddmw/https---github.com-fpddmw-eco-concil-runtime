@@ -163,6 +163,40 @@ def build_mission_file(root: Path, artifacts: dict[str, Path]) -> Path:
 
 
 class AgentEntryGateTests(unittest.TestCase):
+    def test_fallback_discourse_actions_use_sample_boundary_language(self) -> None:
+        from eco_council_runtime.kernel.governance.fallback.policy import (
+            issue_cluster_policy,
+            verification_route_policy,
+        )
+
+        issue_action = issue_cluster_policy(
+            {
+                "recommended_lane": "public-discourse-analysis",
+                "route_status": "routed",
+            },
+            issue_label="smoke narratives",
+            weakest_coverage={},
+            link_status="formal-only",
+            has_representation_gap=False,
+        )
+        route_action = verification_route_policy(
+            {
+                "claim_id": "claim-smoke-discourse",
+                "recommended_lane": "public-discourse-analysis",
+                "route_status": "routed",
+            },
+            issue_label="smoke narratives",
+            weakest_coverage={},
+            link_status="formal-only",
+        )
+
+        action_text = json.dumps([issue_action, route_action], sort_keys=True).lower()
+        self.assertIn("sample-local boundaries", action_text)
+        self.assertIn("sample boundary", action_text)
+        self.assertIn("interpretable", action_text)
+        self.assertNotIn("representative enough", action_text)
+        self.assertNotIn("overall public opinion", action_text)
+
     def test_materialize_agent_entry_gate_creates_gate_and_capability_surface(
         self,
     ) -> None:
@@ -1230,6 +1264,15 @@ class AgentEntryGateTests(unittest.TestCase):
                     "status": "completed",
                 },
             )
+            write_json(
+                run_dir / "analytics" / f"environment_evidence_aggregation_{ROUND_ID}.json",
+                {
+                    "schema_version": "optional-analysis-environment-evidence-aggregation-v1",
+                    "skill": "aggregate-environment-evidence",
+                    "status": "completed",
+                    "aggregation_method": "coverage-summary",
+                },
+            )
 
             payload = run_kernel(
                 "materialize-case-run-package",
@@ -1246,6 +1289,7 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertEqual("completed", payload["status"])
             self.assertEqual("case-run-package-manifest-v1", package["schema_version"])
             self.assertIn("does not copy evidence", package["package_semantics"])
+            self.assertIn("do not prescribe sources", package["checklist_semantics"])
             self.assertIn("source ranking", package["does_not_decide"])
             self.assertIn("report readiness", package["does_not_decide"])
             self.assertIn("mission", package["artifact_groups"])
@@ -1264,6 +1308,33 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertTrue(
                 any(entry["artifact_kind"] == "public-discourse-analysis" for entry in analytics_entries)
             )
+            self.assertTrue(
+                any(entry["artifact_kind"] == "environment-evidence-aggregation" for entry in analytics_entries)
+            )
+            checklist_ids = {
+                item.get("checklist_id")
+                for item in package["operator_checklists"]
+                if isinstance(item, dict)
+            }
+            self.assertEqual(
+                {
+                    "case-run-start",
+                    "report-publication",
+                    "case-archive",
+                    "showcase-review",
+                },
+                checklist_ids,
+            )
+            showcase_checklist = next(
+                item
+                for item in package["operator_checklists"]
+                if item.get("checklist_id") == "showcase-review"
+            )
+            self.assertIn(
+                "environment-evidence-aggregation",
+                showcase_checklist["observed_artifact_kinds"],
+            )
+            self.assertIn("show_reporting_state", showcase_checklist["command_keys"])
             self.assertIn(
                 "materialize-runtime-health",
                 package["operator_commands"]["refresh_runtime_health"],

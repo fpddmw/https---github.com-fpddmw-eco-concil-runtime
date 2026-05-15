@@ -142,6 +142,19 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
                 )
                 self.assertIn("approval-required", metadata.get("audit_status", ""))
                 self.assertTrue(metadata.get("helper_destination"))
+        aggregate_metadata = next(
+            skill.get("helper_governance", {})
+            for skill in optional_skills
+            if skill["skill_name"] == "aggregate-environment-evidence"
+        )
+        aggregate_caveats = " ".join(aggregate_metadata.get("caveats", [])).lower()
+        for phrase in [
+            "risk scoring",
+            "source ranking",
+            "source attribution",
+            "readiness scoring",
+        ]:
+            self.assertIn(phrase, aggregate_caveats)
 
     def test_analysis_kind_governance_freezes_legacy_report_basis_paths(self) -> None:
         from eco_council_runtime.kernel.planes.analysis_plane import (

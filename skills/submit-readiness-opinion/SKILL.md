@@ -59,6 +59,9 @@ description: Submit one structured readiness opinion directly into the deliberat
 - `blocked` or `needs-more-data` is a gap declaration, not proof that evidence
   does not exist. It should name the missing route or unresolved refs whenever
   possible.
+- If the blocker is that the current source surface cannot answer the evidence
+  need, submit `evidence-route-assessment` as the route object and cite it from
+  the readiness opinion rather than hiding route mismatch inside readiness text.
 - `ready` should cite basis objects and limits. It should not hide unresolved
   challenges or unnormalized fetch receipts.
 

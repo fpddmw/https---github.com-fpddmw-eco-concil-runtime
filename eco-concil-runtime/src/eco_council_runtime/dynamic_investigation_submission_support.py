@@ -56,6 +56,15 @@ TEXT_FIELDS = (
     "decided_by_role",
     "source_review_comment_id",
     "challenge_id",
+    "assessment_type",
+    "evidence_need_summary",
+    "current_surface_summary",
+    "route_judgment",
+    "recommended_next_step",
+    "source_surface_status",
+    "continuation_mode",
+    "capability_gap_kind",
+    "moderator_response_required",
 )
 
 LIST_FIELDS = (
@@ -82,6 +91,14 @@ LIST_FIELDS = (
     "unresolved_object_refs",
     "evidence_gap_refs",
     "next_round_candidate_refs",
+    "target_evidence_request_ids",
+    "considered_source_families",
+    "considered_source_skills",
+    "same_family_followups_considered",
+    "alternate_routes",
+    "capability_gap_refs",
+    "rejected_route_refs",
+    "route_assessment_refs",
 )
 
 LIST_ARG_FLAGS = {
@@ -108,6 +125,14 @@ LIST_ARG_FLAGS = {
     "unresolved_object_refs": "unresolved-object-ref",
     "evidence_gap_refs": "evidence-gap-ref",
     "next_round_candidate_refs": "next-round-candidate-ref",
+    "target_evidence_request_ids": "target-evidence-request-id",
+    "considered_source_families": "considered-source-family",
+    "considered_source_skills": "considered-source-skill",
+    "same_family_followups_considered": "same-family-followup-considered",
+    "alternate_routes": "alternate-route",
+    "capability_gap_refs": "capability-gap-ref",
+    "rejected_route_refs": "rejected-route-ref",
+    "route_assessment_refs": "route-assessment-ref",
 }
 
 

@@ -146,7 +146,7 @@ def run_aggregate_environment_evidence(
         rule_trace=["db-normalized-environment-signal-summary", config.aggregation_method],
         caveats=[
             "Aggregation describes environment evidence coverage and descriptive statistics only.",
-            "Aggregation must not be used for claim matching, evidence ranking, source ranking, or readiness decisions.",
+            "Aggregation must not be used for claim matching, risk scoring, evidence ranking, source ranking, source attribution, or readiness decisions.",
             "Helper output must be carried by a council object before report use.",
         ],
     )

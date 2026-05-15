@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "draft-narrative-report"
-REPORT_TEMPLATE_VERSION = "narrative-report-template-v6"
+REPORT_TEMPLATE_VERSION = "narrative-report-template-v7"
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
@@ -521,9 +521,12 @@ def markdown_from_draft(draft: dict[str, Any]) -> str:
     lines.extend([f"## {label('report-boundary', language)}", ""])
     lines.append(maybe_text(boundary.get("summary")) or "This draft is bounded to recorded council evidence.")
     lines.append("")
+    has_audit_section = False
     for item in draft.get("sections", []):
         if not isinstance(item, dict):
             continue
+        section_id = maybe_text(item.get("section_id"))
+        has_audit_section = has_audit_section or section_id == "audit-trail"
         lines.extend([f"## {maybe_text(item.get('title'))}", ""])
         paragraphs = [maybe_text(paragraph) for paragraph in item.get("paragraphs", []) if maybe_text(paragraph)]
         if maybe_text(item.get("presentation")) == "bullet-list" or maybe_text(item.get("section_id")) == "key-points":
@@ -531,8 +534,23 @@ def markdown_from_draft(draft: dict[str, Any]) -> str:
                 lines.append(f"- {paragraph.removeprefix('- ').strip()}")
             lines.append("")
             continue
+        if maybe_text(item.get("presentation")) == "ref-list" or section_id == "audit-trail":
+            for paragraph in paragraphs:
+                lines.extend([paragraph, ""])
+            audit_refs = [maybe_text(ref) for ref in item.get("evidence_refs", []) if maybe_text(ref)]
+            for ref in audit_refs[:25]:
+                lines.append(f"- {ref}")
+            if len(audit_refs) > 25:
+                if is_zh(language):
+                    lines.append(f"- ... 另有 {len(audit_refs) - 25} 条引用见 JSON 产物")
+                else:
+                    lines.append(f"- ... {len(audit_refs) - 25} additional refs in the JSON artifact")
+            lines.append("")
+            continue
         for paragraph in paragraphs:
             lines.extend([paragraph, ""])
+    if has_audit_section:
+        return "\n".join(lines)
     lines.extend([f"## {label('audit-trail', language)}", ""])
     audit_refs = [maybe_text(ref) for ref in draft.get("audit_refs", []) if maybe_text(ref)]
     if len(audit_refs) > 25:
@@ -963,6 +981,26 @@ def public_lane_label(value: str, language: str) -> str:
     }
     english, chinese = labels.get(value, (value, value))
     return chinese if is_zh(language) else english
+
+
+def build_audit_trail_paragraphs(ref_count: int, language: str) -> list[str]:
+    if is_zh(language):
+        if ref_count:
+            return [
+                f"本节保留 {ref_count} 条审计引用，用于复核报告所依据的议会对象、报告基础和样本摘要。",
+                "这些引用是可追踪索引，不是来源排序、证据权重或正文结论本身。",
+            ]
+        return [
+            "本节没有可列出的审计引用；报告应保持边界，不能把缺少引用解释为现实证据不存在。",
+        ]
+    if ref_count:
+        return [
+            f"This section preserves {ref_count} audit refs for reviewing the council objects, reporting basis, and sample summaries behind the report.",
+            "These refs are a traceability index, not source ranking, evidence weighting, or reader-facing conclusions.",
+        ]
+    return [
+        "No audit refs are available for this section; keep the report boundary explicit and do not read missing refs as real-world absence.",
+    ]
 
 
 def count_phrase(
@@ -1500,6 +1538,15 @@ def draft_narrative_report(
             all_refs[:10],
             language=report_language,
         ),
+        section(
+            "audit-trail",
+            label("audit-trail", report_language),
+            build_audit_trail_paragraphs(len(all_refs), report_language),
+            all_refs,
+            status="traceability-index",
+            language=report_language,
+        )
+        | {"presentation": "ref-list"},
     ]
     draft_id = "narrative-report-draft-" + stable_hash(
         REPORT_TEMPLATE_VERSION,

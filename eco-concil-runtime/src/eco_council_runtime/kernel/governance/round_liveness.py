@@ -8,6 +8,12 @@ from eco_council_runtime.kernel.governance.claim_strength import (
     claim_strength_closing_item,
     claim_strength_obligations,
 )
+from eco_council_runtime.kernel.governance.evidence_route_assessment import (
+    COMPACT_LIST_FIELDS as ROUTE_ASSESSMENT_COMPACT_LIST_FIELDS,
+    COMPACT_TEXT_FIELDS as ROUTE_ASSESSMENT_COMPACT_TEXT_FIELDS,
+    route_assessment_closing_item,
+    route_assessment_needs_moderator_response,
+)
 from eco_council_runtime.objects.council import query_council_objects
 from eco_council_runtime.runtime_command_hints import kernel_command, run_skill_command
 
@@ -62,6 +68,7 @@ def object_id_for_kind(object_kind: str, payload: dict[str, Any]) -> str:
         "opinion_id",
         "request_id",
         "proposal_id",
+        "assessment_id",
         "synthesis_id",
     ):
         text = maybe_text(payload.get(field_name))
@@ -243,6 +250,40 @@ def object_handoff_commands(
                 "{\"source\":\"agent-follow-up\"}",
             ],
         )
+        handoff_commands[
+            "submit_evidence_route_assessment_for_request_command_template"
+        ] = run_skill_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name="submit-evidence-route-assessment",
+            actor_role="<agent_role>",
+            contract_mode="warn",
+            skill_args=[
+                "--author-role",
+                "<agent_role>",
+                "--assessment-type",
+                "<source-surface-mismatch|capability-gap|route-discovery-needed|no-actionable-current-route|same-family-followup-needed>",
+                "--evidence-need-summary",
+                "<what_this_request_needs>",
+                "--current-surface-summary",
+                "<what_visible_sources_or_skills_can_and_cannot_answer>",
+                "--route-judgment",
+                "<route_judgment>",
+                "--recommended-next-step",
+                "<route-discovery-continuation|capability-gap-human-pause|bounded-report-with-limitation|revise-request>",
+                "--target-kind",
+                "evidence-request",
+                "--target-id",
+                identifier,
+                "--target-evidence-request-id",
+                identifier,
+                "--rationale",
+                "<agent_route_assessment_rationale>",
+                "--provenance-json",
+                "{\"source\":\"agent-follow-up\"}",
+            ],
+        )
     elif object_kind == "source-acquisition-proposal":
         handoff_commands[
             "update_source_acquisition_proposal_status_command_template"
@@ -356,10 +397,16 @@ def compact_object(
         "target_evidence_request_id",
         "readiness_status",
         "sufficient_for_report_basis",
+        *ROUTE_ASSESSMENT_COMPACT_TEXT_FIELDS,
     ):
         value = payload.get(field_name)
         if isinstance(value, bool) or maybe_text(value):
             compact[field_name] = value
+    for field_name in ROUTE_ASSESSMENT_COMPACT_LIST_FIELDS:
+        values = text_list(payload.get(field_name))
+        if values:
+            compact[field_name] = values[:10]
+            compact[field_name + "_count"] = len(values)
     evidence_refs = text_list(payload.get("evidence_refs"))
     if evidence_refs:
         compact["evidence_refs"] = evidence_refs[:10]
@@ -503,6 +550,13 @@ def round_closing_checklist(
         for item in unresolved_sets.get("not_ready_readiness_opinions", [])
         if isinstance(item, dict) and maybe_text(item.get("object_ref"))
     ]
+    route_assessment_refs = [
+        maybe_text(item.get("object_ref"))
+        for item in unresolved_sets.get(
+            "route_assessments_needing_moderator_response", []
+        )
+        if isinstance(item, dict) and maybe_text(item.get("object_ref"))
+    ]
     return {
         "schema_version": "round-closing-checklist-v1",
         "semantics": (
@@ -521,7 +575,10 @@ def round_closing_checklist(
             "This is a procedural decision requirement, not a source ranking or "
             "agenda lock. A weak or bounded report is allowed only after the "
             "moderator records claim strength, limitations, unresolved refs, and "
-            "why live actionable investigation paths are not being continued now."
+            "why live actionable investigation paths are not being continued now. "
+            "If route assessments record source-surface mismatch or capability "
+            "gap, the moderator must acknowledge, re-route, pause, bound, or "
+            "explicitly disagree before repeating the same request."
         ),
         "claim_strength_obligations": claim_strength_obligations(),
         "continuation_decision_required": bool(unresolved_refs),
@@ -587,6 +644,7 @@ def round_closing_checklist(
                     "submit-round-synthesis",
                 ],
             },
+            route_assessment_closing_item(route_assessment_refs),
             claim_strength_closing_item(
                 unresolved_refs=unresolved_refs,
                 source_attempt_review_refs=source_attempt_review_refs,
@@ -603,6 +661,7 @@ def round_closing_checklist(
                 ),
                 "available_paths": [
                     "carry selected refs into a continuation request",
+                    "open a route-discovery continuation when route assessment says the current source surface is mismatched",
                     "record report-ready/no-actionable-path/human-paused/out-of-scope in synthesis after source-owner reflection",
                 ],
             },
@@ -669,6 +728,14 @@ def build_round_liveness_surface(
     source_proposals, query_warnings = query_objects(
         run_dir_path,
         object_kind="source-acquisition-proposal",
+        run_id=run_id,
+        round_id=round_id,
+        limit=query_limit,
+    )
+    warnings.extend(query_warnings)
+    route_assessments, query_warnings = query_objects(
+        run_dir_path,
+        object_kind="evidence-route-assessment",
         run_id=run_id,
         round_id=round_id,
         limit=query_limit,
@@ -758,6 +825,14 @@ def build_round_liveness_surface(
     not_ready_readiness = [
         item for item in readiness_opinions if is_not_ready_opinion(item)
     ]
+    route_assessments_needing_response = [
+        item
+        for item in route_assessments
+        if route_assessment_needs_moderator_response(
+            item,
+            terminal_statuses=TERMINAL_STATUSES,
+        )
+    ]
 
     unresolved_sets = {
         "open_evidence_requests": liveness_ref_set(
@@ -791,6 +866,14 @@ def build_round_liveness_surface(
             next_round_id=next_round_id,
             object_kind="source-acquisition-proposal",
             objects=source_attempts_needing_review,
+        ),
+        "route_assessments_needing_moderator_response": liveness_ref_set(
+            run_dir=run_dir_path,
+            run_id=run_id,
+            round_id=round_id,
+            next_round_id=next_round_id,
+            object_kind="evidence-route-assessment",
+            objects=route_assessments_needing_response,
         ),
         "open_board_tasks": liveness_ref_set(
             run_dir=run_dir_path,
@@ -887,6 +970,10 @@ def build_round_liveness_surface(
                 "report-ready, no-actionable-path, human-paused, or out-of-scope in "
                 "round synthesis. Nonproductive source attempts require owner "
                 "reflection before no-actionable-path is procedurally supportable. "
+                "Route assessments that record source-surface mismatch or capability "
+                "gap require moderator acknowledgement, re-routing, pause, bounded "
+                "report rationale, or explicit disagreement before repeating the "
+                "same evidence request. "
                 "Weak reports remain possible, but only with explicit claim "
                 "strength, limitation, and non-continuation rationale. This does "
                 "not rank sources or fix the next agenda."
@@ -951,6 +1038,7 @@ def build_round_liveness_surface(
                 "evidence-request",
                 "round-synthesis",
                 "source-acquisition-proposal",
+                "evidence-route-assessment",
                 "finding",
                 "evidence-bundle",
                 "hypothesis",

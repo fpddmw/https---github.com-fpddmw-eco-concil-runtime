@@ -20,6 +20,7 @@ REQUIRED_SECTIONS = {
     "council-reasoning",
     "limitations",
     "decision-implications",
+    "audit-trail",
 }
 MACHINE_PROSE_PREFIXES = (
     "council-decision (",
@@ -327,6 +328,15 @@ def load_json_file_if_exists(path: Path) -> dict[str, Any]:
     return load_json_file(path)
 
 
+def load_text_file_if_exists(path: Path) -> str:
+    if not path.exists():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -392,6 +402,31 @@ def contains_unnegated_phrase(text: str, phrases: tuple[str, ...]) -> bool:
 def contains_any_phrase(text: str, phrases: tuple[str, ...]) -> bool:
     lowered = normalized_text(text)
     return any(phrase.casefold() in lowered for phrase in phrases)
+
+
+def mission_text(run_dir: Path | None) -> str:
+    if run_dir is None:
+        return ""
+    candidates = [
+        run_dir / "mission.json",
+        run_dir / "input" / "mission.json",
+        run_dir / "inputs" / "mission.json",
+    ]
+    parts: list[str] = []
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            payload = load_json_file(path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            parts.append(load_text_file_if_exists(path))
+            continue
+        parts.extend(strings_from(payload))
+    return "\n".join(unique_texts(parts))
+
+
+def mission_has_representative_sampling_design(run_dir: Path | None) -> bool:
+    return contains_any_phrase(mission_text(run_dir), REPRESENTATIVE_SAMPLING_DESIGN_TERMS)
 
 
 def section_by_id(draft: dict[str, Any], section_id: str) -> dict[str, Any]:
@@ -609,13 +644,87 @@ def sample_distribution_language_present(text: str) -> bool:
     return has_sample_language and has_ratio
 
 
-def validate_claim_boundary_semantics(draft: dict[str, Any]) -> list[dict[str, str]]:
+def public_discourse_quantification_present(text: str) -> bool:
+    lowered = normalized_text(text)
+    has_quantity = (
+        bool(re.search(r"\b\d+(?:\.\d+)?\s*%", lowered))
+        or "sample_fraction" in lowered
+        or "sample fraction" in lowered
+        or "distribution" in lowered
+        or "proportion" in lowered
+        or "share" in lowered
+        or "\u51fa\u73b0\u7387" in lowered
+        or "\u6bd4\u4f8b" in lowered
+        or "\u5206\u5e03" in lowered
+    )
+    return has_quantity and contains_any_phrase(lowered, PUBLIC_DISCOURSE_QUANTIFICATION_CUES)
+
+
+def public_discourse_sample_boundary_visible(text: str) -> bool:
+    return contains_any_phrase(text, PUBLIC_DISCOURSE_SAMPLE_BOUNDARY_TERMS)
+
+
+def public_discourse_nonexclusive_boundary_visible(text: str) -> bool:
+    return contains_any_phrase(text, PUBLIC_DISCOURSE_NONEXCLUSIVE_TERMS)
+
+
+def helper_marker_mentions(text: str) -> list[str]:
+    lowered = normalized_text(text)
+    return [
+        marker
+        for marker in OPTIONAL_HELPER_MARKERS
+        if marker.casefold() in lowered
+    ]
+
+
+def optional_helper_carrier_issues(draft: dict[str, Any]) -> list[dict[str, str]]:
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    reporting_artifacts = (
+        source_material.get("reporting_artifacts")
+        if isinstance(source_material.get("reporting_artifacts"), list)
+        else []
+    )
+    carrier_visible = any(
+        isinstance(row, dict) and maybe_text(row.get("kind")) == "report-basis-freeze"
+        for row in reporting_artifacts
+    )
+    if carrier_visible:
+        return []
+    helper_text = "\n".join(
+        [
+            report_prose_text(draft),
+            "\n".join(all_evidence_refs(draft)),
+            "\n".join(strings_from(source_material)),
+        ]
+    )
+    markers = helper_marker_mentions(helper_text)
+    if not markers:
+        return []
+    return [
+        issue(
+            "optional-analysis-helper-not-carried",
+            (
+                "The draft appears to cite optional-analysis helper output "
+                f"({', '.join(unique_texts(markers)[:4])}). Helper artifacts must be carried "
+                "by a finding, evidence bundle, agent position, readiness, synthesis, or report-basis object before report use."
+            ),
+            "warning",
+        )
+    ]
+
+
+def validate_claim_boundary_semantics(
+    draft: dict[str, Any],
+    *,
+    run_dir: Path | None = None,
+) -> list[dict[str, str]]:
     issues: list[dict[str, str]] = []
     text = report_prose_text(draft)
     if not text:
         return issues
 
-    if contains_unnegated_phrase(text, PUBLIC_OPINION_UPGRADE_PHRASES):
+    has_representative_design = mission_has_representative_sampling_design(run_dir)
+    if contains_unnegated_phrase(text, PUBLIC_OPINION_UPGRADE_PHRASES) and not has_representative_design:
         issues.append(
             issue(
                 "unsupported-public-opinion-claim",
@@ -628,7 +737,10 @@ def validate_claim_boundary_semantics(draft: dict[str, Any]) -> list[dict[str, s
             )
         )
 
-    if sample_distribution_language_present(text) and not has_public_discourse_basis(draft, text):
+    if (
+        sample_distribution_language_present(text)
+        or public_discourse_quantification_present(text)
+    ) and not has_public_discourse_basis(draft, text):
         issues.append(
             issue(
                 "sample-distribution-without-public-discourse-basis",
@@ -639,6 +751,29 @@ def validate_claim_boundary_semantics(draft: dict[str, Any]) -> list[dict[str, s
                 "error",
             )
         )
+    elif public_discourse_quantification_present(text):
+        if not public_discourse_sample_boundary_visible(text):
+            issues.append(
+                issue(
+                    "public-discourse-quantification-sample-boundary-missing",
+                    (
+                        "Public discourse counts, percentages, shares, or label distributions "
+                        "should state that they are sample-local and not population or platform-wide estimates."
+                    ),
+                    "warning",
+                )
+            )
+        if not public_discourse_nonexclusive_boundary_visible(text):
+            issues.append(
+                issue(
+                    "public-discourse-label-nonexclusive-boundary-missing",
+                    (
+                        "Public discourse label percentages should state whether labels are non-exclusive "
+                        "and should not be summed into a 100% opinion composition."
+                    ),
+                    "warning",
+                )
+            )
 
     if contains_unnegated_phrase(text, GDELT_TONE_PUBLIC_SENTIMENT_PHRASES):
         issues.append(
@@ -722,6 +857,8 @@ def validate_claim_boundary_semantics(draft: dict[str, Any]) -> list[dict[str, s
             )
         )
 
+    issues.extend(optional_helper_carrier_issues(draft))
+
     if contains_any_phrase(text, ACQUISITION_ATTEMPT_TERMS) and not contains_any_phrase(text, ACTIONABLE_PATH_TERMS):
         issues.append(
             issue(
@@ -756,7 +893,12 @@ def validate_draft(draft: dict[str, Any], *, run_dir: Path | None = None) -> lis
     missing = sorted(REQUIRED_SECTIONS - section_ids)
     for section_id in missing:
         issues.append(issue("missing-section", f"Missing required section: {section_id}.", "error"))
-    allowed_ref_optional_statuses = {"limitations-only", "limitations-visible", "boundary-only"}
+    allowed_ref_optional_statuses = {
+        "limitations-only",
+        "limitations-visible",
+        "boundary-only",
+        "traceability-index",
+    }
     for section in sections:
         if not isinstance(section, dict):
             continue
@@ -819,7 +961,7 @@ def validate_draft(draft: dict[str, Any], *, run_dir: Path | None = None) -> lis
         issues.append(issue("missing-evidence-index", "Draft has no top-level evidence_refs index.", "warning"))
     if not isinstance(draft.get("audit_refs"), list) or not draft["audit_refs"]:
         issues.append(issue("missing-audit-refs", "Draft has no audit_refs index.", "warning"))
-    issues.extend(validate_claim_boundary_semantics(draft))
+    issues.extend(validate_claim_boundary_semantics(draft, run_dir=run_dir))
     if run_dir is not None:
         issues.extend(public_discourse_summary_contract_issues(draft, run_dir=run_dir))
     return issues

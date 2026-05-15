@@ -1,4 +1,4 @@
 interface:
   display_name: "Eco Submit Readiness Opinion"
   short_description: "Write one structured readiness opinion into the deliberation DB"
-  default_prompt: "Use $submit-readiness-opinion to submit one role's readiness posture into the deliberation DB. It does not move the council phase by itself. Always provide explicit agent_role, readiness_status, rationale, basis object ids when available, unresolved refs or missing routes for blocked/needs-more-data opinions, and sufficient_for_report_basis when the council is making a report-basis judgement."
+  default_prompt: "Use $submit-readiness-opinion to submit one role's readiness posture into the deliberation DB. It does not move the council phase by itself. Always provide explicit agent_role, readiness_status, rationale, basis object ids when available, unresolved refs or missing routes for blocked/needs-more-data opinions, and sufficient_for_report_basis when the council is making a report-basis judgement. If the blocker is a source-surface mismatch or capability gap, submit/cite an evidence-route-assessment rather than hiding the route problem in readiness prose."

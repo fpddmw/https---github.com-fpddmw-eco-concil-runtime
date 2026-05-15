@@ -63,6 +63,11 @@ description: Moderator-controlled council-state skill that opens one follow-up i
   context, not hard agenda locks; agents may revise them with rationale.
 - Use this when live actionable routes remain. If the council does not continue,
   the moderator should record the report boundary and non-continuation rationale.
+- If an investigator submitted an `evidence-route-assessment`, the new round
+  should acknowledge it as route context. Do not reopen the same request as a
+  repeated evidence-continuation unless the moderator has recorded agreement,
+  re-routing, pause/capability-gap handling, bounded-report rationale, or
+  explicit disagreement.
 
 ## Scripts
 - `scripts/open_investigation_round.py`

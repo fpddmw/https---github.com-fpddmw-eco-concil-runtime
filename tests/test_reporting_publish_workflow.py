@@ -135,6 +135,7 @@ def minimal_narrative_draft() -> dict[str, object]:
             "council-reasoning",
             "limitations",
             "decision-implications",
+            "audit-trail",
         ),
         start=1,
     ):
@@ -142,7 +143,11 @@ def minimal_narrative_draft() -> dict[str, object]:
             {
                 "section_id": section_id,
                 "title": section_id.replace("-", " ").title(),
-                "status": "limitations-visible" if section_id == "limitations" else "draft",
+                "status": "limitations-visible"
+                if section_id == "limitations"
+                else "traceability-index"
+                if section_id == "audit-trail"
+                else "draft",
                 "paragraphs": [f"Reader-facing paragraph {index} with bounded report language."],
                 "evidence_refs": ["signal:test-report-quality-001"],
             }
@@ -820,7 +825,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             run_dir = Path(tmpdir) / "run"
             draft = minimal_narrative_draft()
             draft["sections"][3]["paragraphs"] = [
-                "The sample-local issue distribution says health-risk labels appear in 60% of the sample."
+                "Health-risk labels appear in 60% of the YouTube comment public discourse."
             ]
             write_narrative_draft(run_dir, draft)
 
@@ -838,6 +843,40 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("blocked", payload["status"])
             self.assertIn(
                 "sample-distribution-without-public-discourse-basis",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_allows_public_opinion_language_with_representative_design_mission(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            write_json(
+                run_dir / "mission.json",
+                {
+                    "objective": "Analyze public opinion using a representative sampling design.",
+                    "sampling_design": "representative sampling design with survey weights",
+                },
+            )
+            draft = minimal_narrative_draft()
+            draft["sections"][0]["paragraphs"] = [
+                "Overall public opinion is reported only because the mission records a representative sampling design."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("valid", validation["status"])
+            self.assertNotIn(
+                "unsupported-public-opinion-claim",
                 [item["code"] for item in validation["issues"]],
             )
 
@@ -890,6 +929,37 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("blocked", payload["status"])
             self.assertIn(
                 "source-narrative-as-physical-attribution",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_warns_when_environment_helper_is_not_carried(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "The aggregate-environment-evidence helper is cited as descriptive environment coverage."
+            ]
+            draft["sections"][3]["evidence_refs"] = [
+                "analytics/environment_evidence_aggregation_round-reporting-publish-001.json:$.aggregation"
+            ]
+            draft["source_material"]["reporting_artifacts"] = []
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("valid", validation["status"])
+            self.assertIn(
+                "optional-analysis-helper-not-carried",
                 [item["code"] for item in validation["issues"]],
             )
 
@@ -1075,6 +1145,7 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("valid", validation["status"])
             self.assertNotIn("public-summary-contract-incomplete", issue_codes)
             self.assertNotIn("public-summary-policy-boundary-missing", issue_codes)
+            self.assertIn("public-discourse-label-nonexclusive-boundary-missing", issue_codes)
 
 
 if __name__ == "__main__":

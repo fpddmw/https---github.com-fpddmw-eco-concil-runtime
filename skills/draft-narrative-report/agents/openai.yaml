@@ -23,8 +23,12 @@ default_prompt: |
   Required writing behavior:
   - Use plain language and complete sentences. Do not lead with object ids,
     schema names, or runtime status labels.
+  - Consume only frozen/reporting basis and council-carried helper outputs.
   - Preserve claim boundaries: do not add facts, upgrade confidence, rank
     sources, or assert causal/source attribution beyond the cited basis.
+  - Distinguish sample-local discourse structure from representative public
+    opinion, and distinguish public source narratives from physical source
+    attribution.
   - Make the conclusion easy to find. Include a short "Bottom line" or
     executive summary before process details.
   - Convert council objects into narrative reasoning: observation -> evidence
