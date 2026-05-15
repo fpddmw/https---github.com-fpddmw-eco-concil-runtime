@@ -257,16 +257,36 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
                 "DB-visible normalized public/formal text sample only",
                 corpus_artifact["sample_definition"]["sample_boundary"],
             )
+            self.assertEqual(
+                "normalized public/formal text-bearing signal",
+                corpus_artifact["text_unit"],
+            )
+            self.assertEqual(
+                "one corpus item per normalized signal_id after signal-plane dedupe",
+                corpus_artifact["dedupe_policy"],
+            )
+            self.assertTrue(corpus_artifact["inclusion_filters"]["requires_text"])
+            self.assertIn("signals without text", corpus_artifact["exclusion_filters"])
             lane_counts = {
                 item["discourse_lane"]: item["signal_count"]
                 for item in corpus_artifact["discourse_lane_counts"]
             }
             self.assertEqual(1, lane_counts["social_sample_affect"])
             self.assertEqual(1, lane_counts["gdelt_media_tone"])
+            sample_class_counts = {
+                item["sample_class"]: item["signal_count"]
+                for item in corpus_artifact["sample_class_counts"]
+            }
+            self.assertEqual(1, sample_class_counts["media_document_sample"])
+            self.assertEqual(1, sample_class_counts["platform_visibility_sample"])
+            self.assertEqual(1, sample_class_counts["platform_comment_sample"])
+            self.assertEqual(1, sample_class_counts["formal_participation_sample"])
             self.assertTrue(
                 any(warning["code"] == "gdelt-tone-boundary" for warning in corpus_artifact["warnings"])
             )
             first_item = corpus_artifact["corpus_items"][0]
+            self.assertIn("sample_class", first_item)
+            self.assertIn("text_unit", first_item)
             self.assertIn("evidence_refs", first_item)
             self.assertNotIn("recommended_conclusion", first_item)
             self.assertNotIn("rank", first_item)
@@ -357,6 +377,24 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
             self.assertEqual("concern", aggregation_artifact["social_affect_distribution"][0]["label"])
             self.assertEqual(1.0, aggregation_artifact["social_affect_distribution"][0]["sample_fraction"])
             self.assertEqual(
+                4,
+                aggregation_artifact["distribution_denominators"]["eligible_signal_count"],
+            )
+            self.assertEqual(
+                1,
+                aggregation_artifact["social_affect_distribution"][0]["label_family_denominator"],
+            )
+            self.assertTrue(
+                aggregation_artifact["social_affect_distribution"][0]["labels_are_not_mutually_exclusive"]
+            )
+            self.assertTrue(
+                aggregation_artifact["social_affect_distribution"][0]["fractions_do_not_sum_to_100_percent"]
+            )
+            self.assertEqual(
+                "sample_fraction is label-family-local and must not be treated as public opinion share",
+                aggregation_artifact["distribution_denominators"]["denominator_policy"],
+            )
+            self.assertEqual(
                 "annotation-basis://fixture/public-discourse-v1",
                 aggregation_artifact["social_affect_distribution"][0]["provenance"]["annotation_basis_refs"][0],
             )
@@ -432,6 +470,25 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
             self.assertEqual(4, summary_artifact["sample_count"])
             self.assertEqual("health-risk", summary_artifact["issue_distribution"][0]["label"])
             self.assertEqual("concern", summary_artifact["social_affect_distribution"][0]["label"])
+            self.assertIn("sample_class_counts", summary_artifact)
+            self.assertIn("text_unit_counts", summary_artifact)
+            self.assertIn("sample_internal_distribution", summary_artifact)
+            self.assertEqual(
+                "sample_fraction is label-family-local and must not be treated as public opinion share",
+                summary_artifact["sample_internal_distribution"]["distribution_denominators"]["denominator_policy"],
+            )
+            self.assertIn(
+                "general public opinion estimates",
+                summary_artifact["what_this_sample_cannot_support"]["en"],
+            )
+            self.assertIn(
+                "Formal comments are described as institutional participation records, not general public opinion.",
+                summary_artifact["recommended_report_language"]["en"],
+            )
+            self.assertIn(
+                "Public source narratives prove the physical source ...",
+                summary_artifact["forbidden_report_language"]["en"],
+            )
             self.assertEqual(
                 comparison_artifact["gdelt_media_tone_summary"],
                 summary_artifact["gdelt_media_tone_summary"],

@@ -1,0 +1,4 @@
+interface:
+  display_name: "USBR RISE Fetch"
+  short_description: "Fetch explicit RISE operational time-series rows"
+  default_prompt: "Use $fetch-usbr-rise only with explicit RISE item IDs and bounded windows. Zero or sparse rows require item/filter review and are not proof of absence; do not infer shortage severity, compliance, governance responsibility, or report conclusions."

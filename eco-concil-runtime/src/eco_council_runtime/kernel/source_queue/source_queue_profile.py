@@ -7,6 +7,8 @@ from typing import Any, Iterable
 FETCH_SKILLS = {
     "fetch-airnow-hourly-observations",
     "fetch-bluesky-cascade",
+    "fetch-epa-eis-records",
+    "fetch-federal-register-documents",
     "fetch-gdelt-doc-search",
     "fetch-gdelt-events",
     "fetch-gdelt-gkg",
@@ -18,6 +20,8 @@ FETCH_SKILLS = {
     "fetch-openaq",
     "fetch-regulationsgov-comment-detail",
     "fetch-regulationsgov-comments",
+    "fetch-usbr-project-records",
+    "fetch-usbr-rise",
     "fetch-usgs-water-iv",
     "fetch-youtube-comments",
     "fetch-youtube-video-search",
@@ -224,6 +228,34 @@ RUNTIME_ARCHIVE_SKILLS = {
 
 SOURCE_FAMILY_WORKFLOWS: list[dict[str, object]] = [
     {
+        "family_id": "usbr-operational-records",
+        "label": "USBR operational records workflow",
+        "semantics": (
+            "Agent-owned direct operational-record workflow. RISE result rows can "
+            "ground reservoir, release, storage, or elevation observations, but "
+            "they do not decide shortage severity, operating compliance, or "
+            "governance responsibility."
+        ),
+        "workflow_steps": [
+            {
+                "step_id": "rise-result-fetch",
+                "role": "direct RISE time-series result retrieval for explicit item IDs",
+                "skill_names": ["fetch-usbr-rise"],
+                "output": "USBR RISE operational result artifacts",
+                "followup_when": (
+                    "Use when an investigator has explicit RISE item IDs or an "
+                    "operator-provided source request for reservoir or release data."
+                ),
+            },
+        ],
+        "normalizer_skills": ["normalize-usbr-rise-environment-signals"],
+        "attempt_review_questions": [
+            "Were RISE item IDs grounded in an explicit item page, source request, or catalog lookup?",
+            "Were date filters and page caps compatible with the operational record need?",
+            "If rows were sparse or empty, did the agent avoid treating that as absence of USBR operations records?",
+        ],
+    },
+    {
         "family_id": "gdelt-public-record",
         "label": "GDELT public record workflow",
         "semantics": (
@@ -340,6 +372,55 @@ SOURCE_FAMILY_WORKFLOWS: list[dict[str, object]] = [
             "Did the list stage return IDs that require detail enrichment?",
             "Should docket/document/agency constraints be revised before stopping?",
             "If no comments were returned, did the agent distinguish docket/filter limits from absence of policy discussion?",
+        ],
+    },
+    {
+        "family_id": "official-governance-records",
+        "label": "Official governance records workflow",
+        "semantics": (
+            "Agent-owned official-record workflow. Federal Register API records and "
+            "direct USBR project pages are complementary official governance surfaces; "
+            "neither path proves completeness or legal significance by itself."
+        ),
+        "workflow_steps": [
+            {
+                "step_id": "epa-eis-records",
+                "role": "EPA EIS Database result metadata from common-search pages or explicit search URLs",
+                "skill_names": ["fetch-epa-eis-records"],
+                "output": "EPA EIS Database metadata artifacts",
+                "followup_when": (
+                    "Use when formal NEPA/EIS metadata, lead agency, CEQ number, "
+                    "Federal Register date, or document availability cues matter."
+                ),
+            },
+            {
+                "step_id": "federal-register-documents",
+                "role": "published federal document discovery by term, agency, type, and publication date",
+                "skill_names": ["fetch-federal-register-documents"],
+                "output": "FederalRegister.gov document metadata artifacts",
+                "followup_when": (
+                    "Use when formal rulemaking or notice records may bound the "
+                    "official governance context."
+                ),
+            },
+            {
+                "step_id": "usbr-project-records",
+                "role": "direct official project-page and linked-document inventory",
+                "skill_names": ["fetch-usbr-project-records"],
+                "output": "USBR project page and linked-record artifacts",
+                "followup_when": (
+                    "Use when an investigator has an official USBR project URL and "
+                    "needs a project-specific record surface."
+                ),
+            },
+        ],
+        "normalizer_skills": ["normalize-official-governance-records"],
+        "attempt_review_questions": [
+            "Was the EPA EIS common-search page or explicit search URL appropriate for the project/window?",
+            "Was the Federal Register agency slug, term, type, and publication window appropriate?",
+            "Were USBR URLs grounded in an explicit official project surface?",
+            "Should another official URL, agency term, or date window be tried before stopping?",
+            "If records were sparse or empty, did the agent avoid treating that as absence of official governance records?",
         ],
     },
     {

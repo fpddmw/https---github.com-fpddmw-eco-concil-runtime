@@ -49,6 +49,8 @@ TEST_SUITES: dict[str, tuple[str, ...]] = {
     "case-study": (
         "tests.test_benchmark_replay_workflow",
         "tests.test_policy_research_case_fixtures",
+        "tests.test_official_governance_records_workflow",
+        "tests.test_usbr_rise_workflow",
     ),
 }
 

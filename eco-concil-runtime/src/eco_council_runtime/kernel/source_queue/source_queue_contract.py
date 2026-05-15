@@ -202,6 +202,54 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         anchor_source_skills=["fetch-regulationsgov-comments"],
         auto_selectable=False,
     ),
+    "fetch-epa-eis-records": _source(
+        role="social-investigator",
+        family_id="official-governance",
+        family_label="Official Governance Records",
+        layer_id="epa-eis-records",
+        layer_label="EPA EIS Records",
+        tier="l1",
+        normalizer_skill="normalize-official-governance-records",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
+    "fetch-federal-register-documents": _source(
+        role="social-investigator",
+        family_id="official-governance",
+        family_label="Official Governance Records",
+        layer_id="federal-register-documents",
+        layer_label="Federal Register Documents",
+        tier="l1",
+        normalizer_skill="normalize-official-governance-records",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
+    "fetch-usbr-project-records": _source(
+        role="social-investigator",
+        family_id="official-governance",
+        family_label="Official Governance Records",
+        layer_id="usbr-project-records",
+        layer_label="USBR Project Records",
+        tier="l1",
+        normalizer_skill="normalize-official-governance-records",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
+    "fetch-usbr-rise": _source(
+        role="environmental-investigator",
+        family_id="usbr-operational-records",
+        family_label="USBR Operational Records",
+        layer_id="rise-results",
+        layer_label="RISE Results",
+        tier="l1",
+        normalizer_skill="normalize-usbr-rise-environment-signals",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--output",
+    ),
     "fetch-airnow-hourly-observations": _source(
         role="environmental-investigator",
         family_id="airnow",
@@ -430,6 +478,54 @@ SOURCE_USE_CARDS: dict[str, dict[str, Any]] = {
             "A failed detail fetch is a limitation for selected IDs, not proof that the docket lacks relevant comments.",
         ],
     },
+    "fetch-epa-eis-records": {
+        "what_this_skill_is": "EPA EIS Database result-table retrieval for official NEPA/EIS metadata rows.",
+        "what_this_skill_is_not": "It is not an EIS adequacy review and does not prove legal sufficiency or policy responsibility.",
+        "before_using": [
+            "Use common-search pages for current official surfaces or pass an explicit EPA EIS Database search URL.",
+            "Normalize with normalize-official-governance-records before DB-backed formal review.",
+        ],
+        "zero_or_failed_result_discipline": [
+            "Zero rows may reflect common-search choice, stale search URL, provider HTML changes, pagination, or the database result cap.",
+            "It is not proof that EIS records are absent.",
+        ],
+    },
+    "fetch-federal-register-documents": {
+        "what_this_skill_is": "FederalRegister.gov published-document metadata retrieval by term, agency, type, and publication date.",
+        "what_this_skill_is_not": "It is not a legal interpretation engine and does not prove official-record completeness.",
+        "before_using": [
+            "Use provider agency slugs and compact terms; keep date and page caps explicit.",
+            "Normalize with normalize-official-governance-records before DB-backed formal review.",
+        ],
+        "zero_or_failed_result_discipline": [
+            "Zero rows may reflect agency slug, term, document type, publication-date, or page-cap constraints.",
+            "It is not proof that official governance records are absent.",
+        ],
+    },
+    "fetch-usbr-project-records": {
+        "what_this_skill_is": "Direct fetch of supplied Bureau of Reclamation project pages and same-domain linked record URLs.",
+        "what_this_skill_is_not": "It is not a full-site USBR search and does not rank pages or decide document completeness.",
+        "before_using": [
+            "Ground each URL in an explicit source request or agent-selected official project surface.",
+            "Normalize with normalize-official-governance-records before DB-backed formal review.",
+        ],
+        "zero_or_failed_result_discipline": [
+            "Sparse links may reflect the supplied URL, page design, extraction limits, or same-domain filtering.",
+            "It is not proof that USBR official records are absent.",
+        ],
+    },
+    "fetch-usbr-rise": {
+        "what_this_skill_is": "USBR RISE JSON:API result retrieval for explicit operational time-series item IDs.",
+        "what_this_skill_is_not": "It is not a catalog search planner and does not decide shortage severity, operating compliance, or governance responsibility.",
+        "before_using": [
+            "Ground item IDs in a RISE item detail page, operator source request, or prior explicit catalog lookup.",
+            "Keep date windows, page caps, and item metadata limitations explicit.",
+        ],
+        "zero_or_failed_result_discipline": [
+            "Zero rows may reflect item ID, date filters, provider latency, metadata limits, or page caps.",
+            "It is not proof that USBR operational records are absent.",
+        ],
+    },
     "fetch-openaq": {
         "what_this_skill_is": "OpenAQ metadata, API measurement, or archive-backfill retrieval.",
         "what_this_skill_is_not": "It is not an exposure conclusion and does not infer coverage sufficiency.",
@@ -548,6 +644,59 @@ SOURCE_CAPABILITY_HINTS: dict[str, dict[str, Any]] = {
         "fetch_argument_templates": [
             ["fetch", "--comment-id", "<comment_id>", "--include-records", "--no-save-response"],
             ["fetch", "--comment-ids-file", "<path>", "--include-records", "--no-save-response"],
+        ],
+    },
+    "fetch-epa-eis-records": {
+        "provider_modes": [
+            {
+                "mode": "eis-database-html-results",
+                "time_coverage": "EPA EIS Database official result surfaces selected by commonSearch or explicit search URL",
+                "time_args": [],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--common-search", "openComment", "--max-records", "<N>", "--output", "<artifact.json>"],
+            ["fetch", "--common-search", "last30Published", "--max-records", "<N>", "--output", "<artifact.json>"],
+            ["fetch", "--search-url", "<official_epa_eis_search_url>", "--dry-run"],
+        ],
+    },
+    "fetch-federal-register-documents": {
+        "provider_modes": [
+            {
+                "mode": "documents",
+                "time_coverage": "FederalRegister.gov published documents filtered by publication_date arguments",
+                "time_args": ["--publication-date-gte", "--publication-date-lte"],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--term", "<term>", "--agency", "<agency_slug>", "--publication-date-gte", "<YYYY-MM-DD>", "--publication-date-lte", "<YYYY-MM-DD>", "--max-pages", "<N>", "--output", "<artifact.json>"],
+            ["fetch", "--document-type", "Notice", "--publication-date-gte", "<YYYY-MM-DD>", "--publication-date-lte", "<YYYY-MM-DD>", "--dry-run"],
+        ],
+    },
+    "fetch-usbr-project-records": {
+        "provider_modes": [
+            {
+                "mode": "direct-url-project-pages",
+                "time_coverage": "Current official USBR project page content and linked same-domain records at supplied URLs",
+                "time_args": [],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--url", "<https://www.usbr.gov/...>", "--max-linked-records", "<N>", "--output", "<artifact.json>"],
+            ["fetch", "--url-file", "<urls.txt>", "--max-linked-records", "<N>", "--dry-run"],
+        ],
+    },
+    "fetch-usbr-rise": {
+        "provider_modes": [
+            {
+                "mode": "rise-results",
+                "time_coverage": "RISE time-series result rows for explicit item IDs and optional dateTime filters",
+                "time_args": ["--after-utc", "--before-utc"],
+            }
+        ],
+        "fetch_argument_templates": [
+            ["fetch", "--item-id", "<rise_item_id>", "--after-utc", "<YYYY-MM-DDTHH:MM:SSZ>", "--before-utc", "<YYYY-MM-DDTHH:MM:SSZ>", "--max-pages", "<N>", "--output", "<artifact.json>"],
+            ["fetch", "--item-id", "<rise_item_id>", "--include-item-metadata", "--dry-run"],
         ],
     },
     "fetch-airnow-hourly-observations": {

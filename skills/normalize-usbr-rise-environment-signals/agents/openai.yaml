@@ -1,0 +1,4 @@
+interface:
+  display_name: "Normalize USBR RISE Environment Signals"
+  short_description: "Normalize RISE result rows into environment signals"
+  default_prompt: "Use $normalize-usbr-rise-environment-signals to normalize one fetch-usbr-rise artifact into environment signal rows. No-row output is not absence; do not infer shortage severity, compliance, source ranking, or report conclusions."

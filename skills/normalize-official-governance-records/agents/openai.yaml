@@ -1,0 +1,4 @@
+interface:
+  display_name: "Normalize Official Governance Records"
+  short_description: "Normalize official-record metadata into formal signals"
+  default_prompt: "Use $normalize-official-governance-records to normalize one EPA EIS, Federal Register, or USBR governance-record artifact into formal signal rows. No-row output is not absence; do not infer legal meaning, source sufficiency, ranking, or report conclusions."

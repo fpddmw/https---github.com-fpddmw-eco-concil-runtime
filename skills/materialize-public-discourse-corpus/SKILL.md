@@ -8,6 +8,9 @@ description: Optional-analysis helper for materializing a DB-backed public/forma
 ## Core Goal
 - Read normalized public/formal text-like signals from `signal_plane.sqlite`.
 - Emit a bounded corpus with source family, discourse lane, item refs, and sample limitations.
+- Emit explicit sample semantics: text unit, dedupe policy, inclusion/exclusion
+  filters, and sample classes for media/document, platform comment, and formal
+  participation records.
 - Avoid public-opinion inference, source ranking, sentiment judgement, or report conclusions.
 
 ## Read/Write Contract

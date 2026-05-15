@@ -16,6 +16,13 @@ description: Validate narrative report draft structure, claim-boundary presence,
   treated as public sentiment, public source narratives used as physical
   attribution, attribution claims without visible basis, and advisory helper
   output that has not been carried by council/report-basis objects.
+- Block formal comment or docket-sample distributions when they are written as
+  general public opinion, and block sample fractions that are summed into a
+  100% opinion composition when labels may be non-exclusive.
+- Warn when source-narrative language appears without an explicit cue/not-
+  physical-attribution boundary.
+- Block strong source/transport/causal attribution wording when no trajectory,
+  plume, chemistry, or comparable attribution-model basis is visible.
 - Allow general public-opinion wording only when the mission itself records an
   explicit representative sampling or survey design.
 - Warn when public-discourse percentages omit sample-local and non-exclusive

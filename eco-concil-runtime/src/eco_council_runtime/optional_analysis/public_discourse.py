@@ -35,7 +35,9 @@ from .support import (
 __all__ = (
     "PUBLIC_DISCOURSE_SOURCE_FAMILY_BY_SKILL",
     "public_discourse_lane",
+    "public_discourse_sample_class",
     "public_discourse_source_family",
+    "public_discourse_text_unit",
     "run_aggregate_public_discourse_annotations",
     "run_audit_public_discourse_sample_coverage",
     "run_compare_public_media_narratives",
@@ -170,6 +172,55 @@ def public_discourse_lane(signal: dict[str, Any]) -> str:
     return "public_discourse_text"
 
 
+def public_discourse_sample_class(signal: dict[str, Any]) -> str:
+    lane = public_discourse_lane(signal)
+    if lane in GDELT_TONE_LANES or lane == "gdelt_doc_recon":
+        return "media_document_sample"
+    if lane == "social_sample_affect":
+        return "platform_comment_sample"
+    if lane in {"formal_public_comment_sample", "formal_record_text"}:
+        return "formal_participation_sample"
+    if lane == "public_visibility":
+        return "platform_visibility_sample"
+    return "public_discourse_text_sample"
+
+
+def public_discourse_text_unit(signal: dict[str, Any]) -> str:
+    source_skill = maybe_text(signal.get("source_skill"))
+    signal_kind = maybe_text(signal.get("signal_kind"))
+    if source_skill == "fetch-youtube-comments":
+        return "youtube_comment"
+    if source_skill == "fetch-youtube-video-search":
+        return "youtube_video_record"
+    if source_skill == "fetch-bluesky-cascade":
+        return "bluesky_post_or_reply"
+    if source_skill in FORMAL_COMMENT_SAMPLE_SKILLS:
+        return "formal_comment_record"
+    if source_skill == "fetch-gdelt-doc-search":
+        return "gdelt_doc_record"
+    if source_skill in GDELT_MEDIA_TONE_SKILLS:
+        return "gdelt_media_or_document_row"
+    return signal_kind or "normalized_signal_text"
+
+
+def _sample_class_counts(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts = Counter(public_discourse_sample_class(signal) for signal in signals)
+    return [
+        {"sample_class": sample_class, "signal_count": count}
+        for sample_class, count in sorted(counts.items())
+        if sample_class
+    ]
+
+
+def _text_unit_counts(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts = Counter(public_discourse_text_unit(signal) for signal in signals)
+    return [
+        {"text_unit": text_unit, "signal_count": count}
+        for text_unit, count in sorted(counts.items())
+        if text_unit
+    ]
+
+
 def _source_family_counts(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
     counts = Counter(public_discourse_source_family(signal) for signal in signals)
     return [
@@ -285,6 +336,8 @@ def _corpus_items(signals: list[dict[str, Any]], *, run_id: str, round_id: str) 
                 "source_family": public_discourse_source_family(signal),
                 "source_skill": maybe_text(signal.get("source_skill")),
                 "discourse_lane": public_discourse_lane(signal),
+                "sample_class": public_discourse_sample_class(signal),
+                "text_unit": public_discourse_text_unit(signal),
                 "signal_kind": maybe_text(signal.get("signal_kind")),
                 "title": maybe_text(signal.get("title")),
                 "text_excerpt": text[:500],
@@ -527,18 +580,24 @@ def _distribution_record(
     label: str,
     annotations: list[dict[str, Any]],
     signal_lookup: dict[str, dict[str, Any]],
-    total_annotated_signals: int,
+    eligible_signal_count: int,
+    label_family_denominator: int,
 ) -> dict[str, Any]:
     signal_ids = unique_texts([annotation.get("signal_id") for annotation in annotations])
     signals = [signal_lookup[signal_id] for signal_id in signal_ids if signal_id in signal_lookup]
     count = len(signal_ids)
-    sample_fraction = round(count / total_annotated_signals, 6) if total_annotated_signals else 0.0
+    sample_fraction = round(count / label_family_denominator, 6) if label_family_denominator else 0.0
     return {
         "distribution_id": "public-discourse-annotation-distribution-" + stable_hash(run_id, round_id, label_family, label)[:12],
         "label_family": label_family,
         "label": label,
+        "eligible_signal_count": eligible_signal_count,
         "annotated_signal_count": count,
+        "label_family_denominator": label_family_denominator,
         "sample_fraction": sample_fraction,
+        "labels_are_not_mutually_exclusive": True,
+        "fractions_do_not_sum_to_100_percent": True,
+        "denominator_note": "sample_fraction uses annotated signals for this label family inside the selected sample",
         "source_family_counts": _source_family_counts(signals),
         "discourse_lane_counts": _lane_counts(signals),
         "signal_ids": signal_ids[:50],
@@ -606,6 +665,18 @@ def run_aggregate_public_discourse_annotations(
         family: len(unique_texts([row.get("signal_id") for row in matched_rows if maybe_text(row.get("label_family")) == family]))
         for family in ANNOTATION_LABEL_FAMILIES
     }
+    distribution_denominators = {
+        "eligible_signal_count": len(signals),
+        "annotated_signal_count": total_annotated_signals,
+        "label_family_denominators": annotated_signal_count_by_family,
+        "source_family_denominator": _source_family_counts(signals),
+        "discourse_lane_denominator": _lane_counts(signals),
+        "sample_class_denominator": _sample_class_counts(signals),
+        "text_unit_denominator": _text_unit_counts(signals),
+        "labels_are_not_mutually_exclusive": True,
+        "fractions_do_not_sum_to_100_percent": True,
+        "denominator_policy": "sample_fraction is label-family-local and must not be treated as public opinion share",
+    }
     distribution_records = [
         _distribution_record(
             run_id=run_id,
@@ -614,7 +685,8 @@ def run_aggregate_public_discourse_annotations(
             label=label,
             annotations=rows,
             signal_lookup=signal_lookup,
-            total_annotated_signals=annotated_signal_count_by_family.get(label_family, 0),
+            eligible_signal_count=len(signals),
+            label_family_denominator=annotated_signal_count_by_family.get(label_family, 0),
         )
         for (label_family, label), rows in sorted(grouped.items())
         if label_family in ANNOTATION_LABEL_FAMILIES and label
@@ -661,6 +733,8 @@ def run_aggregate_public_discourse_annotations(
         "round_id": round_id,
         "round_scope": normalized_round_scope,
         "sample_boundary": "DB-visible normalized public/formal text sample only",
+        "text_unit": "normalized public/formal text-bearing signal",
+        "dedupe_policy": "one corpus item per normalized signal_id after signal-plane dedupe",
     }
     payload = {
         "schema_version": "optional-analysis-public-discourse-annotation-aggregation-v1",
@@ -675,6 +749,7 @@ def run_aggregate_public_discourse_annotations(
         "sample_count": len(signals),
         "annotation_count": len(matched_rows),
         "annotated_signal_count": total_annotated_signals,
+        "distribution_denominators": distribution_denominators,
         "issue_distribution": distributions_by_family["issue_facets"],
         "social_affect_distribution": distributions_by_family["affect_labels"],
         "source_narrative_distribution": distributions_by_family["source_narrative_labels"],
@@ -1054,6 +1129,77 @@ def _distribution_from_payload(payload: dict[str, Any], field_name: str) -> list
     return list_items(payload.get(field_name)) if payload else []
 
 
+def _sample_internal_distribution(aggregation_payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "issue_distribution": _distribution_from_payload(aggregation_payload, "issue_distribution"),
+        "social_affect_distribution": _distribution_from_payload(aggregation_payload, "social_affect_distribution"),
+        "source_narrative_distribution": _distribution_from_payload(aggregation_payload, "source_narrative_distribution"),
+        "actor_responsibility_distribution": _distribution_from_payload(aggregation_payload, "actor_responsibility_distribution"),
+        "action_orientation_distribution": _distribution_from_payload(aggregation_payload, "action_orientation_distribution"),
+        "distribution_denominators": dict_items(aggregation_payload.get("distribution_denominators")),
+        "distribution_use_policy": _distribution_use_policy(),
+    }
+
+
+def _report_language_guidance() -> dict[str, Any]:
+    return {
+        "what_this_sample_can_support": {
+            "en": [
+                "sample-local issue, affect, and source-narrative label structure when annotation basis is present",
+                "media/document tone descriptions for GDELT tone lanes",
+                "formal participation sample descriptions for docket or formal comment records",
+                "source-narrative cues for council review",
+            ],
+            "zh-Hans": [
+                "在存在标注依据时，描述样本内议题、情绪和来源叙事标签结构",
+                "将 GDELT tone 表述为媒体/文档语气",
+                "将 docket 或正式意见记录表述为制度化参与样本",
+                "把来源叙事作为供议会复核的线索",
+            ],
+        },
+        "what_this_sample_cannot_support": {
+            "en": [
+                "general public opinion estimates",
+                "affected-population or platform-wide sentiment shares",
+                "summing non-exclusive label fractions into a 100% opinion composition",
+                "physical source attribution or causal proof",
+            ],
+            "zh-Hans": [
+                "总体公众意见估计",
+                "受影响人群或全平台情绪比例",
+                "把非互斥标签比例相加为 100% 意见构成",
+                "物理来源归因或因果证明",
+            ],
+        },
+        "recommended_report_language": {
+            "en": [
+                "In this sampled corpus, label <x> appears in <n> annotated records, or about <p>% within that label-family annotation basis.",
+                "GDELT tone is described as media/document tone within the sampled records.",
+                "Formal comments are described as institutional participation records, not general public opinion.",
+            ],
+            "zh-Hans": [
+                "在本轮样本内，<x> 标签出现在 <n> 条已标注记录中，约占该标签族标注依据的 <p>%。",
+                "GDELT tone 应表述为样本内媒体/文档语气。",
+                "正式意见应表述为制度化参与记录，而不是总体公众意见。",
+            ],
+        },
+        "forbidden_report_language": {
+            "en": [
+                "<p>% of the public believes ...",
+                "Formal comments represent public opinion ...",
+                "These non-exclusive label fractions add up to public opinion composition ...",
+                "Public source narratives prove the physical source ...",
+            ],
+            "zh-Hans": [
+                "公众中 <p>% 认为……",
+                "正式意见代表总体民意……",
+                "这些非互斥标签比例相加构成公众意见……",
+                "公共来源叙事证明物理来源……",
+            ],
+        },
+    }
+
+
 def _summary_board_handoff(
     *,
     output_file: Path,
@@ -1182,6 +1328,7 @@ def run_summarize_public_discourse_sample(
         summary_id=summary_id,
         warnings=warnings,
     )
+    language_guidance = _report_language_guidance()
     payload = {
         "schema_version": "optional-analysis-public-discourse-sample-summary-v1",
         "skill": skill_name,
@@ -1196,6 +1343,8 @@ def run_summarize_public_discourse_sample(
         "source_family_counts": list_items(corpus_payload.get("source_family_counts")) if corpus_payload else _source_family_counts(signals),
         "source_skill_counts": list_items(corpus_payload.get("source_skill_counts")) if corpus_payload else _source_skill_counts(signals),
         "discourse_lane_counts": list_items(corpus_payload.get("discourse_lane_counts")) if corpus_payload else _lane_counts(signals),
+        "sample_class_counts": list_items(corpus_payload.get("sample_class_counts")) if corpus_payload else _sample_class_counts(signals),
+        "text_unit_counts": list_items(corpus_payload.get("text_unit_counts")) if corpus_payload else _text_unit_counts(signals),
         "coverage_audit_summary": {
             "coverage_audit_id": maybe_text(coverage_payload.get("coverage_audit_id")),
             "coverage_cue_count": len(list_items(coverage_payload.get("coverage_cues"))),
@@ -1210,6 +1359,11 @@ def run_summarize_public_discourse_sample(
         "source_narrative_distribution": _distribution_from_payload(aggregation_payload, "source_narrative_distribution"),
         "actor_responsibility_distribution": _distribution_from_payload(aggregation_payload, "actor_responsibility_distribution"),
         "action_orientation_distribution": _distribution_from_payload(aggregation_payload, "action_orientation_distribution"),
+        "sample_internal_distribution": _sample_internal_distribution(aggregation_payload),
+        "what_this_sample_can_support": language_guidance["what_this_sample_can_support"],
+        "what_this_sample_cannot_support": language_guidance["what_this_sample_cannot_support"],
+        "recommended_report_language": language_guidance["recommended_report_language"],
+        "forbidden_report_language": language_guidance["forbidden_report_language"],
         "distribution_use_policy": _distribution_use_policy(),
         "cross_source_comparison": cross_source_comparison,
         "source_narrative_cross_lane_cues": _distribution_from_payload(comparison_payload, "source_narrative_cross_lane_cues"),
@@ -1351,6 +1505,27 @@ def run_materialize_public_discourse_corpus(
         "observed_after_utc": maybe_text(observed_after_utc),
         "observed_before_utc": maybe_text(observed_before_utc),
         "sample_boundary": "DB-visible normalized public/formal text sample only",
+        "text_unit": "normalized public/formal text-bearing signal",
+        "dedupe_policy": "one corpus item per normalized signal_id after signal-plane dedupe",
+        "inclusion_filters": {
+            "plane": ["public", "formal"],
+            "requires_text": True,
+            "source_family": maybe_text(source_family),
+            "source_skill": maybe_text(source_skill),
+            "keyword_any": keywords,
+            "observed_after_utc": maybe_text(observed_after_utc),
+            "observed_before_utc": maybe_text(observed_before_utc),
+        },
+        "exclusion_filters": [
+            "signals without text",
+            "signals outside selected round scope",
+            "signals outside supplied source, keyword, or time filters",
+        ],
+        "sample_class_policy": {
+            "media_document_sample": "GDELT media/document records and tone rows",
+            "platform_comment_sample": "YouTube comments or Bluesky posts/replies",
+            "formal_participation_sample": "formal comment or docket participation records",
+        },
     }
     payload = {
         "schema_version": "optional-analysis-public-discourse-corpus-v1",
@@ -1363,9 +1538,15 @@ def run_materialize_public_discourse_corpus(
         "corpus_id": corpus_id,
         "sample_definition": sample_definition,
         "sample_count": len(items),
+        "text_unit": sample_definition["text_unit"],
+        "dedupe_policy": sample_definition["dedupe_policy"],
+        "inclusion_filters": sample_definition["inclusion_filters"],
+        "exclusion_filters": sample_definition["exclusion_filters"],
         "source_family_counts": _source_family_counts(matched_signals),
         "source_skill_counts": _source_skill_counts(matched_signals),
         "discourse_lane_counts": _lane_counts(matched_signals),
+        "sample_class_counts": _sample_class_counts(matched_signals),
+        "text_unit_counts": _text_unit_counts(matched_signals),
         "corpus_items": items,
         "representativeness_limits": [
             "The corpus is not a representative public-opinion sample.",

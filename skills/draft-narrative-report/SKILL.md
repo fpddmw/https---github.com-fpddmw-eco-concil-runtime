@@ -96,6 +96,10 @@ description: Draft a narrative decision-support report from existing council, re
   therefore should not be summed to 100%. Do not use public-discourse labels to
   strengthen physical source attribution or other conclusions beyond the
   recorded basis.
+- Treat formal comments and docket comments as institutional participation
+  samples unless a representative sampling design is explicitly present.
+- Treat source-narrative labels as cues for environmental review, not as proof
+  of physical source, transport, or causal attribution.
 
 ## Reader-Facing Section Requirements
 - `Bottom Line` / `Executive Summary`: 2-4 sentences that state the most

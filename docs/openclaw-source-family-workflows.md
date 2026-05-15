@@ -27,6 +27,8 @@ The agent remains responsible for:
 | Bluesky public discourse | `fetch-bluesky-cascade` | Search, author-feed, and thread/cascade modes are alternate paths inside the same skill. Agents should revise mode, handles, hashtags, or event terms before treating weak output as a source limit. |
 | OpenAQ observations | `fetch-openaq` | Metadata discovery, API measurements, and S3 archive backfill are related paths. Empty measurement windows should prompt location/parameter/window review or archive backfill. |
 | Environmental cross-check | `fetch-airnow-hourly-observations`, `fetch-open-meteo-air-quality`, `fetch-open-meteo-historical`, `fetch-open-meteo-flood`, `fetch-nasa-firms-fire`, `fetch-usgs-water-iv` | These are complementary evidence surfaces, not interchangeable proof channels. AirNow/OpenAQ expose station/provider observations; Open-Meteo exposes modeled weather, air-quality, or discharge context; FIRMS exposes active-fire detections; USGS IV exposes station hydrology in supported USGS coverage. Agents may cross-check receptor observations, modeled context, source-region fire activity, or hydrologic context. Runtime does not decide which source proves a claim. |
+| USBR operational records | `fetch-usbr-rise`, `normalize-usbr-rise-environment-signals` | RISE operational data provides direct reservoir, release, storage, elevation, or related result rows when explicit item IDs are known. These records can ground operating-baseline observations, but they do not by themselves decide shortage severity, governance responsibility, operating compliance, or policy adequacy. API failures, wrong item IDs, missing metadata, or sparse windows are capability/source-surface limits, not evidence absence. |
+| Official governance records | `fetch-usbr-project-records`, `fetch-federal-register-documents`, `fetch-epa-eis-records`, `normalize-official-governance-records` | Official project pages, Federal Register notices, EPA EIS metadata, Reclamation public-involvement pages, and attached PDFs/HTML records are direct governance-record surfaces. They should expose named documents, dates, agencies, comment periods, and artifact refs. They do not replace agent judgement about whether a document supports a governance claim. |
 
 ## Public Discourse Deepening
 
@@ -57,6 +59,40 @@ Use these boundaries:
    - Compare media tone, public-response affect, formal comments, and source
      narratives as advisory cues.
    - Do not infer representativeness, causal truth, or source proof from overlap.
+
+## Sample Proportion Semantics
+
+The system may report sample-internal proportions when the denominator is explicit.
+It must not call those proportions general public opinion unless the mission
+provides a representative sampling design.
+
+Allowed report forms:
+
+1. “In this YouTube comment sample, `<label>` appears in X% of annotated comments.”
+2. “In this formal public-participation sample, `<issue>` appears in X% of eligible
+   submissions.”
+3. “In this GDELT media/document sample, average tone is negative/positive within
+   the sampled documents.”
+
+Unsupported report forms without a representative design:
+
+1. “X% of the public believes ...”
+2. “Affected residents overall think ...”
+3. “Public opinion is X% supportive / opposed.”
+4. Mixing GDELT media rows, YouTube comments, and formal comments into one public
+   denominator.
+
+Required proportion metadata:
+
+1. `sample_definition`
+2. `source_family`
+3. `source_skill`
+4. `text_unit`
+5. `eligible_signal_count`
+6. `annotated_signal_count`
+7. `label_family`
+8. `labels_are_not_mutually_exclusive`
+9. `representativeness_limits`
 
 Desired optional-analysis surfaces for this lane include corpus materialization,
 sample coverage audit, annotation-worker classification, annotation aggregation,

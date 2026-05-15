@@ -43,8 +43,9 @@ description: Optional-analysis helper for DB-backed environment signal aggregati
   sufficiency, score risk, assign physical source attribution, or decide
   readiness.
 - `time-series-summary` reports descriptive count/min/max/mean by
-  source/location/metric. These extrema are not exposure, severity, transport,
-  or attribution findings.
+  source/location/metric, plus date buckets with count/min/max/mean. Point-event
+  records such as FIRMS detections stay out of this continuous-series grouping.
+  These extrema are not exposure, severity, transport, or attribution findings.
 - `point-event-summary` reports date buckets, spatial envelope, provider
   metadata distribution, and numeric metadata statistics such as FIRMS FRP when
   present. Point density is only normalized row density.

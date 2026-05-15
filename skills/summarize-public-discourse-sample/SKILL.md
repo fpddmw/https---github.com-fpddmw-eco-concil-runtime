@@ -28,6 +28,10 @@ description: Optional-analysis helper for summarizing a public discourse sample 
   boundary: labels may be non-exclusive, sample fractions are not population
   estimates, GDELT tone is media/document tone, and source-narrative labels are
   cues for environmental verification rather than physical attribution.
+- Carries `sample_internal_distribution`, `what_this_sample_can_support`,
+  `what_this_sample_cannot_support`, `recommended_report_language`, and
+  `forbidden_report_language` so report-editor can use bounded wording without
+  turning helper output into a conclusion.
 - The summary is advisory helper output until a council object explicitly cites it.
 
 ## Required Input

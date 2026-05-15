@@ -1,0 +1,4 @@
+interface:
+  display_name: "Federal Register Documents Fetch"
+  short_description: "Fetch official FederalRegister.gov document metadata"
+  default_prompt: "Use $fetch-federal-register-documents to fetch official FederalRegister.gov document metadata by term, agency, type, and publication date. Zero rows require filter review and are not proof of absence; do not derive legal meaning, source sufficiency, or report conclusions."

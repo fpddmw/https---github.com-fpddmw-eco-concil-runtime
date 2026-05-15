@@ -1,10 +1,53 @@
 from __future__ import annotations
 
-from collections import Counter
 from typing import Any
 
 from ..support import maybe_text
-from .common import date_bucket, numeric_value, signal_location_payload, signal_timestamp
+from .common import (
+    date_bucket,
+    is_point_event_signal,
+    numeric_value,
+    signal_location_payload,
+    signal_timestamp,
+)
+
+
+class BucketStats:
+    def __init__(self, bucket: str) -> None:
+        self.bucket = bucket
+        self.count = 0
+        self.numeric_count = 0
+        self.missing_numeric_count = 0
+        self._sum = 0.0
+        self.min_value: float | None = None
+        self.max_value: float | None = None
+
+    def add(self, value: float | None) -> None:
+        self.count += 1
+        if value is None:
+            self.missing_numeric_count += 1
+            return
+        self.numeric_count += 1
+        self._sum += value
+        self.min_value = value if self.min_value is None else min(self.min_value, value)
+        self.max_value = value if self.max_value is None else max(self.max_value, value)
+
+    def to_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "date": self.bucket,
+            "count": self.count,
+            "numeric_count": self.numeric_count,
+            "missing_numeric_count": self.missing_numeric_count,
+        }
+        if self.numeric_count:
+            payload.update(
+                {
+                    "min": self.min_value,
+                    "max": self.max_value,
+                    "mean": round(self._sum / self.numeric_count, 6),
+                }
+            )
+        return payload
 
 
 class SeriesStats:
@@ -28,20 +71,25 @@ class SeriesStats:
         self.max_value: float | None = None
         self.first_observed_at = ""
         self.last_observed_at = ""
-        self.date_counts: Counter[str] = Counter()
+        self.date_buckets: dict[str, BucketStats] = {}
 
     def add(self, signal: dict[str, Any]) -> None:
         self.count += 1
         timestamp = signal_timestamp(signal)
+        value = numeric_value(signal)
         if timestamp:
             if not self.first_observed_at or timestamp < self.first_observed_at:
                 self.first_observed_at = timestamp
             if not self.last_observed_at or timestamp > self.last_observed_at:
                 self.last_observed_at = timestamp
-            self.date_counts[date_bucket(timestamp) or "undated"] += 1
+            bucket_key = date_bucket(timestamp) or "undated"
         else:
-            self.date_counts["missing-timestamp"] += 1
-        value = numeric_value(signal)
+            bucket_key = "missing-timestamp"
+        bucket = self.date_buckets.get(bucket_key)
+        if bucket is None:
+            bucket = BucketStats(bucket_key)
+            self.date_buckets[bucket_key] = bucket
+        bucket.add(value)
         if value is None:
             self.missing_numeric_count += 1
             return
@@ -62,8 +110,8 @@ class SeriesStats:
             "first_observed_at": self.first_observed_at,
             "last_observed_at": self.last_observed_at,
             "date_buckets": [
-                {"date": key, "count": count}
-                for key, count in sorted(self.date_counts.items())
+                bucket.to_payload()
+                for _, bucket in sorted(self.date_buckets.items())
             ][:bucket_limit],
         }
         if self.numeric_count:
@@ -89,6 +137,8 @@ class TimeSeriesAccumulator:
         self.candidate_count = 0
 
     def add(self, signal: dict[str, Any]) -> None:
+        if is_point_event_signal(signal):
+            return
         if not signal_timestamp(signal) or numeric_value(signal) is None:
             return
         self.candidate_count += 1

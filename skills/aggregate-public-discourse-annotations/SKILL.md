@@ -40,6 +40,9 @@ description: Optional-analysis helper for aggregating sample-level public discou
   `sample_fraction` is local to annotated items in the selected sample, and
   source-narrative labels are cues for follow-up verification rather than
   physical source attribution.
+- Preserve denominator semantics: each distribution records eligible signal
+  count, label-family denominator, and explicit flags that fractions are
+  sample-local and must not be summed into a 100% public-opinion composition.
 - Annotation-worker output may carry its own `annotation_basis_ref`; manual
   agent-authored annotations require an explicit annotation basis ref. Approved
   taxonomy cues remain candidate labels for human review and are not findings by

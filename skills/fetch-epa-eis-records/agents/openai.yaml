@@ -1,0 +1,4 @@
+interface:
+  display_name: "EPA EIS Records Fetch"
+  short_description: "Fetch official EPA EIS Database result metadata"
+  default_prompt: "Use $fetch-epa-eis-records to fetch EPA EIS Database result rows from common-search pages or explicit official search URLs. Empty rows require search/page review and are not proof of absence; do not infer EIS adequacy, legal sufficiency, policy responsibility, or report conclusions."

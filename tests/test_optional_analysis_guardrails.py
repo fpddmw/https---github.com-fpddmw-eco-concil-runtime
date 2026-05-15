@@ -456,7 +456,22 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
                 "full-statistics-with-limited-output-samples",
                 aggregation["sample_definition"]["sampling_status"],
             )
-            self.assertEqual(12, aggregation["time_series_summary"]["groups"][0]["count"])
+            series_group = aggregation["time_series_summary"]["groups"][0]
+            self.assertEqual(12, series_group["count"])
+            self.assertEqual(
+                [
+                    {
+                        "date": "2023-06-07",
+                        "count": 12,
+                        "numeric_count": 12,
+                        "missing_numeric_count": 0,
+                        "min": 40.0,
+                        "max": 51.0,
+                        "mean": 45.5,
+                    }
+                ],
+                series_group["date_buckets"],
+            )
             artifact = load_json(
                 run_dir / "analytics" / f"environment_evidence_aggregation_{ROUND_ID}.json"
             )
@@ -522,6 +537,15 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
             self.assertIn("time-series-summary", aggregation["aggregation_methods_included"])
             self.assertIn("point-event-summary", aggregation["aggregation_methods_included"])
             self.assertEqual(4, aggregation["signal_count"])
+            self.assertEqual(2, aggregation["time_series_summary"]["candidate_signal_count"])
+            self.assertEqual(1, aggregation["time_series_summary"]["group_count"])
+            self.assertNotIn(
+                "fetch-nasa-firms-fire",
+                {
+                    item["source_skill"]
+                    for item in aggregation["time_series_summary"]["groups"]
+                },
+            )
             self.assertEqual(2, aggregation["point_event_summary"]["point_event_signal_count"])
             metadata_fields = {
                 item["field"]

@@ -1,0 +1,4 @@
+interface:
+  display_name: "USBR Project Records Fetch"
+  short_description: "Fetch supplied USBR project pages and linked records"
+  default_prompt: "Use $fetch-usbr-project-records only with supplied official project URLs. Sparse or zero linked records require URL/filter review and are not proof of absence; do not rank pages, infer completeness, or make report conclusions."

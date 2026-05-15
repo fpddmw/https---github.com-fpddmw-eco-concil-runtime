@@ -132,6 +132,43 @@ PUBLIC_OPINION_UPGRADE_PHRASES = (
     "\u591a\u6570\u5c45\u6c11",
     "\u53d7\u5f71\u54cd\u5c45\u6c11\u666e\u904d",
 )
+PUBLIC_OPINION_DENOMINATOR_PHRASES = (
+    "of the public",
+    "among the public",
+    "of affected residents",
+    "among affected residents",
+    "of residents",
+    "among residents",
+    "of the affected population",
+    "among the affected population",
+    "\u516c\u4f17\u4e2d",
+    "\u53d7\u5f71\u54cd\u4eba\u7fa4\u4e2d",
+    "\u53d7\u5f71\u54cd\u5c45\u6c11\u4e2d",
+    "\u5c45\u6c11\u4e2d",
+)
+FORMAL_COMMENT_PUBLIC_OPINION_PHRASES = (
+    "formal comments show public opinion",
+    "formal comments represent public opinion",
+    "formal comment distribution shows public opinion",
+    "formal comment sample represents the public",
+    "regulations.gov comments show public opinion",
+    "regulations.gov comments represent public opinion",
+    "docket comments show public opinion",
+    "docket comments represent public opinion",
+    "\u6b63\u5f0f\u610f\u89c1\u4ee3\u8868\u516c\u4f17\u610f\u89c1",
+    "\u6b63\u5f0f\u8bc4\u8bba\u4ee3\u8868\u603b\u4f53\u6c11\u610f",
+)
+SAMPLE_FRACTION_TOTALIZATION_PHRASES = (
+    "sum to 100%",
+    "add up to 100%",
+    "total 100%",
+    "complete opinion composition",
+    "100% opinion composition",
+    "full opinion composition",
+    "\u76f8\u52a0\u4e3a100%",
+    "\u52a0\u603b\u4e3a100%",
+    "\u5b8c\u6574\u610f\u89c1\u6784\u6210",
+)
 REPRESENTATIVE_SAMPLING_DESIGN_TERMS = (
     "representative sampling design",
     "representative sample design",
@@ -180,6 +217,29 @@ SOURCE_NARRATIVE_ATTRIBUTION_PHRASES = (
     "\u516c\u5171\u53d9\u4e8b\u8868\u660e\u7269\u7406\u6765\u6e90",
     "\u8bc4\u8bba\u8bc1\u660e\u7269\u7406\u6765\u6e90",
 )
+SOURCE_NARRATIVE_DISCUSSION_TERMS = (
+    "source narrative",
+    "source-narrative",
+    "source narrative distribution",
+    "source narrative label",
+    "source-narrative label",
+    "public source narrative",
+    "\u6765\u6e90\u53d9\u4e8b",
+)
+SOURCE_NARRATIVE_BOUNDARY_TERMS = (
+    "source narrative cue",
+    "source-narrative cue",
+    "public source narrative cue",
+    "not physical source attribution",
+    "not physical attribution",
+    "not source attribution",
+    "cannot substitute for physical source attribution",
+    "environmental verification",
+    "\u6765\u6e90\u53d9\u4e8b\u7ebf\u7d22",
+    "\u4e0d\u662f\u7269\u7406\u6765\u6e90\u5f52\u56e0",
+    "\u4e0d\u80fd\u66ff\u4ee3\u7269\u7406\u6765\u6e90\u5f52\u56e0",
+    "\u7269\u7406\u6765\u6e90\u5f52\u56e0\u9a8c\u8bc1",
+)
 OPTIONAL_HELPER_MARKERS = (
     "aggregate-environment-evidence",
     "environment_evidence_aggregation",
@@ -210,6 +270,42 @@ ENVIRONMENT_ATTRIBUTION_PHRASES = (
     "\u5177\u4f53\u6765\u6e90",
     "\u5177\u4f53\u706b\u573a",
     "\u8bc1\u660e\u6765\u6e90",
+)
+STRONG_ENVIRONMENT_ATTRIBUTION_PHRASES = (
+    "proves source attribution",
+    "proved source attribution",
+    "proves physical source attribution",
+    "proved physical source attribution",
+    "proves transport attribution",
+    "proved transport attribution",
+    "proves causal attribution",
+    "proved causal attribution",
+    "establishes source attribution",
+    "established source attribution",
+    "confirms source attribution",
+    "confirmed source attribution",
+    "definitively caused by",
+    "definitively proves",
+    "\u8bc1\u660e\u6765\u6e90\u5f52\u56e0",
+    "\u8bc1\u660e\u7269\u7406\u6765\u6e90\u5f52\u56e0",
+    "\u8bc1\u660e\u8f93\u9001\u5f52\u56e0",
+    "\u786e\u8ba4\u6765\u6e90\u5f52\u56e0",
+)
+BOUNDED_ATTRIBUTION_TERMS = (
+    "compatible with",
+    "compatibility",
+    "consistent with",
+    "descriptive relationship",
+    "descriptive relation",
+    "not attribution",
+    "not proof of source",
+    "not proof of attribution",
+    "does not prove source",
+    "does not prove attribution",
+    "\u76f8\u5bb9",
+    "\u63cf\u8ff0\u6027\u5173\u7cfb",
+    "\u4e0d\u662f\u5f52\u56e0",
+    "\u4e0d\u8bc1\u660e\u6765\u6e90",
 )
 ATTRIBUTION_MODEL_MARKERS = (
     "trajectory",
@@ -402,6 +498,53 @@ def contains_unnegated_phrase(text: str, phrases: tuple[str, ...]) -> bool:
 def contains_any_phrase(text: str, phrases: tuple[str, ...]) -> bool:
     lowered = normalized_text(text)
     return any(phrase.casefold() in lowered for phrase in phrases)
+
+
+def public_opinion_percentage_present(text: str) -> bool:
+    lowered = normalized_text(text)
+    if not contains_any_phrase(lowered, PUBLIC_OPINION_DENOMINATOR_PHRASES):
+        return False
+    percent_patterns = (
+        r"\b\d+(?:\.\d+)?\s*%\s+(?:of|among)\s+(?:the\s+)?(?:public|residents|affected residents|affected population)\b",
+        r"(?:of|among)\s+(?:the\s+)?(?:public|residents|affected residents|affected population)\s*,?\s+\d+(?:\.\d+)?\s*%",
+        r"[\u516c\u4f17\u5c45\u6c11\u4eba\u7fa4]{2,12}\u4e2d\s*\d+(?:\.\d+)?\s*%",
+    )
+    return any(re.search(pattern, lowered) for pattern in percent_patterns)
+
+
+def formal_comment_public_opinion_upgrade_present(text: str) -> bool:
+    lowered = normalized_text(text)
+    if contains_unnegated_phrase(lowered, FORMAL_COMMENT_PUBLIC_OPINION_PHRASES):
+        return True
+    has_formal_sample = contains_any_phrase(
+        lowered,
+        (
+            "formal comment",
+            "formal comments",
+            "formal participation",
+            "regulations.gov",
+            "docket comment",
+            "docket comments",
+            "\u6b63\u5f0f\u610f\u89c1",
+            "\u6b63\u5f0f\u8bc4\u8bba",
+        ),
+    )
+    return has_formal_sample and (
+        contains_unnegated_phrase(lowered, PUBLIC_OPINION_UPGRADE_PHRASES)
+        or public_opinion_percentage_present(lowered)
+    )
+
+
+def source_narrative_discussion_present(text: str) -> bool:
+    return contains_any_phrase(text, SOURCE_NARRATIVE_DISCUSSION_TERMS)
+
+
+def source_narrative_boundary_visible(text: str) -> bool:
+    return contains_any_phrase(text, SOURCE_NARRATIVE_BOUNDARY_TERMS)
+
+
+def sample_fraction_totalized_present(text: str) -> bool:
+    return contains_unnegated_phrase(text, SAMPLE_FRACTION_TOTALIZATION_PHRASES)
 
 
 def mission_text(run_dir: Path | None) -> str:
@@ -613,6 +756,19 @@ def has_optional_analysis_carrier(draft: dict[str, Any], helper_id: str) -> bool
         if isinstance(source_material.get("reporting_artifacts"), list)
         else []
     )
+    counts = council_object_counts(draft)
+    if any(
+        counts.get(kind, 0) > 0
+        for kind in (
+            "finding",
+            "evidence-bundle",
+            "agent-position",
+            "readiness-opinion",
+            "round-synthesis",
+            "proposal",
+        )
+    ):
+        return True
     reporting_artifact_text = "\n".join(strings_from(reporting_artifacts))
     if helper_id and helper_id.casefold() in reporting_artifact_text.casefold():
         return True
@@ -684,9 +840,20 @@ def optional_helper_carrier_issues(draft: dict[str, Any]) -> list[dict[str, str]
         if isinstance(source_material.get("reporting_artifacts"), list)
         else []
     )
+    counts = council_object_counts(draft)
     carrier_visible = any(
         isinstance(row, dict) and maybe_text(row.get("kind")) == "report-basis-freeze"
         for row in reporting_artifacts
+    ) or any(
+        counts.get(kind, 0) > 0
+        for kind in (
+            "finding",
+            "evidence-bundle",
+            "agent-position",
+            "readiness-opinion",
+            "round-synthesis",
+            "proposal",
+        )
     )
     if carrier_visible:
         return []
@@ -724,7 +891,10 @@ def validate_claim_boundary_semantics(
         return issues
 
     has_representative_design = mission_has_representative_sampling_design(run_dir)
-    if contains_unnegated_phrase(text, PUBLIC_OPINION_UPGRADE_PHRASES) and not has_representative_design:
+    if (
+        contains_unnegated_phrase(text, PUBLIC_OPINION_UPGRADE_PHRASES)
+        or public_opinion_percentage_present(text)
+    ) and not has_representative_design:
         issues.append(
             issue(
                 "unsupported-public-opinion-claim",
@@ -732,6 +902,19 @@ def validate_claim_boundary_semantics(
                     "Report text appears to make a representative or platform-wide "
                     "public-opinion claim. Keep public discourse language sample-local "
                     "unless the mission records a representative sampling design."
+                ),
+                "error",
+            )
+        )
+
+    if formal_comment_public_opinion_upgrade_present(text) and not has_representative_design:
+        issues.append(
+            issue(
+                "formal-comment-distribution-as-public-opinion",
+                (
+                    "Formal comment or docket samples are institutional participation records. "
+                    "They must not be written as general public-opinion distributions without "
+                    "a representative sampling design."
                 ),
                 "error",
             )
@@ -774,6 +957,18 @@ def validate_claim_boundary_semantics(
                     "warning",
                 )
             )
+        if sample_fraction_totalized_present(text):
+            issues.append(
+                issue(
+                    "sample-fractions-totalized-as-opinion-composition",
+                    (
+                        "Sample fractions from public-discourse labels must not be "
+                        "summed or presented as a complete 100% opinion composition "
+                        "when labels can be non-exclusive."
+                    ),
+                    "error",
+                )
+            )
 
     if contains_unnegated_phrase(text, GDELT_TONE_PUBLIC_SENTIMENT_PHRASES):
         issues.append(
@@ -781,6 +976,19 @@ def validate_claim_boundary_semantics(
                 "gdelt-tone-public-sentiment",
                 "GDELT tone may describe media/document tone, not public sentiment or public emotion.",
                 "error",
+            )
+        )
+
+    if source_narrative_discussion_present(text) and not source_narrative_boundary_visible(text):
+        issues.append(
+            issue(
+                "source-narrative-boundary-missing",
+                (
+                    "Public source-narrative wording should state that it is a "
+                    "source-narrative cue and cannot substitute for physical "
+                    "source attribution."
+                ),
+                "warning",
             )
         )
 
@@ -798,7 +1006,10 @@ def validate_claim_boundary_semantics(
 
     if contains_unnegated_phrase(text, ENVIRONMENT_ATTRIBUTION_PHRASES):
         counts = council_object_counts(draft)
-        has_environment_basis = any(counts.get(kind, 0) > 0 for kind in ("finding", "evidence-bundle"))
+        has_environment_basis = any(
+            counts.get(kind, 0) > 0
+            for kind in ("finding", "evidence-bundle", "hypothesis", "hypothesis-status")
+        )
         has_challenger_review = counts.get("review-comment", 0) > 0 or counts.get("challenge", 0) > 0
         if not has_environment_basis:
             issues.append(
@@ -823,6 +1034,22 @@ def validate_claim_boundary_semantics(
                     "warning",
                 )
             )
+        if (
+            contains_unnegated_phrase(text, STRONG_ENVIRONMENT_ATTRIBUTION_PHRASES)
+            and not contains_any_phrase(text, ATTRIBUTION_MODEL_MARKERS)
+        ):
+            issues.append(
+                issue(
+                    "strong-attribution-without-attribution-model",
+                    (
+                        "Strong source, transport, or causal attribution wording "
+                        "requires trajectory, plume, chemistry, or comparable "
+                        "professional attribution-model basis. Without that basis, "
+                        "the report should use compatibility or descriptive language."
+                    ),
+                    "error",
+                )
+            )
         if not contains_any_phrase(text, ATTRIBUTION_MODEL_MARKERS):
             issues.append(
                 issue(
@@ -831,6 +1058,18 @@ def validate_claim_boundary_semantics(
                         "If the report discusses source, transport, or causal attribution, "
                         "it should state whether trajectory, plume, chemistry, or comparable "
                         "attribution evidence is present or absent."
+                    ),
+                    "warning",
+                )
+            )
+        elif not contains_any_phrase(text, BOUNDED_ATTRIBUTION_TERMS):
+            issues.append(
+                issue(
+                    "attribution-boundary-language-missing",
+                    (
+                        "Attribution discussion should keep compatibility, "
+                        "descriptive relation, or explicit non-proof language visible "
+                        "unless the cited basis supports stronger attribution."
                     ),
                     "warning",
                 )

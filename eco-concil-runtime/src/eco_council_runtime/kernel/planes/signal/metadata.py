@@ -18,6 +18,9 @@ from eco_council_runtime.kernel.planes.signal.common import (
 )
 
 FORMAL_SOURCE_SKILLS = {
+    "fetch-epa-eis-records",
+    "fetch-federal-register-documents",
+    "fetch-usbr-project-records",
     "fetch-regulationsgov-comments",
     "fetch-regulationsgov-comment-detail",
 }
@@ -150,6 +153,11 @@ def environment_signal_taxonomy_defaults(
             }
         return {
             "signal_role": "unknown-environment-signal-role",
+            "environment_signal_class": "hydrology",
+        }
+    if source == "fetch-usbr-rise":
+        return {
+            "signal_role": "context-observation",
             "environment_signal_class": "hydrology",
         }
     return {

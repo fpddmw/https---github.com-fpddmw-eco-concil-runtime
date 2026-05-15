@@ -906,6 +906,113 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 [item["code"] for item in validation["issues"]],
             )
 
+    def test_narrative_validator_blocks_public_percentage_denominator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "The report states that 60% of the public opposed the water release policy."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "unsupported-public-opinion-claim",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_blocks_formal_comments_as_public_opinion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "Formal comment distribution shows public opinion: 60% of the public opposed the policy."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "formal-comment-distribution-as-public-opinion",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_blocks_sample_fraction_totalization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "Sample-local concern labels appear in 50% and anger labels appear in 50%, so they sum to 100% opinion composition."
+            ]
+            draft["source_material"]["public_discourse_summary"] = {
+                "path": "analytics/public_discourse_sample_summary_complete.json",
+                "summary_id": "public-summary-complete",
+                "status": "completed",
+                "advisory_only": True,
+            }
+            write_json(
+                analytics_path(run_dir, "public_discourse_sample_summary_complete.json"),
+                {
+                    "schema_version": "optional-analysis-public-discourse-sample-summary-v1",
+                    "skill": "summarize-public-discourse-sample",
+                    "status": "completed",
+                    "summary_id": "public-summary-complete",
+                    "sample_definition": {"run_id": RUN_ID, "round_id": ROUND_ID},
+                    "source_family_counts": [],
+                    "discourse_lane_counts": [],
+                    "warnings": [],
+                    "evidence_refs": ["signal:test-public-summary-001"],
+                    "distribution_use_policy": {
+                        "label_sets_are_non_exclusive": True,
+                        "sample_fractions_are_sample_local": True,
+                        "do_not_sum_to_population_opinion": True,
+                        "requires_council_uptake_before_reporting": True,
+                    },
+                    "social_affect_distribution": [
+                        {"label": "concern", "annotated_signal_count": 1, "sample_fraction": 0.5}
+                    ],
+                },
+            )
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "sample-fractions-totalized-as-opinion-composition",
+                [item["code"] for item in validation["issues"]],
+            )
+
     def test_narrative_validator_blocks_source_narrative_as_physical_attribution(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -929,6 +1036,62 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("blocked", payload["status"])
             self.assertIn(
                 "source-narrative-as-physical-attribution",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_warns_when_source_narrative_boundary_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "The report discusses source narrative labels from the sampled public records."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", payload["status"])
+            self.assertIn(
+                "source-narrative-boundary-missing",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_blocks_strong_attribution_without_model_basis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "The environmental evidence proves source attribution to a specific fire."
+            ]
+            draft["source_material"]["council_object_counts"] = {
+                "finding": 1,
+                "review-comment": 1,
+            }
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "strong-attribution-without-attribution-model",
                 [item["code"] for item in validation["issues"]],
             )
 
