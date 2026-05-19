@@ -132,7 +132,16 @@ def skill_config_env_path(script_path: Path) -> Path | None:
     if script_path.parent.name != "scripts":
         return None
     candidate = script_path.parent.parent / "assets" / "config.env"
-    return candidate if candidate.exists() else None
+    if candidate.exists():
+        return candidate
+
+    skill_dir = script_path.parent.parent
+    if skill_dir.name.startswith("fetch-regulationsgov-"):
+        for sibling_name in ("fetch-regulationsgov-comments", "fetch-regulationsgov-comment-detail"):
+            sibling_candidate = skill_dir.parent / sibling_name / "assets" / "config.env"
+            if sibling_candidate.exists():
+                return sibling_candidate
+    return None
 
 
 def parse_env_file(path: Path) -> dict[str, str]:

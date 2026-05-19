@@ -9,7 +9,8 @@ description: Draft a narrative decision-support report from existing council, re
 - Produce a reader-facing narrative decision-support report from existing council/reporting basis.
 - Preserve claim boundaries, evidence refs, unresolved limitations, and audit trail.
 - Keep report writing separate from investigation and source acquisition.
-- Make the conclusion, reasoning path, limitations, and practical implications easy for a human reviewer to capture.
+- Make the conclusion, evidence reasoning, limitations, and practical implications easy for a human reviewer to capture.
+- Answer the user's mission request directly. The reader wants a professional reference report, not a runtime log.
 
 ## Triggering Conditions
 - A report-writing round has been opened, or moderator asks report-editor to draft a narrative from frozen/canonical basis.
@@ -20,9 +21,10 @@ description: Draft a narrative decision-support report from existing council, re
 - Reads `run_dir/reporting/council_decision_<basis_round_id>.json` and draft variant when present.
 - Reads `run_dir/reporting/expert_report_*_<basis_round_id>.json` when present.
 - Reads `run_dir/report_basis/frozen_report_basis_<basis_round_id>.json` when present.
-- Reads `run_dir/analytics/public_discourse_sample_summary_<round_id>.json` when present or when supplied through `public_discourse_summary_path`.
+- Reads `run_dir/analytics/public_discourse_sample_summary_<round_id>.json` when present.
+- If the report-writing round differs from the evidence basis round, also reads `run_dir/analytics/public_discourse_sample_summary_<basis_round_id>.json` when present.
 - Reads DB-backed council objects for the basis round.
-- Optionally reads `run_dir/analytics/public_discourse_sample_summary_<round_id>.json` or an explicit public discourse summary path as an advisory addendum source.
+- Optionally reads an explicit public discourse summary path as an advisory addendum source.
 - Writes `run_dir/reporting/narrative_report_draft_<round_id>.json`.
 - Writes `run_dir/reporting/narrative_report_draft_<round_id>.md`.
 
@@ -57,13 +59,26 @@ description: Draft a narrative decision-support report from existing council, re
   report drafting is not a substitute for moderator continuation when actionable
   investigation routes remain live.
 - Evidence refs are an audit index, not evidence weights or source rankings.
-- A good report is not a list of object summaries. It must transform recorded
-  council objects into an explicit narrative chain:
-  - the central judgment in one or two sentences;
-  - the event or issue sequence in chronological or causal order;
-  - the evidence lanes and the role each lane plays in the inference;
-  - the point where the evidence stops being strong enough for a stronger claim;
-  - the practical meaning for a human reviewer.
+- A good report is not a list of object summaries, a skill receipt summary, or
+  a transcript of council procedure. It must read like an academic report or
+  decision-support briefing:
+  - the opening answer maps directly to the user's mission request;
+  - before drafting prose, infer the report's argument map: central claim,
+    chronological or causal development, supporting evidence, counter-boundary,
+    and decision meaning;
+  - write the main body as connected prose, not as visible template blocks that
+    tell the reader "this section is for X";
+  - foreground the real-world event or governance issue, then weave
+    environmental/operational evidence, public-discourse semantics, formal
+    records, and limits into one coherent line of reasoning;
+  - show the council process briefly as method context only: what kinds of
+    evidence were gathered, how they were checked, and why the report stops at
+    the stated boundary;
+  - preserve enough concrete evidence detail for professional review, including
+    quantities, windows, source families, sample sizes, and known caveats when
+    they are present in the recorded basis;
+  - state the practical meaning for a human reviewer without inventing new
+    policy advice.
 - Avoid repeated restatement. If the same object text supports multiple
   sections, summarize it once in the narrative account and then refer to its
   role in the evidence chain.
@@ -72,16 +87,38 @@ description: Draft a narrative decision-support report from existing council, re
 - Prefer connective prose over inventory prose: use language such as "This
   matters because", "That supports", "It still does not prove", and "The
   decision implication is". Do not merely enumerate sources.
+- Unless the user explicitly asks for a brief or one-page output, do not
+  compress Chinese narrative reports into short executive summaries. A frozen
+  case report should have enough length to develop the case: mission question,
+  event development, concrete evidence detail, public-discourse semantics,
+  reasoning links, council process summary, limitations, and follow-up evidence
+  needs. The report may remain concise by academic standards, but it must not
+  feel like an abstract.
 - Avoid starting paragraphs with object-kind labels such as `council-decision`,
   `finding`, or `agent-position`. Use those ids in refs and audit trails, not as
   the main prose.
 - Keep runtime details out of the main story unless they explain a material
   limitation. The reader should not need to understand the runtime schema to
   understand the report.
+- Keep council/runtime procedure out of the main prose unless it is necessary
+  to explain a material evidence limitation. The main report should answer:
+  what happened, what the data show, what the governance record shows, what the
+  public-discourse semantics show, what can be concluded, and what remains
+  unsupported. Runtime receipts, round mechanics, and role descriptions belong
+  in the audit trail or a compact source-basis note.
+- Do not hard-code domain-specific story frames such as a particular city,
+  pollutant, transport pathway, agency, data source, or disaster type into the
+  generic template. Use such terms only when they appear in recorded council
+  objects, report-basis artifacts, or a supplied public-discourse summary.
 - When `language` is supplied, write generated headings, framing text, claim
   boundary, decision-use language, and known report-basis summaries in that
-  language. Preserve source refs and raw source excerpts when translation would
-  risk changing the recorded meaning.
+  language. In Chinese mode, do not pass through full English sentences in the
+  reader-facing body. Keep stable identifiers, refs, acronyms, source names, and
+  technical names such as `PM2.5`, `GDELT`, `USBR`, `FIRMS`, `YouTube`, or
+  `Regulations.gov`, but render the surrounding prose in Chinese. If an English
+  evidence excerpt cannot be safely translated, provide a bounded Chinese
+  paraphrase or Chinese boundary note and leave the original traceable through
+  audit refs.
 - Recommendations must be report-boundary recommendations only: what the report
   can be used for, what it should not be used for, and what follow-up evidence
   would be needed for stronger claims. Do not invent policy advice that the
@@ -102,20 +139,21 @@ description: Draft a narrative decision-support report from existing council, re
   of physical source, transport, or causal attribution.
 
 ## Reader-Facing Section Requirements
-- `Bottom Line` / `Executive Summary`: 2-4 sentences that state the most
-  important conclusion, the evidence shape, and the claim boundary.
-- `Key Takeaways`: short bullets that can be scanned without reading the full
-  audit trail.
-- `Narrative Account`: explain the event or issue as a sequence, not as a list
-  of artifacts, using recorded basis only.
-- `How The Evidence Fits`: connect evidence lanes to the conclusion without
-  ranking or scoring sources. Explain what each lane contributes.
-- `How The Council Closed`: explain why the moderator could close or why a weak
-  report was still acceptable inside the stated boundary.
-- `What Remains Unproven`: explain what is not proven and why in plain language.
-- `Decision Use`: state how a human can responsibly use the report and what
-  follow-up evidence is needed for stronger claims.
-- `Audit Trail`: keep refs available without letting refs dominate the prose.
+The JSON draft keeps stable internal sections for validation and publication,
+but the reader-facing Markdown should not expose those internal sections as a
+stack of disconnected blocks, especially in Chinese mode. Treat the internal
+sections as source material for an article-like report:
+
+- Start from the user's question and answer it directly.
+- Develop the event or issue through time, causality, or thematic progression.
+- Fold professional evidence detail into the prose instead of isolating it in
+  inventory lists.
+- Explain public-discourse semantics as part of the substantive case, not as an
+  appendix detached from the argument.
+- Briefly describe the council process only after the substantive evidence is
+  clear, and only to explain how the evidence basis was formed and bounded.
+- End with claim boundaries and responsible use.
+- Keep audit refs available at the end without letting refs dominate the prose.
 
 ## Scripts
 - `scripts/draft_narrative_report.py`

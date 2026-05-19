@@ -56,6 +56,7 @@ PUBLIC_DISCOURSE_SOURCE_FAMILY_BY_SKILL = {
     "fetch-bluesky-cascade": "bluesky-public-discourse",
     "fetch-regulationsgov-comments": "regulationsgov-formal-comments",
     "fetch-regulationsgov-comment-detail": "regulationsgov-formal-comments",
+    "fetch-regulationsgov-attachments": "regulationsgov-formal-comments",
 }
 
 PUBLIC_DISCOURSE_EXPECTED_FAMILIES = [
@@ -84,6 +85,7 @@ PUBLIC_DISCOURSE_EXPECTED_FAMILIES = [
         "text_sample_skills": [
             "fetch-regulationsgov-comments",
             "fetch-regulationsgov-comment-detail",
+            "fetch-regulationsgov-attachments",
         ],
         "recon_skills": ["fetch-regulationsgov-comments"],
     },
@@ -96,6 +98,7 @@ SOCIAL_SAMPLE_AFFECT_SKILLS = {
 FORMAL_COMMENT_SAMPLE_SKILLS = {
     "fetch-regulationsgov-comments",
     "fetch-regulationsgov-comment-detail",
+    "fetch-regulationsgov-attachments",
 }
 GDELT_MEDIA_TONE_SKILLS = {
     "fetch-gdelt-events",
@@ -112,6 +115,9 @@ ANNOTATION_LABEL_FAMILIES = {
     "source_narrative_labels",
     "actor_responsibility_labels",
     "action_orientation_labels",
+    "formal_issue_labels",
+    "formal_stance_hints",
+    "formal_concern_facets",
 }
 ANNOTATION_FAMILY_ALIASES = {
     "issue": "issue_facets",
@@ -131,6 +137,15 @@ ANNOTATION_FAMILY_ALIASES = {
     "action_orientation": "action_orientation_labels",
     "action_orientation_label": "action_orientation_labels",
     "action_orientation_labels": "action_orientation_labels",
+    "formal_issue": "formal_issue_labels",
+    "formal_issue_label": "formal_issue_labels",
+    "formal_issue_labels": "formal_issue_labels",
+    "formal_stance": "formal_stance_hints",
+    "formal_stance_hint": "formal_stance_hints",
+    "formal_stance_hints": "formal_stance_hints",
+    "formal_concern": "formal_concern_facets",
+    "formal_concern_facet": "formal_concern_facets",
+    "formal_concern_facets": "formal_concern_facets",
 }
 
 

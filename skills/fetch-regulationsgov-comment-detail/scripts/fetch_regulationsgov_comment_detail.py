@@ -495,6 +495,27 @@ def extract_comment_id_from_object(obj: dict[str, Any]) -> str | None:
     return None
 
 
+def extract_comment_ids_from_object(obj: dict[str, Any]) -> list[str]:
+    ids: list[str] = []
+    direct = extract_comment_id_from_object(obj)
+    if direct:
+        ids.append(direct)
+    for key in ("candidate_ids", "comment_ids", "commentIds"):
+        value = obj.get(key)
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, str) and item.strip():
+                    ids.append(item.strip())
+                elif isinstance(item, dict):
+                    nested = extract_comment_id_from_object(item)
+                    if nested:
+                        ids.append(nested)
+    audit = obj.get("audit")
+    if isinstance(audit, dict):
+        ids.extend(extract_comment_ids_from_object(audit))
+    return ids
+
+
 def load_comment_ids_from_json(path: Path) -> list[str]:
     obj = json.loads(path.read_text(encoding="utf-8"))
     ids: list[str] = []
@@ -516,19 +537,17 @@ def load_comment_ids_from_json(path: Path) -> list[str]:
                     if isinstance(row, str) and row.strip():
                         ids.append(row.strip())
                     elif isinstance(row, dict):
-                        cid = extract_comment_id_from_object(row)
-                        if cid:
-                            ids.append(cid)
+                        ids.extend(extract_comment_ids_from_object(row))
                 if ids:
                     return ids
             if isinstance(candidate, dict):
-                cid = extract_comment_id_from_object(candidate)
-                if cid:
-                    return [cid]
+                ids.extend(extract_comment_ids_from_object(candidate))
+                if ids:
+                    return ids
 
-        cid = extract_comment_id_from_object(obj)
-        if cid:
-            return [cid]
+        ids.extend(extract_comment_ids_from_object(obj))
+        if ids:
+            return ids
 
     return ids
 
@@ -549,9 +568,7 @@ def load_comment_ids_from_text(path: Path) -> list[str]:
                     continue
 
                 for obj in iter_objects_from_any(parsed):
-                    cid = extract_comment_id_from_object(obj)
-                    if cid:
-                        ids.append(cid)
+                    ids.extend(extract_comment_ids_from_object(obj))
                 if isinstance(parsed, str) and parsed.strip():
                     ids.append(parsed.strip())
                 continue

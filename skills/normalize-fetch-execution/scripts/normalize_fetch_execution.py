@@ -195,6 +195,32 @@ def normalizer_script_path(skill_name: str) -> Path:
     return WORKSPACE_ROOT / "skills" / skill_name / "scripts" / f"{skill_name.replace('-', '_')}.py"
 
 
+def attachment_text_extraction_manifest_path(raw_artifact_path: Path) -> tuple[Path, Path]:
+    output_dir = raw_artifact_path.with_suffix("").with_name(f"{raw_artifact_path.stem}-text")
+    manifest_path = output_dir / "document_text_extraction_manifest.json"
+    return output_dir, manifest_path
+
+
+def run_attachment_text_extraction(raw_artifact_path: Path) -> tuple[Path, dict[str, Any]]:
+    script_path = normalizer_script_path("extract-document-text")
+    if not script_path.exists():
+        raise RuntimeError("Script failed: extract-document-text normalizer bridge is not present.")
+    output_dir, manifest_path = attachment_text_extraction_manifest_path(raw_artifact_path)
+    payload = run_json_script(
+        script_path,
+        "--input-manifest",
+        str(raw_artifact_path),
+        "--output-dir",
+        str(output_dir),
+        "--manifest-output",
+        str(manifest_path),
+        "--overwrite",
+    )
+    if not manifest_path.exists():
+        raise RuntimeError(f"extract-document-text did not write expected manifest: {manifest_path}")
+    return manifest_path, payload
+
+
 def run_json_script(script_path: Path, *args: str) -> dict[str, Any]:
     completed = subprocess.run(
         [sys.executable, str(script_path), *args],
@@ -397,7 +423,26 @@ def run_normalizer_for_step(
                 artifact_path=raw_artifact_path,
                 reason=f"Normalizer script {normalizer_skill} is not present; raw artifact was kept for later processing.",
             )
-        return run_json_script(
+        normalizer_artifact_path = raw_artifact_path
+        pre_normalization: dict[str, Any] = {}
+        if source_skill == "fetch-regulationsgov-attachments" and normalizer_skill == "normalize-regulationsgov-attachment-text":
+            extraction_manifest_path, extraction_payload = run_attachment_text_extraction(raw_artifact_path)
+            normalizer_artifact_path = extraction_manifest_path
+            pre_normalization = {
+                "skill": "extract-document-text",
+                "input_artifact_path": str(raw_artifact_path),
+                "output_manifest_path": str(extraction_manifest_path),
+                "status": maybe_text(extraction_payload.get("status")),
+                "record_count": extraction_payload.get("record_count"),
+                "completed_count": extraction_payload.get("completed_count"),
+                "limited_count": extraction_payload.get("limited_count"),
+            }
+            normalizer_args = [
+                item
+                for item in normalizer_args
+                if item != str(raw_artifact_path)
+            ]
+        payload = run_json_script(
             script_path,
             "--run-dir",
             str(run_dir),
@@ -406,9 +451,12 @@ def run_normalizer_for_step(
             "--round-id",
             round_id,
             "--artifact-path",
-            str(raw_artifact_path),
+            str(normalizer_artifact_path),
             *normalizer_args,
         )
+        if pre_normalization:
+            payload["pre_normalization"] = pre_normalization
+        return payload
 
 
 def receipt_step_id(receipt_ref: str) -> str:
@@ -737,6 +785,8 @@ def execute_import_step(
         status["source_artifact_path"] = maybe_text(step.get("source_artifact_path"))
     if fetch_details is not None:
         status["detached_fetch"] = fetch_details
+    if isinstance(payload.get("pre_normalization"), dict):
+        status["normalizer_runner"]["pre_normalization"] = payload["pre_normalization"]
     return status, payload
 
 

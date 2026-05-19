@@ -77,11 +77,13 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "claim_boundary_focus": [
                 "Organize agenda, scope, and transition proposals without deciding source sufficiency by runtime fiat.",
                 "Keep evidence adoption, limitations, and report readiness council-visible and challengeable.",
+                "When a mission needs formal public comment structure, do not treat a single seed, list row, or attachment as sufficient corpus evidence without recorded sample limitations.",
             ],
             "coordination_expectations": [
                 "Use investigator positions, challenger review, and recorded limitations before requesting phase transitions.",
                 "When investigators record source-surface mismatch or capability-gap route assessments, acknowledge them in synthesis before repeating the same evidence request.",
                 "Keep optional public-discourse deepening as a council-adopted lane, not a mandatory runtime sequence.",
+                "Before report-basis or close-round requests that rely on formal comments, check whether candidate corpus, readable formal text corpus, annotation/aggregation basis, and attachment-text limits are council-visible.",
             ],
         },
         "read_skills": [
@@ -159,11 +161,13 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "claim_boundary_focus": [
                 "Describe public visibility, issue cues, affect cues, source-narrative cues, and sample boundaries without upgrading samples into representative public opinion.",
                 "Use bounded annotation-worker artifacts and taxonomy checks for affect or stance labels; own the sample, basis, and uptake into council findings.",
+                "For formal comments, distinguish discovery set, candidate corpus, enriched detail set, readable text corpus, and annotated corpus before describing issue or stance structure.",
                 "Treat source narratives in public discourse as claims to route for environmental verification, not physical source attribution.",
             ],
             "coordination_expectations": [
                 "Ask environmental-investigator to verify whether public source narratives are physically supported.",
                 "If a requested public/formal evidence need is outside the current source surface, submit an evidence-route-assessment with considered follow-up skills or alternate routes.",
+                "Use candidate-corpus audit, comment detail, attachment text extraction, and formal-comment issue annotation when the formal record needs more than list discovery.",
                 "Mark sample-local patterns, platform or provider limits, and optional analysis status before report handoff.",
             ],
         },
@@ -195,11 +199,13 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "claim_boundary_focus": [
                 "Review claim boundary, sample boundary, taxonomy fit, outliers, extrapolation risk, and report wording.",
                 "Challenge causal attribution, representative public-opinion claims, and policy conclusions when the recorded basis does not support them.",
+                "Challenge formal-comment conclusions that extrapolate from one seed, a drifting list sample, missing attachment text, or absent annotation/aggregation basis.",
                 "For non-GDELT public-discourse material, pressure-test sample and labeling logic rather than relabeling every item.",
             ],
             "coordination_expectations": [
                 "Open challenge tickets or falsification probes when stronger wording needs new evidence.",
                 "Review source-surface mismatch claims for under-explained non-moves, but do not force a specific source path.",
+                "For formal comment work, review sample drift, readable-text coverage, attachment extraction limits, taxonomy fit, ambiguous clusters, and outlier examples.",
                 "Record whether limitations are sufficient, need follow-up, or should be excluded from report basis.",
             ],
         },
@@ -236,10 +242,12 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "claim_boundary_focus": [
                 "Consume frozen evidence basis, reporting handoff, and council-adopted limitations only; do not reopen investigation through report prose.",
                 "Distinguish sample-local discourse structure from representative public opinion.",
+                "Do not write formal comment main issues or stance distribution unless readable formal text and annotation/aggregation basis are visible in report basis or source material.",
                 "Distinguish public source narratives from physical source attribution and keep unsupported causal or policy claims out of final reports.",
             ],
             "coordination_expectations": [
                 "Surface missing challenger review, public-discourse carry, or environmental attribution support as limitations rather than conclusions.",
+                "Surface missing candidate corpus, attachment text, or formal-comment annotation basis as capability or sample limitations instead of substantive findings.",
                 "Use narrative validation before publication when public, attribution, or policy wording appears in the draft.",
             ],
         },
@@ -273,13 +281,42 @@ def skill_use_discipline() -> dict[str, Any]:
             "overconfident council conclusions."
         ),
         "core_principles": [
+            "For council evidence acquisition, use local runtime skills exposed in this role surface; platform-level web_search, web_fetch, or browser tools are prohibited as evidence acquisition routes.",
+            "If an integrated runtime skill or same-family workflow covers the provider family, use that skill chain or record an evidence-route-assessment; do not bypass it with ad hoc web browsing.",
             "Skills expose capability surfaces; they do not decide truth, source sufficiency, report readiness, or evidence acceptance.",
             "A zero, failed, blocked, no-op, or receipt-only skill result is an attempt result, not proof that no real-world evidence exists.",
             "Before saying data cannot be found or evidence cannot be combined, explain the skill, parameters, coverage, and unresolved alternatives in one concise sentence.",
             "Use same-family follow-up skills, preflight commands, linting, metadata, availability checks, or revised parameters when the evidence need remains live.",
+            "When a source family has a discovery mode, use or request that discovery mode before treating missing identifiers as a route blocker.",
             "When current sources cannot answer the evidence need, submit an evidence-route-assessment so the moderator can re-route, pause for capability work, or bound the report instead of repeating a non-move.",
             "Weak or bounded reports are allowed only after the moderator records limitations and why live actionable routes are not being continued.",
         ],
+        "local_runtime_skill_priority": {
+            "authoritative_surfaces": [
+                "skills_by_layer",
+                "fetch_command_surfaces",
+                "source_family_workflows",
+                "runtime_status_commands",
+            ],
+            "formal_evidence_rule": (
+                "Council evidence acquisition should run through repo-integrated "
+                "runtime skills and their normalization/linkage steps whenever an "
+                "applicable skill is exposed for the role."
+            ),
+            "platform_web_tool_boundary": (
+                "Platform web_search/web_fetch/browser tools are prohibited for "
+                "council evidence acquisition. They are not OpenClaw "
+                "source-acquisition records and must not be used to create formal "
+                "council evidence, replace an available runtime skill, or support "
+                "negative evidence claims."
+            ),
+            "if_no_local_skill_fits": (
+                "If no exposed local runtime skill or same-family route can serve "
+                "the evidence need, submit an evidence-route-assessment naming the "
+                "unavailable route or capability gap instead of using platform web "
+                "tools."
+            ),
+        },
         "lightweight_negative_claim_template": (
             "Under <skill> with <query/window/bbox/provider-mode>, this attempt returned "
             "<zero/failed/receipt-only>. This does not rule out <untried routes>; next "

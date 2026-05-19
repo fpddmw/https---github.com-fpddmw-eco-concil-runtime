@@ -117,6 +117,14 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
             "fetch-regulationsgov-comment-detail",
             profiles["fetch-regulationsgov-comments"]["downstream_hints"],
         )
+        self.assertIn(
+            "fetch-regulationsgov-attachments",
+            profiles["fetch-regulationsgov-comments"]["downstream_hints"],
+        )
+        self.assertEqual(
+            ["regulationsgov-policy-comments"],
+            profiles["fetch-regulationsgov-attachments"]["source_family_ids"],
+        )
 
         self.assertEqual("advisory", profiles["query-public-signals"]["queue_status"])
         self.assertEqual("query", profiles["query-public-signals"]["stage"])
@@ -154,7 +162,10 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
             "compare-formal-public-footprints",
             "identify-representation-audit-cues",
             "materialize-public-discourse-corpus",
+            "audit-formal-comment-candidate-corpus",
             "audit-public-discourse-sample-coverage",
+            "classify-formal-comment-issues",
+            "classify-public-discourse-affect",
             "aggregate-public-discourse-annotations",
             "compare-public-media-narratives",
             "summarize-public-discourse-sample",

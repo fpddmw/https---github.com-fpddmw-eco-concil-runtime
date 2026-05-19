@@ -1,0 +1,4 @@
+name: extract-document-text
+metadata:
+  short_description: "Extract local document text with caveats"
+  default_prompt: "Use $extract-document-text to extract bounded text artifacts from local TXT, HTML, or PDF files. It does not classify stance or prove that limited extraction means no content."

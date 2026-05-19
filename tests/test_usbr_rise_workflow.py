@@ -65,6 +65,73 @@ def normalized_rows(run_dir: Path) -> list[dict[str, object]]:
 
 
 class UsbrRiseWorkflowTests(unittest.TestCase):
+    def test_discover_usbr_rise_items_outputs_candidate_item_ids(self) -> None:
+        catalog_payload = {
+            "@context": "/rise/api/contexts/CatalogItem",
+            "@id": "/rise/api/catalog-item",
+            "@type": "Collection",
+            "totalItems": 2,
+            "member": [
+                {
+                    "@id": "/rise/api/catalog-item/10835",
+                    "@type": ["CatalogItem", "dcat:Dataset"],
+                    "id": 10835,
+                    "itemTitle": "Glen Canyon Dam Daily Release Time Series Data",
+                    "itemDescription": "Lake Powell operations data.",
+                    "locationName": "Glen Canyon Dam",
+                    "parameterId": 15,
+                    "parameterName": "Lake/Reservoir Release - Total",
+                    "parameterUnit": "cfs",
+                    "parameterGroup": "Lake/Reservoir Outflow",
+                    "sourceCode": "HAR",
+                },
+                {
+                    "@id": "/rise/api/catalog-item/99999",
+                    "@type": ["CatalogItem", "dcat:Dataset"],
+                    "id": 99999,
+                    "itemTitle": "Yakima River Water Temperature Time Series Data",
+                    "locationName": "Yakima River",
+                    "parameterId": 24,
+                    "parameterName": "Water Temperature",
+                    "parameterUnit": "DegF",
+                },
+            ],
+            "view": {
+                "@id": "/rise/api/catalog-item?page=1",
+                "@type": "PartialCollectionView",
+                "first": "/rise/api/catalog-item?page=1",
+                "last": "/rise/api/catalog-item?page=1",
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmpdir, fixture_server(
+            {"/rise/api/catalog-item": ("application/ld+json", json.dumps(catalog_payload))}
+        ) as base_url:
+            output_path = Path(tmpdir) / "rise-candidates.json"
+
+            payload = run_script(
+                script_path("fetch-usbr-rise"),
+                "discover-items",
+                "--base-url",
+                f"{base_url}/rise/api",
+                "--query",
+                "Glen Canyon release",
+                "--max-pages",
+                "1",
+                "--max-records",
+                "10",
+                "--output",
+                str(output_path),
+            )
+            artifact = load_json(output_path)
+
+            self.assertEqual("fetch-usbr-rise-v1", payload["schema_version"])
+            self.assertEqual("usbr-rise-catalog-items", artifact["source"])
+            self.assertEqual(["10835"], artifact["candidate_item_ids"])
+            self.assertEqual("10835", artifact["records"][0]["item_id"])
+            self.assertEqual("Glen Canyon Dam", artifact["records"][0]["location_name"])
+            self.assertEqual("catalog-page-scan-client-filter", artifact["discovery_mode"])
+            self.assertIn("not source ranking", artifact["list_semantics"])
+
     def test_fetch_usbr_rise_results_and_normalize_environment_signals(self) -> None:
         result_payload = {
             "@context": "/rise/api/contexts/Result",

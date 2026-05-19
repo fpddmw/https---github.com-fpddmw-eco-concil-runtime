@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch USBR RISE time-series result records for explicit item IDs."""
+"""Fetch USBR RISE catalog items and time-series result records."""
 
 from __future__ import annotations
 
@@ -315,6 +315,14 @@ def build_result_url(
     return f"{config.base_url}/result?{parse.urlencode(query)}"
 
 
+def build_catalog_url(config: RuntimeConfig, *, page: int) -> str:
+    query = [
+        ("itemsPerPage", str(config.page_size)),
+        ("page", str(page)),
+    ]
+    return f"{config.base_url}/catalog-item?{parse.urlencode(query)}"
+
+
 def build_item_url(config: RuntimeConfig, item_id: str) -> str:
     return f"{config.base_url}/catalog-item/{parse.quote(item_id)}"
 
@@ -339,6 +347,90 @@ def item_metadata_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "landing_page": maybe_text(payload.get("dcat:landingPage")),
         "spatial": payload.get("dcat:spatial") if isinstance(payload.get("dcat:spatial"), dict) else {},
     }
+
+
+def normalize_catalog_item(payload: dict[str, Any]) -> dict[str, Any]:
+    spatial = payload.get("dcat:spatial") if isinstance(payload.get("dcat:spatial"), dict) else {}
+    return {
+        "source_skill": SKILL_NAME,
+        "record_source": "USBR RISE catalog-item",
+        "record_id": maybe_text(payload.get("id") or payload.get("@id")),
+        "item_id": maybe_text(payload.get("id")),
+        "item_api_path": maybe_text(payload.get("@id")),
+        "item_title": maybe_text(payload.get("itemTitle") or payload.get("dcat:title")),
+        "item_description": maybe_text(payload.get("itemDescription") or payload.get("dcat:description")),
+        "location_id": maybe_text(payload.get("locationId")),
+        "location_name": maybe_text(payload.get("locationName")),
+        "location_source_code": maybe_text(payload.get("locationSourceCode")),
+        "parameter_id": maybe_text(payload.get("parameterId")),
+        "parameter_name": maybe_text(payload.get("parameterName")),
+        "parameter_unit": maybe_text(payload.get("parameterUnit")),
+        "parameter_group": maybe_text(payload.get("parameterGroup")),
+        "parameter_timestep": maybe_text(payload.get("parameterTimestep")),
+        "parameter_transformation": maybe_text(payload.get("parameterTransformation")),
+        "source_code": maybe_text(payload.get("sourceCode")),
+        "temporal_start_date": maybe_text(payload.get("temporalStartDate")),
+        "temporal_end_date": maybe_text(payload.get("temporalEndDate")),
+        "landing_page": maybe_text(payload.get("dcat:landingPage")),
+        "spatial": spatial,
+        "raw": payload,
+    }
+
+
+def searchable_catalog_text(item: dict[str, Any]) -> str:
+    text_parts: list[str] = []
+    for key in (
+        "item_id",
+        "item_title",
+        "item_description",
+        "location_id",
+        "location_name",
+        "location_source_code",
+        "parameter_id",
+        "parameter_name",
+        "parameter_unit",
+        "parameter_group",
+        "source_code",
+        "landing_page",
+    ):
+        text_parts.append(maybe_text(item.get(key)))
+    return " ".join(part for part in text_parts if part).lower()
+
+
+def split_terms(values: list[str]) -> list[str]:
+    terms: list[str] = []
+    for value in values:
+        for term in maybe_text(value).replace(",", " ").split():
+            normalized = term.strip().lower()
+            if normalized:
+                terms.append(normalized)
+    return terms
+
+
+def contains_filter(item: dict[str, Any], key: str, expected: str) -> bool:
+    expected_text = maybe_text(expected).lower()
+    if not expected_text:
+        return True
+    return expected_text in maybe_text(item.get(key)).lower()
+
+
+def catalog_item_matches(item: dict[str, Any], args: argparse.Namespace) -> bool:
+    haystack = searchable_catalog_text(item)
+    if any(term not in haystack for term in split_terms(args.query)):
+        return False
+    if not contains_filter(item, "item_title", args.item_title_contains):
+        return False
+    if not contains_filter(item, "location_name", args.location_name_contains):
+        return False
+    if not contains_filter(item, "parameter_name", args.parameter_name_contains):
+        return False
+    if args.parameter_id and maybe_text(item.get("parameter_id")) != maybe_text(args.parameter_id):
+        return False
+    if args.location_id and maybe_text(item.get("location_id")) != maybe_text(args.location_id):
+        return False
+    if args.source_code and maybe_text(item.get("source_code")).lower() != maybe_text(args.source_code).lower():
+        return False
+    return True
 
 
 def override_metadata(args: argparse.Namespace, item_id: str) -> dict[str, Any]:
@@ -429,6 +521,11 @@ def validate_limits(args: argparse.Namespace, config: RuntimeConfig) -> None:
         raise ValueError(f"--max-records={args.max_records} exceeds configured cap {config.max_records_per_run}.")
 
 
+def validate_start_page(value: int) -> None:
+    if value < 1:
+        raise ValueError("--start-page must be >= 1.")
+
+
 def write_output(path_text: str, payload: dict[str, Any], overwrite: bool) -> str:
     if not path_text.strip():
         return ""
@@ -482,10 +579,173 @@ def command_check_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_discover_items(args: argparse.Namespace) -> int:
+    logger = build_logger(args.log_level, args.log_file)
+    config = build_runtime_config(args)
+    validate_limits(args, config)
+    validate_start_page(args.start_page)
+
+    first_url = build_catalog_url(config, page=args.start_page)
+    if args.dry_run:
+        print_json(
+            {
+                "ok": True,
+                "dry_run": True,
+                "request_plan": {
+                    "source_skill": SKILL_NAME,
+                    "source": "usbr-rise-catalog-items",
+                    "base_url": config.base_url,
+                    "start_page": args.start_page,
+                    "max_pages": args.max_pages,
+                    "max_records": args.max_records,
+                    "query_terms": [maybe_text(value) for value in args.query if maybe_text(value)],
+                    "client_filters": {
+                        "item_title_contains": maybe_text(args.item_title_contains),
+                        "location_name_contains": maybe_text(args.location_name_contains),
+                        "parameter_name_contains": maybe_text(args.parameter_name_contains),
+                        "parameter_id": maybe_text(args.parameter_id),
+                        "location_id": maybe_text(args.location_id),
+                        "source_code": maybe_text(args.source_code),
+                    },
+                    "list_semantics": "Catalog candidates are returned in provider/page scan order after client-side filtering; this is not source ranking or evidence weighting.",
+                },
+                "sample_request_url": first_url,
+            },
+            args.pretty,
+        )
+        return 0
+
+    client = RetryableHttpClient(config, logger)
+    records: list[dict[str, Any]] = []
+    page_summaries: list[dict[str, Any]] = []
+    warnings: list[dict[str, str]] = []
+    stop_reason = "completed"
+    page = args.start_page
+    pages_fetched = 0
+
+    if not any(
+        [
+            args.query,
+            maybe_text(args.item_title_contains),
+            maybe_text(args.location_name_contains),
+            maybe_text(args.parameter_name_contains),
+            maybe_text(args.parameter_id),
+            maybe_text(args.location_id),
+            maybe_text(args.source_code),
+        ]
+    ):
+        warnings.append(
+            {
+                "code": "broad-catalog-discovery",
+                "message": "No query or filter was supplied; candidates reflect provider/page order only.",
+            }
+        )
+
+    while True:
+        if pages_fetched >= args.max_pages:
+            stop_reason = "max_pages_reached"
+            break
+        if args.max_records > 0 and len(records) >= args.max_records:
+            stop_reason = "max_records_reached"
+            break
+        url = build_catalog_url(config, page=page)
+        response = client.get_json(url)
+        members = response.payload.get("member")
+        if not isinstance(members, list):
+            warnings.append({"code": "missing-member", "message": f"Expected member list for catalog page={page}."})
+            stop_reason = "invalid_response_shape"
+            break
+        normalized_members = [normalize_catalog_item(member) for member in members if isinstance(member, dict)]
+        matching_members = [item for item in normalized_members if catalog_item_matches(item, args)]
+        if args.max_records > 0:
+            matching_members = matching_members[: args.max_records - len(records)]
+        records.extend(matching_members)
+        page_summaries.append(
+            {
+                "page": page,
+                "request_url": url,
+                "status_code": response.status_code,
+                "byte_length": response.byte_length,
+                "provider_total_items": response.payload.get("totalItems"),
+                "provider_member_count": len(members),
+                "matched_record_count": len(matching_members),
+            }
+        )
+        pages_fetched += 1
+        view = response.payload.get("view") if isinstance(response.payload.get("view"), dict) else {}
+        has_next = bool(maybe_text(view.get("next")))
+        if args.max_records > 0 and len(records) >= args.max_records:
+            stop_reason = "max_records_reached"
+            break
+        if not members:
+            stop_reason = "empty_page"
+            break
+        if not has_next:
+            break
+        page += 1
+
+    if stop_reason == "max_pages_reached":
+        warnings.append(
+            {
+                "code": "catalog-scan-incomplete",
+                "message": "Discovery stopped at the configured page cap; zero or sparse candidates do not prove that matching RISE catalog items are absent.",
+            }
+        )
+
+    artifact: dict[str, Any] = {
+        "ok": True,
+        "schema_version": SCHEMA_VERSION,
+        "source": "usbr-rise-catalog-items",
+        "source_skill": SKILL_NAME,
+        "generated_at_utc": utc_now_iso(),
+        "discovery_mode": "catalog-page-scan-client-filter",
+        "list_semantics": "Catalog candidates are returned in provider/page scan order after client-side filtering; this is not source ranking or evidence weighting.",
+        "source_parameters": {
+            "base_url": config.base_url,
+            "page_size": config.page_size,
+            "start_page": args.start_page,
+            "max_pages": args.max_pages,
+            "max_records": args.max_records,
+        },
+        "query_parameters": {
+            "query_terms": [maybe_text(value) for value in args.query if maybe_text(value)],
+            "item_title_contains": maybe_text(args.item_title_contains),
+            "location_name_contains": maybe_text(args.location_name_contains),
+            "parameter_name_contains": maybe_text(args.parameter_name_contains),
+            "parameter_id": maybe_text(args.parameter_id),
+            "location_id": maybe_text(args.location_id),
+            "source_code": maybe_text(args.source_code),
+        },
+        "candidate_item_ids": [item.get("item_id") for item in records if maybe_text(item.get("item_id"))],
+        "records": records,
+        "records_fetched": len(records),
+        "pages_fetched": pages_fetched,
+        "stop_reason": stop_reason,
+        "page_summaries": page_summaries,
+        "validation_summary": {"warning_count": len(warnings), "record_count": len(records)},
+        "warnings": warnings,
+        "provenance": {
+            "provider": "Bureau of Reclamation RISE",
+            "provider_api": "https://data.usbr.gov/rise/api",
+            "source_note": "RISE catalog discovery grounds candidate item IDs for later bounded result fetches; it does not fetch operational result rows or decide report conclusions.",
+        },
+        "artifact_refs": [],
+        "output_file": "",
+    }
+    output_file = write_output(args.output, artifact, args.overwrite)
+    if output_file:
+        artifact["output_file"] = output_file
+        artifact["artifact_refs"] = [{"artifact_path": output_file, "record_locator": "$"}]
+        Path(output_file).write_text(json.dumps(artifact, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print_json(artifact, args.pretty)
+    return 0
+
+
 def command_fetch(args: argparse.Namespace) -> int:
     logger = build_logger(args.log_level, args.log_file)
     config = build_runtime_config(args)
     validate_limits(args, config)
+    validate_start_page(args.start_page)
     item_ids = read_item_ids(args)
 
     first_url = build_result_url(config, item_id=item_ids[0], args=args, page=args.start_page)
@@ -653,6 +913,25 @@ def build_parser() -> argparse.ArgumentParser:
     add_runtime_config_args(check)
     check.add_argument("--pretty", action="store_true")
     check.set_defaults(func=command_check_config)
+
+    discover = subparsers.add_parser("discover-items")
+    add_runtime_config_args(discover)
+    add_logging_args(discover)
+    discover.add_argument("--query", action="append", default=[])
+    discover.add_argument("--item-title-contains", default="")
+    discover.add_argument("--location-name-contains", default="")
+    discover.add_argument("--parameter-name-contains", default="")
+    discover.add_argument("--parameter-id", default="")
+    discover.add_argument("--location-id", default="")
+    discover.add_argument("--source-code", default="")
+    discover.add_argument("--start-page", type=int, default=1)
+    discover.add_argument("--max-pages", type=int, default=5)
+    discover.add_argument("--max-records", type=int, default=50)
+    discover.add_argument("--output", default="")
+    discover.add_argument("--overwrite", action="store_true")
+    discover.add_argument("--dry-run", action="store_true")
+    discover.add_argument("--pretty", action="store_true")
+    discover.set_defaults(func=command_discover_items)
 
     fetch = subparsers.add_parser("fetch")
     add_runtime_config_args(fetch)

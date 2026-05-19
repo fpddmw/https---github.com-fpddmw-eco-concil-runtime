@@ -7,7 +7,8 @@ description: Fetch Regulations.gov v4 comment detail resources by comment IDs wi
 
 ## Core Goal
 - Fetch detailed comment resources from `GET /comments/{commentId}`.
-- Support ID inputs from CLI and files (txt/json/jsonl).
+- Support ID inputs from CLI, plain ID files, comments list artifacts, and
+  `audit-formal-comment-candidate-corpus` artifacts.
 - Optionally request `include=attachments`.
 - Return machine-readable JSON and optionally save JSONL artifacts.
 - Keep execution observable with structured logs and optional log file.
@@ -61,6 +62,18 @@ python3 scripts/fetch_regulationsgov_comment_detail.py fetch \
   --pretty
 ```
 
+4. Fetch details from a formal candidate-corpus audit artifact.
+
+```bash
+python3 scripts/fetch_regulationsgov_comment_detail.py fetch \
+  --comment-ids-file ./runs/<run-id>/analytics/formal_comment_candidate_corpus_audit_round-001.json \
+  --max-comments 100 \
+  --include attachments \
+  --output-dir ./runs/<run-id>/raw/round-001/direct-fetch/regulationsgov-comment-details \
+  --no-fail-on-item-error \
+  --pretty
+```
+
 ## Built-in Robustness
 - Retry transient failures (`429/500/502/503/504`) with exponential backoff.
 - Respect `Retry-After` and fail fast if value exceeds configured cap.
@@ -85,6 +98,9 @@ python3 scripts/fetch_regulationsgov_comment_detail.py fetch \
   the docket lacks relevant comments.
 - Keep the upstream list artifact or comment-ID rationale visible so later agents
   can audit why those comments were selected.
+- When consuming a candidate-corpus audit artifact, preserve the audit artifact
+  ref in the council note or source-acquisition proposal so batch detail remains
+  traceable to the list-quality review.
 
 ## References
 - `references/env.md`

@@ -158,6 +158,68 @@ FORMAL_COMMENT_PUBLIC_OPINION_PHRASES = (
     "\u6b63\u5f0f\u610f\u89c1\u4ee3\u8868\u516c\u4f17\u610f\u89c1",
     "\u6b63\u5f0f\u8bc4\u8bba\u4ee3\u8868\u603b\u4f53\u6c11\u610f",
 )
+FORMAL_COMMENT_STRUCTURE_TERMS = (
+    "formal comment",
+    "formal comments",
+    "formal participation",
+    "regulations.gov comment",
+    "regulations.gov comments",
+    "docket comment",
+    "docket comments",
+    "\u6b63\u5f0f\u610f\u89c1",
+    "\u6b63\u5f0f\u8bc4\u8bba",
+)
+FORMAL_COMMENT_STRUCTURE_CLAIM_TERMS = (
+    "main issue",
+    "major issue",
+    "primary issue",
+    "key issue",
+    "issue distribution",
+    "stance distribution",
+    "concern distribution",
+    "support",
+    "oppose",
+    "opposition",
+    "stance",
+    "label distribution",
+    "sample fraction",
+    "\u4e3b\u8981\u4e89\u8bae",
+    "\u4e3b\u8981\u8bae\u9898",
+    "\u7acb\u573a\u5206\u5e03",
+    "\u6807\u7b7e\u5206\u5e03",
+)
+FORMAL_COMMENT_STANCE_DISTRIBUTION_TERMS = (
+    "stance distribution",
+    "support distribution",
+    "opposition distribution",
+    "support/oppose",
+    "support or oppose",
+    "supportive or opposed",
+    "formal_stance_hints",
+    "\u7acb\u573a\u5206\u5e03",
+    "\u652f\u6301/\u53cd\u5bf9",
+)
+FORMAL_ATTACHMENT_DISCUSSION_TERMS = (
+    "attachment",
+    "attached comment",
+    "attachment text",
+    "pdf attachment",
+    "\u9644\u4ef6",
+    "\u9644\u4ef6\u6587\u672c",
+)
+FORMAL_ATTACHMENT_LIMITATION_TERMS = (
+    "attachment limitation",
+    "attachment text limitation",
+    "unreadable attachment",
+    "text extraction limited",
+    "text-extraction-limited",
+    "requires attachment text",
+    "requires-attachment-text",
+    "unreadable pdf",
+    "scanned pdf",
+    "\u9644\u4ef6\u4e0d\u53ef\u8bfb",
+    "\u9644\u4ef6\u6587\u672c\u9650\u5236",
+)
 SAMPLE_FRACTION_TOTALIZATION_PHRASES = (
     "sum to 100%",
     "add up to 100%",
@@ -168,6 +230,44 @@ SAMPLE_FRACTION_TOTALIZATION_PHRASES = (
     "\u76f8\u52a0\u4e3a100%",
     "\u52a0\u603b\u4e3a100%",
     "\u5b8c\u6574\u610f\u89c1\u6784\u6210",
+)
+SAMPLE_DENOMINATOR_TERMS = (
+    "denominator",
+    "sample denominator",
+    "source-family denominator",
+    "source family denominator",
+    "discourse lane denominator",
+    "eligible signal count",
+    "eligible_signal_count",
+    "annotated sample",
+    "n=",
+    "sample_count",
+    "\u5206\u6bcd",
+    "\u6837\u672c\u91cf",
+)
+SMALL_SAMPLE_BOUNDARY_TERMS = (
+    "small sample",
+    "limited sample",
+    "sample size",
+    "only ",
+    "n=",
+    "sample_count",
+    "\u5c0f\u6837\u672c",
+    "\u6837\u672c\u91cf\u6709\u9650",
+    "\u6837\u672c\u4e0d\u8db3",
+)
+REPRESENTATIVENESS_LIMIT_TERMS = (
+    "representativeness limit",
+    "representativeness limits",
+    "not representative",
+    "not a representative",
+    "not population",
+    "not general public opinion",
+    "not public opinion",
+    "\u4ee3\u8868\u6027\u9650\u5236",
+    "\u975e\u4ee3\u8868\u6027",
+    "\u4e0d\u4ee3\u8868",
+    "\u4e0d\u662f\u603b\u4f53",
 )
 REPRESENTATIVE_SAMPLING_DESIGN_TERMS = (
     "representative sampling design",
@@ -239,6 +339,10 @@ SOURCE_NARRATIVE_BOUNDARY_TERMS = (
     "\u4e0d\u662f\u7269\u7406\u6765\u6e90\u5f52\u56e0",
     "\u4e0d\u80fd\u66ff\u4ee3\u7269\u7406\u6765\u6e90\u5f52\u56e0",
     "\u7269\u7406\u6765\u6e90\u5f52\u56e0\u9a8c\u8bc1",
+    "\u7269\u7406\u6765\u6e90\u5224\u5b9a",
+    "\u4e0d\u80fd\u66ff\u4ee3\u73af\u5883\u7ebf\u7684\u7269\u7406\u6765\u6e90\u5224\u5b9a",
+    "\u4e0d\u80fd\u66ff\u4ee3\u73af\u5883\u3001\u8fd0\u884c\u3001\u6cd5\u5f8b\u6216\u653f\u7b56\u56e0\u679c\u5224\u5b9a",
+    "\u4e0d\u80fd\u7528\u516c\u5171\u6765\u6e90\u53d9\u4e8b\u8bc1\u660e\u5177\u4f53\u6765\u6e90\u3001\u8fd0\u884c\u56e0\u679c\u6216\u8d23\u4efb\u5224\u65ad",
 )
 OPTIONAL_HELPER_MARKERS = (
     "aggregate-environment-evidence",
@@ -535,6 +639,34 @@ def formal_comment_public_opinion_upgrade_present(text: str) -> bool:
     )
 
 
+def formal_comment_structure_claim_present(text: str) -> bool:
+    lowered = normalized_text(text)
+    return contains_any_phrase(lowered, FORMAL_COMMENT_STRUCTURE_TERMS) and contains_any_phrase(
+        lowered,
+        FORMAL_COMMENT_STRUCTURE_CLAIM_TERMS,
+    )
+
+
+def formal_comment_stance_distribution_present(text: str) -> bool:
+    lowered = normalized_text(text)
+    if not contains_any_phrase(lowered, FORMAL_COMMENT_STRUCTURE_TERMS):
+        return False
+    if contains_any_phrase(lowered, FORMAL_COMMENT_STANCE_DISTRIBUTION_TERMS):
+        return True
+    return (
+        contains_any_phrase(lowered, ("support", "oppose", "opposed", "stance", "\u652f\u6301", "\u53cd\u5bf9"))
+        and contains_any_phrase(lowered, ("distribution", "proportion", "share", "most", "majority", "%", "\u5206\u5e03", "\u6bd4\u4f8b"))
+    )
+
+
+def formal_attachment_discussion_present(text: str) -> bool:
+    return contains_any_phrase(text, FORMAL_ATTACHMENT_DISCUSSION_TERMS)
+
+
+def formal_attachment_limitation_visible(text: str) -> bool:
+    return contains_any_phrase(text, FORMAL_ATTACHMENT_LIMITATION_TERMS)
+
+
 def source_narrative_discussion_present(text: str) -> bool:
     return contains_any_phrase(text, SOURCE_NARRATIVE_DISCUSSION_TERMS)
 
@@ -749,6 +881,220 @@ def public_discourse_summary_contract_issues(
     return issues
 
 
+def artifact_candidate_paths(draft: dict[str, Any], *, run_dir: Path) -> list[Path]:
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    values = [*strings_from(source_material), *all_evidence_refs(draft)]
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for value in values:
+        for token in re.split(r"[\s,;]+", maybe_text(value)):
+            if ".json" not in token:
+                continue
+            cleaned = token.strip("`'\"()[]{}<>")
+            json_index = cleaned.find(".json")
+            if json_index < 0:
+                continue
+            candidate_text = cleaned[: json_index + len(".json")]
+            candidate = resolve_path(run_dir, candidate_text, candidate_text)
+            key = str(candidate)
+            if key in seen or not candidate.exists():
+                continue
+            seen.add(key)
+            paths.append(candidate)
+    return paths
+
+
+def helper_artifacts_from_draft(draft: dict[str, Any], *, run_dir: Path | None) -> list[dict[str, Any]]:
+    if run_dir is None:
+        return []
+    artifacts: list[dict[str, Any]] = []
+    for path in artifact_candidate_paths(draft, run_dir=run_dir):
+        payload = load_json_file_if_exists(path)
+        if payload:
+            payload = dict(payload)
+            payload["_artifact_path"] = str(path)
+            artifacts.append(payload)
+    return artifacts
+
+
+def int_value(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return max(0, int(value))
+    text = maybe_text(value)
+    if not text:
+        return 0
+    try:
+        return max(0, int(float(text)))
+    except ValueError:
+        return 0
+
+
+def count_from_rows(rows: Any, *, name_field: str, names: set[str], count_field: str) -> int:
+    if not isinstance(rows, list):
+        return 0
+    total = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = maybe_text(row.get(name_field))
+        if name in names:
+            total += int_value(row.get(count_field))
+    return total
+
+
+def formal_distribution_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for field_name in ("annotation_distributions", "formal_issue_distribution", "formal_stance_distribution"):
+        value = payload.get(field_name)
+        if isinstance(value, list):
+            rows.extend(row for row in value if isinstance(row, dict))
+    sample_internal = payload.get("sample_internal_distribution")
+    if isinstance(sample_internal, dict):
+        rows.extend(formal_distribution_rows(sample_internal))
+    return rows
+
+
+def formal_comment_basis_summary(draft: dict[str, Any], *, run_dir: Path | None) -> dict[str, Any]:
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    formal_meta: dict[str, Any] = {}
+    for key in ("formal_comment_basis", "formal_comment_sample", "formal_comment_annotations"):
+        value = source_material.get(key)
+        if isinstance(value, dict):
+            formal_meta.update(value)
+
+    readable_count = max(
+        int_value(formal_meta.get("readable_formal_signal_count")),
+        int_value(formal_meta.get("formal_comment_text_signal_count")),
+        int_value(formal_meta.get("formal_signal_count")),
+        int_value(formal_meta.get("comment_detail_count")),
+        int_value(formal_meta.get("attachment_text_signal_count")),
+        int_value(formal_meta.get("sample_count")),
+    )
+    annotation_count = max(
+        int_value(formal_meta.get("formal_annotation_count")),
+        int_value(formal_meta.get("annotation_count")),
+    )
+    attachment_text_count = int_value(formal_meta.get("attachment_text_signal_count"))
+    listing_count = int_value(formal_meta.get("comment_listing_count"))
+    detail_count = int_value(formal_meta.get("comment_detail_count"))
+    has_formal_annotation_distribution = annotation_count > 0
+
+    for artifact in helper_artifacts_from_draft(draft, run_dir=run_dir):
+        skill = maybe_text(artifact.get("skill"))
+        if skill == "classify-formal-comment-issues":
+            readable_count = max(readable_count, int_value(artifact.get("sample_count")))
+            annotation_count = max(annotation_count, int_value(artifact.get("annotation_count")))
+            for row in artifact.get("annotations") if isinstance(artifact.get("annotations"), list) else []:
+                if isinstance(row, dict) and maybe_text(row.get("source_skill")) == "fetch-regulationsgov-attachments":
+                    attachment_text_count += 1
+            has_formal_annotation_distribution = has_formal_annotation_distribution or annotation_count > 0
+        elif skill in {"materialize-public-discourse-corpus", "summarize-public-discourse-sample"}:
+            formal_lane_count = count_from_rows(
+                artifact.get("discourse_lane_counts"),
+                name_field="discourse_lane",
+                names={"formal_public_comment_sample", "formal_record_text"},
+                count_field="signal_count",
+            )
+            readable_count = max(readable_count, formal_lane_count)
+            formal_source_count = count_from_rows(
+                artifact.get("source_family_counts"),
+                name_field="source_family",
+                names={"regulationsgov-formal-comments", "formal-record"},
+                count_field="signal_count",
+            )
+            readable_count = max(readable_count, formal_source_count)
+            if skill == "summarize-public-discourse-sample" and max(formal_lane_count, formal_source_count) > 0:
+                label_rows: list[Any] = []
+                for field_name in (
+                    "issue_distribution",
+                    "social_affect_distribution",
+                    "source_narrative_distribution",
+                    "actor_responsibility_distribution",
+                    "action_orientation_distribution",
+                    "annotation_distributions",
+                ):
+                    if isinstance(artifact.get(field_name), list):
+                        label_rows.extend(artifact[field_name])
+                if any(isinstance(row, dict) for row in label_rows):
+                    has_formal_annotation_distribution = True
+                    annotation_count = max(
+                        annotation_count,
+                        sum(
+                            int_value(row.get("annotated_signal_count"))
+                            for row in label_rows
+                            if isinstance(row, dict)
+                        ),
+                    )
+        elif skill == "aggregate-public-discourse-annotations":
+            formal_rows = [
+                row
+                for row in formal_distribution_rows(artifact)
+                if maybe_text(row.get("label_family")).startswith("formal_")
+            ]
+            if formal_rows:
+                has_formal_annotation_distribution = True
+                annotation_count = max(
+                    annotation_count,
+                    sum(int_value(row.get("annotated_signal_count")) for row in formal_rows),
+                )
+
+    source_text = "\n".join(strings_from(source_material))
+    attachment_limited = contains_any_phrase(
+        source_text,
+        (
+            "requires-attachment-text",
+            "requires attachment text",
+            "text-extraction-limited",
+            "pdf-reader-unavailable",
+            "unreadable attachment",
+            "scanned pdf",
+        ),
+    )
+    return {
+        "readable_count": readable_count,
+        "annotation_count": annotation_count,
+        "attachment_text_count": attachment_text_count,
+        "listing_count": listing_count,
+        "detail_count": detail_count,
+        "has_readable_formal_text": readable_count > 0,
+        "has_annotation_basis": annotation_count > 0 or has_formal_annotation_distribution,
+        "attachment_limited": attachment_limited,
+    }
+
+
+def public_discourse_summary_payload(draft: dict[str, Any], *, run_dir: Path | None) -> dict[str, Any]:
+    if run_dir is None:
+        return {}
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    public_summary_meta = (
+        source_material.get("public_discourse_summary")
+        if isinstance(source_material.get("public_discourse_summary"), dict)
+        else {}
+    )
+    summary_path_text = maybe_text(public_summary_meta.get("path"))
+    if summary_path_text:
+        payload = load_json_file_if_exists(resolve_path(run_dir, summary_path_text, summary_path_text))
+        if payload:
+            return payload
+    for artifact in helper_artifacts_from_draft(draft, run_dir=run_dir):
+        if maybe_text(artifact.get("skill")) == "summarize-public-discourse-sample":
+            return artifact
+    return {}
+
+
+def source_family_count(payload: dict[str, Any]) -> int:
+    rows = payload.get("source_family_counts")
+    if not isinstance(rows, list):
+        return 0
+    return sum(
+        1
+        for row in rows
+        if isinstance(row, dict) and maybe_text(row.get("source_family")) and int_value(row.get("signal_count")) > 0
+    )
+
+
 def has_optional_analysis_carrier(draft: dict[str, Any], helper_id: str) -> bool:
     source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
     reporting_artifacts = (
@@ -822,6 +1168,18 @@ def public_discourse_sample_boundary_visible(text: str) -> bool:
 
 def public_discourse_nonexclusive_boundary_visible(text: str) -> bool:
     return contains_any_phrase(text, PUBLIC_DISCOURSE_NONEXCLUSIVE_TERMS)
+
+
+def sample_denominator_visible(text: str) -> bool:
+    return contains_any_phrase(text, SAMPLE_DENOMINATOR_TERMS)
+
+
+def small_sample_boundary_visible(text: str) -> bool:
+    return public_discourse_sample_boundary_visible(text) or contains_any_phrase(text, SMALL_SAMPLE_BOUNDARY_TERMS)
+
+
+def representativeness_limit_visible(text: str) -> bool:
+    return contains_any_phrase(text, REPRESENTATIVENESS_LIMIT_TERMS)
 
 
 def helper_marker_mentions(text: str) -> list[str]:
@@ -920,6 +1278,62 @@ def validate_claim_boundary_semantics(
             )
         )
 
+    formal_basis = formal_comment_basis_summary(draft, run_dir=run_dir)
+    if formal_comment_structure_claim_present(text):
+        if not formal_basis["has_readable_formal_text"]:
+            issues.append(
+                issue(
+                    "formal-comment-structure-without-readable-corpus",
+                    (
+                        "Formal comment issue, stance, or concern structure requires "
+                        "a readable formal comment corpus, not only source discovery or receipt metadata."
+                    ),
+                    "error",
+                )
+            )
+        if not formal_basis["has_annotation_basis"]:
+            issues.append(
+                issue(
+                    "formal-comment-structure-without-annotation-basis",
+                    (
+                        "Formal comment issue, stance, or concern structure requires "
+                        "a formal comment annotation or aggregation basis before report use."
+                    ),
+                    "error",
+                )
+            )
+
+    if formal_comment_stance_distribution_present(text) and (
+        int_value(formal_basis.get("readable_count")) <= 1 or not formal_basis["has_annotation_basis"]
+    ):
+        issues.append(
+            issue(
+                "formal-comment-stance-distribution-insufficient-basis",
+                (
+                    "Formal comment stance distributions require more than a single readable "
+                    "comment/detail seed and must cite annotation or aggregation basis."
+                ),
+                "error",
+            )
+        )
+
+    if (
+        formal_attachment_discussion_present(text)
+        and formal_basis["attachment_limited"]
+        and not formal_attachment_limitation_visible(text)
+    ):
+        issues.append(
+            issue(
+                "formal-attachment-text-limitation-missing",
+                (
+                    "The draft discusses formal comment attachments while source material "
+                    "records attachment text limits. State the attachment readability or extraction limitation."
+                ),
+                "warning",
+            )
+        )
+
+    public_summary_payload = public_discourse_summary_payload(draft, run_dir=run_dir)
     if (
         sample_distribution_language_present(text)
         or public_discourse_quantification_present(text)
@@ -962,11 +1376,53 @@ def validate_claim_boundary_semantics(
                 issue(
                     "sample-fractions-totalized-as-opinion-composition",
                     (
-                        "Sample fractions from public-discourse labels must not be "
-                        "summed or presented as a complete 100% opinion composition "
-                        "when labels can be non-exclusive."
+                    "Sample fractions from public-discourse labels must not be "
+                    "summed or presented as a complete 100% opinion composition "
+                    "when labels can be non-exclusive."
+                ),
+                "error",
+            )
+        )
+        sample_count = int_value(public_summary_payload.get("sample_count"))
+        if 0 < sample_count < 10 and not small_sample_boundary_visible(text):
+            issues.append(
+                issue(
+                    "small-public-discourse-sample-boundary-missing",
+                    (
+                        "Public discourse sample counts below 10 should be paired with "
+                        "visible small-sample or sample-boundary wording."
                     ),
-                    "error",
+                    "warning",
+                )
+            )
+        if source_family_count(public_summary_payload) > 1 and not sample_denominator_visible(text):
+            issues.append(
+                issue(
+                    "mixed-source-family-denominator-missing",
+                    (
+                        "Public discourse statistics spanning multiple source families "
+                        "should state source-family or discourse-lane denominators."
+                    ),
+                    "warning",
+                )
+            )
+        if not sample_denominator_visible(text):
+            issues.append(
+                issue(
+                    "public-discourse-denominator-missing",
+                    "Public discourse percentages or label distributions should state an explicit sample denominator.",
+                    "warning",
+                )
+            )
+        if not representativeness_limit_visible(text):
+            issues.append(
+                issue(
+                    "public-discourse-representativeness-limit-missing",
+                    (
+                        "Public discourse percentages or label distributions should state "
+                        "representativeness limits such as not representative or not public opinion."
+                    ),
+                    "warning",
                 )
             )
 
@@ -986,7 +1442,8 @@ def validate_claim_boundary_semantics(
                 (
                     "Public source-narrative wording should state that it is a "
                     "source-narrative cue and cannot substitute for physical "
-                    "source attribution."
+                    "source attribution or other environment/operation/legal/policy "
+                    "causal judgment."
                 ),
                 "warning",
             )

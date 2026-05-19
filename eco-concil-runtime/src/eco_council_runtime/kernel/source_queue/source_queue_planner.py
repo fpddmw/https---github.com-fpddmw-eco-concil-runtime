@@ -24,6 +24,7 @@ from eco_council_runtime.kernel.source_queue.source_queue_contract import (
     source_runtime_output_mode,
     source_selection_path,
     stable_hash,
+    tier_sort_order,
     unique_texts,
     utc_now_iso,
     write_json_file,
@@ -160,7 +161,7 @@ def selected_source_sequence(selection: dict[str, Any] | None) -> list[dict[str,
         layer_plans = family.get("layer_plans") if isinstance(family.get("layer_plans"), list) else []
         ordered_layers = sorted(
             [layer_plan for layer_plan in layer_plans if isinstance(layer_plan, dict)],
-            key=lambda layer_plan: (0 if maybe_text(layer_plan.get("tier")) == "l1" else 1, maybe_text(layer_plan.get("layer_id"))),
+            key=lambda layer_plan: (tier_sort_order(layer_plan.get("tier")), maybe_text(layer_plan.get("layer_id"))),
         )
         for layer_plan in ordered_layers:
             if layer_plan.get("selected") is not True:

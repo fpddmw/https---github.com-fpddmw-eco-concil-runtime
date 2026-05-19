@@ -511,6 +511,19 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("environmental-investigator", roles)
             self.assertNotIn("social_investigator", roles)
             self.assertNotIn("public-discourse-investigator", roles)
+            moderator_entry = next(
+                entry
+                for entry in entry_gate["role_entry_points"]
+                if isinstance(entry, dict) and entry.get("role") == "moderator"
+            )
+            moderator_boundary_surface = "\n".join(
+                [
+                    *moderator_entry["role_boundary_guidance"]["claim_boundary_focus"],
+                    *moderator_entry["role_boundary_guidance"]["coordination_expectations"],
+                ]
+            )
+            self.assertIn("single seed", moderator_boundary_surface)
+            self.assertIn("candidate corpus, readable formal text corpus", moderator_boundary_surface)
             self.assertTrue((run_dir / "supervisor" / "openclaw-workspaces" / "social-investigator").exists())
             social_workspace = run_dir / "supervisor" / "openclaw-workspaces" / "social-investigator"
             social_role_surface = load_json(social_workspace / "council_runtime" / "role_surface.json")
@@ -538,6 +551,9 @@ class AgentEntryGateTests(unittest.TestCase):
                 ]
             )
             self.assertIn("sample boundaries", social_boundary_surface)
+            self.assertIn("candidate corpus", social_boundary_surface)
+            self.assertIn("readable text corpus", social_boundary_surface)
+            self.assertIn("formal-comment issue annotation", social_boundary_surface)
             self.assertIn("environmental-investigator", social_boundary_surface)
             self.assertIn("not physical source attribution", social_boundary_surface)
             self.assertEqual(
@@ -570,10 +586,12 @@ class AgentEntryGateTests(unittest.TestCase):
                 social_role_surface["runtime_status_commands"]["show_council_status"],
             )
             self.assertTrue((social_workspace / "COUNCIL_RUNTIME.md").exists())
-            self.assertIn(
-                "agent entry gate is a snapshot",
-                (social_workspace / "COUNCIL_RUNTIME.md").read_text(encoding="utf-8"),
-            )
+            social_runtime_text = (social_workspace / "COUNCIL_RUNTIME.md").read_text(encoding="utf-8")
+            self.assertIn("agent entry gate is a snapshot", social_runtime_text)
+            self.assertIn("use repo-integrated runtime skills", social_runtime_text)
+            self.assertIn("prohibited as evidence-acquisition routes", social_runtime_text)
+            self.assertIn("web_search", social_runtime_text)
+            self.assertIn("source_family_workflows", social_runtime_text)
             self.assertIn("openclaw agents add", registration["register_all_command"])
             self.assertIn("openclaw agents set-identity", registration["register_all_command"])
             self.assertNotIn(" --identity ", registration["register_all_command"])
@@ -611,6 +629,24 @@ class AgentEntryGateTests(unittest.TestCase):
                     for command in entry.get("write_commands", [])
                     if isinstance(entry.get("write_commands"), list)
                 )
+            )
+            social_entries = [
+                entry
+                for entry in entry_gate["role_entry_points"]
+                if isinstance(entry, dict) and entry.get("role") == "social-investigator"
+            ]
+            self.assertEqual(1, len(social_entries))
+            social_fetch_surface = "\n".join(social_entries[0].get("fetch_commands", []))
+            self.assertIn("fetch-usbr-project-records", social_fetch_surface)
+            self.assertIn("fetch-federal-register-documents", social_fetch_surface)
+            self.assertIn(
+                "normalize-official-governance-records",
+                "\n".join(social_entries[0].get("normalize_commands", [])),
+            )
+            social_skill_discipline = social_entries[0]["skill_use_discipline"]
+            self.assertIn(
+                "Platform web_search/web_fetch/browser tools are prohibited",
+                social_skill_discipline["local_runtime_skill_priority"]["platform_web_tool_boundary"],
             )
             environmental_entries = [
                 entry
@@ -676,6 +712,8 @@ class AgentEntryGateTests(unittest.TestCase):
                 ]
             )
             self.assertIn("representative public-opinion claims", challenger_boundary_surface)
+            self.assertIn("missing attachment text", challenger_boundary_surface)
+            self.assertIn("readable-text coverage", challenger_boundary_surface)
             self.assertIn("relabeling every item", challenger_boundary_surface)
             report_editor_entries = [
                 entry
@@ -691,6 +729,8 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             self.assertIn("frozen evidence basis", report_editor_boundary_surface)
             self.assertIn("sample-local discourse structure", report_editor_boundary_surface)
+            self.assertIn("readable formal text", report_editor_boundary_surface)
+            self.assertIn("formal-comment annotation basis", report_editor_boundary_surface)
             self.assertIn("physical source attribution", report_editor_boundary_surface)
             self.assertIn(
                 "causal_or_source_attribution",

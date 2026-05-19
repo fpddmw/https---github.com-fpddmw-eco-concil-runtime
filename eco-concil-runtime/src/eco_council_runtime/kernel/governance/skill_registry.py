@@ -184,6 +184,7 @@ FETCH_SKILLS = [
     "fetch-open-meteo-flood",
     "fetch-open-meteo-historical",
     "fetch-openaq",
+    "fetch-regulationsgov-attachments",
     "fetch-regulationsgov-comment-detail",
     "fetch-regulationsgov-comments",
     "fetch-usbr-project-records",
@@ -206,6 +207,7 @@ NORMALIZE_SKILLS = [
     "normalize-open-meteo-historical-signals",
     "normalize-openaq-observation-signals",
     "normalize-official-governance-records",
+    "normalize-regulationsgov-attachment-text",
     "normalize-regulationsgov-comment-detail-public-signals",
     "normalize-regulationsgov-comments-public-signals",
     "normalize-usbr-rise-environment-signals",
@@ -226,7 +228,9 @@ OPTIONAL_ANALYSIS_SKILLS = [
     "compare-formal-public-footprints",
     "identify-representation-audit-cues",
     "materialize-public-discourse-corpus",
+    "audit-formal-comment-candidate-corpus",
     "audit-public-discourse-sample-coverage",
+    "classify-formal-comment-issues",
     "classify-public-discourse-affect",
     "aggregate-public-discourse-annotations",
     "compare-public-media-narratives",
@@ -356,12 +360,31 @@ OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
             "GDELT tone rows must remain media/document tone, not public response sentiment.",
         ],
     },
+    "audit-formal-comment-candidate-corpus": {
+        "rule_id": "HEUR-FORMAL-COMMENT-CANDIDATE-CORPUS-001",
+        "destination": "formal comment candidate corpus audit helper",
+        "caveats": [
+            "Candidate corpus audit describes sample shape only and cannot judge stance, importance, or evidence sufficiency.",
+            "Drift indicators are review cues, not source scores or source ranking.",
+            "Formal comment samples must not be converted into general public-opinion distributions.",
+        ],
+    },
     "audit-public-discourse-sample-coverage": {
         "rule_id": "HEUR-PUBLIC-DISCOURSE-COVERAGE-001",
         "destination": "public discourse sample coverage audit helper",
         "caveats": [
             "Coverage cues are prompts for human review, not representation findings.",
             "Zero rows may reflect unrun fetches, filters, API limits, import scope, or normalization gaps.",
+        ],
+    },
+    "classify-formal-comment-issues": {
+        "rule_id": "HEUR-FORMAL-COMMENT-ISSUE-ANNOTATION-001",
+        "taxonomy_version": "formal-public-taxonomy-freeze-2026-04-29",
+        "destination": "bounded formal comment issue annotation worker",
+        "caveats": [
+            "Worker labels describe only DB-visible formal comment text signals inside the selected sample.",
+            "This helper is not a council agent and does not write findings, report basis, source ranking, or evidence sufficiency decisions.",
+            "Formal comment samples must not be converted into general public-opinion distributions.",
         ],
     },
     "classify-public-discourse-affect": {
@@ -624,6 +647,21 @@ POLICIES.update(
         output_object_kinds=["normalized-signal"],
         write_scope=WRITE_SCOPE_SIGNAL,
     )
+)
+POLICIES.update(
+    {
+        "extract-document-text": _policy(
+            skill_name="extract-document-text",
+            skill_layer=SKILL_LAYER_NORMALIZE,
+            allowed_roles=FETCH_NORMALIZE_ROLES,
+            required_capabilities=[CAPABILITY_NORMALIZE],
+            side_effect_scope=["artifact-read", "artifact-write"],
+            db_write_planes=[],
+            input_object_kinds=["raw-artifact"],
+            output_object_kinds=["text-artifact"],
+            write_scope=WRITE_SCOPE_ARTIFACT,
+        )
+    }
 )
 POLICIES.update(
     _group(

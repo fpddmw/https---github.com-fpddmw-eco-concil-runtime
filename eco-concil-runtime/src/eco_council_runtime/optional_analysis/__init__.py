@@ -8,6 +8,7 @@ from .formal_public import (
     run_identify_representation_audit_cues,
     taxonomy_labels,
 )
+from .formal_comment_issue_worker import run_classify_formal_comment_issues
 from .public_discourse import (
     PUBLIC_DISCOURSE_SOURCE_FAMILY_BY_SKILL,
     public_discourse_lane,
@@ -148,6 +149,7 @@ __all__ = (
     "run_aggregate_public_discourse_annotations",
     "run_apply_approved_formal_public_taxonomy",
     "run_audit_public_discourse_sample_coverage",
+    "run_classify_formal_comment_issues",
     "run_classify_public_discourse_affect",
     "run_compare_formal_public_footprints",
     "run_compare_public_media_narratives",

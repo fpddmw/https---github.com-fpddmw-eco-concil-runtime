@@ -29,6 +29,7 @@ MIGRATED_SOURCE_SKILLS = [
     "fetch-youtube-comments",
     "fetch-regulationsgov-comments",
     "fetch-regulationsgov-comment-detail",
+    "fetch-regulationsgov-attachments",
     "fetch-epa-eis-records",
     "fetch-federal-register-documents",
     "fetch-usbr-project-records",
@@ -120,7 +121,7 @@ def normalized_rows_for_source(run_dir: Path, source_skill: str) -> list[dict[st
             """
             SELECT signal_id, source_skill, plane, signal_kind,
                    canonical_object_kind, external_id, artifact_path,
-                   record_locator, title
+                   record_locator, title, body_text
             FROM normalized_signals
             WHERE source_skill = ?
             ORDER BY signal_id
@@ -415,6 +416,154 @@ class MigratedSourceRuntimeIntegrationTests(unittest.TestCase):
                     str(row["canonical_object_kind"])
                     for row in normalized_rows_for_source(run_dir, "fetch-regulationsgov-comment-detail")
                 },
+            )
+
+    def test_prepare_and_execute_regulationsgov_attachment_text_chain(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            comments_script = write_script(
+                root / "emit_reggov_comments.py",
+                (
+                    "import json\n"
+                    "records=[{'id':'REG-2024-0001','attributes':{'title':'Air rule comment','comment':'See Attached','postedDate':'2024-03-01T00:00:00Z','agencyId':'EPA','docketId':'EPA-HQ-2024-0001','submitterName':'Concerned Citizen'}}]\n"
+                    "print(json.dumps({'records':records}))\n"
+                ),
+            )
+            detail_script = write_script(
+                root / "emit_reggov_comment_detail.py",
+                (
+                    "import json, pathlib, sys\n"
+                    "args = sys.argv[1:]\n"
+                    "anchor = ''\n"
+                    "for index, token in enumerate(args):\n"
+                    "    if token == '--comment-ids-file' and index + 1 < len(args):\n"
+                    "        anchor = args[index + 1]\n"
+                    "        break\n"
+                    "if not anchor:\n"
+                    "    raise SystemExit('missing --comment-ids-file')\n"
+                    "payload = json.loads(pathlib.Path(anchor).read_text(encoding='utf-8'))\n"
+                    "comment_id = payload['records'][0]['id']\n"
+                    "records = [{'comment_id':comment_id,'response_url':'https://www.regulations.gov/comment/' + comment_id,'detail':{'attributes':{'title':'Air rule comment detail','comment':'See Attached','postedDate':'2024-03-01T00:00:00Z','modifyDate':'2024-03-01T01:00:00Z','receiveDate':'2024-03-01T00:30:00Z','agencyId':'EPA','docketId':'EPA-HQ-2024-0001','submitterName':'Concerned Citizen'},'relationships':{'attachments':{'data':[{'id':'ATT-REG-0001','type':'attachments'}]}}}}]\n"
+                    "print(json.dumps({'records':records}))\n"
+                ),
+            )
+            attachments_script = write_script(
+                root / "emit_reggov_attachments.py",
+                (
+                    "import json, pathlib, sys\n"
+                    "args = sys.argv[1:]\n"
+                    "input_artifact = ''\n"
+                    "output_dir = ''\n"
+                    "manifest_output = ''\n"
+                    "for index, token in enumerate(args):\n"
+                    "    if token == '--input-artifact' and index + 1 < len(args):\n"
+                    "        input_artifact = args[index + 1]\n"
+                    "    if token == '--output-dir' and index + 1 < len(args):\n"
+                    "        output_dir = args[index + 1]\n"
+                    "    if token == '--manifest-output' and index + 1 < len(args):\n"
+                    "        manifest_output = args[index + 1]\n"
+                    "if not input_artifact or not output_dir or not manifest_output:\n"
+                    "    raise SystemExit('missing required attachment args')\n"
+                    "detail = json.loads(pathlib.Path(input_artifact).read_text(encoding='utf-8'))\n"
+                    "comment_id = detail['records'][0]['comment_id']\n"
+                    "out_dir = pathlib.Path(output_dir)\n"
+                    "out_dir.mkdir(parents=True, exist_ok=True)\n"
+                    "attachment_path = out_dir / 'attachment_1.txt'\n"
+                    "attachment_path.write_text('Attached comment supports health protections but raises implementation cost concerns.', encoding='utf-8')\n"
+                    "manifest = {'ok': True, 'source': 'regulationsgov-v4-attachments', 'downloads': [{'status': 'downloaded', 'comment_id': comment_id, 'attachment_id': 'ATT-REG-0001', 'file_url': 'https://downloads.regulations.gov/REG-2024-0001/attachment_1.txt', 'output_path': str(attachment_path), 'content_type': 'text/plain', 'metadata': {'id': 'ATT-REG-0001', 'attributes': {'title': 'Attached comment letter'}}, 'comment_attributes': {'agencyId': 'EPA', 'docketId': 'EPA-HQ-2024-0001', 'commentOnId': 'DOC-REG-0001', 'submitterName': 'Concerned Citizen'}}]}\n"
+                    "pathlib.Path(manifest_output).parent.mkdir(parents=True, exist_ok=True)\n"
+                    "pathlib.Path(manifest_output).write_text(json.dumps(manifest), encoding='utf-8')\n"
+                    "print(json.dumps(manifest))\n"
+                ),
+            )
+            mission = {
+                **base_mission(),
+                "source_governance": {
+                    "max_selected_sources_per_role": 3,
+                    "max_non_entry_layers_per_role": 2,
+                    "approved_layers": [
+                        {"family_id": "regulationsgov", "layer_id": "comments"},
+                        {"family_id": "regulationsgov", "layer_id": "comment-detail"},
+                        {"family_id": "regulationsgov", "layer_id": "attachments"},
+                    ],
+                },
+                "source_requests": [
+                    {
+                        "source_skill": "fetch-regulationsgov-comments",
+                        "artifact_capture": "stdout-json",
+                        "fetch_argv": [sys.executable, str(comments_script)],
+                    },
+                    {
+                        "source_skill": "fetch-regulationsgov-comment-detail",
+                        "artifact_capture": "stdout-json",
+                        "fetch_argv": [sys.executable, str(detail_script)],
+                    },
+                    {
+                        "source_skill": "fetch-regulationsgov-attachments",
+                        "artifact_capture": "direct-file",
+                        "fetch_argv": [sys.executable, str(attachments_script)],
+                    },
+                ],
+            }
+            write_prepare_inputs(
+                run_dir,
+                mission=mission,
+                tasks=round_tasks(
+                    role="social-investigator",
+                    source_skills=[
+                        "fetch-regulationsgov-comments",
+                        "fetch-regulationsgov-comment-detail",
+                        "fetch-regulationsgov-attachments",
+                    ],
+                ),
+            )
+
+            run_script(
+                script_path("prepare-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            plan = load_json(runtime_path(run_dir, f"fetch_plan_{ROUND_ID}.json"))
+            list_step, detail_step, attachment_step = plan["steps"]
+
+            self.assertEqual("fetch-regulationsgov-attachments", attachment_step["source_skill"])
+            self.assertEqual([detail_step["step_id"]], attachment_step["depends_on"])
+            self.assertEqual([detail_step["artifact_path"]], attachment_step["anchor_artifact_paths"])
+            self.assertIn("--input-artifact", attachment_step["fetch_argv"])
+            self.assertIn("--output-dir", attachment_step["fetch_argv"])
+            self.assertIn("--manifest-output", attachment_step["fetch_argv"])
+            self.assertEqual(attachment_step["artifact_path"], attachment_step["fetch_argv"][attachment_step["fetch_argv"].index("--manifest-output") + 1])
+
+            import_payload = run_script(
+                script_path("normalize-fetch-execution"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "social-investigator",
+            )
+            execution = load_json(runtime_path(run_dir, f"import_execution_{ROUND_ID}.json"))
+            counts = normalized_counts_by_source(run_dir)
+
+            self.assertEqual(0, import_payload["summary"]["failed_step_count"])
+            self.assertEqual(3, execution["completed_count"])
+            self.assertEqual(1, counts["fetch-regulationsgov-comments"])
+            self.assertEqual(1, counts["fetch-regulationsgov-comment-detail"])
+            self.assertEqual(1, counts["fetch-regulationsgov-attachments"])
+            attachment_rows = normalized_rows_for_source(run_dir, "fetch-regulationsgov-attachments")
+            self.assertEqual({"attachment-text"}, {str(row["signal_kind"]) for row in attachment_rows})
+            self.assertIn("implementation cost", str(attachment_rows[0]["body_text"]))
+            self.assertIn(
+                "extract-document-text",
+                execution["statuses"][2]["normalizer_runner"]["pre_normalization"]["skill"],
             )
 
     def test_import_execution_falls_back_to_raw_only_when_normalizer_missing(self) -> None:

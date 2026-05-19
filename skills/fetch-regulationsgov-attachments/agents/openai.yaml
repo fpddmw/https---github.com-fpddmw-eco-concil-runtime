@@ -1,0 +1,4 @@
+name: fetch-regulationsgov-attachments
+metadata:
+  short_description: "Fetch Regulations.gov attachment metadata and files"
+  default_prompt: "Use $fetch-regulationsgov-attachments to fetch selected Regulations.gov attachment metadata and downloadable files from comment/detail artifacts. It does not extract text, classify stance, or prove that missing downloads mean missing content."

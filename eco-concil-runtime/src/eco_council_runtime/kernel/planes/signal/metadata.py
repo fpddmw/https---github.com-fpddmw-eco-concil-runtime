@@ -23,6 +23,7 @@ FORMAL_SOURCE_SKILLS = {
     "fetch-usbr-project-records",
     "fetch-regulationsgov-comments",
     "fetch-regulationsgov-comment-detail",
+    "fetch-regulationsgov-attachments",
 }
 
 

@@ -18,6 +18,7 @@ FETCH_SKILLS = {
     "fetch-open-meteo-flood",
     "fetch-open-meteo-historical",
     "fetch-openaq",
+    "fetch-regulationsgov-attachments",
     "fetch-regulationsgov-comment-detail",
     "fetch-regulationsgov-comments",
     "fetch-usbr-project-records",
@@ -40,7 +41,9 @@ OPTIONAL_ANALYSIS_SKILLS = {
     "compare-formal-public-footprints",
     "identify-representation-audit-cues",
     "materialize-public-discourse-corpus",
+    "audit-formal-comment-candidate-corpus",
     "audit-public-discourse-sample-coverage",
+    "classify-formal-comment-issues",
     "classify-public-discourse-affect",
     "aggregate-public-discourse-annotations",
     "compare-public-media-narratives",
@@ -104,10 +107,20 @@ OPTIONAL_ANALYSIS_NOTES = {
         "DB-visible sample with explicit boundaries and does not infer public "
         "opinion or report conclusions."
     ),
+    "audit-formal-comment-candidate-corpus": (
+        "Approval-gated formal comment candidate corpus audit helper. It describes "
+        "candidate/list shape, drift cues, and field coverage without judging "
+        "stance, importance, sufficiency, or source ranking."
+    ),
     "audit-public-discourse-sample-coverage": (
         "Approval-gated public discourse coverage audit helper. It emits "
         "source-family coverage cues and limitations, not representation "
         "findings or absence claims."
+    ),
+    "classify-formal-comment-issues": (
+        "Approval-gated formal comment annotation worker. It emits sample-local "
+        "issue, stance, and concern cues from DB-visible readable formal text; "
+        "it is not a council agent and does not infer public opinion or evidence sufficiency."
     ),
     "classify-public-discourse-affect": (
         "Approval-gated public discourse annotation worker. It emits sample-local "
@@ -238,19 +251,32 @@ SOURCE_FAMILY_WORKFLOWS: list[dict[str, object]] = [
         ),
         "workflow_steps": [
             {
+                "step_id": "rise-catalog-discovery",
+                "role": "same-family item-id discovery for RISE catalog items",
+                "skill_names": ["fetch-usbr-rise"],
+                "command_mode": "discover-items",
+                "output": "USBR RISE catalog candidate artifacts with candidate_item_ids",
+                "followup_when": (
+                    "Use when an investigator needs Glen Canyon, Lake Powell, "
+                    "reservoir elevation, storage, release, or other USBR "
+                    "operational records but no explicit RISE item ID is grounded."
+                ),
+            },
+            {
                 "step_id": "rise-result-fetch",
                 "role": "direct RISE time-series result retrieval for explicit item IDs",
                 "skill_names": ["fetch-usbr-rise"],
                 "output": "USBR RISE operational result artifacts",
                 "followup_when": (
-                    "Use when an investigator has explicit RISE item IDs or an "
-                    "operator-provided source request for reservoir or release data."
+                    "Use when an investigator has explicit RISE item IDs from a "
+                    "catalog candidate artifact, item page, or source request."
                 ),
             },
         ],
         "normalizer_skills": ["normalize-usbr-rise-environment-signals"],
         "attempt_review_questions": [
-            "Were RISE item IDs grounded in an explicit item page, source request, or catalog lookup?",
+            "If item IDs were unknown, did the agent run or request same-family catalog discovery before declining the route?",
+            "Were RISE item IDs grounded in an explicit item page, source request, or discover-items catalog artifact?",
             "Were date filters and page caps compatible with the operational record need?",
             "If rows were sparse or empty, did the agent avoid treating that as absence of USBR operations records?",
         ],
@@ -343,9 +369,10 @@ SOURCE_FAMILY_WORKFLOWS: list[dict[str, object]] = [
         "family_id": "regulationsgov-policy-comments",
         "label": "Regulations.gov policy comment workflow",
         "semantics": (
-            "Agent-owned list-to-detail workflow. The comments list stage discovers "
-            "candidate comment IDs; detail fetch enriches selected comments where "
-            "full text or attachments are needed."
+            "Agent-owned list-to-detail-to-attachment workflow. The comments list "
+            "stage discovers candidate comment IDs; detail fetch enriches selected "
+            "comments; attachment fetch and text extraction materialize readable "
+            "formal comment text when inline text is absent or insufficient."
         ),
         "workflow_steps": [
             {
@@ -362,16 +389,27 @@ SOURCE_FAMILY_WORKFLOWS: list[dict[str, object]] = [
                 "output": "comment detail artifacts",
                 "followup_when": "Use after selecting comment IDs from list artifacts.",
             },
+            {
+                "step_id": "attachment-fetch",
+                "role": "attachment metadata and file download for selected comments",
+                "skill_names": ["fetch-regulationsgov-attachments"],
+                "output": "attachment metadata and downloaded file artifacts",
+                "followup_when": "Use when detail rows show attachments or inline text says See Attached.",
+            },
         ],
         "normalizer_skills": [
             "normalize-regulationsgov-comments-public-signals",
             "normalize-regulationsgov-comment-detail-public-signals",
+            "extract-document-text",
+            "normalize-regulationsgov-attachment-text",
         ],
         "attempt_review_questions": [
             "Was the filter mode/date field appropriate for the policy question?",
+            "Was a candidate corpus audit used before extrapolating from a broad list or single seed?",
             "Did the list stage return IDs that require detail enrichment?",
+            "Do detail rows require attachment text before semantic annotation?",
             "Should docket/document/agency constraints be revised before stopping?",
-            "If no comments were returned, did the agent distinguish docket/filter limits from absence of policy discussion?",
+            "If no comments or readable texts were returned, did the agent distinguish docket/filter/API/text-extraction limits from absence of policy discussion?",
         ],
     },
     {

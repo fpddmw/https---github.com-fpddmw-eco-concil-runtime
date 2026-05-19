@@ -1,0 +1,4 @@
+interface:
+  display_name: "Classify Formal Comment Issues"
+  short_description: "Bounded annotation-worker for sample-local formal comment issue, stance, and concern cues"
+  default_prompt: "Use $classify-formal-comment-issues only after approval and after readable formal comment text exists in the signal-plane DB. Produce sample-local issue, stance, and concern annotations only; do not write findings, rank sources, infer public opinion, or decide evidence sufficiency. Challenger review is boundary/taxonomy/outlier review, not mandatory item-by-item relabeling."

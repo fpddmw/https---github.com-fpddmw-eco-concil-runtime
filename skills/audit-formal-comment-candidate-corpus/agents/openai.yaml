@@ -1,0 +1,4 @@
+name: audit-formal-comment-candidate-corpus
+metadata:
+  short_description: "Audit formal comment candidate corpus shape"
+  default_prompt: "Use $audit-formal-comment-candidate-corpus to audit Regulations.gov candidate comment rows against docket/document/agency/keyword constraints. It emits sample-shape and drift cues only; it does not judge stance, importance, sufficiency, or whether to close a round."

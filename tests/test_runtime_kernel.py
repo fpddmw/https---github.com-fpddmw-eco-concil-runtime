@@ -509,6 +509,67 @@ class RuntimeKernelTests(unittest.TestCase):
                 payload["event"]["command_snapshot"]["loaded_env_files"],
             )
 
+    def test_kernel_reuses_regulationsgov_family_config_env(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.execution.executor import run_skill
+
+            attachment_script = root / "skills" / "fetch-regulationsgov-attachments" / "scripts" / "fake_fetch.py"
+            attachment_script.parent.mkdir(parents=True)
+            shared_config_env = root / "skills" / "fetch-regulationsgov-comments" / "assets" / "config.env"
+            shared_config_env.parent.mkdir(parents=True)
+            shared_config_env.write_text(
+                "REGGOV_API_KEY=from_shared_reggov_config\n"
+                "REGGOV_TIMEOUT_SECONDS=60\n",
+                encoding="utf-8",
+            )
+            fake_payload = {
+                "status": "completed",
+                "summary": {"source": "fake"},
+                "receipt_id": "runtime-receipt-fetch-reggov-attachments",
+                "artifact_refs": [],
+                "canonical_ids": [],
+            }
+            fake_skill_entry = {
+                "skill_name": "fetch-regulationsgov-attachments",
+                "script_path": str(attachment_script),
+                "declared_contract": {"reads": [], "writes": []},
+                "declared_inputs": {"required": [], "optional": []},
+                "declared_side_effects": ["network-external"],
+                "execution_policy": {},
+                "agent": {},
+            }
+
+            with (
+                mock.patch("eco_council_runtime.kernel.governance.runtime_governance.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch("eco_council_runtime.kernel.execution.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch(
+                    "eco_council_runtime.kernel.execution.executor.subprocess.run",
+                    return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(fake_payload), stderr=""),
+                ) as run_mock,
+            ):
+                payload = run_skill(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    skill_name="fetch-regulationsgov-attachments",
+                    actor_role="social-investigator",
+                    skill_args=["check-config"],
+                    contract_mode="warn",
+                    allow_side_effects=["network-external"],
+                )
+
+            env = run_mock.call_args.kwargs["env"]
+            self.assertEqual("from_shared_reggov_config", env["REGGOV_API_KEY"])
+            self.assertEqual("60", env["REGGOV_TIMEOUT_SECONDS"])
+            self.assertEqual(
+                [str(shared_config_env.resolve())],
+                payload["event"]["command_snapshot"]["loaded_env_files"],
+            )
+
     def test_kernel_blocks_write_command_without_explicit_actor_role(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

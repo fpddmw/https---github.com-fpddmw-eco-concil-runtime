@@ -61,11 +61,18 @@ def provider_metadata(attributes: dict[str, Any], *, artifact_sha256: str) -> di
         "typed_metadata_status": "not-derived-by-normalizer",
         "docket_id": maybe_text(attributes.get("docketId")),
         "comment_on_id": maybe_text(attributes.get("commentOnId")),
+        "comment_on_document_id": maybe_text(attributes.get("commentOnDocumentId"))
+        or maybe_text(attributes.get("commentOnId")),
+        "document_type": maybe_text(attributes.get("documentType")),
+        "subtype": maybe_text(attributes.get("subtype")),
+        "posted_date": maybe_text(attributes.get("postedDate")),
+        "receive_date": maybe_text(attributes.get("receiveDate")),
         "last_modified_date": maybe_text(attributes.get("lastModifiedDate")),
         "agency_id": maybe_text(attributes.get("agencyId")),
         "submitter_name": submitter_name,
         "submitter_organization": maybe_text(attributes.get("organization"))
         or maybe_text(attributes.get("organizationName")),
+        "comment_text": maybe_text(attributes.get("comment")) or maybe_text(attributes.get("commentText")),
         "provider": "Regulations.gov",
         "source_provenance": {
             "source_skill": SOURCE_SKILL,

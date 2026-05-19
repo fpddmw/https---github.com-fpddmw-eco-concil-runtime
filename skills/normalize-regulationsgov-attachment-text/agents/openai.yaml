@@ -1,0 +1,4 @@
+name: normalize-regulationsgov-attachment-text
+metadata:
+  short_description: "Normalize Regulations.gov attachment text"
+  default_prompt: "Use $normalize-regulationsgov-attachment-text to normalize extracted Regulations.gov attachment text into formal signal rows. Preserve extraction limits and do not infer issue, stance, or sufficiency; no-row or limited-text output is not absence of attachment content."

@@ -427,7 +427,7 @@ class ReportWritingRoundWorkflowTests(unittest.TestCase):
                 "--evidence-ref",
                 "signal:test-water-public-001",
             )
-            public_summary_path = run_dir / "analytics" / "governance_public_discourse_summary.json"
+            public_summary_path = run_dir / "analytics" / f"public_discourse_sample_summary_{ROUND_ID}.json"
             write_json(
                 public_summary_path,
                 {
@@ -496,8 +496,6 @@ class ReportWritingRoundWorkflowTests(unittest.TestCase):
                 ROUND_ID,
                 "--language",
                 "zh",
-                "--public-discourse-summary-path",
-                "analytics/governance_public_discourse_summary.json",
             )
             validation_payload = run_script(
                 script_path("validate-narrative-report"),
@@ -517,13 +515,25 @@ class ReportWritingRoundWorkflowTests(unittest.TestCase):
 
             self.assertEqual("completed", draft_payload["status"])
             self.assertEqual("completed", validation_payload["status"])
+            self.assertEqual(
+                str(public_summary_path.resolve()),
+                draft["source_material"]["public_discourse_summary"]["path"],
+            )
             self.assertIn("来源家族构成", report_text)
             self.assertIn("Regulations.gov 正式意见样本", report_text)
             self.assertIn("受影响人群或全平台用户的总体比例", report_text)
-            self.assertIn("物理来源归因验证", report_text)
+            self.assertIn("环境、运行、法律或政策因果判定", report_text)
+            self.assertNotIn("Council records", report_text)
+            self.assertNotIn("This test finding", report_text)
+            self.assertNotIn("governance dispute", report_text)
             self.assertNotIn("纽约", report_text)
+            self.assertNotIn("烟霾", report_text)
+            self.assertNotIn("烟羽", report_text)
             self.assertNotIn("火场", report_text)
             self.assertNotIn("加拿大", report_text)
+            self.assertNotIn("受体时序", report_text)
+            self.assertNotIn("污染严重程度", report_text)
+            self.assertNotIn("区域输送", report_text)
             self.assertNotIn("GDELT 公共记录", report_text)
 
 

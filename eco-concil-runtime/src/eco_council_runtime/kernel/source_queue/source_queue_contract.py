@@ -202,6 +202,23 @@ SOURCE_CATALOG: dict[str, dict[str, Any]] = {
         anchor_source_skills=["fetch-regulationsgov-comments"],
         auto_selectable=False,
     ),
+    "fetch-regulationsgov-attachments": _source(
+        role="social-investigator",
+        family_id="regulationsgov",
+        family_label="Regulations.gov",
+        layer_id="attachments",
+        layer_label="Attachments",
+        tier="l3",
+        normalizer_skill="normalize-regulationsgov-attachment-text",
+        artifact_capture="direct-file",
+        runtime_output_mode="file",
+        runtime_output_arg="--manifest-output",
+        runtime_default_args=["--output-dir", "{artifact_dir}"],
+        requires_anchor=True,
+        anchor_argument="--input-artifact",
+        anchor_source_skills=["fetch-regulationsgov-comment-detail"],
+        auto_selectable=False,
+    ),
     "fetch-epa-eis-records": _source(
         role="social-investigator",
         family_id="official-governance",
@@ -477,6 +494,16 @@ SOURCE_USE_CARDS: dict[str, dict[str, Any]] = {
         "zero_or_failed_result_discipline": [
             "A failed detail fetch is a limitation for selected IDs, not proof that the docket lacks relevant comments.",
         ],
+        "same_family_followups": ["fetch-regulationsgov-attachments"],
+    },
+    "fetch-regulationsgov-attachments": {
+        "what_this_skill_is": "Regulations.gov attachment metadata and file download for selected comments or attachment IDs.",
+        "what_this_skill_is_not": "It does not extract document text, classify comment stance, or prove attachment content is absent when downloads fail.",
+        "before_using": ["Ground attachments in comment-detail artifacts, attachment IDs, or another explicit selection record."],
+        "zero_or_failed_result_discipline": [
+            "A missing file URL or failed attachment download is a route limitation for selected IDs, not proof that the comment has no readable content.",
+            "If attachment text matters, revise metadata route or use a text/OCR extraction path before abandoning the source-limit rationale.",
+        ],
     },
     "fetch-epa-eis-records": {
         "what_this_skill_is": "EPA EIS Database result-table retrieval for official NEPA/EIS metadata rows.",
@@ -515,13 +542,16 @@ SOURCE_USE_CARDS: dict[str, dict[str, Any]] = {
         ],
     },
     "fetch-usbr-rise": {
-        "what_this_skill_is": "USBR RISE JSON:API result retrieval for explicit operational time-series item IDs.",
-        "what_this_skill_is_not": "It is not a catalog search planner and does not decide shortage severity, operating compliance, or governance responsibility.",
+        "what_this_skill_is": "USBR RISE JSON:API catalog item discovery and result retrieval for explicit operational time-series item IDs.",
+        "what_this_skill_is_not": "It does not decide shortage severity, operating compliance, governance responsibility, or whether a candidate item should be adopted as report evidence.",
         "before_using": [
-            "Ground item IDs in a RISE item detail page, operator source request, or prior explicit catalog lookup.",
+            "When item IDs are unknown, run discover-items with agent-defined place/parameter terms and cite the candidate artifact.",
+            "Before result fetch, ground item IDs in a RISE item detail page, operator source request, or discover-items catalog artifact.",
             "Keep date windows, page caps, and item metadata limitations explicit.",
         ],
         "zero_or_failed_result_discipline": [
+            "Zero discovery candidates may reflect terms, page caps, or provider catalog shape; revise terms or record a route assessment before abandoning the family.",
+            "An incomplete catalog scan is a route-grounding attempt, not evidence absence.",
             "Zero rows may reflect item ID, date filters, provider latency, metadata limits, or page caps.",
             "It is not proof that USBR operational records are absent.",
         ],
@@ -689,12 +719,19 @@ SOURCE_CAPABILITY_HINTS: dict[str, dict[str, Any]] = {
     "fetch-usbr-rise": {
         "provider_modes": [
             {
+                "mode": "rise-catalog-discovery",
+                "time_coverage": "current RISE catalog-item metadata scanned by page with client-side phrase/filter matching",
+                "time_args": [],
+            },
+            {
                 "mode": "rise-results",
                 "time_coverage": "RISE time-series result rows for explicit item IDs and optional dateTime filters",
                 "time_args": ["--after-utc", "--before-utc"],
             }
         ],
         "fetch_argument_templates": [
+            ["discover-items", "--query", "<place parameter phrase>", "--max-pages", "<N>", "--max-records", "<N>", "--output", "<catalog_candidates.json>"],
+            ["discover-items", "--query", "<broader_or_revised_phrase>", "--max-pages-per-run", "<approved_cap>", "--max-pages", "<approved_cap>", "--max-records", "<N>", "--output", "<catalog_candidates.json>"],
             ["fetch", "--item-id", "<rise_item_id>", "--after-utc", "<YYYY-MM-DDTHH:MM:SSZ>", "--before-utc", "<YYYY-MM-DDTHH:MM:SSZ>", "--max-pages", "<N>", "--output", "<artifact.json>"],
             ["fetch", "--item-id", "<rise_item_id>", "--include-item-metadata", "--dry-run"],
         ],
@@ -1277,6 +1314,13 @@ def effective_constraints(mission: dict[str, Any]) -> dict[str, int]:
     return defaults
 
 
+def tier_sort_order(value: Any) -> int:
+    text = maybe_text(value).lower()
+    if text.startswith("l") and text[1:].isdigit():
+        return int(text[1:])
+    return 999
+
+
 def role_source_governance(mission: dict[str, Any], role: str) -> dict[str, Any]:
     governance = mission.get("source_governance") if isinstance(mission.get("source_governance"), dict) else {}
     approved_layers_payload = governance.get("approved_layers") if isinstance(governance.get("approved_layers"), list) else []
@@ -1336,7 +1380,7 @@ def role_source_governance(mission: dict[str, Any], role: str) -> dict[str, Any]
             finalized_layers.append(layer)
         family["layers"] = sorted(
             finalized_layers,
-            key=lambda item: (0 if maybe_text(item.get("tier")) == "l1" else 1, maybe_text(item.get("layer_id"))),
+            key=lambda item: (tier_sort_order(item.get("tier")), maybe_text(item.get("layer_id"))),
         )
     family_ids = {maybe_text(item.get("family_id")) for item in families.values() if maybe_text(item.get("family_id"))}
     approved_layers = [

@@ -140,6 +140,27 @@ def seed_discourse_signals(run_dir: Path) -> None:
 
 
 class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
+    def test_annotation_worker_includes_water_governance_cues(self) -> None:
+        from eco_council_runtime.optional_analysis.public_discourse_annotation_worker import (
+            _candidate_labels_for_text,
+        )
+
+        labels = _candidate_labels_for_text(
+            "Public comments oppose the Glen Canyon dam release plan because Lake Powell reservoir levels, "
+            "water supply allocation, hydropower, and endangered fish habitat may be affected.",
+            max_labels_per_family=10,
+        )
+        labels_by_family = {(item["label_family"], item["label"]) for item in labels}
+
+        self.assertIn(("issue_facets", "water-supply-risk"), labels_by_family)
+        self.assertIn(("issue_facets", "reservoir-or-release-operations"), labels_by_family)
+        self.assertIn(("issue_facets", "ecological-or-habitat-risk"), labels_by_family)
+        self.assertIn(("issue_facets", "formal-governance-process"), labels_by_family)
+        self.assertIn(("source_narrative_labels", "water-release-operations"), labels_by_family)
+        self.assertIn(("source_narrative_labels", "reservoir-levels"), labels_by_family)
+        self.assertIn(("source_narrative_labels", "basin-allocation-conflict"), labels_by_family)
+        self.assertIn(("affect_labels", "opposition-or-criticism"), labels_by_family)
+
     def test_gdelt_doc_tone_aggregate_uses_distinct_lane_from_doc_recon(self) -> None:
         from eco_council_runtime.optional_analysis.public_discourse import public_discourse_lane
 
@@ -232,6 +253,111 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
             self.assertIn(
                 "public-discourse-annotation-worker",
                 concern_distribution["provenance"]["annotation_sources"],
+            )
+
+    def test_formal_comment_issue_worker_labels_detail_and_attachment_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            insert_signal(
+                run_dir,
+                signal_id="sig-formal-detail-health",
+                plane="formal",
+                source_skill="fetch-regulationsgov-comment-detail",
+                signal_kind="comment-detail",
+                title="Comment supports stronger PM2.5 health protections",
+                body_text=(
+                    "We support stronger PM2.5 standards because public health benefits for children "
+                    "and asthma prevention are needed."
+                ),
+                metadata={"docket_id": "EPA-HQ-OAR-2015-0072", "submitter_name": "Health Coalition"},
+            )
+            insert_signal(
+                run_dir,
+                signal_id="sig-formal-attachment-cost",
+                plane="formal",
+                source_skill="fetch-regulationsgov-attachments",
+                signal_kind="attachment-text",
+                title="Attached industry comment",
+                body_text=(
+                    "We oppose the deadline because compliance cost, economic burden, feasibility, "
+                    "and state implementation discretion require further review."
+                ),
+                metadata={
+                    "docket_id": "EPA-HQ-OAR-2015-0072",
+                    "attachment_id": "09000064859c8451",
+                    "submitter_name": "Industry Association",
+                },
+            )
+
+            annotation_payload = run_script(
+                script_path("classify-formal-comment-issues"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--max-labels-per-family",
+                "5",
+            )
+            annotation_artifact = load_json(
+                analytics_path(run_dir, f"formal_comment_issue_annotations_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", annotation_payload["status"])
+            self.assertEqual(2, annotation_payload["summary"]["sample_count"])
+            self.assertGreaterEqual(annotation_payload["summary"]["annotation_count"], 6)
+            self.assertEqual("formal-comment-issue-worker", annotation_artifact["annotation_worker_role"])
+            self.assertEqual(
+                "DB-visible formal comment text signals only",
+                annotation_artifact["sample_definition"]["sample_boundary"],
+            )
+            labels_by_signal = {
+                (item["signal_id"], item["label_family"], item["label"])
+                for item in annotation_artifact["annotations"]
+            }
+            self.assertIn(("sig-formal-detail-health", "formal_issue_labels", "health-benefit"), labels_by_signal)
+            self.assertIn(("sig-formal-detail-health", "formal_stance_hints", "support"), labels_by_signal)
+            self.assertIn(("sig-formal-detail-health", "formal_concern_facets", "health"), labels_by_signal)
+            self.assertIn(("sig-formal-attachment-cost", "formal_issue_labels", "compliance-cost"), labels_by_signal)
+            self.assertIn(("sig-formal-attachment-cost", "formal_stance_hints", "oppose"), labels_by_signal)
+            self.assertIn(("sig-formal-attachment-cost", "formal_concern_facets", "federalism"), labels_by_signal)
+            self.assertTrue(
+                all(item["label_method"] for item in annotation_artifact["annotations"])
+            )
+            self.assertIn(
+                "Sample label counts are not general public-opinion estimates.",
+                annotation_artifact["representativeness_limits"],
+            )
+
+            aggregation_payload = run_script(
+                script_path("aggregate-public-discourse-annotations"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--annotations-path",
+                annotation_payload["summary"]["output_path"],
+            )
+            aggregation_artifact = load_json(
+                analytics_path(run_dir, f"public_discourse_annotation_aggregation_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", aggregation_payload["status"])
+            formal_distributions = {
+                (item["label_family"], item["label"]): item
+                for item in aggregation_artifact["annotation_distributions"]
+            }
+            self.assertIn(("formal_issue_labels", "health-benefit"), formal_distributions)
+            self.assertIn(("formal_stance_hints", "oppose"), formal_distributions)
+            self.assertEqual(
+                2,
+                aggregation_artifact["distribution_denominators"]["eligible_signal_count"],
+            )
+            self.assertTrue(
+                aggregation_artifact["distribution_use_policy"]["sample_fractions_are_sample_local"]
             )
 
     def test_corpus_and_coverage_helpers_preserve_sample_boundaries(self) -> None:

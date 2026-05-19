@@ -29,11 +29,83 @@ SOURCE_SKILL = "fetch-regulationsgov-comment-detail"
 PLANE = "formal"
 
 
+ATTACHED_ONLY_MARKERS = {
+    "see attached",
+    "see attachment",
+    "see attachments",
+    "please see attached",
+    "please see attachment",
+    "please see attachments",
+    "attached",
+}
+
+
+def list_items(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    return []
+
+
+def dict_items(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def attachment_items(record: dict[str, Any], detail: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates: list[Any] = []
+    for container in (record, detail):
+        for key in ("attachments", "included"):
+            candidates.extend(list_items(container.get(key)))
+    relationships = dict_items(detail.get("relationships"))
+    attachments_rel = dict_items(relationships.get("attachments"))
+    candidates.extend(list_items(attachments_rel.get("data")))
+
+    attachments: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        attachment_id = (
+            maybe_text(item.get("attachment_id"))
+            or maybe_text(item.get("id"))
+            or maybe_text(dict_items(item.get("attributes")).get("id"))
+        )
+        dedupe = attachment_id or repr(sorted(item.keys()))
+        if dedupe in seen:
+            continue
+        seen.add(dedupe)
+        attachments.append(item)
+    return attachments
+
+
+def attachment_ids_for_record(record: dict[str, Any], detail: dict[str, Any]) -> list[str]:
+    attachment_ids: list[str] = []
+    for item in attachment_items(record, detail):
+        attributes = dict_items(item.get("attributes"))
+        attachment_id = (
+            maybe_text(item.get("attachment_id"))
+            or maybe_text(item.get("id"))
+            or maybe_text(attributes.get("id"))
+        )
+        if attachment_id and attachment_id not in attachment_ids:
+            attachment_ids.append(attachment_id)
+    return attachment_ids
+
+
+def has_inline_comment_text(body_text: str) -> bool:
+    normalized = maybe_text(body_text).strip().lower().strip(".:")
+    return bool(normalized) and normalized not in ATTACHED_ONLY_MARKERS
+
+
 def provider_metadata(
     attributes: dict[str, Any],
     *,
     artifact_sha256: str,
     validation: dict[str, Any],
+    comment_id: str,
+    body_text: str,
+    attachment_ids: list[str],
 ) -> dict[str, Any]:
     submitter_name = (
         maybe_text(attributes.get("submitterName"))
@@ -44,14 +116,25 @@ def provider_metadata(
         "decision_source": "provider-field-normalization",
         "normalization_scope": "provider-fields-only",
         "typed_metadata_status": "not-derived-by-normalizer",
+        "comment_id": comment_id,
         "docket_id": maybe_text(attributes.get("docketId")),
         "comment_on_id": maybe_text(attributes.get("commentOnId")),
+        "comment_on_document_id": maybe_text(attributes.get("commentOnDocumentId"))
+        or maybe_text(attributes.get("commentOnId")),
+        "document_type": maybe_text(attributes.get("documentType")),
+        "subtype": maybe_text(attributes.get("subtype")),
+        "posted_date": maybe_text(attributes.get("postedDate")),
         "modify_date": maybe_text(attributes.get("modifyDate")),
         "receive_date": maybe_text(attributes.get("receiveDate")),
         "agency_id": maybe_text(attributes.get("agencyId")),
         "submitter_name": submitter_name,
         "submitter_organization": maybe_text(attributes.get("organization"))
         or maybe_text(attributes.get("organizationName")),
+        "comment_text": body_text,
+        "attachment_ids": attachment_ids,
+        "attachment_count": len(attachment_ids),
+        "has_inline_comment_text": has_inline_comment_text(body_text),
+        "requires_attachment_text": bool(attachment_ids) and not has_inline_comment_text(body_text),
         "provider": "Regulations.gov",
         "validation": validation,
         "source_provenance": {
@@ -68,10 +151,15 @@ def quality_flags_for_record(
     body_text: str,
     author_name: str,
     validation: dict[str, Any],
+    attachment_ids: list[str],
 ) -> list[str]:
     flags = ["formal-record", "provider-field-normalized", "comment-detail"]
     if not body_text:
         flags.append("missing-comment-text")
+    if attachment_ids and not has_inline_comment_text(body_text):
+        flags.append("requires-attachment-text")
+    if attachment_ids:
+        flags.append("has-attachments")
     if not maybe_text(attributes.get("docketId")):
         flags.append("missing-docket-id")
     if not maybe_text(attributes.get("agencyId")):
@@ -97,12 +185,12 @@ def build_signals(payload: Any, run_id: str, round_id: str, artifact_file: Path,
         comment_id = maybe_text(record.get("comment_id")) or f"reggov-comment-detail-{index}"
         detail = record.get("detail") if isinstance(record.get("detail"), dict) else {}
         attributes = detail.get("attributes") if isinstance(detail.get("attributes"), dict) else {}
+        attachment_ids = attachment_ids_for_record(record, detail)
         title = maybe_text(attributes.get("title")) or f"Regulations.gov comment {comment_id}"
         body_text = (
             maybe_text(attributes.get("comment"))
             or maybe_text(attributes.get("commentText"))
             or maybe_text(attributes.get("summary"))
-            or title
         )
         published_at = (
             maybe_text(attributes.get("postedDate"))
@@ -120,12 +208,16 @@ def build_signals(payload: Any, run_id: str, round_id: str, artifact_file: Path,
             attributes,
             artifact_sha256=artifact_sha256,
             validation=validation,
+            comment_id=comment_id,
+            body_text=body_text,
+            attachment_ids=attachment_ids,
         )
         quality_flags = quality_flags_for_record(
             attributes,
             body_text=body_text,
             author_name=author_name,
             validation=validation,
+            attachment_ids=attachment_ids,
         )
         signals.append(
             base_signal(

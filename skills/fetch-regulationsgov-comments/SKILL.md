@@ -8,8 +8,11 @@ description: Fetch Regulations.gov v4 comments in configurable time windows with
 ## Core Goal
 - Fetch `comments` data from `https://api.regulations.gov/v4/comments`.
 - Filter by configurable time windows (`lastModifiedDate` or `postedDate`).
-- Apply optional filters (`agencyId`, `commentOnId`, `searchTerm`).
+- Apply optional filters (`docketId`, `agencyId`, `commentOnId` /
+  `commentOnDocumentId`, `searchTerm`, `documentType`, `subtype`).
 - Return machine-readable JSON and optionally save JSONL records locally.
+- Return a `candidate_corpus_summary` with candidate counts, bounded ID samples,
+  field coverage, source limitations, and drift indicators.
 - Keep execution observable with structured logs and optional log file.
 
 ## Artifact Placement
@@ -86,6 +89,9 @@ python3 scripts/fetch_regulationsgov_comments.py fetch \
 ## Agent Reasoning Guide
 - This skill discovers comment list rows. It does not fetch all detail fields,
   attachments, issue labels, stance, concern, or policy conclusions.
+- Treat `candidate_corpus_summary` as sample-shape evidence for planning batch
+  detail fetches. Its `likely_drift_indicators` are review cues only, not source
+  scores or evidence sufficiency judgements.
 - If list rows are relevant but insufficient for evidence review, follow with
   `fetch-regulationsgov-comment-detail` for selected comment IDs.
 - Zero rows may reflect docket/document/agency filters, `posted` versus
@@ -136,7 +142,9 @@ python3 scripts/fetch_regulationsgov_comments.py fetch \
   --filter-mode last-modified \
   --start-datetime [YYYY-MM-DDTHH:MM:SSZ] \
   --end-datetime [YYYY-MM-DDTHH:MM:SSZ] \
+  --docket-id [OPTIONAL_DOCKET] \
   --agency-id [OPTIONAL_AGENCY] \
+  --comment-on-document-id [OPTIONAL_DOCUMENT_ID] \
   --max-pages [N] \
   --max-records [M] \
   --output-dir [OUTPUT_DIR] \

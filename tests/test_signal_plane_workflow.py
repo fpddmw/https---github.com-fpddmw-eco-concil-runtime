@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import sqlite3
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -96,6 +98,9 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                                 "postedDate": "2023-06-08T12:00:00Z",
                                 "agencyId": "EPA",
                                 "docketId": "EPA-2023-001",
+                                "commentOnId": "EPA-DOC-2023-001",
+                                "documentType": "Public Submission",
+                                "subtype": "Comment",
                                 "submitterName": "Coalition of River Residents",
                             },
                         },
@@ -256,6 +261,8 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             self.assertNotIn(("evidence_citation_types", "scientific-study"), indexed_pairs)
             self.assertIsNotNone(raw_row)
             self.assertIn("provider-fields-only", str(raw_row["metadata_json"]))
+            self.assertIn('"comment_on_document_id": "EPA-DOC-2023-001"', str(raw_row["metadata_json"]))
+            self.assertIn('"document_type": "Public Submission"', str(raw_row["metadata_json"]))
             self.assertIn("provider-field-normalized", str(raw_row["quality_flags_json"]))
 
     def test_formal_comment_detail_signal_enrichment(self) -> None:
@@ -282,11 +289,40 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                                     "receiveDate": "2023-06-08T14:30:00Z",
                                     "agencyId": "EPA",
                                     "docketId": "EPA-2023-009",
+                                    "commentOnId": "EPA-DOC-2023-009",
+                                    "documentType": "Public Submission",
+                                    "subtype": "Comment",
                                     "submitterName": "Clean Air Alliance",
                                     "organizationName": "Clean Air Alliance",
                                 }
                             },
-                        }
+                            "attachments": [
+                                {"id": "att-001", "attributes": {"title": "Attachment one"}},
+                                {"id": "att-002", "attributes": {"title": "Attachment two"}},
+                            ],
+                        },
+                        {
+                            "comment_id": "rg-detail-attached",
+                            "response_url": "https://www.regulations.gov/comment/rg-detail-attached",
+                            "detail": {
+                                "attributes": {
+                                    "title": "Attached technical appendix",
+                                    "comment": "See Attached",
+                                    "postedDate": "2023-06-09T14:00:00Z",
+                                    "agencyId": "EPA",
+                                    "docketId": "EPA-2023-009",
+                                    "commentOnId": "EPA-DOC-2023-009",
+                                    "submitterName": "Technical Commenter",
+                                },
+                                "relationships": {
+                                    "attachments": {
+                                        "data": [
+                                            {"id": "att-technical-001", "type": "attachments"}
+                                        ]
+                                    }
+                                },
+                            },
+                        },
                     ]
                 },
             )
@@ -302,7 +338,7 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 str(detail_path),
             )
             self.assertEqual("completed", normalize_payload["status"])
-            self.assertEqual(1, len(normalize_payload["canonical_ids"]))
+            self.assertEqual(2, len(normalize_payload["canonical_ids"]))
 
             query_payload = run_script(
                 script_path("query-formal-signals"),
@@ -316,6 +352,8 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
                 "fetch-regulationsgov-comment-detail",
                 "--docket-id",
                 "EPA-2023-009",
+                "--keyword",
+                "reopen",
             )
             self.assertEqual(1, query_payload["result_count"])
             result = query_payload["results"][0]
@@ -357,6 +395,424 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             self.assertNotIn(("route_hint", "formal-comment-and-policy-record"), indexed_pairs)
             self.assertIsNotNone(raw_row)
             self.assertIn("comment-detail", str(raw_row["quality_flags_json"]))
+            self.assertIn('"attachment_count": 2', str(raw_row["metadata_json"]))
+            self.assertIn('"has_inline_comment_text": true', str(raw_row["metadata_json"]))
+
+            with sqlite3.connect(run_dir / "analytics" / "signal_plane.sqlite") as connection:
+                connection.row_factory = sqlite3.Row
+                attached_row = connection.execute(
+                    """
+                    SELECT metadata_json, quality_flags_json
+                    FROM normalized_signals
+                    WHERE external_id = 'rg-detail-attached'
+                    """,
+                ).fetchone()
+            self.assertIsNotNone(attached_row)
+            self.assertIn('"requires_attachment_text": true', str(attached_row["metadata_json"]))
+            self.assertIn("requires-attachment-text", str(attached_row["quality_flags_json"]))
+
+    def test_formal_comment_candidate_corpus_audit_reports_drift_cues(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            regulations_path = root / "regulationsgov_comments.json"
+            write_json(
+                regulations_path,
+                {
+                    "records": [
+                        {
+                            "id": "rg-candidate-001",
+                            "attributes": {
+                                "title": "PM2.5 health comment",
+                                "comment": "The rule should account for health benefits.",
+                                "postedDate": "2024-02-01T12:00:00Z",
+                                "agencyId": "EPA",
+                                "docketId": "EPA-HQ-OAR-2015-0072",
+                                "commentOnId": "EPA-HQ-OAR-2015-0072-0001",
+                            },
+                        },
+                        {
+                            "id": "rg-candidate-drift",
+                            "attributes": {
+                                "title": "Unrelated permit comment",
+                                "comment": "This concerns a different action.",
+                                "postedDate": "2024-02-01T13:00:00Z",
+                                "agencyId": "DOT",
+                            },
+                        },
+                    ]
+                },
+            )
+
+            audit_payload = run_script(
+                script_path("audit-formal-comment-candidate-corpus"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(regulations_path),
+                "--docket-id",
+                "EPA-HQ-OAR-2015-0072",
+                "--comment-on-document-id",
+                "EPA-HQ-OAR-2015-0072-0001",
+                "--agency-id",
+                "EPA",
+                "--keyword",
+                "health",
+                "--sample-ref-limit",
+                "5",
+            )
+
+            self.assertEqual("completed", audit_payload["status"])
+            audit = audit_payload["audit"]
+            self.assertEqual(2, audit["candidate_comment_count"])
+            self.assertEqual(1, audit["eligible_count"])
+            self.assertEqual(1, audit["excluded_count"])
+            self.assertEqual(["rg-candidate-001"], audit["candidate_ids"])
+            self.assertEqual(1, audit["missing_docket_count"])
+            self.assertEqual(1, audit["exact_docket_match_count"])
+            drift_codes = {item["code"] for item in audit["likely_drift_indicators"]}
+            self.assertIn("docket-mismatch-or-missing", drift_codes)
+            self.assertIn("keyword-miss", drift_codes)
+            self.assertIn("Formal comment samples must not be converted", " ".join(audit["source_limitations"]))
+
+    def test_regulationsgov_fetch_candidate_summary_and_dry_run_filters(self) -> None:
+        fetch_script = script_path("fetch-regulationsgov-comments")
+        spec = importlib.util.spec_from_file_location("fetch_regulationsgov_comments", fetch_script)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["fetch_regulationsgov_comments"] = module
+        spec.loader.exec_module(module)
+
+        summary = module.candidate_corpus_summary(
+            [
+                {
+                    "id": "rg-candidate-001",
+                    "attributes": {
+                        "title": "PM2.5 health comment",
+                        "comment": "The rule should account for health benefits.",
+                        "agencyId": "EPA",
+                        "docketId": "EPA-HQ-OAR-2015-0072",
+                        "commentOnId": "EPA-HQ-OAR-2015-0072-0001",
+                        "documentType": "Public Submission",
+                        "subtype": "Comment",
+                    },
+                },
+                {
+                    "id": "rg-candidate-drift",
+                    "attributes": {
+                        "title": "Unrelated permit comment",
+                        "comment": "This concerns a different action.",
+                        "agencyId": "DOT",
+                    },
+                },
+            ],
+            normalized_filters={
+                "docket_id": "EPA-HQ-OAR-2015-0072",
+                "comment_on_id": "EPA-HQ-OAR-2015-0072-0001",
+                "agency_id": "EPA",
+                "search_term": "health",
+                "document_type": "Public Submission",
+                "subtype": "Comment",
+            },
+            sample_ref_limit=5,
+        )
+        self.assertEqual(2, summary["candidate_comment_count"])
+        self.assertEqual(["rg-candidate-001", "rg-candidate-drift"], summary["candidate_ids"])
+        self.assertEqual(1, summary["field_coverage"]["records_with_docket_id"])
+        drift_codes = {item["code"] for item in summary["likely_drift_indicators"]}
+        self.assertIn("docket-mismatch-or-missing", drift_codes)
+        self.assertIn("search-term-miss", drift_codes)
+        self.assertIn("general public-opinion", " ".join(summary["source_limitations"]))
+
+        dry_run_payload = run_script(
+            fetch_script,
+            "fetch",
+            "--api-key",
+            "DUMMY_KEY",
+            "--filter-mode",
+            "posted",
+            "--start-date",
+            "2024-02-01",
+            "--end-date",
+            "2024-02-02",
+            "--docket-id",
+            "EPA-HQ-OAR-2015-0072",
+            "--comment-on-document-id",
+            "EPA-HQ-OAR-2015-0072-0001",
+            "--document-type",
+            "Public Submission",
+            "--subtype",
+            "Comment",
+            "--sample-ref-limit",
+            "7",
+            "--dry-run",
+            "--pretty",
+        )
+        self.assertTrue(dry_run_payload["dry_run"])
+        filters = dry_run_payload["request_plan"]["filters"]
+        self.assertEqual("EPA-HQ-OAR-2015-0072", filters["docket_id"])
+        self.assertEqual("EPA-HQ-OAR-2015-0072-0001", filters["comment_on_document_id"])
+        self.assertEqual("Public Submission", filters["document_type"])
+        self.assertEqual("Comment", filters["subtype"])
+        self.assertEqual(7, dry_run_payload["request_plan"]["sample_ref_limit"])
+        self.assertIn("filter%5BdocketId%5D=EPA-HQ-OAR-2015-0072", dry_run_payload["sample_request_url"])
+
+    def test_regulationsgov_detail_fetch_reads_candidate_audit_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            audit_path = root / "formal_comment_candidate_corpus_audit.json"
+            write_json(
+                audit_path,
+                {
+                    "audit": {
+                        "candidate_ids": [
+                            "EPA-HQ-OAR-2015-0072-5836",
+                            "EPA-HQ-OAR-2015-0072-5837",
+                        ]
+                    }
+                },
+            )
+
+            dry_run_payload = run_script(
+                script_path("fetch-regulationsgov-comment-detail"),
+                "fetch",
+                "--api-key",
+                "DUMMY_KEY",
+                "--comment-ids-file",
+                str(audit_path),
+                "--max-comments",
+                "1",
+                "--include",
+                "attachments",
+                "--dry-run",
+                "--pretty",
+            )
+
+            self.assertTrue(dry_run_payload["dry_run"])
+            self.assertEqual(1, dry_run_payload["request_plan"]["selected_count"])
+            self.assertEqual(["EPA-HQ-OAR-2015-0072-5836"], dry_run_payload["sample_ids"])
+            self.assertIn("include=attachments", dry_run_payload["sample_request_url"])
+
+    def test_regulationsgov_attachment_fetch_dry_run_reads_detail_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            detail_path = root / "regulationsgov_comment_detail.json"
+            write_json(
+                detail_path,
+                {
+                    "records": [
+                        {
+                            "comment_id": "EPA-HQ-OAR-2015-0072-5836",
+                            "detail": {
+                                "relationships": {
+                                    "attachments": {
+                                        "data": [
+                                            {"id": "09000064859c8451", "type": "attachments"}
+                                        ]
+                                    }
+                                }
+                            },
+                        },
+                        {
+                            "comment_id": "EPA-HQ-OAR-2015-0072-5837",
+                            "attachments": [
+                                {
+                                    "id": "09000064859c8452",
+                                    "attributes": {
+                                        "title": "Comment attachment",
+                                        "fileFormats": [
+                                            {
+                                                "format": "pdf",
+                                                "fileUrl": "https://downloads.regulations.gov/EPA-HQ-OAR-2015-0072-5837/attachment_1.pdf",
+                                            }
+                                        ],
+                                    },
+                                }
+                            ],
+                        },
+                    ]
+                },
+            )
+
+            dry_run_payload = run_script(
+                script_path("fetch-regulationsgov-attachments"),
+                "fetch",
+                "--api-key",
+                "DUMMY_KEY",
+                "--input-artifact",
+                str(detail_path),
+                "--max-attachments",
+                "2",
+                "--dry-run",
+                "--pretty",
+            )
+
+            self.assertTrue(dry_run_payload["dry_run"])
+            self.assertEqual(2, dry_run_payload["request_plan"]["target_count"])
+            targets = dry_run_payload["sample_targets"]
+            self.assertEqual("EPA-HQ-OAR-2015-0072-5836", targets[0]["comment_id"])
+            self.assertEqual("09000064859c8451", targets[0]["attachment_id"])
+            self.assertEqual("09000064859c8452", targets[1]["attachment_id"])
+            self.assertEqual(
+                "https://downloads.regulations.gov/EPA-HQ-OAR-2015-0072-5837/attachment_1.pdf",
+                targets[1]["file_url"],
+            )
+            self.assertTrue(
+                any(
+                    "comments/EPA-HQ-OAR-2015-0072-5836/attachments" in url
+                    or "attachments/09000064859c8451" in url
+                    for url in dry_run_payload["sample_request_urls"]
+                )
+            )
+
+    def test_regulationsgov_attachment_text_extracts_and_normalizes_to_formal_signal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            raw_dir = root / "raw"
+            raw_dir.mkdir()
+            attachment_path = raw_dir / "attachment_1.txt"
+            attachment_path.write_text(
+                "Attached comment text asks EPA to consider health benefits and implementation costs.",
+                encoding="utf-8",
+            )
+            fetch_manifest = root / "regulationsgov_attachments_manifest.json"
+            write_json(
+                fetch_manifest,
+                {
+                    "downloads": [
+                        {
+                            "status": "downloaded",
+                            "comment_id": "EPA-HQ-OAR-2015-0072-5836",
+                            "attachment_id": "09000064859c8451",
+                            "file_url": "https://downloads.regulations.gov/EPA-HQ-OAR-2015-0072-5836/attachment_1.txt",
+                            "output_path": str(attachment_path),
+                            "content_type": "text/plain",
+                            "metadata": {
+                                "id": "09000064859c8451",
+                                "attributes": {"title": "Attached comment letter"},
+                            },
+                            "comment_attributes": {
+                                "agencyId": "EPA",
+                                "docketId": "EPA-HQ-OAR-2015-0072",
+                                "commentOnId": "EPA-HQ-OAR-2015-0072-0001",
+                                "submitterName": "Forestry Association",
+                            },
+                        }
+                    ]
+                },
+            )
+
+            extraction_payload = run_script(
+                script_path("extract-document-text"),
+                "--input-manifest",
+                str(fetch_manifest),
+                "--output-dir",
+                str(root / "text"),
+                "--manifest-output",
+                str(root / "text" / "extraction_manifest.json"),
+                "--pretty",
+            )
+            self.assertEqual("completed", extraction_payload["status"])
+            self.assertEqual(1, extraction_payload["completed_count"])
+            extraction_manifest = Path(extraction_payload["manifest_output"])
+            self.assertTrue(extraction_manifest.exists())
+
+            normalize_payload = run_script(
+                script_path("normalize-regulationsgov-attachment-text"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(extraction_manifest),
+                "--pretty",
+            )
+            self.assertEqual("completed", normalize_payload["status"])
+            self.assertEqual(1, len(normalize_payload["canonical_ids"]))
+
+            query_payload = run_script(
+                script_path("query-formal-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--source-skill",
+                "fetch-regulationsgov-attachments",
+                "--docket-id",
+                "EPA-HQ-OAR-2015-0072",
+                "--keyword",
+                "health",
+            )
+            self.assertEqual(1, query_payload["result_count"])
+            result = query_payload["results"][0]
+            self.assertEqual("attachment-text", result["signal_kind"])
+            self.assertEqual("EPA-HQ-OAR-2015-0072", result["docket_id"])
+            self.assertEqual("Forestry Association", result["submitter_name"])
+            self.assertIn("implementation costs", result["snippet"])
+
+            with sqlite3.connect(run_dir / "analytics" / "signal_plane.sqlite") as connection:
+                connection.row_factory = sqlite3.Row
+                raw_row = connection.execute(
+                    """
+                    SELECT metadata_json, quality_flags_json
+                    FROM normalized_signals
+                    WHERE signal_id = ?
+                    """,
+                    (result["signal_id"],),
+                ).fetchone()
+            self.assertIsNotNone(raw_row)
+            self.assertIn('"attachment_id": "09000064859c8451"', str(raw_row["metadata_json"]))
+            self.assertIn('"text_extraction_status": "completed"', str(raw_row["metadata_json"]))
+            self.assertIn("attachment-text", str(raw_row["quality_flags_json"]))
+
+    def test_regulationsgov_attachment_text_normalizer_rejects_fetch_manifest_without_extraction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            raw_manifest = root / "regulationsgov_attachments_manifest.json"
+            write_json(
+                raw_manifest,
+                {
+                    "ok": True,
+                    "source": "regulationsgov-v4-attachments",
+                    "records": [
+                        {
+                            "comment_id": "EPA-HQ-OAR-2015-0072-5836",
+                            "attachment_id": "09000064859c8451",
+                            "file_url": "https://downloads.regulations.gov/example/attachment_1.pdf",
+                        }
+                    ],
+                    "downloads": [],
+                },
+            )
+
+            normalize_payload = run_script(
+                script_path("normalize-regulationsgov-attachment-text"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(raw_manifest),
+                "--pretty",
+            )
+
+            self.assertEqual("completed", normalize_payload["status"])
+            self.assertEqual([], normalize_payload["canonical_ids"])
+            warning_codes = {item["code"] for item in normalize_payload["warnings"]}
+            self.assertIn("expected-document-text-extraction-manifest", warning_codes)
 
     def test_public_signal_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

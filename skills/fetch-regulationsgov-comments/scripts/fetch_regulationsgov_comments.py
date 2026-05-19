@@ -743,6 +743,175 @@ def summarize_preview(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def maybe_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return " ".join(str(value).split())
+
+
+def normalize_search_terms(value: str) -> list[str]:
+    terms: list[str] = []
+    for token in value.split(","):
+        text = maybe_text(token).lower()
+        if text and text not in terms:
+            terms.append(text)
+    return terms
+
+
+def candidate_text(attributes: dict[str, Any]) -> str:
+    return " ".join(
+        maybe_text(attributes.get(key))
+        for key in ("title", "comment", "commentText", "summary", "commentOnDocumentTitle")
+        if maybe_text(attributes.get(key))
+    ).lower()
+
+
+def candidate_snapshot(item: dict[str, Any]) -> dict[str, Any]:
+    attributes = item.get("attributes") if isinstance(item.get("attributes"), dict) else {}
+    return {
+        "comment_id": maybe_text(item.get("id")),
+        "title": maybe_text(attributes.get("title")),
+        "docket_id": maybe_text(attributes.get("docketId")),
+        "comment_on_document_id": maybe_text(attributes.get("commentOnDocumentId"))
+        or maybe_text(attributes.get("commentOnId")),
+        "agency_id": maybe_text(attributes.get("agencyId")),
+        "document_type": maybe_text(attributes.get("documentType")),
+        "subtype": maybe_text(attributes.get("subtype")),
+        "posted_date": maybe_text(attributes.get("postedDate")),
+        "receive_date": maybe_text(attributes.get("receiveDate")),
+    }
+
+
+def candidate_corpus_summary(
+    records: list[dict[str, Any]],
+    *,
+    normalized_filters: dict[str, Any],
+    sample_ref_limit: int,
+) -> dict[str, Any]:
+    sample_limit = max(0, sample_ref_limit)
+    docket_id = maybe_text(normalized_filters.get("docket_id"))
+    comment_on_id = maybe_text(normalized_filters.get("comment_on_id"))
+    agency_id = maybe_text(normalized_filters.get("agency_id"))
+    document_type = maybe_text(normalized_filters.get("document_type"))
+    subtype = maybe_text(normalized_filters.get("subtype"))
+    search_terms = normalize_search_terms(maybe_text(normalized_filters.get("search_term")))
+
+    missing_docket_count = 0
+    missing_comment_on_count = 0
+    exact_docket_match_count = 0
+    exact_document_match_count = 0
+    title_keyword_match_count = 0
+    snapshots: list[dict[str, Any]] = []
+    excluded_samples: list[dict[str, Any]] = []
+    fingerprints: dict[str, int] = {}
+
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        attributes = item.get("attributes") if isinstance(item.get("attributes"), dict) else {}
+        snapshot = candidate_snapshot(item)
+        snapshots.append(snapshot)
+        reasons: list[str] = []
+
+        if not snapshot["docket_id"]:
+            missing_docket_count += 1
+            if docket_id:
+                reasons.append("missing-docket-id")
+        elif docket_id and snapshot["docket_id"] == docket_id:
+            exact_docket_match_count += 1
+        elif docket_id:
+            reasons.append("docket-mismatch")
+
+        if not snapshot["comment_on_document_id"]:
+            missing_comment_on_count += 1
+            if comment_on_id:
+                reasons.append("missing-comment-on-document-id")
+        elif comment_on_id and snapshot["comment_on_document_id"] == comment_on_id:
+            exact_document_match_count += 1
+        elif comment_on_id:
+            reasons.append("comment-on-document-mismatch")
+
+        if agency_id and snapshot["agency_id"] != agency_id:
+            reasons.append("agency-mismatch")
+        if document_type and snapshot["document_type"] != document_type:
+            reasons.append("document-type-mismatch")
+        if subtype and snapshot["subtype"] != subtype:
+            reasons.append("subtype-mismatch")
+
+        searchable = candidate_text(attributes)
+        if search_terms:
+            if any(term in searchable for term in search_terms):
+                title_keyword_match_count += 1
+            else:
+                reasons.append("search-term-miss")
+
+        fingerprint = "|".join(
+            [
+                maybe_text(attributes.get("title")).lower(),
+                maybe_text(attributes.get("comment") or attributes.get("commentText")).lower()[:200],
+            ]
+        )
+        if fingerprint:
+            fingerprints[fingerprint] = fingerprints.get(fingerprint, 0) + 1
+
+        if reasons and len(excluded_samples) < sample_limit:
+            excluded_samples.append({"candidate": snapshot, "reasons": reasons})
+
+    record_count = len(snapshots)
+    duplicate_count = sum(count for count in fingerprints.values() if count > 1)
+    drift_indicators: list[dict[str, Any]] = []
+    if docket_id and exact_docket_match_count < record_count:
+        drift_indicators.append(
+            {"code": "docket-mismatch-or-missing", "count": record_count - exact_docket_match_count}
+        )
+    if comment_on_id and exact_document_match_count < record_count:
+        drift_indicators.append(
+            {
+                "code": "comment-on-document-mismatch-or-missing",
+                "count": record_count - exact_document_match_count,
+            }
+        )
+    if agency_id:
+        agency_miss_count = sum(1 for item in snapshots if item["agency_id"] != agency_id)
+        if agency_miss_count:
+            drift_indicators.append({"code": "agency-mismatch", "count": agency_miss_count})
+    if document_type:
+        document_type_miss_count = sum(1 for item in snapshots if item["document_type"] != document_type)
+        if document_type_miss_count:
+            drift_indicators.append({"code": "document-type-mismatch", "count": document_type_miss_count})
+    if subtype:
+        subtype_miss_count = sum(1 for item in snapshots if item["subtype"] != subtype)
+        if subtype_miss_count:
+            drift_indicators.append({"code": "subtype-mismatch", "count": subtype_miss_count})
+    if search_terms and title_keyword_match_count < record_count:
+        drift_indicators.append({"code": "search-term-miss", "count": record_count - title_keyword_match_count})
+    if duplicate_count:
+        drift_indicators.append({"code": "duplicate-or-mass-campaign-cue", "count": duplicate_count})
+
+    return {
+        "candidate_comment_count": record_count,
+        "candidate_ids": [item["comment_id"] for item in snapshots[:sample_limit] if item["comment_id"]],
+        "query_parameters": normalized_filters,
+        "source_limitations": [
+            "Regulations.gov list rows may omit full text and attachment content.",
+            "Candidate summaries are sample-shape cues, not stance, importance, or sufficiency judgements.",
+            "Formal comment samples must not be converted into general public-opinion distributions.",
+        ],
+        "field_coverage": {
+            "records_with_docket_id": record_count - missing_docket_count,
+            "records_with_comment_on_document_id": record_count - missing_comment_on_count,
+            "records_with_agency_id": sum(1 for item in snapshots if item["agency_id"]),
+            "records_with_document_type": sum(1 for item in snapshots if item["document_type"]),
+            "records_with_subtype": sum(1 for item in snapshots if item["subtype"]),
+            "records_with_title": sum(1 for item in snapshots if item["title"]),
+        },
+        "likely_drift_indicators": drift_indicators,
+        "candidate_id_samples": snapshots[:sample_limit],
+        "exclusion_reason_samples": excluded_samples,
+        "sample_ref_limit": sample_limit,
+    }
+
+
 def serialize_meta_summary(meta: dict[str, Any]) -> dict[str, Any]:
     summary: dict[str, Any] = {}
     for key, _ in REQUIRED_META_FIELDS:
@@ -781,9 +950,13 @@ def build_filters(args: argparse.Namespace) -> tuple[dict[str, str], dict[str, A
     filters: dict[str, str] = {}
     normalized: dict[str, Any] = {
         "filter_mode": args.filter_mode,
+        "docket_id": args.docket_id or None,
         "agency_id": args.agency_id or None,
         "comment_on_id": args.comment_on_id or None,
+        "comment_on_document_id": args.comment_on_document_id or args.comment_on_id or None,
         "search_term": args.search_term or None,
+        "document_type": args.document_type or None,
+        "subtype": args.subtype or None,
     }
 
     if args.filter_mode == "last-modified":
@@ -827,12 +1000,19 @@ def build_filters(args: argparse.Namespace) -> tuple[dict[str, str], dict[str, A
     else:
         raise ValueError(f"Unsupported --filter-mode: {args.filter_mode}")
 
+    if args.docket_id:
+        filters["filter[docketId]"] = args.docket_id
     if args.agency_id:
         filters["filter[agencyId]"] = args.agency_id
-    if args.comment_on_id:
-        filters["filter[commentOnId]"] = args.comment_on_id
+    comment_on_filter = args.comment_on_document_id or args.comment_on_id
+    if comment_on_filter:
+        filters["filter[commentOnId]"] = comment_on_filter
     if args.search_term:
         filters["filter[searchTerm]"] = args.search_term
+    if args.document_type:
+        filters["filter[documentType]"] = args.document_type
+    if args.subtype:
+        filters["filter[subtype]"] = args.subtype
 
     return filters, normalized, default_sort
 
@@ -949,6 +1129,8 @@ def command_fetch(args: argparse.Namespace) -> int:
         raise ValueError("--max-validation-issues must be >= 1.")
     if args.preview_records < 0:
         raise ValueError("--preview-records must be >= 0.")
+    if args.sample_ref_limit < 0:
+        raise ValueError("--sample-ref-limit must be >= 0.")
 
     ensure_fetch_limits(
         max_pages=args.max_pages,
@@ -982,6 +1164,7 @@ def command_fetch(args: argparse.Namespace) -> int:
                 "max_pages": args.max_pages,
                 "max_records": args.max_records,
                 "include_records": args.include_records,
+                "sample_ref_limit": args.sample_ref_limit,
             },
             "sample_request_url": render_query(
                 config.base_url,
@@ -1149,6 +1332,11 @@ def command_fetch(args: argparse.Namespace) -> int:
             "failed": pages_with_issues > 0,
         },
         "rate_limit_last": rate_limit_last,
+        "candidate_corpus_summary": candidate_corpus_summary(
+            records,
+            normalized_filters=normalized_filters,
+            sample_ref_limit=args.sample_ref_limit,
+        ),
     }
 
     if args.include_records:
@@ -1284,6 +1472,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="End date for posted mode (YYYY-MM-DD).",
     )
     fetch.add_argument(
+        "--docket-id",
+        default="",
+        help="Optional filter[docketId] value.",
+    )
+    fetch.add_argument(
         "--agency-id",
         default="",
         help="Optional filter[agencyId] value.",
@@ -1294,9 +1487,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional filter[commentOnId] value.",
     )
     fetch.add_argument(
+        "--comment-on-document-id",
+        default="",
+        help="Alias for commentOn document ID; emitted as filter[commentOnId].",
+    )
+    fetch.add_argument(
         "--search-term",
         default="",
         help="Optional filter[searchTerm] value.",
+    )
+    fetch.add_argument(
+        "--document-type",
+        default="",
+        help="Optional filter[documentType] value when supported by the API.",
+    )
+    fetch.add_argument(
+        "--subtype",
+        default="",
+        help="Optional filter[subtype] value when supported by the API.",
     )
     fetch.add_argument(
         "--sort",
@@ -1332,6 +1540,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=2,
         help="How many preview records to keep per page summary.",
+    )
+    fetch.add_argument(
+        "--sample-ref-limit",
+        type=int,
+        default=25,
+        help="Maximum candidate sample rows and IDs to include in candidate_corpus_summary.",
     )
     fetch.add_argument(
         "--max-validation-issues",

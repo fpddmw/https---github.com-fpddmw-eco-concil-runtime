@@ -68,6 +68,11 @@ description: Moderator-controlled council-state skill that opens one follow-up i
   repeated evidence-continuation unless the moderator has recorded agreement,
   re-routing, pause/capability-gap handling, bounded-report rationale, or
   explicit disagreement.
+- If a route assessment says `same-family-followup-needed`, and the same
+  source family exposes a discovery mode, the moderator should not open another
+  generic continuation. The transition rationale should say whether discovery is
+  being executed, explicitly deferred, rejected, or treated as a capability
+  pause.
 
 ## Scripts
 - `scripts/open_investigation_round.py`

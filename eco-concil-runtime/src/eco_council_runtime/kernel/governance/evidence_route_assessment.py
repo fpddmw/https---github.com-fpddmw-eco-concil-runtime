@@ -93,14 +93,18 @@ def route_assessment_closing_item(route_assessment_refs: list[str]) -> dict[str,
             "Acknowledge the route assessment before repeating the same "
             "evidence request. Choose route-discovery continuation, "
             "capability-gap/human pause, bounded report with limitation, "
-            "request revision, or explicit disagreement."
+            "request revision, or explicit disagreement. If the assessment "
+            "names a same-family follow-up skill or discovery mode, do not "
+            "open another generic continuation without recording why that "
+            "discovery will be executed, deferred, or rejected."
             if route_assessment_refs
             else ""
         ),
         "response_boundary": (
             "This does not rank sources or force a route; it prevents "
             "unresolved refs from producing repeated non-move rounds when "
-            "investigators have already recorded a source-surface mismatch."
+            "investigators have already recorded a source-surface mismatch "
+            "or a missing route-grounding step."
             if route_assessment_refs
             else ""
         ),
