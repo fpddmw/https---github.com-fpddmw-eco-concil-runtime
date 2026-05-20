@@ -480,6 +480,47 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
             self.assertNotIn("source_ranking", artifact_text)
             self.assertNotIn("readiness_decision", artifact_text)
 
+    def test_aggregate_environment_evidence_metric_distribution_keeps_units_separate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            for signal_id, value, unit in [
+                ("env-pm25-concentration-001", 50.0, "ug/m3"),
+                ("env-pm25-concentration-002", 70.0, "ug/m3"),
+                ("env-pm25-aqi-001", 150.0, "aqi"),
+            ]:
+                insert_signal(
+                    run_dir,
+                    signal_id=signal_id,
+                    plane="environment",
+                    source_skill="fetch-airnow-hourly-observations",
+                    title="AirNow PM2.5",
+                    body_text="",
+                    metric="pm2_5",
+                    numeric_value=value,
+                    unit=unit,
+                    observed_at_utc="2023-06-07T12:00:00Z",
+                    latitude=40.7,
+                    longitude=-74.0,
+                    metadata={"site_name": "NYC Air", "environment_signal_class": "air-quality"},
+                )
+
+            payload = run_script(
+                script_path("aggregate-environment-evidence"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            metric_rows = {
+                (row["metric"], row["unit"]): row
+                for row in payload["aggregation"]["metric_distribution"]
+            }
+            self.assertEqual(60.0, metric_rows[("pm2_5", "ug/m3")]["mean_value"])
+            self.assertEqual(150.0, metric_rows[("pm2_5", "aqi")]["mean_value"])
+
     def test_aggregate_environment_evidence_auto_summary_keeps_mixed_shapes_descriptive(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"

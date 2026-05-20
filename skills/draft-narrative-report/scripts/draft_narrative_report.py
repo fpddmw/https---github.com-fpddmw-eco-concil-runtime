@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import re
+import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -826,6 +827,454 @@ def public_discourse_compact_line(summary: dict[str, Any], language: str) -> str
     return "; ".join(parts)
 
 
+def format_number(value: Any, digits: int = 1) -> str:
+    if isinstance(value, int):
+        return f"{value:,}"
+    if isinstance(value, float):
+        if abs(value - round(value)) < 0.05:
+            return f"{round(value):,}"
+        return f"{value:,.{digits}f}"
+    return maybe_text(value)
+
+
+def zh_clean_report_prose(text: str) -> str:
+    cleaned = maybe_text(text)
+    replacements = {
+        "source attribution": "来源归因",
+        "physical source attribution": "物理来源归因",
+        "plume transport": "烟羽输送",
+        "chemical causation": "化学成因",
+        "responsibility": "责任判断",
+        "public sentiment": "公众情绪",
+        "source narrative cues": "来源叙事线索",
+        "source narratives": "来源叙事",
+        "route diagnostic": "检索路线诊断",
+        "frozen basis": "冻结证据基础",
+        "canonical report basis": "规范化报告基础",
+        "report basis": "报告基础",
+        "runtime": "运行时",
+        "claim boundary": "结论边界",
+        "prevalence": "普遍性或出现率",
+        "sample-local": "样本内",
+        "provider-visible": "供应方可见",
+    }
+    for source, target in replacements.items():
+        cleaned = re.sub(re.escape(source), target, cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\bround-\d+\b", "相应轮次", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def compact_source_ref_label(ref: str) -> str:
+    text = maybe_text(ref)
+    if text.startswith("current-run-signal-set:"):
+        parts = text.split(":")
+        if len(parts) >= 5:
+            source = parts[1]
+            metric = parts[-2]
+            count = parts[-1]
+            labels = {
+                "airnow": "AirNow PM2.5/AQI 小时观测",
+                "open-meteo-aq": "Open-Meteo 空气质量 PM2.5",
+                "open-meteo-historical": "Open-Meteo 历史风速/风向",
+                "firms": "NASA FIRMS VIIRS 活跃火点",
+                "gdelt-doc": "GDELT DOC 媒体/文档记录",
+                "youtube-comments": "YouTube 评论/回复样本",
+                "youtube-video-search": "YouTube 视频发现元数据",
+                "bluesky": "Bluesky 公开帖文样本",
+            }
+            return f"{labels.get(source, source)}：{count} 条（{metric}）"
+    if "environment_evidence_aggregation" in text:
+        return "环境聚合产物：按来源、指标、单位、时间和空间压缩环境信号"
+    if text.startswith("report-basis-freeze"):
+        return "冻结报告基础：限定正文可使用的证据对象和结论边界"
+    return ""
+
+
+def compact_audit_ref_lines(refs: list[str]) -> list[str]:
+    readable = unique_texts(
+        [
+            label
+            for ref in refs
+            for label in [compact_source_ref_label(ref)]
+            if label
+        ]
+    )
+    return readable[:14]
+
+
+def _parse_datetime(value: str) -> datetime | None:
+    text = maybe_text(value)
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _date_key(value: str) -> str:
+    text = maybe_text(value)
+    return text[:10] if len(text) >= 10 else ""
+
+
+def signal_plane_incident_stats(run_dir: Path, run_id: str, round_id: str) -> dict[str, Any]:
+    db_path = run_dir / "analytics" / "signal_plane.sqlite"
+    if not db_path.exists():
+        return {}
+    try:
+        con = sqlite3.connect(db_path)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        params = (run_id, round_id)
+        counts = {
+            row["source_skill"]: int(row["count"])
+            for row in cur.execute(
+                """
+                select source_skill, count(*) as count
+                from normalized_signals
+                where run_id = ? and round_id = ?
+                group by source_skill
+                """,
+                params,
+            )
+        }
+        metric_rows = [
+            dict(row)
+            for row in cur.execute(
+                """
+                select source_skill, metric, unit, count(*) as count,
+                       min(numeric_value) as min_value,
+                       max(numeric_value) as max_value,
+                       avg(numeric_value) as mean_value
+                from normalized_signals
+                where run_id = ? and round_id = ? and numeric_value is not null
+                group by source_skill, metric, unit
+                order by count desc
+                """,
+                params,
+            )
+        ]
+        airnow_daily = [
+            dict(row)
+            for row in cur.execute(
+                """
+                select substr(observed_at_utc, 1, 10) as date,
+                       max(numeric_value) as max_value,
+                       avg(numeric_value) as mean_value,
+                       count(*) as count
+                from normalized_signals
+                where run_id = ? and round_id = ?
+                  and source_skill = 'fetch-airnow-hourly-observations'
+                  and metric = 'pm2_5'
+                  and upper(unit) = 'UG/M3'
+                  and observed_at_utc != ''
+                group by substr(observed_at_utc, 1, 10)
+                order by date
+                """,
+                params,
+            )
+        ]
+        top_airnow = cur.execute(
+            """
+            select numeric_value, observed_at_utc, latitude, longitude, title, metadata_json
+            from normalized_signals
+            where run_id = ? and round_id = ?
+              and source_skill = 'fetch-airnow-hourly-observations'
+              and metric = 'pm2_5'
+              and upper(unit) = 'UG/M3'
+            order by numeric_value desc
+            limit 1
+            """,
+            params,
+        ).fetchone()
+        open_meteo_pm25 = cur.execute(
+            """
+            select max(numeric_value) as max_value,
+                   avg(numeric_value) as mean_value,
+                   count(*) as count
+            from normalized_signals
+            where run_id = ? and round_id = ?
+              and source_skill = 'fetch-open-meteo-air-quality'
+              and metric = 'pm2_5'
+            """,
+            params,
+        ).fetchone()
+        fire_daily = [
+            dict(row)
+            for row in cur.execute(
+                """
+                select substr(observed_at_utc, 1, 10) as date, count(*) as count
+                from normalized_signals
+                where run_id = ? and round_id = ?
+                  and source_skill = 'fetch-nasa-firms-fire'
+                  and observed_at_utc != ''
+                group by substr(observed_at_utc, 1, 10)
+                order by date
+                """,
+                params,
+            )
+        ]
+        wind_rows = [
+            dict(row)
+            for row in cur.execute(
+                """
+                select metric, numeric_value, unit, observed_at_utc
+                from normalized_signals
+                where run_id = ? and round_id = ?
+                  and source_skill = 'fetch-open-meteo-historical'
+                  and metric in ('wind_speed_10m', 'wind_direction_10m')
+                  and observed_at_utc != ''
+                """,
+                params,
+            )
+        ]
+        con.close()
+    except sqlite3.Error:
+        return {}
+
+    top_airnow_dict = dict(top_airnow) if top_airnow else {}
+    top_time = _parse_datetime(maybe_text(top_airnow_dict.get("observed_at_utc")))
+    nearest_wind: dict[str, dict[str, Any]] = {}
+    if top_time:
+        for row in wind_rows:
+            observed = _parse_datetime(maybe_text(row.get("observed_at_utc")))
+            if not observed:
+                continue
+            distance = abs((observed - top_time).total_seconds())
+            metric = maybe_text(row.get("metric"))
+            current = nearest_wind.get(metric)
+            if current is None or distance < current["distance"]:
+                nearest_wind[metric] = {**row, "distance": distance}
+    return {
+        "counts": counts,
+        "metric_rows": metric_rows,
+        "airnow_daily": airnow_daily,
+        "top_airnow": top_airnow_dict,
+        "open_meteo_pm25": dict(open_meteo_pm25) if open_meteo_pm25 else {},
+        "fire_daily": fire_daily,
+        "nearest_wind": nearest_wind,
+    }
+
+
+def _count(stats: dict[str, Any], source_skill: str) -> int:
+    return int((stats.get("counts") or {}).get(source_skill) or 0)
+
+
+def public_semantic_themes_from_text(text: str) -> list[str]:
+    lower = maybe_text(text).lower()
+    themes: list[str] = []
+    if any(token in lower for token in ("sensory", "looked like nighttime", "sky is yellow", "orange", "smell", "hazy", "smoky")):
+        themes.append("感官异常：黄天、橙色天空、异味、烟雾或“像夜晚”的可见经验使事件变成直接可感知的风险。")
+    if any(token in lower for token in ("mask", "n95", "kn95", "health", "air quality", "protective")):
+        themes.append("健康防护：N95/KN95、空气质量、户外活动和即时防护成为公共讨论中的行动问题。")
+    if any(token in lower for token in ("canadian", "canada", "wildfire smoke", "source narrative")):
+        themes.append("来源解释：加拿大野火、区域野火烟雾等说法是公共叙事中的来源解释线索，但不替代物理归因证据。")
+    if any(token in lower for token in ("climate", "wildfire interpretation")):
+        themes.append("气候框架：部分讨论把本次烟霾放入气候变化、野火风险和跨区域环境影响的解释框架中。")
+    if any(token in lower for token in ("skeptic", "conspir", "doubt")):
+        themes.append("怀疑反应：样本中也出现对事件解释的怀疑或阴谋式解读，提示风险沟通存在信任与解释竞争问题。")
+    if any(token in lower for token in ("west coast", "california", "seattle")):
+        themes.append("经验比较：纽约讨论借用加州、西海岸或西雅图既有烟霾经验，帮助解释一个对本地而言异常的污染情境。")
+    return unique_texts(themes)
+
+
+def build_environmental_incident_academic_sections(
+    *,
+    run_dir: Path,
+    run_id: str,
+    round_id: str,
+    title: str,
+    mission_line: str,
+    central_claim: str,
+    object_rows: list[dict[str, Any]],
+    all_refs: list[str],
+    boundary_line: str,
+) -> dict[str, Any]:
+    stats = signal_plane_incident_stats(run_dir, run_id, round_id)
+    if not stats:
+        return {}
+    counts = stats.get("counts") or {}
+    airnow_count = _count(stats, "fetch-airnow-hourly-observations")
+    openmeteo_aq_count = _count(stats, "fetch-open-meteo-air-quality")
+    wind_count = _count(stats, "fetch-open-meteo-historical")
+    firms_count = _count(stats, "fetch-nasa-firms-fire")
+    gdelt_count = _count(stats, "fetch-gdelt-doc-search")
+    youtube_comment_count = _count(stats, "fetch-youtube-comments")
+    youtube_video_count = _count(stats, "fetch-youtube-video-search")
+    bluesky_count = _count(stats, "fetch-bluesky-cascade")
+    top_airnow = stats.get("top_airnow") or {}
+    top_value = top_airnow.get("numeric_value")
+    top_time = maybe_text(top_airnow.get("observed_at_utc"))
+    top_location = ""
+    if top_airnow.get("latitude") is not None and top_airnow.get("longitude") is not None:
+        top_location = f"（约 {float(top_airnow['latitude']):.3f}, {float(top_airnow['longitude']):.3f}）"
+    airnow_daily_parts = [
+        f"{row['date']}: {format_number(row['max_value'])}"
+        for row in stats.get("airnow_daily", [])
+        if maybe_text(row.get("date")) and row.get("max_value") is not None
+    ]
+    openmeteo = stats.get("open_meteo_pm25") or {}
+    fire_daily = stats.get("fire_daily") or []
+    peak_fire = max(fire_daily, key=lambda row: int(row.get("count") or 0), default={})
+    wind_direction = (stats.get("nearest_wind") or {}).get("wind_direction_10m") or {}
+    wind_speed = (stats.get("nearest_wind") or {}).get("wind_speed_10m") or {}
+    source_refs = compact_audit_ref_lines(all_refs)
+    combined_text = " ".join(
+        maybe_text(row.get("summary")) + " " + maybe_text(row.get("rationale"))
+        for row in object_rows
+    )
+    public_themes = public_semantic_themes_from_text(combined_text)
+    if not public_themes:
+        public_themes = [
+            "样本内公共讨论围绕空气质量、野火烟雾、防护行为、感官异常和来源解释展开。",
+            "这些材料说明事件如何被媒体和平台用户理解，但不构成代表性公众意见调查。",
+        ]
+
+    abstract = [
+        (
+            "本文分析 2023 年 6 月纽约烟霾事件的环境观测、候选源区背景和公共讨论语义。"
+            f"证据基础包括 AirNow 受体侧 PM2.5 观测、Open-Meteo 空气质量和风场记录、NASA FIRMS 火点记录，"
+            f"以及 GDELT、YouTube、Bluesky 形成的媒体/平台样本。"
+        ),
+        (
+            central_claim
+            or "现有材料支持把本案描述为一次短时、高强度的受体侧 PM2.5 污染过程；区域火点和风场记录提供相容背景，但不足以完成强来源归因。"
+        ),
+        (
+            "公共讨论并非只是在描述“烟很大”，而是围绕感官异常、健康防护、来源解释、气候框架、跨地区经验比较和怀疑反应形成了多层语义结构。"
+            "这些结果适合用于事件复盘和风险沟通设计，不适合直接推出具体源火场、完整烟羽路径、责任主体或代表性公众意见比例。"
+        ),
+    ]
+    methods = [
+        (
+            f"环境材料包括 AirNow 小时观测 {airnow_count:,} 条、Open-Meteo PM2.5 小时值 {openmeteo_aq_count:,} 条、"
+            f"Open-Meteo 风速/风向 {wind_count:,} 条，以及 FIRMS VIIRS 活跃火点 {firms_count:,} 条。"
+            "AirNow 用于描述纽约受体侧污染过程，Open-Meteo 用于交叉检查和气象背景，FIRMS 用于候选源区火点背景。"
+        ),
+        (
+            f"公共与媒体材料包括 GDELT DOC 记录 {gdelt_count:,} 条、YouTube 视频发现元数据 {youtube_video_count:,} 条、"
+            f"YouTube 评论/回复 {youtube_comment_count:,} 条，以及 Bluesky 无语言过滤样本 {bluesky_count:,} 条。"
+            "这些材料按样本处理，用于识别语义结构和风险沟通线索，不用于估计公众总体态度。"
+        ),
+        (
+            "分析方法是证据角色综合：先用受体侧观测建立事件时序，再用风场和火点记录讨论相容背景，"
+            "最后用媒体/平台文本解释事件在公共空间中的命名、解释和争议。环境聚合只作描述性压缩，不作证据排序或归因模型。"
+        ),
+    ]
+    env_result = [
+        (
+            "AirNow 记录给出本案最直接的受体侧证据。"
+            + (f"日最大 PM2.5 浓度依次为 {'；'.join(airnow_daily_parts)} µg/m³。" if airnow_daily_parts else "")
+            + (
+                f"本轮材料中的最高值为 {format_number(top_value)} µg/m³，出现在 {top_time}{top_location}。"
+                if top_value is not None and top_time
+                else ""
+            )
+            + "这一时序说明，纽约污染过程不是持续性背景噪声，而是 6 月 6 日开始升高、6 月 7 日达峰、6 月 8 日仍高、之后回落的短时高强度事件。"
+        ),
+        (
+            f"Open-Meteo 空气质量序列提供独立模型背景：{openmeteo_aq_count:,} 个小时值中，"
+            f"PM2.5 最高约 {format_number(openmeteo.get('max_value'))} µg/m³，均值约 {format_number(openmeteo.get('mean_value'))} µg/m³。"
+            "它不能替代地面站观测，但与 AirNow 共同支持 6 月 6 日至 8 日的污染升高判断。"
+        ),
+    ]
+    context_result = [
+        (
+            "风场和火点记录的作用是解释背景相容性，而不是完成来源证明。"
+            + (
+                f"在 AirNow 峰值附近，Open-Meteo 最近邻风向约 {format_number(wind_direction.get('numeric_value'))}{wind_direction.get('unit') or '°'}，"
+                f"风速约 {format_number(wind_speed.get('numeric_value'))} {wind_speed.get('unit') or 'm/s'}。"
+                if wind_direction and wind_speed
+                else ""
+            )
+            + "这提供了讨论区域输送背景的气象语境，但单点风场不是烟羽轨迹模型。"
+        ),
+        (
+            f"FIRMS 在候选源区窗口内归一化 {firms_count:,} 条火点信号。"
+            + (
+                f"日计数最高出现在 {peak_fire.get('date')}，为 {int(peak_fire.get('count') or 0):,} 条。"
+                if peak_fire
+                else ""
+            )
+            + "这些记录说明事件前后候选源区存在大量活跃火点，但仍不能单独证明这些火点导致纽约 PM2.5 峰值。"
+        ),
+    ]
+    public_result = [
+        (
+            "媒体/文档材料主要把事件组织为空气质量和野火烟雾风险议题。GDELT 与 YouTube 标题可用于观察公共文本中的命名方式、风险框架和事件可见性，"
+            "但它们不是公众情绪测量，也不是物理来源证明。"
+        ),
+        " ".join(public_themes[:6]),
+        (
+            "Bluesky 修正查询的意义在于排除了一个程序性误判：带语言过滤的历史检索可能产生假零。"
+            f"无语言过滤样本获得 {bluesky_count:,} 条可见帖文，因此旧的零结果只能作为检索路线诊断，不能写成无人讨论。"
+        ),
+    ]
+    discussion = [
+        (
+            "综合来看，本案的核心不是单一数据源给出完整解释，而是多条证据线各自承担有限角色。"
+            "AirNow 和 Open-Meteo 确认纽约受体侧污染过程；风场和 FIRMS 提供区域烟雾背景相容性；公共文本说明事件如何被社会理解和争议化。"
+        ),
+        (
+            "这种证据结构对风险沟通有直接意义。公众首先感受到的是天空颜色、气味、能见度和身体风险；随后需要知道是否应减少户外活动、是否需要口罩、污染来自哪里，以及解释为何仍存在不确定性。"
+            "因此，专业沟通不应只发布数值，也应解释证据能支持什么、不能支持什么。"
+        ),
+        (
+            "若要把本报告升级为强归因研究，需要补充烟羽轨迹、垂直廓线、化学组分或源解析证据，并系统评估替代解释。"
+            "若要讨论公众态度结构，则需要明确抽样框、覆盖审计、标注规则和分母，不能只依赖 YouTube 或 Bluesky 的可见样本。"
+        ),
+    ]
+    limitations = [
+        "环境证据足以描述 PM2.5 时序和强度，但不足以单独证明具体源火场、完整烟羽路径、化学成因或责任主体。",
+        "FIRMS 火点和局地风场是相容背景，不是源解析或轨迹模型。",
+        "GDELT、YouTube 和 Bluesky 只支持样本内语义结构；不能外推为纽约居民总体态度、平台总体情绪或公众意见比例。",
+    ]
+    conclusion = [
+        (
+            "本报告可支持的总论点是：2023 年 6 月纽约烟霾是一场时间边界清楚、强度突出的受体侧 PM2.5 污染事件；"
+            "现有证据与区域野火烟雾背景相容，但尚未形成足以锁定具体来源和传输路径的物理归因链。"
+        ),
+        (
+            "公共讨论显示，这一事件同时是风险沟通事件：公众通过感官异常识别风险，通过口罩和空气质量讨论寻找行动方案，"
+            "通过加拿大野火、气候变化、西海岸经验和怀疑叙事解释事件意义。"
+        ),
+        (
+            "因此，它最适合作为一个有边界的事件复盘案例：既能展示环境观测和公共语义如何结合，也能展示为什么专业报告必须区分描述、相容性、因果归因和代表性结论。"
+        ),
+    ]
+    return {
+        "abstract": abstract,
+        "keywords": ["纽约烟霾", "PM2.5", "野火烟雾", "风险沟通", "公共语义", "证据边界"],
+        "introduction": [
+            (
+                "2023 年 6 月，纽约出现异常烟霾和空气质量恶化。本报告把该事件作为一个突发环境风险复盘问题处理："
+                "先回答污染过程在受体侧如何呈现，再讨论哪些环境背景与之相容，最后分析媒体和公众样本如何解释这一事件。"
+            ),
+            (
+                "本文的贡献不是完成最终物理归因，而是在可审计证据基础上给出一份有边界的专业综合："
+                "它说明哪些结论已经被本轮材料支持，哪些结论仍需要更强的环境模型、源解析或代表性调查。"
+            ),
+        ],
+        "methods": methods,
+        "results": [
+            {"title": "受体侧 PM2.5 时序与强度", "paragraphs": env_result},
+            {"title": "区域烟雾背景的相容性与归因边界", "paragraphs": context_result},
+            {"title": "媒体与公共讨论的语义结构", "paragraphs": public_result},
+        ],
+        "discussion": discussion,
+        "limitations": unique_texts([item for item in limitations if maybe_text(item)]),
+        "conclusion": conclusion,
+        "source_refs": source_refs,
+    }
+
+
 def formal_policy_helper_lines(run_dir: Path, basis_round_id: str, language: str) -> tuple[list[str], dict[str, Any]]:
     if not is_zh(language):
         return [], {}
@@ -1420,6 +1869,11 @@ def load_reporting_basis(
             ("expert-report-environmental", run_dir / "reporting" / f"expert_report_environmental_investigator_{basis_round_id}.json"),
         ]
     )
+    frozen_default = run_dir / "report_basis" / f"frozen_report_basis_{basis_round_id}.json"
+    for variant_path in sorted((run_dir / "report_basis").glob(f"frozen_report_basis_{basis_round_id}*.json")):
+        if variant_path == frozen_default:
+            continue
+        candidates.append(("report-basis-freeze", variant_path))
     rows: list[dict[str, Any]] = []
     for kind, path in candidates:
         payload = load_json_if_exists(path)
@@ -1527,7 +1981,18 @@ def markdown_audit_lines(draft: dict[str, Any], language: str) -> list[str]:
         audit_refs = [maybe_text(ref) for ref in draft.get("audit_refs", []) if maybe_text(ref)]
     lines = [f"## {label('audit-trail', language)}", ""]
     if is_zh(language):
-        lines.append(f"本报告保留 {len(audit_refs)} 条审计引用，用于复核证据对象、报告基础和样本摘要；以下列出主要索引，完整引用见 JSON 产物。")
+        compact_refs = compact_audit_ref_lines(audit_refs)
+        lines.append(
+            f"完整 JSON 产物保留 {len(audit_refs)} 条可追踪审计引用。"
+            "正文只列出读者可理解的来源索引；对象 ID、receipt 和 signal ID 保留在 JSON 中用于复核，不在正文展开。"
+        )
+        lines.append("")
+        for ref in compact_refs:
+            lines.append(f"- {ref}")
+        if not compact_refs:
+            lines.append("- 本报告的完整证据对象和运行索引见 JSON 审计字段。")
+        lines.append("")
+        return lines
     else:
         lines.append(f"The report preserves {len(audit_refs)} audit refs for review; selected refs follow.")
     lines.append("")
@@ -2367,6 +2832,67 @@ def case_story_paragraphs(argument_map: dict[str, Any], mission_focus: str, lang
     )
 
 
+def zh_add_paragraph_section(lines: list[str], heading: str, paragraphs: list[str]) -> None:
+    cleaned = unique_texts(
+        [
+            zh_clean_report_prose(paragraph)
+            for paragraph in paragraphs
+            if maybe_text(paragraph)
+        ]
+    )
+    if not cleaned:
+        return
+    lines.extend([f"## {heading}", ""])
+    for paragraph in cleaned:
+        lines.extend([paragraph, ""])
+
+
+def zh_academic_markdown_from_sections(draft: dict[str, Any], academic_sections: dict[str, Any]) -> str:
+    title = maybe_text(draft.get("title")) or "叙事报告"
+    lines = [f"# {title}", ""]
+    abstract = text_list(academic_sections.get("abstract"))
+    keywords = text_list(academic_sections.get("keywords"))
+    introduction = text_list(academic_sections.get("introduction"))
+    methods = text_list(academic_sections.get("methods"))
+    discussion = text_list(academic_sections.get("discussion"))
+    limitations = text_list(academic_sections.get("limitations"))
+    conclusion = text_list(academic_sections.get("conclusion"))
+    results = [item for item in list_items(academic_sections.get("results")) if isinstance(item, dict)]
+
+    zh_add_paragraph_section(lines, "摘要", abstract)
+    if keywords:
+        lines.extend(["**关键词：** " + "；".join(keywords), ""])
+    zh_add_paragraph_section(lines, "1. 引言", introduction)
+    zh_add_paragraph_section(lines, "2. 数据与方法", methods)
+    if results:
+        lines.extend(["## 3. 结果", ""])
+        for index, item in enumerate(results, 1):
+            title_text = maybe_text(item.get("title")) or f"结果 {index}"
+            paragraphs = text_list(item.get("paragraphs"))
+            if not paragraphs:
+                continue
+            lines.extend([f"### 3.{index} {title_text}", ""])
+            for paragraph in unique_texts([zh_clean_report_prose(p) for p in paragraphs if maybe_text(p)]):
+                lines.extend([paragraph, ""])
+    zh_add_paragraph_section(lines, "4. 讨论", discussion)
+    zh_add_paragraph_section(lines, "5. 局限性", limitations)
+    zh_add_paragraph_section(lines, "6. 结论", conclusion)
+    audit_refs = [maybe_text(ref) for ref in draft.get("audit_refs", []) if maybe_text(ref)]
+    source_refs = text_list(academic_sections.get("source_refs"))
+    lines.extend(["## 参考文献与审计索引", ""])
+    lines.append(
+        "本报告不新增外部文献；下列索引用于说明主要来源和数据范围。"
+        "完整对象 ID、receipt、signal ID 和运行审计链保存在 JSON 产物中，供复核使用。"
+    )
+    lines.append("")
+    for ref in unique_texts([*source_refs, *compact_audit_ref_lines(audit_refs)]):
+        lines.append(f"- {ref}")
+    if not source_refs and not audit_refs:
+        lines.append("- 完整审计索引见报告 JSON 产物。")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def zh_formal_policy_markdown_from_draft(draft: dict[str, Any]) -> str:
     title = maybe_text(draft.get("title")) or "正式评论与公共话语报告"
     argument_map = draft.get("argument_map") if isinstance(draft.get("argument_map"), dict) else {}
@@ -2497,6 +3023,13 @@ def zh_article_markdown_from_draft(draft: dict[str, Any]) -> str:
     )
     if profile == "formal-policy-comment":
         return zh_formal_policy_markdown_from_draft(draft)
+    academic_sections = (
+        argument_map.get("academic_sections")
+        if isinstance(argument_map.get("academic_sections"), dict)
+        else {}
+    )
+    if academic_sections:
+        return zh_academic_markdown_from_sections(draft, academic_sections)
     focus = issue_profile_focus(profile, "zh-Hans")
     lines = [f"# {title}", ""]
 
@@ -2893,6 +3426,25 @@ def draft_narrative_report(
                 }
             }
         )
+    if (
+        is_zh(report_language)
+        and case_profile == "environmental-incident"
+        and not isinstance(argument_map.get("academic_sections"), dict)
+    ):
+        academic_sections = build_environmental_incident_academic_sections(
+            run_dir=run_dir_path,
+            run_id=run_id,
+            round_id=resolved_basis_round_id,
+            title=maybe_text(title),
+            mission_line=mission_line,
+            central_claim=maybe_text(argument_map.get("central_claim")),
+            object_rows=object_rows,
+            all_refs=all_refs,
+            boundary_line=boundary_line_for_report,
+        )
+        if academic_sections:
+            argument_map["academic_sections"] = academic_sections
+            argument_map["profile"] = case_profile
     argument_chain = argument_map_paragraphs(argument_map, report_language)
     argument_evidence = argument_evidence_paragraphs(argument_map, report_language)
     case_story = case_story_paragraphs(argument_map, mission_focus, report_language)

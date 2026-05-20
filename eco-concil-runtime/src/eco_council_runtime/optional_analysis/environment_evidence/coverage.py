@@ -8,8 +8,9 @@ from .common import date_bucket, limited_unique_texts, numeric_value, signal_tim
 
 
 class MetricStats:
-    def __init__(self, metric: str) -> None:
+    def __init__(self, metric: str, unit: str) -> None:
         self.metric = metric or "unspecified"
+        self.unit = unit
         self.signal_count = 0
         self.numeric_count = 0
         self.missing_numeric_count = 0
@@ -30,6 +31,7 @@ class MetricStats:
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "metric": self.metric,
+            "unit": self.unit,
             "signal_count": self.signal_count,
             "numeric_count": self.numeric_count,
             "missing_numeric_count": self.missing_numeric_count,
@@ -75,6 +77,7 @@ class CoverageAccumulator:
         self.signal_count += 1
         source_skill = maybe_text(signal.get("source_skill")) or "unspecified"
         metric = maybe_text(signal.get("metric")) or "unspecified"
+        unit = maybe_text(signal.get("unit"))
         self.source_counts[source_skill] += 1
         self.round_counts[maybe_text(signal.get("round_id")) or "unspecified"] += 1
         timestamp = signal_timestamp(signal)
@@ -91,7 +94,8 @@ class CoverageAccumulator:
         value = numeric_value(signal)
         if value is not None:
             self.numeric_signal_count += 1
-        stats = self.metric_stats.setdefault(metric, MetricStats(metric))
+        metric_key = f"{metric}\x1f{unit}"
+        stats = self.metric_stats.setdefault(metric_key, MetricStats(metric, unit))
         stats.add(value)
 
         latitude = signal.get("latitude")
@@ -149,7 +153,9 @@ class CoverageAccumulator:
 
     def metric_distribution(self) -> list[dict[str, Any]]:
         rows = [stats.to_payload() for _, stats in sorted(self.metric_stats.items())]
-        return sorted(rows, key=lambda item: (-int(item["signal_count"]), item["metric"]))[: self.group_limit]
+        return sorted(rows, key=lambda item: (-int(item["signal_count"]), item["metric"], item["unit"]))[
+            : self.group_limit
+        ]
 
     def date_buckets(self) -> list[dict[str, Any]]:
         return [

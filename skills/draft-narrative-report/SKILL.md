@@ -94,6 +94,10 @@ description: Draft a narrative decision-support report from existing council, re
   role in the evidence chain.
 - Put audit refs at the end or after the relevant section in compact form. Do
   not let ids, runtime labels, or receipt lists dominate the main prose.
+- In reader-facing Markdown, keep raw object ids, receipts, signal ids, and
+  `round-*` mechanics out of the body. The body should cite source families and
+  data scopes in human terms; the full audit chain belongs in the final audit
+  index or JSON artifact.
 - Prefer connective prose over inventory prose: use language such as "This
   matters because", "That supports", "It still does not prove", and "The
   decision implication is". Do not merely enumerate sources.
@@ -186,6 +190,11 @@ source material for an article-like report:
   and only to explain how the evidence basis was formed and bounded.
 - End with responsible use and follow-up evidence needs.
 - Keep audit refs available at the end without letting refs dominate the prose.
+- For environmental-incident reports, the preferred article spine is:
+  event chronology and intensity; contextual compatibility evidence; public and
+  media semantics; discussion of risk communication and evidence boundaries;
+  limitations; bounded conclusion. Do not write the report as repeated warnings
+  about what cannot be claimed.
 
 ## Scripts
 - `scripts/draft_narrative_report.py`

@@ -105,6 +105,23 @@ python3 scripts/fetch_bluesky_cascade.py fetch \
 - Search is query-sensitive and may not page through the complete universe of
   matching posts. Weak search output should prompt alternate terms, hashtags,
   author/feed/list modes, or authenticated access when appropriate.
+- For historical event windows, do not stop after a single zero-result
+  `searchPosts` call. Run at least one route diagnostic before writing a route
+  limitation:
+  - compare the same query with and without `--search-lang`; older Bluesky posts
+    may have empty or missing `langs`, so `--search-lang en` can hide otherwise
+    retrievable English-language posts;
+  - repeat a broad event-family query with the same historical `since`/`until`
+    window to test whether the provider surfaces older posts at all;
+  - run the event query with `--disable-server-time-filter` and inspect whether
+    the API returns only out-of-window posts that the client then filters out;
+  - try one same-family event-term revision and, when available, hashtag,
+    known-handle, author-feed, feed, list, or authenticated routes.
+  If the no-language historical query succeeds, prefer that artifact and record
+  the language-filter limitation. If broad historical-window probes also return
+  zero while no-window probes return current posts, classify the result as a
+  provider/search historical coverage limit, not as evidence that the event had
+  no Bluesky discussion.
 - Zero, blocked, or sparse cascades can reflect endpoint host behavior,
   authentication, provider filtering, pagination, thread deletion/blocking, or
   overly narrow terms. Treat that as acquisition scope, not as absence of public

@@ -82,6 +82,11 @@ description: Validate narrative report draft structure, claim-boundary presence,
   instead of conclusions, key points, reasoning, limitations, and decision use.
 - Reader-facing quality checks are procedural checks, not style scoring or
   evidence ranking.
+- Reader-facing Markdown must also be checked. Raw object ids, receipt lists,
+  per-section audit snippets, repeated "see JSON" tails, and untranslated
+  runtime jargon should be flagged because they make the report read like an
+  audit dump rather than a professional article. Audit visibility belongs in
+  the final audit/index section and JSON artifact.
 - Validation is a reverse constraint on report wording. It does not require a
   fixed source sequence, gate, source ranking, or runtime-owned agenda.
 

@@ -32,6 +32,21 @@ MACHINE_PROSE_PREFIXES = (
     "environmental-investigator:",
     "social-investigator:",
 )
+RAW_AUDIT_ID_RE = re.compile(
+    r"\b(?:finding|evidence-bundle|review-comment|readiness-opinion|round-synthesis|agent-position|"
+    r"challenge-disposition|runtimeevt|runtime-receipt|normalize-receipt|source-acquisition-proposal|"
+    r"report-basis|sig)-[0-9a-f]{6,}\b"
+)
+CHINESE_RUNTIME_JARGON = (
+    "source attribution",
+    "plume transport",
+    "chemical causation",
+    "public sentiment",
+    "source narrative cues",
+    "route diagnostic",
+    "frozen basis",
+    "canonical report basis",
+)
 PUBLIC_DISCOURSE_BASIS_MARKERS = (
     "public_discourse_sample_summary",
     "public-discourse-sample-summary",
@@ -2281,6 +2296,62 @@ def validate_draft(draft: dict[str, Any], *, run_dir: Path | None = None) -> lis
     return issues
 
 
+def markdown_reader_quality_issues(markdown_text: str) -> list[dict[str, str]]:
+    if not maybe_text(markdown_text):
+        return []
+    issues: list[dict[str, str]] = []
+    audit_heading_match = re.search(r"^## (?:参考文献与审计索引|审计索引|Audit Trail)\b", markdown_text, re.MULTILINE)
+    body_text = markdown_text[: audit_heading_match.start()] if audit_heading_match else markdown_text
+    if "审计引用（节选）" in body_text:
+        issues.append(
+            issue(
+                "reader-body-inline-audit-snippets",
+                "Reader-facing Markdown inserts audit-ref snippets inside substantive sections; keep audit refs in the final audit/index section.",
+                "error",
+            )
+        )
+    raw_id_count = len(RAW_AUDIT_ID_RE.findall(body_text))
+    if raw_id_count > 4:
+        issues.append(
+            issue(
+                "reader-body-audit-id-density",
+                f"Reader-facing Markdown body contains {raw_id_count} raw audit/object ids before the audit section.",
+                "error",
+            )
+        )
+    lowered_body = body_text.lower()
+    jargon_hits = [term for term in CHINESE_RUNTIME_JARGON if term in lowered_body]
+    if jargon_hits and re.search(r"[\u4e00-\u9fff]", body_text):
+        issues.append(
+            issue(
+                "reader-body-untranslated-runtime-jargon",
+                "Chinese reader-facing Markdown still contains untranslated runtime/audit jargon: "
+                + ", ".join(jargon_hits[:6]),
+                "warning",
+            )
+        )
+    json_tail_mentions = len(re.findall(r"另有\s*\d+\s*条.*JSON", body_text))
+    if json_tail_mentions:
+        issues.append(
+            issue(
+                "reader-body-json-tail-refs",
+                "Reader-facing Markdown body points readers to additional JSON refs inside substantive prose; reserve that for the audit/index section.",
+                "warning",
+            )
+        )
+    cannot_count = body_text.count("不能") + body_text.count("不得")
+    body_length_units = max(1, len(body_text) // 1000)
+    if cannot_count / body_length_units > 6:
+        issues.append(
+            issue(
+                "over-defensive-reader-body",
+                "Reader-facing Markdown uses unusually dense negative boundary language; consolidate limits into discussion/limitations instead of repeating them throughout the body.",
+                "warning",
+            )
+        )
+    return issues
+
+
 def validate_narrative_report(
     *,
     run_dir: str,
@@ -2294,6 +2365,9 @@ def validate_narrative_report(
     output_file = resolve_path(run_dir_path, output_path, f"reporting/narrative_report_validation_{round_id}.json")
     draft = load_json_file(draft_file)
     issues = validate_draft(draft, run_dir=run_dir_path)
+    markdown_file = draft_file.with_suffix(".md")
+    if markdown_file.exists():
+        issues.extend(markdown_reader_quality_issues(markdown_file.read_text(encoding="utf-8")))
     error_count = sum(1 for item in issues if item.get("severity") == "error")
     warning_count = sum(1 for item in issues if item.get("severity") != "error")
     validation_id = "narrative-report-validation-" + stable_hash(run_id, round_id, draft.get("draft_id"), issues)[:12]

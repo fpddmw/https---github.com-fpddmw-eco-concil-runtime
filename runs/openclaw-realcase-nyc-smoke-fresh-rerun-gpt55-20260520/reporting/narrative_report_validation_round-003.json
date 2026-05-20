@@ -9,21 +9,15 @@
   "draft_id": "narrative-report-draft-cffc8df6b75c",
   "draft_path": "/home/fpddmw/projects/openclaw-eco-concil_v1/runs/openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520/reporting/narrative_report_draft_round-003.json",
   "error_count": 0,
-  "generated_at_utc": "2026-05-20T10:35:45Z",
-  "issue_count": 1,
-  "issues": [
-    {
-      "code": "public-summary-path-missing",
-      "message": "Public discourse addendum metadata should include the helper artifact path.",
-      "severity": "warning"
-    }
-  ],
+  "generated_at_utc": "2026-05-20T11:32:42Z",
+  "issue_count": 0,
+  "issues": [],
   "publish_allowed": true,
   "round_id": "round-003",
   "run_id": "openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520",
   "schema_version": "narrative-report-validation-v1",
   "status": "valid",
-  "validation_id": "narrative-report-validation-6f74e4f623b4",
+  "validation_id": "narrative-report-validation-591283050ca3",
   "validation_scope": "structure-traceability-and-claim-boundary",
-  "warning_count": 1
+  "warning_count": 0
 }

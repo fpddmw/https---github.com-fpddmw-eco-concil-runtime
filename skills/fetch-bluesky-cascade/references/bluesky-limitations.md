@@ -38,6 +38,27 @@ Reference:
   - env: `BLUESKY_BASE_URL=https://api.bsky.app`
   - CLI: `--base-url https://api.bsky.app`
 
+## Historical Search Diagnostics
+
+- A zero-result `searchPosts` response for an older event window is ambiguous:
+  it may reflect the real query surface, but it may also reflect provider
+  search indexing, server-side time filtering, unauthenticated access, or cursor
+  limits.
+- Before treating a historical public-discourse route as exhausted, compare:
+  - the event query with the historical `since`/`until` window;
+  - the same query with and without `--search-lang`; older posts may have empty
+    or missing language metadata, so `lang=en` can produce false-zero results;
+  - a broader same-window query, such as the event family or pollutant family;
+  - the event query with `--disable-server-time-filter`, so the client can show
+    whether the API returned out-of-window posts that were then filtered out;
+  - alternate same-family routes when available: hashtags, known handles,
+    author-feed, feed, list-feed, or authenticated access.
+- If the no-language historical query succeeds, use that route and record the
+  language-filter limitation. If same-window broad probes return zero but
+  no-window probes return current posts, record a provider/search historical
+  coverage limitation. Do not convert it into a no-discussion or
+  no-public-interest claim.
+
 ## Built-in Protections in This Skill
 
 - Retry transient errors (`429/500/502/503/504`) with exponential backoff.

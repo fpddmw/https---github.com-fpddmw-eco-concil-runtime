@@ -1,34 +1,110 @@
 {
   "argument_map": {
-    "central_claim": "2023年6月纽约烟霾在当前 frozen basis 中可稳健描述为 Jun 6-8 的受体侧 PM2.5 显著升高，并在 Jun 7 达到本轮材料中的最高记录；风场和候选源区火点提供相容背景，但不支持强来源归因、烟羽输送、化学成因或责任判断。",
-    "decision_meaning": "适当用途包括：为决策者、研究者或传播人员提供事件时序、证据角色和公共语义结构的审计化摘要；为后续归因建模、健康影响评估、风险沟通研究和代表性公众调查提出证据需求。",
+    "academic_sections": {
+      "abstract": [
+        "\u672c\u6587\u5206\u6790 2023 \u5e74 6 \u6708\u7ebd\u7ea6\u70df\u973e\u4e8b\u4ef6\u7684\u73af\u5883\u89c2\u6d4b\u3001\u5019\u9009\u6e90\u533a\u80cc\u666f\u548c\u516c\u5171\u8ba8\u8bba\u8bed\u4e49\u3002\u8bc1\u636e\u57fa\u7840\u5305\u62ec AirNow \u53d7\u4f53\u4fa7 PM2.5 \u89c2\u6d4b\u3001Open-Meteo \u7a7a\u6c14\u8d28\u91cf\u548c\u98ce\u573a\u8bb0\u5f55\u3001NASA FIRMS \u706b\u70b9\u8bb0\u5f55\uff0c\u4ee5\u53ca GDELT\u3001YouTube\u3001Bluesky \u5f62\u6210\u7684\u5a92\u4f53/\u5e73\u53f0\u6837\u672c\u3002",
+        "\u7ebd\u7ea6\u53d7\u4f53\u4fa7\u89c2\u6d4b\u53ef\u4ee5\u7ea6\u675f\u70df\u973e\u4e8b\u4ef6\u7684\u65f6\u95f4\u548c\u5f3a\u5ea6\uff1aPM2.5 \u5728 2023-06-06 \u660e\u663e\u5347\u9ad8\uff0c\u5728 2023-06-07 \u7ebd\u7ea6\u533a\u57df\u591a\u4e2a\u76d1\u6d4b\u70b9\u8fbe\u5230\u9ad8\u503c\uff0c\u5e76\u5728 2023-06-08 \u4ecd\u4fdd\u6301\u8f83\u9ad8\u6c34\u5e73\uff0c\u968f\u540e\u5230 2023-06-09 \u660e\u663e\u56de\u843d\u3002\u98ce\u5411\u3001\u706b\u70b9\u548c\u53d7\u4f53\u5cf0\u503c\u4e4b\u95f4\u5177\u6709\u533a\u57df\u8f93\u9001\u76f8\u5bb9\u6027\uff0c\u4f46\u4ecd\u4e0d\u8db3\u4ee5\u5355\u72ec\u9501\u5b9a\u67d0\u4e00\u4e2a\u6e90\u706b\u70b9\u3002",
+        "\u516c\u5171\u8ba8\u8bba\u5e76\u975e\u53ea\u662f\u5728\u63cf\u8ff0\u201c\u70df\u5f88\u5927\u201d\uff0c\u800c\u662f\u56f4\u7ed5\u611f\u5b98\u5f02\u5e38\u3001\u5065\u5eb7\u9632\u62a4\u3001\u6765\u6e90\u89e3\u91ca\u3001\u6c14\u5019\u6846\u67b6\u3001\u8de8\u5730\u533a\u7ecf\u9a8c\u6bd4\u8f83\u548c\u6000\u7591\u53cd\u5e94\u5f62\u6210\u4e86\u591a\u5c42\u8bed\u4e49\u7ed3\u6784\u3002\u8fd9\u4e9b\u7ed3\u679c\u9002\u5408\u7528\u4e8e\u4e8b\u4ef6\u590d\u76d8\u548c\u98ce\u9669\u6c9f\u901a\u8bbe\u8ba1\uff0c\u4e0d\u9002\u5408\u76f4\u63a5\u63a8\u51fa\u5177\u4f53\u6e90\u706b\u573a\u3001\u5b8c\u6574\u70df\u7fbd\u8def\u5f84\u3001\u8d23\u4efb\u4e3b\u4f53\u6216\u4ee3\u8868\u6027\u516c\u4f17\u610f\u89c1\u6bd4\u4f8b\u3002"
+      ],
+      "conclusion": [
+        "\u672c\u62a5\u544a\u53ef\u652f\u6301\u7684\u603b\u8bba\u70b9\u662f\uff1a2023 \u5e74 6 \u6708\u7ebd\u7ea6\u70df\u973e\u662f\u4e00\u573a\u65f6\u95f4\u8fb9\u754c\u6e05\u695a\u3001\u5f3a\u5ea6\u7a81\u51fa\u7684\u53d7\u4f53\u4fa7 PM2.5 \u6c61\u67d3\u4e8b\u4ef6\uff1b\u73b0\u6709\u8bc1\u636e\u4e0e\u533a\u57df\u91ce\u706b\u70df\u96fe\u80cc\u666f\u76f8\u5bb9\uff0c\u4f46\u5c1a\u672a\u5f62\u6210\u8db3\u4ee5\u9501\u5b9a\u5177\u4f53\u6765\u6e90\u548c\u4f20\u8f93\u8def\u5f84\u7684\u7269\u7406\u5f52\u56e0\u94fe\u3002",
+        "\u516c\u5171\u8ba8\u8bba\u663e\u793a\uff0c\u8fd9\u4e00\u4e8b\u4ef6\u540c\u65f6\u662f\u98ce\u9669\u6c9f\u901a\u4e8b\u4ef6\uff1a\u516c\u4f17\u901a\u8fc7\u611f\u5b98\u5f02\u5e38\u8bc6\u522b\u98ce\u9669\uff0c\u901a\u8fc7\u53e3\u7f69\u548c\u7a7a\u6c14\u8d28\u91cf\u8ba8\u8bba\u5bfb\u627e\u884c\u52a8\u65b9\u6848\uff0c\u901a\u8fc7\u52a0\u62ff\u5927\u91ce\u706b\u3001\u6c14\u5019\u53d8\u5316\u3001\u897f\u6d77\u5cb8\u7ecf\u9a8c\u548c\u6000\u7591\u53d9\u4e8b\u89e3\u91ca\u4e8b\u4ef6\u610f\u4e49\u3002",
+        "\u56e0\u6b64\uff0c\u5b83\u6700\u9002\u5408\u4f5c\u4e3a\u4e00\u4e2a\u6709\u8fb9\u754c\u7684\u4e8b\u4ef6\u590d\u76d8\u6848\u4f8b\uff1a\u65e2\u80fd\u5c55\u793a\u73af\u5883\u89c2\u6d4b\u548c\u516c\u5171\u8bed\u4e49\u5982\u4f55\u7ed3\u5408\uff0c\u4e5f\u80fd\u5c55\u793a\u4e3a\u4ec0\u4e48\u4e13\u4e1a\u62a5\u544a\u5fc5\u987b\u533a\u5206\u63cf\u8ff0\u3001\u76f8\u5bb9\u6027\u3001\u56e0\u679c\u5f52\u56e0\u548c\u4ee3\u8868\u6027\u7ed3\u8bba\u3002"
+      ],
+      "discussion": [
+        "\u7efc\u5408\u6765\u770b\uff0c\u672c\u6848\u7684\u6838\u5fc3\u4e0d\u662f\u5355\u4e00\u6570\u636e\u6e90\u7ed9\u51fa\u5b8c\u6574\u89e3\u91ca\uff0c\u800c\u662f\u591a\u6761\u8bc1\u636e\u7ebf\u5404\u81ea\u627f\u62c5\u6709\u9650\u89d2\u8272\u3002AirNow \u548c Open-Meteo \u786e\u8ba4\u7ebd\u7ea6\u53d7\u4f53\u4fa7\u6c61\u67d3\u8fc7\u7a0b\uff1b\u98ce\u573a\u548c FIRMS \u63d0\u4f9b\u533a\u57df\u70df\u96fe\u80cc\u666f\u76f8\u5bb9\u6027\uff1b\u516c\u5171\u6587\u672c\u8bf4\u660e\u4e8b\u4ef6\u5982\u4f55\u88ab\u793e\u4f1a\u7406\u89e3\u548c\u4e89\u8bae\u5316\u3002",
+        "\u8fd9\u79cd\u8bc1\u636e\u7ed3\u6784\u5bf9\u98ce\u9669\u6c9f\u901a\u6709\u76f4\u63a5\u610f\u4e49\u3002\u516c\u4f17\u9996\u5148\u611f\u53d7\u5230\u7684\u662f\u5929\u7a7a\u989c\u8272\u3001\u6c14\u5473\u3001\u80fd\u89c1\u5ea6\u548c\u8eab\u4f53\u98ce\u9669\uff1b\u968f\u540e\u9700\u8981\u77e5\u9053\u662f\u5426\u5e94\u51cf\u5c11\u6237\u5916\u6d3b\u52a8\u3001\u662f\u5426\u9700\u8981\u53e3\u7f69\u3001\u6c61\u67d3\u6765\u81ea\u54ea\u91cc\uff0c\u4ee5\u53ca\u89e3\u91ca\u4e3a\u4f55\u4ecd\u5b58\u5728\u4e0d\u786e\u5b9a\u6027\u3002\u56e0\u6b64\uff0c\u4e13\u4e1a\u6c9f\u901a\u4e0d\u5e94\u53ea\u53d1\u5e03\u6570\u503c\uff0c\u4e5f\u5e94\u89e3\u91ca\u8bc1\u636e\u80fd\u652f\u6301\u4ec0\u4e48\u3001\u4e0d\u80fd\u652f\u6301\u4ec0\u4e48\u3002",
+        "\u82e5\u8981\u628a\u672c\u62a5\u544a\u5347\u7ea7\u4e3a\u5f3a\u5f52\u56e0\u7814\u7a76\uff0c\u9700\u8981\u8865\u5145\u70df\u7fbd\u8f68\u8ff9\u3001\u5782\u76f4\u5ed3\u7ebf\u3001\u5316\u5b66\u7ec4\u5206\u6216\u6e90\u89e3\u6790\u8bc1\u636e\uff0c\u5e76\u7cfb\u7edf\u8bc4\u4f30\u66ff\u4ee3\u89e3\u91ca\u3002\u82e5\u8981\u8ba8\u8bba\u516c\u4f17\u6001\u5ea6\u7ed3\u6784\uff0c\u5219\u9700\u8981\u660e\u786e\u62bd\u6837\u6846\u3001\u8986\u76d6\u5ba1\u8ba1\u3001\u6807\u6ce8\u89c4\u5219\u548c\u5206\u6bcd\uff0c\u4e0d\u80fd\u53ea\u4f9d\u8d56 YouTube \u6216 Bluesky \u7684\u53ef\u89c1\u6837\u672c\u3002"
+      ],
+      "introduction": [
+        "2023 \u5e74 6 \u6708\uff0c\u7ebd\u7ea6\u51fa\u73b0\u5f02\u5e38\u70df\u973e\u548c\u7a7a\u6c14\u8d28\u91cf\u6076\u5316\u3002\u672c\u62a5\u544a\u628a\u8be5\u4e8b\u4ef6\u4f5c\u4e3a\u4e00\u4e2a\u7a81\u53d1\u73af\u5883\u98ce\u9669\u590d\u76d8\u95ee\u9898\u5904\u7406\uff1a\u5148\u56de\u7b54\u6c61\u67d3\u8fc7\u7a0b\u5728\u53d7\u4f53\u4fa7\u5982\u4f55\u5448\u73b0\uff0c\u518d\u8ba8\u8bba\u54ea\u4e9b\u73af\u5883\u80cc\u666f\u4e0e\u4e4b\u76f8\u5bb9\uff0c\u6700\u540e\u5206\u6790\u5a92\u4f53\u548c\u516c\u4f17\u6837\u672c\u5982\u4f55\u89e3\u91ca\u8fd9\u4e00\u4e8b\u4ef6\u3002",
+        "\u672c\u6587\u7684\u8d21\u732e\u4e0d\u662f\u5b8c\u6210\u6700\u7ec8\u7269\u7406\u5f52\u56e0\uff0c\u800c\u662f\u5728\u53ef\u5ba1\u8ba1\u8bc1\u636e\u57fa\u7840\u4e0a\u7ed9\u51fa\u4e00\u4efd\u6709\u8fb9\u754c\u7684\u4e13\u4e1a\u7efc\u5408\uff1a\u5b83\u8bf4\u660e\u54ea\u4e9b\u7ed3\u8bba\u5df2\u7ecf\u88ab\u672c\u8f6e\u6750\u6599\u652f\u6301\uff0c\u54ea\u4e9b\u7ed3\u8bba\u4ecd\u9700\u8981\u66f4\u5f3a\u7684\u73af\u5883\u6a21\u578b\u3001\u6e90\u89e3\u6790\u6216\u4ee3\u8868\u6027\u8c03\u67e5\u3002"
+      ],
+      "keywords": [
+        "\u7ebd\u7ea6\u70df\u973e",
+        "PM2.5",
+        "\u91ce\u706b\u70df\u96fe",
+        "\u98ce\u9669\u6c9f\u901a",
+        "\u516c\u5171\u8bed\u4e49",
+        "\u8bc1\u636e\u8fb9\u754c"
+      ],
+      "limitations": [
+        "\u73af\u5883\u8bc1\u636e\u8db3\u4ee5\u63cf\u8ff0 PM2.5 \u65f6\u5e8f\u548c\u5f3a\u5ea6\uff0c\u4f46\u4e0d\u8db3\u4ee5\u5355\u72ec\u8bc1\u660e\u5177\u4f53\u6e90\u706b\u573a\u3001\u5b8c\u6574\u70df\u7fbd\u8def\u5f84\u3001\u5316\u5b66\u6210\u56e0\u6216\u8d23\u4efb\u4e3b\u4f53\u3002",
+        "FIRMS \u706b\u70b9\u548c\u5c40\u5730\u98ce\u573a\u662f\u76f8\u5bb9\u80cc\u666f\uff0c\u4e0d\u662f\u6e90\u89e3\u6790\u6216\u8f68\u8ff9\u6a21\u578b\u3002",
+        "GDELT\u3001YouTube \u548c Bluesky \u53ea\u652f\u6301\u6837\u672c\u5185\u8bed\u4e49\u7ed3\u6784\uff1b\u4e0d\u80fd\u5916\u63a8\u4e3a\u7ebd\u7ea6\u5c45\u6c11\u603b\u4f53\u6001\u5ea6\u3001\u5e73\u53f0\u603b\u4f53\u60c5\u7eea\u6216\u516c\u4f17\u610f\u89c1\u6bd4\u4f8b\u3002"
+      ],
+      "methods": [
+        "\u73af\u5883\u6750\u6599\u5305\u62ec AirNow \u5c0f\u65f6\u89c2\u6d4b 2,265 \u6761\u3001Open-Meteo PM2.5 \u5c0f\u65f6\u503c 144 \u6761\u3001Open-Meteo \u98ce\u901f/\u98ce\u5411 288 \u6761\uff0c\u4ee5\u53ca FIRMS VIIRS \u6d3b\u8dc3\u706b\u70b9 70,392 \u6761\u3002AirNow \u7528\u4e8e\u63cf\u8ff0\u7ebd\u7ea6\u53d7\u4f53\u4fa7\u6c61\u67d3\u8fc7\u7a0b\uff0cOpen-Meteo \u7528\u4e8e\u4ea4\u53c9\u68c0\u67e5\u548c\u6c14\u8c61\u80cc\u666f\uff0cFIRMS \u7528\u4e8e\u5019\u9009\u6e90\u533a\u706b\u70b9\u80cc\u666f\u3002",
+        "\u516c\u5171\u4e0e\u5a92\u4f53\u6750\u6599\u5305\u62ec GDELT DOC \u8bb0\u5f55 500 \u6761\u3001YouTube \u89c6\u9891\u53d1\u73b0\u5143\u6570\u636e 25 \u6761\u3001YouTube \u8bc4\u8bba/\u56de\u590d 439 \u6761\uff0c\u4ee5\u53ca Bluesky \u65e0\u8bed\u8a00\u8fc7\u6ee4\u6837\u672c 71 \u6761\u3002\u8fd9\u4e9b\u6750\u6599\u6309\u6837\u672c\u5904\u7406\uff0c\u7528\u4e8e\u8bc6\u522b\u8bed\u4e49\u7ed3\u6784\u548c\u98ce\u9669\u6c9f\u901a\u7ebf\u7d22\uff0c\u4e0d\u7528\u4e8e\u4f30\u8ba1\u516c\u4f17\u603b\u4f53\u6001\u5ea6\u3002",
+        "\u5206\u6790\u65b9\u6cd5\u662f\u8bc1\u636e\u89d2\u8272\u7efc\u5408\uff1a\u5148\u7528\u53d7\u4f53\u4fa7\u89c2\u6d4b\u5efa\u7acb\u4e8b\u4ef6\u65f6\u5e8f\uff0c\u518d\u7528\u98ce\u573a\u548c\u706b\u70b9\u8bb0\u5f55\u8ba8\u8bba\u76f8\u5bb9\u80cc\u666f\uff0c\u6700\u540e\u7528\u5a92\u4f53/\u5e73\u53f0\u6587\u672c\u89e3\u91ca\u4e8b\u4ef6\u5728\u516c\u5171\u7a7a\u95f4\u4e2d\u7684\u547d\u540d\u3001\u89e3\u91ca\u548c\u4e89\u8bae\u3002\u73af\u5883\u805a\u5408\u53ea\u4f5c\u63cf\u8ff0\u6027\u538b\u7f29\uff0c\u4e0d\u4f5c\u8bc1\u636e\u6392\u5e8f\u6216\u5f52\u56e0\u6a21\u578b\u3002"
+      ],
+      "results": [
+        {
+          "paragraphs": [
+            "AirNow \u8bb0\u5f55\u7ed9\u51fa\u672c\u6848\u6700\u76f4\u63a5\u7684\u53d7\u4f53\u4fa7\u8bc1\u636e\u3002\u65e5\u6700\u5927 PM2.5 \u6d53\u5ea6\u4f9d\u6b21\u4e3a 2023-06-05: 28.1\uff1b2023-06-06: 201.9\uff1b2023-06-07: 412\uff1b2023-06-08: 274.6\uff1b2023-06-09: 67.1\uff1b2023-06-10: 31.7 \u00b5g/m\u00b3\u3002\u672c\u8f6e\u6750\u6599\u4e2d\u7684\u6700\u9ad8\u503c\u4e3a 412 \u00b5g/m\u00b3\uff0c\u51fa\u73b0\u5728 2023-06-07T18:00:00Z\uff08\u7ea6 40.737, -73.824\uff09\u3002\u8fd9\u4e00\u65f6\u5e8f\u8bf4\u660e\uff0c\u7ebd\u7ea6\u6c61\u67d3\u8fc7\u7a0b\u4e0d\u662f\u6301\u7eed\u6027\u80cc\u666f\u566a\u58f0\uff0c\u800c\u662f 6 \u6708 6 \u65e5\u5f00\u59cb\u5347\u9ad8\u30016 \u6708 7 \u65e5\u8fbe\u5cf0\u30016 \u6708 8 \u65e5\u4ecd\u9ad8\u3001\u4e4b\u540e\u56de\u843d\u7684\u77ed\u65f6\u9ad8\u5f3a\u5ea6\u4e8b\u4ef6\u3002",
+            "Open-Meteo \u7a7a\u6c14\u8d28\u91cf\u5e8f\u5217\u63d0\u4f9b\u72ec\u7acb\u6a21\u578b\u80cc\u666f\uff1a144 \u4e2a\u5c0f\u65f6\u503c\u4e2d\uff0cPM2.5 \u6700\u9ad8\u7ea6 99.9 \u00b5g/m\u00b3\uff0c\u5747\u503c\u7ea6 37.7 \u00b5g/m\u00b3\u3002\u5b83\u4e0d\u80fd\u66ff\u4ee3\u5730\u9762\u7ad9\u89c2\u6d4b\uff0c\u4f46\u4e0e AirNow \u5171\u540c\u652f\u6301 6 \u6708 6 \u65e5\u81f3 8 \u65e5\u7684\u6c61\u67d3\u5347\u9ad8\u5224\u65ad\u3002"
+          ],
+          "title": "\u53d7\u4f53\u4fa7 PM2.5 \u65f6\u5e8f\u4e0e\u5f3a\u5ea6"
+        },
+        {
+          "paragraphs": [
+            "\u98ce\u573a\u548c\u706b\u70b9\u8bb0\u5f55\u7684\u4f5c\u7528\u662f\u89e3\u91ca\u80cc\u666f\u76f8\u5bb9\u6027\uff0c\u800c\u4e0d\u662f\u5b8c\u6210\u6765\u6e90\u8bc1\u660e\u3002\u5728 AirNow \u5cf0\u503c\u9644\u8fd1\uff0cOpen-Meteo \u6700\u8fd1\u90bb\u98ce\u5411\u7ea6 298\u00b0\uff0c\u98ce\u901f\u7ea6 5.1 m/s\u3002\u8fd9\u63d0\u4f9b\u4e86\u8ba8\u8bba\u533a\u57df\u8f93\u9001\u80cc\u666f\u7684\u6c14\u8c61\u8bed\u5883\uff0c\u4f46\u5355\u70b9\u98ce\u573a\u4e0d\u662f\u70df\u7fbd\u8f68\u8ff9\u6a21\u578b\u3002",
+            "FIRMS \u5728\u5019\u9009\u6e90\u533a\u7a97\u53e3\u5185\u5f52\u4e00\u5316 70,392 \u6761\u706b\u70b9\u4fe1\u53f7\u3002\u65e5\u8ba1\u6570\u6700\u9ad8\u51fa\u73b0\u5728 2023-06-06\uff0c\u4e3a 14,940 \u6761\u3002\u8fd9\u4e9b\u8bb0\u5f55\u8bf4\u660e\u4e8b\u4ef6\u524d\u540e\u5019\u9009\u6e90\u533a\u5b58\u5728\u5927\u91cf\u6d3b\u8dc3\u706b\u70b9\uff0c\u4f46\u4ecd\u4e0d\u80fd\u5355\u72ec\u8bc1\u660e\u8fd9\u4e9b\u706b\u70b9\u5bfc\u81f4\u7ebd\u7ea6 PM2.5 \u5cf0\u503c\u3002"
+          ],
+          "title": "\u533a\u57df\u70df\u96fe\u80cc\u666f\u7684\u76f8\u5bb9\u6027\u4e0e\u5f52\u56e0\u8fb9\u754c"
+        },
+        {
+          "paragraphs": [
+            "\u5a92\u4f53/\u6587\u6863\u6750\u6599\u4e3b\u8981\u628a\u4e8b\u4ef6\u7ec4\u7ec7\u4e3a\u7a7a\u6c14\u8d28\u91cf\u548c\u91ce\u706b\u70df\u96fe\u98ce\u9669\u8bae\u9898\u3002GDELT \u4e0e YouTube \u6807\u9898\u53ef\u7528\u4e8e\u89c2\u5bdf\u516c\u5171\u6587\u672c\u4e2d\u7684\u547d\u540d\u65b9\u5f0f\u3001\u98ce\u9669\u6846\u67b6\u548c\u4e8b\u4ef6\u53ef\u89c1\u6027\uff0c\u4f46\u5b83\u4eec\u4e0d\u662f\u516c\u4f17\u60c5\u7eea\u6d4b\u91cf\uff0c\u4e5f\u4e0d\u662f\u7269\u7406\u6765\u6e90\u8bc1\u660e\u3002",
+            "\u611f\u5b98\u5f02\u5e38\uff1a\u9ec4\u5929\u3001\u6a59\u8272\u5929\u7a7a\u3001\u5f02\u5473\u3001\u70df\u96fe\u6216\u201c\u50cf\u591c\u665a\u201d\u7684\u53ef\u89c1\u7ecf\u9a8c\u4f7f\u4e8b\u4ef6\u53d8\u6210\u76f4\u63a5\u53ef\u611f\u77e5\u7684\u98ce\u9669\u3002 \u5065\u5eb7\u9632\u62a4\uff1aN95/KN95\u3001\u7a7a\u6c14\u8d28\u91cf\u3001\u6237\u5916\u6d3b\u52a8\u548c\u5373\u65f6\u9632\u62a4\u6210\u4e3a\u516c\u5171\u8ba8\u8bba\u4e2d\u7684\u884c\u52a8\u95ee\u9898\u3002 \u6765\u6e90\u89e3\u91ca\uff1a\u52a0\u62ff\u5927\u91ce\u706b\u3001\u533a\u57df\u91ce\u706b\u70df\u96fe\u7b49\u8bf4\u6cd5\u662f\u516c\u5171\u53d9\u4e8b\u4e2d\u7684\u6765\u6e90\u89e3\u91ca\u7ebf\u7d22\uff0c\u4f46\u4e0d\u66ff\u4ee3\u7269\u7406\u5f52\u56e0\u8bc1\u636e\u3002 \u6c14\u5019\u6846\u67b6\uff1a\u90e8\u5206\u8ba8\u8bba\u628a\u672c\u6b21\u70df\u973e\u653e\u5165\u6c14\u5019\u53d8\u5316\u3001\u91ce\u706b\u98ce\u9669\u548c\u8de8\u533a\u57df\u73af\u5883\u5f71\u54cd\u7684\u89e3\u91ca\u6846\u67b6\u4e2d\u3002 \u6000\u7591\u53cd\u5e94\uff1a\u6837\u672c\u4e2d\u4e5f\u51fa\u73b0\u5bf9\u4e8b\u4ef6\u89e3\u91ca\u7684\u6000\u7591\u6216\u9634\u8c0b\u5f0f\u89e3\u8bfb\uff0c\u63d0\u793a\u98ce\u9669\u6c9f\u901a\u5b58\u5728\u4fe1\u4efb\u4e0e\u89e3\u91ca\u7ade\u4e89\u95ee\u9898\u3002 \u7ecf\u9a8c\u6bd4\u8f83\uff1a\u7ebd\u7ea6\u8ba8\u8bba\u501f\u7528\u52a0\u5dde\u3001\u897f\u6d77\u5cb8\u6216\u897f\u96c5\u56fe\u65e2\u6709\u70df\u973e\u7ecf\u9a8c\uff0c\u5e2e\u52a9\u89e3\u91ca\u4e00\u4e2a\u5bf9\u672c\u5730\u800c\u8a00\u5f02\u5e38\u7684\u6c61\u67d3\u60c5\u5883\u3002",
+            "Bluesky \u4fee\u6b63\u67e5\u8be2\u7684\u610f\u4e49\u5728\u4e8e\u6392\u9664\u4e86\u4e00\u4e2a\u7a0b\u5e8f\u6027\u8bef\u5224\uff1a\u5e26\u8bed\u8a00\u8fc7\u6ee4\u7684\u5386\u53f2\u68c0\u7d22\u53ef\u80fd\u4ea7\u751f\u5047\u96f6\u3002\u65e0\u8bed\u8a00\u8fc7\u6ee4\u6837\u672c\u83b7\u5f97 71 \u6761\u53ef\u89c1\u5e16\u6587\uff0c\u56e0\u6b64\u65e7\u7684\u96f6\u7ed3\u679c\u53ea\u80fd\u4f5c\u4e3a\u68c0\u7d22\u8def\u7ebf\u8bca\u65ad\uff0c\u4e0d\u80fd\u5199\u6210\u65e0\u4eba\u8ba8\u8bba\u3002"
+          ],
+          "title": "\u5a92\u4f53\u4e0e\u516c\u5171\u8ba8\u8bba\u7684\u8bed\u4e49\u7ed3\u6784"
+        }
+      ],
+      "source_refs": [
+        "\u51bb\u7ed3\u62a5\u544a\u57fa\u7840\uff1a\u9650\u5b9a\u6b63\u6587\u53ef\u4f7f\u7528\u7684\u8bc1\u636e\u5bf9\u8c61\u548c\u7ed3\u8bba\u8fb9\u754c",
+        "AirNow PM2.5/AQI \u5c0f\u65f6\u89c2\u6d4b\uff1a2265 \u6761\uff08pm2_5\uff09",
+        "Open-Meteo \u7a7a\u6c14\u8d28\u91cf PM2.5\uff1a144 \u6761\uff08pm2_5\uff09",
+        "Open-Meteo \u5386\u53f2\u98ce\u901f/\u98ce\u5411\uff1a288 \u6761\uff08wind\uff09",
+        "NASA FIRMS VIIRS \u6d3b\u8dc3\u706b\u70b9\uff1a70392 \u6761\uff08fire_detection_count\uff09",
+        "GDELT DOC \u5a92\u4f53/\u6587\u6863\u8bb0\u5f55\uff1a500 \u6761\uff08articles\uff09",
+        "YouTube \u8bc4\u8bba/\u56de\u590d\u6837\u672c\uff1a439 \u6761\uff08comments\uff09",
+        "Bluesky \u516c\u5f00\u5e16\u6587\u6837\u672c\uff1a71 \u6761\uff08no-language\uff09",
+        "\u73af\u5883\u805a\u5408\u4ea7\u7269\uff1a\u6309\u6765\u6e90\u3001\u6307\u6807\u3001\u5355\u4f4d\u3001\u65f6\u95f4\u548c\u7a7a\u95f4\u538b\u7f29\u73af\u5883\u4fe1\u53f7"
+      ]
+    },
+    "central_claim": "\u7ebd\u7ea6\u53d7\u4f53\u4fa7\u89c2\u6d4b\u53ef\u4ee5\u7ea6\u675f\u70df\u973e\u4e8b\u4ef6\u7684\u65f6\u95f4\u548c\u5f3a\u5ea6\uff1aPM2.5 \u5728 2023-06-06 \u660e\u663e\u5347\u9ad8\uff0c\u5728 2023-06-07 \u7ebd\u7ea6\u533a\u57df\u591a\u4e2a\u76d1\u6d4b\u70b9\u8fbe\u5230\u9ad8\u503c\uff0c\u5e76\u5728 2023-06-08 \u4ecd\u4fdd\u6301\u8f83\u9ad8\u6c34\u5e73\uff0c\u968f\u540e\u5230 2023-06-09 \u660e\u663e\u56de\u843d\u3002\u98ce\u5411\u3001\u706b\u70b9\u548c\u53d7\u4f53\u5cf0\u503c\u4e4b\u95f4\u5177\u6709\u533a\u57df\u8f93\u9001\u76f8\u5bb9\u6027\uff0c\u4f46\u4ecd\u4e0d\u8db3\u4ee5\u5355\u72ec\u9501\u5b9a\u67d0\u4e00\u4e2a\u6e90\u706b\u70b9\u3002",
+    "decision_meaning": "\u8fd9\u4efd\u62a5\u544a\u9002\u5408\u7528\u4e8e\u56f4\u7ed5\u73af\u5883\u4e8b\u4ef6\u4e8b\u5b9e\u3001\u53ef\u80fd\u89e3\u91ca\u8def\u5f84\u4e0e\u516c\u5171\u98ce\u9669\u611f\u77e5\u4e4b\u95f4\u7684\u5173\u7cfb\u8fdb\u884c\u5b66\u672f\u6c47\u62a5\u3001\u51b3\u7b56\u53c2\u8003\u548c\u540e\u7eed\u8c03\u67e5\u8bbe\u8ba1\uff1b\u82e5\u8981\u5347\u7ea7\u4e3a\u66f4\u5f3a\u56e0\u679c\u3001\u4ee3\u8868\u6027\u6216\u653f\u7b56\u8bc4\u4ef7\uff0c\u9700\u8981\u8865\u5145\u4e0e\u5bf9\u5e94 claim \u7c7b\u578b\u5339\u914d\u7684\u65b0\u8bc1\u636e\u3002",
     "evidence_roles": [
       {
-        "claim": "事实基础",
-        "evidence": "已记录材料提供了一项尚未完全结构化的证据摘要；本报告只将其作为已记录证据线索纳入，具体内容和边界以审计引用为准。",
-        "role": "约束报告能够描述的事件、状态、运行过程或正式对象，防止把公共叙事误写成事实本身。"
+        "claim": "\u4e8b\u5b9e\u57fa\u7840",
+        "evidence": "\u5df2\u8bb0\u5f55\u6750\u6599\u63d0\u4f9b\u4e86\u4e00\u9879\u5c1a\u672a\u5b8c\u5168\u7ed3\u6784\u5316\u7684\u8bc1\u636e\u6458\u8981\uff1b\u672c\u62a5\u544a\u53ea\u5c06\u5176\u4f5c\u4e3a\u5df2\u8bb0\u5f55\u8bc1\u636e\u7ebf\u7d22\u7eb3\u5165\uff0c\u5177\u4f53\u5185\u5bb9\u548c\u8fb9\u754c\u4ee5\u5ba1\u8ba1\u5f15\u7528\u4e3a\u51c6\u3002",
+        "role": "\u7ea6\u675f\u62a5\u544a\u80fd\u591f\u63cf\u8ff0\u7684\u4e8b\u4ef6\u3001\u72b6\u6001\u3001\u8fd0\u884c\u8fc7\u7a0b\u6216\u6b63\u5f0f\u5bf9\u8c61\uff0c\u9632\u6b62\u628a\u516c\u5171\u53d9\u4e8b\u8bef\u5199\u6210\u4e8b\u5b9e\u672c\u8eab\u3002"
       },
       {
-        "claim": "治理与公共语境",
-        "evidence": "已记录材料显示：受体侧环境观测用于刻画事件强度和时序；火点或野火记录可作为来源假说的背景线索，但不能单独完成物理来源判定；视频或平台样本显示该事件在公众可见性、风险感知和防护行为层面被讨论；公共讨论材料只支持样本内议题、情绪线索或叙事结构，不能外推到样本外人群。 已记录材料显示：受体侧环境观测用于刻画事件强度和时序；火点或野火记录可作为来源假说的背景线索，但不能单独完成物理来源判定；视频或平台样本显示该事件在公众可见性、风险感知和防护行为层面被讨论；GDELT 相关记录可描述媒体或文档语气变化，但不能直接等同于公众情绪；公共讨论材料只支持样本内议题、情绪线索或叙事结构，不能外推到样本外人群；该证据线需要保留代表性、归因强度或误检风险边界。",
-        "role": "说明议题如何进入制度记录、媒体文本或公共讨论样本，并解释这些材料能支持到什么层级。"
+        "claim": "\u6cbb\u7406\u4e0e\u516c\u5171\u8bed\u5883",
+        "evidence": "\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u89c6\u9891\u6216\u5e73\u53f0\u6837\u672c\u663e\u793a\u8be5\u4e8b\u4ef6\u5728\u516c\u4f17\u53ef\u89c1\u6027\u3001\u98ce\u9669\u611f\u77e5\u548c\u9632\u62a4\u884c\u4e3a\u5c42\u9762\u88ab\u8ba8\u8bba\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\u3002 \u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u89c6\u9891\u6216\u5e73\u53f0\u6837\u672c\u663e\u793a\u8be5\u4e8b\u4ef6\u5728\u516c\u4f17\u53ef\u89c1\u6027\u3001\u98ce\u9669\u611f\u77e5\u548c\u9632\u62a4\u884c\u4e3a\u5c42\u9762\u88ab\u8ba8\u8bba\uff1bGDELT \u76f8\u5173\u8bb0\u5f55\u53ef\u63cf\u8ff0\u5a92\u4f53\u6216\u6587\u6863\u8bed\u6c14\u53d8\u5316\uff0c\u4f46\u4e0d\u80fd\u76f4\u63a5\u7b49\u540c\u4e8e\u516c\u4f17\u60c5\u7eea\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002",
+        "role": "\u8bf4\u660e\u8bae\u9898\u5982\u4f55\u8fdb\u5165\u5236\u5ea6\u8bb0\u5f55\u3001\u5a92\u4f53\u6587\u672c\u6216\u516c\u5171\u8ba8\u8bba\u6837\u672c\uff0c\u5e76\u89e3\u91ca\u8fd9\u4e9b\u6750\u6599\u80fd\u652f\u6301\u5230\u4ec0\u4e48\u5c42\u7ea7\u3002"
       },
       {
-        "claim": "结论边界",
-        "evidence": "已记录材料显示：受体侧环境观测用于刻画事件强度和时序；火点或野火记录可作为来源假说的背景线索，但不能单独完成物理来源判定；公共讨论材料只支持样本内议题、情绪线索或叙事结构，不能外推到样本外人群；该证据线需要保留代表性、归因强度或误检风险边界。",
-        "role": "限制因果归因、代表性公众意见、责任判定和政策优劣评价的写作强度。"
+        "claim": "\u7ed3\u8bba\u8fb9\u754c",
+        "evidence": "\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002",
+        "role": "\u9650\u5236\u56e0\u679c\u5f52\u56e0\u3001\u4ee3\u8868\u6027\u516c\u4f17\u610f\u89c1\u3001\u8d23\u4efb\u5224\u5b9a\u548c\u653f\u7b56\u4f18\u52a3\u8bc4\u4ef7\u7684\u5199\u4f5c\u5f3a\u5ea6\u3002"
       }
     ],
     "limitations": [
-      "第一，环境证据的主要强项是受体侧 PM2.5 时序和强度；它不提供强 source attribution、plume transport、chemical causation 或 responsibility 判断。FIRMS 火点和风场记录是相容背景，不是烟羽轨迹或源解析。",
-      "第二，公共讨论材料没有代表性抽样设计。YouTube 评论、Bluesky 帖文和媒体/文档记录只能说明样本内可见语义；不得写为公众意见占比、纽约居民总体态度、平台总体情绪或议题 prevalence。GDELT DOC 是媒体/文档叙事线索，不是 public sentiment。",
-      "第三，旧 lang=en Bluesky zero 只应作为 route diagnostic：它说明带语言过滤的历史检索可能因语言元数据而出现假零，不说明相关讨论不存在。修正后的无语言样本可用于例示语义主题，但仍不得外推代表性。"
+      "\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002",
+      "\u516c\u5171\u8ba8\u8bba\u6216\u5e73\u53f0\u6837\u672c\u53ea\u8bf4\u660e\u6837\u672c\u5185\u8bed\u4e49\u7ed3\u6784\uff0c\u4e0d\u80fd\u76f4\u63a5\u4ee3\u8868\u6837\u672c\u5916\u516c\u4f17\u6001\u5ea6\u3002",
+      "\u6b63\u5f0f\u8bb0\u5f55\u3001\u73af\u5883\u8bb0\u5f55\u548c\u8206\u60c5\u8bb0\u5f55\u627f\u62c5\u4e0d\u540c\u8bc1\u636e\u89d2\u8272\uff0c\u4e0d\u80fd\u4e92\u76f8\u66ff\u4ee3\u6216\u88ab\u5199\u6210\u5355\u4e00\u5f3a\u7ed3\u8bba\u3002",
+      "\u62a5\u544a\u53ef\u4ee5\u63d0\u51fa\u6709\u8bc1\u636e\u652f\u6491\u7684\u9636\u6bb5\u6027\u5224\u65ad\uff0c\u4f46\u4e0d\u5f97\u8865\u5199\u7f3a\u5931\u7684\u4e13\u4e1a\u6a21\u578b\u3001\u5b8c\u6574\u6b63\u6587\u6750\u6599\u6216\u672a\u8bb0\u5f55\u6765\u6e90\u3002"
     ],
+    "profile": "environmental-incident",
     "reasoning_chain": [
-      "第一，事实层材料提供报告的地基：已记录材料提供了一项尚未完全结构化的证据摘要；本报告只将其作为已记录证据线索纳入，具体内容和边界以审计引用为准。",
-      "第二，治理或公共讨论材料说明议题如何被制度化、传播和解释：已记录材料显示：受体侧环境观测用于刻画事件强度和时序；火点或野火记录可作为来源假说的背景线索，但不能单独完成物理来源判定；视频或平台样本显示该事件在公众可见性、风险感知和防护行为层面被讨论；公共讨论材料只支持样本内议题、情绪线索或叙事结构，不能外推到样本外人群。 已记录材料显示：受体侧环境观测用于刻画事件强度和时序；火点或野火记录可作为来源假说的背景线索，但不能单独完成物理来源判定；视频或平台样本显示该事件在公众可见性、风险感知和防护行为层面被讨论；GDELT 相关记录可描述媒体或文档语气变化，但不能直接等同于公众情绪；公共讨论材料只支持样本内议题、情绪线索或叙事结构，不能外推到样本外人群；该证据线需要保留代表性、归因强度或误检风险边界。",
-      "第三，公共舆情分析只在样本内说明问题意识、情绪线索和叙事框架，不能自动外推为样本外公众态度。",
-      "最后，结论强度受证据边界约束：已记录材料显示：受体侧环境观测用于刻画事件强度和时序；火点或野火记录可作为来源假说的背景线索，但不能单独完成物理来源判定；公共讨论材料只支持样本内议题、情绪线索或叙事结构，不能外推到样本外人群；该证据线需要保留代表性、归因强度或误检风险边界。"
+      "\u7b2c\u4e00\uff0c\u4e8b\u5b9e\u5c42\u6750\u6599\u63d0\u4f9b\u62a5\u544a\u7684\u5730\u57fa\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u63d0\u4f9b\u4e86\u4e00\u9879\u5c1a\u672a\u5b8c\u5168\u7ed3\u6784\u5316\u7684\u8bc1\u636e\u6458\u8981\uff1b\u672c\u62a5\u544a\u53ea\u5c06\u5176\u4f5c\u4e3a\u5df2\u8bb0\u5f55\u8bc1\u636e\u7ebf\u7d22\u7eb3\u5165\uff0c\u5177\u4f53\u5185\u5bb9\u548c\u8fb9\u754c\u4ee5\u5ba1\u8ba1\u5f15\u7528\u4e3a\u51c6\u3002",
+      "\u7b2c\u4e8c\uff0c\u6cbb\u7406\u6216\u516c\u5171\u8ba8\u8bba\u6750\u6599\u8bf4\u660e\u8bae\u9898\u5982\u4f55\u88ab\u5236\u5ea6\u5316\u3001\u4f20\u64ad\u548c\u89e3\u91ca\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u89c6\u9891\u6216\u5e73\u53f0\u6837\u672c\u663e\u793a\u8be5\u4e8b\u4ef6\u5728\u516c\u4f17\u53ef\u89c1\u6027\u3001\u98ce\u9669\u611f\u77e5\u548c\u9632\u62a4\u884c\u4e3a\u5c42\u9762\u88ab\u8ba8\u8bba\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\u3002 \u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u89c6\u9891\u6216\u5e73\u53f0\u6837\u672c\u663e\u793a\u8be5\u4e8b\u4ef6\u5728\u516c\u4f17\u53ef\u89c1\u6027\u3001\u98ce\u9669\u611f\u77e5\u548c\u9632\u62a4\u884c\u4e3a\u5c42\u9762\u88ab\u8ba8\u8bba\uff1bGDELT \u76f8\u5173\u8bb0\u5f55\u53ef\u63cf\u8ff0\u5a92\u4f53\u6216\u6587\u6863\u8bed\u6c14\u53d8\u5316\uff0c\u4f46\u4e0d\u80fd\u76f4\u63a5\u7b49\u540c\u4e8e\u516c\u4f17\u60c5\u7eea\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002",
+      "\u7b2c\u4e09\uff0c\u516c\u5171\u8206\u60c5\u5206\u6790\u53ea\u5728\u6837\u672c\u5185\u8bf4\u660e\u95ee\u9898\u610f\u8bc6\u3001\u60c5\u7eea\u7ebf\u7d22\u548c\u53d9\u4e8b\u6846\u67b6\uff0c\u4e0d\u80fd\u81ea\u52a8\u5916\u63a8\u4e3a\u6837\u672c\u5916\u516c\u4f17\u6001\u5ea6\u3002",
+      "\u6700\u540e\uff0c\u7ed3\u8bba\u5f3a\u5ea6\u53d7\u8bc1\u636e\u8fb9\u754c\u7ea6\u675f\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002"
     ]
   },
   "audit_refs": [
@@ -165,7 +241,7 @@
       "public source narratives written as physical source attribution",
       "optional-analysis helper output used without council or report-basis uptake"
     ],
-    "summary": "报告中的陈述仅限于已进入报告基础的证据产物及其引用。报告可以解释证据之间的关系，但不得引入新事实、不得给信源排序，也不得把归因强度提升到记录基础之外。"
+    "summary": "\u62a5\u544a\u4e2d\u7684\u9648\u8ff0\u4ec5\u9650\u4e8e\u5df2\u8fdb\u5165\u62a5\u544a\u57fa\u7840\u7684\u8bc1\u636e\u4ea7\u7269\u53ca\u5176\u5f15\u7528\u3002\u62a5\u544a\u53ef\u4ee5\u89e3\u91ca\u8bc1\u636e\u4e4b\u95f4\u7684\u5173\u7cfb\uff0c\u4f46\u4e0d\u5f97\u5f15\u5165\u65b0\u4e8b\u5b9e\u3001\u4e0d\u5f97\u7ed9\u4fe1\u6e90\u6392\u5e8f\uff0c\u4e5f\u4e0d\u5f97\u628a\u5f52\u56e0\u5f3a\u5ea6\u63d0\u5347\u5230\u8bb0\u5f55\u57fa\u7840\u4e4b\u5916\u3002"
   },
   "draft_id": "narrative-report-draft-cffc8df6b75c",
   "evidence_refs": [
@@ -286,7 +362,7 @@
     "envagg-receipt-22c329b7b5238af42a69",
     "/home/fpddmw/projects/openclaw-eco-concil_v1/runs/openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520/analytics/environment_evidence_aggregation_round-002_metric_unit_v2.json:$.aggregation"
   ],
-  "generated_at_utc": "2026-05-20T10:32:19Z",
+  "generated_at_utc": "2026-05-20T11:32:41Z",
   "language": "zh-Hans",
   "reader_guidance": {
     "claim_sensitive_soft_obligations": [
@@ -324,279 +400,193 @@
   "schema_version": "narrative-report-draft-v1",
   "sections": [
     {
+      "evidence_refs": [
+        "report-basis-freeze:report-basis-freeze",
+        "finding:finding-01ca5b9d9b40",
+        "finding:finding-0e69dd8d8a2e",
+        "finding:finding-cabc71dba6ec",
+        "finding:finding-41d0055c332e",
+        "finding:finding-0063344c52a7",
+        "finding:finding-589da494e256",
+        "evidence-bundle:evidence-bundle-921dc877cdf0",
+        "evidence-bundle:evidence-bundle-c7fd0fd58728",
+        "evidence-bundle:evidence-bundle-b6db51775c63",
+        "readiness-opinion:readiness-opinion-163c747bfe63",
+        "readiness-opinion:readiness-opinion-99708bd51d96"
+      ],
+      "paragraphs": [
+        "\u56f4\u7ed5 \u8bf7\u91cd\u65b0\u8c03\u67e5 2023 \u5e74 6 \u6708\u7ebd\u7ea6\u5e02\u70df\u973e\u4e8b\u4ef6\uff0c\u672c\u62a5\u544a\u7684\u6838\u5fc3\u5224\u65ad\u662f\uff1a\u7ebd\u7ea6\u53d7\u4f53\u4fa7\u89c2\u6d4b\u53ef\u4ee5\u7ea6\u675f\u70df\u973e\u4e8b\u4ef6\u7684\u65f6\u95f4\u548c\u5f3a\u5ea6\uff1aPM2.5 \u5728 2023-06-06 \u660e\u663e\u5347\u9ad8\uff0c\u5728 2023-06-07 \u7ebd\u7ea6\u533a\u57df\u591a\u4e2a\u76d1\u6d4b\u70b9\u8fbe\u5230\u9ad8\u503c\uff0c\u5e76\u5728 2023-06-08 \u4ecd\u4fdd\u6301\u8f83\u9ad8\u6c34\u5e73\uff0c\u968f\u540e\u5230 2023-06-09 \u660e\u663e\u56de\u843d\u3002\u98ce\u5411\u3001\u706b\u70b9\u548c\u53d7\u4f53\u5cf0\u503c\u4e4b\u95f4\u5177\u6709\u533a\u57df\u8f93\u9001\u76f8\u5bb9\u6027\uff0c\u4f46\u4ecd\u4e0d\u8db3\u4ee5\u5355\u72ec\u9501\u5b9a\u67d0\u4e00\u4e2a\u6e90\u706b\u70b9\u3002",
+        "\u63a8\u7406\u8def\u5f84\u662f\uff1a\u7b2c\u4e00\uff0c\u4e8b\u5b9e\u5c42\u6750\u6599\u63d0\u4f9b\u62a5\u544a\u7684\u5730\u57fa\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u63d0\u4f9b\u4e86\u4e00\u9879\u5c1a\u672a\u5b8c\u5168\u7ed3\u6784\u5316\u7684\u8bc1\u636e\u6458\u8981\uff1b\u672c\u62a5\u544a\u53ea\u5c06\u5176\u4f5c\u4e3a\u5df2\u8bb0\u5f55\u8bc1\u636e\u7ebf\u7d22\u7eb3\u5165\uff0c\u5177\u4f53\u5185\u5bb9\u548c\u8fb9\u754c\u4ee5\u5ba1\u8ba1\u5f15\u7528\u4e3a\u51c6\u3002",
+        "\u62a5\u544a\u8fb9\u754c\u662f\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002"
+      ],
       "section_id": "executive-summary",
-      "title": "摘要",
       "status": "draft",
-      "evidence_refs": [
-        "report-basis-freeze:report-basis-freeze",
-        "evidence-bundle:evidence-bundle-b6db51775c63",
-        "finding:finding-589da494e256",
-        "finding:finding-41d0055c332e",
-        "finding:finding-0063344c52a7",
-        "review-comment:review-comment-c4b1fe6e6922",
-        "current-run-signal-set:airnow:round-002:fetch-airnow-hourly-observations:pm2_5:2265",
-        "current-run-signal-set:open-meteo-aq:round-002:pm2_5:144",
-        "current-run-signal-set:open-meteo-historical:round-002:wind:288",
-        "current-run-signal-set:firms:round-002:fire_detection_count:70392",
-        "/home/fpddmw/projects/openclaw-eco-concil_v1/runs/openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520/analytics/environment_evidence_aggregation_round-002_metric_unit_v2.json:$.aggregation",
-        "evidence-bundle:evidence-bundle-c7fd0fd58728",
-        "evidence-bundle:evidence-bundle-921dc877cdf0",
-        "finding:finding-0e69dd8d8a2e",
-        "finding:finding-01ca5b9d9b40",
-        "review-comment:review-comment-1738755d2c75",
-        "review-comment:review-comment-30d295ffa17e",
-        "current-run-signal-set:gdelt-doc:round-002:articles:500",
-        "current-run-signal-set:youtube-comments:round-002:comments:439",
-        "current-run-signal-set:bluesky:round-002:no-language:71",
-        "evidence-route-assessment-52e1450809d3",
-        "challenge-disposition:challenge-disposition-f7c4f598eef5"
-      ],
-      "paragraphs": [
-        "本报告只消费 round-002 的 frozen/canonical report basis（report-basis:report-basis-a3644c654c90；artifact: report_basis/frozen_report_basis_round-002_v2.json），并以 round-003 形成中文读者版叙述。报告回答四个问题：2023 年 6 月纽约烟霾发生了什么，环境证据能支持到什么层级，公共讨论与媒体文本呈现怎样的语义结构，以及哪些结论必须保持受限。",
-        "有界结论是：受体侧 PM2.5 观测清楚显示纽约在 2023-06-06 至 2023-06-08 出现显著污染升高，2023-06-07 达到本轮材料中的最高受体侧记录，2023-06-09 后明显回落。风场记录与候选源区火点记录提供“相容背景”，但本报告不得把它写成强来源归因、烟羽输送证明、化学因果链或责任判断。",
-        "公共讨论与媒体证据显示的不是代表性公众意见占比，而是样本内语义结构：媒体/文档材料反复把事件框定为空气质量、野火烟雾、危险烟霾、口罩、防护、航班或户外影响以及烟雾持续/改善；YouTube 评论与 Bluesky 样本呈现感官描述、防护健康、气候/野火解释、怀疑或阴谋式反应、以及西海岸/加州/西雅图烟霾经验比较等线索。旧的 lang=en Bluesky zero 只能作为路线参数诊断，不能作为“无人讨论”的负面发现。"
-      ]
+      "title": "\u6838\u5fc3\u7ed3\u8bba"
     },
     {
+      "evidence_refs": [
+        "evidence-bundle-b6db51775c63",
+        "finding-589da494e256",
+        "finding-41d0055c332e",
+        "finding-0063344c52a7",
+        "evidence-route-assessment-1d649f166dcb",
+        "evidence-bundle-921dc877cdf0",
+        "source-acquisition-execution-link-receipt-51451a1312a292dcbadc",
+        "source-acquisition-proposal-85bc1c931e91",
+        "sig-8a8e93e917255d53",
+        "sig-e9c3d00c8b119e4d",
+        "sig-2328cc4ee5e0aaa8",
+        "sig-7f0f871062bb427c"
+      ],
+      "paragraphs": [
+        "\u4e2d\u5fc3\u5224\u65ad\uff1a\u7ebd\u7ea6\u53d7\u4f53\u4fa7\u89c2\u6d4b\u53ef\u4ee5\u7ea6\u675f\u70df\u973e\u4e8b\u4ef6\u7684\u65f6\u95f4\u548c\u5f3a\u5ea6\uff1aPM2.5 \u5728 2023-06-06 \u660e\u663e\u5347\u9ad8\uff0c\u5728 2023-06-07 \u7ebd\u7ea6\u533a\u57df\u591a\u4e2a\u76d1\u6d4b\u70b9\u8fbe\u5230\u9ad8\u503c\uff0c\u5e76\u5728 2023-06-08 \u4ecd\u4fdd\u6301\u8f83\u9ad8\u6c34\u5e73\uff0c\u968f\u540e\u5230 2023-06-09 \u660e\u663e\u56de\u843d\u3002\u98ce\u5411\u3001\u706b\u70b9\u548c\u53d7\u4f53\u5cf0\u503c\u4e4b\u95f4\u5177\u6709\u533a\u57df\u8f93\u9001\u76f8\u5bb9\u6027\uff0c\u4f46\u4ecd\u4e0d\u8db3\u4ee5\u5355\u72ec\u9501\u5b9a\u67d0\u4e00\u4e2a\u6e90\u706b\u70b9\u3002",
+        "1. \u7b2c\u4e00\uff0c\u4e8b\u5b9e\u5c42\u6750\u6599\u63d0\u4f9b\u62a5\u544a\u7684\u5730\u57fa\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u63d0\u4f9b\u4e86\u4e00\u9879\u5c1a\u672a\u5b8c\u5168\u7ed3\u6784\u5316\u7684\u8bc1\u636e\u6458\u8981\uff1b\u672c\u62a5\u544a\u53ea\u5c06\u5176\u4f5c\u4e3a\u5df2\u8bb0\u5f55\u8bc1\u636e\u7ebf\u7d22\u7eb3\u5165\uff0c\u5177\u4f53\u5185\u5bb9\u548c\u8fb9\u754c\u4ee5\u5ba1\u8ba1\u5f15\u7528\u4e3a\u51c6\u3002",
+        "2. \u7b2c\u4e8c\uff0c\u6cbb\u7406\u6216\u516c\u5171\u8ba8\u8bba\u6750\u6599\u8bf4\u660e\u8bae\u9898\u5982\u4f55\u88ab\u5236\u5ea6\u5316\u3001\u4f20\u64ad\u548c\u89e3\u91ca\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u89c6\u9891\u6216\u5e73\u53f0\u6837\u672c\u663e\u793a\u8be5\u4e8b\u4ef6\u5728\u516c\u4f17\u53ef\u89c1\u6027\u3001\u98ce\u9669\u611f\u77e5\u548c\u9632\u62a4\u884c\u4e3a\u5c42\u9762\u88ab\u8ba8\u8bba\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\u3002 \u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u89c6\u9891\u6216\u5e73\u53f0\u6837\u672c\u663e\u793a\u8be5\u4e8b\u4ef6\u5728\u516c\u4f17\u53ef\u89c1\u6027\u3001\u98ce\u9669\u611f\u77e5\u548c\u9632\u62a4\u884c\u4e3a\u5c42\u9762\u88ab\u8ba8\u8bba\uff1bGDELT \u76f8\u5173\u8bb0\u5f55\u53ef\u63cf\u8ff0\u5a92\u4f53\u6216\u6587\u6863\u8bed\u6c14\u53d8\u5316\uff0c\u4f46\u4e0d\u80fd\u76f4\u63a5\u7b49\u540c\u4e8e\u516c\u4f17\u60c5\u7eea\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002",
+        "3. \u7b2c\u4e09\uff0c\u516c\u5171\u8206\u60c5\u5206\u6790\u53ea\u5728\u6837\u672c\u5185\u8bf4\u660e\u95ee\u9898\u610f\u8bc6\u3001\u60c5\u7eea\u7ebf\u7d22\u548c\u53d9\u4e8b\u6846\u67b6\uff0c\u4e0d\u80fd\u81ea\u52a8\u5916\u63a8\u4e3a\u6837\u672c\u5916\u516c\u4f17\u6001\u5ea6\u3002",
+        "4. \u6700\u540e\uff0c\u7ed3\u8bba\u5f3a\u5ea6\u53d7\u8bc1\u636e\u8fb9\u754c\u7ea6\u675f\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002",
+        "\u9762\u5411\u51b3\u7b56\u8005\u7684\u542b\u4e49\uff1a\u8fd9\u4efd\u62a5\u544a\u9002\u5408\u7528\u4e8e\u56f4\u7ed5\u73af\u5883\u4e8b\u4ef6\u4e8b\u5b9e\u3001\u53ef\u80fd\u89e3\u91ca\u8def\u5f84\u4e0e\u516c\u5171\u98ce\u9669\u611f\u77e5\u4e4b\u95f4\u7684\u5173\u7cfb\u8fdb\u884c\u5b66\u672f\u6c47\u62a5\u3001\u51b3\u7b56\u53c2\u8003\u548c\u540e\u7eed\u8c03\u67e5\u8bbe\u8ba1\uff1b\u82e5\u8981\u5347\u7ea7\u4e3a\u66f4\u5f3a\u56e0\u679c\u3001\u4ee3\u8868\u6027\u6216\u653f\u7b56\u8bc4\u4ef7\uff0c\u9700\u8981\u8865\u5145\u4e0e\u5bf9\u5e94 claim \u7c7b\u578b\u5339\u914d\u7684\u65b0\u8bc1\u636e\u3002"
+      ],
+      "section_id": "argument-map",
+      "status": "draft",
+      "title": "\u8bba\u8bc1\u94fe"
+    },
+    {
+      "evidence_refs": [
+        "report-basis-freeze:report-basis-freeze",
+        "finding:finding-01ca5b9d9b40",
+        "finding:finding-0e69dd8d8a2e",
+        "finding:finding-cabc71dba6ec",
+        "finding:finding-41d0055c332e",
+        "finding:finding-0063344c52a7",
+        "finding:finding-589da494e256",
+        "evidence-bundle:evidence-bundle-921dc877cdf0",
+        "evidence-bundle:evidence-bundle-c7fd0fd58728",
+        "evidence-bundle:evidence-bundle-b6db51775c63",
+        "readiness-opinion:readiness-opinion-163c747bfe63",
+        "readiness-opinion:readiness-opinion-99708bd51d96"
+      ],
+      "paragraphs": [
+        "\u7528\u6237\u95ee\u9898\uff1a\u8bf7\u91cd\u65b0\u8c03\u67e5 2023 \u5e74 6 \u6708\u7ebd\u7ea6\u5e02\u70df\u973e\u4e8b\u4ef6\uff1a\u8bf4\u660e\u53d1\u751f\u4e86\u4ec0\u4e48\u3001\u73af\u5883\u8bc1\u636e\u652f\u6301\u54ea\u4e9b\u89e3\u91ca\u3001\u516c\u5171\u8ba8\u8bba\u548c\u5a92\u4f53\u8bed\u4e49\u5448\u73b0\u51fa\u4ec0\u4e48\u7ed3\u6784\u3001\u54ea\u4e9b\u7ed3\u8bba\u53d7\u5230\u8bc1\u636e\u9650\u5236\uff0c\u5e76\u751f\u6210\u9002\u5408\u51b3\u7b56\u8005\u9605\u8bfb\u7684\u4e2d\u6587\u4e13\u4e1a\u8c03\u7814\u62a5\u544a\u3002",
+        "\u7b80\u8981\u56de\u7b54\uff1a\u7ebd\u7ea6\u53d7\u4f53\u4fa7\u89c2\u6d4b\u53ef\u4ee5\u7ea6\u675f\u70df\u973e\u4e8b\u4ef6\u7684\u65f6\u95f4\u548c\u5f3a\u5ea6\uff1aPM2.5 \u5728 2023-06-06 \u660e\u663e\u5347\u9ad8\uff0c\u5728 2023-06-07 \u7ebd\u7ea6\u533a\u57df\u591a\u4e2a\u76d1\u6d4b\u70b9\u8fbe\u5230\u9ad8\u503c\uff0c\u5e76\u5728 2023-06-08 \u4ecd\u4fdd\u6301\u8f83\u9ad8\u6c34\u5e73\uff0c\u968f\u540e\u5230 2023-06-09 \u660e\u663e\u56de\u843d\u3002\u98ce\u5411\u3001\u706b\u70b9\u548c\u53d7\u4f53\u5cf0\u503c\u4e4b\u95f4\u5177\u6709\u533a\u57df\u8f93\u9001\u76f8\u5bb9\u6027\uff0c\u4f46\u4ecd\u4e0d\u8db3\u4ee5\u5355\u72ec\u9501\u5b9a\u67d0\u4e00\u4e2a\u6e90\u706b\u70b9\u3002",
+        "\u73af\u5883\u538b\u529b\u4fe1\u53f7\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u63d0\u4f9b\u4e86\u4e00\u9879\u5c1a\u672a\u5b8c\u5168\u7ed3\u6784\u5316\u7684\u8bc1\u636e\u6458\u8981\uff1b\u672c\u62a5\u544a\u53ea\u5c06\u5176\u4f5c\u4e3a\u5df2\u8bb0\u5f55\u8bc1\u636e\u7ebf\u7d22\u7eb3\u5165\uff0c\u5177\u4f53\u5185\u5bb9\u548c\u8fb9\u754c\u4ee5\u5ba1\u8ba1\u5f15\u7528\u4e3a\u51c6\u3002",
+        "\u8206\u60c5\u8bed\u4e49\u7ed3\u6784\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u89c6\u9891\u6216\u5e73\u53f0\u6837\u672c\u663e\u793a\u8be5\u4e8b\u4ef6\u5728\u516c\u4f17\u53ef\u89c1\u6027\u3001\u98ce\u9669\u611f\u77e5\u548c\u9632\u62a4\u884c\u4e3a\u5c42\u9762\u88ab\u8ba8\u8bba\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\u3002 \u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u89c6\u9891\u6216\u5e73\u53f0\u6837\u672c\u663e\u793a\u8be5\u4e8b\u4ef6\u5728\u516c\u4f17\u53ef\u89c1\u6027\u3001\u98ce\u9669\u611f\u77e5\u548c\u9632\u62a4\u884c\u4e3a\u5c42\u9762\u88ab\u8ba8\u8bba\uff1bGDELT \u76f8\u5173\u8bb0\u5f55\u53ef\u63cf\u8ff0\u5a92\u4f53\u6216\u6587\u6863\u8bed\u6c14\u53d8\u5316\uff0c\u4f46\u4e0d\u80fd\u76f4\u63a5\u7b49\u540c\u4e8e\u516c\u4f17\u60c5\u7eea\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002",
+        "\u4e3b\u8981\u9650\u5236\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002"
+      ],
+      "presentation": "bullet-list",
       "section_id": "key-points",
-      "title": "要点",
       "status": "draft",
-      "evidence_refs": [
-        "report-basis-freeze:report-basis-freeze",
-        "evidence-bundle:evidence-bundle-b6db51775c63",
-        "finding:finding-589da494e256",
-        "finding:finding-41d0055c332e",
-        "finding:finding-0063344c52a7",
-        "review-comment:review-comment-c4b1fe6e6922",
-        "current-run-signal-set:airnow:round-002:fetch-airnow-hourly-observations:pm2_5:2265",
-        "current-run-signal-set:open-meteo-aq:round-002:pm2_5:144",
-        "current-run-signal-set:open-meteo-historical:round-002:wind:288",
-        "current-run-signal-set:firms:round-002:fire_detection_count:70392",
-        "/home/fpddmw/projects/openclaw-eco-concil_v1/runs/openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520/analytics/environment_evidence_aggregation_round-002_metric_unit_v2.json:$.aggregation",
-        "evidence-bundle:evidence-bundle-c7fd0fd58728",
-        "evidence-bundle:evidence-bundle-921dc877cdf0",
-        "finding:finding-0e69dd8d8a2e",
-        "finding:finding-01ca5b9d9b40",
-        "review-comment:review-comment-1738755d2c75",
-        "review-comment:review-comment-30d295ffa17e",
-        "current-run-signal-set:gdelt-doc:round-002:articles:500",
-        "current-run-signal-set:youtube-comments:round-002:comments:439",
-        "current-run-signal-set:bluesky:round-002:no-language:71",
-        "evidence-route-assessment-52e1450809d3",
-        "challenge-disposition:challenge-disposition-f7c4f598eef5"
-      ],
-      "paragraphs": [
-        "事件发生了什么：在当前报告基础中，纽约烟霾事件表现为 2023-06-06 开始明显升高、2023-06-07 达峰、2023-06-08 仍高、2023-06-09 至 2023-06-10 回落的受体侧 PM2.5 过程。AirNow 在纽约 bbox 内归一化 2,265 条 PM2.5 信号；日最大值为 Jun 5: 28.1 µg/m³、Jun 6: 201.9、Jun 7: 412.0、Jun 8: 274.6、Jun 9: 122.0、Jun 10: 56.0，其中 Queens 在 2023-06-07T18:00Z 记录 412.0 µg/m³。Open-Meteo 空气质量交叉检查提供 144 个小时值，2023-06-08T00:00 最大为 99.9 µg/m³。",
-        "环境证据支持什么：它支持“纽约受体侧确有显著 PM2.5 升高，并与同时段局地风场和候选源区活跃火点记录具有背景相容性”的描述性判断。Open-Meteo 历史天气提供 Jun 5-10 的 288 个风速/风向信号；在 AirNow 峰值附近记录 298°、5.10 m/s（2023-06-07T18:00）、301°、5.83 m/s（19:00）和 302°、3.55 m/s（2023-06-08T00:00）。FIRMS 在候选源区 bbox（约 lat 45.024–58.529、lon -84.830–-61.051）于 Jun 1-10 归一化 70,392 条火点信号，日计数在 Jun 6 为 14,940。",
-        "公共语义结构是什么：GDELT DOC 的 500 条文章信号与 YouTube 标题是媒体/文档叙事线索；YouTube 的 439 条评论/回复和 Bluesky 的 71 条无语言过滤样本是平台样本内公共反应线索。它们可以说明“看起来像夜晚、黄天、异味”、N95/KN95 或健康防护、加拿大野火/野火烟雾叙事、气候框架、怀疑反应、以及西海岸经验比较等语义簇，但不能转写为公众占比、平台总体情绪或纽约居民代表性意见。"
-      ]
+      "title": "\u7528\u6237\u95ee\u9898\u4e0e\u56de\u7b54"
     },
     {
+      "evidence_refs": [
+        "evidence-bundle-b6db51775c63",
+        "finding-589da494e256",
+        "finding-41d0055c332e",
+        "finding-0063344c52a7",
+        "evidence-route-assessment-1d649f166dcb",
+        "evidence-bundle-921dc877cdf0",
+        "source-acquisition-execution-link-receipt-51451a1312a292dcbadc",
+        "source-acquisition-proposal-85bc1c931e91",
+        "sig-8a8e93e917255d53",
+        "sig-e9c3d00c8b119e4d",
+        "sig-2328cc4ee5e0aaa8",
+        "sig-7f0f871062bb427c"
+      ],
+      "paragraphs": [
+        "\u56f4\u7ed5\u201c\u8bf7\u91cd\u65b0\u8c03\u67e5 2023 \u5e74 6 \u6708\u7ebd\u7ea6\u5e02\u70df\u973e\u4e8b\u4ef6\u201d\uff0c\u6b63\u6587\u5148\u5efa\u7acb\u4e8b\u5b9e\u5bf9\u8c61\uff0c\u518d\u89e3\u91ca\u6cbb\u7406\u6216\u4f20\u64ad\u8bed\u5883\uff0c\u6700\u540e\u628a\u516c\u5171\u8bed\u4e49\u548c\u7ed3\u8bba\u8fb9\u754c\u653e\u56de\u540c\u4e00\u6761\u8bba\u8bc1\u94fe\u4e2d\u3002",
+        "\u8bc1\u636e\u7ec4\u7ec7\u9075\u5faa\u201c\u4e8b\u5b9e\u5bf9\u8c61-\u89e3\u91ca\u8bed\u5883-\u516c\u5171\u8bed\u4e49-\u7ed3\u8bba\u8fb9\u754c\u201d\u7684\u987a\u5e8f\uff1a\u5148\u8bf4\u660e\u5df2\u88ab\u8bb0\u5f55\u7ea6\u675f\u7684\u4e8b\u5b9e\u6216\u6cbb\u7406\u5bf9\u8c61\uff0c\u518d\u89e3\u91ca\u8fd9\u4e9b\u4e8b\u5b9e\u5982\u4f55\u8fdb\u5165\u5236\u5ea6\u8bb0\u5f55\u548c\u516c\u5171\u8ba8\u8bba\uff0c\u968f\u540e\u8ba8\u8bba\u6837\u672c\u5185\u8bed\u4e49\u7ed3\u6784\uff0c\u6700\u540e\u660e\u786e\u54ea\u4e9b\u7ed3\u8bba\u4ecd\u4e0d\u80fd\u5347\u7ea7\u3002"
+      ],
       "section_id": "what-happened",
-      "title": "引言：事件问题与可回答范围",
       "status": "draft",
-      "evidence_refs": [
-        "report-basis-freeze:report-basis-freeze",
-        "evidence-bundle:evidence-bundle-b6db51775c63",
-        "finding:finding-589da494e256",
-        "finding:finding-41d0055c332e",
-        "finding:finding-0063344c52a7",
-        "review-comment:review-comment-c4b1fe6e6922",
-        "current-run-signal-set:airnow:round-002:fetch-airnow-hourly-observations:pm2_5:2265",
-        "current-run-signal-set:open-meteo-aq:round-002:pm2_5:144",
-        "current-run-signal-set:open-meteo-historical:round-002:wind:288",
-        "current-run-signal-set:firms:round-002:fire_detection_count:70392",
-        "/home/fpddmw/projects/openclaw-eco-concil_v1/runs/openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520/analytics/environment_evidence_aggregation_round-002_metric_unit_v2.json:$.aggregation"
-      ],
-      "paragraphs": [
-        "2023 年 6 月纽约烟霾在本轮材料中首先是一个“受体侧空气污染过程”：报告基础不需要、也不允许新增外部事实来证明它，而是从已归一化的环境信号出发，描述纽约地区 PM2.5 的时间结构。可回答的问题是污染升高的时段、峰值、回落，以及哪些背景线索与之同时出现；不可回答的问题是精确来源、烟羽路径、化学成分、责任主体或完整健康影响链。",
-        "本报告采用学术/专业调研文章的组织方式，而不是复述运行日志。读者应把它理解为一个有审计索引的阶段性证据综合：它能为后续归因建模、健康影响研究、风险沟通或制度复盘划定问题和证据边界，但不把尚未完成的专业归因或代表性民意调查伪装成结论。"
-      ]
+      "title": "\u4e8b\u4ef6\u4e0e\u8bae\u9898\u8109\u7edc"
     },
     {
+      "evidence_refs": [
+        "evidence-bundle-b6db51775c63",
+        "finding-589da494e256",
+        "finding-41d0055c332e",
+        "finding-0063344c52a7",
+        "evidence-route-assessment-1d649f166dcb",
+        "evidence-bundle-921dc877cdf0",
+        "source-acquisition-execution-link-receipt-51451a1312a292dcbadc",
+        "source-acquisition-proposal-85bc1c931e91",
+        "sig-8a8e93e917255d53",
+        "sig-e9c3d00c8b119e4d",
+        "sig-2328cc4ee5e0aaa8",
+        "sig-7f0f871062bb427c"
+      ],
+      "paragraphs": [
+        "\u56f4\u7ed5\u201c\u4e8b\u5b9e\u57fa\u7840\u201d\uff0c\u62a5\u544a\u4e0d\u662f\u5b64\u7acb\u5217\u4e3e\u6750\u6599\uff0c\u800c\u662f\u8bf4\u660e\u5176\u8bba\u8bc1\u529f\u80fd\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u63d0\u4f9b\u4e86\u4e00\u9879\u5c1a\u672a\u5b8c\u5168\u7ed3\u6784\u5316\u7684\u8bc1\u636e\u6458\u8981\uff1b\u672c\u62a5\u544a\u53ea\u5c06\u5176\u4f5c\u4e3a\u5df2\u8bb0\u5f55\u8bc1\u636e\u7ebf\u7d22\u7eb3\u5165\uff0c\u5177\u4f53\u5185\u5bb9\u548c\u8fb9\u754c\u4ee5\u5ba1\u8ba1\u5f15\u7528\u4e3a\u51c6\u3002 \u8fd9\u7c7b\u6750\u6599\u5728\u8bba\u8bc1\u4e2d\u4e3b\u8981\u7528\u4e8e\u7ea6\u675f\u62a5\u544a\u80fd\u591f\u63cf\u8ff0\u7684\u4e8b\u4ef6\u3001\u72b6\u6001\u3001\u8fd0\u884c\u8fc7\u7a0b\u6216\u6b63\u5f0f\u5bf9\u8c61\uff0c\u9632\u6b62\u628a\u516c\u5171\u53d9\u4e8b\u8bef\u5199\u6210\u4e8b\u5b9e\u672c\u8eab\u3002",
+        "\u56f4\u7ed5\u201c\u6cbb\u7406\u4e0e\u516c\u5171\u8bed\u5883\u201d\uff0c\u62a5\u544a\u4e0d\u662f\u5b64\u7acb\u5217\u4e3e\u6750\u6599\uff0c\u800c\u662f\u8bf4\u660e\u5176\u8bba\u8bc1\u529f\u80fd\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u89c6\u9891\u6216\u5e73\u53f0\u6837\u672c\u663e\u793a\u8be5\u4e8b\u4ef6\u5728\u516c\u4f17\u53ef\u89c1\u6027\u3001\u98ce\u9669\u611f\u77e5\u548c\u9632\u62a4\u884c\u4e3a\u5c42\u9762\u88ab\u8ba8\u8bba\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\u3002 \u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u89c6\u9891\u6216\u5e73\u53f0\u6837\u672c\u663e\u793a\u8be5\u4e8b\u4ef6\u5728\u516c\u4f17\u53ef\u89c1\u6027\u3001\u98ce\u9669\u611f\u77e5\u548c\u9632\u62a4\u884c\u4e3a\u5c42\u9762\u88ab\u8ba8\u8bba\uff1bGDELT \u76f8\u5173\u8bb0\u5f55\u53ef\u63cf\u8ff0\u5a92\u4f53\u6216\u6587\u6863\u8bed\u6c14\u53d8\u5316\uff0c\u4f46\u4e0d\u80fd\u76f4\u63a5\u7b49\u540c\u4e8e\u516c\u4f17\u60c5\u7eea\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002 \u8fd9\u7c7b\u6750\u6599\u5728\u8bba\u8bc1\u4e2d\u4e3b\u8981\u7528\u4e8e\u8bf4\u660e\u8bae\u9898\u5982\u4f55\u8fdb\u5165\u5236\u5ea6\u8bb0\u5f55\u3001\u5a92\u4f53\u6587\u672c\u6216\u516c\u5171\u8ba8\u8bba\u6837\u672c\uff0c\u5e76\u89e3\u91ca\u8fd9\u4e9b\u6750\u6599\u80fd\u652f\u6301\u5230\u4ec0\u4e48\u5c42\u7ea7\u3002",
+        "\u56f4\u7ed5\u201c\u7ed3\u8bba\u8fb9\u754c\u201d\uff0c\u62a5\u544a\u4e0d\u662f\u5b64\u7acb\u5217\u4e3e\u6750\u6599\uff0c\u800c\u662f\u8bf4\u660e\u5176\u8bba\u8bc1\u529f\u80fd\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002 \u8fd9\u7c7b\u6750\u6599\u5728\u8bba\u8bc1\u4e2d\u4e3b\u8981\u7528\u4e8e\u9650\u5236\u56e0\u679c\u5f52\u56e0\u3001\u4ee3\u8868\u6027\u516c\u4f17\u610f\u89c1\u3001\u8d23\u4efb\u5224\u5b9a\u548c\u653f\u7b56\u4f18\u52a3\u8bc4\u4ef7\u7684\u5199\u4f5c\u5f3a\u5ea6\u3002"
+      ],
       "section_id": "evidence-basis",
-      "title": "材料与方法",
       "status": "draft",
+      "title": "\u57fa\u4e8e\u8bc1\u636e\u7684\u5206\u6790"
+    },
+    {
       "evidence_refs": [
-        "report-basis-freeze:report-basis-freeze",
-        "evidence-bundle:evidence-bundle-b6db51775c63",
-        "finding:finding-589da494e256",
-        "finding:finding-41d0055c332e",
-        "finding:finding-0063344c52a7",
-        "review-comment:review-comment-c4b1fe6e6922",
-        "current-run-signal-set:airnow:round-002:fetch-airnow-hourly-observations:pm2_5:2265",
-        "current-run-signal-set:open-meteo-aq:round-002:pm2_5:144",
-        "current-run-signal-set:open-meteo-historical:round-002:wind:288",
-        "current-run-signal-set:firms:round-002:fire_detection_count:70392",
-        "/home/fpddmw/projects/openclaw-eco-concil_v1/runs/openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520/analytics/environment_evidence_aggregation_round-002_metric_unit_v2.json:$.aggregation",
-        "evidence-bundle:evidence-bundle-c7fd0fd58728",
-        "evidence-bundle:evidence-bundle-921dc877cdf0",
-        "finding:finding-0e69dd8d8a2e",
-        "finding:finding-01ca5b9d9b40",
-        "review-comment:review-comment-1738755d2c75",
         "review-comment:review-comment-30d295ffa17e",
-        "current-run-signal-set:gdelt-doc:round-002:articles:500",
-        "current-run-signal-set:youtube-comments:round-002:comments:439",
-        "current-run-signal-set:bluesky:round-002:no-language:71",
-        "evidence-route-assessment-52e1450809d3"
-      ],
-      "paragraphs": [
-        "材料基础为当前 run 的 frozen/canonical report basis：frozen_report_basis_round-002_v2.json、round_readiness_round-002_after_dispositions.json，以及被报告基础携带的环境聚合 artifact environment_evidence_aggregation_round-002_metric_unit_v2.json。环境材料包括 AirNow 小时 PM2.5、Open-Meteo 空气质量 PM2.5、Open-Meteo 历史风速/风向，以及 NASA FIRMS VIIRS 活跃火点记录。公共/媒体材料包括 GDELT DOC、YouTube 发现元数据、YouTube 评论/回复，以及经 challenger 修正边界后的 Bluesky 无语言过滤样本。",
-        "方法上，本报告只做“证据角色综合”：受体侧 PM2.5 用于描述纽约污染时序和强度；风场记录用于局地气象相容性背景；FIRMS 火点用于候选源区活跃火点背景；GDELT 和 YouTube 标题用于媒体/文档叙事线索；YouTube 评论与 Bluesky 帖文用于样本内公共反应语义。环境聚合 artifact 的角色是压缩已入库环境信号的覆盖、时间序列和点事件统计，不用于证据排序、来源排序、风险评分或归因判定。",
-        "所有公共讨论材料均按样本处理：GDELT 不等于公众情绪，YouTube 发现只是选取候选视频的元数据，YouTube 评论和 Bluesky 帖文不构成代表性抽样。旧 Bluesky lang=en zero 在本报告中只保留为路线诊断：同查询在无 search-lang 条件下可见 25 条，而 search-lang=en 为 0，说明早先零结果与历史语言元数据/路线参数有关，不能写成讨论缺席。"
-      ]
-    },
-    {
-      "section_id": "results-environment",
-      "title": "结果一：环境证据显示的时序与相容背景",
-      "status": "draft",
-      "evidence_refs": [
-        "report-basis-freeze:report-basis-freeze",
-        "evidence-bundle:evidence-bundle-b6db51775c63",
-        "finding:finding-589da494e256",
-        "finding:finding-41d0055c332e",
-        "finding:finding-0063344c52a7",
         "review-comment:review-comment-c4b1fe6e6922",
-        "current-run-signal-set:airnow:round-002:fetch-airnow-hourly-observations:pm2_5:2265",
-        "current-run-signal-set:open-meteo-aq:round-002:pm2_5:144",
-        "current-run-signal-set:open-meteo-historical:round-002:wind:288",
-        "current-run-signal-set:firms:round-002:fire_detection_count:70392",
-        "/home/fpddmw/projects/openclaw-eco-concil_v1/runs/openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520/analytics/environment_evidence_aggregation_round-002_metric_unit_v2.json:$.aggregation"
-      ],
-      "paragraphs": [
-        "AirNow 与 Open-Meteo 的共同作用是确认受体侧污染升高。AirNow 记录显示 Jun 6 开始出现高值、Jun 7 达到最高、Jun 8 仍保持高水平、Jun 9 后下降；Open-Meteo 空气质量记录也在 Jun 6-8 给出升高的小时值和日均背景。两套材料来源、测量/模型属性不同，因此本报告把它们作为交叉描述线索，而不是互相替代。",
-        "局地风记录提供的是相容性语境：在 AirNow 峰值附近，风向约 298°–302°、风速约 3.55–5.83 m/s。该信息说明峰值时段有可讨论的局地气象背景，但单一受体风时间序列不是烟羽轨迹模型，也不是来源归因模型。",
-        "FIRMS 火点记录提供候选源区背景：Jun 1-10 共 70,392 条归一化火点信号，Jun 3、Jun 5、Jun 6 等日计数较高，其中 Jun 6 为 14,940。该记录说明候选源区在事件窗口前后存在大量活跃火点，但本报告不得把火点记录直接改写成“这些火导致纽约 PM2.5 峰值”的因果证明。"
-      ]
-    },
-    {
-      "section_id": "public-discourse-deepening",
-      "title": "结果二：公共讨论与媒体语义结构",
-      "status": "draft",
-      "evidence_refs": [
-        "evidence-bundle:evidence-bundle-c7fd0fd58728",
-        "evidence-bundle:evidence-bundle-921dc877cdf0",
-        "finding:finding-0e69dd8d8a2e",
-        "finding:finding-01ca5b9d9b40",
         "review-comment:review-comment-1738755d2c75",
-        "review-comment:review-comment-30d295ffa17e",
-        "current-run-signal-set:gdelt-doc:round-002:articles:500",
-        "current-run-signal-set:youtube-comments:round-002:comments:439",
-        "current-run-signal-set:bluesky:round-002:no-language:71",
-        "evidence-route-assessment-52e1450809d3"
+        "readiness-opinion:readiness-opinion-163c747bfe63",
+        "readiness-opinion:readiness-opinion-99708bd51d96",
+        "readiness-opinion:readiness-opinion-df01a96235ba",
+        "readiness-opinion:readiness-opinion-49c8cfff9312",
+        "agent-position:agent-position-6acf3967bfdf"
       ],
       "paragraphs": [
-        "媒体/文档语义层面，GDELT DOC 文章记录和 YouTube 标题反复出现“野火烟雾、空气质量警示、危险烟霾、口罩、防护、航班或户外影响、烟雾持续或改善”等框架。这些材料说明事件在公开文本中被组织为空气质量与野火烟雾相关的风险议题；但它们不是公众情绪测量，也不能证明物理来源。",
-        "平台评论语义层面，YouTube 的 439 条评论/回复显示若干样本内主题：感官异常（像夜晚、天空发黄、异味）、健康防护与口罩、气候/野火解释、怀疑或阴谋式反应、以及与 California/West Coast/Seattle 烟霾经验的比较。Bluesky 的 71 条无语言过滤样本也提供空气质量、N95/KN95、橙色/烟雾天空和气味、加拿大野火叙事、西海岸比较和气候框架等例子。",
-        "这些主题只能称为“样本内语义簇”或“可见讨论线索”。本报告不报告公众意见占比，不把非代表性样本写成纽约公众或平台总体态度，不把公共 source narrative cues 写成物理 source attribution。若未来要讨论公众态度结构，需要独立的样本设计、覆盖审计、标注体系、聚合方法和明确分母。"
-      ]
-    },
-    {
-      "section_id": "council-reasoning",
-      "title": "讨论：证据链如何支持有界结论",
-      "status": "draft",
-      "evidence_refs": [
-        "report-basis-freeze:report-basis-freeze",
-        "evidence-bundle:evidence-bundle-b6db51775c63",
-        "finding:finding-589da494e256",
-        "finding:finding-41d0055c332e",
-        "finding:finding-0063344c52a7",
-        "review-comment:review-comment-c4b1fe6e6922",
-        "current-run-signal-set:airnow:round-002:fetch-airnow-hourly-observations:pm2_5:2265",
-        "current-run-signal-set:open-meteo-aq:round-002:pm2_5:144",
-        "current-run-signal-set:open-meteo-historical:round-002:wind:288",
-        "current-run-signal-set:firms:round-002:fire_detection_count:70392",
-        "/home/fpddmw/projects/openclaw-eco-concil_v1/runs/openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520/analytics/environment_evidence_aggregation_round-002_metric_unit_v2.json:$.aggregation",
-        "evidence-bundle:evidence-bundle-c7fd0fd58728",
-        "evidence-bundle:evidence-bundle-921dc877cdf0",
-        "finding:finding-0e69dd8d8a2e",
-        "finding:finding-01ca5b9d9b40",
-        "review-comment:review-comment-1738755d2c75",
-        "review-comment:review-comment-30d295ffa17e",
-        "current-run-signal-set:gdelt-doc:round-002:articles:500",
-        "current-run-signal-set:youtube-comments:round-002:comments:439",
-        "current-run-signal-set:bluesky:round-002:no-language:71",
-        "evidence-route-assessment-52e1450809d3",
-        "challenge-disposition:challenge-disposition-f7c4f598eef5"
+        "\u8fd9\u4efd\u62a5\u544a\u7684\u9650\u5236\u5fc5\u987b\u548c\u7ed3\u8bba\u540c\u7b49\u663e\u773c\uff1a\u5b83\u53ea\u80fd\u89e3\u91ca\u5df2\u8fdb\u5165\u62a5\u544a\u57fa\u7840\u7684\u6750\u6599\u80fd\u652f\u6301\u7684\u5185\u5bb9\uff0c\u4e0d\u80fd\u8865\u5199\u8c03\u67e5\u9636\u6bb5\u6ca1\u6709\u5f62\u6210\u7684\u4e8b\u5b9e\u3002",
+        "\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b\u7528\u4e8e\u523b\u753b\u4e8b\u4ef6\u5f3a\u5ea6\u548c\u65f6\u5e8f\uff1b\u706b\u70b9\u6216\u91ce\u706b\u8bb0\u5f55\u53ef\u4f5c\u4e3a\u6765\u6e90\u5047\u8bf4\u7684\u80cc\u666f\u7ebf\u7d22\uff0c\u4f46\u4e0d\u80fd\u5355\u72ec\u5b8c\u6210\u7269\u7406\u6765\u6e90\u5224\u5b9a\uff1b\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u652f\u6301\u6837\u672c\u5185\u8bae\u9898\u3001\u60c5\u7eea\u7ebf\u7d22\u6216\u53d9\u4e8b\u7ed3\u6784\uff0c\u4e0d\u80fd\u5916\u63a8\u5230\u6837\u672c\u5916\u4eba\u7fa4\uff1b\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002",
+        "\u516c\u5171\u8ba8\u8bba\u6216\u5e73\u53f0\u6837\u672c\u53ea\u8bf4\u660e\u6837\u672c\u5185\u8bed\u4e49\u7ed3\u6784\uff0c\u4e0d\u80fd\u76f4\u63a5\u4ee3\u8868\u6837\u672c\u5916\u516c\u4f17\u6001\u5ea6\u3002",
+        "\u6b63\u5f0f\u8bb0\u5f55\u3001\u73af\u5883\u8bb0\u5f55\u548c\u8206\u60c5\u8bb0\u5f55\u627f\u62c5\u4e0d\u540c\u8bc1\u636e\u89d2\u8272\uff0c\u4e0d\u80fd\u4e92\u76f8\u66ff\u4ee3\u6216\u88ab\u5199\u6210\u5355\u4e00\u5f3a\u7ed3\u8bba\u3002",
+        "\u62a5\u544a\u53ef\u4ee5\u63d0\u51fa\u6709\u8bc1\u636e\u652f\u6491\u7684\u9636\u6bb5\u6027\u5224\u65ad\uff0c\u4f46\u4e0d\u5f97\u8865\u5199\u7f3a\u5931\u7684\u4e13\u4e1a\u6a21\u578b\u3001\u5b8c\u6574\u6b63\u6587\u6750\u6599\u6216\u672a\u8bb0\u5f55\u6765\u6e90\u3002"
       ],
-      "paragraphs": [
-        "将环境证据和公共语义放在同一条论证链中，可以得到一个稳健但受限的解释：纽约在 Jun 6-8 经历了明显 PM2.5 污染升高，媒体和公众样本将其理解为空气质量和烟霾/野火烟雾风险事件，环境背景中同时存在候选源区活跃火点和局地风场相容线索。这个解释足以回答“发生了什么”和“公共讨论如何组织”，但不足以回答“精确来源是什么”或“谁应负责”。",
-        "challenger/moderator 的边界在这里不是形式约束，而是结论质量的一部分。环境 bundle 只能支持 AirNow/Open-Meteo 的受体侧 PM2.5 描述、Open-Meteo 风场背景和 FIRMS 活跃火点背景；公共/媒体 bundle 只能支持媒体文档叙事线索和平台样本内公共反应；Bluesky 修正只改变路线诊断和样本可见性，不提供代表性。",
-        "因此，本文采用“相容性”和“背景线索”而非强归因语言。若要从本报告升级到来源、输送、化学成因或责任判断，需要轨迹/烟羽模型、化学组成或源解析、替代解释评估、以及相应的专业审查；这些均不在 frozen basis 中形成可发布强结论。"
-      ]
-    },
-    {
       "section_id": "limitations",
-      "title": "局限性",
       "status": "limitations-visible",
-      "evidence_refs": [
-        "review-comment:review-comment-c4b1fe6e6922",
-        "review-comment:review-comment-1738755d2c75",
-        "review-comment:review-comment-30d295ffa17e",
-        "challenge-disposition:challenge-disposition-f7c4f598eef5",
-        "report-basis-freeze:report-basis-freeze",
-        "evidence-bundle:evidence-bundle-b6db51775c63",
-        "finding:finding-589da494e256",
-        "finding:finding-41d0055c332e",
-        "finding:finding-0063344c52a7",
-        "current-run-signal-set:airnow:round-002:fetch-airnow-hourly-observations:pm2_5:2265",
-        "current-run-signal-set:open-meteo-aq:round-002:pm2_5:144",
-        "current-run-signal-set:open-meteo-historical:round-002:wind:288",
-        "current-run-signal-set:firms:round-002:fire_detection_count:70392",
-        "/home/fpddmw/projects/openclaw-eco-concil_v1/runs/openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520/analytics/environment_evidence_aggregation_round-002_metric_unit_v2.json:$.aggregation",
-        "evidence-bundle:evidence-bundle-c7fd0fd58728",
-        "evidence-bundle:evidence-bundle-921dc877cdf0",
-        "finding:finding-0e69dd8d8a2e",
-        "finding:finding-01ca5b9d9b40",
-        "current-run-signal-set:gdelt-doc:round-002:articles:500",
-        "current-run-signal-set:youtube-comments:round-002:comments:439",
-        "current-run-signal-set:bluesky:round-002:no-language:71",
-        "evidence-route-assessment-52e1450809d3"
-      ],
-      "paragraphs": [
-        "第一，环境证据的主要强项是受体侧 PM2.5 时序和强度；它不提供强 source attribution、plume transport、chemical causation 或 responsibility 判断。FIRMS 火点和风场记录是相容背景，不是烟羽轨迹或源解析。",
-        "第二，公共讨论材料没有代表性抽样设计。YouTube 评论、Bluesky 帖文和媒体/文档记录只能说明样本内可见语义；不得写为公众意见占比、纽约居民总体态度、平台总体情绪或议题 prevalence。GDELT DOC 是媒体/文档叙事线索，不是 public sentiment。",
-        "第三，旧 lang=en Bluesky zero 只应作为 route diagnostic：它说明带语言过滤的历史检索可能因语言元数据而出现假零，不说明相关讨论不存在。修正后的无语言样本可用于例示语义主题，但仍不得外推代表性。"
-      ]
+      "title": "\u8bc1\u636e\u9650\u5236"
     },
     {
+      "evidence_refs": [
+        "report-basis-freeze:report-basis-freeze",
+        "finding:finding-01ca5b9d9b40",
+        "finding:finding-0e69dd8d8a2e",
+        "finding:finding-cabc71dba6ec",
+        "finding:finding-41d0055c332e",
+        "finding:finding-0063344c52a7",
+        "finding:finding-589da494e256",
+        "evidence-bundle:evidence-bundle-921dc877cdf0",
+        "evidence-bundle:evidence-bundle-c7fd0fd58728",
+        "evidence-bundle:evidence-bundle-b6db51775c63"
+      ],
+      "paragraphs": [
+        "\u51b3\u7b56\u8005\u53ef\u4ee5\u628a\u672c\u62a5\u544a\u7528\u4e8e\u8bc6\u522b\u8bae\u9898\u7ed3\u6784\uff1a\u54ea\u4e9b\u73af\u5883/\u8fd0\u884c\u4e8b\u5b9e\u5df2\u7ecf\u6709\u6570\u636e\u652f\u6491\uff0c\u54ea\u4e9b\u6b63\u5f0f\u8bb0\u5f55\u80fd\u591f\u7ea6\u675f\u8bed\u5883\uff0c\u516c\u5171\u8ba8\u8bba\u4e3b\u8981\u56f4\u7ed5\u54ea\u4e9b\u98ce\u9669\u548c\u6210\u56e0\u5c55\u5f00\u3002",
+        "\u672c\u62a5\u544a\u4e0d\u5e94\u88ab\u7528\u4e8e\u5224\u5b9a\u5177\u4f53\u8d23\u4efb\u3001\u8bc1\u660e\u67d0\u4e00\u8fd0\u884c\u51b3\u7b56\u7684\u6cd5\u5f8b\u89e6\u53d1\u539f\u56e0\uff0c\u6216\u58f0\u79f0\u5df2\u7ecf\u5f62\u6210\u4ee3\u8868\u6027\u516c\u4f17\u610f\u89c1\u7ed3\u8bba\u3002\u82e5\u8981\u652f\u6491\u8fd9\u4e9b\u66f4\u5f3a\u5224\u65ad\uff0c\u9700\u8981\u8865\u5145\u76f4\u63a5\u8fd0\u8425\u7406\u7531\u3001\u6b63\u5f0f\u610f\u89c1\u6587\u672c\u548c\u4ee3\u8868\u6027\u8c03\u67e5\u8bbe\u8ba1\u3002"
+      ],
       "section_id": "decision-implications",
-      "title": "结论与使用建议",
       "status": "draft",
-      "evidence_refs": [
-        "report-basis-freeze:report-basis-freeze",
-        "evidence-bundle:evidence-bundle-b6db51775c63",
-        "finding:finding-589da494e256",
-        "finding:finding-41d0055c332e",
-        "finding:finding-0063344c52a7",
-        "review-comment:review-comment-c4b1fe6e6922",
-        "current-run-signal-set:airnow:round-002:fetch-airnow-hourly-observations:pm2_5:2265",
-        "current-run-signal-set:open-meteo-aq:round-002:pm2_5:144",
-        "current-run-signal-set:open-meteo-historical:round-002:wind:288",
-        "current-run-signal-set:firms:round-002:fire_detection_count:70392",
-        "/home/fpddmw/projects/openclaw-eco-concil_v1/runs/openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520/analytics/environment_evidence_aggregation_round-002_metric_unit_v2.json:$.aggregation",
-        "evidence-bundle:evidence-bundle-c7fd0fd58728",
-        "evidence-bundle:evidence-bundle-921dc877cdf0",
-        "finding:finding-0e69dd8d8a2e",
-        "finding:finding-01ca5b9d9b40",
-        "review-comment:review-comment-1738755d2c75",
-        "review-comment:review-comment-30d295ffa17e",
-        "current-run-signal-set:gdelt-doc:round-002:articles:500",
-        "current-run-signal-set:youtube-comments:round-002:comments:439",
-        "current-run-signal-set:bluesky:round-002:no-language:71",
-        "evidence-route-assessment-52e1450809d3",
-        "challenge-disposition:challenge-disposition-f7c4f598eef5"
-      ],
-      "paragraphs": [
-        "本报告的可发布结论是：2023 年 6 月纽约烟霾在 frozen basis 中表现为 Jun 6-8 的显著受体侧 PM2.5 升高，Jun 7 达到最高记录，Jun 9 后回落；媒体/公共文本把它组织为空气质量、野火烟雾、防护、感官异常、气候/野火解释、怀疑反应和跨地区经验比较等语义结构；环境背景与候选源区活跃火点和局地风场具有相容性，但不构成强物理归因。",
-        "适当用途包括：为决策者、研究者或传播人员提供事件时序、证据角色和公共语义结构的审计化摘要；为后续归因建模、健康影响评估、风险沟通研究和代表性公众调查提出证据需求。",
-        "不适当用途包括：证明具体野火或区域导致了纽约 PM2.5 峰值，判定烟羽传输路径或化学成因，给出责任归属，或声称公众中有多少占比持有某种意见。"
-      ]
+      "title": "\u51b3\u7b56\u53c2\u8003"
     },
     {
-      "section_id": "audit-trail",
-      "title": "参考文献与审计索引",
-      "status": "traceability-index",
+      "evidence_refs": [
+        "round-synthesis:round-synthesis-70eabb1c435e",
+        "agent-position:agent-position-6acf3967bfdf",
+        "readiness-opinion:readiness-opinion-163c747bfe63",
+        "readiness-opinion:readiness-opinion-99708bd51d96",
+        "readiness-opinion:readiness-opinion-df01a96235ba",
+        "readiness-opinion:readiness-opinion-49c8cfff9312"
+      ],
+      "paragraphs": [
+        "\u672c\u62a5\u544a\u53ea\u4f7f\u7528\u5df2\u7ecf\u8fdb\u5165\u62a5\u544a\u57fa\u7840\u7684\u6750\u6599\uff1a\u73af\u5883/\u8fd0\u884c\u8bb0\u5f55\u3001\u6b63\u5f0f\u6cbb\u7406\u8bb0\u5f55\u3001\u516c\u5171\u8ba8\u8bba\u6837\u672c\u3001\u8206\u60c5\u8bed\u4e49\u6458\u8981\u548c\u53ef\u8ffd\u8e2a\u7684\u8bc1\u636e\u5f15\u7528\u3002",
+        "\u7efc\u5408\u5224\u65ad\u6240\u4f9d\u636e\u7684\u6750\u6599\u8fb9\u754c\u662f\uff1a\u5df2\u8bb0\u5f55\u6750\u6599\u663e\u793a\uff1a\u8be5\u8bc1\u636e\u7ebf\u9700\u8981\u4fdd\u7559\u4ee3\u8868\u6027\u3001\u5f52\u56e0\u5f3a\u5ea6\u6216\u8bef\u68c0\u98ce\u9669\u8fb9\u754c\u3002",
+        "\u73af\u5883\u6216\u8fd0\u884c\u6750\u6599\u53ea\u627f\u62c5\u4e8b\u5b9e\u7ea6\u675f\uff0c\u6b63\u5f0f\u8bb0\u5f55\u548c\u516c\u5171\u8ba8\u8bba\u6750\u6599\u53ea\u627f\u62c5\u6cbb\u7406\u8fc7\u7a0b\u3001\u6837\u672c\u5185\u8bed\u4e49\u6216\u53ef\u89c1\u6027\u80cc\u666f\uff1b\u672a\u88ab\u8bb0\u5f55\u652f\u6491\u7684\u56e0\u679c\u3001\u4ee3\u8868\u6027\u6216\u653f\u7b56\u8bc4\u4ef7\u4e0d\u8fdb\u5165\u6b63\u6587\u7ed3\u8bba\u3002",
+        "\u5ba1\u8ba1\u7d22\u5f15\u7528\u4e8e\u590d\u6838\u6750\u6599\u6765\u6e90\uff0c\u4e0d\u6784\u6210\u8bc1\u636e\u6392\u5e8f\u6216\u7ed3\u8bba\u6743\u91cd\u3002"
+      ],
+      "section_id": "council-reasoning",
+      "status": "draft",
+      "title": "\u8d44\u6599\u57fa\u7840\u4e0e\u8fb9\u754c"
+    },
+    {
       "evidence_refs": [
         "report-basis-freeze:report-basis-freeze",
         "finding:finding-01ca5b9d9b40",
@@ -716,9 +706,13 @@
         "/home/fpddmw/projects/openclaw-eco-concil_v1/runs/openclaw-realcase-nyc-smoke-fresh-rerun-gpt55-20260520/analytics/environment_evidence_aggregation_round-002_metric_unit_v2.json:$.aggregation"
       ],
       "paragraphs": [
-        "本报告的“参考文献”以审计索引形式保存，而非新增外部书目。核心材料包括：frozen_report_basis_round-002_v2.json；round_readiness_round-002_after_dispositions.json；environment_evidence_aggregation_round-002_metric_unit_v2.json；environmental evidence bundle b6db51775c63；public/media semantics bundle c7fd0fd58728；supplemental Bluesky bundle 921dc877cdf0；以及相关 finding、review-comment、challenge-disposition 和 current-run signal-set refs。",
-        "主要信号索引包括：AirNow PM2.5 2,265 条；Open-Meteo AQ PM2.5 144 条；Open-Meteo historical wind 288 条；FIRMS fire_detection_count 70,392 条；GDELT DOC 500 条；YouTube comments 439 条；Bluesky no-language 71 条。完整 116 条审计引用保留在 JSON 产物中，用于复核证据对象、报告基础和样本边界。"
-      ]
+        "\u672c\u8282\u4fdd\u7559 116 \u6761\u5ba1\u8ba1\u5f15\u7528\uff0c\u7528\u4e8e\u590d\u6838\u62a5\u544a\u6240\u4f9d\u636e\u7684\u8bc1\u636e\u5bf9\u8c61\u3001\u62a5\u544a\u57fa\u7840\u548c\u6837\u672c\u6458\u8981\u3002",
+        "\u8fd9\u4e9b\u5f15\u7528\u662f\u53ef\u8ffd\u8e2a\u7d22\u5f15\uff0c\u4e0d\u662f\u6765\u6e90\u6392\u5e8f\u3001\u8bc1\u636e\u6743\u91cd\u6216\u6b63\u6587\u7ed3\u8bba\u672c\u8eab\u3002"
+      ],
+      "presentation": "ref-list",
+      "section_id": "audit-trail",
+      "status": "traceability-index",
+      "title": "\u5ba1\u8ba1\u7d22\u5f15"
     }
   ],
   "source_material": {
@@ -733,8 +727,8 @@
     },
     "formal_policy_helper_summary": {},
     "mission": {
-      "objective": "请重新调查 2023 年 6 月纽约市烟霾事件：说明发生了什么、环境证据支持哪些解释、公共讨论和媒体语义呈现出什么结构、哪些结论受到证据限制，并生成适合决策者阅读的中文专业调研报告。",
-      "request_text": "请重新调查 2023 年 6 月纽约市烟霾事件：说明发生了什么、环境证据支持哪些解释、公共讨论和媒体语义呈现出什么结构、哪些结论受到证据限制，并生成适合决策者阅读的中文专业调研报告。",
+      "objective": "\u8bf7\u91cd\u65b0\u8c03\u67e5 2023 \u5e74 6 \u6708\u7ebd\u7ea6\u5e02\u70df\u973e\u4e8b\u4ef6\uff1a\u8bf4\u660e\u53d1\u751f\u4e86\u4ec0\u4e48\u3001\u73af\u5883\u8bc1\u636e\u652f\u6301\u54ea\u4e9b\u89e3\u91ca\u3001\u516c\u5171\u8ba8\u8bba\u548c\u5a92\u4f53\u8bed\u4e49\u5448\u73b0\u51fa\u4ec0\u4e48\u7ed3\u6784\u3001\u54ea\u4e9b\u7ed3\u8bba\u53d7\u5230\u8bc1\u636e\u9650\u5236\uff0c\u5e76\u751f\u6210\u9002\u5408\u51b3\u7b56\u8005\u9605\u8bfb\u7684\u4e2d\u6587\u4e13\u4e1a\u8c03\u7814\u62a5\u544a\u3002",
+      "request_text": "\u8bf7\u91cd\u65b0\u8c03\u67e5 2023 \u5e74 6 \u6708\u7ebd\u7ea6\u5e02\u70df\u973e\u4e8b\u4ef6\uff1a\u8bf4\u660e\u53d1\u751f\u4e86\u4ec0\u4e48\u3001\u73af\u5883\u8bc1\u636e\u652f\u6301\u54ea\u4e9b\u89e3\u91ca\u3001\u516c\u5171\u8ba8\u8bba\u548c\u5a92\u4f53\u8bed\u4e49\u5448\u73b0\u51fa\u4ec0\u4e48\u7ed3\u6784\u3001\u54ea\u4e9b\u7ed3\u8bba\u53d7\u5230\u8bc1\u636e\u9650\u5236\uff0c\u5e76\u751f\u6210\u9002\u5408\u51b3\u7b56\u8005\u9605\u8bfb\u7684\u4e2d\u6587\u4e13\u4e1a\u8c03\u7814\u62a5\u544a\u3002",
       "topic": "2023 New York City smoke haze fresh rerun"
     },
     "public_discourse_summary": {
@@ -774,6 +768,6 @@
   },
   "status": "draft",
   "template_version": "narrative-report-template-v19",
-  "title": "2023年6月纽约烟霾事件：环境证据与公共讨论语义结构的有界报告",
-  "validation_status": "revised-pending-validation"
+  "title": "2023\u5e746\u6708\u7ebd\u7ea6\u70df\u973e\u4e8b\u4ef6\uff1a\u73af\u5883\u8bc1\u636e\u4e0e\u516c\u5171\u8ba8\u8bba\u8bed\u4e49\u7ed3\u6784",
+  "validation_status": "not-validated"
 }
