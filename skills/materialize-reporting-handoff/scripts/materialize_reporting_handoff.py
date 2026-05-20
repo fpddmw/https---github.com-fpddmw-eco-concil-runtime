@@ -105,6 +105,36 @@ def load_text_if_exists(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def load_claim_gap_action_cards(run_dir: Path, round_id: str) -> dict[str, Any]:
+    artifact_path = run_dir / "analytics" / f"claim_gap_action_cards_{round_id}.json"
+    if not artifact_path.exists():
+        return {
+            "present": False,
+            "path": str(artifact_path.resolve()),
+            "action_cards": [],
+        }
+    try:
+        payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "present": False,
+            "path": str(artifact_path.resolve()),
+            "action_cards": [],
+            "warning": "claim-gap action card artifact is not valid JSON",
+        }
+    cards = (
+        payload.get("action_cards", [])
+        if isinstance(payload, dict) and isinstance(payload.get("action_cards"), list)
+        else []
+    )
+    return {
+        "present": bool(cards),
+        "path": str(artifact_path.resolve()),
+        "action_cards": [card for card in cards if isinstance(card, dict)],
+        "payload": payload if isinstance(payload, dict) else {},
+    }
+
+
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1023,6 +1053,15 @@ def materialize_reporting_handoff_skill(
         open_risks=open_risks,
         reporting_blocker_hints=reporting_blocker_hints,
     )
+    claim_gap_cards_context = load_claim_gap_action_cards(
+        run_dir_path,
+        basis_round_id,
+    )
+    claim_gap_action_cards = [
+        card
+        for card in list_items(claim_gap_cards_context.get("action_cards"))
+        if isinstance(card, dict)
+    ]
     supporting_proposal_ids = unique_texts(
         report_basis_freeze.get("supporting_proposal_ids", [])
         if isinstance(report_basis_freeze.get("supporting_proposal_ids"), list)
@@ -1072,6 +1111,16 @@ def materialize_reporting_handoff_skill(
         accepted_limitations=accepted_limitations,
         unresolved_challenges=unresolved_challenges,
     )
+    report_packet["claim_gap_action_cards"] = claim_gap_action_cards
+    report_packet["claim_gap_action_card_policy"] = {
+        "artifact_path": maybe_text(claim_gap_cards_context.get("path")),
+        "present": bool(claim_gap_cards_context.get("present")),
+        "advisory_semantics": (
+            "Claim-gap action cards expose optional report-boundary and recovery "
+            "cues. They are not report basis unless carried by council or "
+            "reporting objects, and they do not rank, schedule, or execute skills."
+        ),
+    }
     board_excerpt = excerpt_text(board_brief_text)
     handoff_id = "reporting-handoff-" + stable_hash(run_id, round_id, handoff_status, report_basis_status)[:12]
 
@@ -1121,6 +1170,11 @@ def materialize_reporting_handoff_skill(
         "uncertainty_register": list_items(report_packet.get("uncertainty_register")),
         "residual_disputes": list_items(report_packet.get("residual_disputes")),
         "policy_recommendations": list_items(report_packet.get("policy_recommendations")),
+        "claim_gap_action_cards_path": maybe_text(
+            claim_gap_cards_context.get("path")
+        ),
+        "claim_gap_action_card_count": len(claim_gap_action_cards),
+        "claim_gap_action_cards": claim_gap_action_cards,
         "challenger_constraint_count": len(
             list_items(report_basis_freeze.get("challenger_constraints"))
         )

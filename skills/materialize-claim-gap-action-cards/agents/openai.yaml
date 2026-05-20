@@ -1,0 +1,5 @@
+version: 1
+skills:
+  - name: materialize-claim-gap-action-cards
+    short_description: "Materialize non-ranking claim-basis action cards"
+    default_prompt: "Use $materialize-claim-gap-action-cards to expose advisory claim gaps, recovery/source-limit cards, and report boundaries from existing OpenClaw DB/artifact state. Do not treat cards as a schedule, ranking, source selector, or automatic execution plan."

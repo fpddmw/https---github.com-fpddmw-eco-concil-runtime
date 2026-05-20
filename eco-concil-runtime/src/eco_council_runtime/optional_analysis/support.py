@@ -65,6 +65,7 @@ OPTIONAL_ANALYSIS_RULE_IDS: dict[str, str] = {
     "review-fact-check-evidence-scope": "HEUR-FACT-SCOPE-001",
     "discover-discourse-issues": "HEUR-DISCOURSE-DISCOVERY-001",
     "suggest-evidence-lanes": "HEUR-EVIDENCE-LANE-001",
+    "materialize-claim-gap-action-cards": "HEUR-CLAIM-GAP-ACTION-CARDS-001",
     "materialize-research-issue-surface": "HEUR-RESEARCH-ISSUE-SURFACE-001",
     "project-research-issue-views": "HEUR-RESEARCH-ISSUE-PROJECTION-001",
     "export-research-issue-map": "HEUR-RESEARCH-ISSUE-MAP-001",

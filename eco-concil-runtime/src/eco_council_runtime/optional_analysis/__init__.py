@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from eco_council_runtime.objects.analysis import HELPER_DECISION_SOURCE_APPROVED_VIEW
+from .claim_gap_action_cards import run_materialize_claim_gap_action_cards
 from .environment_evidence import run_aggregate_environment_evidence
 from .formal_public import (
     run_apply_approved_formal_public_taxonomy,
@@ -158,6 +159,7 @@ __all__ = (
     "run_export_research_issue_map",
     "run_identify_representation_audit_cues",
     "run_materialize_public_discourse_corpus",
+    "run_materialize_claim_gap_action_cards",
     "run_materialize_research_issue_surface",
     "run_project_research_issue_views",
     "run_review_fact_check_evidence_scope",

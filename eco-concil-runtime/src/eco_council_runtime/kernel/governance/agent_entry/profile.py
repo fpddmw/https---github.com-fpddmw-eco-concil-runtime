@@ -522,6 +522,59 @@ def allowed_skills_by_layer(role: str) -> dict[str, list[str]]:
     return {layer: sorted(skill_names) for layer, skill_names in grouped.items()}
 
 
+def skill_contracts_by_layer(role: str) -> dict[str, list[dict[str, Any]]]:
+    grouped_names = allowed_skills_by_layer(role)
+    grouped_contracts: dict[str, list[dict[str, Any]]] = {}
+    for layer, skill_names in grouped_names.items():
+        layer_contracts: list[dict[str, Any]] = []
+        for skill_name in skill_names:
+            policy = resolve_skill_policy(skill_name)
+            contract = (
+                policy.get("skill_contract")
+                if isinstance(policy.get("skill_contract"), dict)
+                else {}
+            )
+            if not contract:
+                continue
+            layer_contracts.append(
+                {
+                    "skill_name": skill_name,
+                    "observes": contract.get("observes", [])
+                    if isinstance(contract.get("observes"), list)
+                    else [],
+                    "cannot_prove": contract.get("cannot_prove", [])
+                    if isinstance(contract.get("cannot_prove"), list)
+                    else [],
+                    "requires": contract.get("requires", [])
+                    if isinstance(contract.get("requires"), list)
+                    else [],
+                    "produces": contract.get("produces", [])
+                    if isinstance(contract.get("produces"), list)
+                    else [],
+                    "followups": contract.get("followups", [])
+                    if isinstance(contract.get("followups"), list)
+                    else [],
+                    "failure_recovery": contract.get("failure_recovery", [])
+                    if isinstance(contract.get("failure_recovery"), list)
+                    else [],
+                    "claim_limits": contract.get("claim_limits", [])
+                    if isinstance(contract.get("claim_limits"), list)
+                    else [],
+                    "report_uses": contract.get("report_uses", [])
+                    if isinstance(contract.get("report_uses"), list)
+                    else [],
+                    "owner_roles": contract.get("owner_roles", [])
+                    if isinstance(contract.get("owner_roles"), list)
+                    else [],
+                    "contract_semantics": maybe_text(
+                        contract.get("contract_semantics")
+                    ),
+                }
+            )
+        grouped_contracts[layer] = layer_contracts
+    return grouped_contracts
+
+
 def skill_count_by_layer(role: str) -> dict[str, int]:
     grouped = allowed_skills_by_layer(role)
     return {layer: len(skill_names) for layer, skill_names in grouped.items()}
@@ -730,6 +783,28 @@ def fetch_skill_command_surfaces(
     return surfaces
 
 
+def claim_gap_action_card_surface(run_dir: Path, round_id: str) -> dict[str, Any]:
+    artifact_path = (run_dir / "analytics" / f"claim_gap_action_cards_{round_id}.json").resolve()
+    payload = load_json_if_exists(artifact_path) or {}
+    cards = (
+        payload.get("action_cards", [])
+        if isinstance(payload, dict) and isinstance(payload.get("action_cards"), list)
+        else []
+    )
+    return {
+        "schema_version": "claim-gap-action-card-agent-surface-v1",
+        "present": bool(cards),
+        "artifact_path": str(artifact_path),
+        "action_card_count": len(cards),
+        "advisory_semantics": (
+            "Claim-gap action cards expose optional claim-basis gaps, recovery "
+            "routes, and report boundaries. They do not rank, score, schedule, "
+            "or auto-execute any skill."
+        ),
+        "cards": cards[:20],
+    }
+
+
 def default_agent_entry_status(
     *,
     governance: dict[str, Any],
@@ -795,6 +870,7 @@ def default_role_entry_points(
         role = maybe_text(definition.get("role"))
         role_metadata = role_contract(role)
         grouped_skill_names = allowed_skills_by_layer(role)
+        grouped_skill_contracts = skill_contracts_by_layer(role)
         fetch_command_surfaces = fetch_skill_command_surfaces(
             run_dir=run_dir,
             run_id=run_id,
@@ -1688,6 +1764,7 @@ def default_role_entry_points(
                 "capability_layers": capability_layers(role),
                 "skill_count_by_layer": skill_count_by_layer(role),
                 "skills_by_layer": grouped_skill_names,
+                "skill_contracts_by_layer": grouped_skill_contracts,
                 "fetch_commands": fetch_commands,
                 "fetch_command_surfaces": fetch_command_surfaces,
                 "source_family_workflows": source_family_workflows,
@@ -1701,6 +1778,21 @@ def default_role_entry_points(
                 "source_family_workflow_card": source_family_workflow_card(),
                 "skill_use_discipline": skill_use_discipline(),
                 "claim_sensitive_soft_obligations": claim_sensitive_soft_obligations(),
+                "claim_gap_action_card_surface": claim_gap_action_card_surface(
+                    run_dir,
+                    round_id,
+                ),
+                "claim_gap_action_card_command": run_skill_command(
+                    run_dir=run_dir,
+                    run_id=run_id,
+                    round_id=round_id,
+                    skill_name="materialize-claim-gap-action-cards",
+                    actor_role=role,
+                    contract_mode=contract_mode,
+                )
+                if "materialize-claim-gap-action-cards"
+                in grouped_skill_names.get(SKILL_LAYER_OPTIONAL_ANALYSIS, [])
+                else "",
                 "acquisition_attempt_review_policy": {
                     "semantics": (
                         "A failed, blocked, receipt-only, executed-without-normalized-refs, "

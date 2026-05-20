@@ -211,7 +211,7 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 该 lane 的治理边界：
 
 1. `query-environment-signals` 返回 item-level 环境证据 rows 和 evidence refs，适合抽查和写 finding 时引用。
-2. `aggregate-environment-evidence` 负责描述性覆盖和统计摘要；三案例补强和 skill uptake 审计见 `docs/diagnostics/openclaw-case-rerun-and-skill-uptake-audit.md`。
+2. `aggregate-environment-evidence` 负责描述性覆盖和统计摘要；毕业提交前的彻底升级路径见 `docs/openclaw-public-policy-situation-analysis-upgrade-plan.md`。
 3. 环境聚合只输出 source/metric/time/spatial coverage、数值 min/max/mean、bucket counts、缺测和样本 refs。
 4. 时序观测和点事件应按数据形态处理，而不是按 provider 写厚规则。
 5. 环境聚合不得输出风险等级、source 排序、证据权重、健康暴露评估、水资源短缺严重性、火源证明或输送/归因结论。
@@ -254,7 +254,7 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
 
 ## 9. 文档地图
 
-当前 docs 以基础文档为主；历史工作计划、迁移清单、真实 run timeline 和临时审计计划的有效常驻内容已并入基础文档。毕业提交前的代码层工程收口以最终升级路径工作计划为准；实验和案例安排单独记录，不混入代码开发计划。
+当前 docs 以基础文档为主；历史工作计划、迁移清单、真实 run timeline 和临时审计计划的有效常驻内容已并入基础文档。毕业提交前的代码层工程收口以公共政策形势分析升级计划为准；实验和案例安排单独记录，不混入代码开发计划。
 
 1. `docs/openclaw-project-overview.md`
    - 项目定位、概念模型/代码角色模型、主工作流、多轮能力、agent/runtime principal、数据契约、skill 分层、公共舆情深化 lane、当前能力边界和质量门。
@@ -264,19 +264,15 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
    - 弱报告、强 claim 和 unresolved refs 收口边界；用于防止过早放弃调查，同时不引入议题模板或证据打分。
 4. `docs/openclaw-experiment-case-plan.md`
    - 毕业设计实验与案例计划；记录两主案例、两轻量验证、第二主案例风险对比、降级策略和展示材料安排。
-5. `docs/diagnostics/openclaw-skill-usage-matrix.md`
-   - 三个已归档/阶段性归档 case 的 skill 使用原始诊断矩阵；用于查看各 skill 在各案例中的执行、artifact 和缺口。
-6. `docs/diagnostics/openclaw-case-rerun-and-skill-uptake-audit.md`
-   - 三案例是否重跑、哪些 skill 未使用属于正常、哪些缺口需要补强，以及三层 skill uptake 机制的审计重写。
-7. `docs/diagnostics/openclaw-three-layer-skill-rewrite-session-prompt.md`
-   - 可直接交给新 session 的三层能力重写任务提示词。
-8. `docs/frozen-case-packages/nyc-smoke-20230607/baseline-case-package.md`
+5. `docs/openclaw-public-policy-situation-analysis-upgrade-plan.md`
+   - 毕业提交前的公共政策形势分析升级计划；记录四条主 lane、claim-gap action cards、public-policy corpus、互动时间线、政策评估依据和报告组织轮重写。
+6. `docs/frozen-case-packages/nyc-smoke-20230607/baseline-case-package.md`
    - NYC smoke 第一主案例冻结包；汇总 mission、最终报告、证据链、claim boundary、公共舆情样本结构和答辩可引用的基线结论。
-9. `docs/frozen-case-packages/nyc-smoke-20230607/defense-onepager.md`
+7. `docs/frozen-case-packages/nyc-smoke-20230607/defense-onepager.md`
    - NYC smoke 答辩一页纸；用于快速展示案例定位、议会流程、环境证据、公共语义样本和边界表述。
-10. `docs/frozen-case-packages/colorado-river-glen-canyon-2023/baseline-case-package.md`
+8. `docs/frozen-case-packages/colorado-river-glen-canyon-2023/baseline-case-package.md`
    - Colorado River / Glen Canyon 第二主案例冻结包；汇总 mission、治理记录、水文/运行信号、公共语义和报告边界。
-11. `docs/frozen-case-packages/colorado-river-glen-canyon-2023/defense-onepager.md`
+9. `docs/frozen-case-packages/colorado-river-glen-canyon-2023/defense-onepager.md`
    - Colorado River / Glen Canyon 答辩一页纸；用于展示慢变量环境治理争议案例。
 
 质量门基线命令：

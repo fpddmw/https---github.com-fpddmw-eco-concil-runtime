@@ -50,6 +50,7 @@ OPTIONAL_ANALYSIS_SKILLS = {
     "summarize-public-discourse-sample",
     "detect-temporal-cooccurrence-cues",
     "review-spatiotemporal-relation-alternatives",
+    "materialize-claim-gap-action-cards",
     "plan-round-orchestration",
     "propose-next-actions",
     "open-falsification-probe",
@@ -149,6 +150,11 @@ OPTIONAL_ANALYSIS_NOTES = {
     "review-spatiotemporal-relation-alternatives": (
         "Approval-gated relation challenger helper. It emits objection candidates "
         "only and must be carried by challenge, probe, or review comment."
+    ),
+    "materialize-claim-gap-action-cards": (
+        "Approval-gated claim-basis advisory helper. It exposes claim gaps, "
+        "candidate followups, recovery/source-limit cards, and report boundaries "
+        "without ranking, scheduling, source selection, or automatic execution."
     ),
 }
 

@@ -221,6 +221,7 @@ OPTIONAL_ANALYSIS_SKILLS = [
     "review-fact-check-evidence-scope",
     "discover-discourse-issues",
     "suggest-evidence-lanes",
+    "materialize-claim-gap-action-cards",
     "materialize-research-issue-surface",
     "project-research-issue-views",
     "export-research-issue-map",
@@ -309,6 +310,15 @@ OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
         "caveats": [
             "Lane tags cannot assign owners, drive the source queue, or freeze-report-basis phases.",
             "Any investigation action must be carried by DB council objects.",
+        ],
+    },
+    "materialize-claim-gap-action-cards": {
+        "rule_id": "HEUR-CLAIM-GAP-ACTION-CARDS-001",
+        "destination": "claim-basis advisory action cards",
+        "caveats": [
+            "Action cards are advisory only and cannot rank, score, schedule, or execute skills.",
+            "Action cards expose claim gaps, recovery routes, and report boundaries; agents decide whether to adopt, reject, or rewrite them through council objects.",
+            "Zero, failed, low-volume, or receipt-only attempts must remain source-limit or recovery context, not evidence absence.",
         ],
     },
     "materialize-research-issue-surface": {
@@ -1358,6 +1368,435 @@ def helper_governance_metadata(skill_name: str) -> dict[str, Any]:
     }
 
 
+SKILL_CONTRACT_METADATA_SCHEMA_VERSION = "openclaw-skill-contract-metadata-v1"
+SKILL_CONTRACT_FIELDS = (
+    "observes",
+    "cannot_prove",
+    "requires",
+    "produces",
+    "followups",
+    "failure_recovery",
+    "claim_limits",
+    "report_uses",
+    "owner_roles",
+)
+
+
+SKILL_CONTRACT_OVERRIDES: dict[str, dict[str, list[str]]] = {
+    "fetch-gdelt-doc-search": {
+        "observes": [
+            "GDELT DOC indexed articles, timeline rows, and DOC tone aggregates for agent-authored queries.",
+        ],
+        "cannot_prove": [
+            "Public sentiment, representative public opinion, official-policy completeness, or physical source attribution.",
+        ],
+        "followups": [
+            "normalize-gdelt-doc-public-signals",
+            "materialize-public-discourse-corpus",
+            "audit-public-discourse-sample-coverage",
+        ],
+        "failure_recovery": [
+            "Revise DOC query syntax, window, domain filters, or use GDELT Events/Mentions/GKG as same-family follow-up.",
+            "Record source-limit rationale if stopping.",
+        ],
+        "claim_limits": [
+            "GDELT tone is media/document tone only and must not be written as public sentiment.",
+        ],
+    },
+    "normalize-gdelt-doc-public-signals": {
+        "observes": [
+            "Normalized GDELT DOC article discovery rows and DOC tone aggregate signals.",
+        ],
+        "cannot_prove": [
+            "Public sentiment, public emotion distribution, or source attribution.",
+        ],
+        "claim_limits": [
+            "Use DOC tone as media/document tone; do not use it as public semantic denominator.",
+        ],
+    },
+    "materialize-public-discourse-corpus": {
+        "observes": [
+            "DB-visible public, media, or formal text-bearing normalized signals selected by source family, keyword, window, and round scope.",
+        ],
+        "cannot_prove": [
+            "Representative public opinion, issue prevalence outside the sample, or evidence absence for unobserved source families.",
+        ],
+        "requires": [
+            "Normalized public/formal text signals and an agent-defined sample definition.",
+        ],
+        "produces": [
+            "materialized_public_policy_corpus",
+            "sample_definition",
+            "source_family_counts",
+        ],
+        "followups": [
+            "audit-public-discourse-sample-coverage",
+            "classify-public-discourse-affect",
+            "classify-formal-comment-issues",
+        ],
+        "claim_limits": [
+            "Corpus rows support sample definition and item-level examples only until coverage, annotation, aggregation, and denominator are present.",
+        ],
+    },
+    "audit-public-discourse-sample-coverage": {
+        "observes": [
+            "Source-family coverage, query/window/sample limits, missing source layers, and denominator separation cues.",
+        ],
+        "cannot_prove": [
+            "Representativeness, public consensus, or absence of discourse outside the current sample.",
+        ],
+        "produces": [
+            "public_policy_corpus_coverage_audit",
+            "source_limit_rationale",
+            "coverage_cues",
+        ],
+        "followups": [
+            "classify-public-discourse-affect",
+            "aggregate-public-discourse-annotations",
+            "submit-evidence-route-assessment",
+        ],
+    },
+    "classify-public-discourse-affect": {
+        "observes": [
+            "Bounded sample-local public/media text labels including affect, issue frames, narratives, responsibility cues, and uncertainty.",
+        ],
+        "cannot_prove": [
+            "Population-level sentiment, mutually exclusive opinion shares, or policy effectiveness.",
+        ],
+        "followups": ["aggregate-public-discourse-annotations"],
+        "claim_limits": [
+            "Labels remain item/sample-local and require aggregation denominators before report percentages.",
+        ],
+    },
+    "aggregate-public-discourse-annotations": {
+        "observes": [
+            "Sample-local annotation distributions with source-family and label-family denominators.",
+        ],
+        "cannot_prove": [
+            "General public opinion, mutually exclusive population shares, or policy success/failure.",
+        ],
+        "produces": [
+            "semantic_aggregate",
+            "distribution_denominators",
+            "sample-local label distributions",
+        ],
+        "followups": [
+            "compare-public-media-narratives",
+            "summarize-public-discourse-sample",
+            "materialize-reporting-handoff",
+        ],
+        "claim_limits": [
+            "Fractions are sample-local and label-family-local; non-mutually exclusive labels must not be summed to 100 percent.",
+        ],
+    },
+    "compare-public-media-narratives": {
+        "observes": [
+            "Bounded contrasts among social sample affect, media/document tone, formal comments, and source narratives.",
+        ],
+        "cannot_prove": [
+            "Alignment scores, causal interaction, public consensus, or physical source attribution.",
+        ],
+        "claim_limits": [
+            "GDELT media tone, social sample affect, and formal comment samples must remain separate denominators.",
+        ],
+    },
+    "aggregate-environment-evidence": {
+        "observes": [
+            "Descriptive environmental, operations, and observation aggregates from normalized signal rows.",
+        ],
+        "cannot_prove": [
+            "Policy success/failure, responsibility, exposure health impact, causality, or public sentiment.",
+        ],
+        "claim_limits": [
+            "Environment aggregates support trend, peak, and operating-status descriptions only within stated source/window limits.",
+        ],
+    },
+    "materialize-claim-gap-action-cards": {
+        "observes": [
+            "Mission focus, council objects, normalized signal counts, helper artifacts, source acquisition attempt states, open challenges, and report readiness gaps.",
+        ],
+        "cannot_prove": [
+            "Evidence truth, source sufficiency, report readiness, priority, or which skill should run next.",
+        ],
+        "requires": [
+            "Run directory, run id, round id, and available DB/artifact surfaces.",
+        ],
+        "produces": [
+            "claim_gap_action_cards",
+            "recovery_cards",
+            "source_limit_cards",
+            "report_boundary_advisory",
+        ],
+        "followups": [
+            "submit-evidence-request",
+            "submit-source-acquisition-proposal",
+            "submit-evidence-route-assessment",
+            "submit-round-synthesis",
+            "materialize-reporting-handoff",
+        ],
+        "failure_recovery": [
+            "If input surfaces are missing, emit cards that identify missing input surfaces and report boundaries without blocking the round.",
+        ],
+        "claim_limits": [
+            "Action cards are not a scheduler, source ranking, score, gate, or automatic execution queue.",
+        ],
+        "report_uses": [
+            "Expose claim-basis gaps, optional reinforcement paths, and bounded report wording when reinforcement is not done.",
+        ],
+    },
+    "materialize-reporting-handoff": {
+        "observes": [
+            "Frozen/reporting basis, readiness state, supervisor state, council basis objects, and optional action-card artifacts.",
+        ],
+        "cannot_prove": [
+            "New facts, new evidence sufficiency, or report claim truth.",
+        ],
+        "claim_limits": [
+            "Handoff carries report basis and limitations only; report-editor must not add facts outside frozen/council basis.",
+        ],
+    },
+    "draft-narrative-report": {
+        "observes": [
+            "Frozen/reporting basis, section drafts, council objects, and carried helper artifacts.",
+        ],
+        "cannot_prove": [
+            "New facts, new causal claims, representative public opinion, or policy success/failure.",
+        ],
+        "followups": ["validate-narrative-report"],
+        "claim_limits": [
+            "Draft prose may synthesize carried basis only and must downgrade claim families missing their basis.",
+        ],
+    },
+    "validate-narrative-report": {
+        "observes": [
+            "Narrative draft text, visible basis metadata, citations, helper-carried status, and claim-boundary hazards.",
+        ],
+        "cannot_prove": [
+            "Underlying evidence truth or policy correctness.",
+        ],
+        "followups": ["publish-narrative-report", "draft-narrative-report"],
+        "claim_limits": [
+            "Validator flags basis gaps for downgrade, deletion, or follow-up; it is not a separate situation-analysis validator path.",
+        ],
+    },
+}
+
+
+def _generic_skill_contract_metadata(
+    skill_name: str,
+    policy: dict[str, Any],
+) -> dict[str, Any]:
+    layer = maybe_text(policy.get("skill_layer"))
+    allowed_roles = unique_texts(
+        policy.get("allowed_roles", [])
+        if isinstance(policy.get("allowed_roles"), list)
+        else []
+    )
+    produces = unique_texts(
+        policy.get("output_object_kinds", [])
+        if isinstance(policy.get("output_object_kinds"), list)
+        else []
+    )
+    requires = unique_texts(
+        policy.get("input_object_kinds", [])
+        if isinstance(policy.get("input_object_kinds"), list)
+        else []
+    )
+    if layer == SKILL_LAYER_FETCH:
+        source_config = SOURCE_CATALOG.get(skill_name, {})
+        normalizer = maybe_text(source_config.get("normalizer_skill"))
+        return {
+            "schema_version": SKILL_CONTRACT_METADATA_SCHEMA_VERSION,
+            "observes": [
+                "Provider or imported raw records within agent-selected query, time, spatial, identifier, and provider-mode limits.",
+            ],
+            "cannot_prove": [
+                "Real-world evidence absence, evidence sufficiency, report readiness, public sentiment, or policy conclusions.",
+            ],
+            "requires": requires
+            or [
+                "mission focus",
+                "agent-defined evidence need",
+                "source parameters",
+            ],
+            "produces": produces
+            or ["raw-artifact", "fetch receipt", "source-limit metadata"],
+            "followups": unique_texts(
+                [
+                    normalizer,
+                    "normalize-fetch-execution",
+                    "link-source-acquisition-execution",
+                ]
+            ),
+            "failure_recovery": [
+                "Revise query terms, identifiers, provider mode, time window, bbox, or same-family route before treating the route as exhausted.",
+                "If stopping, record a source-limit rationale and report boundary.",
+            ],
+            "claim_limits": [
+                "Zero, failed, blocked, or receipt-only output is an acquisition attempt result, not evidence absence.",
+            ],
+            "report_uses": [
+                "Provider provenance, acquisition audit, raw source citation candidate, and source-limit rationale after council uptake.",
+            ],
+            "owner_roles": allowed_roles,
+        }
+    if layer == SKILL_LAYER_NORMALIZE:
+        return {
+            "schema_version": SKILL_CONTRACT_METADATA_SCHEMA_VERSION,
+            "observes": [
+                "Raw artifact records converted into canonical signal-plane rows with provenance and quality flags.",
+            ],
+            "cannot_prove": [
+                "Evidence truth, source sufficiency, claim acceptance, public opinion, or policy conclusions.",
+            ],
+            "requires": requires or ["raw-artifact"],
+            "produces": produces or ["normalized-signal", "normalization receipt"],
+            "followups": [
+                "query-normalized-signal",
+                "query-public-signals",
+                "query-formal-signals",
+                "query-environment-signals",
+                "link-source-acquisition-execution",
+            ],
+            "failure_recovery": [
+                "Inspect raw artifact shape, provider metadata, normalizer warnings, and whether receipt-only lineage must be carried as a source-limit.",
+            ],
+            "claim_limits": [
+                "Normalized row presence is evidence availability metadata; interpretation belongs to council findings or approved helper artifacts.",
+            ],
+            "report_uses": [
+                "DB-backed citation candidate, source coverage audit input, and helper-analysis input after council uptake.",
+            ],
+            "owner_roles": allowed_roles,
+        }
+    if layer == SKILL_LAYER_QUERY:
+        return {
+            "schema_version": SKILL_CONTRACT_METADATA_SCHEMA_VERSION,
+            "observes": [
+                "Existing DB rows matching explicit query filters.",
+            ],
+            "cannot_prove": [
+                "Evidence absence outside the queried DB, source sufficiency, or report readiness.",
+            ],
+            "requires": requires or ["DB state", "query parameters"],
+            "produces": produces or ["query-response"],
+            "followups": [
+                "submit-finding-record",
+                "submit-evidence-bundle",
+                "materialize-claim-gap-action-cards",
+            ],
+            "failure_recovery": [
+                "Widen query filters, check round/run scope, inspect acquisition attempts, or record a source-limit rationale.",
+            ],
+            "claim_limits": [
+                "Empty query results describe the current DB/query scope only and must not become evidence absence.",
+            ],
+            "report_uses": [
+                "DB inspection, citation lookup, and visible basis audit.",
+            ],
+            "owner_roles": allowed_roles,
+        }
+    if layer == SKILL_LAYER_OPTIONAL_ANALYSIS:
+        return {
+            "schema_version": SKILL_CONTRACT_METADATA_SCHEMA_VERSION,
+            "observes": [
+                "Approved helper inputs and DB/artifact surfaces inside explicit helper scope.",
+            ],
+            "cannot_prove": [
+                "Claim truth, evidence sufficiency, source ranking, report readiness, or phase transition eligibility.",
+            ],
+            "requires": requires or ["normalized-signal", "analysis-context"],
+            "produces": produces or ["analysis-object", "helper artifact"],
+            "followups": [
+                "submit-finding-record",
+                "submit-evidence-bundle",
+                "submit-readiness-opinion",
+                "materialize-reporting-handoff",
+            ],
+            "failure_recovery": [
+                "Carry helper warnings into council objects or report boundary instead of treating sparse helper output as proof of absence.",
+            ],
+            "claim_limits": [
+                "Helper output is advisory until carried by finding, evidence bundle, readiness opinion, synthesis, report section, or report basis.",
+            ],
+            "report_uses": [
+                "Advisory analysis basis after explicit council/reporting uptake.",
+            ],
+            "owner_roles": allowed_roles,
+        }
+    if layer == SKILL_LAYER_REPORTING:
+        return {
+            "schema_version": SKILL_CONTRACT_METADATA_SCHEMA_VERSION,
+            "observes": [
+                "Frozen/council/reporting basis and report artifacts.",
+            ],
+            "cannot_prove": [
+                "New facts or evidence truth.",
+            ],
+            "requires": requires or ["reporting-object"],
+            "produces": produces or ["reporting artifact"],
+            "followups": [],
+            "failure_recovery": [
+                "Downgrade unsupported prose, cite carried basis, or return the gap to moderator/challenger as a council object.",
+            ],
+            "claim_limits": [
+                "Reporting skills must not add substantive claims outside frozen/reporting/council basis.",
+            ],
+            "report_uses": ["Report handoff, draft, validation, publication, or final publication artifact."],
+            "owner_roles": allowed_roles,
+        }
+    return {
+        "schema_version": SKILL_CONTRACT_METADATA_SCHEMA_VERSION,
+        "observes": ["Governed runtime or council state within this skill's declared scope."],
+        "cannot_prove": ["Evidence truth, sufficiency, or source ranking."],
+        "requires": requires,
+        "produces": produces,
+        "followups": [],
+        "failure_recovery": ["Record limitation or route assessment when the skill cannot satisfy the evidence need."],
+        "claim_limits": ["This contract is advisory and does not rank, gate, or schedule evidence work."],
+        "report_uses": [],
+        "owner_roles": allowed_roles,
+    }
+
+
+def _merge_contract_lists(base: dict[str, Any], override: dict[str, list[str]]) -> dict[str, Any]:
+    merged = dict(base)
+    for field_name in SKILL_CONTRACT_FIELDS:
+        if field_name == "owner_roles":
+            continue
+        override_values = override.get(field_name)
+        if isinstance(override_values, list) and override_values:
+            merged[field_name] = unique_texts(
+                [
+                    *(
+                        merged.get(field_name, [])
+                        if isinstance(merged.get(field_name), list)
+                        else []
+                    ),
+                    *override_values,
+                ]
+            )
+    return merged
+
+
+def skill_contract_metadata(skill_name: str, policy: dict[str, Any]) -> dict[str, Any]:
+    normalized_name = maybe_text(skill_name)
+    contract = _generic_skill_contract_metadata(normalized_name, policy)
+    contract = _merge_contract_lists(
+        contract,
+        SKILL_CONTRACT_OVERRIDES.get(normalized_name, {}),
+    )
+    for field_name in SKILL_CONTRACT_FIELDS:
+        if field_name not in contract:
+            contract[field_name] = []
+    contract["contract_semantics"] = (
+        "Claim-basis advisory metadata for agent entry, action cards, reporting "
+        "handoff, and validation. It is not a runtime hard gate, source ranking, "
+        "source scheduler, or automatic execution rule."
+    )
+    return contract
+
+
 for _skill_name, _policy_payload in POLICIES.items():
     _metadata = helper_governance_metadata(_skill_name)
     if _metadata:
@@ -1365,6 +1804,10 @@ for _skill_name, _policy_payload in POLICIES.items():
     _boundary_metadata = skill_boundary_metadata(_skill_name)
     if _boundary_metadata:
         _policy_payload["skill_boundary"] = _boundary_metadata
+    _policy_payload["skill_contract"] = skill_contract_metadata(
+        _skill_name,
+        _policy_payload,
+    )
 
 
 def available_skill_names(root: Path | None = None) -> list[str]:
@@ -1412,6 +1855,9 @@ def resolve_skill_policy(skill_name: str, root: Path | None = None) -> dict[str,
         else {},
         "skill_boundary": dict(policy.get("skill_boundary", {}))
         if isinstance(policy.get("skill_boundary"), dict)
+        else {},
+        "skill_contract": dict(policy.get("skill_contract", {}))
+        if isinstance(policy.get("skill_contract"), dict)
         else {},
     }
 
@@ -1483,6 +1929,8 @@ __all__ = [
     "NORMALIZE_SKILLS",
     "OPTIONAL_ANALYSIS_SKILLS",
     "QUERY_SKILLS",
+    "SKILL_CONTRACT_FIELDS",
+    "SKILL_CONTRACT_METADATA_SCHEMA_VERSION",
     "available_skill_names",
     "default_actor_role_hint",
     "evidence_only_skill_names",
@@ -1495,4 +1943,5 @@ __all__ = [
     "validate_skill_output_boundary",
     "helper_governance_metadata",
     "skill_boundary_metadata",
+    "skill_contract_metadata",
 ]

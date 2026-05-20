@@ -61,6 +61,7 @@ ANALYSIS_KIND_FORMAL_PUBLIC_LINK = "formal-public-link"
 ANALYSIS_KIND_REPRESENTATION_GAP = "representation-gap"
 ANALYSIS_KIND_DIFFUSION_EDGE = "diffusion-edge"
 ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE = "spatiotemporal-relation-cue"
+ANALYSIS_KIND_CLAIM_GAP_ACTION_CARD = "claim-gap-action-card"
 ANALYSIS_KIND_CLAIM_SCOPE = "claim-scope"
 ANALYSIS_KIND_OBSERVATION_SCOPE = "observation-scope"
 ANALYSIS_KIND_CLAIM_OBSERVATION_LINK = "claim-observation-link"
@@ -97,6 +98,10 @@ ANALYSIS_KIND_GOVERNANCE_OVERRIDES: dict[str, dict[str, str]] = {
     ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE: {
         "successor_skill": "detect-temporal-cooccurrence-cues",
         "freeze_reason": "spatiotemporal relation cues are candidate relation objects and cannot prove causality, transport, source attribution, or report readiness",
+    },
+    ANALYSIS_KIND_CLAIM_GAP_ACTION_CARD: {
+        "successor_skill": "materialize-claim-gap-action-cards",
+        "freeze_reason": "claim-gap action cards are advisory prompts and cannot rank, schedule, auto-execute, or prove claim sufficiency",
     },
     ANALYSIS_KIND_MERGED_OBSERVATION: {
         "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
@@ -406,6 +411,36 @@ ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
             "target_signal_id",
         ],
         "item_parent_id_list_fields": ["context_signal_ids", "lineage"],
+        "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_CLAIM_GAP_ACTION_CARD: {
+        "artifact_label": "claim-gap-action-card",
+        "default_relative": "analytics/claim_gap_action_cards_{round_id}.json",
+        "items_key": "action_cards",
+        "count_key": "action_card_count",
+        "id_field": "card_id",
+        "subject_field": "claim_gap",
+        "state_field": "card_kind",
+        "related_id_fields": [
+            "card_id",
+            "card_kind",
+            "claim_gap",
+        ],
+        "default_source_skill": "materialize-claim-gap-action-cards",
+        "summary_fields": [
+            "mission_focus",
+            "advisory_semantics",
+        ],
+        "query_basis_fields": [
+            "mission_focus",
+            "observed_input_summary",
+        ],
+        "item_parent_id_list_fields": [
+            "source_attempt_refs",
+            "challenge_refs",
+            "readiness_refs",
+            "lineage",
+        ],
         "item_artifact_ref_fields": ["evidence_refs"],
     },
     ANALYSIS_KIND_FORMAL_PUBLIC_LINK: {
@@ -828,6 +863,7 @@ __all__ = [
     "ANALYSIS_KIND_REPRESENTATION_GAP",
     "ANALYSIS_KIND_DIFFUSION_EDGE",
     "ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE",
+    "ANALYSIS_KIND_CLAIM_GAP_ACTION_CARD",
     "ANALYSIS_KIND_CLAIM_SCOPE",
     "ANALYSIS_KIND_OBSERVATION_SCOPE",
     "ANALYSIS_KIND_CLAIM_OBSERVATION_LINK",

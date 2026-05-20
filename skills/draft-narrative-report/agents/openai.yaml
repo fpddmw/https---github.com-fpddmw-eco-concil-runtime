@@ -28,8 +28,9 @@ default_prompt: |
   - Open with an abstract that states research question, evidence basis,
     principal finding, and limits in prose.
   - Use an introduction to establish the governance problem and why it matters.
-  - Use materials/methods to explain the frozen evidence basis, sample scope,
-    source-family roles, and council validation method.
+  - Use materials/methods to explain the frozen/reporting basis, sample scope,
+    source-family roles, council validation method, and any council-carried
+    helper outputs.
   - Use results to present substantive findings, not process chronology.
   - Use discussion to interpret what the findings mean, what they do not prove,
     and what further evidence would be required.
