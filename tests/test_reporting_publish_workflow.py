@@ -906,6 +906,32 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 [item["code"] for item in validation["issues"]],
             )
 
+    def test_narrative_validator_blocks_gdelt_tone_public_emotion_paraphrase(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "The GDELT tone average indicates public mood became negative."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "gdelt-tone-public-sentiment",
+                [item["code"] for item in validation["issues"]],
+            )
+
     def test_narrative_validator_blocks_public_percentage_denominator(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -929,6 +955,32 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("blocked", payload["status"])
             self.assertIn(
                 "unsupported-public-opinion-claim",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_blocks_platform_sample_generalization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "The YouTube comments show residents think the policy failed."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "platform-or-docket-sample-generalized",
                 [item["code"] for item in validation["issues"]],
             )
 
@@ -989,6 +1041,36 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertIn("formal-comment-structure-without-annotation-basis", issue_codes)
             self.assertIn("formal-comment-stance-distribution-insufficient-basis", issue_codes)
 
+    def test_narrative_validator_requires_formal_candidate_audit_for_issue_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "Formal participation main issues include health risk and implementation burden in this sample."
+            ]
+            draft["source_material"]["formal_comment_basis"] = {
+                "readable_formal_signal_count": 3,
+                "annotation_count": 3,
+            }
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "formal-comment-structure-without-candidate-audit",
+                [item["code"] for item in validation["issues"]],
+            )
+
     def test_narrative_validator_accepts_bounded_formal_annotation_language(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -1001,6 +1083,8 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                 )
             ]
             draft["source_material"]["formal_comment_basis"] = {
+                "candidate_audit_count": 1,
+                "candidate_audit_ref": "analytics/formal_comment_candidate_audit_test.json",
                 "readable_formal_signal_count": 2,
                 "annotation_count": 2,
                 "attachment_text_signal_count": 1,
@@ -1079,6 +1163,14 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                     "discourse_lane_counts": [],
                     "warnings": [],
                     "evidence_refs": ["signal:test-public-summary-001"],
+                    "observed_inputs": {
+                        "corpus_path": "analytics/public_discourse_corpus_complete.json",
+                        "coverage_audit_path": "analytics/public_discourse_coverage_audit_complete.json",
+                        "aggregation_path": "analytics/public_discourse_annotation_aggregation_complete.json",
+                    },
+                    "distribution_denominators": {
+                        "label_family_denominators": {"social_affect_labels": 2},
+                    },
                     "distribution_use_policy": {
                         "label_sets_are_non_exclusive": True,
                         "sample_fractions_are_sample_local": True,
@@ -1166,10 +1258,13 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
             issue_codes = [item["code"] for item in validation["issues"]]
 
-            self.assertEqual("completed", payload["status"])
+            self.assertEqual("blocked", payload["status"])
             self.assertIn("small-public-discourse-sample-boundary-missing", issue_codes)
             self.assertIn("mixed-source-family-denominator-missing", issue_codes)
             self.assertIn("public-discourse-denominator-missing", issue_codes)
+            self.assertIn("public-discourse-corpus-basis-missing", issue_codes)
+            self.assertIn("public-discourse-coverage-audit-basis-missing", issue_codes)
+            self.assertIn("public-discourse-aggregation-basis-missing", issue_codes)
 
     def test_narrative_validator_blocks_source_narrative_as_physical_attribution(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1250,6 +1345,58 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             self.assertEqual("blocked", payload["status"])
             self.assertIn(
                 "strong-attribution-without-attribution-model",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_blocks_environment_trend_without_aggregation_or_item_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "USBR RISE water level trend peaked in 2023 and then recovered by late 2024."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("blocked", payload["status"])
+            self.assertIn(
+                "environment-state-claim-without-aggregation",
+                [item["code"] for item in validation["issues"]],
+            )
+
+    def test_narrative_validator_allows_environment_item_example_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][3]["paragraphs"] = [
+                "As an item-level example, one USBR RISE water level peak row is cited; this is not a trend."
+            ]
+            write_narrative_draft(run_dir, draft)
+
+            payload = run_script(
+                script_path("validate-narrative-report"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
+
+            self.assertEqual("completed", payload["status"])
+            self.assertNotIn(
+                "environment-state-claim-without-aggregation",
                 [item["code"] for item in validation["issues"]],
             )
 
@@ -1385,10 +1532,13 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
             validation = load_json(reporting_path(run_dir, f"narrative_report_validation_{ROUND_ID}.json"))
             issue_codes = [item["code"] for item in validation["issues"]]
 
-            self.assertEqual("completed", payload["status"])
-            self.assertEqual("valid", validation["status"])
+            self.assertEqual("blocked", payload["status"])
+            self.assertEqual("invalid", validation["status"])
             self.assertIn("public-summary-contract-incomplete", issue_codes)
             self.assertIn("public-summary-policy-boundary-missing", issue_codes)
+            self.assertIn("public-discourse-corpus-basis-missing", issue_codes)
+            self.assertIn("public-discourse-coverage-audit-basis-missing", issue_codes)
+            self.assertIn("public-discourse-aggregation-basis-missing", issue_codes)
 
     def test_narrative_validator_accepts_complete_public_summary_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1425,6 +1575,14 @@ class ReportingPublishWorkflowTests(unittest.TestCase):
                         "requires_council_uptake_before_reporting": True,
                         "gdelt_tone_boundary": "media_or_document_tone_not_public_sentiment",
                         "source_narrative_boundary": "public_source_narrative_cue_not_physical_source_attribution",
+                    },
+                    "observed_inputs": {
+                        "corpus_path": "analytics/public_discourse_corpus_complete.json",
+                        "coverage_audit_path": "analytics/public_discourse_coverage_audit_complete.json",
+                        "aggregation_path": "analytics/public_discourse_annotation_aggregation_complete.json",
+                    },
+                    "distribution_denominators": {
+                        "label_family_denominators": {"social_affect_labels": 2},
                     },
                     "warnings": [],
                     "evidence_refs": ["signal:test-public-summary-001"],

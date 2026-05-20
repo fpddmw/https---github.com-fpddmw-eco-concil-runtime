@@ -16,6 +16,17 @@ description: Validate narrative report draft structure, claim-boundary presence,
   treated as public sentiment, public source narratives used as physical
   attribution, attribution claims without visible basis, and advisory helper
   output that has not been carried by council/report-basis objects.
+- Check claim-basis correspondence without deciding evidence truth:
+  - public emotion, opinion-proportion, or main-concern language needs corpus,
+    coverage audit, annotation, aggregation, and explicit denominator basis;
+  - formal comment issue/stance/participation-structure language needs
+    candidate audit, readable comment detail or attachment text, and
+    formal issue classification or equivalent analysis;
+  - environment trend, peak, range, or operating-status language needs
+    `aggregate-environment-evidence` or explicit item-level-example wording;
+  - source, causal, transport, or impact-chain language needs relation,
+    fact-check, alternatives, or challenger-review basis, otherwise it should
+    be downgraded to compatibility or still-needs-verification language.
 - Block formal comment or docket-sample distributions when they are written as
   general public opinion, and block sample fractions that are summed into a
   100% opinion composition when labels may be non-exclusive.
@@ -71,6 +82,8 @@ description: Validate narrative report draft structure, claim-boundary presence,
   instead of conclusions, key points, reasoning, limitations, and decision use.
 - Reader-facing quality checks are procedural checks, not style scoring or
   evidence ranking.
+- Validation is a reverse constraint on report wording. It does not require a
+  fixed source sequence, gate, source ranking, or runtime-owned agenda.
 
 ## Scripts
 - `scripts/validate_narrative_report.py`

@@ -192,6 +192,124 @@ def build_skill_subprocess_env(
     return env, loaded_env_files
 
 
+def skill_args_request_help(skill_args: list[str]) -> bool:
+    return any(maybe_text(item) in {"-h", "--help"} for item in skill_args)
+
+
+def run_skill_help_probe(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    skill_name: str,
+    actor_role: str,
+    skill_args: list[str],
+    contract_mode: str = "warn",
+    workspace: Path | None = None,
+    timeout_seconds: float | None = None,
+) -> dict[str, Any]:
+    """Return human help text as a runtime diagnostic, not evidence execution.
+
+    Agents sometimes inspect skill CLIs through the runtime surface. Help output
+    is intentionally human text rather than a skill JSON payload, so it should
+    not create evidence-chain dead letters.
+    """
+    root = workspace or workspace_root()
+    skill_entry = resolve_skill_entry(skill_name, root)
+    script_path = Path(maybe_text(skill_entry.get("script_path")))
+    command = build_skill_subprocess_command(
+        script_path=script_path,
+        run_dir=run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        skill_entry=skill_entry,
+        skill_args=skill_args,
+    )
+    env, loaded_env_files = build_skill_subprocess_env(
+        script_path=script_path,
+        actor_role=actor_role,
+        resolved_actor_role=actor_role,
+        skill_name=skill_name,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    command_snapshot = {
+        "argv": command,
+        "cwd": str(root),
+        "python_executable": sys.executable,
+        "workspace_root": str(root),
+        "script_path": str(script_path),
+        "actor_role": actor_role,
+        "diagnostic_kind": "skill-help",
+    }
+    if loaded_env_files:
+        command_snapshot["loaded_env_files"] = loaded_env_files
+    started_at = utc_now_iso()
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=str(root),
+            timeout=timeout_seconds or 30.0,
+            env=env,
+        )
+        stdout = completed.stdout
+        stderr = completed.stderr
+        exit_code = completed.returncode
+        status = "completed" if exit_code == 0 else "failed"
+        message = "" if exit_code == 0 else (stderr or stdout or f"Help probe failed for {skill_name}.")
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout if isinstance(exc.stdout, str) else (exc.stdout.decode("utf-8", errors="replace") if exc.stdout else "")
+        stderr = exc.stderr if isinstance(exc.stderr, str) else (exc.stderr.decode("utf-8", errors="replace") if exc.stderr else "")
+        exit_code = None
+        status = "failed"
+        message = f"Help probe timed out for {skill_name}."
+    finished_at = utc_now_iso()
+    event = {
+        "schema_version": "runtime-event-v3",
+        "event_id": new_runtime_event_id("runtimeevt", run_id, round_id, skill_name, "skill-help", json_hash({"skill_args": skill_args}), started_at),
+        "event_type": "skill-help",
+        "run_id": run_id,
+        "round_id": round_id,
+        "skill_name": skill_name,
+        "actor_role": actor_role,
+        "resolved_actor_role": actor_role,
+        "started_at_utc": started_at,
+        "completed_at_utc": finished_at,
+        "status": status,
+        "contract_mode": contract_mode,
+        "skill_args": skill_args,
+        "command_snapshot": command_snapshot,
+        "exit_code": exit_code,
+        "stdout_hash": stable_hash(stdout),
+        "stderr_hash": stable_hash(stderr),
+        "diagnostic_semantics": "Skill help text is a diagnostic surface and is not treated as evidence execution.",
+    }
+    append_ledger_event(run_dir, event)
+    operator_surface = refresh_runtime_surfaces_safely(run_dir, round_id=round_id)
+    payload = {
+        "status": status,
+        "schema_version": "runtime-skill-help-v1",
+        "summary": {
+            "skill_name": skill_name,
+            "run_id": run_id,
+            "round_id": round_id,
+            "actor_role": actor_role,
+            "contract_mode": contract_mode,
+            "exit_code": exit_code,
+            "diagnostic_kind": "skill-help",
+        },
+        "help_text": stdout,
+        "stderr": stderr,
+        "message": message,
+        "event": event,
+        "operator_surface": operator_surface,
+    }
+    return payload
+
+
 def run_skill(
     run_dir: Path,
     *,
@@ -217,6 +335,18 @@ def run_skill(
         skill_name=skill_name,
         skill_args=skill_args,
     )
+    if skill_args_request_help(skill_args):
+        return run_skill_help_probe(
+            run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            skill_name=skill_name,
+            actor_role=actor_role,
+            skill_args=skill_args,
+            contract_mode=contract_mode,
+            workspace=root,
+            timeout_seconds=timeout_seconds,
+        )
     preflight = preflight_skill_execution(
         run_dir,
         run_id=run_id,
@@ -1054,7 +1184,9 @@ __all__ = (
     "refresh_runtime_surfaces_safely",
     "retryable_return_code",
     "run_skill",
+    "run_skill_help_probe",
     "skill_command_hint",
+    "skill_args_request_help",
     "stable_hash",
     "structured_failure",
     "utc_now_iso",

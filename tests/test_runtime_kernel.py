@@ -1257,6 +1257,58 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertTrue(ledger_event["recovered_after_retry"])
             sleep_mock.assert_called_once()
 
+    def test_run_skill_help_probe_does_not_create_dead_letter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.core.ledger import load_ledger_tail
+            from eco_council_runtime.kernel.execution.executor import run_skill
+            from eco_council_runtime.kernel.operator.operations import load_dead_letters
+
+            fake_skill_entry = {
+                "skill_name": "query-formal-signals",
+                "script_path": str(root / "fake_help.py"),
+                "declared_contract": {"reads": [], "writes": []},
+                "declared_inputs": {"required": [], "optional": []},
+                "declared_side_effects": [],
+                "execution_policy": {},
+                "agent": {},
+            }
+
+            with (
+                mock.patch("eco_council_runtime.kernel.execution.executor.resolve_skill_entry", return_value=fake_skill_entry),
+                mock.patch(
+                    "eco_council_runtime.kernel.execution.executor.subprocess.run",
+                    return_value=subprocess.CompletedProcess(
+                        args=["python"],
+                        returncode=0,
+                        stdout="usage: query-formal-signals [--keyword KEYWORD]\\n",
+                        stderr="",
+                    ),
+                ),
+            ):
+                payload = run_skill(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id=ROUND_ID,
+                    skill_name="query-formal-signals",
+                    actor_role="environmental-investigator",
+                    skill_args=["--help"],
+                    contract_mode="warn",
+                )
+
+            ledger_event = load_ledger_tail(run_dir, 1)[0]
+            dead_letters = load_dead_letters(run_dir, round_id=ROUND_ID, limit=5)
+
+            self.assertEqual("completed", payload["status"])
+            self.assertEqual("runtime-skill-help-v1", payload["schema_version"])
+            self.assertIn("--keyword", payload["help_text"])
+            self.assertEqual("skill-help", ledger_event["event_type"])
+            self.assertNotIn("dead_letter_id", ledger_event)
+            self.assertEqual([], dead_letters)
+
     def test_runtime_receipt_envelope_captures_governed_execution_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -1904,6 +1956,33 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                 ["<workspace_root>", "<run_dir>"],
                 sandbox["allowed_cwd_roots"],
             )
+
+    def test_runtime_admission_treats_logical_signal_writes_as_shared_state_not_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.operator.admission_policy import evaluate_execution_admission
+
+            payload = evaluate_execution_admission(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                actor_kind="skill",
+                actor_name="normalize-regulationsgov-attachment-text",
+                declared_side_effects=["writes-artifacts", "writes-shared-state"],
+                requested_side_effect_approvals=[],
+                execution_policy={"timeout_seconds": 300, "retry_budget": 0, "retry_backoff_ms": 250},
+                resolved_read_paths=[],
+                resolved_write_paths=["formal"],
+                cwd_path=str(root),
+                workspace=root,
+            )
+
+            self.assertFalse(payload["block_execution"])
+            self.assertEqual(["formal"], payload["logical_write_targets"])
+            self.assertEqual([], payload["path_checked_write_paths"])
 
     def test_controller_forwards_execution_policy_and_records_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

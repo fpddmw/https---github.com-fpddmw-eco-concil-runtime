@@ -28,6 +28,8 @@ from eco_council_runtime.kernel.execution.executor import (
     maybe_text,
     new_runtime_event_id,
     run_skill,
+    run_skill_help_probe,
+    skill_args_request_help,
 )
 from eco_council_runtime.kernel.governance.runtime_governance import (
     preflight_skill_execution,
@@ -193,6 +195,19 @@ def handle_runtime_command(args: Any, run_dir: Path) -> int | None:
         skill_args = list(args.skill_args or [])
         if skill_args and skill_args[0] == "--":
             skill_args = skill_args[1:]
+        if skill_args_request_help(skill_args):
+            payload = run_skill_help_probe(
+                run_dir,
+                run_id=args.run_id,
+                round_id=args.round_id,
+                skill_name=args.skill_name,
+                actor_role=args.actor_role,
+                skill_args=skill_args,
+                contract_mode=args.contract_mode,
+                timeout_seconds=args.timeout_seconds,
+            )
+            print(pretty_json(payload, args.pretty))
+            return 0 if payload["status"] == "completed" else 1
         preflight = preflight_skill_execution(
             run_dir,
             run_id=args.run_id,

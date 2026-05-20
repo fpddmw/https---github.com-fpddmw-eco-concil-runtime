@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -171,6 +172,47 @@ def load_round_readiness_wrapper(
     }
 
 
+def _load_json_object(path: Path) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _report_basis_payload_wrapper(
+    payload: dict[str, Any],
+    *,
+    source: str,
+    artifact_path: Path,
+) -> dict[str, Any]:
+    wrapped_payload = dict(payload)
+    wrapped_payload["report_basis_source"] = (
+        maybe_text(wrapped_payload.get("report_basis_source")) or source
+    )
+    return {
+        "payload": wrapped_payload,
+        "source": source,
+        "artifact_path": str(artifact_path),
+        "artifact_present": artifact_path.exists(),
+        "payload_present": True,
+    }
+
+
+def _artifact_matches_report_basis_record(
+    *,
+    artifact_payload: dict[str, Any],
+    record_payload: dict[str, Any],
+) -> bool:
+    artifact_basis_id = maybe_text(artifact_payload.get("basis_id"))
+    record_basis_id = maybe_text(record_payload.get("basis_id"))
+    if artifact_basis_id and record_basis_id and artifact_basis_id != record_basis_id:
+        return False
+    return True
+
+
 def load_report_basis_freeze_wrapper(
     run_dir: str | Path,
     *,
@@ -190,18 +232,42 @@ def load_report_basis_freeze_wrapper(
         round_id=round_id,
     )
     if isinstance(report_basis_payload, dict):
-        payload = dict(report_basis_payload)
-        payload["report_basis_source"] = (
-            maybe_text(payload.get("report_basis_source"))
-            or "deliberation-plane-report-basis-freeze"
+        return _report_basis_payload_wrapper(
+            report_basis_payload,
+            source="deliberation-plane-report-basis-freeze",
+            artifact_path=report_basis_file,
         )
-        return {
-            "payload": payload,
-            "source": "deliberation-plane-report-basis-freeze",
-            "artifact_path": str(report_basis_file),
-            "artifact_present": report_basis_file.exists(),
-            "payload_present": True,
-        }
+    explicit_report_basis_path = bool(maybe_text(report_basis_path))
+    if explicit_report_basis_path and report_basis_file.exists():
+        artifact_payload = _load_json_object(report_basis_file)
+        if isinstance(artifact_payload, dict):
+            artifact_run_id = maybe_text(artifact_payload.get("run_id"))
+            artifact_round_id = maybe_text(artifact_payload.get("round_id"))
+            if artifact_run_id and artifact_run_id != run_id:
+                return orphaned_artifact_wrapper(
+                    report_basis_file,
+                    source="mismatched-report-basis-freeze-artifact",
+                )
+            if artifact_round_id and artifact_round_id != round_id:
+                cross_round_payload = load_report_basis_freeze_record(
+                    run_dir_path,
+                    run_id=run_id,
+                    round_id=artifact_round_id,
+                )
+                if (
+                    isinstance(cross_round_payload, dict)
+                    and _artifact_matches_report_basis_record(
+                        artifact_payload=artifact_payload,
+                        record_payload=cross_round_payload,
+                    )
+                ):
+                    payload = dict(cross_round_payload)
+                    payload["requested_round_id"] = round_id
+                    return _report_basis_payload_wrapper(
+                        payload,
+                        source="deliberation-plane-report-basis-freeze-cross-round",
+                        artifact_path=report_basis_file,
+                    )
     if report_basis_file.exists():
         return orphaned_artifact_wrapper(
             report_basis_file,

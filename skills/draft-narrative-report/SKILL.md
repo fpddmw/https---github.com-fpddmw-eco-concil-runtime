@@ -59,26 +59,36 @@ description: Draft a narrative decision-support report from existing council, re
   report drafting is not a substitute for moderator continuation when actionable
   investigation routes remain live.
 - Evidence refs are an audit index, not evidence weights or source rankings.
-- A good report is not a list of object summaries, a skill receipt summary, or
-  a transcript of council procedure. It must read like an academic report or
-  decision-support briefing:
-  - the opening answer maps directly to the user's mission request;
-  - before drafting prose, infer the report's argument map: central claim,
-    chronological or causal development, supporting evidence, counter-boundary,
-    and decision meaning;
-  - write the main body as connected prose, not as visible template blocks that
-    tell the reader "this section is for X";
-  - foreground the real-world event or governance issue, then weave
-    environmental/operational evidence, public-discourse semantics, formal
-    records, and limits into one coherent line of reasoning;
-  - show the council process briefly as method context only: what kinds of
-    evidence were gathered, how they were checked, and why the report stops at
-    the stated boundary;
-  - preserve enough concrete evidence detail for professional review, including
-    quantities, windows, source families, sample sizes, and known caveats when
-    they are present in the recorded basis;
-  - state the practical meaning for a human reviewer without inventing new
-    policy advice.
+- A good report is a professional article with a visible argument. It is not a
+  list of object summaries, a skill receipt summary, a transcript of council
+  procedure, or a set of headings copied from the user's critique.
+- Before drafting prose, infer the report's argument map:
+  - mission question actually answerable from the frozen basis;
+  - bounded central judgment;
+  - evidence lanes and the specific role each lane plays;
+  - interpretation that links those lanes into one line of reasoning;
+  - counter-boundary: what stronger claims the evidence cannot support;
+  - decision or research meaning.
+- Reader-facing prose should normally develop that map as an academic article:
+  - 摘要：研究问题、证据基础、主要发现、边界；
+  - 关键词：case topic, source families, method terms;
+  - 引言：议题背景、研究问题、本文贡献；
+  - 材料与方法：frozen/reporting basis、source-family roles、sample scope、
+    council validation method;
+  - 结果：substantive findings only, not runtime chronology;
+  - 讨论：interpretation, limits, alternative explanations, follow-up evidence;
+  - 结论：bounded answer to the user mission;
+  - 参考文献与审计索引：recorded source/audit refs, without inventing external
+    bibliography.
+- Show council process only as method context: what kinds of evidence were
+  gathered, how they were bounded, and why the report stops where it does.
+  Do not make "what the council did" the main report storyline unless the user
+  explicitly asks for an operations audit.
+- Preserve concrete evidence detail for professional review, including
+  quantities, windows, source families, sample sizes, and known caveats when
+  present in the recorded basis. Use those details as scope markers and
+  reasoning supports; do not treat counts as representative conclusions unless
+  the basis supplies a representative design.
 - Avoid repeated restatement. If the same object text supports multiple
   sections, summarize it once in the narrative account and then refer to its
   role in the evidence chain.
@@ -137,22 +147,44 @@ description: Draft a narrative decision-support report from existing council, re
   samples unless a representative sampling design is explicitly present.
 - Treat source-narrative labels as cues for environmental review, not as proof
   of physical source, transport, or causal attribution.
+- Apply claim-sensitive soft obligations while writing. These are report-basis
+  checks, not a fixed investigation agenda:
+  - public emotion, opinion proportions, or main-concern claims need corpus,
+    coverage audit, annotation, aggregation, explicit denominator, and
+    sample-local representativeness limits;
+  - formal comment issue or participation-structure claims need candidate
+    audit, readable comment detail or attachment text, and formal issue
+    classification or equivalent analysis;
+  - environment trend, peak, or operating-status claims need
+    `aggregate-environment-evidence` or explicit wording that the report is
+    only using item-level examples;
+  - source, causal, transport, or impact-chain claims need relation,
+    fact-check, alternatives, or challenger-review basis; otherwise write
+    compatibility cues or "still needs verification" language.
 
 ## Reader-Facing Section Requirements
-The JSON draft keeps stable internal sections for validation and publication,
-but the reader-facing Markdown should not expose those internal sections as a
-stack of disconnected blocks, especially in Chinese mode. Treat the internal
-sections as source material for an article-like report:
+The JSON draft keeps stable internal sections for validation and publication.
+The reader-facing Markdown must not expose those internal sections as a stack
+of disconnected blocks, especially in Chinese mode. Treat internal sections as
+source material for an article-like report:
 
-- Start from the user's question and answer it directly.
-- Develop the event or issue through time, causality, or thematic progression.
-- Fold professional evidence detail into the prose instead of isolating it in
-  inventory lists.
+- Use academic sections such as "摘要", "引言", "材料与方法", "结果", "讨论",
+  "结论", and "参考文献与审计索引" when they fit the case. Do not use mechanical
+  labels like "总论点", "分论点", or "议会做了什么" as a substitute for
+  argument.
+- Start from the user's question and answer it directly in the abstract and
+  conclusion, but do not quote the whole prompt as a separate block unless it
+  clarifies scope.
+- Develop the event or issue through thematic progression, chronology, or
+  causal logic as supported by the basis.
+- Fold professional evidence detail into prose. Short bullets are acceptable
+  only for executive takeaways or explicit risk registers; they should not be
+  the primary body of the report.
 - Explain public-discourse semantics as part of the substantive case, not as an
   appendix detached from the argument.
-- Briefly describe the council process only after the substantive evidence is
-  clear, and only to explain how the evidence basis was formed and bounded.
-- End with claim boundaries and responsible use.
+- Briefly describe council process only after the substantive evidence is clear,
+  and only to explain how the evidence basis was formed and bounded.
+- End with responsible use and follow-up evidence needs.
 - Keep audit refs available at the end without letting refs dominate the prose.
 
 ## Scripts

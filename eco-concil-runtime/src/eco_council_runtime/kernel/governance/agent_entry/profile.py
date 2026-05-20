@@ -126,11 +126,13 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
                 "Separate environmental compatibility, timing, and receptor-side conditions from specific physical source attribution.",
                 "Treat source-specific attribution as a strong claim requiring trajectory, plume, chemistry, professional attribution model, or equivalent council-visible support.",
                 "Do not convert public, media, or formal-record source narratives into physical source proof without environmental verification.",
+                "For large environment or operations datasets, prefer aggregate-environment-evidence before asking report-editor to summarize trends, peaks, ranges, or operating status.",
             ],
             "coordination_expectations": [
                 "Respond to social or formal source-narrative cues with compatibility, limitation, or verification status.",
                 "If the current source surface cannot answer an evidence request, submit an evidence-route-assessment rather than silently declining or treating the gap as evidence absence.",
                 "Submit explicit limitations when the basis supports conditions or associations but not causal transport or source proof.",
+                "Carry environment aggregation cues into a finding, evidence bundle, readiness opinion, or synthesis before report use.",
             ],
         },
         "read_skills": [
@@ -162,12 +164,15 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
                 "Describe public visibility, issue cues, affect cues, source-narrative cues, and sample boundaries without upgrading samples into representative public opinion.",
                 "Use bounded annotation-worker artifacts and taxonomy checks for affect or stance labels; own the sample, basis, and uptake into council findings.",
                 "For formal comments, distinguish discovery set, candidate corpus, enriched detail set, readable text corpus, and annotated corpus before describing issue or stance structure.",
+                "Treat GDELT DOC as article/tone reconnaissance and GDELT Events/Mentions/GKG as row-level supplements; keep all GDELT tone as media/document tone, not public sentiment.",
+                "Treat YouTube video search as candidate discovery and YouTube comments as the public-response corpus when public response semantics matter.",
                 "Treat source narratives in public discourse as claims to route for environmental verification, not physical source attribution.",
             ],
             "coordination_expectations": [
                 "Ask environmental-investigator to verify whether public source narratives are physically supported.",
                 "If a requested public/formal evidence need is outside the current source surface, submit an evidence-route-assessment with considered follow-up skills or alternate routes.",
                 "Use candidate-corpus audit, comment detail, attachment text extraction, and formal-comment issue annotation when the formal record needs more than list discovery.",
+                "Do not ask report-editor to summarize formal comment issues from Regulations.gov listing rows alone; carry readable detail or attachment text and annotation/aggregation basis first.",
                 "Mark sample-local patterns, platform or provider limits, and optional analysis status before report handoff.",
             ],
         },
@@ -243,6 +248,8 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
                 "Consume frozen evidence basis, reporting handoff, and council-adopted limitations only; do not reopen investigation through report prose.",
                 "Distinguish sample-local discourse structure from representative public opinion.",
                 "Do not write formal comment main issues or stance distribution unless readable formal text and annotation/aggregation basis are visible in report basis or source material.",
+                "Do not write public emotion, opinion proportions, or main concerns unless corpus, coverage audit, annotation, aggregation, and denominator basis are visible.",
+                "Do not write environment trends, peaks, ranges, or operating status unless aggregate-environment-evidence is visible or the prose clearly says it is only item-level illustration.",
                 "Distinguish public source narratives from physical source attribution and keep unsupported causal or policy claims out of final reports.",
             ],
             "coordination_expectations": [
@@ -327,6 +334,109 @@ def skill_use_discipline() -> dict[str, Any]:
             "fixed agenda. It is a short reasoning discipline for moments when a "
             "tool result might otherwise be mistaken for a research conclusion."
         ),
+    }
+
+
+def source_family_workflow_card() -> dict[str, Any]:
+    return {
+        "schema_version": "source-family-workflow-card-v1",
+        "purpose": (
+            "Expose common multi-layer source-family paths as agent reasoning "
+            "guidance. This is not a runtime agenda, source ranking, gate, or "
+            "required order."
+        ),
+        "families": [
+            {
+                "family_id": "gdelt-public-record",
+                "guidance": (
+                    "GDELT DOC is reconnaissance for articles, timelines, and DOC "
+                    "tone aggregates. Events, Mentions, and GKG are row-level "
+                    "supplements for agent-scoped UTC windows. DOC tone, AvgTone, "
+                    "MentionDocTone, and V2Tone are media/document tone cues, not "
+                    "public sentiment."
+                ),
+            },
+            {
+                "family_id": "youtube-public-discourse",
+                "guidance": (
+                    "YouTube video search discovers candidate videos. YouTube "
+                    "comments are the public-response corpus when public-response "
+                    "semantics, affect, concerns, or sample language matter."
+                ),
+            },
+            {
+                "family_id": "regulationsgov-policy-comments",
+                "guidance": (
+                    "Regulations.gov comment listing discovers candidate rows. "
+                    "Detail, attachment fetch, text extraction, and formal issue "
+                    "classification are needed before formal-comment issue or "
+                    "stance structure can be reported."
+                ),
+            },
+            {
+                "family_id": "environment-observation-crosscheck",
+                "guidance": (
+                    "AirNow/OpenAQ, Open-Meteo, FIRMS, USGS, and USBR records are "
+                    "complementary environment or operations surfaces. Large "
+                    "normalized fetch outputs should be compressed with "
+                    "aggregate-environment-evidence before report synthesis."
+                ),
+            },
+        ],
+        "adoption_boundary": (
+            "Helper artifacts stay advisory until carried by a finding, evidence "
+            "bundle, agent position, readiness opinion, moderator synthesis, or "
+            "report-basis object."
+        ),
+    }
+
+
+def claim_sensitive_soft_obligations() -> dict[str, Any]:
+    return {
+        "schema_version": "claim-sensitive-soft-obligations-v1",
+        "semantics": (
+            "These obligations constrain report wording after agents choose their "
+            "own investigation path. They do not prescribe a fixed source order, "
+            "gate a round, rank evidence, or make runtime judge sufficiency."
+        ),
+        "obligations": [
+            {
+                "claim_family": "public_emotion_opinion_proportion_or_main_concern",
+                "basis_needed": [
+                    "materialized corpus",
+                    "coverage audit",
+                    "annotation basis",
+                    "aggregation basis",
+                    "explicit denominator",
+                    "sample-local representativeness limit",
+                ],
+            },
+            {
+                "claim_family": "formal_comment_issue_or_participation_structure",
+                "basis_needed": [
+                    "candidate-corpus audit",
+                    "readable comment detail or attachment text",
+                    "formal issue classification or equivalent analysis",
+                ],
+            },
+            {
+                "claim_family": "environment_trend_peak_range_or_operating_status",
+                "basis_needed": [
+                    "aggregate-environment-evidence",
+                    "or explicit item-level-example boundary",
+                ],
+            },
+            {
+                "claim_family": "source_causal_transport_or_impact_chain",
+                "basis_needed": [
+                    "relation evidence packet",
+                    "fact-check scope",
+                    "alternatives review",
+                    "challenger review",
+                    "or downgrade to compatible cue / still-needs-verification wording",
+                ],
+            },
+        ],
     }
 
 
@@ -1588,7 +1698,9 @@ def default_role_entry_points(
                     "role remains responsible for choosing queries, follow-up "
                     "skills, and evidence adoption."
                 ),
+                "source_family_workflow_card": source_family_workflow_card(),
                 "skill_use_discipline": skill_use_discipline(),
+                "claim_sensitive_soft_obligations": claim_sensitive_soft_obligations(),
                 "acquisition_attempt_review_policy": {
                     "semantics": (
                         "A failed, blocked, receipt-only, executed-without-normalized-refs, "

@@ -745,9 +745,6 @@ def materialize_reporting_handoff_skill(
 ) -> dict[str, Any]:
     run_dir_path = resolve_run_dir(run_dir)
     report_basis_file = resolve_path(run_dir_path, report_basis_path, f"report_basis/frozen_report_basis_{round_id}.json")
-    readiness_file = resolve_path(run_dir_path, readiness_path, f"reporting/round_readiness_{round_id}.json")
-    board_brief_file = resolve_path(run_dir_path, board_brief_path, f"board/board_brief_{round_id}.md")
-    supervisor_file = resolve_path(run_dir_path, supervisor_state_path, f"runtime/supervisor_state_{round_id}.json")
     output_file = resolve_path(run_dir_path, output_path, f"reporting/reporting_handoff_{round_id}.json")
 
     warnings: list[dict[str, Any]] = []
@@ -785,10 +782,14 @@ def materialize_reporting_handoff_skill(
         }
     else:
         report_basis_freeze = report_basis_payload
+    basis_round_id = maybe_text(report_basis_freeze.get("round_id")) or round_id
+    readiness_file = resolve_path(run_dir_path, readiness_path, f"reporting/round_readiness_{basis_round_id}.json")
+    board_brief_file = resolve_path(run_dir_path, board_brief_path, f"board/board_brief_{basis_round_id}.md")
+    supervisor_file = resolve_path(run_dir_path, supervisor_state_path, f"runtime/supervisor_state_{basis_round_id}.json")
     readiness_context = load_round_readiness_wrapper(
         run_dir_path,
         run_id=run_id,
-        round_id=round_id,
+        round_id=basis_round_id,
         readiness_path=readiness_path,
     )
     readiness_payload = (
@@ -817,7 +818,7 @@ def materialize_reporting_handoff_skill(
     supervisor_context = load_supervisor_state_wrapper(
         run_dir_path,
         run_id=run_id,
-        round_id=round_id,
+        round_id=basis_round_id,
         supervisor_state_path=supervisor_state_path,
     )
     supervisor_state_payload = (
@@ -997,7 +998,7 @@ def materialize_reporting_handoff_skill(
     council_basis = load_reporting_basis_objects(
         run_dir_path,
         run_id=run_id,
-        round_id=round_id,
+        round_id=basis_round_id,
     )
     key_findings = build_key_findings_from_council_basis(
         council_basis,
@@ -1080,6 +1081,7 @@ def materialize_reporting_handoff_skill(
         "generated_at_utc": utc_now_iso(),
         "run_id": run_id,
         "round_id": round_id,
+        "basis_round_id": basis_round_id,
         "handoff_id": handoff_id,
         "handoff_status": handoff_status,
         "reporting_ready": reporting_ready,
@@ -1183,6 +1185,7 @@ def materialize_reporting_handoff_skill(
             "skill": SKILL_NAME,
             "run_id": run_id,
             "round_id": round_id,
+            "basis_round_id": basis_round_id,
             "output_path": str(output_file),
             "handoff_id": handoff_id,
             "handoff_status": handoff_status,

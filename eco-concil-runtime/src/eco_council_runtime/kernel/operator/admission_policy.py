@@ -221,6 +221,15 @@ def path_within_roots(candidate_path: str, roots: list[Path]) -> bool:
     return False
 
 
+def path_like_contract_target(value: Any) -> bool:
+    text = maybe_text(value)
+    if not text:
+        return False
+    if text.startswith(("<run_dir>", "<run_parent>", "<workspace_root>", "~", "/", ".")):
+        return True
+    return "/" in text or "\\" in text
+
+
 def side_effect_risk_level(side_effects: list[str]) -> str:
     values = set(side_effects)
     if "destructive-write" in values:
@@ -339,7 +348,8 @@ def evaluate_execution_admission(
         )
 
     read_paths = [maybe_text(item) for item in resolved_read_paths if maybe_text(item)]
-    for candidate_path in read_paths:
+    read_paths_for_boundary = [item for item in read_paths if path_like_contract_target(item)]
+    for candidate_path in read_paths_for_boundary:
         if read_roots and not path_within_roots(candidate_path, read_roots):
             issues.append(
                 issue(
@@ -349,7 +359,9 @@ def evaluate_execution_admission(
                 )
             )
     write_paths = [maybe_text(item) for item in resolved_write_paths if maybe_text(item)]
-    for candidate_path in write_paths:
+    write_paths_for_boundary = [item for item in write_paths if path_like_contract_target(item)]
+    logical_write_targets = [item for item in write_paths if item not in write_paths_for_boundary]
+    for candidate_path in write_paths_for_boundary:
         if write_roots and not path_within_roots(candidate_path, write_roots):
             issues.append(
                 issue(
@@ -396,6 +408,9 @@ def evaluate_execution_admission(
         },
         "resolved_read_paths": read_paths,
         "resolved_write_paths": write_paths,
+        "path_checked_read_paths": read_paths_for_boundary,
+        "path_checked_write_paths": write_paths_for_boundary,
+        "logical_write_targets": logical_write_targets,
         "cwd_path": cwd_value,
         "allowed_read_roots": [str(item) for item in read_roots],
         "allowed_write_roots": [str(item) for item in write_roots],
@@ -436,6 +451,7 @@ __all__ = (
     "issue",
     "resolve_policy_root",
     "path_within_roots",
+    "path_like_contract_target",
     "side_effect_risk_level",
     "sandbox_profile",
     "evaluate_execution_admission",

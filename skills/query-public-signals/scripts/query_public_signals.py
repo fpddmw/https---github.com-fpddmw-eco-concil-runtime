@@ -335,7 +335,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--signal-kind", default="")
     parser.add_argument("--published-after-utc", default="")
     parser.add_argument("--published-before-utc", default="")
-    parser.add_argument("--keyword", action="append", default=[])
+    parser.add_argument("--keyword", "--keyword-any", dest="keyword", action="append", default=[])
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args()

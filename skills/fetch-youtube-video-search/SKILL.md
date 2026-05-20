@@ -93,7 +93,8 @@ python3 scripts/fetch_youtube_video_search.py search \
 - This skill discovers candidate videos. It does not fetch comment language and
   does not represent platform-wide public discourse by itself.
 - If the investigation needs discourse semantics, choose relevant video IDs and
-  follow with `fetch-youtube-comments`.
+  follow with `fetch-youtube-comments`; comments, not search results, are the
+  public-response text corpus for sample-level affect, concern, or issue claims.
 - Sparse or zero search output may reflect query wording, creator/channel scope,
   language, publish window, or API index behavior. Revise those before treating
   YouTube as exhausted.

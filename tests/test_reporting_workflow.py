@@ -400,6 +400,60 @@ class ReportingWorkflowTests(unittest.TestCase):
                 decision_artifact["report_basis_source"],
             )
 
+    def test_reporting_handoff_uses_basis_round_state_for_report_writing_round(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            report_round_id = "round-reporting-report-writing"
+            seed_ready_reporting_context(
+                run_dir,
+                root,
+                note_text="Round is ready to move into a later report-writing round.",
+            )
+
+            prepare_optional_analysis_for_supervision(run_dir)
+            approve_report_basis_transition(run_dir)
+            run_kernel(
+                "supervise-round",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+
+            handoff_payload = run_script(
+                script_path("materialize-reporting-handoff"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                report_round_id,
+                "--report-basis-path",
+                str(report_basis_path(run_dir, f"frozen_report_basis_{ROUND_ID}.json")),
+            )
+            handoff_artifact = load_json(
+                reporting_path(run_dir, f"reporting_handoff_{report_round_id}.json")
+            )
+
+            self.assertEqual("reporting-ready", handoff_payload["summary"]["handoff_status"])
+            self.assertTrue(handoff_artifact["reporting_ready"])
+            self.assertEqual(ROUND_ID, handoff_artifact["basis_round_id"])
+            self.assertEqual(
+                "deliberation-plane-report-basis-freeze-cross-round",
+                handoff_artifact["report_basis_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-readiness",
+                handoff_artifact["readiness_source"],
+            )
+            self.assertEqual(
+                "deliberation-plane-supervisor",
+                handoff_artifact["supervisor_state_source"],
+            )
+
     def test_reporting_handoff_recovers_supervisor_state_from_db_when_artifact_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

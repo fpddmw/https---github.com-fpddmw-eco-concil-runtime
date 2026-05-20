@@ -9,6 +9,10 @@ WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 sys.path.insert(0, str(RUNTIME_SRC))
 
+from eco_council_runtime.kernel.source_queue.source_queue_profile import (  # noqa: E402
+    source_family_workflows_for_skills,
+)
+
 
 def load_registry_snapshot():
     registry_module = importlib.import_module("eco_council_runtime.kernel.core.registry")
@@ -125,6 +129,11 @@ class RuntimeSourceQueueProfileTests(unittest.TestCase):
             ["regulationsgov-policy-comments"],
             profiles["fetch-regulationsgov-attachments"]["source_family_ids"],
         )
+        workflow_text = str(source_family_workflows_for_skills(profiles.keys())).lower()
+        self.assertIn("doc tone", workflow_text)
+        self.assertIn("media/document tone", workflow_text)
+        self.assertIn("listing rows are not a readable formal-comment corpus", workflow_text)
+        self.assertIn("aggregate-environment-evidence", workflow_text)
 
         self.assertEqual("advisory", profiles["query-public-signals"]["queue_status"])
         self.assertEqual("query", profiles["query-public-signals"]["stage"])

@@ -211,7 +211,7 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 该 lane 的治理边界：
 
 1. `query-environment-signals` 返回 item-level 环境证据 rows 和 evidence refs，适合抽查和写 finding 时引用。
-2. `aggregate-environment-evidence` 负责描述性覆盖和统计摘要，后续升级方向见 `docs/openclaw-graduation-upgrade-path-workplan.md`。
+2. `aggregate-environment-evidence` 负责描述性覆盖和统计摘要；三案例补强和 skill uptake 审计见 `docs/diagnostics/openclaw-case-rerun-and-skill-uptake-audit.md`。
 3. 环境聚合只输出 source/metric/time/spatial coverage、数值 min/max/mean、bucket counts、缺测和样本 refs。
 4. 时序观测和点事件应按数据形态处理，而不是按 provider 写厚规则。
 5. 环境聚合不得输出风险等级、source 排序、证据权重、健康暴露评估、水资源短缺严重性、火源证明或输送/归因结论。
@@ -262,16 +262,22 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
    - fetch skill 的多层工作流说明；用于帮助 agent 理解同一信源家族内的 search/detail/table/backfill 关系，不作为 source 排序或议程脚本。
 3. `docs/openclaw-claim-strength-obligations.md`
    - 弱报告、强 claim 和 unresolved refs 收口边界；用于防止过早放弃调查，同时不引入议题模板或证据打分。
-4. `docs/openclaw-graduation-upgrade-path-workplan.md`
-   - 毕业提交前代码层最终升级路径；整合公共舆情深化、环境证据压缩层、报告质量检查、报告模板优化、agent/skill 文档收口、operator runbook 和不做事项。
-5. `docs/openclaw-experiment-case-plan.md`
+4. `docs/openclaw-experiment-case-plan.md`
    - 毕业设计实验与案例计划；记录两主案例、两轻量验证、第二主案例风险对比、降级策略和展示材料安排。
-6. `docs/frozen-case-packages/nyc-smoke-20230607/baseline-case-package.md`
+5. `docs/diagnostics/openclaw-skill-usage-matrix.md`
+   - 三个已归档/阶段性归档 case 的 skill 使用原始诊断矩阵；用于查看各 skill 在各案例中的执行、artifact 和缺口。
+6. `docs/diagnostics/openclaw-case-rerun-and-skill-uptake-audit.md`
+   - 三案例是否重跑、哪些 skill 未使用属于正常、哪些缺口需要补强，以及三层 skill uptake 机制的审计重写。
+7. `docs/diagnostics/openclaw-three-layer-skill-rewrite-session-prompt.md`
+   - 可直接交给新 session 的三层能力重写任务提示词。
+8. `docs/frozen-case-packages/nyc-smoke-20230607/baseline-case-package.md`
    - NYC smoke 第一主案例冻结包；汇总 mission、最终报告、证据链、claim boundary、公共舆情样本结构和答辩可引用的基线结论。
-7. `docs/frozen-case-packages/nyc-smoke-20230607/defense-onepager.md`
+9. `docs/frozen-case-packages/nyc-smoke-20230607/defense-onepager.md`
    - NYC smoke 答辩一页纸；用于快速展示案例定位、议会流程、环境证据、公共语义样本和边界表述。
-8. `docs/openclaw-realcase-nyc-smoke-first-run-timeline.md`
-   - NYC smoke 首次真实 run 的历史 timeline；只用于保留当次运行事实、边界和暴露问题，不作为当前能力基线或工作计划。
+10. `docs/frozen-case-packages/colorado-river-glen-canyon-2023/baseline-case-package.md`
+   - Colorado River / Glen Canyon 第二主案例冻结包；汇总 mission、治理记录、水文/运行信号、公共语义和报告边界。
+11. `docs/frozen-case-packages/colorado-river-glen-canyon-2023/defense-onepager.md`
+   - Colorado River / Glen Canyon 答辩一页纸；用于展示慢变量环境治理争议案例。
 
 质量门基线命令：
 

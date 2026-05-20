@@ -692,7 +692,9 @@ def merged_runtime_control_freeze_record(
             if isinstance(resolved_controller.get("planning"), dict)
             else ""
         )
+        or maybe_text(resolved_gate.get("planning_mode"))
         or maybe_text(record.get("planning_mode"))
+        or "planner-backed"
     )
     gate_present = isinstance(resolved_gate, dict) and bool(resolved_gate)
     report_basis_freeze_allowed = (

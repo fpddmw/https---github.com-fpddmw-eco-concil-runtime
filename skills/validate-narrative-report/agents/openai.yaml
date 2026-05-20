@@ -1,5 +1,18 @@
 name: validate-narrative-report
-description: Validate structural traceability of a narrative report draft.
+description: Validate structural traceability and claim-basis boundaries of a narrative report draft.
 interface:
   input: runtime arguments
   output: narrative report validation artifact
+default_prompt: |
+  Use $validate-narrative-report after draft-narrative-report and before
+  publication. Validate report structure, audit visibility, and claim-basis
+  correspondence only; do not decide truth, rank evidence, score sources, or
+  impose a fixed agenda.
+
+  Block or warn when report wording exceeds its basis: public emotion/opinion or
+  main-concern claims need corpus, coverage audit, annotation, aggregation, and
+  denominator; formal-comment issue claims need candidate audit, readable detail
+  or attachment text, and classification; environment trend/peak/status claims
+  need aggregate-environment-evidence or item-level-example wording; source or
+  causal claims need relation, fact-check, alternatives, or challenger-review
+  basis. GDELT tone is media/document tone, not public sentiment.

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "draft-narrative-report"
-REPORT_TEMPLATE_VERSION = "narrative-report-template-v14"
+REPORT_TEMPLATE_VERSION = "narrative-report-template-v19"
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
@@ -43,6 +43,8 @@ SECTION_TITLES = {
         "what-happened": "Case Narrative",
         "evidence-basis": "Evidence-Based Analysis",
         "public-discourse-deepening": "Public Discourse Semantics",
+        "council-work": "What The Council Did",
+        "risk-register": "Risks And Open Problems",
         "council-reasoning": "Source Basis And Boundary",
         "limitations": "Evidence Limits",
         "decision-implications": "Decision Reference",
@@ -57,6 +59,8 @@ SECTION_TITLES = {
         "what-happened": "事件与议题脉络",
         "evidence-basis": "基于证据的分析",
         "public-discourse-deepening": "公共舆情语义分析",
+        "council-work": "议会做了什么",
+        "risk-register": "风险与问题识别",
         "council-reasoning": "资料基础与边界",
         "limitations": "证据限制",
         "decision-implications": "决策参考",
@@ -81,6 +85,223 @@ def normalize_language(language: str) -> str:
 
 def is_zh(language: str) -> bool:
     return normalize_language(language) == "zh-Hans"
+
+
+def issue_profile_from_text(text: str) -> str:
+    """Classify the writing problem without selecting a case-specific template."""
+    cleaned = maybe_text(text)
+    lowered = cleaned.lower()
+    formal_terms = (
+        "formal comment",
+        "public comment",
+        "regulations.gov",
+        "federal register",
+        "docket",
+        "rulemaking",
+        "notice of proposed rulemaking",
+        "agency notice",
+        "standard",
+        "regulatory",
+        "正式公众评论",
+        "正式评论",
+        "公众评论",
+        "规则制定",
+        "修订",
+        "法规",
+        "标准",
+        "征求意见",
+    )
+    strong_formal_terms = (
+        "formal comment",
+        "public comment",
+        "regulations.gov",
+        "docket",
+        "standard",
+        "naaqs",
+        "正式公众评论",
+        "正式评论",
+        "公众评论",
+        "标准",
+        "征求意见",
+    )
+    operational_terms = (
+        "reservoir",
+        "dam",
+        "release",
+        "storage",
+        "elevation",
+        "inflow",
+        "hydropower",
+        "operations",
+        "usbr",
+        "rise",
+        "water allocation",
+        "水库",
+        "大坝",
+        "下泄",
+        "库容",
+        "水位",
+        "入流",
+        "水电",
+        "调度",
+        "水资源",
+    )
+    incident_terms = (
+        "air quality",
+        "pm2.5",
+        "smoke",
+        "wildfire",
+        "fire detection",
+        "firms",
+        "airnow",
+        "receptor",
+        "pollution episode",
+        "空气质量",
+        "污染",
+        "烟雾",
+        "野火",
+        "火点",
+        "受体",
+        "浓度",
+    )
+    if any(token in lowered or token in cleaned for token in strong_formal_terms):
+        return "formal-policy-comment"
+    if any(token in lowered or token in cleaned for token in incident_terms):
+        return "environmental-incident"
+    if any(token in lowered or token in cleaned for token in operational_terms):
+        return "environmental-operations-governance"
+    if any(token in lowered or token in cleaned for token in formal_terms):
+        return "formal-policy-comment"
+    return "general-environment-governance"
+
+
+def formal_policy_context_present(text: str) -> bool:
+    lowered = maybe_text(text).lower()
+    return any(
+        token in lowered or token in text
+        for token in (
+            "formal comment",
+            "public comment",
+            "regulations.gov",
+            "federal register",
+            "docket",
+            "rulemaking",
+            "naaqs",
+            "formal issue",
+            "attachment-body",
+            "comment-detail",
+            "正式公众评论",
+            "正式评论",
+            "公众评论",
+            "规则制定",
+            "征求意见",
+        )
+    )
+
+
+def boundary_only_environment_text(text: str) -> bool:
+    lowered = maybe_text(text).lower()
+    return any(
+        token in lowered or token in text
+        for token in (
+            "no environmental observation",
+            "no live environmental",
+            "no airnow",
+            "no openaq",
+            "prevent environmental drift",
+            "environmental data would be out-of-scope",
+            "not ready for public proportions",
+            "not ready for public proportions/representativeness",
+            "not ready for environmental trend",
+            "do not let formal/public-discourse evidence be written up as environmental trend",
+            "do not let formal/public-discourse evidence",
+            "must not be written as evidence of",
+            "mandatory exclusions",
+            "不应写成环境趋势",
+            "不得写成环境趋势",
+            "没有环境观测",
+            "无环境观测",
+            "环境观测缺失",
+            "环境数据不在范围",
+            "环境趋势、暴露",
+            "暴露因果",
+            "健康结果",
+            "政策责任",
+        )
+    )
+
+
+def reportable_environment_basis_present(text: str) -> bool:
+    lowered = maybe_text(text).lower()
+    return any(
+        token in lowered or token in text
+        for token in (
+            "aggregate-environment-evidence",
+            "environment_evidence_aggregation",
+            "envagg-",
+            "airnow",
+            "openaq",
+            "open-meteo",
+            "open meteo",
+            "usgs",
+            "usbr",
+            "rise",
+            "firms",
+            "monitoring station",
+            "station observations",
+            "water level",
+            "storage",
+            "inflow",
+            "release",
+            "discharge",
+            "监测点",
+            "观测站",
+            "火点",
+            "水位",
+            "库容",
+            "入流",
+            "下泄",
+            "流量",
+        )
+    )
+
+
+def reportable_environment_detail(text: str, *, profile: str) -> str:
+    cleaned = maybe_text(text)
+    if not cleaned or boundary_only_environment_text(cleaned):
+        return ""
+    if profile == "formal-policy-comment" and not reportable_environment_basis_present(cleaned):
+        return ""
+    return cleaned
+
+
+def unsupported_environment_stock_text(text: str) -> bool:
+    cleaned = maybe_text(text)
+    return any(
+        token in cleaned
+        for token in (
+            "受体侧环境观测用于刻画事件强度和时序",
+            "环境压力信号：",
+            "环境与运行层面，关键证据显示：受体侧",
+            "环境/运行证据：受体侧",
+        )
+    )
+
+
+def issue_profile_focus(profile: str, language: str) -> str:
+    if is_zh(language):
+        return {
+            "formal-policy-comment": "正式治理程序、公众参与记录与公共语义之间的关系",
+            "environmental-operations-governance": "环境压力、运行记录、治理程序与公共讨论之间的关系",
+            "environmental-incident": "环境事件事实、可能解释路径与公共风险感知之间的关系",
+            "general-environment-governance": "环境事实、治理语境与公共讨论之间的关系",
+        }.get(profile, "环境事实、治理语境与公共讨论之间的关系")
+    return {
+        "formal-policy-comment": "formal governance records, participation records, and public semantics",
+        "environmental-operations-governance": "environmental pressure, operational records, governance process, and public discussion",
+        "environmental-incident": "environmental incident facts, plausible explanatory pathways, and public risk perception",
+        "general-environment-governance": "environmental facts, governance context, and public discussion",
+    }.get(profile, "environmental facts, governance context, and public discussion")
 
 
 def label(section_id: str, language: str) -> str:
@@ -292,7 +513,62 @@ def zh_keyword_summary_from_english(text: str) -> str:
             "因此，报告可以从“只有下游水文背景”推进到“具备直接水库/大坝运行描述和正式治理过程描述”。"
             "剩余限制在于：这些材料主要支持事实描述和关系判断，不足以单独给出完整因果、责任或政策评价。"
         )
-    if "nyc receptor observations" in lower or ("pm2.5" in lower and "smoke" in lower):
+    if "bounded formal/public-discourse source coverage" in lower and "attachment-body substance" in lower:
+        return (
+            "当前报告基础只能用于描述有边界的正式评论/公共话语来源覆盖、样本内评论线索和已记录限制。"
+            "它不能支持公众代表性、正式争点强弱排序、附件正文内容、环境趋势、暴露因果、政策责任或来源归因。"
+        )
+    if "11 attachment normalized signals" in lower and "metadata-only" in lower:
+        return (
+            "附件路线形成了 11 条附件相关归一化信号，但这些信号是 metadata-only / no-local-file / text-extraction-limited。"
+            "因此它们只能证明附件路线和抽取限制存在，不能被写成附件正文已经被阅读或分类。"
+        )
+    if "bounded issue annotations" in lower and "12 existing comment-detail signals" in lower:
+        return (
+            "正式评论 issue 标注只覆盖既有 12 条 comment-detail 信号，可作为样本内条目级线索。"
+            "它不能支持正式评论争点分布、比例、代表性样本或依赖附件正文的判断。"
+        )
+    if "approved public-discourse coverage audit" in lower and "existing normalized public/media corpus" in lower:
+        return (
+            "公共话语覆盖审计可以说明既有 GDELT 派生公共/媒体语料覆盖了什么、缺了什么，"
+            "但不能支持样本外公众态度、代表性、流行度、因果归因或政策责任判断。"
+        )
+    if "approved audit artifact public-discourse" in lower and "coverage/boundary evidence" in lower:
+        return (
+            "公共话语审计产物已被承接为覆盖/边界证据；其用途限于样本范围和缺口描述，"
+            "不能升级为公众 prevalence、代表性、因果或政策责任结论。"
+        )
+    if "approved optional issue-classification artifact" in lower and "12 comment-detail" in lower:
+        return (
+            "formal-comment issue-classification 产物已被承接为 12 条 comment-detail 信号上的 advisory 条目级标注。"
+            "它不能被汇总成争点强弱排序、prevalence、代表性或附件正文结论。"
+        )
+    if "attachment route linked" in lower and "metadata-only" in lower:
+        return (
+            "附件路线已完成 proposal、fetch/text-extraction/normalization receipt 和归一化信号的链路连接，"
+            "但成功重试保留了 metadata-only 与 text-extraction-limited 限制，因此只支持附件存在和限制追踪。"
+        )
+    if "round-002 has converted the continuation lanes" in lower and "mandatory exclusions" in lower:
+        return (
+            "Round-002 已把继续调查结果收口为 bounded descriptive/source-scope 报告基础："
+            "公共覆盖审计只作样本/覆盖/缺口 framing，正式 issue annotation 只作 12 条 detail 信号上的 advisory 线索，"
+            "附件路线只作元数据和抽取限制记录。必须排除公众比例、代表性、正式争点 prevalence、附件正文 substance、"
+            "环境趋势、暴露因果、健康结果、政策责任和来源归因。"
+        )
+    if "currently has formal/comment-detail and public/media-oriented normalized signals" in lower:
+        return (
+            "环境调查位确认：本 run 当前拥有 formal/comment-detail 与 public/media 取向的归一化信号，"
+            "没有环境观测信号；因此环境趋势、暴露估计、健康影响和政策责任需要专门证据路线，不能由正式评论或公共话语材料替代。"
+        )
+    if "public/media coverage audit, formal issue annotations, and attachment route outputs" in lower:
+        return (
+            "social/formal-governance lane 对报告基础的准备度是有条件的：公共/媒体覆盖审计、正式 issue annotations、附件路线输出均已被承接，"
+            "但只能按样本内、条目级和元数据限制使用，不能扩展为比例、代表性、附件正文、政策责任或因果结论。"
+        )
+    formal_context = formal_policy_context_present(cleaned)
+    if "nyc receptor observations" in lower or (
+        not formal_context and "pm2.5" in lower and "smoke" in lower
+    ):
         return (
             "纽约受体侧观测可以约束烟霾事件的时间和强度：PM2.5 在 2023-06-06 明显升高，"
             "在 2023-06-07 纽约区域多个监测点达到高值，并在 2023-06-08 仍保持较高水平，"
@@ -306,7 +582,8 @@ def zh_keyword_summary_from_english(text: str) -> str:
             facts.append(fact)
 
     add_fact(
-        any(token in lower for token in ("nyc", "new york", "pm2.5", "air-quality", "air quality", "smoke episode")),
+        not formal_context
+        and any(token in lower for token in ("nyc", "new york", "pm2.5", "air-quality", "air quality", "smoke episode")),
         "受体侧环境观测用于刻画事件强度和时序",
     )
     add_fact(
@@ -322,7 +599,8 @@ def zh_keyword_summary_from_english(text: str) -> str:
         "火点或野火记录可作为来源假说的背景线索，但不能单独完成物理来源判定",
     )
     add_fact(
-        any(token in lower for token in ("youtube", "video", "orange sky", "masks", "unsafe air", "public reaction")),
+        not formal_context
+        and any(token in lower for token in ("youtube", "video", "orange sky", "masks", "unsafe air", "public reaction")),
         "视频或平台样本显示该事件在公众可见性、风险感知和防护行为层面被讨论",
     )
     add_fact(
@@ -340,6 +618,10 @@ def zh_keyword_summary_from_english(text: str) -> str:
     add_fact(
         any(token in lower for token in ("federal register", "regulations.gov", "formal comment", "docket", "policy", "governance", "seis", "eis")),
         "正式治理记录和意见征集材料用于说明制度程序、参与样本和政策语境",
+    )
+    add_fact(
+        "regulations.gov" in lower,
+        "Regulations.gov 是正式评论入口或样本来源之一",
     )
     add_fact(
         any(token in lower for token in ("public discourse", "public-facing", "sample", "community", "sentiment", "affect")),
@@ -544,6 +826,419 @@ def public_discourse_compact_line(summary: dict[str, Any], language: str) -> str
     return "; ".join(parts)
 
 
+def formal_policy_helper_lines(run_dir: Path, basis_round_id: str, language: str) -> tuple[list[str], dict[str, Any]]:
+    if not is_zh(language):
+        return [], {}
+    derived_dir = run_dir / "derived" / basis_round_id / "social-investigator"
+    coverage = load_json_if_exists(derived_dir / "public-discourse-coverage-audit.json")
+    annotations = load_json_if_exists(derived_dir / "formal-comment-issue-annotations-bounded12.json")
+    if not coverage and not annotations:
+        return [], {}
+
+    source_skill_counts = {
+        maybe_text(item.get("source_skill")): int(item.get("signal_count") or 0)
+        for item in list_items(coverage.get("source_skill_counts"))
+        if isinstance(item, dict)
+    }
+    source_family_counts = {
+        maybe_text(item.get("source_family")): int(item.get("signal_count") or 0)
+        for item in list_items(coverage.get("source_family_counts"))
+        if isinstance(item, dict)
+    }
+    discourse_lane_counts = {
+        maybe_text(item.get("discourse_lane")): int(item.get("signal_count") or 0)
+        for item in list_items(coverage.get("discourse_lane_counts"))
+        if isinstance(item, dict)
+    }
+    coverage_cues = [
+        {
+            "source_family": maybe_text(item.get("source_family")),
+            "coverage_status": maybe_text(item.get("coverage_status")),
+            "observed_signal_count": int(item.get("observed_signal_count") or 0),
+        }
+        for item in list_items(coverage.get("coverage_cues"))
+        if isinstance(item, dict)
+    ]
+    label_counts: dict[str, int] = {}
+    for item in list_items(annotations.get("annotations")):
+        if not isinstance(item, dict):
+            continue
+        label = maybe_text(item.get("label"))
+        if label:
+            label_counts[label] = label_counts.get(label, 0) + 1
+    top_labels = sorted(label_counts.items(), key=lambda item: (-item[1], item[0]))[:8]
+    label_phrase = "、".join(f"{label}({count})" for label, count in top_labels)
+
+    lines: list[str] = []
+    if coverage:
+        gdelt_count = source_skill_counts.get("fetch-gdelt-doc-search", 0)
+        listing_count = source_skill_counts.get("fetch-regulationsgov-comments", 0)
+        detail_count = source_skill_counts.get("fetch-regulationsgov-comment-detail", 0)
+        formal_count = source_family_counts.get("regulationsgov-formal-comments", 0)
+        lines.append(
+            "已进入报告基础的样本覆盖为有边界的来源范围："
+            f"GDELT DOC 检索(recon)归一化 {gdelt_count} 条媒体/公共记录，"
+            f"Regulations.gov 正式评论线共 {formal_count} 条信号，其中 listing 候选记录 {listing_count} 条、comment-detail 记录 {detail_count} 条。"
+            "YouTube/Bluesky 在本次 DB 样本中未观察到信号；这只能说明本次 run 的获取/归一化覆盖，不代表平台或公众讨论不存在。"
+        )
+    if annotations:
+        sample_count = int(annotations.get("sample_count") or 0)
+        annotation_count = int(annotations.get("annotation_count") or 0)
+        lines.append(
+            f"正式评论议题标注的样本分母为 {sample_count} 条 comment-detail 信号，生成 {annotation_count} 个非互斥、样本内标签。"
+            + (f"高频线索包括 {label_phrase}。" if label_phrase else "")
+            + "这些标签只能作为条目级阅读线索，不能相加为争点份额或代表性立场分布。"
+        )
+    lines.append(
+        "附件路线的报告用法被限制在限制说明层：成功重试保留 metadata-only / no-local-file / text-extraction-limited 状态，"
+        "因此附件输出不能被写成附件正文已经被读取、归纳或分类。"
+    )
+    return unique_texts(lines), {
+        "coverage_audit_id": maybe_text(coverage.get("coverage_audit_id")),
+        "annotation_set_id": maybe_text(annotations.get("annotation_set_id")),
+        "coverage_sample_count": int(coverage.get("sample_count") or 0) if coverage else 0,
+        "annotation_sample_count": int(annotations.get("sample_count") or 0) if annotations else 0,
+        "annotation_count": int(annotations.get("annotation_count") or 0) if annotations else 0,
+        "source_skill_counts": source_skill_counts,
+        "source_family_counts": source_family_counts,
+        "discourse_lane_counts": discourse_lane_counts,
+        "coverage_cues": coverage_cues,
+        "coverage_warnings": list_items(coverage.get("warnings")) if coverage else [],
+        "representativeness_limits": list_items(coverage.get("representativeness_limits")) if coverage else [],
+        "label_counts": label_counts,
+    }
+
+
+def _label_count_phrase(label_counts: dict[str, int], labels: list[str]) -> str:
+    parts = [
+        f"{label}({label_counts.get(label, 0)})"
+        for label in labels
+        if int(label_counts.get(label, 0)) > 0
+    ]
+    return "、".join(parts)
+
+
+ZH_FORMAL_ISSUE_LABELS = {
+    "health": "健康保护",
+    "health-benefit": "健康收益",
+    "health-safety": "健康安全",
+    "scientific-basis": "科学依据",
+    "legal-authority": "法定授权",
+    "support": "支持性立场",
+    "cost": "成本",
+    "economic-burden": "经济负担",
+    "oppose": "反对性立场",
+    "procedural-or-unclear": "程序或表达不清",
+    "procedure-governance": "程序治理",
+    "environmental-justice": "环境正义",
+    "equity": "公平",
+    "air-quality-smoke": "空气质量或烟尘",
+}
+
+
+def _zh_label_count_phrase(label_counts: dict[str, int], labels: list[str]) -> str:
+    parts = [
+        f"{ZH_FORMAL_ISSUE_LABELS.get(label, label)} {int(label_counts.get(label, 0))} 项"
+        for label in labels
+        if int(label_counts.get(label, 0)) > 0
+    ]
+    return "、".join(parts)
+
+
+def formal_policy_argument_summary(meta: dict[str, Any], language: str) -> dict[str, Any]:
+    """Turn bounded helper uptake into a report argument, not just a count dump."""
+    if not is_zh(language):
+        return {}
+    source_skill_counts = meta.get("source_skill_counts") if isinstance(meta.get("source_skill_counts"), dict) else {}
+    label_counts = meta.get("label_counts") if isinstance(meta.get("label_counts"), dict) else {}
+    if not source_skill_counts and not label_counts:
+        return {}
+
+    gdelt_count = int(source_skill_counts.get("fetch-gdelt-doc-search") or 0)
+    listing_count = int(source_skill_counts.get("fetch-regulationsgov-comments") or 0)
+    detail_count = int(source_skill_counts.get("fetch-regulationsgov-comment-detail") or 0)
+    annotation_sample_count = int(meta.get("annotation_sample_count") or 0)
+    annotation_count = int(meta.get("annotation_count") or 0)
+    health_science_legal = _zh_label_count_phrase(
+        label_counts,
+        ["health", "health-benefit", "health-safety", "scientific-basis", "legal-authority", "support"],
+    )
+    burden_feasibility = _zh_label_count_phrase(
+        label_counts,
+        ["cost", "economic-burden", "oppose", "procedural-or-unclear", "procedure-governance"],
+    )
+    equity_environment = _zh_label_count_phrase(
+        label_counts,
+        ["environmental-justice", "equity", "air-quality-smoke"],
+    )
+    zero_families = [
+        cue.get("source_family")
+        for cue in list_items(meta.get("coverage_cues"))
+        if isinstance(cue, dict)
+        and maybe_text(cue.get("coverage_status")) == "not-observed-in-db-sample"
+    ]
+    zero_family_phrase = "、".join(zero_families)
+
+    central_claim = (
+        "现有报告基础支持的判断是：在本次可审计样本内，2024 年 PM2.5 NAAQS 修订的公共争议"
+        "主要呈现为健康保护、科学依据和法定授权正当性，与成本负担、经济影响和实施可行性之间的张力。"
+        "正式评论样本能够提供争点类型线索，媒体/公共文档样本能够提供议题命名和可见性线索；"
+        "二者合在一起可以形成一张有边界的议题地图，但不能替代完整 docket 分析、代表性公众调查或政策优劣裁断。"
+    )
+    subclaims = [
+        (
+            f"正式评论语料入口已经建立：Regulations.gov listing 候选记录 {listing_count} 条，"
+            f"其中 {detail_count} 条进入 comment-detail 探测样本。这个链路能说明评论样本和可读性边界，"
+            "但不能把 listing 当作完整评论正文。"
+        ),
+        (
+            f"有限 comment-detail 样本中出现了健康、科学依据和法律权限相关线索"
+            f"（{health_science_legal or '本轮未形成可列举标签'}），也出现了成本、经济负担或程序/反对线索"
+            f"（{burden_feasibility or '本轮未形成可列举标签'}）。"
+            f"这些来自 {annotation_sample_count} 条 detail 信号上的 {annotation_count} 个非互斥标签，"
+            "只能说明争点类型，不能说明争点强弱排序。"
+        ),
+        (
+            (
+                f"样本内还出现了公平、EJ 或空气质量/烟尘相关线索（{equity_environment}），"
+                "这说明议题不只是在技术标准层面被表达，也会被连接到健康保护、公平和负担问题。"
+            )
+            if equity_environment
+            else "当前样本没有形成足够的公平/EJ 标签基础；不能据此判断公平议题在正式评论总体中的位置。"
+        ),
+        (
+            f"GDELT DOC 检索样本归一化 {gdelt_count} 条媒体/公共记录，可用于说明该规则制定在公共文本中如何被命名和传播；"
+            "但它不是社交平台评论语料，也不是代表性民意样本。"
+        ),
+        (
+            f"{zero_family_phrase} 在本次 DB 样本中未观察到信号。"
+            if zero_family_phrase
+            else "本次 coverage audit 没有给出可支持平台代表性的社交样本。"
+        )
+        + "这只能说明本次 run 的覆盖缺口，不能推出现实讨论不存在。",
+    ]
+    evidence_roles = [
+        {
+            "claim": "总论点",
+            "evidence": (
+                f"Regulations.gov listing {listing_count} 条、comment-detail {detail_count} 条、"
+                f"GDELT DOC {gdelt_count} 条，以及 bounded issue annotation。"
+            ),
+            "role": "把正式制度入口、有限评论样本和公共文档样本串成议题地图，同时防止升级为代表性或政策优劣结论。",
+        },
+        {
+            "claim": "正式评论争点结构",
+            "evidence": subclaims[1],
+            "role": "识别样本内争点类型：健康/科学/法律正当性、成本/负担、程序和公平线索。",
+        },
+        {
+            "claim": "公共语义结构",
+            "evidence": subclaims[3],
+            "role": "说明媒体/公共文档样本提供的是命名、可见性和传播语境，不是样本外公众态度。",
+        },
+        {
+            "claim": "风险与问题识别",
+            "evidence": "listing/detail/attachment/GDELT/social-platform coverage 的层级必须分开。",
+            "role": "防止把候选记录、附件元数据或 recon 结果写成完整语料与代表性结论。",
+        },
+    ]
+    executive_paragraphs = [
+        (
+            f"本报告围绕 2024 年 EPA PM2.5 NAAQS 修订的正式公众评论和媒体/公共语义结构展开。"
+            f"可用证据包括 {listing_count} 条 Regulations.gov 候选 listing、{detail_count} 条 comment-detail 探测样本、"
+            f"{gdelt_count} 条 GDELT DOC 媒体/公共文档记录，以及对可读评论样本形成的有限争点标注。"
+            "这些材料足以支持一个描述性判断：该议题在样本内不是单纯的支持/反对二分，而是围绕健康保护、科学与法律正当性、"
+            "成本和实施影响、公平关切等问题形成的规则制定争议。"
+        ),
+        (
+            "这份报告的价值在于把正式制度参与和公共文本语义放在同一张证据地图上。"
+            "它能说明当前样本中哪些争点可见、哪些公共命名方式出现、哪些证据层级已经闭合；"
+            "但它不能判断正式评论总体格局、样本外公众态度比例、环境效果、健康因果或政策责任。"
+        ),
+    ]
+    issue_analysis = [
+        (
+            "从治理争议看，PM2.5 NAAQS 修订的核心张力并不只是“是否收紧标准”。"
+            "样本内可见的表达把健康保护、科学依据和 EPA 法定授权放在正当性一侧，同时把成本、经济负担、程序治理和实施影响放在约束一侧。"
+            "这说明该议题更适合作为规则制定中的利益和证据边界问题来阅读，而不是作为单一态度投票来阅读。"
+        ),
+        (
+            f"正式评论探测样本中，健康/科学/授权相关线索包括 {health_science_legal or '尚未形成可列举标签'}；"
+            f"成本/负担/程序相关线索包括 {burden_feasibility or '尚未形成可列举标签'}。"
+            f"这些标签来自 {annotation_sample_count} 条 detail 信号上的 {annotation_count} 个非互斥标注，"
+            "因此适合用来识别争点类型，不适合相加、排序或外推为完整 docket 的争点分布。"
+        ),
+    ]
+    if equity_environment:
+        issue_analysis.append(
+            f"样本内还出现了 {equity_environment} 等线索。"
+            "这使议题的公共含义超出技术标准本身：PM2.5 标准讨论会被连接到健康保护、暴露负担、公平和实施成本之间的分配问题。"
+        )
+    evidence_analysis = [
+        (
+            "证据链的关键不在于记录数量本身，而在于不同来源的功能不同。"
+            "Regulations.gov listing 提供的是正式评论入口和候选样本框，comment-detail 提供的是有限可读文本线索，"
+            "附件路线主要揭示正文可读性的限制，GDELT DOC 则提供媒体和公共文档如何命名该议题的线索。"
+            "如果把这些层级混在一起，报告就会把入口材料误写成评论正文，或把媒体可见性误写成公众代表性。"
+        ),
+        (
+            "议会因此采用了有边界的收口方式：正式评论材料只用于描述样本内争点和可读性边界，"
+            "公共文本材料只用于描述样本内命名和传播语境，附件路线只用于说明文本抽取限制。"
+            "这些边界不是报告的附属说明，而是结论本身的一部分。"
+        ),
+    ]
+    public_semantics = [
+        (
+            f"公共语义方面，{gdelt_count} 条 GDELT DOC 记录说明 PM2.5 NAAQS 修订已经进入媒体/公共文档语境，"
+            "可被命名为 soot pollution、fine particulate standards、EPA tightening 等相关议题。"
+            "这些命名线索有助于理解议题如何被公共文本组织，但不能回答公众总体态度、平台讨论强弱或情绪比例。"
+        ),
+        (
+            (
+                f"本次 DB 样本中未观察到 {zero_family_phrase} 信号。"
+                if zero_family_phrase
+                else "本次 coverage audit 没有给出可以支撑平台代表性的社交样本。"
+            )
+            + "这应被解释为本次 run 的覆盖缺口，而不是现实世界中相应平台没有讨论。"
+        ),
+    ]
+    method_context = [
+        (
+            "从议会流程看，moderator 先把任务拆成正式评论、公共/媒体语义和治理代表性边界三条证据线；"
+            "investigator 通过本地 Regulations.gov 和 GDELT 路线获取材料，challenger 则持续限制 listing、detail、附件和公共文档之间的 claim 升级。"
+            "这种流程安排的意义，是确保报告不会把工具执行结果直接转换为超出 basis 的政策判断。"
+        )
+    ]
+    risks = [
+        f"正式评论完整性风险：{listing_count} 条 listing 只是候选入口，{detail_count} 条 detail 是有限探测样本，不是完整 docket 语料。",
+        f"争点识别风险：{annotation_count} 个标签是非互斥、样本内、条目级 annotation，不能相加成争点强弱排序，也不能代表正式评论总体。",
+        "附件可读性风险：附件路线保留仅元数据、无本地文件或文本抽取受限状态，不能写成附件正文已被阅读。",
+        "公共话语覆盖风险：GDELT DOC 是媒体/文档检索样本；没有 YouTube/Bluesky normalized signals，不能判断社交平台情绪或样本外公众态度。",
+        "重复与聚合风险：GDELT DOC 中可能有 syndicated headlines 或重复报道；未 materialize tone aggregates、Events/Mentions/GKG row layers。",
+        "环境与责任风险：本 run 没有环境观测、暴露模型、健康结果或归因路线，不能推出环境趋势、健康因果、政策责任或污染来源归因。",
+    ]
+    non_conclusions = [
+        "不能断言正式评论总体支持或反对 2024 PM2.5 NAAQS 修订，也不能判断哪一类争点在完整 docket 中占主导。",
+        f"不能把 {listing_count} 条 listing 或 {detail_count} 条 detail 探测样本外推为完整正式评论语料；listing 只能作为候选入口，不能当作评论正文。",
+        "不能声称附件正文已经被系统读取、归纳或分类；附件路线在本 run 中只支持可读性限制说明。",
+        "不能报告样本外公众态度比例、社交平台情绪分布或公共舆论强弱；GDELT DOC 检索样本不是代表性公众样本。",
+        "不能推出 PM2.5 环境趋势、暴露变化、健康因果、政策责任或污染来源归因；本 run 没有走这些观测和归因路线。",
+    ]
+    direct_answers = [
+        "主要治理争议：样本内可见的争议轴不是单一“支持/反对”，而是健康保护、科学依据、法律权限、成本负担、程序治理和公平关切之间的组合。",
+        "公共讨论语义结构：本次公共/媒体样本能说明 PM2.5 NAAQS 被公共文本命名为 soot pollution / fine particulate standards / EPA tightening 相关议题，但不能说明样本外公众情绪或平台讨论强弱。",
+        "证据支持：已有 proposal -> fetch -> normalize -> council uptake -> frozen basis -> report 的链路，可以支持来源范围内的描述性结论。",
+        "证据限制：不能回答哪一方占主导、正式评论总体争点强弱、样本外公众态度、环境效果、健康因果或政策责任。",
+    ]
+    council_work = [
+        "Round-001 中，moderator 划分正式评论、公共/媒体语义和治理代表性三个 evidence request；social-investigator 自主选择 Regulations.gov 与 GDELT 本地 skill route。",
+        f"Round-001 获取并归一化 {listing_count} 条 Regulations.gov listing signal 和 {gdelt_count} 条 GDELT DOC article signal；challenger 判定这些只能作为 seed，不能报告收口。",
+        f"Round-002 中，social/formal-governance lane 补拉 {detail_count} 条 comment-detail，完成正式争点 bounded annotation，并尝试附件路线；helper artifacts 被 evidence bundle 和 finding 承接后才进入报告基础。",
+        "environmental-investigator 明确记录边界：当前 mission 没有环境观测 claim，不应引入新的环境观测路线并把正式评论材料误写成环境事实。",
+        "challenger 接受 bounded-ready，但强制排除代表性、争点强弱排序、附件正文、环境趋势、暴露因果、健康结果、政策责任和来源归因。moderator 依此冻结 bounded report basis。",
+    ]
+    decision_meaning = (
+        "对决策者和研究展示来说，这份报告最适合用作议题地图和证据缺口地图："
+        "它能帮助识别正式参与材料中可见的争点类型、公共文本中的命名方式，以及目前证据链在哪些环节已经闭合、在哪些环节仍然不足。"
+        "它不应被用作政策优劣裁决、完整公众意见概括或环境健康影响评估。"
+    )
+    follow_up_needs = [
+        "若要判断正式评论总体格局，需要完整 docket 候选审计、批量可读正文/附件抽取，以及可复核的争点分类聚合。",
+        "若要判断公众态度或平台讨论强弱，需要明确定义的公共语料、覆盖审计、标注规则、聚合结果和分母。",
+        "若要讨论环境效果、暴露变化、健康影响或政策责任，需要独立的环境观测、暴露/健康证据和因果或责任审查路线。",
+    ]
+    academic_sections = {
+        "abstract": executive_paragraphs,
+        "keywords": [
+            "PM2.5 NAAQS",
+            "正式公众评论",
+            "Regulations.gov",
+            "GDELT",
+            "公共语义",
+            "证据边界",
+        ],
+        "introduction": [
+            (
+                "细颗粒物国家环境空气质量标准的修订同时具有科学、法律和分配政治含义。"
+                "在正式规则制定中，公众评论提供制度化参与记录；在媒体和公共文本中，同一议题又会被重新命名、解释并嵌入健康、成本和治理责任叙事。"
+                "因此，理解该议题不能只问是否支持或反对标准收紧，还需要区分正式评论、公共可见性和可审计证据之间的层级。"
+            ),
+            (
+                "本文的问题是：在当前 OpenClaw 议会已冻结的证据基础上，能够如何描述 2024 年 PM2.5 NAAQS 修订中的正式评论争议和公共语义结构。"
+                "本文的贡献不是给出政策优劣裁断，而是形成一份可复核的争议结构和证据边界说明。"
+            ),
+        ],
+        "methods": [
+            (
+                "本文使用的材料限于已进入冻结报告基础的议会对象和被议会承接的辅助分析产物。"
+                f"主要样本包括 {listing_count} 条 Regulations.gov 候选 listing、{detail_count} 条 comment-detail 探测样本、"
+                f"{gdelt_count} 条 GDELT DOC 媒体/公共文档记录，以及 {annotation_sample_count} 条 detail 信号上的有边界争点标注。"
+            ),
+            (
+                "方法上，报告把不同来源家族按证据功能区分：Regulations.gov listing 用于界定正式评论入口，"
+                "comment-detail 用于识别有限可读文本中的争点线索，附件路线用于记录可读性限制，GDELT DOC 用于描述公共文本命名和传播语境。"
+                "质询角色对代表性、附件正文、环境趋势、健康因果和政策责任等强主张保留排除边界。"
+            ),
+            (
+                "这种方法的核心不是给来源排序，而是防止证据层级混淆：入口记录不能写成完整评论正文，"
+                "媒体/公共文档可见性不能写成代表性公众态度，样本内标签不能写成完整 docket 的争点强弱。"
+            ),
+        ],
+        "results": [
+            {
+                "title": "正式评论争议呈现多轴结构",
+                "paragraphs": issue_analysis,
+            },
+            {
+                "title": "公共文本提供议题命名和可见性，而非代表性民意",
+                "paragraphs": public_semantics,
+            },
+            {
+                "title": "证据链的主要成果是边界清楚的议题地图",
+                "paragraphs": evidence_analysis,
+            },
+        ],
+        "discussion": [
+            (
+                "上述结果说明，当前材料最适合支持描述性和结构性判断：PM2.5 NAAQS 修订在样本内同时被表达为健康保护、科学/法律正当性、"
+                "成本负担、程序治理和公平问题。它揭示的是争议维度，而不是争议力量对比。"
+            ),
+            (
+                "风险主要来自三个方向。第一，正式评论样本仍然有限，listing 与 detail 的层级不能混用；第二，附件正文未形成稳定可读语料，"
+                "因此不能把附件路线写成附件内容分析；第三，公共文本样本缺少代表性抽样框和平台覆盖，不能外推出公众态度。"
+            ),
+            (
+                "因此，本文不能推出以下强结论：正式评论总体支持或反对修订，完整 docket 中的主导争点，附件正文的实质内容，"
+                "样本外公众态度比例、社交平台情绪分布、公共舆论强弱，或 PM2.5 环境趋势、暴露变化、健康因果和政策责任。"
+            ),
+        ],
+        "conclusion": [
+            central_claim,
+            decision_meaning,
+            "后续若要形成更强结论，应补齐完整正式评论语料、附件正文抽取、争点分类聚合、公共语料覆盖审计，以及必要时的环境和健康影响证据。"
+        ],
+        "follow_up_needs": follow_up_needs,
+    }
+    return {
+        "central_claim": central_claim,
+        "executive_paragraphs": executive_paragraphs,
+        "issue_analysis": issue_analysis,
+        "evidence_analysis": evidence_analysis,
+        "public_semantics": public_semantics,
+        "method_context": method_context,
+        "reasoning_chain": subclaims,
+        "evidence_roles": evidence_roles,
+        "limitations": non_conclusions,
+        "risk_register": risks,
+        "direct_answers": direct_answers,
+        "council_work": council_work,
+        "decision_meaning": decision_meaning,
+        "follow_up_needs": follow_up_needs,
+        "academic_sections": academic_sections,
+        "profile": "formal-policy-comment",
+    }
+
+
 def load_optional_json_path(run_dir: Path, path_text: str, default_relative: str = "") -> tuple[Path | None, dict[str, Any]]:
     if maybe_text(path_text):
         path = resolve_path(run_dir, path_text, default_relative or maybe_text(path_text))
@@ -646,6 +1341,7 @@ def artifact_row(kind: str, path: Path, payload: dict[str, Any]) -> dict[str, An
         "id": maybe_text(payload.get("publication_id"))
         or maybe_text(payload.get("decision_id"))
         or maybe_text(payload.get("report_id"))
+        or maybe_text(payload.get("handoff_id"))
         or maybe_text(payload.get("freeze_id"))
         or maybe_text(payload.get("object_id"))
         or kind,
@@ -697,16 +1393,33 @@ def artifact_row(kind: str, path: Path, payload: dict[str, Any]) -> dict[str, An
     }
 
 
-def load_reporting_basis(run_dir: Path, basis_round_id: str) -> list[dict[str, Any]]:
+def load_reporting_basis(
+    run_dir: Path,
+    basis_round_id: str,
+    *,
+    report_round_id: str = "",
+) -> list[dict[str, Any]]:
     candidates = [
         ("final-publication", run_dir / "reporting" / f"final_publication_{basis_round_id}.json"),
         ("council-decision", run_dir / "reporting" / f"council_decision_{basis_round_id}.json"),
         ("council-decision-draft", run_dir / "reporting" / f"council_decision_draft_{basis_round_id}.json"),
-        ("reporting-handoff", run_dir / "reporting" / f"reporting_handoff_{basis_round_id}.json"),
-        ("report-basis-freeze", run_dir / "report_basis" / f"frozen_report_basis_{basis_round_id}.json"),
-        ("expert-report-social", run_dir / "reporting" / f"expert_report_social_investigator_{basis_round_id}.json"),
-        ("expert-report-environmental", run_dir / "reporting" / f"expert_report_environmental_investigator_{basis_round_id}.json"),
     ]
+    current_report_round_id = maybe_text(report_round_id)
+    if current_report_round_id and current_report_round_id != basis_round_id:
+        candidates.append(
+            (
+                "reporting-handoff",
+                run_dir / "reporting" / f"reporting_handoff_{current_report_round_id}.json",
+            )
+        )
+    candidates.extend(
+        [
+            ("reporting-handoff", run_dir / "reporting" / f"reporting_handoff_{basis_round_id}.json"),
+            ("report-basis-freeze", run_dir / "report_basis" / f"frozen_report_basis_{basis_round_id}.json"),
+            ("expert-report-social", run_dir / "reporting" / f"expert_report_social_investigator_{basis_round_id}.json"),
+            ("expert-report-environmental", run_dir / "reporting" / f"expert_report_environmental_investigator_{basis_round_id}.json"),
+        ]
+    )
     rows: list[dict[str, Any]] = []
     for kind, path in candidates:
         payload = load_json_if_exists(path)
@@ -827,459 +1540,6 @@ def markdown_audit_lines(draft: dict[str, Any], language: str) -> list[str]:
             lines.append(f"- ... {len(audit_refs) - 25} additional refs in the JSON artifact")
     lines.append("")
     return lines
-
-
-def zh_article_markdown_from_draft(draft: dict[str, Any]) -> str:
-    title = maybe_text(draft.get("title")) or "叙事报告"
-    boundary = draft.get("claim_boundary") if isinstance(draft.get("claim_boundary"), dict) else {}
-    boundary_summary = maybe_text(boundary.get("summary"))
-    argument_map = draft.get("argument_map") if isinstance(draft.get("argument_map"), dict) else {}
-    central_claim = maybe_text(argument_map.get("central_claim"))
-    reasoning_chain = text_list(argument_map.get("reasoning_chain"))
-    limitations = text_list(argument_map.get("limitations"))
-    decision_meaning = maybe_text(argument_map.get("decision_meaning"))
-    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
-    mission_payload = source_material.get("mission") if isinstance(source_material.get("mission"), dict) else {}
-    mission_request = (
-        maybe_text(mission_payload.get("request_text"))
-        or maybe_text(mission_payload.get("objective"))
-        or maybe_text(mission_payload.get("topic"))
-    )
-    key_points = section_paragraphs(draft, "key-points")
-    narrative = section_paragraphs(draft, "what-happened")
-    evidence = section_paragraphs(draft, "evidence-basis")
-    public_discourse = section_paragraphs(draft, "public-discourse-deepening")
-    decision = section_paragraphs(draft, "decision-implications")
-    source_basis = section_paragraphs(draft, "council-reasoning")
-    combined = " ".join([title, mission_request, central_claim, *reasoning_chain, *narrative, *evidence, *public_discourse])
-    lower_combined = combined.lower()
-    is_nyc_case = "纽约" in combined or "PM2.5" in combined or "烟霾" in combined
-    is_colorado_case = "科罗拉多" in combined or "lake powell" in lower_combined or "glen canyon" in lower_combined
-    lines = [f"# {title}", ""]
-
-    if is_nyc_case:
-        evidence_roles = [
-            item
-            for item in list_items(argument_map.get("evidence_roles"))
-            if isinstance(item, dict)
-        ]
-        role_evidence = [maybe_text(item.get("evidence")) for item in evidence_roles]
-        env_detail = first_text(
-            [
-                paragraph
-                for paragraph in role_evidence
-                if "AirNow" in paragraph or "ug/m3" in paragraph or "PM2.5" in paragraph
-            ]
-            + [
-                paragraph
-                for paragraph in [*evidence, *key_points, *narrative, *reasoning_chain]
-                if "AirNow" in paragraph or "ug/m3" in paragraph or "PM2.5" in paragraph
-            ],
-            first_text(evidence + narrative + reasoning_chain),
-        )
-        public_overview = first_text(
-            [
-                paragraph
-                for paragraph in public_discourse + key_points
-                if "476" in paragraph or "GDELT" in paragraph or "YouTube" in paragraph
-            ],
-            first_text(public_discourse + key_points),
-        )
-        source_narrative = first_text(
-            [
-                paragraph
-                for paragraph in public_discourse + key_points
-                if "来源叙事" in paragraph or "加拿大野火" in paragraph or "区域野火" in paragraph
-            ],
-            "",
-        )
-        affect_issue_line = first_text(
-            [
-                paragraph
-                for paragraph in public_discourse + key_points
-                if "公众表达" in paragraph or "议题线索主要包括" in paragraph
-            ],
-            "",
-        )
-        public_boundary_line = first_text(
-            [
-                paragraph
-                for paragraph in public_discourse + key_points
-                if "公共讨论线可以" in paragraph or "代表性公众情绪" in paragraph
-            ],
-            "",
-        )
-        tone_line = first_text([paragraph for paragraph in public_discourse if "GDELT 语气" in paragraph], "")
-        process_line = (
-            "从工作过程看，本案不是由报告阶段临时拼接材料，而是先由环境调查线索确定受体端异常，"
-            "再由公共讨论线补充公开视频、评论和 GDELT 公共记录，随后经过质询与报告基础冻结，"
-            "才进入当前的叙事报告撰写。这个过程的意义在于：报告可以把环境事实、来源假说和舆情语义放在同一问题链条下讨论，"
-            "同时保留不能升级为强归因或代表性民意的边界。"
-        )
-        paragraphs = [
-            (
-                f"本文围绕用户提出的“{mission_request}”展开。"
-                if mission_request
-                else "本文围绕 2023 年纽约烟霾事件展开。"
-            )
-            + (
-                f"综合已进入报告基础的环境观测、火点背景、公共讨论样本和语义摘要，较稳妥的中心判断是：{central_claim}"
-                if central_claim
-                else "综合已进入报告基础的材料，报告只能形成有边界的描述性和关系性判断。"
-            ),
-            (
-                "报告的基本任务不是把一组数据源分别罗列出来，而是解释一个环境事件如何在物理过程和公共语义两个层面同时形成。"
-                "对纽约烟霾事件而言，第一层问题是空气质量异常是否真实存在、异常强度是否足以构成需要解释的环境冲击；"
-                "第二层问题是这种异常可以被哪些来源和输送线索解释；第三层问题则是公众、媒体和公开视频空间如何识别、命名并讨论这次冲击。"
-                "只有把这三层问题串联起来，报告才能回答用户真正关心的“发生了什么、可能原因是什么、证据支持到哪里、限制在哪里”。"
-            ),
-            (
-                "这一定性首先依赖受体端证据，而不是舆论材料本身。"
-                f"{env_detail}"
-                "因此，报告可以比较明确地说明事件的时间结构：污染过程不是长期缓慢变化，而是在 6 月 6 日抬升、6 月 7 日达到核心高值、6 月 8 日仍维持严重水平，并在 6 月 9 日明显回落。"
-                "这种受体端时序为后续讨论建立了事实地基，也避免把社交媒体或新闻叙事误当成事件本身。"
-            ),
-            (
-                "从事件演化看，6 月 5 日的低基线、6 月 6 日的明显升高、6 月 7 日的峰值和 6 月 9 日的回落共同构成了一个相对完整的污染过程。"
-                "这种过程性很重要：如果只有单个小时或单个站点的异常值，报告只能谨慎地说存在局部异常；"
-                "但当前记录同时包含多小时窗口、多个站点-小时观测和跨日变化，因此更适合被描述为一次具有时间边界的城市受体端污染事件。"
-                "其中，Queens 站点峰值和 6 月 7 日 18:00Z 的小时均值提供了强度上限的直观参照，而 6 月 8 日凌晨仍然较高、6 月 9 日明显回落，则说明这不是瞬时误差或孤立噪声。"
-            ),
-            (
-                "环境证据的第二个作用，是把“发生了污染”推进到“哪类解释更合理”。"
-                "PM2.5 受体曲线本身只能说明纽约空气质量受到了显著冲击，不能直接告诉我们污染从何而来；"
-                "因此，风向和火点线索成为连接受体端异常与可能来源区域的中间环节。"
-                "记录中的 298-330 度风向为北至西北方向输送提供了物理语境，FIRMS 火点活动则说明加拿大东部在事件前后具有区域野火活动背景。"
-                "这两类材料共同让“区域野火烟雾输送”成为合理解释，而不是事后随意添加的叙事。"
-            ),
-            (
-                "在事件被受体端数据确认之后，来源解释才进入第二层论证。"
-                "风向、火点和区域野火烟雾叙事共同指向一种合理解释：纽约的异常 PM2.5 过程与区域野火烟雾输送相容。"
-                "但这里的关键词是“相容”，不是“已经锁定”。FIRMS 火点记录能说明上游区域存在强烈野火活动背景，风向能说明输送方向具有物理可讨论性，公共文本中出现加拿大野火或区域野火烟雾叙事也能提示调查方向；三者合在一起提高了解释路径的可信度，却仍不能替代反向轨迹、烟羽影像、化学组成或专业归因模型。"
-            ),
-            (
-                "这种表述上的克制不是削弱结论，而是提高结论的专业性。"
-                "“区域输送相容”说明当前证据链已经超过了单纯相关叙事：它有受体端浓度过程、风向背景、火点活动背景和公共来源叙事之间的相互支持。"
-                "但“单一源火点判定”要求更高，需要证明某一具体火场或火场群的烟羽在时间和空间上到达纽约，并与受体端污染负荷建立更直接关系。"
-                "本报告没有把缺失的专业归因产品补写进结论，因此它能够支持有限但可靠的解释，而不是给出看似完整、实则证据不足的强结论。"
-            ),
-            (
-                "公共舆情材料的价值，在于揭示这次环境事件如何被公众和媒体理解。"
-                f"{public_overview}"
-                "这些材料把事件从“污染物浓度异常”推进到“社会感知与信息需求”层面：人们不仅看到橙色天空和空气污染，也在追问污染从哪里来、健康风险有多大、是否需要口罩或减少外出、官方解释是否足够清楚。"
-            ),
-            (
-                f"{affect_issue_line}"
-                if affect_issue_line
-                else "样本内舆情标注显示，公共表达同时包含报道转述、疑问、不确定和担忧等不同层次。"
-            )
-            + "这组结果的意义不在于给出总体公众情绪比例，而在于说明该事件的公共语义重心：讨论并非只围绕视觉冲击展开，而是持续指向来源解释、健康风险和防护信息。",
-            (
-                "舆情样本的结构也说明，本案并不是简单的“负面情绪事件”。"
-                "样本中占比较高的是中性报道/转述，这意味着大量公共材料首先承担了记录、传播和解释事件的功能；"
-                "不确定/疑问和担忧虽然数量较少，却指向了风险沟通中的关键问题：公众需要理解污染来源、健康风险和可采取的防护行动。"
-                "因此，舆情分析的重点不应只是给出一个笼统的情绪极性，而应识别公共讨论中反复出现的语义任务：确认事件、追问来源、评估风险、寻找行动建议。"
-            ),
-            (
-                "议题线索进一步强化了这一判断。来源/起因疑问、健康风险、信息求助/询问分别对应事件理解中的三个环节："
-                "第一，公众需要知道污染从哪里来；第二，公众需要判断污染会不会影响身体健康和日常活动；第三，公众需要寻找可靠信息来决定是否减少外出、佩戴口罩或采取其他防护措施。"
-                "这些语义类别与环境证据之间存在内在联系：正因为受体端污染强度高且过程明显，来源和健康风险才会成为公共讨论中的核心问题。"
-            ),
-            (
-                "因此，环境证据和舆情证据在本文中不是两条互不相干的材料清单。环境证据回答“事件是否真实发生、强度如何、时间边界在哪里、哪类物理解释较为相容”；"
-                "舆情证据回答“公共讨论如何感知这次冲击、哪些风险和成因被反复提出、信息需求集中在哪里”。"
-                "两类证据结合后，报告才能同时说明事件的物理侧和社会侧：前者约束事实，后者解释语义反应；前者防止报告沦为舆论摘录，后者防止报告只停留在污染物曲线而忽视公众风险感知。"
-            ),
-            (
-                f"{source_narrative}"
-                if source_narrative
-                else "来源叙事标签显示，样本中存在关于区域野火烟雾和加拿大野火的成因表达。"
-            )
-            + "这类信息适合被理解为公共语义线索：它说明公共讨论中哪些解释被反复提及，却不能被写成物理来源判定。换言之，舆情可以帮助发现、组织和追问假说，但不能单独完成环境归因。",
-            (
-                "来源叙事在本案中尤其值得单独说明。样本中“区域野火烟雾”和“加拿大野火”标签的出现，说明公众和媒体语境中已经形成了较清楚的来源解释方向。"
-                "这对调查是有价值的：它提示研究不应只在纽约本地寻找污染源，也不应把事件简化为城市内部排放问题。"
-                "但来源叙事的证据属性仍然是语义性的，它回答的是“公共文本如何谈论来源”，而不是“物理过程是否已经被证明”。"
-                "如果后续研究要把来源结论做强，就应以这些叙事线索为问题入口，继续补充轨迹、烟羽和化学证据，而不是直接把叙事线索当作来源证明。"
-            ),
-            (
-                f"{tone_line}"
-                if tone_line
-                else "GDELT 语气记录可以补充媒体或公共文档的语气状态。"
-            )
-            + "这里同样需要保持边界：媒体/文档语气不等于公众情绪；YouTube 和公共文本样本也不是概率抽样，不能推出纽约受影响人群总体中某类情绪或观点的比例。",
-            (
-                "GDELT 的作用更适合放在媒体/文档语气层面理解。事件、Mentions 和 GKG 的 tone 指标都指向偏负的文档语气，"
-                "这与烟霾事件的公共风险属性相符合，但它不能替代评论文本中的情绪标注，也不能被解释为公众心理状态的直接测量。"
-                "YouTube 样本则提供了公开视频和部分评论语境，能够帮助观察事件如何被视觉化、标题化和评论化；"
-                "但平台检索本身存在查询噪声和误入样本风险，因此只能用于说明可见讨论与样本内语义结构。"
-            ),
-            (
-                f"{public_boundary_line}"
-                if public_boundary_line
-                else "公共讨论线可以深化为样本内议题、情绪线索与来源叙事结构，但不能把样本比例升级为总体民意。"
-            )
-            + "这一边界对报告质量很关键：如果把搜索样本当作代表性抽样，报告会显得结论更强，却会失去方法可信度；如果完全不报告样本结构，又会浪费已经形成的语义标注成果。当前写法选择折中：报告样本内结构，同时明确不外推。",
-            process_line,
-            (
-                "简要回看工作过程，本案先由任务描述进入开放式调查，而不是在 mission 中预设“加拿大来源”或指定固定数据源。"
-                "环境调查线先补齐 AirNow 受体端观测、Open-Meteo 风场和 FIRMS 火点背景；社会调查线先通过 GDELT 和 YouTube 建立公共可见性与来源叙事线索，随后通过舆情深化流程形成样本内议题、表达和来源叙事标签。"
-                "质询环节的作用，是防止这些证据被过度解释：YouTube 视频不能代表总体民意，GDELT tone 不能代表公众情绪，FIRMS 火点和风向也不能直接证明单一源火点。"
-                "报告阶段只消费这些已经进入基础的材料，因此当前文本是对调查结果的组织，而不是新的事实发现。"
-            ),
-            (
-                "从方法角度看，这个案例展示了“生态环境舆情分析与语义感知”中一个关键问题：环境事件的社会意义并不只存在于评论区，也不只存在于污染物曲线。"
-                "污染物曲线告诉我们事件何时、何地、以多大强度发生；公共讨论告诉我们人们如何感知这种异常、如何寻找解释、如何表达风险和行动需求。"
-                "如果只看环境数据，报告会忽略公众为何焦虑、为何追问来源；如果只看舆情数据，报告又容易脱离真实环境压力。"
-                "本案的价值就在于把两者放在一个证据框架中，并用明确边界限制它们各自能支持的结论强度。"
-            ),
-            (
-                "因此，这份报告最适合用于有限复盘、风险沟通复核和后续调查设计：它展示了如何把环境监测、开放火点数据、公共讨论和语义标注组织成一条可审计的证据链。"
-                "它的结论应被表述为：2023 年纽约烟霾事件具有清楚的 PM2.5 受体端异常，现有材料支持区域野火烟雾输送相容性，并显示公众讨论围绕来源、健康风险和信息需求展开；但报告不证明单一源火点，不提供代表性公众意见比例，也不替代专业归因模型。"
-            ),
-            (
-                "对决策者或研究展示而言，这种结论形式有两个意义。第一，它能够给出足够清楚的事实判断：纽约确实经历了一次强 PM2.5 烟霾过程，且现有证据支持区域野火烟雾输送相容性。"
-                "第二，它能够给出足够清楚的风险沟通判断：公共讨论集中在来源、健康风险和信息求助，说明公众需要的不只是污染事实，还包括原因解释、防护建议和可信信息渠道。"
-                "这使报告可以服务于复盘和沟通改进，但不会越界成为完整的物理归因报告或代表性民意报告。"
-            ),
-            (
-                "如果需要把结论进一步升级，后续工作应沿着证据缺口补强，而不是在现有材料上提高措辞强度。"
-                "来源侧需要反向轨迹、烟羽影像、化学组成或专业归因模型；公众意见侧需要明确抽样框、去重、分层或加权设计；风险沟通侧则需要进一步比对官方通告、媒体传播和公众提问之间的时间关系。"
-                "在这些材料进入证据基础之前，当前报告的专业性恰恰体现在保持克制：能够说明相容关系和语义结构，但不把相容性写成因果证明，也不把样本结构写成总体民意。"
-            ),
-            (
-                "综上，本案可以被理解为一次具有明确受体端污染过程、区域输送相容背景和高度可见公共讨论的生态环境舆情事件。"
-                "环境证据提供了事件事实和物理解释边界，舆情证据提供了公众风险感知和语义组织方式，二者共同支持一份有边界但可用的调研结论。"
-                "报告的核心不是宣称已经解决所有科学归因问题，而是在现有开放数据和推理基础上，给出可追踪、可复核、不过度自信的专业判断。"
-            ),
-        ]
-        if decision_meaning:
-            paragraphs.append(decision_meaning)
-        if limitations:
-            paragraphs.append("需要特别保留的证据边界包括：" + "；".join(limit.rstrip("。") for limit in limitations) + "。")
-    elif is_colorado_case:
-        evidence_roles = [
-            item
-            for item in list_items(argument_map.get("evidence_roles"))
-            if isinstance(item, dict)
-        ]
-        role_evidence = [maybe_text(item.get("evidence")) for item in evidence_roles]
-        operations_detail = first_text(
-            [
-                paragraph
-                for paragraph in [*role_evidence, *evidence, *key_points, *narrative, *reasoning_chain]
-                if "USBR RISE" in paragraph or "Lake Powell" in paragraph or "下泄量" in paragraph or "库容" in paragraph
-            ],
-            first_text(evidence + key_points + reasoning_chain),
-        )
-        governance_detail = first_text(
-            [
-                paragraph
-                for paragraph in [*role_evidence, *evidence, *key_points, *narrative, *reasoning_chain]
-                if "正式治理记录" in paragraph
-                or "Federal Register" in paragraph
-                or "post-2026" in paragraph
-                or "LTEMP" in paragraph
-                or "Adaptive Management" in paragraph
-            ],
-            "",
-        )
-        if "舆情样本" in governance_detail:
-            governance_detail = governance_detail.split(" 舆情样本", 1)[0].rstrip()
-        public_overview = first_text(
-            [
-                paragraph
-                for paragraph in public_discourse + key_points
-                if "800" in paragraph or "YouTube" in paragraph or "GDELT" in paragraph or "舆情样本" in paragraph
-            ],
-            first_text(public_discourse + key_points),
-        )
-        affect_issue_line = first_text(
-            [
-                paragraph
-                for paragraph in public_discourse + key_points
-                if "公众表达" in paragraph or "议题线索主要包括" in paragraph or "表达线索包括" in paragraph
-            ],
-            "",
-        )
-        source_narrative = first_text(
-            [
-                paragraph
-                for paragraph in public_discourse + key_points
-                if "来源叙事" in paragraph or "气候变化叙事" in paragraph or "干旱" in paragraph
-            ],
-            "",
-        )
-        tone_line = first_text([paragraph for paragraph in public_discourse if "GDELT 语气" in paragraph], "")
-        public_boundary_line = first_text(
-            [
-                paragraph
-                for paragraph in public_discourse + key_points
-                if "代表性" in paragraph or "不能外推" in paragraph or "总体比例" in paragraph
-            ],
-            "",
-        )
-        boundary_line = first_text(limitations, "")
-        paragraphs = [
-            (
-                f"本文围绕用户提出的“{mission_request}”展开。"
-                if mission_request
-                else "本文围绕科罗拉多河水资源短缺与格伦峡谷大坝运行争议展开。"
-            )
-            + (
-                f"综合已进入报告基础的水库运行记录、正式治理记录和公共讨论样本，较稳妥的中心判断是：{central_claim}"
-                if central_claim
-                else "综合已进入报告基础的材料，当前可以形成一份关于环境压力、运行变化、治理程序和公共语义的有边界调研报告。"
-            ),
-            (
-                "这份报告要回答的不是单一的“水位下降了吗”或“公众支持哪一方”，而是一个更复杂的治理问题："
-                "当科罗拉多河流域长期水资源压力、Lake Powell 水库状态、Glen Canyon Dam 运行安排和联邦治理程序同时被公众讨论时，"
-                "哪些事实已经可以被开放数据约束，哪些争议只是被公共文本反复表达，哪些判断仍然不能升级为责任归因或政策优劣排序。"
-                "因此，本文按事件和议题本身组织证据，而不是把材料清单作为正文重点。"
-            ),
-            (
-                "首先，环境压力必须落到可观测的水库和运行指标上。"
-                f"{operations_detail}"
-                "这些序列使报告可以从抽象的“水资源短缺”进入更具体的运行背景：Lake Powell 的水位和库容并不是只在舆论中被提及，"
-                "而是存在可追踪的日尺度记录；Glen Canyon 相关下泄变化也不是单纯由评论或新闻推断出来，而是可以在总下泄量和电站下泄量之间看到结构性差异。"
-            ),
-            (
-                "从时间结构看，2022-2024 年的序列共同显示了一个低位压力与阶段性恢复并存的格局。"
-                "低水位阶段说明 Lake Powell 作为上游关键水库曾处于紧张背景之下；到 2024 年末的水位和库容恢复，又提示治理讨论不能被简化为单向恶化叙事。"
-                "这种双重性很重要：如果只强调水位低点，容易把议题写成危机宣传；如果只强调后期恢复，又会遮蔽此前已经出现的运行压力和政策争议。"
-                "报告需要保留这种动态过程，才能更接近环境治理问题本身。"
-            ),
-            (
-                "下泄量证据进一步把“水库状态”连接到“格伦峡谷大坝运行争议”。"
-                "总日下泄量的高值说明 2023 年前后存在显著运行变化，至少 173 个日记录中总下泄量高于电站下泄量，则说明部分时段存在非电站下泄路径的可见信号。"
-                "这类信号可以支持运行层面的描述，也能解释为什么大坝运行会进入公共讨论和治理争议；"
-                "但它不能单独说明每一次下泄安排的法律依据、调度目的或责任归属。"
-            ),
-            (
-                "换言之，运行数据回答的是“发生了哪些可观测变化”，而不是“管理者为什么这样做”。"
-                "这一区分对专业报告尤其关键。水位、库容、入流和下泄量可以约束事实背景，并防止报告把公共叙事写成事实本身；"
-                "但运行意图、法律触发和政策责任需要操作说明、法律文本链路、正式决策文件或更具体的管理记录。"
-                "在这些材料没有进入报告基础之前，本文只能把运行变化作为治理争议的事实背景，而不能把它写成完整因果结论。"
-            ),
-            (
-                "第二，正式治理记录说明该议题并不是停留在媒体争论层面的公共话题。"
-                f"{governance_detail}"
-                "这些材料把 Lake Powell/Glen Canyon 争议放入了联邦水资源治理、环境影响评价和适应性管理框架中，"
-                "说明官方制度确实在处理未来运行规则、生态影响、公众参与和跨主体协调等问题。"
-            ),
-            (
-                "正式记录的价值在于确定治理程序的存在和议题入口。Federal Register 和 USBR public involvement 记录能够说明："
-                "后 2026 年 Colorado River 运行规则、Lake Powell/Lake Mead 操作框架、Glen Canyon Dam LTEMP 补充环境影响评价以及 Adaptive Management Work Group 等过程，都构成了该争议的制度背景。"
-                "这使报告可以避免把公共争论写成无制度承接的舆论噪声，也可以避免把水库运行写成纯自然过程。"
-            ),
-            (
-                "但正式记录同样有边界。它们可以证明“治理通道正在运行”，却不能证明“各利益相关方已经形成共识”；"
-                "可以证明“存在公众参与与联邦程序”，却不能直接给出不同方案的优劣排序；"
-                "可以说明议题被制度化处理，却不能替代对正式意见文本、听证材料、利益相关方陈述和法律约束的细读。"
-                "因此，本文把正式记录作为治理背景证据，而不是作为最终政策评价。"
-            ),
-            (
-                "第三，公共舆情材料揭示了这个水资源议题如何被看见、被命名和被解释。"
-                f"{public_overview}"
-                "在这些样本中，公众和媒体并不只是讨论“水位高低”这一单一指标，而是把水库水位、干旱/干旱化、气候变化、水电与基础设施风险、未来运行规则和流域分配争议放在同一语义空间中。"
-            ),
-            (
-                f"{affect_issue_line}"
-                if affect_issue_line
-                else "样本内舆情标注显示，公共表达同时包含信息求助、气候变化、来源/起因疑问、担忧和批评等线索。"
-            )
-            + "这些标签的意义在于展示样本内语义结构，而不是宣布公众总体中某类情绪或观点的比例。"
-            "对决策者而言，更有用的不是一个孤立的正负面比例，而是理解公众到底在围绕什么问题组织讨论：水从哪里来、短缺是否与气候变化有关、大坝运行是否影响生态与能源、未来规则如何分配风险和责任。",
-            (
-                "从议题结构看，信息求助/询问和来源/起因疑问提示该议题具有较强的不确定性表达：公众需要理解水位变化、干旱背景和大坝运行之间的关系。"
-                "气候变化、干旱/干旱化和水库水位/库容叙事，则说明公共讨论倾向于把具体水库状态放入更长期的流域压力框架中理解。"
-                "这与环境证据形成互补：运行序列提供事实地基，公共语义揭示这些事实如何被解释为风险、责任和治理问题。"
-            ),
-            (
-                f"{source_narrative}"
-                if source_narrative
-                else "来源/成因叙事显示，样本中同时出现气候变化、水库水位/库容和干旱化等解释框架。"
-            )
-            + "这些叙事可以帮助识别公众如何理解问题成因，但不能替代水文模型、法律分析或政策评估。"
-            "例如，公共文本中反复出现气候变化和干旱框架，说明它们是重要语义资源；但报告不能因此直接证明某个具体运行决策由气候变化单独导致，也不能据此判断某一政策方案必然更优。",
-            (
-                f"{tone_line}"
-                if tone_line
-                else "GDELT tone 可以补充媒体或公共文档的语气状态。"
-            )
-            + "在本案中，GDELT 指标应被解释为媒体/文档语气，而不是公众情绪的直接测量。"
-            "YouTube 样本和 GDELT 样本也具有检索和平台边界，能够说明可见讨论和样本内标签结构，不能自动外推到整个流域、全部受影响居民或全部利益相关方。",
-            (
-                "因此，公共讨论线的结论应当是：该议题在样本中被组织为水资源压力、气候/干旱背景、水库运行、基础设施风险和治理规则争议的复合叙事。"
-                "这比简单说“公众情绪偏负面”更有解释力，也更符合生态环境舆情分析的任务。"
-                "舆情分析的价值不在于替代专家水文判断，而在于识别环境压力进入公共语境之后，被哪些概念、风险和责任框架重新组织。"
-            ),
-            (
-                "把三条证据线合在一起，可以形成一条相对清楚的论证链。"
-                "Lake Powell 和 Glen Canyon 的运行记录说明水库状态和下泄安排具有可观测变化；正式治理记录说明这些变化和风险已经进入联邦规则制定、环境评价和适应性管理过程；"
-                "公共讨论样本说明公众和媒体围绕气候变化、干旱、水库水位、供水风险、水电和治理规则形成了多层叙事。"
-                "这三者相互支撑，使报告可以把该案判断为“慢变量环境压力下的运行治理争议”，而不是单纯的水文数据展示或单纯的政策舆论事件。"
-            ),
-            (
-                "这种论证链也解释了为什么本文不把案例写成单一责任叙事。"
-                "如果只依据公共讨论，容易把复杂流域治理简化为某一方过错；如果只依据水库序列，又难以解释为什么社会争议集中在未来规则、生态影响和公共参与上；"
-                "如果只依据正式记录，则会遮蔽公众如何理解和质疑这些程序。"
-                "当前报告把三类材料共同纳入，是为了给出有事实地基、有治理语境、有舆情结构的综合判断。"
-            ),
-            (
-                "从决策参考角度看，本文可以支持三类较稳妥的判断。"
-                "第一，环境与运行层面，Lake Powell/Glen Canyon 的水位、库容和下泄量变化具有直接记录支撑，足以作为治理讨论的事实背景。"
-                "第二，制度层面，联邦治理程序和公众参与通道真实存在，说明争议已经被纳入正式治理框架。"
-                "第三，公共语义层面，样本内讨论围绕气候/干旱、水库状态、供水风险、能源/基础设施和规则争议展开，说明公众关心的不只是水位数字，而是这些数字背后的风险分配和治理选择。"
-            ),
-            (
-                "同时，本文明确不支持三类更强判断。"
-                "第一，不证明某个具体下泄变化的法律触发、操作者意图或责任归属；第二，不证明各利益相关方已经形成共识，也不给出政策方案排序；"
-                "第三，不把 YouTube/GDELT 样本内标签比例解释为全体公众意见比例。"
-                "这些边界不是形式化免责，而是保证报告可用于学术汇报和决策参考的必要条件。"
-            ),
-            (
-                "如果要把结论继续做强，后续调查应沿证据缺口展开，而不是在现有材料上提高措辞强度。"
-                "运行因果侧需要更直接的操作说明、法律依据和调度解释；治理评价侧需要正式意见文本、利益相关方分类和政策目标框架；"
-                "公众意见侧需要明确抽样框、去重、分层或加权策略。"
-                "在这些材料进入证据基础之前，当前报告最合适的定位是有边界的综合调研报告：说明环境压力、治理程序和公共语义如何交织，而不越界给出完整责任或政策结论。"
-            ),
-            (
-                "综上，科罗拉多河水资源短缺与格伦峡谷大坝运行争议体现了一类典型生态环境舆情问题：环境压力不是孤立存在的自然事实，"
-                "它会通过大坝运行、联邦规则、公众参与和媒体叙事进入治理空间；公共舆情也不是脱离事实的情绪集合，"
-                "它围绕水库水位、干旱、气候变化、供水安全和基础设施风险组织意义。"
-                "本报告的贡献在于把这些材料组织成一条可审计的证据链，并在结论中同时保留事实强度和解释边界。"
-            ),
-        ]
-        if decision_meaning:
-            paragraphs.append(decision_meaning)
-        if boundary_line:
-            paragraphs.append("需要特别保留的证据边界包括：" + boundary_line.rstrip("。") + "。")
-        elif limitations:
-            paragraphs.append("需要特别保留的证据边界包括：" + "；".join(limit.rstrip("。") for limit in limitations) + "。")
-    else:
-        paragraphs = []
-        if mission_request:
-            paragraphs.append(f"本文围绕用户提出的“{mission_request}”展开。")
-        if central_claim:
-            paragraphs.append(f"综合已进入报告基础的材料，本文的中心判断是：{central_claim}")
-        paragraphs.extend(reasoning_chain[:4])
-        paragraphs.extend(narrative[:3])
-        paragraphs.extend(evidence[:3])
-        if public_discourse:
-            paragraphs.extend(public_discourse[:4])
-        paragraphs.extend(decision[:2])
-        if limitations:
-            paragraphs.append("需要保留的证据边界包括：" + "；".join(limit.rstrip("。") for limit in limitations) + "。")
-
-    if boundary_summary:
-        paragraphs.append(f"写作边界上，{boundary_summary}")
-    if source_basis and not (is_nyc_case or is_colorado_case):
-        paragraphs.append("资料基础说明：" + first_text(source_basis))
-    for paragraph in unique_texts(paragraphs):
-        lines.extend([paragraph, ""])
-    lines.extend(markdown_audit_lines(draft, normalize_language("zh")))
-    return "\n".join(lines)
 
 
 def markdown_from_draft(draft: dict[str, Any]) -> str:
@@ -1430,13 +1690,15 @@ def build_key_takeaways(
     environmental_detail: str = "",
     boundary_line: str,
     language: str,
+    profile: str = "",
 ) -> list[str]:
     if is_zh(language):
+        material_label = "正式治理与样本基础" if profile == "formal-policy-comment" else "环境压力信号"
         return unique_texts(
             [
                 f"用户问题：{mission_line}",
                 f"简要回答：{bottom_line}",
-                f"环境压力信号：{environmental_detail}" if environmental_detail else "",
+                f"{material_label}：{environmental_detail}" if environmental_detail else "",
                 f"舆情语义结构：{social_line}" if social_line else "舆情语义材料用于描述样本内议题、情绪线索和来源叙事，不用于样本外推断。",
                 f"主要限制：{boundary_line}" if boundary_line else "",
             ]
@@ -1823,19 +2085,30 @@ def build_public_discourse_addendum(
     )
 
 
-def build_zh_closure_narrative(*, synthesis_line: str, readiness_lines: list[str]) -> list[str]:
-    paragraphs = [
-        (
-            "本报告只使用已经进入报告基础的材料：环境/运行记录、正式治理记录、公共讨论样本、舆情语义摘要和可追踪的证据引用。"
-        )
-    ]
+def build_zh_closure_narrative(*, synthesis_line: str, readiness_lines: list[str], profile: str = "") -> list[str]:
+    if profile == "formal-policy-comment":
+        paragraphs = [
+            "本报告只使用已经进入报告基础的材料：正式治理记录、评论详情/附件路线限制、公共讨论样本、样本覆盖审计和可追踪的证据引用。"
+        ]
+    else:
+        paragraphs = [
+            (
+                "本报告只使用已经进入报告基础的材料：环境/运行记录、正式治理记录、公共讨论样本、舆情语义摘要和可追踪的证据引用。"
+            )
+        ]
     if synthesis_line:
         paragraphs.append(f"综合判断所依据的材料边界是：{synthesis_line}")
     if readiness_lines:
-        paragraphs.append(
-            "环境或运行材料只承担事实约束，正式记录和公共讨论材料只承担治理过程、样本内语义或可见性背景；"
-            "未被记录支撑的因果、代表性或政策评价不进入正文结论。"
-        )
+        if profile == "formal-policy-comment":
+            paragraphs.append(
+                "正式记录、评论样本和公共讨论材料分别承担制度入口、样本内语义和限制说明的角色；"
+                "未被记录支撑的正式评论总体争点判断、公众代表性、环境趋势、暴露因果、健康结果、政策责任或来源归因不进入正文结论。"
+            )
+        else:
+            paragraphs.append(
+                "环境或运行材料只承担事实约束，正式记录和公共讨论材料只承担治理过程、样本内语义或可见性背景；"
+                "未被记录支撑的因果、代表性或政策评价不进入正文结论。"
+            )
     paragraphs.append(
         "审计索引用于复核材料来源，不构成证据排序或结论权重。"
     )
@@ -1861,128 +2134,6 @@ def build_en_closure_narrative(*, synthesis_line: str, readiness_lines: list[str
     return unique_texts(paragraphs)
 
 
-def build_case_argument_map(
-    *,
-    mission_focus: str,
-    bottom_line: str,
-    environmental_detail: str,
-    social_line: str,
-    public_compact_line: str,
-    boundary_line: str,
-    language: str,
-) -> dict[str, Any]:
-    combined = " ".join(
-        maybe_text(item)
-        for item in [mission_focus, bottom_line, environmental_detail, social_line, public_compact_line, boundary_line]
-    )
-    lower = combined.lower()
-    if is_zh(language):
-        if "纽约" in combined or "pm2.5" in lower or "烟霾" in combined:
-            receptor_detail = environmental_detail or (
-                "PM2.5 在 2023-06-06 开始明显升高，2023-06-07 在纽约区域多个监测点达到高值，"
-                "2023-06-08 仍处高位，并在 2023-06-09 明显回落。"
-            )
-            central_claim = (
-                "现有证据支持将 2023 年纽约烟霾事件理解为一次受体侧 PM2.5 明显异常、"
-                "并与区域野火烟雾输送相容的空气质量事件；但当前材料不足以把来源锁定到某一个火场。"
-            )
-            reasoning_chain = [
-                f"第一步，受体端环境信号先确认事件本身：{receptor_detail}这说明报告讨论的不是抽象舆论，而是一个有明确时间边界的空气质量异常过程。",
-                "第二步，气象、火点和来源叙事把“区域野火烟雾输送”变成可讨论的解释路径：风向和受体峰值在时间上与区域输送相容，火点记录提供野火背景，公共样本中也出现区域野火烟雾和加拿大野火等来源叙事。",
-                "第三步，公共舆情语义说明公众如何理解这次事件：样本内议题集中在来源/起因疑问、健康风险和信息求助，说明公众讨论并不只是记录天空变色，而是在追问污染来源、风险后果和应对方式。",
-                "因此，较稳妥的结论是：该事件可以被有边界地解释为一次与区域野火烟雾输送相容的纽约空气质量冲击；但不能把舆情中的来源叙事、火点背景或风向相容性单独升级为单一源火点判定。"
-            ]
-            evidence_roles = [
-                {
-                    "claim": "事件事实与时间边界",
-                    "evidence": receptor_detail,
-                    "role": "确认纽约确实出现短时强空气质量异常，并约束升高、峰值、回落的时间结构。",
-                },
-                {
-                    "claim": "可能来源解释",
-                    "evidence": "风向、火点和区域野火烟雾叙事",
-                    "role": "支持区域输送相容性和来源假说，但不单独锁定某一个源火点。",
-                },
-                {
-                    "claim": "公共语义结构",
-                    "evidence": public_compact_line or social_line,
-                    "role": "说明公众讨论围绕来源追问、健康风险、信息求助和区域野火叙事展开，但只代表样本内结构。",
-                },
-            ]
-            limitations = [
-                "缺少反向轨迹、烟羽影像、化学组成或归因模型时，不能把相容性证据升级为完整来源证明。",
-                "公共讨论样本不是代表性民意调查，样本内比例不能外推为纽约受影响人群整体态度。",
-                "GDELT 语气描述的是媒体/文档语气，不等于公众情绪。"
-            ]
-            decision_meaning = (
-                "这份报告可用于说明纽约烟霾事件的环境异常、可能来源路径和公众语义反应；"
-                "若用于应急复盘或政策展示，应把结论表述为“区域野火烟雾输送相容”，而不是“已经锁定单一来源”。"
-            )
-        elif "科罗拉多" in combined or "glen canyon" in lower or "lake powell" in lower:
-            central_claim = (
-                "现有证据支持将科罗拉多河水资源短缺与格伦峡谷大坝运行争议理解为环境压力、"
-                "水库/大坝运行变化、正式联邦治理程序和公共叙事共同构成的治理议题。"
-            )
-            reasoning_chain = [
-                "第一步，USBR RISE 日尺度序列确认了 Lake Powell 水位、库容、入流和下泄量变化，为环境压力与运行背景提供直接数据基础。",
-                "第二步，正式治理记录显示后 2026 年运行规则、LTEMP 补充环境影响评价和 Glen Canyon 适应性管理程序正在处理该议题，说明它不只是媒体或公众讨论中的风险想象。",
-                "第三步，公共讨论样本把争议表达为水资源短缺、气候变化、水库水位、能源和基础设施风险等语义线索，补充了公众如何理解该治理问题。",
-                "因此，报告可以支持描述性和关系性判断，但不能证明运营者意图、具体法律触发原因、利益相关方共识或政策方案优劣排序。"
-            ]
-            evidence_roles = [
-                {"claim": "环境压力与运行事实", "evidence": environmental_detail, "role": "约束水库状态、入流和下泄变化。"},
-                {"claim": "治理争议存在", "evidence": social_line, "role": "说明正式治理程序和公共参与通道存在。"},
-                {"claim": "公共语义结构", "evidence": public_compact_line, "role": "说明样本内公众讨论的主要议题和来源叙事。"},
-            ]
-            limitations = [
-                "运行序列能说明发生了什么，不能直接说明每次调度的法律依据、运营意图或政策责任。",
-                "正式记录能证明治理程序存在，不等于证明利益相关方共识或政策优劣。",
-                "舆情样本比例只能描述样本内结构，不能外推为总体民意。"
-            ]
-            decision_meaning = "这份报告可用于识别环境压力、治理程序和公共叙事之间的关系，但不能替代专业水资源调度或法律责任判断。"
-        else:
-            central_claim = bottom_line or "现有材料支持形成有边界的综合判断，但仍需保留证据限制。"
-            reasoning_chain = unique_texts(
-                [
-                    f"首先，环境或运行材料提供事实基础：{environmental_detail}" if environmental_detail else "",
-                    f"其次，正式记录或公共讨论材料说明语境和社会理解：{social_line}" if social_line else "",
-                    f"最后，证据边界限制结论强度：{boundary_line}" if boundary_line else "",
-                ]
-            )
-            evidence_roles = [
-                {"claim": "事实基础", "evidence": environmental_detail or bottom_line, "role": "约束报告可以描述的对象。"},
-                {"claim": "语义和社会语境", "evidence": social_line or public_compact_line, "role": "说明样本内问题表达和理解方式。"},
-            ]
-            limitations = [boundary_line] if boundary_line else ["没有被记录和引用的内容不能作为本文结论。"]
-            decision_meaning = "这份报告适合用于有边界复盘和后续调查设计，不适合替代更强因果、代表性或责任判断。"
-        return {
-            "central_claim": central_claim,
-            "reasoning_chain": unique_texts(reasoning_chain),
-            "evidence_roles": [item for item in evidence_roles if maybe_text(item.get("evidence")) or maybe_text(item.get("role"))],
-            "limitations": unique_texts(limitations),
-            "decision_meaning": decision_meaning,
-        }
-
-    central_claim = bottom_line or "The recorded basis supports a bounded conclusion."
-    reasoning_chain = unique_texts(
-        [
-            f"First, environmental or operational evidence grounds the factual case: {environmental_detail}" if environmental_detail else "",
-            f"Second, formal or public-discourse evidence explains context and interpretation: {social_line}" if social_line else "",
-            f"Finally, the claim boundary limits the conclusion: {boundary_line}" if boundary_line else "",
-        ]
-    )
-    return {
-        "central_claim": central_claim,
-        "reasoning_chain": reasoning_chain,
-        "evidence_roles": [
-            {"claim": "Factual basis", "evidence": environmental_detail or bottom_line, "role": "Constrains what happened."},
-            {"claim": "Public or formal context", "evidence": social_line or public_compact_line, "role": "Explains how the issue is framed."},
-        ],
-        "limitations": [boundary_line] if boundary_line else [],
-        "decision_meaning": "Use this as a bounded synthesis, not as source ranking or upgraded attribution.",
-    }
-
-
 def argument_map_paragraphs(argument_map: dict[str, Any], language: str) -> list[str]:
     if not argument_map:
         return []
@@ -2003,63 +2154,428 @@ def argument_map_paragraphs(argument_map: dict[str, Any], language: str) -> list
     return unique_texts(paragraphs)
 
 
+def build_case_argument_map(
+    *,
+    mission_focus: str,
+    bottom_line: str,
+    environmental_detail: str,
+    social_line: str,
+    public_compact_line: str,
+    boundary_line: str,
+    language: str,
+) -> dict[str, Any]:
+    """Build a reusable argument map from evidence lanes, not case names."""
+    combined = " ".join(
+        maybe_text(item)
+        for item in [mission_focus, bottom_line, environmental_detail, social_line, public_compact_line, boundary_line]
+    )
+    profile = issue_profile_from_text(combined)
+    focus = issue_profile_focus(profile, language)
+    if is_zh(language):
+        if profile == "formal-policy-comment":
+            central_claim = bottom_line or f"现有记录支持围绕{focus}形成一份有边界的专业参考判断。"
+            formal_basis = bottom_line or social_line or "正式治理记录和评论样本只支持来源范围内的程序、样本与可读性描述。"
+            public_basis = public_compact_line or social_line
+            reasoning_chain = unique_texts(
+                [
+                    f"第一，正式治理和评论材料约束本报告的事实对象：{formal_basis}",
+                    (
+                        f"第二，公共或媒体材料只用于说明样本内语义和可见性边界：{public_basis}"
+                        if public_basis
+                        else "第二，公共或媒体材料只能作为样本内语义和可见性线索，不能外推为样本外公众态度。"
+                    ),
+                    (
+                        f"第三，结论强度受已记录边界约束：{boundary_line}"
+                        if boundary_line
+                        else "第三，当前基础不得升级为正式评论总体争点判断、样本外公众态度、环境趋势、暴露因果、健康结果、政策责任或来源归因判断。"
+                    ),
+                ]
+            )
+            evidence_roles = [
+                {
+                    "claim": "正式治理与评论样本基础",
+                    "evidence": formal_basis,
+                    "role": "说明议题进入正式规则制定和评论样本的记录边界，防止把 listing、候选样本或附件元数据写成完整评论语料。",
+                },
+                {
+                    "claim": "公共语义与覆盖边界",
+                    "evidence": public_basis,
+                    "role": "说明媒体或公共文本在样本内呈现的语义线索，防止外推为代表性公众意见或人群态度。",
+                },
+                {
+                    "claim": "结论边界",
+                    "evidence": boundary_line,
+                    "role": "排除无 basis 的总体判断、正式争点强弱排序、附件正文内容、环境趋势、暴露因果、健康结果、政策责任和来源归因。",
+                },
+            ]
+            limitations = unique_texts(
+                [
+                    boundary_line,
+                    "正式评论 listing、候选样本和有限 comment detail 不能直接写成完整正式评论语料或总体争点判断。",
+                    "附件路线若只有元数据或抽取限制，只能支持附件存在和限制描述，不能支持附件正文 substance。",
+                    "公共或媒体样本只说明样本内语义结构，不能代表样本外公众态度。",
+                    "本轮没有环境观测或环境聚合 basis，因此不得写环境趋势、暴露因果、健康结果、政策责任或来源归因。",
+                ]
+            )
+            decision_meaning = (
+                f"这份报告适合用于围绕{focus}进行制度入口、样本覆盖、可读性限制和后续证据路线设计；"
+                "若要形成更强正式争点、代表性、环境或政策责任结论，需要补充对应证据并由议会承接。"
+            )
+            return {
+                "central_claim": central_claim,
+                "reasoning_chain": reasoning_chain,
+                "evidence_roles": [
+                    item
+                    for item in evidence_roles
+                    if maybe_text(item.get("evidence")) or maybe_text(item.get("role"))
+                ],
+                "limitations": limitations,
+                "decision_meaning": decision_meaning,
+                "profile": profile,
+            }
+        central_claim = bottom_line or f"现有记录支持围绕{focus}形成一份有边界的专业参考判断。"
+        reasoning_chain = unique_texts(
+            [
+                (
+                    f"第一，事实层材料提供报告的地基：{environmental_detail}"
+                    if environmental_detail
+                    else "第一，报告先从已归档的环境、运行或正式记录中建立事实对象，避免直接从舆论表达推出事实结论。"
+                ),
+                (
+                    f"第二，治理或公共讨论材料说明议题如何被制度化、传播和解释：{social_line}"
+                    if social_line
+                    else "第二，治理记录和公共讨论材料用于解释议题语境、公众可见性和样本内语义结构，而不承担事实替代作用。"
+                ),
+                (
+                    f"第三，公共舆情摘要把样本内议题、情绪和来源叙事结构化：{public_compact_line}"
+                    if public_compact_line
+                    else "第三，公共舆情分析只在样本内说明问题意识、情绪线索和叙事框架，不能自动外推为样本外公众态度。"
+                ),
+                (
+                    f"最后，结论强度受证据边界约束：{boundary_line}"
+                    if boundary_line
+                    else "最后，未被记录、引用和归一化的内容不进入结论；因果、代表性和责任判断必须保持与证据类型相匹配。"
+                ),
+            ]
+        )
+        evidence_roles = [
+            {
+                "claim": "事实基础",
+                "evidence": environmental_detail or bottom_line,
+                "role": "约束报告能够描述的事件、状态、运行过程或正式对象，防止把公共叙事误写成事实本身。",
+            },
+            {
+                "claim": "治理与公共语境",
+                "evidence": social_line or public_compact_line,
+                "role": "说明议题如何进入制度记录、媒体文本或公共讨论样本，并解释这些材料能支持到什么层级。",
+            },
+            {
+                "claim": "结论边界",
+                "evidence": boundary_line,
+                "role": "限制因果归因、代表性公众意见、责任判定和政策优劣评价的写作强度。",
+            },
+        ]
+        limitations = unique_texts(
+            [
+                boundary_line,
+                "公共讨论或平台样本只说明样本内语义结构，不能直接代表样本外公众态度。",
+                "正式记录、环境记录和舆情记录承担不同证据角色，不能互相替代或被写成单一强结论。",
+                "报告可以提出有证据支撑的阶段性判断，但不得补写缺失的专业模型、完整正文材料或未记录来源。",
+            ]
+        )
+        decision_meaning = (
+            f"这份报告适合用于围绕{focus}进行学术汇报、决策参考和后续调查设计；"
+            "若要升级为更强因果、代表性或政策评价，需要补充与对应 claim 类型匹配的新证据。"
+        )
+        return {
+            "central_claim": central_claim,
+            "reasoning_chain": reasoning_chain,
+            "evidence_roles": [
+                item
+                for item in evidence_roles
+                if maybe_text(item.get("evidence")) or maybe_text(item.get("role"))
+            ],
+            "limitations": limitations,
+            "decision_meaning": decision_meaning,
+        }
+
+    central_claim = bottom_line or f"The recorded basis supports a bounded assessment of {focus}."
+    reasoning_chain = unique_texts(
+        [
+            f"First, factual or operational evidence grounds the issue: {environmental_detail}" if environmental_detail else "",
+            f"Second, formal or public-discourse evidence explains context and interpretation: {social_line}" if social_line else "",
+            f"Third, public-discourse summaries describe sample-local semantics: {public_compact_line}" if public_compact_line else "",
+            f"Finally, the claim boundary limits the conclusion: {boundary_line}" if boundary_line else "",
+        ]
+    )
+    return {
+        "central_claim": central_claim,
+        "reasoning_chain": reasoning_chain,
+        "evidence_roles": [
+            {"claim": "Factual basis", "evidence": environmental_detail or bottom_line, "role": "Constrains what the report can describe."},
+            {"claim": "Governance or public context", "evidence": social_line or public_compact_line, "role": "Explains how the issue is framed and discussed."},
+            {"claim": "Claim boundary", "evidence": boundary_line, "role": "Constrains attribution, representativeness, and policy evaluation."},
+        ],
+        "limitations": [boundary_line] if boundary_line else [],
+        "decision_meaning": "Use this as a bounded synthesis, not as source ranking or upgraded attribution.",
+    }
+
+
 def argument_evidence_paragraphs(argument_map: dict[str, Any], language: str) -> list[str]:
     rows = [item for item in list_items(argument_map.get("evidence_roles")) if isinstance(item, dict)]
     paragraphs: list[str] = []
     if is_zh(language):
-        central = maybe_text(argument_map.get("central_claim"))
-        combined = " ".join([central, *[maybe_text(item.get("evidence")) for item in rows], *[maybe_text(item.get("role")) for item in rows]])
-        if "纽约" in combined or "PM2.5" in combined or "烟霾" in combined:
-            return [
-                "报告的论证起点是受体端 PM2.5 时序。它先把事件从一般性舆论讨论中分离出来，证明纽约在 6 月 6 日至 9 日确实经历了一个短时、强烈、可测量的空气质量异常过程。没有这条时间线，后续关于来源、风险和公众反应的讨论就容易变成零散叙述。",
-                "在这个时间边界建立之后，风向、火点和区域野火烟雾叙事才具有解释意义：它们不是单独证明来源的证据，而是共同说明“区域野火烟雾输送影响纽约”这一假说与已观测到的污染过程相容。换言之，环境证据把问题从“是否发生”推进到“哪类解释路径更合理”，但仍停留在相容性层级。",
-                "公共舆情语义位于第三层。样本中的来源追问、健康风险和信息求助，并不是独立决定事件原因的证据；它们说明公众如何围绕同一个空气质量冲击组织问题意识。来源叙事标签可以提示后续核查关注哪些成因假说，但不能替代环境线的物理来源判定；样本内比例也只能说明本轮样本结构，不能外推为纽约公众总体意见。",
-            ]
-        if "科罗拉多" in combined or "Lake Powell" in combined or "Glen Canyon" in combined:
-            return [
-                "报告的论证起点是水库和大坝运行记录。USBR RISE 序列先把争议落到可观测的水位、库容、入流和下泄变化上，使问题不只是抽象的水资源焦虑或政策争吵。",
-                "正式治理记录在第二层提供制度语境：后 2026 年运行规则、LTEMP 补充环境影响评价和适应性管理程序说明，运行压力已经进入联邦治理和公共参与通道。它们能证明治理程序存在，但不能自动推出具体法律触发原因、运营意图或各方立场强弱。",
-                "公共讨论样本则说明社会语义如何附着在这些运行和治理事实上：干旱、水库水位、能源风险、基础设施风险和方案分歧成为公众理解问题的入口。它能补足风险感知和议题结构，但不能替代水文调度、法律责任或政策优劣判断。",
-            ]
         for item in rows:
-            claim = maybe_text(item.get("claim"))
+            claim = maybe_text(item.get("claim")) or "一项判断"
             evidence = maybe_text(item.get("evidence"))
             role = maybe_text(item.get("role"))
-            paragraphs.append(f"在“{claim}”这一判断上，{evidence}承担的是证据角色：{role}")
+            if evidence and role:
+                paragraphs.append(f"围绕“{claim}”，报告不是孤立列举材料，而是说明其论证功能：{evidence} 这类材料在论证中主要用于{role}")
+            elif role:
+                paragraphs.append(f"围绕“{claim}”，这类材料在论证中主要用于{role}")
         return unique_texts(paragraphs)
     for item in rows:
-        claim = maybe_text(item.get("claim"))
+        claim = maybe_text(item.get("claim")) or "Claim"
         evidence = maybe_text(item.get("evidence"))
         role = maybe_text(item.get("role"))
-        paragraphs.append(f"{claim}: {evidence} Its role in the argument is: {role}")
+        paragraphs.append(f"For {claim}, the report uses {evidence}. Its role is: {role}")
     return unique_texts(paragraphs)
 
 
 def case_story_paragraphs(argument_map: dict[str, Any], mission_focus: str, language: str) -> list[str]:
-    central = maybe_text(argument_map.get("central_claim"))
     chain = text_list(argument_map.get("reasoning_chain"))
     if not is_zh(language):
-        return unique_texts([central, *chain[:3]])
-    combined = " ".join([mission_focus, central, *chain])
-    if "纽约" in combined or "PM2.5" in combined or "烟霾" in combined:
-        return [
-            "这次事件的叙事起点是空气质量异常，而不是单纯的网络讨论。受体端 PM2.5 记录先给出时间边界：污染过程在 6 月 6 日开始抬升，6 月 7 日形成高值，6 月 8 日仍保持高位，并在 6 月 9 日回落。",
-            "在解释这条时间线时，风向、火点和区域野火烟雾叙事共同构成来源假说的背景。它们让“区域野火烟雾输送影响纽约”成为有证据支撑的解释路径，但这些材料仍是相容性证据，而不是完整的物理来源判定。",
-            "公共讨论的作用是补上社会感知层：样本内的来源追问、健康风险和信息求助说明，公众面对的并不只是能见度或天空颜色异常，而是对风险来源、防护行动和官方解释的综合追问。",
-        ]
-    if "科罗拉多" in combined or "Lake Powell" in combined or "Glen Canyon" in combined:
-        return [
-            "本案的叙事起点是流域水资源压力和水库运行状态。Lake Powell 的水位、库容、入流和下泄变化构成事实基础，使争议不再停留在抽象的水资源焦虑上。",
-            "正式治理记录把环境压力和制度回应连接起来：后 2026 年运行规则、LTEMP 补充环境影响评价和适应性管理程序说明，该问题已经进入联邦治理和公共参与通道。",
-            "公共讨论则显示公众如何解释这种压力：样本内围绕气候变化、水库水位、干旱和信息求助形成语义结构，但这些表达不能替代运营理由或法律责任判断。",
-        ]
+        return unique_texts(chain[:4])
+    if maybe_text(argument_map.get("profile")) == "formal-policy-comment":
+        return unique_texts(
+            [
+                f"围绕“{mission_focus}”，正文先界定正式治理对象和可用评论样本，再解释公共或媒体语义材料的样本边界，最后说明哪些结论不能升级。",
+                (
+                    "证据组织遵循“正式治理入口-评论/附件可读性-公共语义-结论边界”的顺序："
+                    "先说明已被记录约束的制度和样本对象，再把覆盖缺口、附件限制和代表性限制写清楚。"
+                ),
+            ]
+        )
     return unique_texts(
         [
-            f"本案的核心问题是：{mission_focus}",
-            central,
-            *chain[:2],
+            f"围绕“{mission_focus}”，正文先建立事实对象，再解释治理或传播语境，最后把公共语义和结论边界放回同一条论证链中。",
+            (
+                "证据组织遵循“事实对象-解释语境-公共语义-结论边界”的顺序：先说明已被记录约束的事实或治理对象，"
+                "再解释这些事实如何进入制度记录和公共讨论，随后讨论样本内语义结构，最后明确哪些结论仍不能升级。"
+            ),
         ]
     )
+
+
+def zh_formal_policy_markdown_from_draft(draft: dict[str, Any]) -> str:
+    title = maybe_text(draft.get("title")) or "正式评论与公共话语报告"
+    argument_map = draft.get("argument_map") if isinstance(draft.get("argument_map"), dict) else {}
+    academic_sections = (
+        argument_map.get("academic_sections")
+        if isinstance(argument_map.get("academic_sections"), dict)
+        else {}
+    )
+    central_claim = maybe_text(argument_map.get("central_claim"))
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    mission_payload = source_material.get("mission") if isinstance(source_material.get("mission"), dict) else {}
+    mission_request = (
+        maybe_text(mission_payload.get("request_text"))
+        or maybe_text(mission_payload.get("objective"))
+        or maybe_text(mission_payload.get("topic"))
+    )
+    abstract = text_list(academic_sections.get("abstract")) or text_list(argument_map.get("executive_paragraphs"))
+    introduction = text_list(academic_sections.get("introduction"))
+    methods = text_list(academic_sections.get("methods"))
+    discussion = text_list(academic_sections.get("discussion"))
+    conclusion = text_list(academic_sections.get("conclusion")) or [central_claim]
+    follow_up_needs = text_list(academic_sections.get("follow_up_needs")) or text_list(argument_map.get("follow_up_needs"))
+    keywords = text_list(academic_sections.get("keywords")) or ["PM2.5 NAAQS", "正式公众评论", "公共语义", "证据边界"]
+    result_sections = [
+        item for item in list_items(academic_sections.get("results")) if isinstance(item, dict)
+    ]
+
+    def add_paragraph_section(lines: list[str], heading: str, paragraphs: list[str]) -> None:
+        cleaned = unique_texts([paragraph for paragraph in paragraphs if maybe_text(paragraph)])
+        if not cleaned:
+            return
+        lines.extend([f"## {heading}", ""])
+        for paragraph in cleaned:
+            lines.extend([paragraph, ""])
+
+    lines = [f"# {title}", ""]
+    add_paragraph_section(lines, "摘要", abstract)
+    if keywords:
+        lines.extend(["**关键词：** " + "；".join(keywords), ""])
+    if mission_request:
+        introduction = unique_texts(
+            [
+                *introduction,
+                (
+                    "据此，本文将研究问题界定为三个层面：正式评论样本中可见的争议结构、媒体/公共文本中的语义结构，"
+                    "以及这些证据能够支撑和不能支撑的结论边界。报告只使用已冻结的议会证据基础，不新增事实或外部材料。"
+                ),
+            ]
+        )
+    add_paragraph_section(lines, "1. 引言", introduction)
+    add_paragraph_section(lines, "2. 材料与方法", methods)
+    if result_sections:
+        lines.extend(["## 3. 结果", ""])
+        for index, item in enumerate(result_sections, 1):
+            subsection_title = maybe_text(item.get("title")) or f"结果 {index}"
+            paragraphs = text_list(item.get("paragraphs"))
+            if not paragraphs:
+                continue
+            lines.extend([f"### 3.{index} {subsection_title}", ""])
+            for paragraph in paragraphs:
+                lines.extend([paragraph, ""])
+    else:
+        fallback_results = unique_texts(
+            [
+                *text_list(argument_map.get("issue_analysis")),
+                *text_list(argument_map.get("public_semantics")),
+                *text_list(argument_map.get("evidence_analysis")),
+                *text_list(argument_map.get("reasoning_chain")),
+            ]
+        )
+        add_paragraph_section(lines, "3. 结果", fallback_results)
+    if follow_up_needs:
+        discussion = unique_texts(
+            [
+                *discussion,
+                "进一步研究需要补齐以下证据环节："
+                + "；".join(need.rstrip("。") for need in follow_up_needs if maybe_text(need))
+                + "。",
+            ]
+        )
+    add_paragraph_section(lines, "4. 讨论", discussion)
+    add_paragraph_section(lines, "5. 结论", conclusion)
+
+    audit_section = section_by_id(draft, "audit-trail")
+    audit_refs = [maybe_text(ref) for ref in audit_section.get("evidence_refs", []) if maybe_text(ref)]
+    if not audit_refs:
+        audit_refs = [maybe_text(ref) for ref in draft.get("audit_refs", []) if maybe_text(ref)]
+    lines.extend(["## 参考文献与审计索引", ""])
+    lines.append(
+        "本报告没有新增外部文献；以下参考项来自已进入议会报告基础的来源、证据对象、分析产物和 runtime 审计引用。"
+        "这些索引用于复核材料来源和报告边界，不表示证据权重或来源排序。"
+    )
+    lines.append("")
+    for ref in audit_refs[:25]:
+        lines.append(f"- {ref}")
+    if len(audit_refs) > 25:
+        lines.append(f"- ... 另有 {len(audit_refs) - 25} 条引用见 JSON 产物")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def zh_article_markdown_from_draft(draft: dict[str, Any]) -> str:
+    """Render a Chinese narrative report as an article, not a case-specific log."""
+    title = maybe_text(draft.get("title")) or "叙事报告"
+    boundary = draft.get("claim_boundary") if isinstance(draft.get("claim_boundary"), dict) else {}
+    boundary_summary = maybe_text(boundary.get("summary"))
+    argument_map = draft.get("argument_map") if isinstance(draft.get("argument_map"), dict) else {}
+    central_claim = maybe_text(argument_map.get("central_claim"))
+    reasoning_chain = text_list(argument_map.get("reasoning_chain"))
+    limitations = text_list(argument_map.get("limitations"))
+    decision_meaning = maybe_text(argument_map.get("decision_meaning"))
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    mission_payload = source_material.get("mission") if isinstance(source_material.get("mission"), dict) else {}
+    mission_request = (
+        maybe_text(mission_payload.get("request_text"))
+        or maybe_text(mission_payload.get("objective"))
+        or maybe_text(mission_payload.get("topic"))
+    )
+    mission_focus = mission_focus_text(mission_request, "zh-Hans")
+    key_points = section_paragraphs(draft, "key-points")
+    narrative = section_paragraphs(draft, "what-happened")
+    evidence = section_paragraphs(draft, "evidence-basis")
+    public_discourse = section_paragraphs(draft, "public-discourse-deepening")
+    decision = section_paragraphs(draft, "decision-implications")
+    source_basis = section_paragraphs(draft, "council-reasoning")
+    profile = issue_profile_from_text(
+        " ".join([title, mission_request, central_claim, *reasoning_chain, *narrative, *evidence, *public_discourse])
+    )
+    if profile == "formal-policy-comment":
+        return zh_formal_policy_markdown_from_draft(draft)
+    focus = issue_profile_focus(profile, "zh-Hans")
+    lines = [f"# {title}", ""]
+
+    paragraphs: list[str] = []
+    if mission_request:
+        paragraphs.append(
+            f"本文围绕用户提出的“{mission_request}”展开，重点分析{focus}。"
+            "正文只使用已经进入报告基础的材料，并把事实、解释、公共语义和证据限制组织成一条可复核的论证链。"
+        )
+    else:
+        paragraphs.append(
+            f"本文围绕{focus}展开，目标是提供一份可供学术汇报和决策参考的专业调研报告。"
+        )
+    if central_claim:
+        paragraphs.append(f"综合当前证据基础，本文的中心判断是：{central_claim}")
+
+    story = case_story_paragraphs(argument_map, mission_focus, "zh-Hans")
+    paragraphs.extend(story[:3])
+    evidence_argument = argument_evidence_paragraphs(argument_map, "zh-Hans")[:5]
+    if evidence_argument:
+        paragraphs.extend(evidence_argument)
+    else:
+        paragraphs.extend([render_source_text(item, "zh-Hans") for item in reasoning_chain[:5]])
+
+    rendered_narrative = [render_source_text(item, "zh-Hans") for item in narrative]
+    rendered_evidence = [render_source_text(item, "zh-Hans") for item in evidence]
+    rendered_key_points = [render_source_text(item, "zh-Hans") for item in key_points]
+    substantive_material = [
+        item
+        for item in unique_texts([*rendered_narrative, *rendered_evidence, *rendered_key_points])
+        if not item.startswith(("用户问题：", "简要回答："))
+        and "尚未完全结构化的证据摘要" not in item
+        and item != "已记录材料显示：该证据线需要保留代表性、归因强度或误检风险边界。"
+    ]
+    if substantive_material:
+        paragraphs.append(
+            "在具体材料层面，报告优先解释证据之间的关系，而不是按来源逐条堆叠。"
+            "下列事实和线索共同承担论证功能：它们有的约束事实对象，有的说明治理或传播语境，有的提示公共语义。"
+        )
+        for item in substantive_material[:8]:
+            if not any(item == paragraph or item in paragraph for paragraph in paragraphs):
+                paragraphs.append(item)
+
+    rendered_public = [render_source_text(item, "zh-Hans") for item in public_discourse]
+    if rendered_public:
+        if profile == "formal-policy-comment":
+            paragraphs.append(
+                "公共语义部分用于回答另一个问题：正式治理议题进入媒体或公共文本后，样本内材料如何命名、解释并表达关注。"
+                "这部分可以说明样本内议题和语义线索，但不能在没有抽样框和加权设计时外推为样本外公众态度。"
+            )
+        else:
+            paragraphs.append(
+                "公共舆情部分用于回答另一个问题：环境事实或治理议题进入公共空间后，公众和媒体如何命名、解释并表达风险。"
+                "这部分可以说明样本内议题、情绪和来源叙事结构，但不能在没有抽样框和加权设计时外推为样本外公众态度。"
+            )
+        paragraphs.extend(rendered_public[:6])
+
+    if decision_meaning:
+        paragraphs.append(decision_meaning)
+    if decision:
+        paragraphs.extend([render_source_text(item, "zh-Hans") for item in decision[:3]])
+    if limitations:
+        paragraphs.append(
+            "因此，本文需要保留的结论边界包括："
+            + "；".join(render_source_text(item, "zh-Hans").rstrip("。") for item in limitations[:5])
+            + "。"
+        )
+    if boundary_summary:
+        paragraphs.append(f"写作边界上，{boundary_summary}")
+    if source_basis:
+        paragraphs.append(
+            "资料基础和审计索引只用于说明材料如何进入报告基础，不构成信源排序，也不把程序性记录写成正文重点。"
+            f"{render_source_text(first_text(source_basis), 'zh-Hans')}"
+        )
+
+    for paragraph in unique_texts(paragraphs):
+        lines.extend([paragraph, ""])
+    lines.extend(markdown_audit_lines(draft, normalize_language("zh")))
+    return "\n".join(lines)
 
 
 def draft_narrative_report(
@@ -2088,7 +2604,11 @@ def draft_narrative_report(
         basis_round_id=resolved_basis_round_id,
         path_text=public_discourse_summary_path,
     )
-    reporting_basis = load_reporting_basis(run_dir_path, resolved_basis_round_id)
+    reporting_basis = load_reporting_basis(
+        run_dir_path,
+        resolved_basis_round_id,
+        report_round_id=round_id,
+    )
     object_sets = council_basis_objects(
         run_dir_path,
         run_id=run_id,
@@ -2141,8 +2661,32 @@ def draft_narrative_report(
     )
     mission_focus = mission_focus_text(mission_line, report_language)
     public_compact_line = public_discourse_compact_line(public_summary, report_language)
+    formal_helper_lines, formal_helper_meta = formal_policy_helper_lines(
+        run_dir_path,
+        resolved_basis_round_id,
+        report_language,
+    )
+    formal_policy_argument = formal_policy_argument_summary(formal_helper_meta, report_language)
+    case_profile = issue_profile_from_text(
+        " ".join(
+            [
+                mission_line,
+                public_compact_line,
+                *formal_helper_lines,
+                *[maybe_text(row.get("summary")) for row in object_rows],
+                *[maybe_text(row.get("rationale")) for row in object_rows],
+            ]
+        )
+    )
+    if case_profile == "formal-policy-comment":
+        known_fact_text = [
+            line
+            for line in known_fact_text
+            if not unsupported_environment_stock_text(line)
+        ]
     basis_text = unique_texts(
         [
+            *formal_helper_lines[:1],
             *decision_lines,
             *[
                 render_source_text(item["summary"], report_language)
@@ -2174,19 +2718,33 @@ def draft_narrative_report(
             ],
         ]
     )
+    if case_profile == "formal-policy-comment":
+        limitation_text = [
+            line
+            for line in limitation_text
+            if not unsupported_environment_stock_text(line)
+        ]
     if not limitation_text:
         limitation_text = [
             "请将本报告视为对既有议会记录的有限综合；没有引用并不代表现实世界中不存在相关证据。"
             if is_zh(report_language)
             else "Use this report as a bounded synthesis of recorded council artifacts; absence of a ref is not evidence of real-world absence."
         ]
-    substantive_line = first_text(
+    substantive_candidates = (
         [
+            *formal_helper_lines[:1],
+            *[rendered_row_text(row, report_language, limit=1500) for row in social_rows],
+            *synthesis_text[:1],
+            *known_fact_text[:2],
+        ]
+        if case_profile == "formal-policy-comment"
+        else [
             *[rendered_row_text(row, report_language, limit=1500) for row in environmental_rows],
             *[rendered_row_text(row, report_language, limit=1500) for row in social_rows],
             *known_fact_text[:2],
         ]
     )
+    substantive_line = first_text(substantive_candidates)
     bottom_line = first_text(
         [
             substantive_line,
@@ -2201,13 +2759,27 @@ def draft_narrative_report(
         ),
     )
     social_candidates = unique_texts(
-        [
-            *[rendered_row_text(row, report_language, limit=1400) for row in social_rows],
-            public_compact_line,
-            finding_text[0] if finding_text else "",
-        ]
+        (
+            [
+                *formal_helper_lines[1:],
+                *[rendered_row_text(row, report_language, limit=1400) for row in social_rows],
+                public_compact_line,
+                finding_text[0] if finding_text else "",
+            ]
+            if case_profile == "formal-policy-comment"
+            else [
+                *[rendered_row_text(row, report_language, limit=1400) for row in social_rows],
+                *formal_helper_lines[1:],
+                public_compact_line,
+                finding_text[0] if finding_text else "",
+            ]
+        )
     )
     social_line = " ".join(social_candidates[:2]) if is_zh(report_language) else first_text(social_candidates)
+    if formal_policy_argument and is_zh(report_language):
+        bottom_line = maybe_text(formal_policy_argument.get("central_claim")) or bottom_line
+        direct_answers = text_list(formal_policy_argument.get("direct_answers"))
+        social_line = " ".join(direct_answers[:2]) or social_line
     boundary_line = limitation_text[0] if limitation_text else ""
     key_points = unique_texts(
         [
@@ -2230,24 +2802,29 @@ def draft_narrative_report(
             if is_zh(report_language)
             else "The council basis is report-ready, but the substantive narrative remains limited by the recorded objects."
         ]
+    environmental_candidates = [
+        *[rendered_row_text(row, report_language, prefer_rationale=True, limit=2200) for row in environmental_rows],
+        *[
+            line
+            for line in known_fact_text
+            if any(token in line for token in ("USBR", "水位", "库容", "下泄", "PM2.5", "受体", "火点", "水文"))
+        ],
+        *[
+            truncate_text(render_source_text(item.get("rationale", ""), report_language), 1600)
+            for item in positions[:2]
+            if maybe_text(item.get("rationale"))
+        ],
+    ]
     environmental_detail = first_text(
         [
-            *[rendered_row_text(row, report_language, prefer_rationale=True, limit=2200) for row in environmental_rows],
-            *[
-                line
-                for line in known_fact_text
-                if any(token in line for token in ("USBR", "水位", "库容", "下泄", "PM2.5", "受体", "火点", "水文"))
-            ],
-            *[
-                truncate_text(render_source_text(item.get("rationale", ""), report_language), 1600)
-                for item in positions[:2]
-                if maybe_text(item.get("rationale"))
-            ],
+            reportable_environment_detail(candidate, profile=case_profile)
+            for candidate in environmental_candidates
         ]
     )
     synthesis_line = first_text(synthesis_text)
     evidence_narrative = unique_texts(
         [
+            *formal_helper_lines,
             *known_fact_text[:6],
             *evidence_lines[:4],
             environmental_detail,
@@ -2260,10 +2837,17 @@ def draft_narrative_report(
     )
     if not evidence_narrative:
         evidence_narrative = basis_text or finding_text
-    if is_zh(report_language):
+    case_context = " ".join([mission_focus, bottom_line, environmental_detail, social_line])
+    case_profile = issue_profile_from_text(case_context)
+    if is_zh(report_language) and case_profile == "formal-policy-comment":
+        decision_implications = [
+            "决策者可以把本报告用于识别正式制度入口、正式评论材料可读性边界，以及媒体/公共文本线索能够提供的公共语义入口。",
+            "本报告不应被用于概括正式评论总体格局、评估样本外公众态度，或完成政策优劣判断。若要支撑这些更强判断，需要补充可读评论正文、可审计标注聚合结果和更清楚的公共样本框。",
+        ]
+    elif is_zh(report_language):
         decision_implications = [
             "决策者可以把本报告用于识别议题结构：哪些环境/运行事实已经有数据支撑，哪些正式记录能够约束语境，公共讨论主要围绕哪些风险和成因展开。",
-            "本报告不应被用于判定具体责任、证明某一运行决策的法律触发原因，或声称公众意见已经形成代表性比例。若要支撑这些更强判断，需要补充直接运营理由、正式意见文本和代表性调查设计。",
+            "本报告不应被用于判定具体责任、证明某一运行决策的法律触发原因，或声称已经形成代表性公众意见结论。若要支撑这些更强判断，需要补充直接运营理由、正式意见文本和代表性调查设计。",
         ]
     else:
         decision_implications = [
@@ -2283,6 +2867,32 @@ def draft_narrative_report(
         boundary_line=boundary_line_for_report,
         language=report_language,
     )
+    if formal_policy_argument and is_zh(report_language):
+        argument_map.update(
+            {
+                key: value
+                for key, value in formal_policy_argument.items()
+                if key
+                in {
+                    "central_claim",
+                    "reasoning_chain",
+                    "evidence_roles",
+                    "limitations",
+                    "decision_meaning",
+                    "risk_register",
+                    "direct_answers",
+                    "council_work",
+                    "executive_paragraphs",
+                    "issue_analysis",
+                    "evidence_analysis",
+                    "public_semantics",
+                    "method_context",
+                    "follow_up_needs",
+                    "academic_sections",
+                    "profile",
+                }
+            }
+        )
     argument_chain = argument_map_paragraphs(argument_map, report_language)
     argument_evidence = argument_evidence_paragraphs(argument_map, report_language)
     case_story = case_story_paragraphs(argument_map, mission_focus, report_language)
@@ -2294,6 +2904,7 @@ def draft_narrative_report(
         environmental_detail=environmental_detail_for_report,
         boundary_line=first_text(argument_limits, boundary_line_for_report),
         language=report_language,
+        profile=case_profile,
     ) or key_points
     narrative_account = (
         case_story
@@ -2305,7 +2916,7 @@ def draft_narrative_report(
         )
     )
     evidence_chain = (
-        argument_evidence
+        unique_texts([*argument_evidence, *formal_helper_lines])
         if is_zh(report_language)
         else build_en_evidence_chain(
             bottom_line=bottom_line,
@@ -2315,7 +2926,7 @@ def draft_narrative_report(
         )
     )
     closure_narrative = (
-        build_zh_closure_narrative(synthesis_line=synthesis_line, readiness_lines=readiness_text)
+        build_zh_closure_narrative(synthesis_line=synthesis_line, readiness_lines=readiness_text, profile=case_profile)
         if is_zh(report_language)
         else build_en_closure_narrative(synthesis_line=synthesis_line, readiness_lines=readiness_text)
     )
@@ -2335,11 +2946,14 @@ def draft_narrative_report(
         summary_path=public_summary_path,
         language=report_language,
     )
-    case_frame_sentence = (
-        "正文主线应优先呈现事件或议题本身如何发展，再说明环境/运行记录、正式治理记录和公共讨论样本分别承担什么证据作用。"
-        if is_zh(report_language)
-        else "The main body should foreground the substantive event or issue before explaining how environmental, formal-governance, and public-discourse materials support it."
-    )
+    if is_zh(report_language) and case_profile == "formal-policy-comment":
+        case_frame_sentence = "正文主线应优先界定正式治理入口、评论样本可读性、附件路线限制和公共语义样本边界。"
+    else:
+        case_frame_sentence = (
+            "正文主线应优先呈现事件或议题本身如何发展，再说明环境/运行记录、正式治理记录和公共讨论样本分别承担什么证据作用。"
+            if is_zh(report_language)
+            else "The main body should foreground the substantive event or issue before explaining how environmental, formal-governance, and public-discourse materials support it."
+        )
     boundary_sentence = (
         f"报告边界是：{boundary_line_for_report}"
         if is_zh(report_language) and boundary_line_for_report
@@ -2379,12 +2993,26 @@ def draft_narrative_report(
         section(
             "key-points",
             label("key-points", report_language),
-            key_points,
+            text_list(argument_map.get("direct_answers")) or key_points,
             all_refs[:12],
             status="draft",
             language=report_language,
         )
         | {"presentation": "bullet-list"},
+        *(
+            [
+                section(
+                    "council-work",
+                    label("council-work", report_language),
+                    text_list(argument_map.get("council_work")),
+                    all_refs[:12],
+                    status="council-visible-summary",
+                    language=report_language,
+                )
+            ]
+            if text_list(argument_map.get("council_work"))
+            else []
+        ),
         section(
             "what-happened",
             label("what-happened", report_language),
@@ -2413,6 +3041,28 @@ def draft_narrative_report(
             ),
             status="limitations-visible",
             language=report_language,
+        ),
+        *(
+            [
+                section(
+                    "risk-register",
+                    label("risk-register", report_language),
+                    text_list(argument_map.get("risk_register")),
+                    unique_texts(
+                        [
+                            *[row["ref"] for row in reviews if row.get("ref")],
+                            *[row["ref"] for row in readinesses if row.get("ref")],
+                            *[row["ref"] for row in positions if row.get("ref")],
+                            *[row["ref"] for row in syntheses if row.get("ref")],
+                        ]
+                    ),
+                    status="risk-visible",
+                    language=report_language,
+                )
+                | {"presentation": "bullet-list"}
+            ]
+            if text_list(argument_map.get("risk_register"))
+            else []
         ),
         section(
             "decision-implications",
@@ -2498,6 +3148,28 @@ def draft_narrative_report(
             "language": report_language,
             "sample_distribution_policy": "sample-local only; non-exclusive labels must not be summed into public opinion",
             "source_narrative_policy": "public source narratives are cues for council review, not physical source attribution",
+            "claim_sensitive_soft_obligations": [
+                {
+                    "claim_family": "public_discourse_emotion_issue_or_proportion",
+                    "basis_needed": "corpus, coverage audit, annotation, aggregation, explicit denominator, and sample-local representativeness limits",
+                    "boundary": "Do not convert YouTube, Bluesky, GDELT, or formal-comment samples into general public opinion without representative sampling design.",
+                },
+                {
+                    "claim_family": "formal_comment_issue_or_participation_structure",
+                    "basis_needed": "candidate audit, readable comment detail or attachment text, formal issue classification or equivalent analysis",
+                    "boundary": "Comment listings are candidate rows, not formal comment corpus text.",
+                },
+                {
+                    "claim_family": "environment_trend_peak_or_operating_status",
+                    "basis_needed": "aggregate-environment-evidence or explicit item-level-example wording",
+                    "boundary": "Large normalized environment datasets should be compressed before report synthesis.",
+                },
+                {
+                    "claim_family": "source_causal_or_impact_chain",
+                    "basis_needed": "relation packet, fact-check scope, alternatives, or challenger review basis",
+                    "boundary": "Otherwise write compatibility cues or still-needs-verification language.",
+                },
+            ],
         },
         "argument_map": argument_map,
         "evidence_refs": all_refs,
@@ -2515,6 +3187,7 @@ def draft_narrative_report(
                 "status": maybe_text(public_summary.get("status")) if public_summary else "",
                 "advisory_only": bool(public_summary),
             },
+            "formal_policy_helper_summary": formal_helper_meta,
         },
         "audit_refs": all_refs,
         "validation_status": "not-validated",

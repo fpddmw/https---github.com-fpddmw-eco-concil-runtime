@@ -375,7 +375,7 @@ DEFAULT_FETCH_SKILL_USE_CARD: dict[str, Any] = {
 SOURCE_USE_CARDS: dict[str, dict[str, Any]] = {
     "fetch-gdelt-doc-search": {
         "what_this_skill_is": (
-            "GDELT DOC API article/timeline reconnaissance over indexed web documents."
+            "GDELT DOC API article/timeline reconnaissance and DOC-level media/document tone queries over indexed web documents."
         ),
         "what_this_skill_is_not": (
             "It is not the raw Events, Mentions, or GKG table export layer; it is "
@@ -385,6 +385,7 @@ SOURCE_USE_CARDS: dict[str, dict[str, Any]] = {
         "before_using": [
             "Lint agent-authored queries when syntax is complex or provider-specific operators are used.",
             "Prefer compact topical searches before exact-domain searches when the source universe is uncertain.",
+            "Use DOC tone/timelinetone/tonechart only as media/document tone, not as public sentiment.",
             "Use source/title/url/snippet metadata to reason about source type instead of relying only on domain filters.",
         ],
         "zero_or_failed_result_discipline": [
@@ -400,6 +401,7 @@ SOURCE_USE_CARDS: dict[str, dict[str, Any]] = {
         "common_traps": [
             "Using search-engine `site:` syntax instead of GDELT `domain:` or `domainis:`.",
             "Treating exact-domain zero rows as absence of official evidence.",
+            "Treating DOC tone, Events AvgTone, Mentions MentionDocTone, or GKG V2Tone as public sentiment.",
             "Using one highly compound query where several compact searches would be more robust.",
         ],
     },
@@ -462,7 +464,7 @@ SOURCE_USE_CARDS: dict[str, dict[str, Any]] = {
     },
     "fetch-youtube-video-search": {
         "what_this_skill_is": "YouTube video discovery for agent-authored queries and publication windows.",
-        "what_this_skill_is_not": "It is not a public-discourse conclusion and does not fetch comment language.",
+        "what_this_skill_is_not": "It is not a public-discourse conclusion, does not fetch comment language, and does not by itself form a public-response corpus.",
         "zero_or_failed_result_discipline": [
             "Weak search results may reflect query wording, channel scope, language, or date filters.",
             "If discourse semantics matter, selected videos usually require fetch-youtube-comments follow-up.",
@@ -480,10 +482,10 @@ SOURCE_USE_CARDS: dict[str, dict[str, Any]] = {
     },
     "fetch-regulationsgov-comments": {
         "what_this_skill_is": "Regulations.gov comment-list discovery by docket/document/agency/time filters.",
-        "what_this_skill_is_not": "It is not full comment-detail enrichment and does not derive issue, stance, or concern labels.",
+        "what_this_skill_is_not": "It is not full comment-detail enrichment, not readable attachment text, and does not derive issue, stance, or concern labels.",
         "zero_or_failed_result_discipline": [
             "Zero list rows may reflect docket/document/agency or date-field constraints.",
-            "If list rows are found and full text matters, use fetch-regulationsgov-comment-detail.",
+            "If list rows are found and full text matters, use fetch-regulationsgov-comment-detail, then attachments/text extraction when inline text is absent.",
         ],
         "same_family_followups": ["fetch-regulationsgov-comment-detail"],
     },

@@ -1,6 +1,6 @@
 ---
 name: fetch-regulationsgov-comments
-description: Fetch Regulations.gov v4 comments in configurable time windows with authenticated requests, pagination, retries, throttling, transport checks, and response-structure validation. Use when tasks need policy/public-opinion comment datasets for downstream analysis (including sentiment workflows) with deterministic JSON/JSONL outputs.
+description: Fetch Regulations.gov v4 comment-list rows in configurable time windows with authenticated requests, pagination, retries, throttling, transport checks, and response-structure validation. Use when tasks need formal policy-comment candidate rows for downstream detail, attachment-text, and issue-classification workflows with deterministic JSON/JSONL outputs.
 ---
 
 # Regulations.gov Comments Fetch
@@ -89,6 +89,11 @@ python3 scripts/fetch_regulationsgov_comments.py fetch \
 ## Agent Reasoning Guide
 - This skill discovers comment list rows. It does not fetch all detail fields,
   attachments, issue labels, stance, concern, or policy conclusions.
+- Comment list rows are candidate records, not a readable formal comment corpus.
+  If the report needs formal comment issues, concerns, or stance structure,
+  follow with candidate audit, detail fetch, attachment/text extraction when
+  needed, normalization, and `classify-formal-comment-issues` or equivalent
+  analysis.
 - Treat `candidate_corpus_summary` as sample-shape evidence for planning batch
   detail fetches. Its `likely_drift_indicators` are review cues only, not source
   scores or evidence sufficiency judgements.

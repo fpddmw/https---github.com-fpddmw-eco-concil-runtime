@@ -256,6 +256,32 @@ def seed_control_state(run_dir: Path) -> dict[str, str]:
 
 
 class ControlQuerySurfaceTests(unittest.TestCase):
+    def test_runtime_control_freeze_defaults_planning_mode_for_gate_only_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            gate_path = run_dir / "runtime" / f"report_basis_gate_{ROUND_ID}.json"
+
+            freeze_record = store_runtime_control_freeze_record(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                gate_snapshot={
+                    "schema_version": "runtime-gate-v1",
+                    "generated_at_utc": "2024-01-01T00:00:00Z",
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "readiness_status": "ready",
+                    "report_basis_freeze_allowed": True,
+                    "gate_status": "report-basis-freeze-allowed",
+                    "report_basis_status": "frozen",
+                    "decision_source": "unit-test",
+                    "output_path": str(gate_path),
+                },
+                artifact_paths={"report_basis_gate_path": str(gate_path)},
+            )
+
+            self.assertEqual("planner-backed", freeze_record["planning_mode"])
+
     def test_query_control_objects_prefers_db_columns_when_raw_json_is_stale(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"

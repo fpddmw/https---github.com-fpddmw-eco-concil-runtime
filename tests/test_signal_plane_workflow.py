@@ -814,6 +814,97 @@ class SignalPlaneWorkflowTests(unittest.TestCase):
             warning_codes = {item["code"] for item in normalize_payload["warnings"]}
             self.assertIn("expected-document-text-extraction-manifest", warning_codes)
 
+    def test_regulationsgov_attachment_failed_download_still_materializes_limited_signal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            fetch_manifest = root / "regulationsgov_attachments_manifest.json"
+            write_json(
+                fetch_manifest,
+                {
+                    "ok": False,
+                    "source": "regulationsgov-v4-attachments",
+                    "records": [
+                        {
+                            "comment_id": "EPA-HQ-OAR-2015-0072-5836",
+                            "attachment_id": "09000064859c8451",
+                            "file_url": "https://downloads.regulations.gov/example/attachment_1.pdf",
+                            "metadata": {
+                                "id": "09000064859c8451",
+                                "attributes": {"title": "Attached comment letter"},
+                            },
+                            "comment_attributes": {
+                                "agencyId": "EPA",
+                                "docketId": "EPA-HQ-OAR-2015-0072",
+                                "commentOnId": "EPA-HQ-OAR-2015-0072-0001",
+                                "submitterName": "Forestry Association",
+                            },
+                        }
+                    ],
+                    "downloads": [],
+                    "failures": [
+                        {
+                            "target": {
+                                "comment_id": "EPA-HQ-OAR-2015-0072-5836",
+                                "attachment_id": "09000064859c8451",
+                                "file_url": "https://downloads.regulations.gov/example/attachment_1.pdf",
+                            },
+                            "error": "HTTP 403 from provider download host",
+                        }
+                    ],
+                },
+            )
+
+            extraction_payload = run_script(
+                script_path("extract-document-text"),
+                "--input-manifest",
+                str(fetch_manifest),
+                "--output-dir",
+                str(root / "text"),
+                "--manifest-output",
+                str(root / "text" / "extraction_manifest.json"),
+                "--pretty",
+            )
+            self.assertEqual("completed", extraction_payload["status"])
+            self.assertEqual(0, extraction_payload["completed_count"])
+            self.assertEqual(1, extraction_payload["limited_count"])
+            extraction_record = extraction_payload["records"][0]
+            self.assertEqual("limited", extraction_record["text_extraction_status"])
+            self.assertIn("metadata-only-no-local-file", extraction_record["quality_flags"])
+
+            normalize_payload = run_script(
+                script_path("normalize-regulationsgov-attachment-text"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--artifact-path",
+                str(extraction_payload["manifest_output"]),
+                "--pretty",
+            )
+            self.assertEqual("completed", normalize_payload["status"])
+            self.assertEqual(1, len(normalize_payload["canonical_ids"]))
+
+            query_payload = run_script(
+                script_path("query-formal-signals"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--source-skill",
+                "fetch-regulationsgov-attachments",
+                "--docket-id",
+                "EPA-HQ-OAR-2015-0072",
+            )
+            self.assertEqual(1, query_payload["result_count"])
+            result = query_payload["results"][0]
+            self.assertEqual("attachment-text", result["signal_kind"])
+            self.assertEqual("", result["snippet"])
+
     def test_public_signal_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

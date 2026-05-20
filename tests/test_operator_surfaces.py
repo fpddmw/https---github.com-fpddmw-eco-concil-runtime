@@ -535,6 +535,53 @@ class GovernedExecutionStateSurfaceTests(unittest.TestCase):
                 contexts["supervisor"]["source"],
             )
 
+    def test_report_basis_wrapper_uses_explicit_cross_round_artifact_to_find_db_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            basis_round_id = "round-reporting-basis-source-001"
+            report_basis = store_report_basis_freeze_record(
+                run_dir,
+                report_basis_payload={
+                    "run_id": RUN_ID,
+                    "round_id": basis_round_id,
+                    "basis_id": "report-basis-cross-round-001",
+                    "generated_at_utc": "2024-01-01T00:12:00Z",
+                    "report_basis_status": "frozen",
+                    "readiness_status": "ready-for-report-basis",
+                    "decision_source": "agent-council",
+                    "selected_evidence_refs": ["artifact:coverage-001"],
+                    "frozen_basis": {"evidence_refs": ["artifact:coverage-001"]},
+                    "report_basis_source": "deliberation-plane-report-basis-freeze",
+                },
+            )
+            basis_artifact = report_basis_path(
+                run_dir,
+                f"frozen_report_basis_{basis_round_id}.json",
+            )
+            write_json(basis_artifact, report_basis)
+
+            context = operator_surfaces.load_report_basis_freeze_wrapper(
+                run_dir,
+                run_id=RUN_ID,
+                round_id="round-reporting-writing-001",
+                report_basis_path=str(basis_artifact),
+            )
+
+            self.assertTrue(context["payload_present"])
+            self.assertEqual(
+                "deliberation-plane-report-basis-freeze-cross-round",
+                context["source"],
+            )
+            self.assertEqual(
+                "report-basis-cross-round-001",
+                context["payload"]["basis_id"],
+            )
+            self.assertEqual(basis_round_id, context["payload"]["round_id"])
+            self.assertEqual(
+                "round-reporting-writing-001",
+                context["payload"]["requested_round_id"],
+            )
+
     def test_materialize_governed_execution_exports_rebuilds_governed_execution_files_from_db(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"

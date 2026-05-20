@@ -286,9 +286,11 @@ SOURCE_FAMILY_WORKFLOWS: list[dict[str, object]] = [
         "label": "GDELT public record workflow",
         "semantics": (
             "Agent-owned source-family workflow. DOC search is useful for topical "
-            "reconnaissance and article lists; Events, Mentions, and GKG exports "
-            "are the row-level follow-up surfaces for shared UTC windows. This is "
-            "not a source ranking or runtime-owned agenda."
+            "reconnaissance, article lists, timeline aggregates, and DOC tone; "
+            "Events, Mentions, and GKG exports are the row-level follow-up "
+            "surfaces for shared UTC windows. DOC tone, AvgTone, MentionDocTone, "
+            "and V2Tone are media/document tone cues, not public sentiment. This "
+            "is not a source ranking or runtime-owned agenda."
         ),
         "workflow_steps": [
             {
@@ -335,8 +337,9 @@ SOURCE_FAMILY_WORKFLOWS: list[dict[str, object]] = [
         "label": "YouTube public discourse workflow",
         "semantics": (
             "Agent-owned discovery-to-comments workflow. Video search finds "
-            "candidate videos; comment fetch tests public response language for "
-            "agent-selected videos."
+            "candidate videos; comment fetch materializes the public-response "
+            "corpus for agent-selected videos when discourse semantics, affect, "
+            "or concerns matter."
         ),
         "workflow_steps": [
             {
@@ -372,7 +375,8 @@ SOURCE_FAMILY_WORKFLOWS: list[dict[str, object]] = [
             "Agent-owned list-to-detail-to-attachment workflow. The comments list "
             "stage discovers candidate comment IDs; detail fetch enriches selected "
             "comments; attachment fetch and text extraction materialize readable "
-            "formal comment text when inline text is absent or insufficient."
+            "formal comment text when inline text is absent or insufficient. "
+            "Listing rows are not a readable formal-comment corpus by themselves."
         ),
         "workflow_steps": [
             {
@@ -553,10 +557,12 @@ SOURCE_FAMILY_WORKFLOWS: list[dict[str, object]] = [
             "normalize-nasa-firms-fire-observation-signals",
             "normalize-usgs-water-observation-signals",
         ],
+        "optional_analysis_followup_skills": ["aggregate-environment-evidence"],
         "attempt_review_questions": [
             "Was the provider's spatial/time/parameter coverage actually compatible with the evidence need?",
             "Should another environmental surface be used for cross-checking?",
             "For FIRMS, did the agent check product availability before interpreting zero rows?",
+            "If the fetch materialized large observation tables, should aggregate-environment-evidence compress them before report use?",
             "If a source-region or receptor claim remains live, did the agent revise product, bbox, window, metric, or provider before stopping?",
         ],
     },
@@ -640,6 +646,7 @@ def source_family_workflows_for_skills(skill_names: Iterable[str]) -> list[dict[
                 "related_fetch_skills": related_fetch_skills,
                 "workflow_steps": workflow.get("workflow_steps", []),
                 "normalizer_skills": workflow.get("normalizer_skills", []),
+                "optional_analysis_followup_skills": workflow.get("optional_analysis_followup_skills", []),
                 "attempt_review_questions": workflow.get("attempt_review_questions", []),
             }
         )

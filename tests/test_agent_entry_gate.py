@@ -648,6 +648,16 @@ class AgentEntryGateTests(unittest.TestCase):
                 "Platform web_search/web_fetch/browser tools are prohibited",
                 social_skill_discipline["local_runtime_skill_priority"]["platform_web_tool_boundary"],
             )
+            social_workflow_card_text = str(social_entries[0]["source_family_workflow_card"])
+            self.assertIn("GDELT DOC is reconnaissance", social_workflow_card_text)
+            self.assertIn("YouTube video search discovers candidate videos", social_workflow_card_text)
+            self.assertIn("Regulations.gov comment listing discovers candidate rows", social_workflow_card_text)
+            self.assertIn("aggregate-environment-evidence", social_workflow_card_text)
+            self.assertIn("not a runtime agenda", social_workflow_card_text)
+            social_soft_obligations = str(social_entries[0]["claim_sensitive_soft_obligations"])
+            self.assertIn("coverage audit", social_soft_obligations)
+            self.assertIn("candidate-corpus audit", social_soft_obligations)
+            self.assertIn("aggregate-environment-evidence", social_soft_obligations)
             environmental_entries = [
                 entry
                 for entry in entry_gate["role_entry_points"]

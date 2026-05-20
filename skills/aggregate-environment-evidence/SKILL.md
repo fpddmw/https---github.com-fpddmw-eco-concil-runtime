@@ -14,6 +14,9 @@ description: Optional-analysis helper for DB-backed environment signal aggregati
 ## Triggering Conditions
 - An approved optional-analysis request asks for an environment evidence aggregation view.
 - Investigators need a human-auditable coverage summary before writing findings or evidence bundles.
+- A report may need to discuss environment trends, peaks, ranges, or operating
+  status from large normalized datasets; this helper compresses those rows into
+  advisory coverage/statistical basis before a council object decides uptake.
 
 ## Read/Write Contract
 - Reads `run_dir/analytics/signal_plane.sqlite`
@@ -54,6 +57,9 @@ description: Optional-analysis helper for DB-backed environment signal aggregati
   evidence is absent.
 - A council agent must carry useful cues into a finding, evidence bundle,
   challenge, proposal, readiness opinion, or synthesis before downstream use.
+- If no such carried aggregation exists, report prose should either avoid
+  trend/peak/operating-status claims or state that it is only citing item-level
+  examples.
 
 ## References
 - `../../docs/openclaw-project-overview.md`

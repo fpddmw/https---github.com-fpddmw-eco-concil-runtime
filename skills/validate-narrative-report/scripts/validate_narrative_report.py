@@ -36,6 +36,9 @@ PUBLIC_DISCOURSE_BASIS_MARKERS = (
     "public_discourse_sample_summary",
     "public-discourse-sample-summary",
     "summarize-public-discourse-sample",
+    "audit-public-discourse-sample-coverage",
+    "public-discourse-coverage-audit",
+    "public-discourse-coverage-receipt",
     "public_discourse_annotation_aggregation",
     "public-discourse-annotation-aggregation",
     "aggregate-public-discourse-annotations",
@@ -177,10 +180,6 @@ FORMAL_COMMENT_STRUCTURE_CLAIM_TERMS = (
     "issue distribution",
     "stance distribution",
     "concern distribution",
-    "support",
-    "oppose",
-    "opposition",
-    "stance",
     "label distribution",
     "sample fraction",
     "\u4e3b\u8981\u4e89\u8bae",
@@ -297,6 +296,70 @@ GDELT_TONE_PUBLIC_SENTIMENT_PHRASES = (
     "gdelt tone \u4ee3\u8868\u516c\u4f17\u60c5\u7eea",
     "gdelt tone \u8bc1\u660e\u516c\u4f17\u60c5\u7eea",
     "gdelt v2tone \u8bc1\u660e\u516c\u4f17\u60c5\u7eea",
+)
+GDELT_TONE_TERMS = (
+    "gdelt tone",
+    "gdelt v2tone",
+    "v2tone",
+    "avgtone",
+    "mentiondoctone",
+    "mention doc tone",
+    "tonechart",
+    "timeline tone",
+    "timelinetone",
+    "gkg tone",
+    "doc tone",
+    "gdelt \u8bed\u6c14",
+    "gdelt tone",
+)
+PUBLIC_SENTIMENT_TERMS = (
+    "public sentiment",
+    "public emotion",
+    "public mood",
+    "public feelings",
+    "public affect",
+    "public opinion",
+    "\u516c\u4f17\u60c5\u7eea",
+    "\u516c\u4f17\u60c5\u611f",
+    "\u516c\u4f17\u5fc3\u6001",
+    "\u603b\u4f53\u6c11\u610f",
+    "\u6c11\u610f",
+)
+PLATFORM_OR_DOCKET_SAMPLE_TERMS = (
+    "youtube",
+    "bluesky",
+    "regulations.gov",
+    "regulationsgov",
+    "formal comment",
+    "formal comments",
+    "docket comment",
+    "docket comments",
+    "\u6b63\u5f0f\u610f\u89c1",
+    "\u6b63\u5f0f\u8bc4\u8bba",
+)
+SAMPLE_GENERALIZATION_TERMS = (
+    "shows the public",
+    "shows residents",
+    "shows affected residents",
+    "shows people",
+    "the public believes",
+    "the public thinks",
+    "residents believe",
+    "residents think",
+    "people believe",
+    "people think",
+    "overall public",
+    "general public",
+    "representative public",
+    "platform-wide",
+    "population-wide",
+    "\u516c\u4f17\u666e\u904d",
+    "\u5c45\u6c11\u666e\u904d",
+    "\u5927\u591a\u6570\u516c\u4f17",
+    "\u591a\u6570\u5c45\u6c11",
+    "\u603b\u4f53\u6c11\u610f",
+    "\u6574\u4f53\u6c11\u610f",
+    "\u4ee3\u8868\u6027\u6c11\u610f",
 )
 SOURCE_NARRATIVE_ATTRIBUTION_PHRASES = (
     "source narrative proves physical source attribution",
@@ -445,6 +508,172 @@ ACTIONABLE_PATH_TERMS = (
     "\u7ee7\u7eed\u8c03\u67e5",
     "\u4e0d\u7ee7\u7eed\u8c03\u67e5\u7406\u7531",
 )
+ENVIRONMENT_STATE_SUBJECT_TERMS = (
+    "environmental evidence",
+    "environment data",
+    "environmental data",
+    "airnow",
+    "openaq",
+    "open-meteo",
+    "open meteo",
+    "usgs",
+    "usbr rise",
+    "firms",
+    "pm2.5",
+    "aqi",
+    "water level",
+    "reservoir level",
+    "storage",
+    "inflow",
+    "release",
+    "discharge",
+    "elevation",
+    "operating status",
+    "operational status",
+    "\u73af\u5883\u6570\u636e",
+    "\u73af\u5883\u8bc1\u636e",
+    "\u8fd0\u884c\u8bb0\u5f55",
+    "\u8fd0\u884c\u6570\u636e",
+    "\u8fd0\u884c\u72b6\u6001",
+    "\u6c34\u4f4d",
+    "\u5e93\u5bb9",
+    "\u5165\u6d41",
+    "\u4e0b\u6cc4",
+    "\u6392\u653e",
+    "\u6d41\u91cf",
+    "\u706b\u70b9",
+)
+ENVIRONMENT_STATE_CLAIM_CUES = (
+    "trend",
+    "peaked",
+    "peak",
+    "maximum",
+    "minimum",
+    "highest",
+    "lowest",
+    "mean",
+    "average",
+    "range",
+    "rose",
+    "fell",
+    "declined",
+    "increased",
+    "decreased",
+    "recovered",
+    "operating status",
+    "operational status",
+    "state of operations",
+    "\u8d8b\u52bf",
+    "\u5cf0\u503c",
+    "\u9ad8\u503c",
+    "\u4f4e\u503c",
+    "\u6700\u9ad8",
+    "\u6700\u4f4e",
+    "\u5747\u503c",
+    "\u5e73\u5747",
+    "\u8303\u56f4",
+    "\u4e0a\u5347",
+    "\u4e0b\u964d",
+    "\u56de\u843d",
+    "\u6062\u590d",
+    "\u8fd0\u884c\u72b6\u6001",
+)
+UNSUPPORTED_ENVIRONMENT_REPORT_PHRASES = (
+    "receptor observation",
+    "receptor observations",
+    "environmental observation",
+    "environmental pressure signal",
+    "environment trend",
+    "environmental trend",
+    "exposure causality",
+    "health outcome",
+    "policy responsibility",
+    "source attribution",
+    "pollution source attribution",
+    "\u53d7\u4f53\u4fa7\u73af\u5883\u89c2\u6d4b",
+    "\u73af\u5883\u89c2\u6d4b",
+    "\u73af\u5883\u538b\u529b\u4fe1\u53f7",
+    "\u73af\u5883\u8d8b\u52bf",
+    "\u66b4\u9732\u56e0\u679c",
+    "\u66b4\u9732\u4f30\u8ba1",
+    "\u5065\u5eb7\u7ed3\u679c",
+    "\u653f\u7b56\u8d23\u4efb",
+    "\u6765\u6e90\u5f52\u56e0",
+    "\u6c61\u67d3\u6765\u6e90\u5f52\u56e0",
+    "\u7269\u7406\u6765\u6e90",
+)
+REPORTABLE_ENVIRONMENT_BASIS_MARKERS = (
+    "aggregate-environment-evidence",
+    "environment_evidence_aggregation",
+    "envagg-",
+    "airnow",
+    "openaq",
+    "open-meteo",
+    "open meteo",
+    "usgs",
+    "usbr rise",
+    "firms",
+    "monitoring station",
+    "station observations",
+    "water level",
+    "storage",
+    "inflow",
+    "release",
+    "discharge",
+    "\u76d1\u6d4b\u70b9",
+    "\u89c2\u6d4b\u7ad9",
+    "\u706b\u70b9",
+    "\u6c34\u4f4d",
+    "\u5e93\u5bb9",
+    "\u5165\u6d41",
+    "\u4e0b\u6cc4",
+    "\u6d41\u91cf",
+)
+ENVIRONMENT_AGGREGATION_MARKERS = (
+    "aggregate-environment-evidence",
+    "environment_evidence_aggregation",
+    "envagg-",
+    "environment aggregation",
+    "environment evidence aggregation",
+)
+ITEM_LEVEL_ENVIRONMENT_CAVEAT_TERMS = (
+    "item-level example",
+    "item level example",
+    "selected item",
+    "selected items",
+    "illustrative item",
+    "illustrative example",
+    "single observation",
+    "single row",
+    "not an aggregate",
+    "not a trend",
+    "\u5355\u6761\u8bc1\u636e",
+    "\u5355\u6761\u8bb0\u5f55",
+    "\u6761\u76ee\u7ea7",
+    "\u793a\u4f8b",
+    "\u4e0d\u662f\u805a\u5408",
+    "\u4e0d\u6784\u6210\u8d8b\u52bf",
+)
+RELATION_REVIEW_BASIS_MARKERS = (
+    "materialize-spatiotemporal-relation-evidence-packet",
+    "spatiotemporal relation evidence packet",
+    "detect-temporal-cooccurrence-cues",
+    "temporal co-occurrence",
+    "review-spatiotemporal-relation-alternatives",
+    "review-fact-check-evidence-scope",
+    "fact-check evidence scope",
+    "review-evidence-sufficiency",
+    "challenger",
+    "review-comment",
+    "challenge",
+    "alternative explanation",
+    "alternatives",
+    "\u8d28\u8be2",
+    "\u6311\u6218",
+    "\u66ff\u4ee3\u89e3\u91ca",
+    "\u4e8b\u5b9e\u6838\u67e5",
+    "\u5173\u7cfb\u8bc1\u636e",
+)
 NEGATION_CUES = (
     "not ",
     "not a ",
@@ -457,6 +686,10 @@ NEGATION_CUES = (
     "without ",
     "does not ",
     "should not ",
+    "requires ",
+    "require ",
+    "would require ",
+    "stronger ",
     "\u4e0d\u5f97",
     "\u4e0d\u80fd",
     "\u4e0d\u5e94",
@@ -464,7 +697,17 @@ NEGATION_CUES = (
     "\u5e76\u975e",
     "\u4e0d\u53ef",
     "\u672a\u80fd",
+    "\u672a\u88ab\u8bb0\u5f55\u652f\u6491",
     "\u7f3a\u5c11",
+    "\u6ca1\u6709",
+    "\u65e0",
+    "\u4e0d\u652f\u6301",
+    "\u4e0d\u80fd\u652f\u6301",
+    "\u6392\u9664",
+    "\u5fc5\u987b\u6392\u9664",
+    "\u82e5\u8981",
+    "\u9700\u8981\u8865\u5145",
+    "\u9700\u8865\u5145",
 )
 
 
@@ -580,7 +823,7 @@ def normalized_text(text: str) -> str:
 
 
 def phrase_is_negated(text: str, start: int) -> bool:
-    prefix = text[max(0, start - 64) : start]
+    prefix = text[max(0, start - 120) : start]
     return any(cue in prefix for cue in NEGATION_CUES)
 
 
@@ -746,6 +989,13 @@ def has_public_discourse_basis(draft: dict[str, Any], text: str) -> bool:
         else {}
     )
     if any(maybe_text(public_summary.get(key)) for key in ("path", "summary_id", "status")):
+        return True
+    formal_helper = (
+        source_material.get("formal_policy_helper_summary")
+        if isinstance(source_material.get("formal_policy_helper_summary"), dict)
+        else {}
+    )
+    if any(maybe_text(formal_helper.get(key)) for key in ("coverage_audit_id", "annotation_set_id")):
         return True
     refs_text = "\n".join(all_evidence_refs(draft))
     return contains_any_phrase("\n".join([text, refs_text]), PUBLIC_DISCOURSE_BASIS_MARKERS)
@@ -959,31 +1209,72 @@ def formal_distribution_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 def formal_comment_basis_summary(draft: dict[str, Any], *, run_dir: Path | None) -> dict[str, Any]:
     source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
     formal_meta: dict[str, Any] = {}
-    for key in ("formal_comment_basis", "formal_comment_sample", "formal_comment_annotations"):
+    for key in (
+        "formal_comment_basis",
+        "formal_comment_sample",
+        "formal_comment_annotations",
+        "formal_policy_helper_summary",
+    ):
         value = source_material.get(key)
         if isinstance(value, dict):
             formal_meta.update(value)
+    source_skill_counts = (
+        formal_meta.get("source_skill_counts")
+        if isinstance(formal_meta.get("source_skill_counts"), dict)
+        else {}
+    )
 
     readable_count = max(
         int_value(formal_meta.get("readable_formal_signal_count")),
         int_value(formal_meta.get("formal_comment_text_signal_count")),
         int_value(formal_meta.get("formal_signal_count")),
         int_value(formal_meta.get("comment_detail_count")),
+        int_value(source_skill_counts.get("fetch-regulationsgov-comment-detail")),
         int_value(formal_meta.get("attachment_text_signal_count")),
         int_value(formal_meta.get("sample_count")),
+        int_value(formal_meta.get("annotation_sample_count")),
     )
     annotation_count = max(
         int_value(formal_meta.get("formal_annotation_count")),
         int_value(formal_meta.get("annotation_count")),
     )
+    candidate_audit_count = max(
+        int_value(formal_meta.get("candidate_audit_count")),
+        int_value(formal_meta.get("formal_candidate_audit_count")),
+        int_value(formal_meta.get("coverage_sample_count")),
+    )
     attachment_text_count = int_value(formal_meta.get("attachment_text_signal_count"))
-    listing_count = int_value(formal_meta.get("comment_listing_count"))
-    detail_count = int_value(formal_meta.get("comment_detail_count"))
+    listing_count = max(
+        int_value(formal_meta.get("comment_listing_count")),
+        int_value(source_skill_counts.get("fetch-regulationsgov-comments")),
+    )
+    detail_count = max(
+        int_value(formal_meta.get("comment_detail_count")),
+        int_value(source_skill_counts.get("fetch-regulationsgov-comment-detail")),
+    )
     has_formal_annotation_distribution = annotation_count > 0
+    has_candidate_audit = candidate_audit_count > 0 or any(
+        maybe_text(formal_meta.get(key))
+        for key in (
+            "candidate_audit_ref",
+            "candidate_audit_path",
+            "formal_candidate_audit_ref",
+            "formal_candidate_audit_path",
+            "coverage_audit_id",
+        )
+    )
 
     for artifact in helper_artifacts_from_draft(draft, run_dir=run_dir):
         skill = maybe_text(artifact.get("skill"))
-        if skill == "classify-formal-comment-issues":
+        if skill == "audit-formal-comment-candidate-corpus":
+            has_candidate_audit = True
+            candidate_audit_count = max(
+                candidate_audit_count,
+                int_value(artifact.get("candidate_signal_count")),
+                int_value(artifact.get("candidate_count")),
+                int_value(artifact.get("sample_count")),
+            )
+        elif skill == "classify-formal-comment-issues":
             readable_count = max(readable_count, int_value(artifact.get("sample_count")))
             annotation_count = max(annotation_count, int_value(artifact.get("annotation_count")))
             for row in artifact.get("annotations") if isinstance(artifact.get("annotations"), list) else []:
@@ -1058,6 +1349,8 @@ def formal_comment_basis_summary(draft: dict[str, Any], *, run_dir: Path | None)
         "attachment_text_count": attachment_text_count,
         "listing_count": listing_count,
         "detail_count": detail_count,
+        "candidate_audit_count": candidate_audit_count,
+        "has_candidate_audit": has_candidate_audit,
         "has_readable_formal_text": readable_count > 0,
         "has_annotation_basis": annotation_count > 0 or has_formal_annotation_distribution,
         "attachment_limited": attachment_limited,
@@ -1082,6 +1375,120 @@ def public_discourse_summary_payload(draft: dict[str, Any], *, run_dir: Path | N
         if maybe_text(artifact.get("skill")) == "summarize-public-discourse-sample":
             return artifact
     return {}
+
+
+def distribution_rows_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for field_name in (
+        "issue_distribution",
+        "social_affect_distribution",
+        "source_narrative_distribution",
+        "actor_responsibility_distribution",
+        "action_orientation_distribution",
+        "annotation_distributions",
+    ):
+        value = payload.get(field_name)
+        if isinstance(value, list):
+            rows.extend(row for row in value if isinstance(row, dict))
+    sample_internal = payload.get("sample_internal_distribution")
+    if isinstance(sample_internal, dict):
+        rows.extend(distribution_rows_from_payload(sample_internal))
+    return rows
+
+
+def public_discourse_basis_summary(draft: dict[str, Any], *, run_dir: Path | None) -> dict[str, bool]:
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    basis_meta: dict[str, Any] = {}
+    for key in (
+        "public_discourse_basis",
+        "public_discourse_sample",
+        "public_discourse_annotations",
+        "formal_policy_helper_summary",
+    ):
+        value = source_material.get(key)
+        if isinstance(value, dict):
+            basis_meta.update(value)
+    summary_payload = public_discourse_summary_payload(draft, run_dir=run_dir)
+    observed_inputs = (
+        summary_payload.get("observed_inputs")
+        if isinstance(summary_payload.get("observed_inputs"), dict)
+        else {}
+    )
+    coverage_summary = (
+        summary_payload.get("coverage_audit_summary")
+        if isinstance(summary_payload.get("coverage_audit_summary"), dict)
+        else {}
+    )
+    rows = distribution_rows_from_payload(summary_payload)
+    source_text = "\n".join(strings_from(source_material))
+    refs_text = "\n".join(all_evidence_refs(draft))
+    artifact_text = "\n".join(
+        "\n".join(strings_from(artifact))
+        for artifact in helper_artifacts_from_draft(draft, run_dir=run_dir)
+    )
+    combined_text = "\n".join([source_text, refs_text, artifact_text])
+    has_corpus = any(
+        maybe_text(value)
+        for value in (
+            basis_meta.get("corpus_path"),
+            basis_meta.get("corpus_ref"),
+            observed_inputs.get("corpus_path"),
+            summary_payload.get("corpus_id"),
+        )
+    ) or int_value(basis_meta.get("coverage_sample_count")) > 0 or contains_any_phrase(
+        combined_text, ("materialize-public-discourse-corpus", "public_discourse_corpus")
+    )
+    has_coverage_audit = any(
+        maybe_text(value)
+        for value in (
+            basis_meta.get("coverage_audit_path"),
+            basis_meta.get("coverage_audit_ref"),
+            basis_meta.get("coverage_audit_id"),
+            observed_inputs.get("coverage_audit_path"),
+            coverage_summary.get("coverage_audit_id"),
+        )
+    ) or contains_any_phrase(combined_text, ("audit-public-discourse-sample-coverage", "public_discourse_coverage_audit"))
+    has_annotation = bool(rows) or any(
+        int_value(basis_meta.get(key)) > 0
+        for key in ("annotation_count", "annotated_signal_count", "public_annotation_count")
+    ) or contains_any_phrase(combined_text, ("classify-public-discourse-affect", "public_discourse_affect_annotations"))
+    has_aggregation = any(
+        maybe_text(value)
+        for value in (
+            basis_meta.get("aggregation_path"),
+            basis_meta.get("aggregation_ref"),
+            observed_inputs.get("aggregation_path"),
+            summary_payload.get("aggregation_id"),
+        )
+    ) or bool(basis_meta.get("label_counts")) or contains_any_phrase(
+        combined_text, ("aggregate-public-discourse-annotations", "public_discourse_annotation_aggregation")
+    )
+    has_denominator = any(
+        int_value(row.get("label_family_denominator")) > 0
+        or int_value(row.get("eligible_signal_count")) > 0
+        for row in rows
+    ) or any(
+        int_value(basis_meta.get(key)) > 0
+        for key in (
+            "denominator",
+            "sample_denominator",
+            "eligible_signal_count",
+            "annotation_sample_count",
+        )
+    )
+    distribution_denominators = summary_payload.get("distribution_denominators")
+    if isinstance(distribution_denominators, dict) and distribution_denominators:
+        has_denominator = True
+    sample_internal = summary_payload.get("sample_internal_distribution")
+    if isinstance(sample_internal, dict) and isinstance(sample_internal.get("distribution_denominators"), dict):
+        has_denominator = True
+    return {
+        "has_corpus": has_corpus,
+        "has_coverage_audit": has_coverage_audit,
+        "has_annotation": has_annotation,
+        "has_aggregation": has_aggregation,
+        "has_denominator": has_denominator,
+    }
 
 
 def source_family_count(payload: dict[str, Any]) -> int:
@@ -1191,6 +1598,115 @@ def helper_marker_mentions(text: str) -> list[str]:
     ]
 
 
+def text_window_contains(text: str, terms_a: tuple[str, ...], terms_b: tuple[str, ...], *, window: int = 160) -> bool:
+    lowered = normalized_text(text)
+    for term_a in terms_a:
+        search_from = 0
+        lowered_a = term_a.casefold()
+        while True:
+            index = lowered.find(lowered_a, search_from)
+            if index < 0:
+                break
+            if phrase_is_negated(lowered, index):
+                search_from = index + len(lowered_a)
+                continue
+            start = max(0, index - window)
+            end = min(len(lowered), index + len(lowered_a) + window)
+            for term_b in terms_b:
+                lowered_b = term_b.casefold()
+                search_b_from = start
+                while True:
+                    index_b = lowered.find(lowered_b, search_b_from, end)
+                    if index_b < 0:
+                        break
+                    if not phrase_is_negated(lowered, index_b):
+                        return True
+                    search_b_from = index_b + len(lowered_b)
+            search_from = index + len(lowered_a)
+    return False
+
+
+def gdelt_tone_as_public_sentiment_present(text: str) -> bool:
+    if contains_unnegated_phrase(text, GDELT_TONE_PUBLIC_SENTIMENT_PHRASES):
+        return True
+    return text_window_contains(text, GDELT_TONE_TERMS, PUBLIC_SENTIMENT_TERMS)
+
+
+def platform_or_docket_sample_generalization_present(text: str) -> bool:
+    return text_window_contains(text, PLATFORM_OR_DOCKET_SAMPLE_TERMS, SAMPLE_GENERALIZATION_TERMS)
+
+
+def environment_state_claim_present(text: str) -> bool:
+    return text_window_contains(
+        text,
+        ENVIRONMENT_STATE_SUBJECT_TERMS,
+        ENVIRONMENT_STATE_CLAIM_CUES,
+        window=180,
+    )
+
+
+def environment_aggregation_basis_visible(draft: dict[str, Any], *, run_dir: Path | None) -> bool:
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    env_meta = (
+        source_material.get("environment_aggregation")
+        if isinstance(source_material.get("environment_aggregation"), dict)
+        else {}
+    )
+    if any(maybe_text(value) for value in env_meta.values()):
+        return True
+    text = "\n".join(
+        [
+            "\n".join(strings_from(source_material)),
+            "\n".join(all_evidence_refs(draft)),
+            "\n".join(
+                "\n".join(strings_from(artifact))
+                for artifact in helper_artifacts_from_draft(draft, run_dir=run_dir)
+            ),
+        ]
+    )
+    return contains_any_phrase(text, ENVIRONMENT_AGGREGATION_MARKERS)
+
+
+def reportable_environment_basis_visible(draft: dict[str, Any], *, run_dir: Path | None) -> bool:
+    if environment_aggregation_basis_visible(draft, run_dir=run_dir):
+        return True
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    combined = "\n".join(
+        [
+            "\n".join(strings_from(source_material)),
+            "\n".join(all_evidence_refs(draft)),
+            "\n".join(
+                "\n".join(strings_from(artifact))
+                for artifact in helper_artifacts_from_draft(draft, run_dir=run_dir)
+            ),
+        ]
+    )
+    return contains_unnegated_phrase(combined, REPORTABLE_ENVIRONMENT_BASIS_MARKERS)
+
+
+def unsupported_environment_claim_present(text: str) -> bool:
+    return contains_unnegated_phrase(text, UNSUPPORTED_ENVIRONMENT_REPORT_PHRASES)
+
+
+def item_level_environment_boundary_visible(text: str) -> bool:
+    return contains_any_phrase(text, ITEM_LEVEL_ENVIRONMENT_CAVEAT_TERMS)
+
+
+def relation_review_basis_visible(draft: dict[str, Any], text: str) -> bool:
+    counts = council_object_counts(draft)
+    if counts.get("review-comment", 0) > 0 or counts.get("challenge", 0) > 0:
+        return True
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    combined = "\n".join(
+        [
+            text,
+            "\n".join(strings_from(source_material)),
+            "\n".join(all_evidence_refs(draft)),
+        ]
+    )
+    return contains_any_phrase(combined, RELATION_REVIEW_BASIS_MARKERS)
+
+
 def optional_helper_carrier_issues(draft: dict[str, Any]) -> list[dict[str, str]]:
     source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
     reporting_artifacts = (
@@ -1280,6 +1796,17 @@ def validate_claim_boundary_semantics(
 
     formal_basis = formal_comment_basis_summary(draft, run_dir=run_dir)
     if formal_comment_structure_claim_present(text):
+        if not formal_basis["has_candidate_audit"]:
+            issues.append(
+                issue(
+                    "formal-comment-structure-without-candidate-audit",
+                    (
+                        "Formal comment issue, stance, or concern structure requires "
+                        "a candidate-corpus audit or equivalent sample-shape basis before report use."
+                    ),
+                    "error",
+                )
+            )
         if not formal_basis["has_readable_formal_text"]:
             issues.append(
                 issue(
@@ -1349,6 +1876,32 @@ def validate_claim_boundary_semantics(
             )
         )
     elif public_discourse_quantification_present(text):
+        public_basis = public_discourse_basis_summary(draft, run_dir=run_dir)
+        required_basis_messages = {
+            "has_corpus": (
+                "public-discourse-corpus-basis-missing",
+                "Public discourse emotion, issue, concern, or proportion claims require a materialized corpus or equivalent sample-definition basis.",
+            ),
+            "has_coverage_audit": (
+                "public-discourse-coverage-audit-basis-missing",
+                "Public discourse emotion, issue, concern, or proportion claims require a coverage-audit basis before report use.",
+            ),
+            "has_annotation": (
+                "public-discourse-annotation-basis-missing",
+                "Public discourse emotion, issue, concern, or proportion claims require annotation basis, not only raw fetch or visibility records.",
+            ),
+            "has_aggregation": (
+                "public-discourse-aggregation-basis-missing",
+                "Public discourse emotion, issue, concern, or proportion claims require annotation aggregation or equivalent summarized basis.",
+            ),
+            "has_denominator": (
+                "public-discourse-denominator-basis-missing",
+                "Public discourse percentages, main-concern, or issue-distribution claims require an explicit denominator in the basis.",
+            ),
+        }
+        for key, (code, message) in required_basis_messages.items():
+            if not public_basis[key]:
+                issues.append(issue(code, message, "error"))
         if not public_discourse_sample_boundary_visible(text):
             issues.append(
                 issue(
@@ -1434,6 +1987,58 @@ def validate_claim_boundary_semantics(
                 "error",
             )
         )
+    elif gdelt_tone_as_public_sentiment_present(text):
+        issues.append(
+            issue(
+                "gdelt-tone-public-sentiment",
+                "GDELT tone may describe media/document tone, not public sentiment or public emotion.",
+                "error",
+            )
+        )
+
+    if platform_or_docket_sample_generalization_present(text) and not has_representative_design:
+        issues.append(
+            issue(
+                "platform-or-docket-sample-generalized",
+                (
+                    "YouTube, Bluesky, and Regulations.gov samples must not be "
+                    "written as overall public or resident opinion unless the "
+                    "mission records a representative sampling design."
+                ),
+                "error",
+            )
+        )
+
+    if (
+        environment_state_claim_present(text)
+        and not environment_aggregation_basis_visible(draft, run_dir=run_dir)
+        and not item_level_environment_boundary_visible(text)
+    ):
+        issues.append(
+            issue(
+                "environment-state-claim-without-aggregation",
+                (
+                    "Environment trend, peak, range, or operating-status claims "
+                    "should cite aggregate-environment-evidence or explicitly state "
+                    "that the text is only an item-level example."
+                ),
+                "error",
+            )
+        )
+
+    if unsupported_environment_claim_present(text) and not reportable_environment_basis_visible(draft, run_dir=run_dir):
+        issues.append(
+            issue(
+                "environment-or-policy-claim-without-visible-basis",
+                (
+                    "Environmental observation, environmental trend, exposure, health-outcome, "
+                    "policy-responsibility, or source-attribution language requires a visible "
+                    "environmental/attribution basis. If the council basis only records a boundary, "
+                    "write the point as an exclusion rather than a substantive claim."
+                ),
+                "error",
+            )
+        )
 
     if source_narrative_discussion_present(text) and not source_narrative_boundary_visible(text):
         issues.append(
@@ -1487,6 +2092,19 @@ def validate_claim_boundary_semantics(
                     (
                         "Strong attribution language should keep challenger review, "
                         "alternative explanations, or explicit limitation handling visible."
+                    ),
+                    "warning",
+                )
+            )
+        if not relation_review_basis_visible(draft, text):
+            issues.append(
+                issue(
+                    "causal-or-attribution-claim-without-relation-review-basis",
+                    (
+                        "Source, causal, transport, or impact-chain wording should "
+                        "show relation, fact-check, alternatives, or challenger-review "
+                        "basis. Otherwise downgrade the wording to compatible cues or "
+                        "still-needs-verification language."
                     ),
                     "warning",
                 )
