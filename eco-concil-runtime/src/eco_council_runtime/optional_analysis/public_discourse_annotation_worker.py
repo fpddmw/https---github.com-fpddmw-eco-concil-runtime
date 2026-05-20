@@ -155,6 +155,14 @@ ANNOTATION_CUE_SETS: dict[str, dict[str, tuple[str, ...]]] = {
         "dam-or-infrastructure-operator": ("dam operator", "glen canyon dam", "hoover dam", "hydropower", "大坝", "基础设施"),
         "environmental-advocacy": ("environmental group", "conservation", "advocacy", "生态保护", "环保组织"),
     },
+    "responsibility_attribution_labels": {
+        "agency-responsibility": ("agency should", "epa should", "reclamation should", "bureau should", "机构应", "epa 应"),
+        "government-responsibility": ("government should", "city should", "state should", "政府应", "市政府", "州政府"),
+        "polluter-or-emitter-responsibility": ("polluter", "emissions", "industry", "emitter", "排放方", "污染者"),
+        "natural-hazard-responsibility": ("wildfire", "drought", "wind", "weather", "natural", "野火", "干旱", "天气"),
+        "shared-responsibility": ("shared responsibility", "everyone", "all parties", "together", "共同责任", "各方"),
+        "infrastructure-operator-responsibility": ("dam operator", "release operations", "grid operator", "大坝运营", "调度责任"),
+    },
     "action_orientation_labels": {
         "seeking-information": ("?", "what", "why", "how", "where", "guidance", "seek", "help", "怎么", "为什么"),
         "protective-action": ("mask", "stay inside", "close windows", "n95", "protect", "口罩", "关窗"),
@@ -164,6 +172,37 @@ ANNOTATION_CUE_SETS: dict[str, dict[str, tuple[str, ...]]] = {
         "humor/reaction": ("lol", "lmao", "meme", "joke", "reaction", "哈哈"),
         "uncertainty": ("maybe", "unclear", "not sure", "unknown", "可能", "不确定"),
         "participation-or-comment": ("comment", "submit", "public meeting", "hearing", "participate", "提交意见", "听证", "参与"),
+    },
+    "policy_demand_labels": {
+        "risk-communication-demand": ("guidance", "warning", "advisory", "tell us", "communicate", "风险沟通", "预警"),
+        "public-participation-demand": ("public meeting", "hearing", "comment period", "community voice", "参与", "听证", "公众意见"),
+        "policy-revision-demand": ("revise", "change the plan", "stronger standard", "stricter", "修订", "更严格"),
+        "monitoring-or-data-demand": ("monitoring", "data", "transparent", "publish data", "监测", "数据公开"),
+        "mitigation-or-relief-demand": ("relief", "mitigation", "compensation", "help residents", "缓解", "补偿", "救助"),
+        "water-conservation-demand": ("conservation", "reduce use", "cut demand", "节水", "减少用水"),
+    },
+    "trust_confidence_labels": {
+        "trust-in-agency": ("trust the agency", "confidence in", "credible", "reliable", "信任", "可信"),
+        "distrust-in-agency": ("do not trust", "distrust", "lost trust", "trust collapsed", "不信任", "信任崩塌"),
+        "transparency-concern": ("transparent", "transparency", "hidden", "withheld", "不透明", "透明"),
+        "ignored-community-voice": ("ignored", "community voice", "not heard", "public input ignored", "忽视", "社区声音"),
+        "process-legitimacy-concern": ("legitimate", "fair process", "rubber stamp", "公平程序", "走过场"),
+    },
+    "uncertainty_labels": {
+        "causal-source-uncertainty": ("where from", "source unknown", "not sure where", "来源不明", "不知道来源"),
+        "health-risk-uncertainty": ("health risk unknown", "not sure if safe", "unclear health", "健康风险不明"),
+        "policy-effect-uncertainty": ("may be affected", "unclear effect", "not sure it works", "policy effects remain uncertain", "效果不确定"),
+        "data-coverage-uncertainty": ("data gap", "limited data", "missing data", "coverage unclear", "数据不足"),
+        "timing-or-forecast-uncertainty": ("forecast", "when will", "how long", "timing unclear", "何时", "持续多久"),
+    },
+    "formal_policy_semantic_labels": {
+        "formal-procedure": ("federal register", "notice", "comment period", "hearing", "公告", "程序", "征求意见"),
+        "statutory-or-standard-basis": ("standard", "statutory", "clean air act", "nepa", "rule", "标准", "法规"),
+        "agency-response-scope": ("agency response", "respond to comments", "response to", "回应意见", "机构回应"),
+        "implementation-burden": ("implementation", "compliance", "burden", "cost", "执行负担", "合规成本"),
+        "public-participation-mechanism": ("public involvement", "public meeting", "comment portal", "参与机制", "公众参与"),
+        "environmental-justice-or-equity": ("environmental justice", "equity", "disproportionate", "公平", "环境正义"),
+        "policy-alternative": ("alternative", "option", "scenario", "方案", "替代方案"),
     },
 }
 
@@ -250,7 +289,39 @@ def _default_labels_for_item(item: dict[str, Any], text: str) -> list[dict[str, 
                 "label_basis": "default source narrative label when no origin cue is present",
             }
         )
+    if lane == "formal_record_text" and text:
+        labels.append(
+            {
+                "label_family": "formal_policy_semantic_labels",
+                "label": "formal-procedure",
+                "matched_cues": [],
+                "label_basis": "default formal record semantic label when policy text is present",
+            }
+        )
     return labels
+
+
+def _label_semantics(item: dict[str, Any], label_family: str) -> dict[str, Any]:
+    source_family = maybe_text(item.get("source_family"))
+    lane = maybe_text(item.get("discourse_lane"))
+    if label_family == "affect_labels" and lane == "social_sample_affect":
+        claim_boundary = "sample-local platform affect cue, not public sentiment or population opinion"
+    elif label_family == "affect_labels":
+        claim_boundary = "text-local affect wording cue; not a public sentiment denominator"
+    elif label_family == "source_narrative_labels":
+        claim_boundary = "public/media/source narrative cue, not physical source attribution"
+    elif label_family in {"formal_policy_semantic_labels", "formal_issue_labels", "formal_stance_hints", "formal_concern_facets"}:
+        claim_boundary = "formal record/comment semantic cue, not general public opinion"
+    else:
+        claim_boundary = "sample-local semantic cue requiring aggregation and council uptake before report use"
+    return {
+        "source_family": source_family,
+        "discourse_lane": lane,
+        "sample_class": maybe_text(item.get("sample_class")),
+        "claim_boundary": claim_boundary,
+        "source_family_denominator_required": True,
+        "discourse_lane_denominator_required": True,
+    }
 
 
 def _annotation_rows_for_item(
@@ -294,10 +365,16 @@ def _annotation_rows_for_item(
                 "audit_status": "worker-labeled",
                 "source_family": maybe_text(item.get("source_family")),
                 "discourse_lane": lane,
+                "sample_class": maybe_text(item.get("sample_class")),
                 "source_skill": maybe_text(item.get("source_skill")),
                 "text_excerpt": maybe_text(item.get("text_excerpt"))[:500],
                 "matched_cues": list_items(label_row.get("matched_cues")),
                 "label_basis": maybe_text(label_row.get("label_basis")),
+                "label_semantics": _label_semantics(item, family),
+                "denominator_boundary": (
+                    "Aggregate this label only within its source_family and discourse_lane; "
+                    "do not combine GDELT, social-platform, formal-comment, and formal-record denominators."
+                ),
                 "evidence_refs": evidence_refs,
             }
         )

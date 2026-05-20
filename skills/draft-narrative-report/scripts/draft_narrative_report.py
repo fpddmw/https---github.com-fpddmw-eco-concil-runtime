@@ -44,6 +44,7 @@ SECTION_TITLES = {
         "what-happened": "Case Narrative",
         "evidence-basis": "Evidence-Based Analysis",
         "public-discourse-deepening": "Public Discourse Semantics",
+        "fact-policy-public-interaction": "Fact Policy Public Interaction",
         "council-work": "What The Council Did",
         "risk-register": "Risks And Open Problems",
         "council-reasoning": "Source Basis And Boundary",
@@ -60,6 +61,7 @@ SECTION_TITLES = {
         "what-happened": "事件与议题脉络",
         "evidence-basis": "基于证据的分析",
         "public-discourse-deepening": "公共舆情语义分析",
+        "fact-policy-public-interaction": "事实-政策-公共互动时间线",
         "council-work": "议会做了什么",
         "risk-register": "风险与问题识别",
         "council-reasoning": "资料基础与边界",
@@ -1766,6 +1768,27 @@ def evidence_refs_from(payload: dict[str, Any]) -> list[str]:
     return unique_texts(refs)
 
 
+def evidence_ref_text(value: Any) -> str:
+    if isinstance(value, dict):
+        artifact_ref = maybe_text(value.get("artifact_ref"))
+        if artifact_ref:
+            return artifact_ref
+        artifact_path = maybe_text(value.get("artifact_path"))
+        record_locator = maybe_text(value.get("record_locator"))
+        if artifact_path:
+            return f"{artifact_path}:{record_locator or '$'}"
+        signal_id = maybe_text(value.get("signal_id"))
+        if signal_id:
+            return signal_id
+    return maybe_text(value)
+
+
+def evidence_ref_texts(values: Any) -> list[str]:
+    if isinstance(values, list):
+        return unique_texts([evidence_ref_text(value) for value in values])
+    return unique_texts([evidence_ref_text(values)])
+
+
 def query_objects(run_dir: Path, *, run_id: str, round_id: str, object_kind: str, limit: int) -> list[dict[str, Any]]:
     try:
         payload = query_council_objects(
@@ -1784,6 +1807,7 @@ def query_objects(run_dir: Path, *, run_id: str, round_id: str, object_kind: str
 def artifact_row(kind: str, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     if not payload:
         return {}
+    report_packet = payload.get("report_packet") if isinstance(payload.get("report_packet"), dict) else {}
     return {
         "kind": kind,
         "path": str(path),
@@ -1839,6 +1863,30 @@ def artifact_row(kind: str, path: Path, payload: dict[str, Any]) -> dict[str, An
             ]
             if maybe_text(item)
         ],
+        "section_briefs": [
+            item
+            for item in [
+                *list_items(payload.get("section_briefs")),
+                *list_items(report_packet.get("section_briefs")),
+            ]
+            if isinstance(item, dict)
+        ],
+        "interaction_timeline_nodes": [
+            item
+            for item in [
+                *list_items(payload.get("interaction_timeline_nodes")),
+                *list_items(report_packet.get("interaction_timeline_nodes")),
+            ]
+            if isinstance(item, dict)
+        ],
+        "interaction_timeline_path": maybe_text(payload.get("interaction_timeline_path"))
+        or maybe_text(
+            (
+                report_packet.get("interaction_timeline_policy", {})
+                if isinstance(report_packet.get("interaction_timeline_policy"), dict)
+                else {}
+            ).get("artifact_path")
+        ),
     }
 
 
@@ -1881,6 +1929,62 @@ def load_reporting_basis(
         if row:
             rows.append(row)
     return rows
+
+
+def section_briefs_from_reporting_basis(reporting_basis: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    briefs: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in reporting_basis:
+        for brief in row.get("section_briefs", []):
+            if not isinstance(brief, dict):
+                continue
+            brief_id = maybe_text(brief.get("brief_id")) or maybe_text(
+                brief.get("section_key")
+            )
+            key = brief_id or json.dumps(brief, ensure_ascii=True, sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            briefs.append(brief)
+    return briefs
+
+
+def interaction_timeline_nodes_from_reporting_basis(reporting_basis: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    nodes: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in reporting_basis:
+        for node in row.get("interaction_timeline_nodes", []):
+            if not isinstance(node, dict):
+                continue
+            node_id = maybe_text(node.get("node_id")) or json.dumps(
+                node,
+                ensure_ascii=True,
+                sort_keys=True,
+            )
+            if node_id in seen:
+                continue
+            seen.add(node_id)
+            nodes.append(node)
+    return nodes
+
+
+def refs_from_section_briefs(section_briefs: list[dict[str, Any]]) -> list[str]:
+    refs: list[str] = []
+    for brief in section_briefs:
+        refs.extend(evidence_ref_texts(brief.get("refs")))
+        refs.extend(evidence_ref_texts(brief.get("evidence_refs")))
+        source_path = maybe_text(brief.get("source_artifact_path"))
+        if source_path:
+            refs.append(f"{source_path}:$")
+    return unique_texts(refs)
+
+
+def first_section_brief_path(section_briefs: list[dict[str, Any]]) -> str:
+    for brief in section_briefs:
+        path = maybe_text(brief.get("source_artifact_path"))
+        if path:
+            return path
+    return ""
 
 
 def council_basis_objects(run_dir: Path, *, run_id: str, basis_round_id: str, limit: int) -> dict[str, list[dict[str, Any]]]:
@@ -2550,6 +2654,88 @@ def build_public_discourse_addendum(
     )
 
 
+def build_interaction_timeline_addendum(
+    *,
+    section_briefs: list[dict[str, Any]],
+    interaction_nodes: list[dict[str, Any]],
+    language: str,
+) -> dict[str, Any]:
+    interaction_briefs = [
+        brief
+        for brief in section_briefs
+        if "interaction" in maybe_text(brief.get("section_key")).casefold()
+        or "interaction" in maybe_text(brief.get("brief_id")).casefold()
+    ]
+    if not interaction_briefs and not interaction_nodes:
+        return {}
+    brief = interaction_briefs[0] if interaction_briefs else {}
+    denominator = brief.get("denominator") if isinstance(brief.get("denominator"), dict) else {}
+    node_count = int(denominator.get("interaction_node_count") or len(interaction_nodes))
+    parallel_count = int(denominator.get("parallel_timeline_node_count") or 0)
+    fact_count = int(denominator.get("environment_signal_count") or 0) + int(
+        denominator.get("formal_signal_count") or 0
+    )
+    public_count = int(denominator.get("public_signal_count") or 0)
+    claim_strength = maybe_text(brief.get("claim_strength")) or "bounded-descriptive-context-only"
+    candidate_claims = text_list(brief.get("candidate_section_claims"))
+    limitations = text_list(brief.get("limitations"))
+    refs = refs_from_section_briefs(interaction_briefs or section_briefs)
+    if is_zh(language):
+        paragraphs = [
+            (
+                "互动时间线只用于把事实/政策侧记录与公共/媒体侧记录放入同一时间坐标。"
+                f"当前可见互动节点 {node_count} 个，单侧背景节点 {parallel_count} 个；"
+                f"事实/政策侧可见信号 {fact_count} 条，公共/媒体侧可见信号 {public_count} 条。"
+            ),
+            (
+                f"本节 claim strength 为 `{claim_strength}`。"
+                + (
+                    "可写入的有界判断是："
+                    + "；".join(claim.rstrip("。") for claim in candidate_claims[:2])
+                    + "。"
+                    if candidate_claims
+                    else "可写入的判断仅限同一时间窗口内两侧记录共同可见。"
+                )
+            ),
+            (
+                "这不是因果、政策效果或公众反应归因。若要写语义变化、政策回应缺口或责任判断，"
+                "还需要可比样本定义、source-family denominator、正式承接的解释对象和质询边界。"
+            ),
+        ]
+        if limitations:
+            paragraphs.append("本节限制包括：" + "；".join(limitations[:3]) + "。")
+    else:
+        paragraphs = [
+            (
+                "The interaction timeline places fact/policy-side records and public/media-side records on the same chronology. "
+                f"The handoff exposes {node_count} interaction node(s), {parallel_count} one-sided context node(s), "
+                f"{fact_count} fact/policy-side visible signal(s), and {public_count} public/media-side visible signal(s)."
+            ),
+            (
+                f"Claim strength is `{claim_strength}`. "
+                + (
+                    "A bounded section claim is: " + " ".join(candidate_claims[:2])
+                    if candidate_claims
+                    else "The supportable claim is limited to co-visible records in the cited timeline windows."
+                )
+            ),
+            (
+                "This is not causality, policy-effect evidence, or public-response attribution. Stronger semantic-shift, "
+                "communication-gap, or responsibility wording requires comparable denominators, council-carried interpretation, and challenge boundaries."
+            ),
+        ]
+        if limitations:
+            paragraphs.append("Key limitations: " + " ".join(limitations[:3]))
+    return section(
+        "fact-policy-public-interaction",
+        label("fact-policy-public-interaction", language),
+        paragraphs,
+        refs,
+        status="advisory-section-brief",
+        language=language,
+    )
+
+
 def build_zh_closure_narrative(*, synthesis_line: str, readiness_lines: list[str], profile: str = "") -> list[str]:
     if profile == "formal-policy-comment":
         paragraphs = [
@@ -3142,6 +3328,11 @@ def draft_narrative_report(
         resolved_basis_round_id,
         report_round_id=round_id,
     )
+    section_briefs = section_briefs_from_reporting_basis(reporting_basis)
+    interaction_timeline_nodes = interaction_timeline_nodes_from_reporting_basis(
+        reporting_basis
+    )
+    section_brief_refs = refs_from_section_briefs(section_briefs)
     object_sets = council_basis_objects(
         run_dir_path,
         run_id=run_id,
@@ -3168,6 +3359,7 @@ def draft_narrative_report(
             *[row["ref"] for row in object_rows if row.get("ref")],
             *[ref for row in reporting_basis for ref in row.get("evidence_refs", [])],
             *[ref for row in object_rows for ref in row.get("evidence_refs", [])],
+            *section_brief_refs,
             *([f"{public_summary_path}:$"] if public_summary_path and public_summary else []),
         ]
     )
@@ -3498,6 +3690,11 @@ def draft_narrative_report(
         summary_path=public_summary_path,
         language=report_language,
     )
+    interaction_timeline_addendum = build_interaction_timeline_addendum(
+        section_briefs=section_briefs,
+        interaction_nodes=interaction_timeline_nodes,
+        language=report_language,
+    )
     if is_zh(report_language) and case_profile == "formal-policy-comment":
         case_frame_sentence = "正文主线应优先界定正式治理入口、评论样本可读性、附件路线限制和公共语义样本边界。"
     else:
@@ -3579,6 +3776,7 @@ def draft_narrative_report(
             refs_from_rows([*positions, *findings, *bundles, *readinesses], fallback=all_refs[:8]),
             language=report_language,
         ),
+        *([interaction_timeline_addendum] if interaction_timeline_addendum else []),
         *([public_discourse_addendum] if public_discourse_addendum else []),
         section(
             "limitations",
@@ -3721,6 +3919,16 @@ def draft_narrative_report(
                     "basis_needed": "relation packet, fact-check scope, alternatives, or challenger review basis",
                     "boundary": "Otherwise write compatibility cues or still-needs-verification language.",
                 },
+                {
+                    "claim_family": "fact_policy_public_interaction",
+                    "basis_needed": "interaction timeline node, section brief, separate fact/policy refs, separate public/media refs, claim strength, denominator, and limitations",
+                    "boundary": "Timeline co-visibility is descriptive context, not causality, policy impact, or public response attribution.",
+                },
+                {
+                    "claim_family": "policy_evaluation_or_responsibility",
+                    "basis_needed": "policy proposal/evaluation basis, finding/evidence bundle, relation review, and challenger limitations",
+                    "boundary": "Do not write policy success, failure, responsibility, or accountability as a substantive finding without matching basis.",
+                },
             ],
         },
         "argument_map": argument_map,
@@ -3738,6 +3946,13 @@ def draft_narrative_report(
                 "summary_id": maybe_text(public_summary.get("summary_id")) if public_summary else "",
                 "status": maybe_text(public_summary.get("status")) if public_summary else "",
                 "advisory_only": bool(public_summary),
+            },
+            "section_briefs": section_briefs,
+            "interaction_timeline": {
+                "path": first_section_brief_path(section_briefs),
+                "section_brief_count": len(section_briefs),
+                "interaction_node_count": len(interaction_timeline_nodes),
+                "advisory_only": bool(section_briefs or interaction_timeline_nodes),
             },
             "formal_policy_helper_summary": formal_helper_meta,
         },

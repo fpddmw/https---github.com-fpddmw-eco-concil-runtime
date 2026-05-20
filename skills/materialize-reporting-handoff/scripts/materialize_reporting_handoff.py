@@ -135,6 +135,156 @@ def load_claim_gap_action_cards(run_dir: Path, round_id: str) -> dict[str, Any]:
     }
 
 
+def load_interaction_timeline(run_dir: Path, round_id: str) -> dict[str, Any]:
+    artifact_path = (
+        run_dir / "analytics" / f"fact_policy_public_interaction_timeline_{round_id}.json"
+    )
+    if not artifact_path.exists():
+        return {
+            "present": False,
+            "path": str(artifact_path.resolve()),
+            "interaction_nodes": [],
+            "parallel_timeline_nodes": [],
+            "payload": {},
+        }
+    try:
+        payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "present": False,
+            "path": str(artifact_path.resolve()),
+            "interaction_nodes": [],
+            "parallel_timeline_nodes": [],
+            "payload": {},
+            "warning": "interaction timeline artifact is not valid JSON",
+        }
+    if not isinstance(payload, dict):
+        payload = {}
+    interaction_nodes = [
+        item
+        for item in list_items(payload.get("interaction_nodes"))
+        if isinstance(item, dict)
+    ]
+    parallel_nodes = [
+        item
+        for item in list_items(payload.get("parallel_timeline_nodes"))
+        if isinstance(item, dict)
+    ]
+    return {
+        "present": bool(interaction_nodes),
+        "path": str(artifact_path.resolve()),
+        "interaction_nodes": interaction_nodes,
+        "parallel_timeline_nodes": parallel_nodes,
+        "payload": payload,
+    }
+
+
+def _brief_refs(nodes: list[dict[str, Any]], *, limit: int = 20) -> list[Any]:
+    refs: list[Any] = []
+    for node in nodes:
+        refs.extend(list_items(node.get("fact_or_policy_evidence_refs")))
+        refs.extend(list_items(node.get("public_or_media_evidence_refs")))
+        refs.extend(list_items(node.get("evidence_refs")))
+        if len(refs) >= limit:
+            break
+    seen: set[str] = set()
+    results: list[Any] = []
+    for ref in refs:
+        key = json.dumps(ref, ensure_ascii=True, sort_keys=True)
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(ref)
+        if len(results) >= limit:
+            break
+    return results
+
+
+def build_interaction_section_briefs(
+    timeline_context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    nodes = [
+        item
+        for item in list_items(timeline_context.get("interaction_nodes"))
+        if isinstance(item, dict)
+    ]
+    if not nodes:
+        return []
+    payload = (
+        timeline_context.get("payload")
+        if isinstance(timeline_context.get("payload"), dict)
+        else {}
+    )
+    observed_input_summary = (
+        payload.get("observed_input_summary")
+        if isinstance(payload.get("observed_input_summary"), dict)
+        else {}
+    )
+    limitations = unique_texts(
+        [
+            maybe_text(
+                (
+                    node.get("claim_boundary", {})
+                    if isinstance(node.get("claim_boundary"), dict)
+                    else {}
+                ).get("report_boundary")
+            )
+            for node in nodes
+        ]
+        + [
+            "Section brief is advisory; report prose must cite council-carried or reporting-basis objects before treating the timeline as report basis.",
+            "Do not write causality, policy impact, public response attribution, representative public opinion, or evidence absence from timeline co-visibility alone.",
+        ]
+    )
+    denominators = {
+        "interaction_node_count": len(nodes),
+        "parallel_timeline_node_count": len(
+            list_items(timeline_context.get("parallel_timeline_nodes"))
+        ),
+        "environment_signal_count": observed_input_summary.get("environment_signal_count", 0),
+        "formal_signal_count": observed_input_summary.get("formal_signal_count", 0),
+        "public_signal_count": observed_input_summary.get("public_signal_count", 0),
+        "missing_timestamp_count": observed_input_summary.get("missing_timestamp_count", 0),
+        "helper_artifacts_present": list_items(
+            observed_input_summary.get("helper_artifacts_present")
+        ),
+        "denominator_boundary": (
+            "Timeline denominators are node/signal visibility counts only; public "
+            "semantic percentages require source-family-local corpus, coverage, "
+            "and annotation denominators."
+        ),
+    }
+    refs = _brief_refs(nodes)
+    return [
+        {
+            "brief_id": "section-brief-fpp-"
+            + stable_hash(timeline_context.get("path"), len(nodes))[:12],
+            "section_key": "fact-policy-public-interaction-timeline",
+            "section_role": "Bounded chronology for fact/policy/public interaction context.",
+            "source_artifact_path": maybe_text(timeline_context.get("path")),
+            "refs": refs,
+            "evidence_refs": refs,
+            "claim_strength": "bounded-descriptive-context-only",
+            "denominator": denominators,
+            "limitations": limitations,
+            "candidate_section_claims": [
+                "Fact/policy-side records and public/media records were visible in the same timeline windows listed in the cited nodes."
+            ],
+            "if_not_used_report_boundary": (
+                "Omit interaction framing and keep fact/policy chronology separate "
+                "from public/media sample discussion."
+            ),
+            "report_use_requires": [
+                "finding-record",
+                "evidence-bundle",
+                "round-synthesis",
+                "report-section-draft",
+                "report-basis citation",
+            ],
+        }
+    ]
+
+
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1062,6 +1212,16 @@ def materialize_reporting_handoff_skill(
         for card in list_items(claim_gap_cards_context.get("action_cards"))
         if isinstance(card, dict)
     ]
+    interaction_timeline_context = load_interaction_timeline(
+        run_dir_path,
+        basis_round_id,
+    )
+    interaction_nodes = [
+        node
+        for node in list_items(interaction_timeline_context.get("interaction_nodes"))
+        if isinstance(node, dict)
+    ]
+    section_briefs = build_interaction_section_briefs(interaction_timeline_context)
     supporting_proposal_ids = unique_texts(
         report_basis_freeze.get("supporting_proposal_ids", [])
         if isinstance(report_basis_freeze.get("supporting_proposal_ids"), list)
@@ -1121,6 +1281,27 @@ def materialize_reporting_handoff_skill(
             "reporting objects, and they do not rank, schedule, or execute skills."
         ),
     }
+    report_packet["interaction_timeline_nodes"] = interaction_nodes
+    report_packet["interaction_timeline_policy"] = {
+        "artifact_path": maybe_text(interaction_timeline_context.get("path")),
+        "present": bool(interaction_timeline_context.get("present")),
+        "advisory_semantics": (
+            "Interaction timeline nodes are descriptive helper context. They are "
+            "not report basis unless carried by council or reporting objects, and "
+            "they do not prove causality, policy impact, public response attribution, "
+            "representativeness, or evidence absence."
+        ),
+    }
+    report_packet["section_briefs"] = section_briefs
+    report_packet["section_brief_policy"] = {
+        "source": "reporting-handoff-derived-from-carried-helper-artifacts",
+        "present": bool(section_briefs),
+        "advisory_semantics": (
+            "Section briefs expose refs, claim strength, denominators, and "
+            "limitations for report-editor judgement; they do not create a "
+            "parallel report path."
+        ),
+    }
     board_excerpt = excerpt_text(board_brief_text)
     handoff_id = "reporting-handoff-" + stable_hash(run_id, round_id, handoff_status, report_basis_status)[:12]
 
@@ -1175,6 +1356,13 @@ def materialize_reporting_handoff_skill(
         ),
         "claim_gap_action_card_count": len(claim_gap_action_cards),
         "claim_gap_action_cards": claim_gap_action_cards,
+        "interaction_timeline_path": maybe_text(
+            interaction_timeline_context.get("path")
+        ),
+        "interaction_timeline_node_count": len(interaction_nodes),
+        "interaction_timeline_nodes": interaction_nodes,
+        "section_brief_count": len(section_briefs),
+        "section_briefs": section_briefs,
         "challenger_constraint_count": len(
             list_items(report_basis_freeze.get("challenger_constraints"))
         )

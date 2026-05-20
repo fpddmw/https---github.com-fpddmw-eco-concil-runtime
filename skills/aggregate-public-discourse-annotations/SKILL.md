@@ -7,7 +7,10 @@ description: Optional-analysis helper for aggregating sample-level public discou
 
 ## Core Goal
 - Read a DB-backed public discourse corpus and approved taxonomy cues, annotation-worker output, or agent-authored annotation JSON/JSONL.
-- Aggregate issue, affect, source narrative, actor responsibility, and action orientation labels inside the selected sample.
+- Aggregate issue, affect, source narrative, actor responsibility,
+  responsibility attribution, action orientation, policy demand,
+  trust/confidence, uncertainty, and formal-policy semantic labels inside the
+  selected sample.
 - Avoid global default sentiment taxonomies, source ranking, public-opinion inference, or report conclusions.
 
 ## Read/Write Contract
@@ -43,6 +46,9 @@ description: Optional-analysis helper for aggregating sample-level public discou
 - Preserve denominator semantics: each distribution records eligible signal
   count, label-family denominator, and explicit flags that fractions are
   sample-local and must not be summed into a 100% public-opinion composition.
+- Use `semantic_distributions` for source-family and discourse-lane local
+  proportions. Do not mix GDELT media/document, YouTube/Bluesky social text,
+  formal comments, or formal records into a single sentiment denominator.
 - Annotation-worker output may carry its own `annotation_basis_ref`; manual
   agent-authored annotations require an explicit annotation basis ref. Approved
   taxonomy cues remain candidate labels for human review and are not findings by

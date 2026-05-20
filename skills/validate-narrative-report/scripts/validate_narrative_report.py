@@ -426,6 +426,12 @@ OPTIONAL_HELPER_MARKERS = (
     "aggregate-environment-evidence",
     "environment_evidence_aggregation",
     "envagg-",
+    "build-fact-policy-public-interaction-timeline",
+    "fact_policy_public_interaction_timeline",
+    "fact-policy-public-interaction",
+    "fact-policy-public-interaction-node",
+    "section-brief-fpp-",
+    "interaction_timeline",
     "summarize-public-discourse-sample",
     "public_discourse_sample_summary",
     "aggregate-public-discourse-annotations",
@@ -434,6 +440,130 @@ OPTIONAL_HELPER_MARKERS = (
     "public_media_narrative_comparison",
     "materialize-public-discourse-corpus",
     "public_discourse_corpus",
+)
+INTERACTION_TIMELINE_BASIS_MARKERS = (
+    "build-fact-policy-public-interaction-timeline",
+    "fact_policy_public_interaction_timeline",
+    "fact-policy-public-interaction",
+    "fact-policy-public-interaction-node",
+    "section-brief-fpp-",
+    "interaction_timeline_nodes",
+    "interaction timeline",
+    "\u4e8b\u5b9e-\u653f\u7b56-\u516c\u5171\u4e92\u52a8",
+    "\u4e92\u52a8\u65f6\u95f4\u7ebf",
+)
+INTERACTION_JUDGEMENT_PHRASES = (
+    "public response to",
+    "public reaction to",
+    "public discourse shifted after",
+    "public concern shifted after",
+    "public media response to",
+    "same-day public response",
+    "same-day interaction",
+    "interaction between official",
+    "interaction between policy",
+    "fact-policy-public interaction",
+    "policy response caused public concern",
+    "official action drove public concern",
+    "media and public response to",
+    "\u516c\u4f17\u5bf9",
+    "\u516c\u5171\u8ba8\u8bba\u56e0",
+    "\u8206\u60c5\u968f",
+    "\u540c\u65e5\u4e92\u52a8",
+    "\u653f\u7b56\u56de\u5e94\u5f15\u53d1",
+)
+INTERACTION_SIDE_TERMS = (
+    "policy response",
+    "official action",
+    "agency notice",
+    "formal record",
+    "fact/policy",
+    "public/media",
+    "\u653f\u7b56\u56de\u5e94",
+    "\u5b98\u65b9\u884c\u52a8",
+    "\u6b63\u5f0f\u8bb0\u5f55",
+)
+INTERACTION_CLAIM_TERMS = (
+    "caused public",
+    "drove public",
+    "triggered public",
+    "public response",
+    "public reaction",
+    "interaction",
+    "semantic shift",
+    "communication gap",
+    "\u5f15\u53d1\u516c\u4f17",
+    "\u63a8\u52a8\u8206\u60c5",
+    "\u516c\u4f17\u53cd\u5e94",
+    "\u8bed\u4e49\u53d8\u5316",
+    "\u6c9f\u901a\u7f3a\u53e3",
+)
+INTERACTION_BOUNDARY_TERMS = (
+    "not causality",
+    "does not prove causality",
+    "not policy impact",
+    "not public response attribution",
+    "descriptive chronology",
+    "co-visible",
+    "same timeline window",
+    "bounded-descriptive-context-only",
+    "\u4e0d\u662f\u56e0\u679c",
+    "\u4e0d\u8bc1\u660e\u56e0\u679c",
+    "\u4e0d\u662f\u653f\u7b56\u6548\u679c",
+    "\u4e0d\u662f\u516c\u4f17\u53cd\u5e94\u5f52\u56e0",
+    "\u63cf\u8ff0\u6027\u65f6\u95f4\u7ebf",
+)
+POLICY_EVALUATION_CLAIM_PHRASES = (
+    "policy was effective",
+    "policy is effective",
+    "policy was ineffective",
+    "policy is ineffective",
+    "policy succeeded",
+    "policy failed",
+    "policy solved",
+    "policy reduced",
+    "policy improved",
+    "policy caused improvement",
+    "policy caused harm",
+    "policy response was effective",
+    "agency response was effective",
+    "\u653f\u7b56\u6709\u6548",
+    "\u653f\u7b56\u65e0\u6548",
+    "\u653f\u7b56\u5931\u8d25",
+    "\u653f\u7b56\u6210\u529f",
+    "\u653f\u7b56\u6539\u5584",
+    "\u653f\u7b56\u5bfc\u81f4\u6539\u5584",
+)
+RESPONSIBILITY_CLAIM_PHRASES = (
+    "agency is responsible for",
+    "agency was responsible for",
+    "government is responsible for",
+    "government was responsible for",
+    "policy responsibility",
+    "regulatory responsibility",
+    "accountable for the harm",
+    "responsible for the health outcome",
+    "responsible for exposure",
+    "failed to protect",
+    "\u673a\u6784\u5bf9",
+    "\u653f\u5e9c\u5bf9",
+    "\u653f\u7b56\u8d23\u4efb",
+    "\u76d1\u7ba1\u8d23\u4efb",
+    "\u5bf9\u5065\u5eb7\u7ed3\u679c\u8d1f\u8d23",
+    "\u5bf9\u66b4\u9732\u8d1f\u8d23",
+)
+POLICY_EVALUATION_BASIS_MARKERS = (
+    "policy evaluation basis",
+    "policy_recommendations",
+    "proposal",
+    "evidence-bundle",
+    "finding-record",
+    "policy option",
+    "options-and-tradeoffs",
+    "decision_packet",
+    "\u653f\u7b56\u8bc4\u4f30\u4f9d\u636e",
+    "\u653f\u7b56\u9009\u9879",
+    "\u6743\u8861",
 )
 ENVIRONMENT_ATTRIBUTION_PHRASES = (
     "caused by",
@@ -1722,6 +1852,85 @@ def relation_review_basis_visible(draft: dict[str, Any], text: str) -> bool:
     return contains_any_phrase(combined, RELATION_REVIEW_BASIS_MARKERS)
 
 
+def interaction_judgement_present(text: str) -> bool:
+    if contains_unnegated_phrase(text, INTERACTION_JUDGEMENT_PHRASES):
+        return True
+    return text_window_contains(text, INTERACTION_SIDE_TERMS, INTERACTION_CLAIM_TERMS, window=220)
+
+
+def interaction_timeline_basis_visible(draft: dict[str, Any], *, run_dir: Path | None) -> bool:
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    timeline_meta = (
+        source_material.get("interaction_timeline")
+        if isinstance(source_material.get("interaction_timeline"), dict)
+        else {}
+    )
+    if any(
+        [
+            maybe_text(timeline_meta.get("path")),
+            int_value(timeline_meta.get("section_brief_count")) > 0,
+            int_value(timeline_meta.get("interaction_node_count")) > 0,
+        ]
+    ):
+        return True
+    section_briefs = source_material.get("section_briefs")
+    if isinstance(section_briefs, list) and any(
+        isinstance(brief, dict) and contains_any_phrase("\n".join(strings_from(brief)), INTERACTION_TIMELINE_BASIS_MARKERS)
+        for brief in section_briefs
+    ):
+        return True
+    combined = "\n".join(
+        [
+            "\n".join(strings_from(source_material)),
+            "\n".join(all_evidence_refs(draft)),
+            "\n".join(
+                "\n".join(strings_from(artifact))
+                for artifact in helper_artifacts_from_draft(draft, run_dir=run_dir)
+            ),
+        ]
+    )
+    return contains_any_phrase(combined, INTERACTION_TIMELINE_BASIS_MARKERS)
+
+
+def interaction_boundary_visible(text: str) -> bool:
+    return contains_any_phrase(text, INTERACTION_BOUNDARY_TERMS)
+
+
+def policy_evaluation_claim_present(text: str) -> bool:
+    return contains_unnegated_phrase(text, POLICY_EVALUATION_CLAIM_PHRASES)
+
+
+def policy_evaluation_basis_visible(draft: dict[str, Any], *, run_dir: Path | None) -> bool:
+    counts = council_object_counts(draft)
+    if any(
+        counts.get(kind, 0) > 0
+        for kind in (
+            "proposal",
+            "finding",
+            "evidence-bundle",
+            "round-synthesis",
+            "readiness-opinion",
+        )
+    ):
+        return True
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    combined = "\n".join(
+        [
+            "\n".join(strings_from(source_material)),
+            "\n".join(all_evidence_refs(draft)),
+            "\n".join(
+                "\n".join(strings_from(artifact))
+                for artifact in helper_artifacts_from_draft(draft, run_dir=run_dir)
+            ),
+        ]
+    )
+    return contains_any_phrase(combined, POLICY_EVALUATION_BASIS_MARKERS)
+
+
+def responsibility_claim_present(text: str) -> bool:
+    return contains_unnegated_phrase(text, RESPONSIBILITY_CLAIM_PHRASES)
+
+
 def optional_helper_carrier_issues(draft: dict[str, Any]) -> list[dict[str, str]]:
     source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
     reporting_artifacts = (
@@ -2019,6 +2228,59 @@ def validate_claim_boundary_semantics(
                     "YouTube, Bluesky, and Regulations.gov samples must not be "
                     "written as overall public or resident opinion unless the "
                     "mission records a representative sampling design."
+                ),
+                "error",
+            )
+        )
+
+    if interaction_judgement_present(text):
+        if not interaction_timeline_basis_visible(draft, run_dir=run_dir):
+            issues.append(
+                issue(
+                    "interaction-claim-without-timeline-basis",
+                    (
+                        "Fact-policy-public interaction, public-response, semantic-shift, "
+                        "or same-day interaction wording requires an interaction timeline "
+                        "section brief or equivalent carried basis."
+                    ),
+                    "error",
+                )
+            )
+        elif not interaction_boundary_visible(text):
+            issues.append(
+                issue(
+                    "interaction-claim-boundary-missing",
+                    (
+                        "Interaction timeline wording should state its descriptive boundary: "
+                        "co-visible chronology is not causality, policy effect, or public-response attribution."
+                    ),
+                    "warning",
+                )
+            )
+
+    if policy_evaluation_claim_present(text) and not policy_evaluation_basis_visible(draft, run_dir=run_dir):
+        issues.append(
+            issue(
+                "policy-evaluation-claim-without-basis",
+                (
+                    "Policy success, failure, effectiveness, harm, or improvement claims "
+                    "require a proposal, finding, evidence bundle, policy-evaluation basis, "
+                    "or equivalent council-carried object."
+                ),
+                "error",
+            )
+        )
+
+    if responsibility_claim_present(text) and not (
+        policy_evaluation_basis_visible(draft, run_dir=run_dir)
+        or relation_review_basis_visible(draft, text)
+    ):
+        issues.append(
+            issue(
+                "responsibility-claim-without-basis",
+                (
+                    "Responsibility or accountability claims require a policy-evaluation "
+                    "basis and/or relation-review/challenger basis before report use."
                 ),
                 "error",
             )

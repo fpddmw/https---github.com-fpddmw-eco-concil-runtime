@@ -62,6 +62,7 @@ ANALYSIS_KIND_REPRESENTATION_GAP = "representation-gap"
 ANALYSIS_KIND_DIFFUSION_EDGE = "diffusion-edge"
 ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE = "spatiotemporal-relation-cue"
 ANALYSIS_KIND_CLAIM_GAP_ACTION_CARD = "claim-gap-action-card"
+ANALYSIS_KIND_FACT_POLICY_PUBLIC_INTERACTION_NODE = "fact-policy-public-interaction-node"
 ANALYSIS_KIND_CLAIM_SCOPE = "claim-scope"
 ANALYSIS_KIND_OBSERVATION_SCOPE = "observation-scope"
 ANALYSIS_KIND_CLAIM_OBSERVATION_LINK = "claim-observation-link"
@@ -102,6 +103,10 @@ ANALYSIS_KIND_GOVERNANCE_OVERRIDES: dict[str, dict[str, str]] = {
     ANALYSIS_KIND_CLAIM_GAP_ACTION_CARD: {
         "successor_skill": "materialize-claim-gap-action-cards",
         "freeze_reason": "claim-gap action cards are advisory prompts and cannot rank, schedule, auto-execute, or prove claim sufficiency",
+    },
+    ANALYSIS_KIND_FACT_POLICY_PUBLIC_INTERACTION_NODE: {
+        "successor_skill": "build-fact-policy-public-interaction-timeline",
+        "freeze_reason": "fact/policy/public interaction timeline nodes are descriptive helper context and cannot prove causality, policy impact, public response attribution, representativeness, or report readiness",
     },
     ANALYSIS_KIND_MERGED_OBSERVATION: {
         "governance_status": ANALYSIS_GOVERNANCE_LEGACY_FROZEN,
@@ -442,6 +447,40 @@ ANALYSIS_KIND_CONFIGS: dict[str, dict[str, Any]] = {
             "lineage",
         ],
         "item_artifact_ref_fields": ["evidence_refs"],
+    },
+    ANALYSIS_KIND_FACT_POLICY_PUBLIC_INTERACTION_NODE: {
+        "artifact_label": "fact-policy-public-interaction-node",
+        "default_relative": "analytics/fact_policy_public_interaction_timeline_{round_id}.json",
+        "items_key": "interaction_nodes",
+        "count_key": "interaction_node_count",
+        "id_field": "node_id",
+        "subject_field": "time_anchor_date",
+        "state_field": "interaction_status",
+        "related_id_fields": [
+            "node_id",
+            "node_kind",
+            "time_anchor_date",
+            "interaction_status",
+        ],
+        "canonical_object_kind": "",
+        "default_source_skill": "build-fact-policy-public-interaction-timeline",
+        "summary_fields": [
+            "timeline_scope",
+            "interaction_policy",
+        ],
+        "query_basis_fields": [
+            "timeline_scope",
+            "observed_input_summary",
+            "helper_artifact_inputs",
+        ],
+        "item_parent_id_list_fields": [
+            "lineage",
+        ],
+        "item_artifact_ref_fields": [
+            "fact_or_policy_evidence_refs",
+            "public_or_media_evidence_refs",
+            "evidence_refs",
+        ],
     },
     ANALYSIS_KIND_FORMAL_PUBLIC_LINK: {
         "artifact_label": "formal-public-link",
@@ -864,6 +903,7 @@ __all__ = [
     "ANALYSIS_KIND_DIFFUSION_EDGE",
     "ANALYSIS_KIND_SPATIOTEMPORAL_RELATION_CUE",
     "ANALYSIS_KIND_CLAIM_GAP_ACTION_CARD",
+    "ANALYSIS_KIND_FACT_POLICY_PUBLIC_INTERACTION_NODE",
     "ANALYSIS_KIND_CLAIM_SCOPE",
     "ANALYSIS_KIND_OBSERVATION_SCOPE",
     "ANALYSIS_KIND_CLAIM_OBSERVATION_LINK",

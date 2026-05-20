@@ -728,7 +728,15 @@ def run_materialize_claim_gap_action_cards(
             owner_role_suggestions=["environmental-investigator", "challenger"],
         )
 
-    if interaction_requested and "fact-policy-public-interaction-timeline" not in analysis.get("available_analysis_kinds", []):
+    available_analysis_kinds = set(analysis.get("available_analysis_kinds", []))
+    interaction_timeline_present = bool(
+        available_analysis_kinds
+        & {
+            "fact-policy-public-interaction-node",
+            "fact-policy-public-interaction-timeline",
+        }
+    )
+    if interaction_requested and not interaction_timeline_present:
         _new_card(
             cards,
             run_id=run_id,
@@ -741,6 +749,7 @@ def run_materialize_claim_gap_action_cards(
                 "be mistaken for causation."
             ),
             candidate_skills=[
+                "build-fact-policy-public-interaction-timeline",
                 "aggregate-environment-evidence",
                 "compare-public-media-narratives",
                 "review-spatiotemporal-relation-alternatives",

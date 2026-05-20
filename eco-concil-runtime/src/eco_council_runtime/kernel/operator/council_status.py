@@ -1354,7 +1354,7 @@ def show_source_surfaces_surface(
             for step in steps[: _safe_limit(limit)]
             if isinstance(step, dict)
         ],
-        "catalog": catalog_entries[: _safe_limit(limit)],
+        "catalog": catalog_entries,
         "commands": {
             "prepare_round": run_skill_command(
                 run_dir=run_dir,

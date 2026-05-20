@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Fact Policy Public Interaction Timeline"
+  short_description: "Optional-analysis fact/policy/public interaction timeline"
+  default_prompt: "Use $build-fact-policy-public-interaction-timeline only after approval. Emit descriptive chronology with separate fact/policy-side and public/media-side refs. Empty or one-sided visibility is not absence; do not infer causality, policy impact, public response attribution, ranking, or execution."

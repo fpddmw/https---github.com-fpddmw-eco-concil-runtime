@@ -1,4 +1,4 @@
 interface:
   display_name: "Classify Public Discourse Affect"
   short_description: "Bounded annotation-worker for sample-local public discourse labels"
-  default_prompt: "Use $classify-public-discourse-affect only after approval and after a public discourse corpus is materialized. Produce sample-local affect, issue, stance/action, and source-narrative annotations only; do not write findings, rank sources, infer public opinion, or perform physical source attribution. Challenger review is boundary/taxonomy/outlier review, not mandatory item-by-item relabeling."
+  default_prompt: "Use $classify-public-discourse-affect only after approval and after a public discourse corpus is materialized. Produce sample-local affect, issue, policy demand, trust/confidence, uncertainty, responsibility, formal-policy semantic, and source-narrative annotations only; do not write findings, rank sources, infer public opinion, or perform physical source attribution. Challenger review is boundary/taxonomy/outlier review, not mandatory item-by-item relabeling."

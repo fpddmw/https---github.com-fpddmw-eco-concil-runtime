@@ -39,6 +39,19 @@ def write_public_semantic_mission(run_dir: Path) -> None:
     )
 
 
+def write_interaction_mission(run_dir: Path) -> None:
+    write_json(
+        run_dir / "mission.json",
+        {
+            "schema_version": "1.0.0",
+            "run_id": RUN_ID,
+            "topic": "Fact policy public interaction analysis",
+            "objective": "Analyze fact policy public interaction timeline and semantic shift for an environmental event.",
+            "request_text": "Assess the interaction timeline between official action, public response, and semantic shift.",
+        },
+    )
+
+
 def insert_signal(
     run_dir: Path,
     *,
@@ -341,6 +354,88 @@ class ClaimGapActionCardTests(unittest.TestCase):
                     ),
                     card,
                 )
+
+    def test_interaction_gap_card_uses_timeline_skill_and_clears_after_analysis_sync(self) -> None:
+        from eco_council_runtime.kernel.planes.analysis_plane import (
+            sync_fact_policy_public_interaction_node_result_set,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            run_kernel("init-run", "--run-dir", str(run_dir), "--run-id", RUN_ID)
+            write_interaction_mission(run_dir)
+
+            run_script(
+                script_path("materialize-claim-gap-action-cards"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            first_artifact = load_json(run_dir / "analytics" / f"claim_gap_action_cards_{ROUND_ID}.json")
+            interaction_gap = next(
+                card
+                for card in first_artifact["action_cards"]
+                if card["claim_gap"].startswith("Fact, policy action")
+            )
+            self.assertIn(
+                "build-fact-policy-public-interaction-timeline",
+                interaction_gap["candidate_skills"],
+            )
+
+            timeline_path = (
+                run_dir
+                / "analytics"
+                / f"fact_policy_public_interaction_timeline_{ROUND_ID}.json"
+            )
+            write_json(
+                timeline_path,
+                {
+                    "schema_version": "fixture",
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "interaction_node_count": 1,
+                    "interaction_nodes": [
+                        {
+                            "node_id": "fact-policy-public-interaction-node-fixture",
+                            "time_anchor_date": "2023-06-07",
+                            "interaction_status": "two-sided-context",
+                            "fact_or_policy_evidence_refs": ["signal:fact-policy-001"],
+                            "public_or_media_evidence_refs": ["signal:public-media-001"],
+                            "evidence_refs": [
+                                "signal:fact-policy-001",
+                                "signal:public-media-001",
+                            ],
+                        }
+                    ],
+                },
+            )
+            sync_fact_policy_public_interaction_node_result_set(
+                run_dir,
+                expected_run_id=RUN_ID,
+                round_id=ROUND_ID,
+                interaction_timeline_path=timeline_path,
+            )
+
+            run_script(
+                script_path("materialize-claim-gap-action-cards"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            second_artifact = load_json(run_dir / "analytics" / f"claim_gap_action_cards_{ROUND_ID}.json")
+            self.assertFalse(
+                [
+                    card
+                    for card in second_artifact["action_cards"]
+                    if card["claim_gap"].startswith("Fact, policy action")
+                ]
+            )
 
     def test_action_cards_expose_to_agent_entry_and_reporting_handoff_without_execution(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

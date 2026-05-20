@@ -8,6 +8,7 @@ description: Materialize DB-backed reporting packets from frozen evidence basis 
 ## Core Goal
 - Turn DB-backed frozen evidence basis and reporting gate state into explicit `evidence_packet`, `decision_packet`, and `report_packet` objects inside one canonical reporting handoff.
 - Preserve evidence index, uncertainty register, residual disputes, policy recommendations, operator notes, and next-round focus in one auditable object.
+- Carry optional claim-gap cards, interaction timeline nodes, and derived section briefs as advisory report_packet context, not direct report basis.
 - Provide a stable handoff for decision memo drafting and decision-maker report assembly.
 - Treat JSON/Markdown artifacts as export-only compatibility inputs when DB rows are available.
 
@@ -46,7 +47,7 @@ description: Materialize DB-backed reporting packets from frozen evidence basis 
 - `analysis_sync`
 - `board_handoff`
 - The emitted artifact also carries normalized cross-plane trace metadata in `board_state_source`, `coverage_source`, `report_basis_source`, `readiness_source`, `board_brief_source`, `supervisor_state_source`, `db_path`, and `observed_inputs`, including explicit artifact-versus-materialized flags for each upstream input.
-- The emitted handoff includes `evidence_packet`, `decision_packet`, `report_packet`, `evidence_index`, `uncertainty_register`, `residual_disputes`, and `policy_recommendations`.
+- The emitted handoff includes `evidence_packet`, `decision_packet`, `report_packet`, `evidence_index`, `uncertainty_register`, `residual_disputes`, `policy_recommendations`, optional `claim_gap_action_cards`, optional `interaction_timeline_nodes`, and optional `section_briefs`.
 
 ## Agent Reasoning Guide
 - Treat reporting handoff as a rebuildable packet view over DB-backed frozen or
@@ -56,6 +57,9 @@ description: Materialize DB-backed reporting packets from frozen evidence basis 
   uncertainty, and residual disputes instead of being smoothed into readiness.
 - Downstream decision/report skills must keep evidence refs, basis ids, and
   uncertainty boundaries visible.
+- Section briefs expose refs, claim strength, denominators, and limitations for
+  report-editor judgement; they do not create a parallel report path or validate
+  public policy situation analysis by themselves.
 
 ## References
 - `../../docs/openclaw-project-overview.md`

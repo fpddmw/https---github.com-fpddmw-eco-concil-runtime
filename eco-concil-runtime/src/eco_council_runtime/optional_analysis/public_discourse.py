@@ -5,6 +5,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from eco_council_runtime.objects.council import query_council_objects
+
 from .research_issues import (
     approved_helper_input_payload,
     load_json_file,
@@ -57,6 +59,9 @@ PUBLIC_DISCOURSE_SOURCE_FAMILY_BY_SKILL = {
     "fetch-regulationsgov-comments": "regulationsgov-formal-comments",
     "fetch-regulationsgov-comment-detail": "regulationsgov-formal-comments",
     "fetch-regulationsgov-attachments": "regulationsgov-formal-comments",
+    "fetch-federal-register-documents": "formal-record",
+    "fetch-epa-eis-records": "formal-record",
+    "fetch-usbr-project-records": "formal-record",
 }
 
 PUBLIC_DISCOURSE_EXPECTED_FAMILIES = [
@@ -89,7 +94,27 @@ PUBLIC_DISCOURSE_EXPECTED_FAMILIES = [
         ],
         "recon_skills": ["fetch-regulationsgov-comments"],
     },
+    {
+        "source_family": "formal-record",
+        "text_sample_skills": [
+            "fetch-federal-register-documents",
+            "fetch-epa-eis-records",
+            "fetch-usbr-project-records",
+        ],
+        "recon_skills": ["fetch-federal-register-documents"],
+    },
 ]
+PUBLIC_DISCOURSE_LOW_VOLUME_THRESHOLD = 3
+SOURCE_ACQUISITION_NONPRODUCTIVE_STATUSES = {
+    "failed",
+    "blocked",
+    "receipt-only",
+}
+SOURCE_ACQUISITION_EXECUTED_STATUSES = {
+    "executed",
+    "fetched",
+    "normalized",
+}
 
 SOCIAL_SAMPLE_AFFECT_SKILLS = {
     "fetch-youtube-comments",
@@ -114,7 +139,12 @@ ANNOTATION_LABEL_FAMILIES = {
     "affect_labels",
     "source_narrative_labels",
     "actor_responsibility_labels",
+    "responsibility_attribution_labels",
     "action_orientation_labels",
+    "policy_demand_labels",
+    "trust_confidence_labels",
+    "uncertainty_labels",
+    "formal_policy_semantic_labels",
     "formal_issue_labels",
     "formal_stance_hints",
     "formal_concern_facets",
@@ -134,9 +164,28 @@ ANNOTATION_FAMILY_ALIASES = {
     "actor_responsibility": "actor_responsibility_labels",
     "actor_responsibility_label": "actor_responsibility_labels",
     "actor_responsibility_labels": "actor_responsibility_labels",
+    "responsibility_attribution": "responsibility_attribution_labels",
+    "responsibility_attribution_label": "responsibility_attribution_labels",
+    "responsibility_attribution_labels": "responsibility_attribution_labels",
     "action_orientation": "action_orientation_labels",
     "action_orientation_label": "action_orientation_labels",
     "action_orientation_labels": "action_orientation_labels",
+    "policy_demand": "policy_demand_labels",
+    "policy_demand_label": "policy_demand_labels",
+    "policy_demand_labels": "policy_demand_labels",
+    "trust_confidence": "trust_confidence_labels",
+    "trust_confidence_label": "trust_confidence_labels",
+    "trust_confidence_labels": "trust_confidence_labels",
+    "trust": "trust_confidence_labels",
+    "confidence": "trust_confidence_labels",
+    "uncertainty": "uncertainty_labels",
+    "uncertainty_label": "uncertainty_labels",
+    "uncertainty_labels": "uncertainty_labels",
+    "formal_policy_semantic": "formal_policy_semantic_labels",
+    "formal_policy_semantic_label": "formal_policy_semantic_labels",
+    "formal_policy_semantic_labels": "formal_policy_semantic_labels",
+    "policy_semantic": "formal_policy_semantic_labels",
+    "policy_semantic_label": "formal_policy_semantic_labels",
     "formal_issue": "formal_issue_labels",
     "formal_issue_label": "formal_issue_labels",
     "formal_issue_labels": "formal_issue_labels",
@@ -279,6 +328,7 @@ def _filter_discourse_signals(
     keyword_any: list[str],
     observed_after_utc: str,
     observed_before_utc: str,
+    require_text: bool = True,
 ) -> list[dict[str, Any]]:
     selected: list[dict[str, Any]] = []
     for signal in signals:
@@ -294,7 +344,7 @@ def _filter_discourse_signals(
             observed_before_utc=observed_before_utc,
         ):
             continue
-        if not signal_text(signal):
+        if require_text and not signal_text(signal):
             continue
         selected.append(signal)
     return selected
@@ -333,6 +383,371 @@ def _load_discourse_signals(
         limit=limit,
     )
     return [*public_signals, *formal_signals], db_path
+
+
+def _source_family_for_skill(source_skill: Any) -> str:
+    return PUBLIC_DISCOURSE_SOURCE_FAMILY_BY_SKILL.get(
+        maybe_text(source_skill),
+        "",
+    )
+
+
+def _signal_dedupe_key(signal: dict[str, Any]) -> str:
+    return maybe_text(signal.get("dedupe_key")) or maybe_text(signal.get("signal_id"))
+
+
+def _dedup_count(signals: list[dict[str, Any]]) -> int:
+    return len({key for key in (_signal_dedupe_key(signal) for signal in signals) if key})
+
+
+def _signal_query_text(signal: dict[str, Any]) -> str:
+    metadata = dict_items(signal.get("metadata"))
+    return (
+        maybe_text(signal.get("query_text"))
+        or maybe_text(metadata.get("query_text"))
+        or maybe_text(metadata.get("query"))
+        or maybe_text(metadata.get("search_query"))
+        or maybe_text(metadata.get("keywords"))
+    )
+
+
+def _query_variants(signals: list[dict[str, Any]], *, keyword_any: list[str] | None = None) -> list[dict[str, Any]]:
+    counts: Counter[tuple[str, str, str]] = Counter()
+    for signal in signals:
+        query_text = _signal_query_text(signal)
+        if not query_text:
+            continue
+        counts[
+            (
+                public_discourse_source_family(signal),
+                maybe_text(signal.get("source_skill")),
+                query_text,
+            )
+        ] += 1
+    variants = [
+        {
+            "source_family": source_family,
+            "source_skill": source_skill,
+            "query_text": query_text,
+            "eligible_signal_count": count,
+        }
+        for (source_family, source_skill, query_text), count in sorted(counts.items())
+    ]
+    for keyword in unique_texts(keyword_any or []):
+        variants.append(
+            {
+                "source_family": "",
+                "source_skill": "",
+                "query_text": keyword,
+                "eligible_signal_count": 0,
+                "variant_source": "materialize-public-discourse-corpus keyword filter",
+            }
+        )
+    return variants
+
+
+def _time_window_summary(signals: list[dict[str, Any]], *, requested_after_utc: str = "", requested_before_utc: str = "") -> dict[str, Any]:
+    timestamps = sorted(
+        {
+            first_timestamp(signal)
+            for signal in signals
+            if first_timestamp(signal)
+        }
+    )
+    return {
+        "requested_after_utc": maybe_text(requested_after_utc),
+        "requested_before_utc": maybe_text(requested_before_utc),
+        "observed_min_utc": timestamps[0] if timestamps else "",
+        "observed_max_utc": timestamps[-1] if timestamps else "",
+        "signal_timestamp_count": len(timestamps),
+        "window_policy": "Use this as the sampled DB-visible window, not as proof of source-family absence outside the window.",
+    }
+
+
+def _source_family_denominators(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for family in PUBLIC_DISCOURSE_EXPECTED_FAMILIES:
+        source_family = maybe_text(family.get("source_family"))
+        family_signals = [
+            signal
+            for signal in signals
+            if public_discourse_source_family(signal) == source_family
+        ]
+        rows.append(
+            {
+                "source_family": source_family,
+                "denominator": len(family_signals),
+                "dedup_count": _dedup_count(family_signals),
+                "denominator_unit": "normalized signal within this source family",
+                "denominator_scope": "sample-local source-family denominator",
+                "do_not_mix_with": [
+                    maybe_text(other.get("source_family"))
+                    for other in PUBLIC_DISCOURSE_EXPECTED_FAMILIES
+                    if maybe_text(other.get("source_family")) != source_family
+                ],
+            }
+        )
+    return rows
+
+
+def _denominator_policy() -> dict[str, Any]:
+    return {
+        "schema_version": "public-policy-corpus-denominator-policy-v1",
+        "denominators_are_source_family_local": True,
+        "do_not_mix_gdelt_youtube_bluesky_formal_comments": True,
+        "do_not_mix_gdelt_youtube_bluesky_formal_records_formal_comments": True,
+        "gdelt_tone_is_media_document_tone_not_public_sentiment": True,
+        "zero_rows_are_visibility_or_acquisition_limits_not_evidence_absence": True,
+        "report_use": (
+            "Public semantic proportions require a carried corpus, coverage audit, "
+            "annotation/aggregation artifact, source-family denominator, and explicit sample boundary."
+        ),
+    }
+
+
+def _query_source_acquisition_proposals(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    try:
+        payload = query_council_objects(
+            run_dir,
+            object_kind="source-acquisition-proposal",
+            run_id=run_id,
+            round_id=round_id,
+            limit=500,
+        )
+    except Exception:
+        return []
+    return [
+        item
+        for item in list_items(payload.get("objects"))
+        if isinstance(item, dict)
+    ]
+
+
+def _proposal_id(proposal: dict[str, Any]) -> str:
+    return (
+        maybe_text(proposal.get("object_id"))
+        or maybe_text(proposal.get("proposal_id"))
+        or maybe_text(proposal.get("id"))
+    )
+
+
+def _source_acquisition_attempt_audit(
+    proposals: list[dict[str, Any]],
+    signals: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    signal_counts = Counter(maybe_text(signal.get("source_skill")) for signal in signals)
+    rows: list[dict[str, Any]] = []
+    for proposal in proposals:
+        source_skill = maybe_text(proposal.get("source_skill"))
+        if source_skill not in PUBLIC_DISCOURSE_SOURCE_FAMILY_BY_SKILL:
+            continue
+        status = maybe_text(proposal.get("status")) or "proposed"
+        normalized_signal_count = signal_counts.get(source_skill, 0)
+        if status in SOURCE_ACQUISITION_NONPRODUCTIVE_STATUSES:
+            attempt_kind = status
+        elif status in SOURCE_ACQUISITION_EXECUTED_STATUSES and normalized_signal_count == 0:
+            attempt_kind = "zero-result"
+        elif 0 < normalized_signal_count < PUBLIC_DISCOURSE_LOW_VOLUME_THRESHOLD:
+            attempt_kind = "low-volume"
+        else:
+            attempt_kind = "observed"
+        rows.append(
+            {
+                "proposal_id": _proposal_id(proposal),
+                "source_skill": source_skill,
+                "source_family": _source_family_for_skill(source_skill),
+                "status": status,
+                "attempt_kind": attempt_kind,
+                "normalized_signal_count": normalized_signal_count,
+                "query_parameters": dict_items(proposal.get("query_parameters")),
+                "rationale": maybe_text(proposal.get("rationale")),
+                "status_rationale": maybe_text(proposal.get("status_rationale")),
+                "evidence_refs": list_items(proposal.get("evidence_refs")),
+                "interpretation_boundary": (
+                    "Attempt outcome is acquisition visibility, API, query, or normalization evidence; "
+                    "it is not proof that the real-world source family lacks relevant discourse."
+                ),
+            }
+        )
+    return rows
+
+
+def _coverage_layers_for_family(
+    source_family: str,
+    signals: list[dict[str, Any]],
+    attempts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    family_config = next(
+        (
+            family
+            for family in PUBLIC_DISCOURSE_EXPECTED_FAMILIES
+            if maybe_text(family.get("source_family")) == source_family
+        ),
+        {},
+    )
+    layer_skills = unique_texts(
+        [
+            *list_items(family_config.get("recon_skills")),
+            *list_items(family_config.get("text_sample_skills")),
+        ]
+    )
+    rows: list[dict[str, Any]] = []
+    for source_skill in layer_skills:
+        skill_signals = [
+            signal
+            for signal in signals
+            if maybe_text(signal.get("source_skill")) == source_skill
+        ]
+        skill_attempts = [
+            attempt
+            for attempt in attempts
+            if maybe_text(attempt.get("source_skill")) == source_skill
+        ]
+        rows.append(
+            {
+                "source_skill": source_skill,
+                "layer_role": "recon"
+                if source_skill in list_items(family_config.get("recon_skills"))
+                else "text-or-row-sample",
+                "observed_signal_count": len(skill_signals),
+                "dedup_count": _dedup_count(skill_signals),
+                "attempt_statuses": sorted(
+                    {
+                        maybe_text(attempt.get("status"))
+                        for attempt in skill_attempts
+                        if maybe_text(attempt.get("status"))
+                    }
+                ),
+                "attempt_kinds": sorted(
+                    {
+                        maybe_text(attempt.get("attempt_kind"))
+                        for attempt in skill_attempts
+                        if maybe_text(attempt.get("attempt_kind"))
+                    }
+                ),
+                "coverage_boundary": (
+                    "Layer count is source-family-local and cannot be merged into another "
+                    "family denominator."
+                ),
+            }
+        )
+    return rows
+
+
+def _source_family_audit(
+    *,
+    source_signals: list[dict[str, Any]],
+    eligible_signals: list[dict[str, Any]],
+    corpus_signals: list[dict[str, Any]],
+    attempts: list[dict[str, Any]],
+    keyword_any: list[str] | None = None,
+    observed_after_utc: str = "",
+    observed_before_utc: str = "",
+) -> list[dict[str, Any]]:
+    attempt_audit = _source_acquisition_attempt_audit(attempts, source_signals)
+    rows: list[dict[str, Any]] = []
+    for family in PUBLIC_DISCOURSE_EXPECTED_FAMILIES:
+        source_family = maybe_text(family.get("source_family"))
+        family_source_signals = [
+            signal
+            for signal in source_signals
+            if public_discourse_source_family(signal) == source_family
+        ]
+        family_eligible = [
+            signal
+            for signal in eligible_signals
+            if public_discourse_source_family(signal) == source_family
+        ]
+        family_corpus = [
+            signal
+            for signal in corpus_signals
+            if public_discourse_source_family(signal) == source_family
+        ]
+        family_attempts = [
+            attempt
+            for attempt in attempt_audit
+            if maybe_text(attempt.get("source_family")) == source_family
+        ]
+        rationale: list[str] = []
+        if not family_eligible and not family_attempts:
+            rationale.append(
+                "No DB-visible rows or source-acquisition attempt are visible for this source family in the selected round scope."
+            )
+        if family_eligible and not family_corpus:
+            rationale.append(
+                "Rows matched source/time/query filters but did not yield text-bearing corpus items."
+            )
+        if any(maybe_text(attempt.get("attempt_kind")) in SOURCE_ACQUISITION_NONPRODUCTIVE_STATUSES for attempt in family_attempts):
+            rationale.append(
+                "At least one acquisition attempt was failed, blocked, or receipt-only and needs recovery or a source-limit boundary."
+            )
+        if any(maybe_text(attempt.get("attempt_kind")) == "zero-result" for attempt in family_attempts):
+            rationale.append(
+                "At least one executed acquisition attempt produced zero normalized rows; treat this as acquisition/query visibility, not evidence absence."
+            )
+        if 0 < len(family_corpus) < PUBLIC_DISCOURSE_LOW_VOLUME_THRESHOLD:
+            rationale.append(
+                "The materialized sample is low-volume; only sample-local examples or explicitly bounded cues are supported."
+            )
+        if source_family == "gdelt-public-record":
+            rationale.append(
+                "GDELT DOC/tone/table rows are media/document visibility or tone material, not public sentiment denominator."
+            )
+        rows.append(
+            {
+                "source_family": source_family,
+                "sample_definition": {
+                    "round_scope": "selected round scope",
+                    "source_family": source_family,
+                    "query_variants": _query_variants(family_eligible or family_source_signals, keyword_any=keyword_any),
+                    "time_window": _time_window_summary(
+                        family_eligible or family_source_signals,
+                        requested_after_utc=observed_after_utc,
+                        requested_before_utc=observed_before_utc,
+                    ),
+                    "text_unit_counts": _text_unit_counts(family_corpus),
+                },
+                "eligible_count": len(family_eligible),
+                "dedup_count": _dedup_count(family_corpus),
+                "corpus_item_count": len(family_corpus),
+                "excluded_no_text_count": max(0, len(family_eligible) - len(family_corpus)),
+                "coverage_layers": _coverage_layers_for_family(source_family, family_source_signals, family_attempts),
+                "acquisition_attempts": family_attempts,
+                "failure_rationale": unique_texts(rationale),
+                "denominator_policy": {
+                    "denominator": len(family_corpus),
+                    "denominator_unit": "text-bearing normalized signals in this source family",
+                    "do_not_mix_source_families": True,
+                    "zero_or_low_volume_is_source_limit_not_absence": True,
+                },
+            }
+        )
+    return rows
+
+
+def _source_limit_records(source_family_audit: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for item in source_family_audit:
+        source_family = maybe_text(item.get("source_family"))
+        for rationale in list_items(item.get("failure_rationale")):
+            records.append(
+                {
+                    "record_id": "public-policy-source-limit-"
+                    + stable_hash(source_family, rationale)[:12],
+                    "source_family": source_family,
+                    "rationale": maybe_text(rationale),
+                    "report_boundary": (
+                        "Report may describe the acquisition or sample boundary, but must not "
+                        "convert it into sample-family absence or general public opinion."
+                    ),
+                }
+            )
+    return records
 
 
 def _corpus_items(signals: list[dict[str, Any]], *, run_id: str, round_id: str) -> list[dict[str, Any]]:
@@ -398,6 +813,7 @@ def _distribution_use_policy() -> dict[str, Any]:
         "requires_council_uptake_before_reporting": True,
         "gdelt_tone_boundary": "media_or_document_tone_not_public_sentiment",
         "source_narrative_boundary": "public_source_narrative_cue_not_physical_source_attribution",
+        "semantic_distribution_partitioning": "sample fractions are source-family and discourse-lane local when reported through semantic_distributions",
     }
 
 
@@ -597,18 +1013,47 @@ def _distribution_record(
     signal_lookup: dict[str, dict[str, Any]],
     eligible_signal_count: int,
     label_family_denominator: int,
+    sample_definition: dict[str, Any],
+    scope_source_family: str = "",
+    scope_discourse_lane: str = "",
 ) -> dict[str, Any]:
     signal_ids = unique_texts([annotation.get("signal_id") for annotation in annotations])
     signals = [signal_lookup[signal_id] for signal_id in signal_ids if signal_id in signal_lookup]
     count = len(signal_ids)
     sample_fraction = round(count / label_family_denominator, 6) if label_family_denominator else 0.0
+    source_families = unique_texts([public_discourse_source_family(signal) for signal in signals])
+    discourse_lanes = unique_texts([public_discourse_lane(signal) for signal in signals])
+    source_family_scope = maybe_text(scope_source_family) or (source_families[0] if len(source_families) == 1 else "mixed-source-family")
+    discourse_lane_scope = maybe_text(scope_discourse_lane) or (discourse_lanes[0] if len(discourse_lanes) == 1 else "mixed-discourse-lane")
     return {
-        "distribution_id": "public-discourse-annotation-distribution-" + stable_hash(run_id, round_id, label_family, label)[:12],
+        "distribution_id": "public-discourse-annotation-distribution-"
+        + stable_hash(
+            run_id,
+            round_id,
+            label_family,
+            label,
+            source_family_scope,
+            discourse_lane_scope,
+        )[:12],
         "label_family": label_family,
         "label": label,
+        "semantic_scope": {
+            "source_family": source_family_scope,
+            "discourse_lane": discourse_lane_scope,
+            "sample_class_counts": _sample_class_counts(signals),
+            "scope_policy": "sample-local; do not merge with other source-family or discourse-lane denominators for report proportions",
+        },
+        "sample_definition": sample_definition,
         "eligible_signal_count": eligible_signal_count,
         "annotated_signal_count": count,
         "label_family_denominator": label_family_denominator,
+        "denominator_scope": {
+            "source_family": source_family_scope,
+            "discourse_lane": discourse_lane_scope,
+            "denominator_unit": "unique annotated signals for this label family inside the stated scope",
+            "do_not_mix_source_families": True,
+            "do_not_mix_discourse_lanes": True,
+        },
         "sample_fraction": sample_fraction,
         "labels_are_not_mutually_exclusive": True,
         "fractions_do_not_sum_to_100_percent": True,
@@ -628,6 +1073,93 @@ def _distribution_record(
 
 def _empty_family_distribution(label_family: str) -> list[dict[str, Any]]:
     return []
+
+
+def _scoped_distribution_records(
+    *,
+    run_id: str,
+    round_id: str,
+    matched_rows: list[dict[str, Any]],
+    signal_lookup: dict[str, dict[str, Any]],
+    sample_definition: dict[str, Any],
+) -> list[dict[str, Any]]:
+    scoped_groups: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+    for row in matched_rows:
+        signal = signal_lookup.get(maybe_text(row.get("signal_id")), {})
+        source_family = public_discourse_source_family(signal) if signal else maybe_text(row.get("source_family"))
+        discourse_lane = public_discourse_lane(signal) if signal else maybe_text(row.get("discourse_lane"))
+        key = (
+            maybe_text(row.get("label_family")),
+            maybe_text(row.get("label")),
+            maybe_text(source_family),
+            maybe_text(discourse_lane),
+        )
+        scoped_groups.setdefault(key, []).append(row)
+
+    scoped_denominators: dict[tuple[str, str, str], int] = {}
+    for row in matched_rows:
+        signal = signal_lookup.get(maybe_text(row.get("signal_id")), {})
+        source_family = public_discourse_source_family(signal) if signal else maybe_text(row.get("source_family"))
+        discourse_lane = public_discourse_lane(signal) if signal else maybe_text(row.get("discourse_lane"))
+        key = (
+            maybe_text(row.get("label_family")),
+            maybe_text(source_family),
+            maybe_text(discourse_lane),
+        )
+        scoped_denominators.setdefault(key, 0)
+    for key in list(scoped_denominators):
+        label_family, source_family, discourse_lane = key
+        scoped_denominators[key] = len(
+            unique_texts(
+                [
+                    row.get("signal_id")
+                    for row in matched_rows
+                    if maybe_text(row.get("label_family")) == label_family
+                    and (
+                        public_discourse_source_family(signal_lookup.get(maybe_text(row.get("signal_id")), {}))
+                        if signal_lookup.get(maybe_text(row.get("signal_id")))
+                        else maybe_text(row.get("source_family"))
+                    )
+                    == source_family
+                    and (
+                        public_discourse_lane(signal_lookup.get(maybe_text(row.get("signal_id")), {}))
+                        if signal_lookup.get(maybe_text(row.get("signal_id")))
+                        else maybe_text(row.get("discourse_lane"))
+                    )
+                    == discourse_lane
+                ]
+            )
+        )
+    records: list[dict[str, Any]] = []
+    for (label_family, label, source_family, discourse_lane), rows in sorted(scoped_groups.items()):
+        if label_family not in ANNOTATION_LABEL_FAMILIES or not label:
+            continue
+        records.append(
+            _distribution_record(
+                run_id=run_id,
+                round_id=round_id,
+                label_family=label_family,
+                label=label,
+                annotations=rows,
+                signal_lookup=signal_lookup,
+                eligible_signal_count=len(
+                    [
+                        signal
+                        for signal in signal_lookup.values()
+                        if public_discourse_source_family(signal) == source_family
+                        and public_discourse_lane(signal) == discourse_lane
+                    ]
+                ),
+                label_family_denominator=scoped_denominators.get(
+                    (label_family, source_family, discourse_lane),
+                    0,
+                ),
+                sample_definition=sample_definition,
+                scope_source_family=source_family,
+                scope_discourse_lane=discourse_lane,
+            )
+        )
+    return records
 
 
 def run_aggregate_public_discourse_annotations(
@@ -680,6 +1212,14 @@ def run_aggregate_public_discourse_annotations(
         family: len(unique_texts([row.get("signal_id") for row in matched_rows if maybe_text(row.get("label_family")) == family]))
         for family in ANNOTATION_LABEL_FAMILIES
     }
+    sample_definition = dict_items(corpus_payload.get("sample_definition")) if corpus_payload else {
+        "run_id": run_id,
+        "round_id": round_id,
+        "round_scope": normalized_round_scope,
+        "sample_boundary": "DB-visible normalized public/formal text sample only",
+        "text_unit": "normalized public/formal text-bearing signal",
+        "dedupe_policy": "one corpus item per normalized signal_id after signal-plane dedupe",
+    }
     distribution_denominators = {
         "eligible_signal_count": len(signals),
         "annotated_signal_count": total_annotated_signals,
@@ -691,6 +1231,7 @@ def run_aggregate_public_discourse_annotations(
         "labels_are_not_mutually_exclusive": True,
         "fractions_do_not_sum_to_100_percent": True,
         "denominator_policy": "sample_fraction is label-family-local and must not be treated as public opinion share",
+        "semantic_scope_policy": "Use semantic_distributions for source-family and discourse-lane local proportions; do not mix GDELT, social, formal, or media/document denominators.",
     }
     distribution_records = [
         _distribution_record(
@@ -702,14 +1243,31 @@ def run_aggregate_public_discourse_annotations(
             signal_lookup=signal_lookup,
             eligible_signal_count=len(signals),
             label_family_denominator=annotated_signal_count_by_family.get(label_family, 0),
+            sample_definition=sample_definition,
         )
         for (label_family, label), rows in sorted(grouped.items())
         if label_family in ANNOTATION_LABEL_FAMILIES and label
     ]
+    semantic_distribution_records = _scoped_distribution_records(
+        run_id=run_id,
+        round_id=round_id,
+        matched_rows=matched_rows,
+        signal_lookup=signal_lookup,
+        sample_definition=sample_definition,
+    )
     distributions_by_family = {
         family: [
             item
             for item in distribution_records
+            if maybe_text(item.get("label_family")) == family
+        ]
+        or _empty_family_distribution(family)
+        for family in sorted(ANNOTATION_LABEL_FAMILIES)
+    }
+    scoped_distributions_by_family = {
+        family: [
+            item
+            for item in semantic_distribution_records
             if maybe_text(item.get("label_family")) == family
         ]
         or _empty_family_distribution(family)
@@ -743,14 +1301,6 @@ def run_aggregate_public_discourse_annotations(
         taxonomy_labels_path,
         total_annotated_signals,
     )[:12]
-    sample_definition = dict_items(corpus_payload.get("sample_definition")) if corpus_payload else {
-        "run_id": run_id,
-        "round_id": round_id,
-        "round_scope": normalized_round_scope,
-        "sample_boundary": "DB-visible normalized public/formal text sample only",
-        "text_unit": "normalized public/formal text-bearing signal",
-        "dedupe_policy": "one corpus item per normalized signal_id after signal-plane dedupe",
-    }
     payload = {
         "schema_version": "optional-analysis-public-discourse-annotation-aggregation-v1",
         "skill": skill_name,
@@ -766,10 +1316,30 @@ def run_aggregate_public_discourse_annotations(
         "annotated_signal_count": total_annotated_signals,
         "distribution_denominators": distribution_denominators,
         "issue_distribution": distributions_by_family["issue_facets"],
-        "social_affect_distribution": distributions_by_family["affect_labels"],
+        "social_affect_distribution": [
+            item
+            for item in scoped_distributions_by_family["affect_labels"]
+            if dict_items(item.get("semantic_scope")).get("discourse_lane") == "social_sample_affect"
+        ],
+        "media_document_affect_distribution": [
+            item
+            for item in scoped_distributions_by_family["affect_labels"]
+            if dict_items(item.get("semantic_scope")).get("source_family") == "gdelt-public-record"
+        ],
+        "formal_participation_affect_distribution": [
+            item
+            for item in scoped_distributions_by_family["affect_labels"]
+            if dict_items(item.get("semantic_scope")).get("source_family") == "regulationsgov-formal-comments"
+        ],
         "source_narrative_distribution": distributions_by_family["source_narrative_labels"],
         "actor_responsibility_distribution": distributions_by_family["actor_responsibility_labels"],
+        "responsibility_attribution_distribution": distributions_by_family["responsibility_attribution_labels"],
         "action_orientation_distribution": distributions_by_family["action_orientation_labels"],
+        "policy_demand_distribution": distributions_by_family["policy_demand_labels"],
+        "trust_confidence_distribution": distributions_by_family["trust_confidence_labels"],
+        "uncertainty_distribution": distributions_by_family["uncertainty_labels"],
+        "formal_policy_semantic_distribution": distributions_by_family["formal_policy_semantic_labels"],
+        "semantic_distributions": semantic_distribution_records,
         "annotation_distributions": distribution_records,
         "distribution_use_policy": _distribution_use_policy(),
         "representativeness_limits": [
@@ -1355,6 +1925,14 @@ def run_summarize_public_discourse_sample(
         "summary_id": summary_id,
         "sample_definition": sample_definition,
         "sample_count": int(corpus_payload.get("sample_count") or len(signals)) if corpus_payload else len(signals),
+        "eligible_count": int(corpus_payload.get("eligible_count") or len(signals)) if corpus_payload else len(signals),
+        "dedup_count": int(corpus_payload.get("dedup_count") or _dedup_count(signals)) if corpus_payload else _dedup_count(signals),
+        "denominator_policy": dict_items(corpus_payload.get("denominator_policy")) if corpus_payload else _denominator_policy(),
+        "source_family_denominators": list_items(corpus_payload.get("source_family_denominators")),
+        "source_family_audit": list_items(coverage_payload.get("source_family_audit"))
+        or list_items(corpus_payload.get("source_family_audit")),
+        "source_limit_records": list_items(coverage_payload.get("source_limit_records"))
+        or list_items(corpus_payload.get("source_limit_records")),
         "source_family_counts": list_items(corpus_payload.get("source_family_counts")) if corpus_payload else _source_family_counts(signals),
         "source_skill_counts": list_items(corpus_payload.get("source_skill_counts")) if corpus_payload else _source_skill_counts(signals),
         "discourse_lane_counts": list_items(corpus_payload.get("discourse_lane_counts")) if corpus_payload else _lane_counts(signals),
@@ -1364,16 +1942,25 @@ def run_summarize_public_discourse_sample(
             "coverage_audit_id": maybe_text(coverage_payload.get("coverage_audit_id")),
             "coverage_cue_count": len(list_items(coverage_payload.get("coverage_cues"))),
             "source_family_counts": list_items(coverage_payload.get("source_family_counts")),
+            "source_limit_record_count": int(coverage_payload.get("source_limit_record_count") or 0),
         },
         "source_acquisition_handoff": dict_items(
             coverage_payload.get("source_acquisition_handoff")
         ),
         "issue_distribution": _distribution_from_payload(aggregation_payload, "issue_distribution"),
         "social_affect_distribution": _distribution_from_payload(aggregation_payload, "social_affect_distribution"),
+        "media_document_affect_distribution": _distribution_from_payload(aggregation_payload, "media_document_affect_distribution"),
+        "formal_participation_affect_distribution": _distribution_from_payload(aggregation_payload, "formal_participation_affect_distribution"),
         "gdelt_media_tone_summary": gdelt_media_tone_summary,
         "source_narrative_distribution": _distribution_from_payload(aggregation_payload, "source_narrative_distribution"),
         "actor_responsibility_distribution": _distribution_from_payload(aggregation_payload, "actor_responsibility_distribution"),
+        "responsibility_attribution_distribution": _distribution_from_payload(aggregation_payload, "responsibility_attribution_distribution"),
         "action_orientation_distribution": _distribution_from_payload(aggregation_payload, "action_orientation_distribution"),
+        "policy_demand_distribution": _distribution_from_payload(aggregation_payload, "policy_demand_distribution"),
+        "trust_confidence_distribution": _distribution_from_payload(aggregation_payload, "trust_confidence_distribution"),
+        "uncertainty_distribution": _distribution_from_payload(aggregation_payload, "uncertainty_distribution"),
+        "formal_policy_semantic_distribution": _distribution_from_payload(aggregation_payload, "formal_policy_semantic_distribution"),
+        "semantic_distributions": _distribution_from_payload(aggregation_payload, "semantic_distributions"),
         "sample_internal_distribution": _sample_internal_distribution(aggregation_payload),
         "what_this_sample_can_support": language_guidance["what_this_sample_can_support"],
         "what_this_sample_cannot_support": language_guidance["what_this_sample_cannot_support"],
@@ -1488,6 +2075,15 @@ def run_materialize_public_discourse_corpus(
         limit=limit,
     )
     keywords = unique_texts(keyword_any or [])
+    eligible_signals = _filter_discourse_signals(
+        source_signals,
+        source_family=source_family,
+        source_skill=source_skill,
+        keyword_any=keywords,
+        observed_after_utc=observed_after_utc,
+        observed_before_utc=observed_before_utc,
+        require_text=False,
+    )
     matched_signals = _filter_discourse_signals(
         source_signals,
         source_family=source_family,
@@ -1495,8 +2091,24 @@ def run_materialize_public_discourse_corpus(
         keyword_any=keywords,
         observed_after_utc=observed_after_utc,
         observed_before_utc=observed_before_utc,
+        require_text=True,
     )[: max(1, int(limit or 500))]
     items = _corpus_items(matched_signals, run_id=run_id, round_id=round_id)
+    source_acquisition_attempts = _query_source_acquisition_proposals(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    source_family_audit = _source_family_audit(
+        source_signals=source_signals,
+        eligible_signals=eligible_signals,
+        corpus_signals=matched_signals,
+        attempts=source_acquisition_attempts,
+        keyword_any=keywords,
+        observed_after_utc=observed_after_utc,
+        observed_before_utc=observed_before_utc,
+    )
+    source_limit_records = _source_limit_records(source_family_audit)
     corpus_id = "public-discourse-corpus-" + stable_hash(
         run_id,
         round_id,
@@ -1522,6 +2134,12 @@ def run_materialize_public_discourse_corpus(
         "sample_boundary": "DB-visible normalized public/formal text sample only",
         "text_unit": "normalized public/formal text-bearing signal",
         "dedupe_policy": "one corpus item per normalized signal_id after signal-plane dedupe",
+        "query_variants": _query_variants(eligible_signals, keyword_any=keywords),
+        "time_window": _time_window_summary(
+            eligible_signals,
+            requested_after_utc=observed_after_utc,
+            requested_before_utc=observed_before_utc,
+        ),
         "inclusion_filters": {
             "plane": ["public", "formal"],
             "requires_text": True,
@@ -1553,10 +2171,24 @@ def run_materialize_public_discourse_corpus(
         "corpus_id": corpus_id,
         "sample_definition": sample_definition,
         "sample_count": len(items),
+        "eligible_count": len(eligible_signals),
+        "dedup_count": _dedup_count(matched_signals),
+        "excluded_no_text_count": max(0, len(eligible_signals) - len(matched_signals)),
         "text_unit": sample_definition["text_unit"],
         "dedupe_policy": sample_definition["dedupe_policy"],
+        "query_variants": sample_definition["query_variants"],
+        "time_window": sample_definition["time_window"],
         "inclusion_filters": sample_definition["inclusion_filters"],
         "exclusion_filters": sample_definition["exclusion_filters"],
+        "denominator_policy": _denominator_policy(),
+        "source_family_denominators": _source_family_denominators(matched_signals),
+        "source_family_audit": source_family_audit,
+        "source_limit_records": source_limit_records,
+        "source_limit_record_count": len(source_limit_records),
+        "source_acquisition_attempt_audit": _source_acquisition_attempt_audit(
+            source_acquisition_attempts,
+            source_signals,
+        ),
         "source_family_counts": _source_family_counts(matched_signals),
         "source_skill_counts": _source_skill_counts(matched_signals),
         "discourse_lane_counts": _lane_counts(matched_signals),
@@ -1572,7 +2204,9 @@ def run_materialize_public_discourse_corpus(
             "db_path": db_path,
             "round_scope": normalized_round_scope,
             "available_signal_count": len(source_signals),
+            "eligible_signal_count": len(eligible_signals),
             "matched_signal_count": len(matched_signals),
+            "source_acquisition_attempt_count": len(source_acquisition_attempts),
         },
         "source_parameters": {"db_path": db_path},
         "query_parameters": sample_definition,
@@ -1588,6 +2222,9 @@ def run_materialize_public_discourse_corpus(
             "round_id": round_id,
             "output_path": str(output_file),
             "sample_count": len(items),
+            "eligible_count": len(eligible_signals),
+            "dedup_count": _dedup_count(matched_signals),
+            "source_limit_record_count": len(source_limit_records),
             "decision_source": metadata["decision_source"],
             "rule_id": metadata["rule_id"],
         },
@@ -1603,7 +2240,10 @@ def run_materialize_public_discourse_corpus(
             artifact_path=output_file,
             locator="$.corpus_items",
             candidate_ids=[corpus_id],
-            gap_hints=[warning["message"] for warning in warnings],
+            gap_hints=[
+                *[warning["message"] for warning in warnings],
+                *[record["rationale"] for record in source_limit_records],
+            ],
         ),
     }
 
@@ -1820,6 +2460,28 @@ def run_audit_public_discourse_sample_coverage(
         limit=limit,
     )
     corpus_payload, corpus_warnings = _corpus_input_observation(corpus_path)
+    source_acquisition_attempts = _query_source_acquisition_proposals(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    corpus_signals = [
+        dict(item)
+        for item in list_items(corpus_payload.get("corpus_items"))
+        if isinstance(item, dict)
+    ] if corpus_payload else source_signals
+    source_family_audit = _source_family_audit(
+        source_signals=source_signals,
+        eligible_signals=source_signals,
+        corpus_signals=corpus_signals,
+        attempts=source_acquisition_attempts,
+    )
+    source_family_audit_by_family = {
+        maybe_text(item.get("source_family")): item
+        for item in source_family_audit
+        if isinstance(item, dict)
+    }
+    source_limit_records = _source_limit_records(source_family_audit)
     metadata = _public_discourse_metadata(skill_name)
     warnings = [*corpus_warnings, *_coverage_warnings(source_signals)]
     source_acquisition_handoff = _public_discourse_missing_layer_handoff(warnings)
@@ -1835,6 +2497,38 @@ def run_audit_public_discourse_sample_coverage(
             "cue_id": "public-discourse-coverage-cue-" + stable_hash(run_id, round_id, item["source_family"])[:12],
             "cue_kind": "source-family-sample-coverage",
             **item,
+            "sample_definition": dict_items(
+                source_family_audit_by_family.get(
+                    item["source_family"],
+                    {},
+                ).get("sample_definition")
+            ),
+            "eligible_count": source_family_audit_by_family.get(
+                item["source_family"],
+                {},
+            ).get("eligible_count", item.get("observed_signal_count", 0)),
+            "dedup_count": source_family_audit_by_family.get(
+                item["source_family"],
+                {},
+            ).get("dedup_count", 0),
+            "failure_rationale": list_items(
+                source_family_audit_by_family.get(
+                    item["source_family"],
+                    {},
+                ).get("failure_rationale")
+            ),
+            "denominator_policy": dict_items(
+                source_family_audit_by_family.get(
+                    item["source_family"],
+                    {},
+                ).get("denominator_policy")
+            ),
+            "coverage_layers": list_items(
+                source_family_audit_by_family.get(
+                    item["source_family"],
+                    {},
+                ).get("coverage_layers")
+            ),
             "evidence_refs": refs_from_signals(
                 [
                     signal
@@ -1863,7 +2557,18 @@ def run_audit_public_discourse_sample_coverage(
         "helper_governance": metadata,
         "coverage_audit_id": audit_id,
         "sample_count": len(source_signals),
+        "eligible_count": len(source_signals),
+        "dedup_count": _dedup_count(source_signals),
+        "denominator_policy": _denominator_policy(),
         "source_family_counts": _source_family_counts(source_signals),
+        "source_family_denominators": _source_family_denominators(corpus_signals),
+        "source_family_audit": source_family_audit,
+        "source_limit_records": source_limit_records,
+        "source_limit_record_count": len(source_limit_records),
+        "source_acquisition_attempt_audit": _source_acquisition_attempt_audit(
+            source_acquisition_attempts,
+            source_signals,
+        ),
         "source_skill_counts": _source_skill_counts(source_signals),
         "discourse_lane_counts": _lane_counts(source_signals),
         "coverage_cues": coverage_cues,
@@ -1878,6 +2583,7 @@ def run_audit_public_discourse_sample_coverage(
             "round_scope": normalized_round_scope,
             "corpus_path": maybe_text(corpus_path),
             "corpus_item_count": len(list_items(corpus_payload.get("corpus_items"))) if corpus_payload else 0,
+            "source_acquisition_attempt_count": len(source_acquisition_attempts),
         },
         "source_parameters": {"db_path": db_path},
         "query_parameters": {"run_id": run_id, "round_id": round_id, "round_scope": normalized_round_scope},
@@ -1889,7 +2595,10 @@ def run_audit_public_discourse_sample_coverage(
         artifact_path=output_file,
         locator="$.coverage_cues",
         candidate_ids=[audit_id],
-        gap_hints=[warning["message"] for warning in warnings],
+        gap_hints=[
+            *[warning["message"] for warning in warnings],
+            *[record["rationale"] for record in source_limit_records],
+        ],
     )
     board_handoff["suggested_next_skills"] = unique_texts(
         list_items(source_acquisition_handoff.get("suggested_next_skills"))
@@ -1903,6 +2612,7 @@ def run_audit_public_discourse_sample_coverage(
             "output_path": str(output_file),
             "coverage_cue_count": len(coverage_cues),
             "warning_count": len(warnings),
+            "source_limit_record_count": len(source_limit_records),
             "decision_source": metadata["decision_source"],
             "rule_id": metadata["rule_id"],
         },

@@ -238,6 +238,7 @@ OPTIONAL_ANALYSIS_SKILLS = [
     "summarize-public-discourse-sample",
     "detect-temporal-cooccurrence-cues",
     "review-spatiotemporal-relation-alternatives",
+    "build-fact-policy-public-interaction-timeline",
     "review-evidence-sufficiency",
 ]
 
@@ -368,6 +369,7 @@ OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
         "caveats": [
             "The corpus defines a DB-visible text sample only and cannot infer general public opinion.",
             "GDELT tone rows must remain media/document tone, not public response sentiment.",
+            "Source-family denominators are isolated and must not be mixed across GDELT, YouTube, Bluesky, formal records, or formal comments.",
         ],
     },
     "audit-formal-comment-candidate-corpus": {
@@ -385,6 +387,7 @@ OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
         "caveats": [
             "Coverage cues are prompts for human review, not representation findings.",
             "Zero rows may reflect unrun fetches, filters, API limits, import scope, or normalization gaps.",
+            "Failed, zero, low-volume, or receipt-only source acquisition is a source-limit rationale, not evidence absence.",
         ],
     },
     "classify-formal-comment-issues": {
@@ -448,6 +451,15 @@ OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
             "Relation objection candidates are prompts for challenger review, not findings.",
             "This helper does not prove or invalidate relation cues by itself.",
             "Report-facing use must be carried by challenge, probe, review comment, finding, or report basis.",
+        ],
+    },
+    "build-fact-policy-public-interaction-timeline": {
+        "rule_id": "HEUR-FACT-POLICY-PUBLIC-TIMELINE-001",
+        "destination": "fact/policy/public interaction timeline helper",
+        "caveats": [
+            "Timeline nodes are descriptive chronology/context only and do not prove causality, policy impact, public response attribution, representativeness, or evidence absence.",
+            "Each interaction node must carry fact/policy-side refs and public/media-side refs.",
+            "Report-facing use requires council or reporting uptake with denominator and limitation metadata.",
         ],
     },
     "review-evidence-sufficiency": {
@@ -1416,7 +1428,7 @@ SKILL_CONTRACT_OVERRIDES: dict[str, dict[str, list[str]]] = {
     },
     "materialize-public-discourse-corpus": {
         "observes": [
-            "DB-visible public, media, or formal text-bearing normalized signals selected by source family, keyword, window, and round scope.",
+            "DB-visible public, media, or formal text-bearing normalized signals selected by source family, keyword, query variant, window, and round scope.",
         ],
         "cannot_prove": [
             "Representative public opinion, issue prevalence outside the sample, or evidence absence for unobserved source families.",
@@ -1427,6 +1439,11 @@ SKILL_CONTRACT_OVERRIDES: dict[str, dict[str, list[str]]] = {
         "produces": [
             "materialized_public_policy_corpus",
             "sample_definition",
+            "query_variants",
+            "source_family_denominators",
+            "eligible_count",
+            "dedup_count",
+            "source_limit_records",
             "source_family_counts",
         ],
         "followups": [
@@ -1435,12 +1452,13 @@ SKILL_CONTRACT_OVERRIDES: dict[str, dict[str, list[str]]] = {
             "classify-formal-comment-issues",
         ],
         "claim_limits": [
-            "Corpus rows support sample definition and item-level examples only until coverage, annotation, aggregation, and denominator are present.",
+            "Corpus rows support sample definition and item-level examples only until coverage, annotation, aggregation, and source-family-local denominator are present.",
+            "GDELT, YouTube, Bluesky, formal-record, and formal-comment denominators must not be mixed.",
         ],
     },
     "audit-public-discourse-sample-coverage": {
         "observes": [
-            "Source-family coverage, query/window/sample limits, missing source layers, and denominator separation cues.",
+            "Source-family coverage, query/window/sample limits, eligible/dedup counts, acquisition-attempt outcomes, missing source layers, and denominator separation cues.",
         ],
         "cannot_prove": [
             "Representativeness, public consensus, or absence of discourse outside the current sample.",
@@ -1448,6 +1466,8 @@ SKILL_CONTRACT_OVERRIDES: dict[str, dict[str, list[str]]] = {
         "produces": [
             "public_policy_corpus_coverage_audit",
             "source_limit_rationale",
+            "source_family_audit",
+            "source_acquisition_attempt_audit",
             "coverage_cues",
         ],
         "followups": [
@@ -1458,19 +1478,20 @@ SKILL_CONTRACT_OVERRIDES: dict[str, dict[str, list[str]]] = {
     },
     "classify-public-discourse-affect": {
         "observes": [
-            "Bounded sample-local public/media text labels including affect, issue frames, narratives, responsibility cues, and uncertainty.",
+            "Bounded sample-local public/media/formal text labels including affect, issue frames, policy demand, trust/confidence, uncertainty, narratives, responsibility cues, and formal-policy semantics.",
         ],
         "cannot_prove": [
             "Population-level sentiment, mutually exclusive opinion shares, or policy effectiveness.",
         ],
         "followups": ["aggregate-public-discourse-annotations"],
         "claim_limits": [
-            "Labels remain item/sample-local and require aggregation denominators before report percentages.",
+            "Labels remain item/sample-local and require source-family/discourse-lane local aggregation denominators before report percentages.",
+            "Formal comment and formal-record semantic labels are not public sentiment.",
         ],
     },
     "aggregate-public-discourse-annotations": {
         "observes": [
-            "Sample-local annotation distributions with source-family and label-family denominators.",
+            "Sample-local annotation distributions with source-family, discourse-lane, label-family, and semantic-scope denominators.",
         ],
         "cannot_prove": [
             "General public opinion, mutually exclusive population shares, or policy success/failure.",
@@ -1478,6 +1499,7 @@ SKILL_CONTRACT_OVERRIDES: dict[str, dict[str, list[str]]] = {
         "produces": [
             "semantic_aggregate",
             "distribution_denominators",
+            "semantic_distributions",
             "sample-local label distributions",
         ],
         "followups": [
@@ -1487,6 +1509,7 @@ SKILL_CONTRACT_OVERRIDES: dict[str, dict[str, list[str]]] = {
         ],
         "claim_limits": [
             "Fractions are sample-local and label-family-local; non-mutually exclusive labels must not be summed to 100 percent.",
+            "Use scoped semantic distributions for public/media/formal proportions; do not mix GDELT, social-platform, formal-comment, and formal-record denominators.",
         ],
     },
     "compare-public-media-narratives": {
@@ -1544,9 +1567,42 @@ SKILL_CONTRACT_OVERRIDES: dict[str, dict[str, list[str]]] = {
             "Expose claim-basis gaps, optional reinforcement paths, and bounded report wording when reinforcement is not done.",
         ],
     },
+    "build-fact-policy-public-interaction-timeline": {
+        "observes": [
+            "Environment, formal, and public signal timestamps; public discourse helper artifacts; and source-family denominator context.",
+        ],
+        "cannot_prove": [
+            "Causality, policy impact, public response attribution, representative public opinion, evidence absence, or report readiness.",
+        ],
+        "requires": [
+            "DB-backed normalized signals with timestamps and optional public discourse corpus/coverage/annotation/summary artifacts.",
+        ],
+        "produces": [
+            "fact_policy_public_interaction_timeline",
+            "interaction_nodes",
+            "parallel_timeline_nodes",
+            "section-brief-ready timeline metadata",
+        ],
+        "followups": [
+            "materialize-reporting-handoff",
+            "submit-round-brief",
+            "submit-round-synthesis",
+            "submit-evidence-bundle",
+        ],
+        "failure_recovery": [
+            "If one side of the timeline is missing, emit one-sided context and report boundaries rather than an interaction claim.",
+        ],
+        "claim_limits": [
+            "Timeline nodes are descriptive same-window context only; they do not rank events, schedule sources, or establish response/influence.",
+            "Public semantic interpretation still requires corpus, coverage, denominator, and council/reporting uptake.",
+        ],
+        "report_uses": [
+            "Advisory section-brief input for bounded chronology and communication-gap wording after explicit uptake.",
+        ],
+    },
     "materialize-reporting-handoff": {
         "observes": [
-            "Frozen/reporting basis, readiness state, supervisor state, council basis objects, and optional action-card artifacts.",
+            "Frozen/reporting basis, readiness state, supervisor state, council basis objects, optional action-card artifacts, and optional interaction-timeline artifacts.",
         ],
         "cannot_prove": [
             "New facts, new evidence sufficiency, or report claim truth.",

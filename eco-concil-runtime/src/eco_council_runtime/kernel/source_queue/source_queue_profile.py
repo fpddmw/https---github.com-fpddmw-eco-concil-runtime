@@ -51,6 +51,7 @@ OPTIONAL_ANALYSIS_SKILLS = {
     "detect-temporal-cooccurrence-cues",
     "review-spatiotemporal-relation-alternatives",
     "materialize-claim-gap-action-cards",
+    "build-fact-policy-public-interaction-timeline",
     "plan-round-orchestration",
     "propose-next-actions",
     "open-falsification-probe",
@@ -155,6 +156,11 @@ OPTIONAL_ANALYSIS_NOTES = {
         "Approval-gated claim-basis advisory helper. It exposes claim gaps, "
         "candidate followups, recovery/source-limit cards, and report boundaries "
         "without ranking, scheduling, source selection, or automatic execution."
+    ),
+    "build-fact-policy-public-interaction-timeline": (
+        "Approval-gated interaction timeline helper. It aligns fact/policy-side "
+        "and public/media-side signal refs as descriptive chronology only, without "
+        "causality, policy-impact, response-attribution, or scheduling authority."
     ),
 }
 

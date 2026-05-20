@@ -12,7 +12,12 @@ description: Optional-analysis annotation-worker skill for labeling a materializ
   - `issue_facets`
   - `source_narrative_labels`
   - `actor_responsibility_labels`
+  - `responsibility_attribution_labels`
   - `action_orientation_labels`
+  - `policy_demand_labels`
+  - `trust_confidence_labels`
+  - `uncertainty_labels`
+  - `formal_policy_semantic_labels`
 - Keep the annotation worker separate from `social-investigator` judgement.
 - Avoid findings, source ranking, public-opinion inference, physical source attribution, or report conclusions.
 
@@ -68,6 +73,9 @@ python3 ../aggregate-public-discourse-annotations/scripts/aggregate_public_disco
 - Treat labels as sample-local semantic annotations. They are not public-opinion estimates.
 - Do not apply affect labels to GDELT provider tone rows. GDELT DOC/row tone remains media/document tone.
 - Keep sarcasm/humor and uncertainty separate from positive/negative simplifications.
+- Keep policy demand, trust/confidence, uncertainty, responsibility attribution,
+  and formal-policy semantic labels source-family local. Formal comment and
+  formal record labels are not public sentiment.
 - If a report will cite a controversial example, ask challenger to review that cited example or cluster; do not require challenger review for every low-stakes item.
 
 ## Scripts

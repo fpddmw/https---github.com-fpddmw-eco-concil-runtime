@@ -139,6 +139,61 @@ def seed_discourse_signals(run_dir: Path) -> None:
     )
 
 
+def submit_source_attempt(
+    run_dir: Path,
+    *,
+    source_skill: str,
+    status: str,
+    rationale: str,
+) -> str:
+    proposal = run_script(
+        script_path("submit-source-acquisition-proposal"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--author-role",
+        "social-investigator",
+        "--source-skill",
+        source_skill,
+        "--query-parameters-json",
+        "{\"query\":\"nyc wildfire smoke public reaction\",\"window\":\"2023-06-07\"}",
+        "--target-kind",
+        "round",
+        "--target-id",
+        ROUND_ID,
+        "--rationale",
+        rationale,
+        "--provenance-json",
+        "{\"source\":\"unit-test\"}",
+    )
+    proposal_id = str(proposal["summary"]["object_id"])
+    run_script(
+        script_path("update-source-acquisition-proposal-status"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        RUN_ID,
+        "--round-id",
+        ROUND_ID,
+        "--object-id",
+        proposal_id,
+        "--status",
+        status,
+        "--actor-role",
+        "social-investigator",
+        "--status-rationale",
+        rationale,
+        "--evidence-ref",
+        f"receipt://{source_skill}/{status}",
+        "--provenance-json",
+        "{\"source\":\"unit-test\"}",
+    )
+    return proposal_id
+
+
 class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
     def test_annotation_worker_includes_water_governance_cues(self) -> None:
         from eco_council_runtime.optional_analysis.public_discourse_annotation_worker import (
@@ -147,7 +202,9 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
 
         labels = _candidate_labels_for_text(
             "Public comments oppose the Glen Canyon dam release plan because Lake Powell reservoir levels, "
-            "water supply allocation, hydropower, and endangered fish habitat may be affected.",
+            "water supply allocation, hydropower, and endangered fish habitat may be affected. "
+            "Community voice was ignored, public trust collapsed, Reclamation should revise the policy, "
+            "and policy effects remain uncertain.",
             max_labels_per_family=10,
         )
         labels_by_family = {(item["label_family"], item["label"]) for item in labels}
@@ -160,6 +217,11 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
         self.assertIn(("source_narrative_labels", "reservoir-levels"), labels_by_family)
         self.assertIn(("source_narrative_labels", "basin-allocation-conflict"), labels_by_family)
         self.assertIn(("affect_labels", "opposition-or-criticism"), labels_by_family)
+        self.assertIn(("policy_demand_labels", "policy-revision-demand"), labels_by_family)
+        self.assertIn(("trust_confidence_labels", "distrust-in-agency"), labels_by_family)
+        self.assertIn(("trust_confidence_labels", "ignored-community-voice"), labels_by_family)
+        self.assertIn(("uncertainty_labels", "policy-effect-uncertainty"), labels_by_family)
+        self.assertIn(("responsibility_attribution_labels", "agency-responsibility"), labels_by_family)
 
     def test_gdelt_doc_tone_aggregate_uses_distinct_lane_from_doc_recon(self) -> None:
         from eco_council_runtime.optional_analysis.public_discourse import public_discourse_lane
@@ -226,6 +288,12 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
             }
             self.assertIn(("sig-youtube-comment", "affect_labels", "concern"), labels_by_signal)
             self.assertIn(("sig-youtube-comment", "issue_facets", "health-risk"), labels_by_signal)
+            self.assertTrue(
+                all(item["label_semantics"]["source_family"] for item in annotation_artifact["annotations"])
+            )
+            self.assertTrue(
+                all(item["denominator_boundary"] for item in annotation_artifact["annotations"])
+            )
 
             aggregation_payload = run_script(
                 script_path("aggregate-public-discourse-annotations"),
@@ -379,6 +447,8 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
             self.assertEqual("completed", corpus_payload["status"])
             self.assertEqual(4, corpus_payload["sample_count"])
             self.assertEqual(4, corpus_artifact["sample_count"])
+            self.assertEqual(4, corpus_artifact["eligible_count"])
+            self.assertEqual(4, corpus_artifact["dedup_count"])
             self.assertEqual(
                 "DB-visible normalized public/formal text sample only",
                 corpus_artifact["sample_definition"]["sample_boundary"],
@@ -393,6 +463,53 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
             )
             self.assertTrue(corpus_artifact["inclusion_filters"]["requires_text"])
             self.assertIn("signals without text", corpus_artifact["exclusion_filters"])
+            self.assertTrue(corpus_artifact["query_variants"])
+            self.assertTrue(
+                corpus_artifact["denominator_policy"]["denominators_are_source_family_local"]
+            )
+            self.assertTrue(
+                corpus_artifact["denominator_policy"][
+                    "do_not_mix_gdelt_youtube_bluesky_formal_comments"
+                ]
+            )
+            self.assertTrue(
+                corpus_artifact["denominator_policy"][
+                    "do_not_mix_gdelt_youtube_bluesky_formal_records_formal_comments"
+                ]
+            )
+            denominator_by_family = {
+                item["source_family"]: item
+                for item in corpus_artifact["source_family_denominators"]
+            }
+            self.assertEqual(
+                2,
+                denominator_by_family["youtube-public-discourse"]["denominator"],
+            )
+            self.assertEqual(
+                1,
+                denominator_by_family["gdelt-public-record"]["denominator"],
+            )
+            self.assertIn(
+                "regulationsgov-formal-comments",
+                denominator_by_family["youtube-public-discourse"]["do_not_mix_with"],
+            )
+            self.assertIn("formal-record", denominator_by_family)
+            family_audit = {
+                item["source_family"]: item
+                for item in corpus_artifact["source_family_audit"]
+            }
+            self.assertEqual(
+                2,
+                family_audit["youtube-public-discourse"]["eligible_count"],
+            )
+            self.assertEqual(
+                2,
+                family_audit["youtube-public-discourse"]["dedup_count"],
+            )
+            self.assertIn(
+                "GDELT DOC/tone/table rows are media/document visibility or tone material, not public sentiment denominator.",
+                family_audit["gdelt-public-record"]["failure_rationale"],
+            )
             lane_counts = {
                 item["discourse_lane"]: item["signal_count"]
                 for item in corpus_artifact["discourse_lane_counts"]
@@ -431,8 +548,8 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
             coverage_artifact = load_json(analytics_path(run_dir, f"public_discourse_coverage_audit_{ROUND_ID}.json"))
 
             self.assertEqual("completed", coverage_payload["status"])
-            self.assertEqual(4, coverage_payload["summary"]["coverage_cue_count"])
-            self.assertEqual(4, len(coverage_artifact["coverage_cues"]))
+            self.assertEqual(5, coverage_payload["summary"]["coverage_cue_count"])
+            self.assertEqual(5, len(coverage_artifact["coverage_cues"]))
             self.assertEqual(
                 4,
                 coverage_artifact["observed_inputs"]["corpus_item_count"],
@@ -442,8 +559,28 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
             )
             first_cue = coverage_artifact["coverage_cues"][0]
             self.assertEqual("requires-human-review", first_cue["audit_status"])
+            self.assertIn("sample_definition", first_cue)
+            self.assertIn("eligible_count", first_cue)
+            self.assertIn("dedup_count", first_cue)
+            self.assertIn("denominator_policy", first_cue)
+            self.assertIn("coverage_layers", first_cue)
             self.assertNotIn("severity", first_cue)
             self.assertNotIn("coverage_score", first_cue)
+            coverage_family_audit = {
+                item["source_family"]: item
+                for item in coverage_artifact["source_family_audit"]
+            }
+            self.assertTrue(
+                coverage_artifact["denominator_policy"]["denominators_are_source_family_local"]
+            )
+            self.assertEqual(
+                2,
+                coverage_family_audit["youtube-public-discourse"]["dedup_count"],
+            )
+            self.assertIn(
+                "GDELT DOC/tone/table rows are media/document visibility or tone material, not public sentiment denominator.",
+                coverage_family_audit["gdelt-public-record"]["failure_rationale"],
+            )
 
             annotations_path = Path(tmpdir) / "annotations.jsonl"
             annotations_path.write_text(
@@ -473,6 +610,38 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
                             },
                             sort_keys=True,
                         ),
+                        json.dumps(
+                            {
+                                "signal_id": "sig-formal-comment",
+                                "label_family": "affect_labels",
+                                "label": "concern",
+                            },
+                            sort_keys=True,
+                        ),
+                        json.dumps(
+                            {
+                                "signal_id": "sig-formal-comment",
+                                "label_family": "formal_policy_semantic_labels",
+                                "label": "public-participation-mechanism",
+                            },
+                            sort_keys=True,
+                        ),
+                        json.dumps(
+                            {
+                                "signal_id": "sig-youtube-comment",
+                                "label_family": "trust_confidence_labels",
+                                "label": "transparency-concern",
+                            },
+                            sort_keys=True,
+                        ),
+                        json.dumps(
+                            {
+                                "signal_id": "sig-youtube-comment",
+                                "label_family": "uncertainty_labels",
+                                "label": "health-risk-uncertainty",
+                            },
+                            sort_keys=True,
+                        ),
                     ]
                 )
                 + "\n",
@@ -498,10 +667,43 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
             )
 
             self.assertEqual("completed", aggregation_payload["status"])
-            self.assertEqual(3, aggregation_payload["summary"]["annotation_count"])
+            self.assertEqual(7, aggregation_payload["summary"]["annotation_count"])
             self.assertEqual(1, len(aggregation_artifact["social_affect_distribution"]))
             self.assertEqual("concern", aggregation_artifact["social_affect_distribution"][0]["label"])
             self.assertEqual(1.0, aggregation_artifact["social_affect_distribution"][0]["sample_fraction"])
+            self.assertEqual(
+                "youtube-public-discourse",
+                aggregation_artifact["social_affect_distribution"][0]["semantic_scope"]["source_family"],
+            )
+            self.assertEqual(
+                "social_sample_affect",
+                aggregation_artifact["social_affect_distribution"][0]["semantic_scope"]["discourse_lane"],
+            )
+            self.assertEqual(
+                1,
+                len(aggregation_artifact["formal_participation_affect_distribution"]),
+            )
+            self.assertEqual(
+                "regulationsgov-formal-comments",
+                aggregation_artifact["formal_participation_affect_distribution"][0]["semantic_scope"]["source_family"],
+            )
+            self.assertEqual(
+                1,
+                len(aggregation_artifact["formal_policy_semantic_distribution"]),
+            )
+            self.assertEqual(
+                "public-participation-mechanism",
+                aggregation_artifact["formal_policy_semantic_distribution"][0]["label"],
+            )
+            self.assertEqual(
+                "transparency-concern",
+                aggregation_artifact["trust_confidence_distribution"][0]["label"],
+            )
+            self.assertEqual(
+                "health-risk-uncertainty",
+                aggregation_artifact["uncertainty_distribution"][0]["label"],
+            )
+            self.assertTrue(aggregation_artifact["semantic_distributions"])
             self.assertEqual(
                 4,
                 aggregation_artifact["distribution_denominators"]["eligible_signal_count"],
@@ -520,6 +722,17 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
                 "sample_fraction is label-family-local and must not be treated as public opinion share",
                 aggregation_artifact["distribution_denominators"]["denominator_policy"],
             )
+            self.assertIn(
+                "source-family and discourse-lane local",
+                aggregation_artifact["distribution_denominators"]["semantic_scope_policy"],
+            )
+            for distribution in aggregation_artifact["semantic_distributions"]:
+                if "sample_fraction" in distribution:
+                    self.assertIn("sample_definition", distribution)
+                    self.assertIn("label_family_denominator", distribution)
+                    self.assertTrue(
+                        distribution["denominator_scope"]["do_not_mix_source_families"]
+                    )
             self.assertEqual(
                 "annotation-basis://fixture/public-discourse-v1",
                 aggregation_artifact["social_affect_distribution"][0]["provenance"]["annotation_basis_refs"][0],
@@ -877,6 +1090,50 @@ class PublicDiscourseDeepeningWorkflowTests(unittest.TestCase):
             self.assertIn(summary_ref, readiness_query["objects"][0]["evidence_refs"])
             self.assertIn(challenge_id, synthesis_query["objects"][0]["unresolved_object_refs"])
             self.assertIn(summary_ref, synthesis_query["objects"][0]["evidence_refs"])
+
+    def test_coverage_audit_records_false_zero_attempt_as_source_limit_not_absence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            submit_source_attempt(
+                run_dir,
+                source_skill="fetch-bluesky-cascade",
+                status="executed",
+                rationale="Bluesky route returned no normalized rows for this query.",
+            )
+
+            coverage_payload = run_script(
+                script_path("audit-public-discourse-sample-coverage"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+            )
+            coverage_artifact = load_json(
+                analytics_path(run_dir, f"public_discourse_coverage_audit_{ROUND_ID}.json")
+            )
+
+            self.assertEqual("completed", coverage_payload["status"])
+            attempts = coverage_artifact["source_acquisition_attempt_audit"]
+            self.assertEqual(1, len(attempts))
+            self.assertEqual("fetch-bluesky-cascade", attempts[0]["source_skill"])
+            self.assertEqual("zero-result", attempts[0]["attempt_kind"])
+            self.assertIn("not proof", attempts[0]["interpretation_boundary"])
+            source_limit_text = " ".join(
+                item["rationale"]
+                for item in coverage_artifact["source_limit_records"]
+            )
+            self.assertIn("zero normalized rows", source_limit_text)
+            self.assertIn("not evidence absence", source_limit_text)
+            bluesky_audit = {
+                item["source_family"]: item
+                for item in coverage_artifact["source_family_audit"]
+            }["bluesky-public-discourse"]
+            self.assertEqual(
+                "zero-result",
+                bluesky_audit["acquisition_attempts"][0]["attempt_kind"],
+            )
 
 
 if __name__ == "__main__":

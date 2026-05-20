@@ -15,6 +15,7 @@ from eco_council_runtime.kernel.planes.analysis_plane_contracts import (
     ANALYSIS_KIND_DIFFUSION_EDGE,
     ANALYSIS_KIND_EVIDENCE_CITATION_TYPE,
     ANALYSIS_KIND_EVIDENCE_COVERAGE,
+    ANALYSIS_KIND_FACT_POLICY_PUBLIC_INTERACTION_NODE,
     ANALYSIS_KIND_FORMAL_PUBLIC_LINK,
     ANALYSIS_KIND_ISSUE_CLUSTER,
     ANALYSIS_KIND_MERGED_OBSERVATION,
@@ -177,6 +178,59 @@ def load_spatiotemporal_relation_cue_context(
         "analysis_sync": context.get("analysis_sync", {}),
         "result_contract": context.get("result_contract", empty_result_contract()),
         "relation_cues_artifact_present": bool(context.get("artifact_present")),
+        "warnings": context.get("warnings", []),
+    }
+
+def sync_fact_policy_public_interaction_node_result_set(
+    run_dir: str | Path,
+    *,
+    expected_run_id: str = "",
+    round_id: str = "",
+    interaction_timeline_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    result = sync_analysis_result_set(
+        run_dir,
+        analysis_kind=ANALYSIS_KIND_FACT_POLICY_PUBLIC_INTERACTION_NODE,
+        expected_run_id=expected_run_id,
+        round_id=round_id,
+        artifact_path=interaction_timeline_path,
+        db_path=db_path,
+        replace_scope="artifact",
+    )
+    return {
+        **result,
+        "interaction_timeline_path": maybe_text(result.get("artifact_path")),
+    }
+
+def load_fact_policy_public_interaction_node_context(
+    run_dir: str | Path,
+    *,
+    run_id: str,
+    round_id: str,
+    interaction_timeline_path: str | Path = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    context = load_analysis_result_context(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        analysis_kind=ANALYSIS_KIND_FACT_POLICY_PUBLIC_INTERACTION_NODE,
+        artifact_path=interaction_timeline_path,
+        db_path=db_path,
+    )
+    return {
+        "interaction_timeline_wrapper": context.get("payload_wrapper", {}),
+        "interaction_nodes": context.get("items", []),
+        "interaction_node_count": int(context.get("item_count") or 0),
+        "interaction_timeline_source": maybe_text(context.get("source")),
+        "interaction_timeline_file": maybe_text(context.get("artifact_path")),
+        "db_path": maybe_text(context.get("db_path")),
+        "analysis_sync": context.get("analysis_sync", {}),
+        "result_contract": context.get("result_contract", empty_result_contract()),
+        "interaction_timeline_artifact_present": bool(
+            context.get("artifact_present")
+        ),
         "warnings": context.get("warnings", []),
     }
 
@@ -1045,6 +1099,8 @@ __all__ = [
     "load_diffusion_edge_context",
     "sync_spatiotemporal_relation_cue_result_set",
     "load_spatiotemporal_relation_cue_context",
+    "sync_fact_policy_public_interaction_node_result_set",
+    "load_fact_policy_public_interaction_node_context",
     "sync_formal_public_link_result_set",
     "load_formal_public_link_context",
     "sync_representation_gap_result_set",

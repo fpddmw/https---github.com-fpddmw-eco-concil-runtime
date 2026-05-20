@@ -11,6 +11,9 @@ description: Optional-analysis helper for materializing a DB-backed public/forma
 - Emit explicit sample semantics: text unit, dedupe policy, inclusion/exclusion
   filters, and sample classes for media/document, platform comment, and formal
   participation records.
+- Emit public-policy corpus metadata: query variants, source-family-local
+  denominator records, eligible count, dedup count, time window, and source-limit
+  rationale for zero/low-volume or missing family coverage.
 - Avoid public-opinion inference, source ranking, sentiment judgement, or report conclusions.
 
 ## Read/Write Contract
@@ -30,6 +33,9 @@ description: Optional-analysis helper for materializing a DB-backed public/forma
 - `discourse_lane`
 - `source_skill`
 - `query_text`
+- `keyword`
+- `observed_after_utc`
+- `observed_before_utc`
 - `limit`
 - `output_path`
 
@@ -41,6 +47,9 @@ description: Optional-analysis helper for materializing a DB-backed public/forma
   within their sampled platform/query/window. GDELT DOC tone aggregates and
   GDELT Events/Mentions/GKG rows belong to `gdelt_doc_tone_aggregate` or
   `gdelt_media_tone`, not public sentiment.
+- Treat `source_family_denominators` as isolated denominators. Do not combine
+  GDELT, YouTube, Bluesky, formal-record, and formal-comment counts into one
+  public sentiment or opinion denominator.
 - Empty or narrow output can reflect missing fetches, unnormalized artifacts,
   source-family gaps, API limits, or filters. A council agent must carry useful
   refs into finding, evidence bundle, challenge, readiness, or synthesis before

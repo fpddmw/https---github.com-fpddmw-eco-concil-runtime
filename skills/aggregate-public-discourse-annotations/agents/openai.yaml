@@ -1,4 +1,4 @@
 interface:
   display_name: "Aggregate Public Discourse Annotations"
   short_description: "Optional-analysis sample-level public discourse annotation aggregation"
-  default_prompt: "Use $aggregate-public-discourse-annotations only after approval. Aggregate sample labels from approved taxonomy cues, $classify-public-discourse-affect output, or agent-authored annotations with an explicit annotation basis; do not infer general public opinion, rank sources, or make report conclusions."
+  default_prompt: "Use $aggregate-public-discourse-annotations only after approval. Aggregate sample labels from approved taxonomy cues, $classify-public-discourse-affect output, or agent-authored annotations with an explicit annotation basis; keep semantic_distributions source-family/discourse-lane local, and do not infer general public opinion, mix GDELT/social/formal denominators, rank sources, or make report conclusions."

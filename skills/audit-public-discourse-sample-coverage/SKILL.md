@@ -8,6 +8,9 @@ description: Optional-analysis helper for auditing public discourse sample cover
 ## Core Goal
 - Read normalized public/formal signals and, optionally, an approved public discourse corpus artifact.
 - Emit source-family coverage cues, missing-layer warnings, and representativeness limits.
+- Emit source-family audit rows with sample definition, query variants, eligible
+  count, dedup count, denominator policy, coverage layers, acquisition-attempt
+  audit, and source-limit records.
 - Avoid representation findings, absence claims, source ranking, or report conclusions.
 
 ## Read/Write Contract
@@ -32,9 +35,12 @@ description: Optional-analysis helper for auditing public discourse sample cover
   source-family layers such as YouTube comments after video discovery, GDELT DOC
   `timelinetone` / `tonechart`, or GDELT Events/Mentions/GKG after DOC recon,
   but they remain advisory and do not prove a concern or narrative is absent.
+- Treat failed, zero-result, low-volume, and receipt-only source acquisition as
+  acquisition or visibility limits. Record recovery/source-limit rationale; do
+  not convert it into evidence absence.
 - Keep `social_sample_affect`, `gdelt_doc_tone_aggregate`, `gdelt_media_tone`,
-  formal comments, and physical source attribution separate. This helper audits
-  sample shape only.
+  formal records, formal comments, and physical source attribution separate.
+  This helper audits sample shape only.
 - A council agent must carry any useful gap cue into an evidence request,
   source-acquisition proposal, challenge, readiness opinion, or synthesis before
   it affects investigation posture.
