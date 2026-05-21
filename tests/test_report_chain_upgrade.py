@@ -222,6 +222,85 @@ class ReportChainUpgradeTests(unittest.TestCase):
             run_dir = Path(tmpdir) / "run"
             artifact = materialize_blueprint(run_dir)
             blueprint_id = artifact["report_blueprint"]["blueprint_id"]
+            round_proposals = {
+                "environmental-investigator": [
+                    {
+                        "round_title": "Smoke chronology basis council",
+                        "program_order": 10,
+                        "round_subtitle_question": "What basis must be acquired or downgraded before the smoke chronology can be stated?",
+                        "round_category": "evidence-acquisition",
+                        "round_mode": "evidence-acquisition-council",
+                        "active_theme_ids": ["theme-fact-event-process"],
+                        "agent_responsibility_boundaries": [
+                            "environmental-investigator: establish item-level chronology basis and visible limitation boundaries."
+                        ],
+                        "round_internal_phases": [
+                            "agenda-question",
+                            "agent-evidence-boundary-turns",
+                            "agent-acquisition-turns",
+                            "moderator-synthesis",
+                        ],
+                    },
+                    {
+                        "round_title": "Smoke chronology interpretation council",
+                        "program_order": 20,
+                        "round_subtitle_question": "Which smoke chronology claims can be carried after the acquired basis is reviewed?",
+                        "round_category": "evidence-analysis",
+                        "round_mode": "evidence-analysis-council",
+                        "active_theme_ids": ["theme-fact-event-process"],
+                        "agent_responsibility_boundaries": [
+                            "environmental-investigator: distinguish supported observations from causal, responsibility, and effect wording."
+                        ],
+                        "round_internal_phases": [
+                            "agenda-question",
+                            "agent-analysis-turns",
+                            "challenger-boundary-review",
+                            "moderator-synthesis",
+                        ],
+                    },
+                ],
+                "social-investigator": [
+                    {
+                        "round_title": "Public meaning interpretation council",
+                        "program_order": 30,
+                        "round_subtitle_question": "What semantic structures and limitations should be analyzed after agents define the public material boundary?",
+                        "round_category": "semantic-analysis",
+                        "round_mode": "semantic-analysis-council",
+                        "active_theme_ids": ["theme-public-semantic-perception"],
+                        "agent_responsibility_boundaries": [
+                            "social-investigator: separate issue frames, risk meanings, trust cues, uncertainty, policy demands, and attribution language within bounded material."
+                        ],
+                        "round_internal_phases": [
+                            "agenda-question",
+                            "agent-analysis-turns",
+                            "challenger-boundary-review",
+                            "moderator-synthesis",
+                        ],
+                    }
+                ],
+                "challenger": [
+                    {
+                        "round_title": "Report claim boundary council",
+                        "program_order": 40,
+                        "round_subtitle_question": "Which strong report claims must be downgraded before report writing?",
+                        "round_category": "claim-boundary-review",
+                        "round_mode": "claim-boundary-review-council",
+                        "active_theme_ids": [
+                            "theme-fact-event-process",
+                            "theme-public-semantic-perception",
+                            "theme-interaction-timeline",
+                        ],
+                        "agent_responsibility_boundaries": [
+                            "challenger: review public-proportion, causal, effectiveness, attribution, and absence wording before report handoff."
+                        ],
+                        "round_internal_phases": [
+                            "agenda-question",
+                            "challenger-boundary-review",
+                            "moderator-synthesis",
+                        ],
+                    }
+                ],
+            }
             for role in ("environmental-investigator", "social-investigator", "challenger"):
                 run_script(
                     script_path("submit-agent-position"),
@@ -249,6 +328,7 @@ class ReportChainUpgradeTests(unittest.TestCase):
                             "proposed_agenda_questions": [
                                 f"Which {role} boundary should the issue council preserve?"
                             ],
+                            "proposed_program_rounds": round_proposals[role],
                         },
                         ensure_ascii=True,
                         sort_keys=True,
@@ -270,7 +350,9 @@ class ReportChainUpgradeTests(unittest.TestCase):
             program = program_artifact["council_investigation_program"]
             round_briefs = program_artifact["materialized_round_briefs"]
             self.assertEqual("council-investigation-program", program["object_kind"])
-            self.assertGreaterEqual(len(program["round_sequence"]), 3)
+            self.assertEqual("agent-authored-round-proposals", program["program_synthesis_mode"])
+            self.assertEqual(4, program["agent_authored_round_proposal_count"])
+            self.assertGreaterEqual(len(program["round_sequence"]), 5)
             self.assertEqual(len(program["round_sequence"]), len(round_briefs))
             self.assertEqual(len(round_briefs), result["summary"]["materialized_round_brief_count"])
             self.assertFalse(result["summary"]["missing_agent_position_roles"])
@@ -298,14 +380,33 @@ class ReportChainUpgradeTests(unittest.TestCase):
                     for item in program["round_sequence"]
                 )
             )
-            first_issue_brief = next(
-                brief for brief in round_briefs if brief["round_category"] == "issue-deliberation"
+            categories = [item["round_category"] for item in program["round_sequence"]]
+            self.assertIn("evidence-acquisition", categories)
+            self.assertIn("evidence-analysis", categories)
+            self.assertIn("semantic-analysis", categories)
+            self.assertIn("claim-boundary-review", categories)
+            self.assertIn("reporting", categories)
+            self.assertLess(categories.index("evidence-acquisition"), categories.index("evidence-analysis"))
+            self.assertIn(
+                "Smoke chronology basis council",
+                [item["round_title"] for item in program["round_sequence"]],
             )
-            self.assertEqual(program["program_id"], first_issue_brief["program_id"])
-            self.assertEqual("round-brief", first_issue_brief["object_kind"])
-            self.assertTrue(first_issue_brief["active_theme_ids"])
-            self.assertTrue(first_issue_brief["agent_responsibility_boundaries"])
-            self.assertIn("theme-progress-review", first_issue_brief["expected_council_objects"])
+            self.assertFalse(
+                any(item["round_id"] == "round-002-fact-official-acquisition" for item in program["round_sequence"])
+            )
+            first_acquisition_brief = next(
+                brief for brief in round_briefs if brief["round_category"] == "evidence-acquisition"
+            )
+            first_analysis_brief = next(
+                brief for brief in round_briefs if brief["round_category"] == "evidence-analysis"
+            )
+            self.assertEqual(program["program_id"], first_acquisition_brief["program_id"])
+            self.assertEqual("round-brief", first_acquisition_brief["object_kind"])
+            self.assertTrue(first_acquisition_brief["active_theme_ids"])
+            self.assertTrue(first_acquisition_brief["agent_responsibility_boundaries"])
+            self.assertIn("theme-progress-review", first_acquisition_brief["expected_council_objects"])
+            self.assertIn("source-acquisition-proposal", first_acquisition_brief["expected_council_objects"])
+            self.assertNotIn("source-acquisition-proposal", first_analysis_brief["expected_council_objects"])
             for forbidden in (
                 "source_family",
                 "source_skill",
@@ -322,6 +423,31 @@ class ReportChainUpgradeTests(unittest.TestCase):
                 self.assertNotIn("source_family", round_item)
                 self.assertNotIn("source_skill", round_item)
                 self.assertNotIn("query_parameters", round_item)
+            forbidden_keys = {
+                "source_family",
+                "source_skill",
+                "query",
+                "query_parameters",
+                "priority_score",
+                "route_ranking",
+                "scheduler_queue",
+                "auto_execute",
+            }
+            violations: list[str] = []
+
+            def walk(value: Any, path: str = "") -> None:
+                if isinstance(value, dict):
+                    for key, child in value.items():
+                        child_path = f"{path}.{key}" if path else key
+                        if key in forbidden_keys and child_path != "forbidden_scheduler_fields":
+                            violations.append(child_path)
+                        walk(child, child_path)
+                elif isinstance(value, list):
+                    for index, child in enumerate(value):
+                        walk(child, f"{path}[{index}]")
+
+            walk(program)
+            self.assertEqual([], violations)
 
     def test_open_issue_round_loads_program_projected_round_brief(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -376,7 +502,7 @@ class ReportChainUpgradeTests(unittest.TestCase):
             first_issue_round = next(
                 item
                 for item in program["round_sequence"]
-                if item["round_category"] == "issue-deliberation"
+                if item["round_category"] == "evidence-acquisition"
             )
             target_round_id = first_issue_round["round_id"]
             transition_request_id = request_and_approve_transition(
@@ -404,12 +530,126 @@ class ReportChainUpgradeTests(unittest.TestCase):
             )
             transition = load_json(Path(opened["summary"]["output_path"]))
             self.assertEqual(program["program_id"], transition["program_id"])
-            self.assertEqual("issue-deliberation", transition["round_category"])
+            self.assertEqual("evidence-acquisition", transition["round_category"])
             self.assertTrue(transition["round_brief_id"])
             self.assertEqual(first_issue_round["active_theme_ids"], transition["active_theme_ids"])
             self.assertTrue(transition["round_internal_phases"])
             self.assertTrue(transition["agent_responsibility_boundaries"])
             self.assertTrue(transition["observed_inputs"]["program_round_brief_loaded"])
+
+    def test_agent_round_proposals_merge_consensus_variants(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            artifact = materialize_blueprint(run_dir)
+            blueprint_id = artifact["report_blueprint"]["blueprint_id"]
+            proposals = {
+                "environmental-investigator": {
+                    "round_title": "Event boundary and fact basis",
+                    "round_subtitle_question": "What happened environmentally within the bounded event window?",
+                    "round_category": "data-acquisition",
+                    "round_mode": "issue-council",
+                    "agent_responsibility_boundaries": {
+                        "environmental-investigator": "establish event-boundary evidence without policy-effect claims",
+                    },
+                },
+                "social-investigator": {
+                    "round_title": "Case scope for public semantics",
+                    "round_subtitle_question": "What case boundary is needed before public semantics can be interpreted?",
+                    "round_category": "scoping-deliberation",
+                    "round_mode": "issue-council",
+                    "agent_responsibility_boundaries": {
+                        "social-investigator": "state public and official-record boundary needs without source routing",
+                    },
+                },
+                "challenger": {
+                    "round_title": "Scope challenge council",
+                    "round_subtitle_question": "Which vague case boundaries would create unsupported strong claims?",
+                    "round_category": "framing-scope",
+                    "round_mode": "issue-council",
+                    "agent_responsibility_boundaries": {
+                        "challenger": "challenge vague scope before public, causal, or policy claims appear",
+                    },
+                },
+                "report-editor": {
+                    "round_title": "Scope the reportable smoke episode",
+                    "round_subtitle_question": "What event window and claim-strength target should govern later investigation?",
+                    "round_category": "scope-deliberation",
+                    "round_mode": "issue-council",
+                    "agent_responsibility_boundaries": {
+                        "report-editor": "state which report sections depend on the adopted case boundary",
+                    },
+                },
+            }
+            for offset, (role, proposal) in enumerate(proposals.items()):
+                proposal["program_order"] = 10 + offset
+                proposal["active_theme_ids"] = ["theme-fact-event-process"]
+                proposal["round_internal_phases"] = [
+                    "role position exchange",
+                    "boundary challenge discussion",
+                    "moderator synthesis",
+                ]
+                run_script(
+                    script_path("submit-agent-position"),
+                    "--run-dir",
+                    str(run_dir),
+                    "--run-id",
+                    RUN_ID,
+                    "--round-id",
+                    ROUND_ID,
+                    "--author-role",
+                    role,
+                    "--target-kind",
+                    "report-blueprint",
+                    "--target-id",
+                    blueprint_id,
+                    "--rationale",
+                    f"{role} submits a consensus-variant scope proposal.",
+                    "--payload-json",
+                    json.dumps(
+                        {
+                            "position_text": f"{role} proposes a scope variant for the same council issue.",
+                            "proposed_program_rounds": [proposal],
+                        },
+                        ensure_ascii=True,
+                        sort_keys=True,
+                    ),
+                )
+
+            result = run_script(
+                script_path("synthesize-council-investigation-program"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--blueprint-id",
+                blueprint_id,
+            )
+            program = load_json(Path(result["summary"]["output_path"]))["council_investigation_program"]
+            merged_rounds = [
+                item
+                for item in program["round_sequence"]
+                if item.get("proposal_source") == "merged-agent-position-rounds"
+            ]
+            self.assertEqual(4, program["agent_authored_round_proposal_count"])
+            self.assertEqual(1, len(merged_rounds))
+            merged = merged_rounds[0]
+            self.assertEqual(
+                {
+                    "environmental-investigator",
+                    "social-investigator",
+                    "challenger",
+                    "report-editor",
+                },
+                set(merged["contributing_agent_roles"]),
+            )
+            self.assertEqual(4, len(merged["contributing_round_titles"]))
+            self.assertIn(
+                "environmental-investigator: establish event-boundary evidence without policy-effect claims",
+                merged["agent_responsibility_boundaries"],
+            )
+            self.assertLessEqual(len(program["round_sequence"]), 3)
 
     def test_acquisition_checkpoints_only_emit_when_claim_impact_visible(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

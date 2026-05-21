@@ -33,6 +33,37 @@ description: Submit a thin agent-position coordination object into the deliberat
 - `payload_json`
 - `provenance_json`
 
+For framing/scope council work, `payload_json` may carry an agent-authored
+program proposal:
+
+```json
+{
+  "proposed_program_rounds": [
+    {
+      "round_title": "Public concern meaning council",
+      "program_order": 30,
+      "round_subtitle_question": "What public concern meanings should be analyzed after agents establish a bounded sample?",
+      "round_category": "semantic-analysis",
+      "round_mode": "semantic-analysis-council",
+      "active_theme_ids": ["theme-public-semantic-perception"],
+      "agent_responsibility_boundaries": [
+        "social-investigator: separate issue frames, trust cues, uncertainty, policy demands, and attribution language within the bounded sample."
+      ],
+      "round_internal_phases": [
+        "agenda-question",
+        "agent-analysis-turns",
+        "challenger-boundary-review",
+        "moderator-synthesis"
+      ]
+    }
+  ]
+}
+```
+
+The proposal must not include source families, source skills, query variants,
+query parameters, route rankings, scheduler queues, automatic execution, or any
+other source route precommitment.
+
 ## Output Contract
 - Appends one canonical `agent-position` row to the deliberation DB.
 - Writes one runtime-local submission artifact.

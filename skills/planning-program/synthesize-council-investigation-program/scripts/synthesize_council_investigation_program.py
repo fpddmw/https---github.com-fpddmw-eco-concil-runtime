@@ -41,6 +41,24 @@ FORBIDDEN_SCHEDULER_FIELDS = (
     "auto_execute",
 )
 
+FORBIDDEN_ROUTE_TEXT_PHRASES = (
+    "auto execute",
+    "automatic execution",
+    "query parameter",
+    "query variant",
+    "route ranking",
+    "scheduler queue",
+    "source family",
+    "source skill",
+)
+
+ROUND_PROPOSAL_FIELDS = (
+    "proposed_program_rounds",
+    "proposed_rounds",
+    "round_plan_proposals",
+    "round_sequence_proposal",
+)
+
 
 def maybe_text(value: Any) -> str:
     if value is None:
@@ -52,8 +70,36 @@ def list_items(value: Any) -> list[Any]:
     return list(value) if isinstance(value, list) else []
 
 
+def list_texts_or_role_map(value: Any) -> list[str]:
+    if isinstance(value, dict):
+        return unique_texts(
+            [
+                f"{maybe_text(key)}: {maybe_text(child)}"
+                for key, child in value.items()
+                if maybe_text(key) and maybe_text(child)
+            ]
+        )
+    if isinstance(value, list):
+        results: list[Any] = []
+        for item in value:
+            if isinstance(item, dict):
+                results.extend(list_texts_or_role_map(item))
+            else:
+                results.append(item)
+        return unique_texts(results)
+    return []
+
+
 def dict_items(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
+
+
+def text_blob(value: Any) -> str:
+    if isinstance(value, dict):
+        return " ".join([maybe_text(key) + " " + text_blob(child) for key, child in value.items()])
+    if isinstance(value, list):
+        return " ".join(text_blob(item) for item in value)
+    return maybe_text(value)
 
 
 def stable_hash(*parts: Any) -> str:
@@ -110,6 +156,40 @@ def unique_texts(values: list[Any]) -> list[str]:
         seen.add(text)
         results.append(text)
     return results
+
+
+def forbidden_field_paths(value: Any, *, path: str = "") -> list[str]:
+    matches: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}" if path else maybe_text(key)
+            if maybe_text(key) in FORBIDDEN_SCHEDULER_FIELDS:
+                matches.append(child_path)
+            matches.extend(forbidden_field_paths(child, path=child_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            child_path = f"{path}[{index}]" if path else f"[{index}]"
+            matches.extend(forbidden_field_paths(child, path=child_path))
+    return matches
+
+
+def has_forbidden_route_text(value: Any) -> list[str]:
+    lowered = text_blob(value).casefold()
+    return [phrase for phrase in FORBIDDEN_ROUTE_TEXT_PHRASES if phrase in lowered]
+
+
+def slugify(value: str) -> str:
+    chars: list[str] = []
+    previous_dash = False
+    for char in maybe_text(value).casefold():
+        if char.isalnum():
+            chars.append(char)
+            previous_dash = False
+        elif not previous_dash:
+            chars.append("-")
+            previous_dash = True
+    slug = "".join(chars).strip("-")
+    return slug[:48].strip("-") or "agent-planned-round"
 
 
 def query_objects(
@@ -193,7 +273,22 @@ def position_text_list(position: dict[str, Any], *field_names: str) -> list[str]
     return unique_texts(values)
 
 
+def position_round_proposals(position: dict[str, Any]) -> list[dict[str, Any]]:
+    proposals: list[dict[str, Any]] = []
+    for field_name in ROUND_PROPOSAL_FIELDS:
+        value = position.get(field_name)
+        if isinstance(value, dict):
+            value = [value]
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if isinstance(item, dict):
+                proposals.append(dict(item))
+    return proposals
+
+
 def position_summary(position: dict[str, Any]) -> dict[str, Any]:
+    proposals = position_round_proposals(position)
     return {
         "position_ref": position_ref(position),
         "author_role": maybe_text(position.get("author_role")),
@@ -210,6 +305,8 @@ def position_summary(position: dict[str, Any]) -> dict[str, Any]:
             "recommended_issue_questions",
             "council_agenda_questions",
         ),
+        "proposed_program_round_count": len(proposals),
+        "proposed_program_rounds": proposals,
     }
 
 
@@ -280,25 +377,445 @@ def round_plan(
     }
 
 
-def build_round_sequence(themes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def theme_ids_matching(theme_by_id: dict[str, dict[str, Any]], *terms: str) -> list[str]:
+    lowered_terms = tuple(term.casefold() for term in terms if maybe_text(term))
+    return [
+        theme_id
+        for theme_id in theme_by_id
+        if any(term in theme_id.casefold() for term in lowered_terms)
+    ]
+
+
+def theme_boundaries(theme_by_id: dict[str, dict[str, Any]], theme_ids: list[str]) -> list[str]:
+    return [boundary_for_theme(theme_by_id[theme_id]) for theme_id in theme_ids if theme_id in theme_by_id]
+
+
+def round_label(index: int, slug: str) -> str:
+    return f"round-{index:03d}-{slug}"
+
+
+def normalize_agent_round_proposal(
+    proposal: dict[str, Any],
+    *,
+    index: int,
+    author_role: str,
+    position_ref_value: str,
+    theme_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    forbidden_paths = forbidden_field_paths(proposal)
+    forbidden_phrases = has_forbidden_route_text(proposal)
+    if forbidden_paths or forbidden_phrases:
+        raise ValueError(
+            "Agent-authored program round proposals cannot include source, "
+            "query, route, scheduler, or automatic execution precommitments: "
+            + ", ".join([*forbidden_paths, *forbidden_phrases])
+        )
+    title = maybe_text(proposal.get("round_title")) or maybe_text(proposal.get("title"))
+    question = (
+        maybe_text(proposal.get("round_subtitle_question"))
+        or maybe_text(proposal.get("agenda_question"))
+        or maybe_text(proposal.get("question"))
+    )
+    if not question:
+        raise ValueError("Agent-authored program round proposals require a question-form agenda.")
+    if not question.endswith(("?", "？")):
+        question = question.rstrip(".") + "?"
+    category = maybe_text(proposal.get("round_category")) or "agent-planned"
+    mode = maybe_text(proposal.get("round_mode")) or f"{category}-council"
+    active_theme_ids = unique_texts(
+        [
+            theme_id
+            for theme_id in list_items(proposal.get("active_theme_ids"))
+            if maybe_text(theme_id) in theme_by_id
+        ]
+    )
+    if not active_theme_ids:
+        active_theme_ids = list(theme_by_id)
+    boundaries = unique_texts(
+        [
+            *list_texts_or_role_map(proposal.get("agent_responsibility_boundaries")),
+            *list_texts_or_role_map(proposal.get("responsibility_boundaries")),
+            *list_texts_or_role_map(proposal.get("claim_basis_boundaries")),
+        ]
+    )
+    if not boundaries:
+        boundaries = [
+            f"{author_role}: define the claim-basis, limitation, and review boundary for this agenda question."
+        ]
+    phases = unique_texts(
+        [
+            *list_items(proposal.get("round_internal_phases")),
+            *list_items(proposal.get("internal_phases")),
+        ]
+    ) or ["agenda-question", "agent-work-turns", "progress-review", "moderator-synthesis"]
+    slug = maybe_text(proposal.get("round_slug")) or maybe_text(proposal.get("slug")) or title or question
+    normalized = round_plan(
+        round_id=round_label(index, slugify(slug)),
+        title=title or question.rstrip("?？"),
+        subtitle=question,
+        round_mode=mode,
+        round_category=category,
+        active_theme_ids=active_theme_ids,
+        boundaries=boundaries,
+        internal_phases=phases,
+    )
+    normalized["proposal_source"] = "agent-position"
+    normalized["proposed_by_role"] = author_role
+    normalized["proposal_position_ref"] = position_ref_value
+    normalized["proposal_rationale"] = maybe_text(proposal.get("rationale"))
+    if maybe_text(proposal.get("program_order")) or maybe_text(proposal.get("round_order")):
+        normalized["program_order"] = maybe_text(
+            proposal.get("program_order")
+        ) or maybe_text(proposal.get("round_order"))
+    explicit_exits = unique_texts(
+        [
+            *list_texts_or_role_map(proposal.get("round_exit_criteria")),
+            *list_texts_or_role_map(proposal.get("exit_criteria")),
+        ]
+    )
+    if explicit_exits:
+        normalized["round_exit_criteria"] = explicit_exits
+    explicit_downgrades = unique_texts(
+        [
+            *list_texts_or_role_map(proposal.get("downgrade_conditions")),
+            *list_texts_or_role_map(proposal.get("downgrade_boundaries")),
+        ]
+    )
+    if explicit_downgrades:
+        normalized["downgrade_conditions"] = explicit_downgrades
+    explicit_continuations = unique_texts(
+        [
+            *list_texts_or_role_map(proposal.get("continuation_criteria")),
+            *list_texts_or_role_map(proposal.get("supplemental_round_triggers")),
+        ]
+    )
+    if explicit_continuations:
+        normalized["continuation_criteria"] = explicit_continuations
+    return normalized
+
+
+def proposal_order_value(proposal: dict[str, Any], fallback: int) -> tuple[float, int]:
+    raw = maybe_text(proposal.get("program_order")) or maybe_text(proposal.get("round_order"))
+    if raw:
+        try:
+            return (float(raw), fallback)
+        except ValueError:
+            return (100000.0 + float(fallback), fallback)
+    return (100000.0 + float(fallback), fallback)
+
+
+def numeric_program_order(round_item: dict[str, Any]) -> float | None:
+    raw = maybe_text(round_item.get("program_order")) or maybe_text(round_item.get("round_order"))
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def ordered_unique(values: list[Any], *, limit: int = 0) -> list[str]:
+    results = unique_texts(values)
+    return results[:limit] if limit > 0 else results
+
+
+def round_family(round_item: dict[str, Any]) -> str:
+    category = maybe_text(round_item.get("round_category")).casefold()
+    mode = maybe_text(round_item.get("round_mode")).casefold()
+    blob = " ".join(
+        [
+            category,
+            mode,
+            maybe_text(round_item.get("round_title")).casefold(),
+            maybe_text(round_item.get("round_subtitle_question")).casefold(),
+        ]
+    )
+    if "reporting" in category or "report writing" in blob:
+        return "reporting"
+    if "readiness" in blob or "freeze claim" in blob:
+        return "report-readiness-synthesis"
+    if "policy" in blob and ("evaluation" in blob or "basis" in blob):
+        return "policy-evaluation-basis-synthesis"
+    if "interaction" in blob or "timeline" in blob or "align" in blob:
+        return "interaction-timeline-synthesis"
+    if (
+        "semantic" in blob
+        or "meaning" in blob
+        or "trust" in blob
+        or "uncertainty" in blob
+        or "demand" in blob
+    ) and "acquisition" not in category and "acquire" not in blob:
+        return "semantic-analysis"
+    if (
+        "public" in blob
+        or "media" in blob
+        or "discourse" in blob
+        or "formal" in blob
+    ) and (
+        "acquisition" in category
+        or "acquire" in blob
+        or "evidence" in blob
+        or "material" in blob
+        or "sample" in blob
+    ):
+        return "public-discourse-acquisition"
+    if (
+        "official" in blob
+        or "governance" in blob
+        or "fact" in blob
+        or "event" in blob
+        or "chronology" in blob
+    ) and (
+        "acquisition" in category
+        or "acquire" in blob
+        or "evidence" in blob
+        or "record" in blob
+        or "basis" in blob
+    ):
+        return "fact-official-acquisition"
+    if "scope" in blob or "framing" in blob or "boundary" in blob or "reportable" in blob:
+        return "scope-deliberation"
+    return category or mode or "agent-planned"
+
+
+def round_cluster_key(round_item: dict[str, Any]) -> tuple[str, str]:
+    explicit_cluster = maybe_text(
+        round_item.get("round_cluster")
+        or round_item.get("program_cluster")
+        or round_item.get("issue_thread_id")
+    )
+    if explicit_cluster:
+        return ("explicit", explicit_cluster.casefold())
+    order = numeric_program_order(round_item)
+    if order is not None and 10 <= order < 100000:
+        # Agents commonly use 10/20/30... program bands. Nearby values in the
+        # same band represent deliberative variants of one intended round, not
+        # separate rounds to schedule mechanically.
+        return ("program-order-band", str(int(order // 10)))
+    if order is not None and order < 10:
+        return ("program-order", str(int(order)))
+    return ("round-family", round_family(round_item))
+
+
+def role_preference(role: str) -> int:
+    order = {
+        "report-editor": 0,
+        "moderator": 1,
+        "challenger": 2,
+        "social-investigator": 3,
+        "environmental-investigator": 4,
+    }
+    return order.get(maybe_text(role), 10)
+
+
+def choose_representative(cluster: list[dict[str, Any]]) -> dict[str, Any]:
+    families = [round_family(item) for item in cluster]
+    family_counts = {family: families.count(family) for family in set(families)}
+    dominant_family = sorted(
+        family_counts,
+        key=lambda family: (-family_counts[family], families.index(family)),
+    )[0]
+    candidates = [item for item in cluster if round_family(item) == dominant_family] or list(cluster)
+    return sorted(
+        candidates,
+        key=lambda item: (
+            role_preference(maybe_text(item.get("proposed_by_role"))),
+            numeric_program_order(item) if numeric_program_order(item) is not None else 100000.0,
+            maybe_text(item.get("round_title")).casefold(),
+        ),
+    )[0]
+
+
+def merge_agent_round_cluster(cluster: list[dict[str, Any]], *, index: int) -> dict[str, Any]:
+    representative = choose_representative(cluster)
+    family = round_family(representative)
+    title = maybe_text(representative.get("round_title"))
+    question = maybe_text(representative.get("round_subtitle_question"))
+    order_values = [
+        order
+        for order in [numeric_program_order(item) for item in cluster]
+        if order is not None
+    ]
+    merged = round_plan(
+        round_id=round_label(index, slugify(title or question or family)),
+        title=title or question.rstrip("?？") or family,
+        subtitle=question or "What should the council resolve in this synthesized issue round?",
+        round_mode=maybe_text(representative.get("round_mode")) or f"{family}-council",
+        round_category=maybe_text(representative.get("round_category")) or family,
+        active_theme_ids=ordered_unique(
+            [
+                theme_id
+                for item in cluster
+                for theme_id in list_items(item.get("active_theme_ids"))
+            ]
+        ),
+        boundaries=ordered_unique(
+            [
+                boundary
+                for item in cluster
+                for boundary in list_texts_or_role_map(item.get("agent_responsibility_boundaries"))
+            ]
+        ),
+        internal_phases=ordered_unique(
+            [
+                phase
+                for item in [representative, *cluster]
+                for phase in list_texts_or_role_map(item.get("round_internal_phases"))
+            ],
+            limit=14,
+        ),
+    )
+    exits = ordered_unique(
+        [
+            criterion
+            for item in cluster
+            for criterion in list_texts_or_role_map(item.get("round_exit_criteria"))
+        ],
+        limit=16,
+    )
+    if exits:
+        merged["round_exit_criteria"] = exits
+    downgrades = ordered_unique(
+        [
+            condition
+            for item in cluster
+            for condition in list_texts_or_role_map(item.get("downgrade_conditions"))
+        ],
+        limit=16,
+    )
+    if downgrades:
+        merged["downgrade_conditions"] = downgrades
+    continuations = ordered_unique(
+        [
+            criterion
+            for item in cluster
+            for criterion in list_texts_or_role_map(item.get("continuation_criteria"))
+        ],
+        limit=8,
+    )
+    if continuations:
+        merged["continuation_criteria"] = continuations
+    if order_values:
+        merged["program_order"] = min(order_values)
+    merged["proposal_source"] = "merged-agent-position-rounds"
+    merged["proposal_position_refs"] = ordered_unique(
+        [item.get("proposal_position_ref") for item in cluster]
+    )
+    merged["contributing_agent_roles"] = ordered_unique(
+        [item.get("proposed_by_role") for item in cluster]
+    )
+    merged["contributing_round_titles"] = ordered_unique(
+        [item.get("round_title") for item in cluster]
+    )
+    merged["synthesis_note"] = (
+        f"Merged {len(cluster)} agent-authored round proposal(s) into one "
+        "council issue round; this is agenda synthesis, not source routing."
+    )
+    return merged
+
+
+def merge_agent_round_proposals(normalized_rounds: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    clusters: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    cluster_order: list[tuple[tuple[float, int], tuple[str, str]]] = []
+    for fallback, item in enumerate(normalized_rounds):
+        key = round_cluster_key(item)
+        if key not in clusters:
+            clusters[key] = []
+            order = numeric_program_order(item)
+            cluster_order.append(((order if order is not None else 100000.0 + fallback, fallback), key))
+        clusters[key].append(item)
+    cluster_order.sort(key=lambda item: item[0])
+    merged: list[dict[str, Any]] = []
+    for next_index, (_, key) in enumerate(cluster_order, start=2):
+        merged.append(merge_agent_round_cluster(clusters[key], index=next_index))
+    return merged
+
+
+def agent_authored_round_sequence(
+    *,
+    positions: list[dict[str, Any]],
+    themes: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     theme_by_id = {theme_ref(theme): theme for theme in themes if theme_ref(theme)}
-    fact_ids = [
-        theme_id
-        for theme_id in theme_by_id
-        if any(term in theme_id for term in ("fact", "official", "policy-action"))
+    rounds: list[dict[str, Any]] = [
+        round_plan(
+            round_id="round-001-framing-scope",
+            title="Framing and scope council",
+            subtitle="What questions did the council decide to investigate, and how did agents split the later research agenda?",
+            round_mode="framing-scope-council",
+            round_category="planning",
+            active_theme_ids=list(theme_by_id),
+            boundaries=[
+                "moderator: synthesize only agent-authored or agent-adopted agenda proposals, and record any unresolved split disagreement.",
+                "challenger: review claim-slot overreach, denominator obligations, policy-basis boundaries, and unsupported strong wording.",
+            ],
+            internal_phases=["report-blueprint", "agent-position-proposals", "moderator-program-synthesis"],
+        )
     ]
-    public_ids = [
-        theme_id
-        for theme_id in theme_by_id
-        if any(term in theme_id for term in ("public", "semantic"))
+    proposal_rows: list[tuple[tuple[float, int], dict[str, Any], dict[str, Any]]] = []
+    insertion_index = 0
+    for position in positions:
+        for proposal in position_round_proposals(position):
+            proposal_rows.append((proposal_order_value(proposal, insertion_index), position, proposal))
+            insertion_index += 1
+    proposal_rows.sort(key=lambda item: item[0])
+    normalized_proposals: list[dict[str, Any]] = []
+    provisional_index = 2
+    for _, position, proposal in proposal_rows:
+        author_role = maybe_text(position.get("author_role"))
+        position_ref_value = position_ref(position)
+        normalized = normalize_agent_round_proposal(
+            proposal,
+            index=provisional_index,
+            author_role=author_role,
+            position_ref_value=position_ref_value,
+            theme_by_id=theme_by_id,
+        )
+        normalized_proposals.append(normalized)
+        provisional_index += 1
+    rounds.extend(merge_agent_round_proposals(normalized_proposals))
+    next_index = len(rounds) + 1
+    if not any(maybe_text(item.get("round_category")) == "reporting" for item in rounds):
+        rounds.append(
+            round_plan(
+                round_id=round_label(next_index, "report-writing"),
+                title="Report writing council handoff",
+                subtitle="Which agent-carried materials can enter the report, and which claims must remain limitations?",
+                round_mode="report-writing",
+                round_category="reporting",
+                active_theme_ids=list(theme_by_id),
+                boundaries=[
+                    "report-editor: organize only council-carried basis, section briefs, frozen basis, and visible limitations into report prose.",
+                    "challenger: review strong claims, policy evaluation, public proportions, causal wording, and attribution language before report use.",
+                    "moderator: ensure reporting handoff preserves unresolved boundaries, downgrade requirements, and transition approvals.",
+                ],
+                internal_phases=[
+                    "agent-section-briefs",
+                    "reporting-handoff",
+                    "draft-validation",
+                    "publication",
+                ],
+            )
+        )
+    return rounds
+
+
+def fallback_round_sequence(themes: list[dict[str, Any]], blueprint: dict[str, Any]) -> list[dict[str, Any]]:
+    theme_by_id = {theme_ref(theme): theme for theme in themes if theme_ref(theme)}
+    fact_official_ids = unique_texts(
+        [
+            *theme_ids_matching(theme_by_id, "fact"),
+            *theme_ids_matching(theme_by_id, "official", "policy-action"),
+        ]
+    )
+    public_ids = theme_ids_matching(theme_by_id, "public", "semantic")
+    interaction_ids = theme_ids_matching(theme_by_id, "interaction", "timeline")
+    all_theme_ids = list(theme_by_id)
+    synthesis_target_ids = [
+        maybe_text(item.get("target_id"))
+        for item in list_items(blueprint.get("synthesis_targets"))
+        if isinstance(item, dict)
     ]
-    interaction_ids = [
-        theme_id
-        for theme_id in theme_by_id
-        if any(term in theme_id for term in ("interaction", "timeline"))
-    ]
-    used = set(fact_ids + public_ids + interaction_ids)
-    remaining_ids = [theme_id for theme_id in theme_by_id if theme_id not in used]
     rounds = [
         round_plan(
             round_id="round-001-framing-scope",
@@ -314,71 +831,160 @@ def build_round_sequence(themes: list[dict[str, Any]]) -> list[dict[str, Any]]:
             internal_phases=["report-blueprint", "agent-positions", "moderator-program-synthesis"],
         )
     ]
-    if fact_ids:
+    next_index = 2
+    if fact_official_ids:
         rounds.append(
             round_plan(
-                round_id="round-002-fact-governance",
-                title="Fact and governance issue council",
-                subtitle="Which fact-process and official-action boundaries can be supported or must be downgraded?",
-                round_mode="issue-council",
-                round_category="issue-deliberation",
-                active_theme_ids=fact_ids,
-                boundaries=[boundary_for_theme(theme_by_id[theme_id]) for theme_id in fact_ids],
+                round_id=round_label(next_index, "fact-official-acquisition"),
+                title="Fact and official evidence acquisition council",
+                subtitle="What evidence basis must agents acquire or explicitly downgrade for the fact process and official actions?",
+                round_mode="evidence-acquisition-council",
+                round_category="evidence-acquisition",
+                active_theme_ids=fact_official_ids,
+                boundaries=[
+                    *theme_boundaries(theme_by_id, fact_official_ids),
+                    "challenger: watch for premature source-origin, responsibility, policy-effect, or public-attitude wording while evidence basis is still being acquired.",
+                ],
                 internal_phases=[
                     "agenda-question",
+                    "agent-evidence-boundary-turns",
                     "agent-acquisition-turns",
-                    "agent-analysis-turns",
+                    "in-round-recovery-feedback",
                     "progress-review",
                     "moderator-synthesis",
                 ],
             )
         )
+        next_index += 1
+        rounds.append(
+            round_plan(
+                round_id=round_label(next_index, "fact-official-analysis"),
+                title="Fact and official evidence analysis council",
+                subtitle="Which fact-process and official-action claims can the council carry after acquired basis is reviewed?",
+                round_mode="evidence-analysis-council",
+                round_category="evidence-analysis",
+                active_theme_ids=fact_official_ids,
+                boundaries=[
+                    *theme_boundaries(theme_by_id, fact_official_ids),
+                    "moderator: distinguish supported fact sequence, official record presence, unresolved basis gaps, and report downgrade wording.",
+                    "challenger: review causal, responsibility, effectiveness, and absence claims before they become report basis.",
+                ],
+                internal_phases=[
+                    "agenda-question",
+                    "agent-analysis-turns",
+                    "challenger-boundary-review",
+                    "progress-review",
+                    "moderator-synthesis",
+                ],
+            )
+        )
+        next_index += 1
     if public_ids:
         rounds.append(
             round_plan(
-                round_id="round-003-public-semantics",
-                title="Public and formal semantics issue council",
-                subtitle="Which public, media, formal, or policy semantics are sample-local and denominator-bounded?",
-                round_mode="issue-council",
-                round_category="issue-deliberation",
+                round_id=round_label(next_index, "public-semantics-acquisition"),
+                title="Public semantics evidence acquisition council",
+                subtitle="What bounded sample and denominator basis is needed before public, media, or formal semantic claims can be made?",
+                round_mode="evidence-acquisition-council",
+                round_category="evidence-acquisition",
                 active_theme_ids=public_ids,
-                boundaries=[boundary_for_theme(theme_by_id[theme_id]) for theme_id in public_ids],
+                boundaries=[
+                    *theme_boundaries(theme_by_id, public_ids),
+                    "social-investigator: make the sample boundary, denominator status, and representation limits visible before semantic interpretation.",
+                    "challenger: prevent low-volume, zero-result, or partial material from becoming public-opinion or absence claims.",
+                ],
                 internal_phases=[
                     "agenda-question",
+                    "agent-evidence-boundary-turns",
                     "agent-acquisition-turns",
-                    "agent-analysis-turns",
+                    "in-round-recovery-feedback",
                     "progress-review",
                     "moderator-synthesis",
                 ],
             )
         )
-    if interaction_ids or remaining_ids:
-        active_ids = [*interaction_ids, *remaining_ids]
+        next_index += 1
         rounds.append(
             round_plan(
-                round_id="round-004-interaction-policy-boundary",
-                title="Interaction and policy-basis issue council",
-                subtitle="What interaction chronology and policy-evaluation basis can the report carry without causal overreach?",
-                round_mode="issue-council",
-                round_category="issue-deliberation",
-                active_theme_ids=active_ids,
-                boundaries=[boundary_for_theme(theme_by_id[theme_id]) for theme_id in active_ids],
+                round_id=round_label(next_index, "public-semantics-analysis"),
+                title="Public semantics analysis council",
+                subtitle="What semantic structures, shifts, and limits are visible within the bounded public, media, or formal material?",
+                round_mode="semantic-analysis-council",
+                round_category="semantic-analysis",
+                active_theme_ids=public_ids,
+                boundaries=[
+                    *theme_boundaries(theme_by_id, public_ids),
+                    "social-investigator: separate issue frames, risk perception, policy demands, trust or uncertainty cues, and attribution language as bounded semantic observations.",
+                    "challenger: ensure public proportion, dominant concern, emotion, trust, or blame wording remains denominator-bounded.",
+                ],
                 internal_phases=[
                     "agenda-question",
                     "agent-analysis-turns",
+                    "challenger-boundary-review",
                     "progress-review",
                     "moderator-synthesis",
                 ],
             )
         )
+        next_index += 1
+    if interaction_ids or all_theme_ids:
+        active_ids = unique_texts([*interaction_ids, *all_theme_ids])
+        rounds.append(
+            round_plan(
+                round_id=round_label(next_index, "interaction-synthesis"),
+                title="Fact-policy-public interaction synthesis council",
+                subtitle="How do supported fact, official-action, and public-semantic materials line up over time without implying causality?",
+                round_mode="interaction-synthesis-council",
+                round_category="interaction-synthesis",
+                active_theme_ids=active_ids,
+                boundaries=[
+                    *theme_boundaries(theme_by_id, active_ids),
+                    "moderator: compose cross-lane chronology only from carried lane basis and explicitly mark descriptive co-visibility versus relation evidence.",
+                    "challenger: block causal, response-effect, or public-reaction attribution unless relation basis is visible.",
+                ],
+                internal_phases=[
+                    "agenda-question",
+                    "lane-episode-assembly",
+                    "agent-analysis-turns",
+                    "challenger-boundary-review",
+                    "progress-review",
+                    "moderator-synthesis",
+                ],
+            )
+        )
+        next_index += 1
+    if "policy_evaluation_basis" in synthesis_target_ids or all_theme_ids:
+        rounds.append(
+            round_plan(
+                round_id=round_label(next_index, "policy-evaluation-basis"),
+                title="Policy evaluation basis review council",
+                subtitle="What can the report use as policy-evaluation basis, and what must stay as limitation or future work?",
+                round_mode="policy-basis-review-council",
+                round_category="policy-basis-review",
+                active_theme_ids=all_theme_ids,
+                boundaries=[
+                    "moderator: synthesize policy-evaluation basis only from carried fact, official-action, public-semantic, interaction, and limitation objects.",
+                    "social-investigator: identify governance-record and public-semantic limits without turning policy_evaluation_basis into an acquisition lane.",
+                    "challenger: require visible downgrade language for effectiveness, adequacy, representativeness, causality, and absence claims.",
+                ],
+                internal_phases=[
+                    "agenda-question",
+                    "claim-basis-matrix-review",
+                    "challenger-boundary-review",
+                    "progress-review",
+                    "moderator-synthesis",
+                ],
+            )
+        )
+        next_index += 1
     rounds.append(
         round_plan(
-            round_id=f"round-{len(rounds) + 1:03d}-report-writing",
+            round_id=round_label(next_index, "report-writing"),
             title="Report writing council handoff",
             subtitle="Which council-carried materials can enter the report, and which claims must remain limitations?",
             round_mode="report-writing",
             round_category="reporting",
-            active_theme_ids=list(theme_by_id),
+            active_theme_ids=all_theme_ids,
             boundaries=[
                 "report-editor: organize only council-carried basis, section briefs, frozen basis, and visible limitations into report prose.",
                 "challenger: review strong claims, policy evaluation, public proportions, causal wording, and attribution language before report use.",
@@ -405,17 +1011,17 @@ def round_brief_payload_from_program_round(
 ) -> dict[str, Any]:
     target_round_id = maybe_text(round_item.get("round_id"))
     brief_id = "round-brief-" + stable_hash(args.run_id, program_id, target_round_id)[:12]
-    is_reporting_round = maybe_text(round_item.get("round_category")) == "reporting"
-    expected_objects = (
-        [
+    round_category = maybe_text(round_item.get("round_category"))
+    if round_category == "reporting":
+        expected_objects = [
             "agent-section-brief",
             "reporting-handoff",
             "narrative-report-draft",
             "narrative-report-validation",
             "narrative-report",
         ]
-        if is_reporting_round
-        else [
+    elif round_category == "evidence-acquisition":
+        expected_objects = [
             "theme-evidence-boundary-plan",
             "source-acquisition-proposal",
             "evidence-route-assessment",
@@ -424,7 +1030,37 @@ def round_brief_payload_from_program_round(
             "theme-progress-review",
             "round-synthesis",
         ]
-    )
+    elif round_category in {"evidence-analysis", "semantic-analysis"}:
+        expected_objects = [
+            "finding",
+            "evidence-bundle",
+            "theme-progress-review",
+            "round-synthesis",
+            "agent-section-brief",
+        ]
+    elif round_category == "interaction-synthesis":
+        expected_objects = [
+            "lane-episode-card",
+            "interaction-timeline-node",
+            "finding",
+            "theme-progress-review",
+            "round-synthesis",
+            "agent-section-brief",
+        ]
+    elif round_category == "policy-basis-review":
+        expected_objects = [
+            "claim-basis-matrix",
+            "challenge-ticket",
+            "theme-progress-review",
+            "round-synthesis",
+            "agent-section-brief",
+        ]
+    else:
+        expected_objects = [
+            "theme-progress-review",
+            "round-synthesis",
+            "agent-section-brief",
+        ]
     return {
         "run_id": args.run_id,
         "round_id": target_round_id,
@@ -451,7 +1087,7 @@ def round_brief_payload_from_program_round(
         "round_title": maybe_text(round_item.get("round_title")),
         "round_subtitle_question": maybe_text(round_item.get("round_subtitle_question")),
         "round_mode": maybe_text(round_item.get("round_mode")),
-        "round_category": maybe_text(round_item.get("round_category")),
+        "round_category": round_category,
         "active_theme_ids": unique_texts(list_items(round_item.get("active_theme_ids"))),
         "agent_responsibility_boundaries": unique_texts(
             list_items(round_item.get("agent_responsibility_boundaries"))
@@ -471,7 +1107,7 @@ def round_brief_payload_from_program_round(
         ),
         "forbidden_source_precommitments": [
             "Do not preselect provider families, skills, query variants, query parameters, route ranking, source priority, scheduler queue, or automatic execution.",
-            "Acquisition and analysis are agent work turns inside the issue council round, not automatic runtime phases.",
+            "Acquisition and analysis organization is council-facing agenda context, not an automatic runtime phase machine.",
         ],
         "evidence_refs": [],
         "lineage": unique_texts([program_object_id, program_id, target_round_id]),
@@ -522,12 +1158,27 @@ def synthesize_program(args: argparse.Namespace) -> dict[str, Any]:
         for theme in themes
         if theme_ref(theme)
     ]
-    round_sequence = build_round_sequence(themes)
+    agent_round_proposal_count = sum(
+        len(position_round_proposals(position)) for position in positions
+    )
+    if agent_round_proposal_count:
+        round_sequence = agent_authored_round_sequence(
+            positions=positions,
+            themes=themes,
+        )
+        synthesis_mode = "agent-authored-round-proposals"
+    else:
+        round_sequence = fallback_round_sequence(themes, blueprint)
+        synthesis_mode = "fallback-blueprint-derived-program"
     agenda_questions = unique_texts(
         [
             agenda_question_for_theme(theme)
             for theme in themes
             if theme_ref(theme)
+        ]
+        + [
+            maybe_text(round_item.get("round_subtitle_question"))
+            for round_item in round_sequence
         ]
         + [
             question
@@ -556,13 +1207,19 @@ def synthesize_program(args: argparse.Namespace) -> dict[str, Any]:
         "decision_source": "moderator-program-synthesis",
         "status": "proposed",
         "adoption_status": "proposed-for-council-use",
+        "program_synthesis_mode": synthesis_mode,
+        "agent_authored_round_proposal_count": agent_round_proposal_count,
         "target_kind": "report-blueprint",
         "target_id": maybe_text(blueprint.get("object_id")) or maybe_text(blueprint.get("blueprint_id")),
         "target": {
             "object_kind": "report-blueprint",
             "object_id": maybe_text(blueprint.get("object_id")) or maybe_text(blueprint.get("blueprint_id")),
         },
-        "rationale": "Program-aware council flow synthesized from report blueprint and agent positions; no acquisition route is selected.",
+        "rationale": (
+            "Program-aware council flow synthesized from report blueprint and "
+            "agent-authored round proposals when present; no acquisition route "
+            "is selected."
+        ),
         "mission_question": mission_question_from_blueprint(blueprint),
         "report_blueprint_ref": blueprint_ref,
         "agent_position_refs": unique_texts([position_ref(position) for position in positions]),
@@ -576,7 +1233,7 @@ def synthesize_program(args: argparse.Namespace) -> dict[str, Any]:
         "round_sequence": round_sequence,
         "round_internal_phase_model": [
             "round_internal_phases are descriptive organization hints only",
-            "acquisition and analysis are agent work turns inside issue council rounds",
+            "round categories should come from agent-authored or agent-adopted program proposals when those proposals are present",
             "progress review is advisory until carried by council object, moderator synthesis, readiness opinion, report-basis gate, or transition approval",
         ],
         "round_exit_criteria": [
@@ -670,6 +1327,17 @@ def synthesize_program(args: argparse.Namespace) -> dict[str, Any]:
         "provenance": {"skill_name": SKILL_NAME, "decision_source": "moderator-program-synthesis"},
     }
     write_json(output_file, wrapper)
+    receipt_basis = stable_hash(
+        args.run_id,
+        args.round_id,
+        stored_program.get("program_id"),
+        json.dumps(
+            list_items(stored_program.get("round_sequence")),
+            ensure_ascii=True,
+            sort_keys=True,
+        ),
+        stored_program.get("agent_authored_round_proposal_count"),
+    )
     return {
         "status": "completed",
         "summary": {
@@ -684,7 +1352,7 @@ def synthesize_program(args: argparse.Namespace) -> dict[str, Any]:
             "output_path": str(output_file),
             "db_path": maybe_text(result.get("db_path")),
         },
-        "receipt_id": "council-program-receipt-" + stable_hash(args.run_id, args.round_id, stored_program.get("program_id"))[:20],
+        "receipt_id": "council-program-receipt-" + receipt_basis[:20],
         "artifact_refs": wrapper["artifact_refs"],
         "canonical_ids": unique_texts(
             [
