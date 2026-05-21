@@ -77,7 +77,7 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
 2. `report framing / scoping`
    - 在开放型 mission 缺少完整 window/region/source requests 时，moderator 先提交 investigation plan、candidate scope、round brief 和 evidence request。面向形势分析报告的 run 还应形成 `report_blueprint`、`claim_slots`、`investigation_themes` 和 claim-basis 边界；report-editor 可参与定义报告问题，但不得提前写结论，也不得把 claim slots 固化成领域模板。
 3. `agent-led evidence acquisition`
-   - investigator 根据 evidence request、report claim slots、finding、challenge 和自身判断提出或执行取证动作；runtime 负责权限、side-effect approval、receipt 和 ledger，不替 agent 排序 source 或采信证据。moderator 可以提出主题和 evidence need，但 source、query、skill 路线必须由 investigator 自主选择、撰写或显式采纳。
+   - investigator 根据 evidence request、report claim slots、finding、challenge 和自身判断提出或执行取证动作；runtime 负责权限、side-effect approval、receipt 和 ledger，不替 agent 排序 source 或采信证据。moderator/report-editor 可以提出主题和 evidence need；前置 theme plan 只能记录证据义务、分母义务、成功条件、恢复路径和降级边界，不能以任何形式预填 source family、source skill、query variant、query parameters 或 route ranking。具体取证路线只能由 investigator 在正式 acquisition turn 中自主形成。
 4. `prepare-round`
    - 根据 mission、round tasks、source governance 和已有 coordination context 生成可审计 fetch plan。该 plan 是运行面材料，不替 agent 采信证据。
 5. `fetch/import + normalize`

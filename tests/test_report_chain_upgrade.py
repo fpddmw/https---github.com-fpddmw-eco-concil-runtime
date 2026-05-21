@@ -308,14 +308,16 @@ class ReportChainUpgradeTests(unittest.TestCase):
                 "examples-only",
                 "--claim-slot-supported",
                 "claim-slot-public-semantics",
-                "--source-family-candidate",
-                "youtube-public-discourse",
-                "--query-variant-plan",
-                "NYC-smoke",
-                "--expected-denominator",
+                "--evidence-obligation",
+                "Materialize enough item-level text evidence to support only sample-local public semantic claims.",
+                "--success-criterion",
+                "The investigator can cite item-level refs, sample boundary, and annotation/aggregation basis.",
+                "--denominator-obligation",
                 "source-family-count",
                 "--failure-recovery-plan",
                 "downgrade-to-example-only",
+                "--forbidden-precommitment",
+                "Do not preselect sources, source skills, query variants, or route rankings in the plan.",
                 "--payload-json",
                 '{"time_window":{"start":"2023-06-01","end":"2023-06-10"}}',
             )
@@ -333,6 +335,15 @@ class ReportChainUpgradeTests(unittest.TestCase):
                 "social-investigator",
             )
             self.assertEqual("completed", payload["status"])
+            with self.assertRaises(AssertionError):
+                run_script(
+                    script_path("submit-theme-acquisition-plan"),
+                    *common_args,
+                    "--author-role",
+                    "social-investigator",
+                    "--source-family-candidate",
+                    "youtube-public-discourse",
+                )
 
     def test_validator_blocks_policy_lane_misuse_and_missing_interaction_summaries(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

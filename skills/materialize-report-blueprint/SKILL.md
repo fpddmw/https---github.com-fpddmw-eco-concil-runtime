@@ -9,6 +9,8 @@ description: Materialize a mission-driven report blueprint and investigation the
 
 Create a report-framing artifact and DB-backed `report-blueprint` / `investigation-theme` objects from the mission. The output defines report questions, claim slots, and theme boundaries only.
 
+The blueprint is not complete council framing by itself. Before formal acquisition starts, relevant roles should adopt, narrow, or challenge the split with council objects such as `agent-position`.
+
 ## Read/Write Contract
 
 - Reads `run_dir/mission.json`
@@ -32,4 +34,4 @@ Create a report-framing artifact and DB-backed `report-blueprint` / `investigati
 
 Use this at the beginning of report-driven investigation. The blueprint is not a source plan, not a fixed topic template, and not a conclusion list. It should be cited before downstream use as framing context only.
 
-Do not add source family choices, query strings, skill routes, source ranking, or policy evaluation findings here. Investigators must author or explicitly adopt their own acquisition plans.
+Do not add source family choices, query strings, skill routes, source ranking, or policy evaluation findings here. Downstream theme plans should state obligations and downgrade boundaries, not route precommitments.

@@ -27,9 +27,9 @@ NYC smoke backtest 已经证明 `lane_episode_cards -> interaction nodes -> sect
 2. claim slots 是 mission-driven 的待回答问题槽，不是固定题型模板、领域模板或预设结论。
 3. report-editor 参与前置 framing，负责提出报告问题、claim slots 和写作所需 evidence shape。
 4. moderator 把 claim slots 拆成可分配、可讨论的 investigation themes。
-5. investigators 对各自 theme 自主选择 sources、queries 和 skills。
-6. theme acquisition plan 必须由 investigator 自己撰写，或由 investigator 显式采纳、修改后使用。
-7. moderator 可以提出主题和 evidence need，但不能替 investigator 决定 source、query 或 skill 路线。
+5. investigators 对各自 theme 自主完成取证路线选择；路线选择发生在正式 acquisition turn，而不是前置拆分对象里。
+6. theme acquisition plan 必须由 investigator 自己撰写，或由 investigator 显式采纳、修改后使用；它只能记录证据义务、成功条件、分母义务、失败恢复和降级边界。
+7. moderator/report-editor 可以提出主题和 evidence need，但不能替 investigator 决定或预填 source、query、skill 路线；前置计划也不能以任何形式指定 source family、source skill、query variant 或 route ranking。
 8. checkpoint 只在抓取结果会影响 claim strength、source-limit 或报告降级时记录，不能变成每次 tool call 的表单负担。
 9. sufficiency review 不是 runtime 判真机制，只回答“哪些 claim 能支撑、哪些必须降级、哪些缺 basis”；最终采信仍由议会通过 finding、evidence bundle、synthesis、readiness 或 report basis 完成。
 10. `policy_evaluation_basis` 是报告综合层产物，由事实、官方行动、公众语义、治理记录共同支撑，不是独立数据 lane。
@@ -41,7 +41,7 @@ NYC smoke backtest 已经证明 `lane_episode_cards -> interaction nodes -> sect
 
 1. `claim_slots` 不是固定题型模板。它们必须从 mission、用户关注、已有议会对象和 report framing 现场生成，表达“本报告要回答什么”，而不是表达“系统一定要证明什么”。
 2. `investigation_theme` 不是 source queue。theme 只定义问题边界和 claim-basis 需求，不规定必须使用哪个 source family、query 或 skill。
-3. `theme_acquisition_plan` 必须 agent-authored 或 agent-adopted。moderator/report-editor 可以提出主题和证据缺口，但 investigator 必须保留路线选择权。
+3. `theme_acquisition_plan` 必须 agent-authored 或 agent-adopted。moderator/report-editor 可以提出主题和证据缺口，但 plan 本身不得包含 source family、source skill、query variant、query parameters 或 route ranking；investigator 的路线选择权保留到正式 acquisition turn。
 4. `acquisition_checkpoint` 是及时反馈，不是合规表单。只有当结果会改变 claim strength、报告降级、source-limit rationale 或下一步恢复选择时才需要记录。
 5. `theme_sufficiency_review` 不是 runtime 判真、证据打分或自动放行。它只把可支撑 claim、必须降级 claim 和缺失 basis 显式化，供议会采信或挑战。
 6. `policy_evaluation_basis` 不是“政策评估数据”抓取 lane。它只能由 fact / official action、public-policy corpus、semantic perception 和 interaction timeline 的已承接材料综合而来。
@@ -88,25 +88,26 @@ NYC smoke backtest 已经证明 `lane_episode_cards -> interaction nodes -> sect
 
 ### 3.3 `theme_acquisition_plan`
 
-用途：让 investigator 在抓取前说明当前 theme 需要什么材料、准备用什么来源和低量时如何恢复。该计划必须由 investigator 撰写，或由 investigator 明确采纳并可修改；moderator 不能替 investigator 决定 source、query 或 skill 路线。
+用途：让 investigator 在抓取前说明当前 theme 需要回答什么、什么证据形态才允许支撑 claim、需要怎样的分母/覆盖边界，以及失败或低量时如何恢复或降级。该计划必须由 investigator 撰写，或由 investigator 明确采纳并可修改；moderator/report-editor 不能替 investigator 决定 source、query 或 skill 路线，plan 本身也不能预填这些路线。
 
 字段建议：
 
 1. `theme_id`
 2. `claim_slots_supported`
-3. `source_family_candidates`
-4. `query_variant_plan`
-5. `time_window`
-6. `sample_unit`
-7. `expected_denominators`
+3. `evidence_obligations`
+4. `success_criteria`
+5. `denominator_obligations`
+6. `time_window`
+7. `sample_unit`
 8. `failure_recovery_plan`
-9. `downgrade_boundary`
+9. `forbidden_precommitments`
+10. `downgrade_boundary`
 
 验收：
 
-1. public / policy theme 不允许没有 source-family 思考就直接进入报告。
+1. public / policy theme 不允许没有证据义务、分母义务和降级边界就直接进入报告。
 2. plan 是 agent-authored 或 agent-adopted，不是 runtime 自动排序，也不是 moderator 指派的 source/script。
-3. plan 可以引用 action cards 或 source-family workflows，但 investigator 必须显式选择、拒绝或改写。
+3. plan 不允许出现 source-family candidates、query variants、source skills、query parameters 或 route ranking。source-family workflow 只能在正式 acquisition turn 中由 investigator 自主使用、拒绝或改写。
 
 ### 3.4 `acquisition_checkpoint`
 
@@ -209,11 +210,11 @@ NYC smoke backtest 已经证明 `lane_episode_cards -> interaction nodes -> sect
 
 任务：
 
-1. 为 public / policy / environment themes 生成或接收 `theme_acquisition_plan`。
+1. 为 public / policy / environment themes 生成或接收不含 source/query/skill 路线的 `theme_acquisition_plan`。
 2. 在 corpus materialization、coverage audit、claim-gap action cards 周围增加 `acquisition_checkpoint` 输出。
 3. 让 checkpoint 能承接 failed / zero / low-volume / receipt-only attempts，并提出恢复路径。
 4. challenger 能对 checkpoint 做快速审查，不必等报告 validator 才发现问题。
-5. 保证 acquisition plan 的 source / query / skill 路线由 investigator 采纳或改写。
+5. 保证 acquisition plan 只表达证据义务和降级边界；source / query / skill 路线只能由 investigator 在正式 acquisition turn 中自主形成。
 
 验收：
 

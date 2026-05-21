@@ -245,7 +245,11 @@ def theme(
         "claim_boundary": boundary,
         "expected_artifacts": expected_artifacts,
         "completion_criteria": completion,
-        "source_selection_policy": "theme defines evidence need only; investigator chooses or adopts source, query, and skill routes",
+        "source_selection_policy": (
+            "theme defines evidence need only; it must not preselect source "
+            "families, source skills, query variants, route rankings, or query "
+            "parameters"
+        ),
     }
 
 
@@ -340,6 +344,19 @@ def blueprint_payload(
                 "public_semantic_perception",
                 "interaction_timeline",
             ],
+        },
+        "framing_participation_policy": {
+            "agent_positions_expected_before_investigation": [
+                "environmental-investigator",
+                "social-investigator",
+                "challenger",
+            ],
+            "advisory_only": True,
+            "semantics": (
+                "The blueprint is report-editor framing context until other "
+                "roles adopt, narrow, or challenge it through council objects. "
+                "Those positions still do not choose data sources or routes."
+            ),
         },
         "evidence_refs": [],
         "lineage": [round_id],
@@ -462,7 +479,8 @@ def materialize_report_blueprint(args: argparse.Namespace) -> dict[str, Any]:
         "framing_boundaries": [
             "No fetch, source family choice, query, skill route, or conclusion was selected by this framing output.",
             "Claim slots are mission-driven questions to answer, not fixed templates or expected conclusions.",
-            "Investigation themes define claim-basis needs only; investigators author or adopt acquisition plans.",
+            "Investigation themes define claim-basis needs only; investigators author or adopt obligation plans without source/query precommitment.",
+            "Before investigation, role positions should adopt, narrow, or challenge the framing so the split is council-visible.",
         ],
         "artifact_refs": [
             {

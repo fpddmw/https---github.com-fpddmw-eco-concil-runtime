@@ -469,14 +469,66 @@ def validate_theme_acquisition_plan_payload(payload: dict[str, Any]) -> None:
             f"`agent-adopted`; got `{authoring_mode or '<empty>'}`."
         )
 
-    selected_route_text = " ".join(
-        [
-            " ".join(normalized_text_list(payload.get("source_family_candidates"))),
-            " ".join(normalized_text_list(payload.get("query_variant_plan"))),
-            " ".join(normalized_text_list(payload.get("expected_denominators"))),
-        ]
+    forbidden_route_fields = (
+        "source_family",
+        "source_families",
+        "source_family_candidates",
+        "source_skill",
+        "source_hints",
+        "source_refs",
+        "query_variant_plan",
+        "query_parameters",
+        "considered_source_families",
+        "considered_source_skills",
+    )
+    populated_route_fields = [
+        field_name
+        for field_name in forbidden_route_fields
+        if (
+            normalized_text_list(payload.get(field_name))
+            if isinstance(payload.get(field_name), list)
+            else maybe_text(payload.get(field_name))
+            if not isinstance(payload.get(field_name), dict)
+            else payload.get(field_name)
+        )
+    ]
+    if populated_route_fields:
+        raise ValueError(
+            "theme-acquisition-plan cannot preselect data sources, source "
+            "families, skills, query variants, or query parameters. Route "
+            "choice stays inside the later investigator acquisition turn. "
+            "Remove: " + ", ".join(sorted(populated_route_fields))
+        )
+
+    required_plan_lists = (
+        "claim_slots_supported",
+        "evidence_obligations",
+        "success_criteria",
+        "denominator_obligations",
+        "failure_recovery_plan",
+        "forbidden_precommitments",
+    )
+    missing_plan_lists = [
+        field_name
+        for field_name in required_plan_lists
+        if not normalized_text_list(payload.get(field_name))
+    ]
+    if missing_plan_lists:
+        raise ValueError(
+            "theme-acquisition-plan requires non-empty obligation fields: "
+            + ", ".join(missing_plan_lists)
+        )
+
+    plan_text = " ".join(
+        " ".join(normalized_text_list(payload.get(field_name)))
+        for field_name in (
+            "evidence_obligations",
+            "success_criteria",
+            "denominator_obligations",
+            "failure_recovery_plan",
+        )
     ).casefold()
-    if "policy_evaluation_basis" in selected_route_text or "policy evaluation basis" in selected_route_text:
+    if "policy_evaluation_basis" in plan_text or "policy evaluation basis" in plan_text:
         raise ValueError(
             "theme-acquisition-plan cannot treat policy_evaluation_basis as a "
             "source family, query route, denominator, or acquisition lane."
