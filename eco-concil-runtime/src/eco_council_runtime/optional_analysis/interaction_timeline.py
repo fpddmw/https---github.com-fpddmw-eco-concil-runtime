@@ -19,8 +19,10 @@ from .support import (
     resolve_output_path,
     resolve_run_dir,
     safe_board_handoff,
+    signal_metric_distribution,
     signal_source_distribution,
     stable_hash,
+    text_terms,
     unique_values,
     utc_now_iso,
     write_json,
@@ -31,6 +33,39 @@ __all__ = (
     "build_fact_policy_public_interaction_timeline",
     "run_build_fact_policy_public_interaction_timeline",
 )
+
+
+EVIDENCE_REF_SAMPLE_LIMIT = 50
+DAILY_CLUSTER_LIMIT = 12
+
+
+def _signal_sample(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for signal in signals:
+        bucket_key = "|".join(
+            [
+                maybe_text(signal.get("source_skill")) or "unknown-source",
+                maybe_text(signal.get("metric")) or "unknown-metric",
+                public_discourse_source_family(signal) or maybe_text(signal.get("plane")),
+            ]
+        )
+        buckets[bucket_key].append(signal)
+    sampled: list[dict[str, Any]] = []
+    offset = 0
+    while len(sampled) < EVIDENCE_REF_SAMPLE_LIMIT:
+        appended = False
+        for bucket_key in sorted(buckets):
+            bucket = buckets[bucket_key]
+            if offset >= len(bucket):
+                continue
+            sampled.append(bucket[offset])
+            appended = True
+            if len(sampled) >= EVIDENCE_REF_SAMPLE_LIMIT:
+                break
+        if not appended:
+            break
+        offset += 1
+    return sampled
 
 
 def _load_json_artifact(path: Path) -> dict[str, Any]:
@@ -158,29 +193,375 @@ def _signal_excerpt(signal: dict[str, Any], limit: int = 180) -> dict[str, str]:
     }
 
 
-def _side_summary(
-    signals: list[dict[str, Any]],
-    *,
-    side_key: str,
-) -> dict[str, Any]:
+def _top_text_terms(signals: list[dict[str, Any]], *, limit: int = 10) -> list[str]:
+    counts: Counter[str] = Counter()
+    for signal in signals[:500]:
+        text = maybe_text(signal.get("title")) + " " + maybe_text(signal.get("body_text"))
+        counts.update(text_terms(text, limit=20))
+    return [term for term, _ in counts.most_common(limit)]
+
+
+def _time_range(signals: list[dict[str, Any]]) -> dict[str, str]:
     timestamps = [
         maybe_text(first_timestamp(signal))
         for signal in signals
         if maybe_text(first_timestamp(signal))
     ]
     return {
+        "start": min(timestamps) if timestamps else "",
+        "end": max(timestamps) if timestamps else "",
+    }
+
+
+def _cluster_key(signal: dict[str, Any], side_key: str) -> tuple[str, str, str]:
+    source_skill = maybe_text(signal.get("source_skill")) or "unknown-source"
+    metric = maybe_text(signal.get("metric"))
+    if side_key == "public-media":
+        return (
+            public_discourse_source_family(signal) or "unknown-public-source-family",
+            public_discourse_lane(signal) or "unknown-public-lane",
+            source_skill,
+        )
+    if side_key == "policy":
+        return (
+            source_skill,
+            public_discourse_lane(signal) or maybe_text(signal.get("plane")) or "formal",
+            "formal-or-policy-text",
+        )
+    return (source_skill, metric or "unspecified-metric", maybe_text(signal.get("unit")))
+
+
+def _daily_cluster_cues(
+    signals: list[dict[str, Any]],
+    *,
+    side_key: str,
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for signal in signals:
+        grouped[_cluster_key(signal, side_key)].append(signal)
+    cues: list[dict[str, Any]] = []
+    for cluster_key, members in sorted(
+        grouped.items(),
+        key=lambda item: (-len(item[1]), item[0]),
+    )[:DAILY_CLUSTER_LIMIT]:
+        source_or_family, metric_or_lane, unit_or_source = cluster_key
+        cue: dict[str, Any] = {
+            "cluster_id": "daily-cluster-" + stable_hash(side_key, *cluster_key)[:12],
+            "cluster_basis": (
+                "date-scoped source/metric compression"
+                if side_key != "public-media"
+                else "date-scoped source-family/lane compression"
+            ),
+            "side_key": side_key,
+            "item_count": len(members),
+            "time_range_utc": _time_range(members),
+            "source_skill_counts": signal_source_distribution(members),
+            "evidence_refs": refs_from_signals(_signal_sample(members)),
+            "evidence_ref_sample_limit": EVIDENCE_REF_SAMPLE_LIMIT,
+            "examples": [_signal_excerpt(signal) for signal in _signal_sample(members)[:3]],
+        }
+        if side_key == "public-media":
+            cue.update(
+                {
+                    "source_family": source_or_family,
+                    "discourse_lane": metric_or_lane,
+                    "source_skill": unit_or_source,
+                    "top_text_terms": _top_text_terms(members),
+                    "cluster_interpretation_boundary": (
+                        "Text terms are sample-local salience cues, not representative public opinion."
+                    ),
+                }
+            )
+        else:
+            cue.update(
+                {
+                    "source_skill": source_or_family,
+                    "metric": metric_or_lane,
+                    "unit": unit_or_source,
+                    "metric_distribution": signal_metric_distribution(members),
+                    "cluster_interpretation_boundary": (
+                        "Numeric summaries are descriptive cluster cues, not source attribution or exposure assessment."
+                    ),
+                }
+            )
+        cues.append(cue)
+    return cues
+
+
+def _side_summary(
+    signals: list[dict[str, Any]],
+    *,
+    side_key: str,
+) -> dict[str, Any]:
+    return {
         "side_key": side_key,
         "item_count": len(signals),
-        "signal_ids": lineage_from_signals(signals),
-        "evidence_refs": refs_from_signals(signals),
+        "signal_ids": lineage_from_signals(_signal_sample(signals)),
+        "evidence_refs": refs_from_signals(_signal_sample(signals)),
+        "evidence_ref_sample_limit": EVIDENCE_REF_SAMPLE_LIMIT,
         "source_skill_counts": signal_source_distribution(signals),
         "source_family_counts": _source_family_counts(signals),
         "discourse_lane_counts": _lane_counts(signals),
-        "time_range_utc": {
-            "start": min(timestamps) if timestamps else "",
-            "end": max(timestamps) if timestamps else "",
+        "time_range_utc": _time_range(signals),
+        "daily_cluster_cues": _daily_cluster_cues(signals, side_key=side_key),
+        "examples": [_signal_excerpt(signal) for signal in _signal_sample(signals)[:4]],
+    }
+
+
+def _owner_role_for_lane(lane_key: str) -> str:
+    return {
+        "fact": "environmental-investigator",
+        "policy": "policy-investigator",
+        "public-media": "social-investigator",
+    }.get(lane_key, "investigator")
+
+
+def _lane_section_role(lane_key: str) -> str:
+    return {
+        "fact": "Organize date-scoped environmental and factual observations before report synthesis.",
+        "policy": "Organize date-scoped official or formal policy records before report synthesis.",
+        "public-media": "Organize date-scoped public/media semantic sample cues before report synthesis.",
+    }.get(lane_key, "Organize date-scoped lane evidence before report synthesis.")
+
+
+def _lane_main_claims(lane_key: str, date_value: str, summary: dict[str, Any]) -> list[str]:
+    count = int(summary.get("item_count") or 0)
+    if lane_key == "fact":
+        return [
+            f"Fact lane has {count} date-scoped environmental/factual signal(s) visible on {date_value}."
+        ]
+    if lane_key == "policy":
+        return [
+            f"Policy lane has {count} date-scoped official/formal signal(s) visible on {date_value}."
+        ]
+    if lane_key == "public-media":
+        return [
+            f"Public/media lane has {count} date-scoped sample signal(s) visible on {date_value}."
+        ]
+    return [f"{lane_key} lane has {count} date-scoped signal(s) visible on {date_value}."]
+
+
+def _lane_limitations(lane_key: str) -> list[str]:
+    common = [
+        "Episode cards are lane-level synthesis inputs; report prose still requires reporting handoff, frozen basis, or council-carried uptake.",
+        "Date-scoped visibility does not establish causality, response, policy effect, representativeness, or evidence absence.",
+    ]
+    if lane_key == "fact":
+        return [
+            *common,
+            "Environmental/factual episode cards are descriptive and do not prove source attribution, exposure, responsibility, or policy effectiveness.",
+        ]
+    if lane_key == "policy":
+        return [
+            *common,
+            "Official/formal episode cards prove visible records or actions only; they do not prove implementation quality, compliance, or policy effectiveness.",
+        ]
+    if lane_key == "public-media":
+        return [
+            *common,
+            "Public/media episode cards are sample-local semantic cues and cannot be written as representative public opinion or population sentiment.",
+        ]
+    return common
+
+
+def _blocked_phrases_for_lane(lane_key: str) -> list[str]:
+    if lane_key == "fact":
+        return [
+            "proved the exact source",
+            "caused by this specific source",
+            "policy failed because",
+        ]
+    if lane_key == "policy":
+        return [
+            "policy was effective",
+            "official action caused public response",
+            "all affected groups were reached",
+        ]
+    if lane_key == "public-media":
+        return [
+            "public opinion was",
+            "the public believed",
+            "representative sentiment",
+        ]
+    return ["caused", "proved", "representative"]
+
+
+def _source_families_from_summary(summary: dict[str, Any]) -> list[str]:
+    families: list[str] = []
+    for item in list_items(summary.get("source_family_counts")):
+        if isinstance(item, dict):
+            family = maybe_text(item.get("source_family"))
+            if family:
+                families.append(family)
+    return unique_values(families)
+
+
+def _make_lane_episode_card(
+    *,
+    run_id: str,
+    round_id: str,
+    date_value: str,
+    lane_key: str,
+    side_key: str,
+    signals: list[dict[str, Any]],
+    semantic_cues: list[dict[str, Any]],
+) -> dict[str, Any]:
+    summary = _side_summary(signals, side_key=side_key)
+    episode_id = "lane-episode-" + stable_hash(run_id, round_id, date_value, lane_key)[:16]
+    return {
+        "episode_id": episode_id,
+        "episode_kind": "lane-episode-card",
+        "episode_basis": "date-scoped lane aggregation before interaction timeline composition",
+        "run_id": run_id,
+        "round_id": round_id,
+        "time_anchor_date": date_value,
+        "lane_key": lane_key,
+        "owner_role": _owner_role_for_lane(lane_key),
+        "section_role": _lane_section_role(lane_key),
+        "main_claims": _lane_main_claims(lane_key, date_value, summary),
+        "evidence_refs": list_items(summary.get("evidence_refs")),
+        "source_families": _source_families_from_summary(summary),
+        "claim_strength": "bounded-lane-episode-summary",
+        "denominators": {
+            "signal_count": int(summary.get("item_count") or 0),
+            "source_skill_counts": list_items(summary.get("source_skill_counts")),
+            "source_family_counts": list_items(summary.get("source_family_counts")),
+            "discourse_lane_counts": list_items(summary.get("discourse_lane_counts")),
+            "evidence_ref_sample_limit": EVIDENCE_REF_SAMPLE_LIMIT,
+            "daily_cluster_limit": DAILY_CLUSTER_LIMIT,
         },
-        "examples": [_signal_excerpt(signal) for signal in signals[:4]],
+        "limitations": _lane_limitations(lane_key),
+        "recommended_report_use": (
+            "Use as an input to interaction timeline and section brief synthesis; do not cite as standalone proof of causality or representativeness."
+        ),
+        "blocked_phrases": _blocked_phrases_for_lane(lane_key),
+        "side_summary": summary,
+        "cluster_cues": list_items(summary.get("daily_cluster_cues")),
+        "semantic_cues": semantic_cues if lane_key == "public-media" else [],
+    }
+
+
+def _build_lane_episode_cards(
+    *,
+    run_id: str,
+    round_id: str,
+    output_file: Path,
+    env_buckets: dict[str, list[dict[str, Any]]],
+    formal_buckets: dict[str, list[dict[str, Any]]],
+    public_buckets: dict[str, list[dict[str, Any]]],
+    semantic_cues: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    episode_cards: list[dict[str, Any]] = []
+    all_dates = sorted(set(env_buckets) | set(formal_buckets) | set(public_buckets))
+    for date_value in all_dates:
+        if env_buckets.get(date_value):
+            episode_cards.append(
+                _make_lane_episode_card(
+                    run_id=run_id,
+                    round_id=round_id,
+                    date_value=date_value,
+                    lane_key="fact",
+                    side_key="fact",
+                    signals=env_buckets[date_value],
+                    semantic_cues=[],
+                )
+            )
+        if formal_buckets.get(date_value):
+            episode_cards.append(
+                _make_lane_episode_card(
+                    run_id=run_id,
+                    round_id=round_id,
+                    date_value=date_value,
+                    lane_key="policy",
+                    side_key="policy",
+                    signals=formal_buckets[date_value],
+                    semantic_cues=[],
+                )
+            )
+        if public_buckets.get(date_value):
+            episode_cards.append(
+                _make_lane_episode_card(
+                    run_id=run_id,
+                    round_id=round_id,
+                    date_value=date_value,
+                    lane_key="public-media",
+                    side_key="public-media",
+                    signals=public_buckets[date_value],
+                    semantic_cues=semantic_cues,
+                )
+            )
+    for index, card in enumerate(episode_cards):
+        card["episode_index"] = index
+        card["episode_ref"] = artifact_ref(output_file, f"$.lane_episode_cards[{index}]")
+    return episode_cards
+
+
+def _episode_refs(episodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        ref
+        for ref in (episode.get("episode_ref") for episode in episodes)
+        if isinstance(ref, dict)
+    ]
+
+
+def _compact_episode_for_node(episode: dict[str, Any]) -> dict[str, Any]:
+    denominators = episode.get("denominators") if isinstance(episode.get("denominators"), dict) else {}
+    return {
+        "episode_id": maybe_text(episode.get("episode_id")),
+        "episode_kind": maybe_text(episode.get("episode_kind")),
+        "lane_key": maybe_text(episode.get("lane_key")),
+        "owner_role": maybe_text(episode.get("owner_role")),
+        "time_anchor_date": maybe_text(episode.get("time_anchor_date")),
+        "claim_strength": maybe_text(episode.get("claim_strength")),
+        "main_claims": list_items(episode.get("main_claims"))[:4],
+        "source_families": list_items(episode.get("source_families"))[:8],
+        "denominators": {
+            "signal_count": denominators.get("signal_count", 0),
+            "source_family_counts": list_items(denominators.get("source_family_counts"))[:8],
+            "source_skill_counts": list_items(denominators.get("source_skill_counts"))[:8],
+        },
+        "episode_ref": episode.get("episode_ref") if isinstance(episode.get("episode_ref"), dict) else {},
+        "limitations": list_items(episode.get("limitations"))[:4],
+    }
+
+
+def _episodes_by_date_and_lane(
+    episode_cards: list[dict[str, Any]],
+) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    grouped: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))
+    for episode in episode_cards:
+        date_value = maybe_text(episode.get("time_anchor_date"))
+        lane_key = maybe_text(episode.get("lane_key"))
+        if not date_value or not lane_key:
+            continue
+        grouped[date_value][lane_key].append(episode)
+    return grouped
+
+
+def _episode_side_summary(episodes: list[dict[str, Any]], *, side_key: str) -> dict[str, Any]:
+    evidence_refs: list[Any] = []
+    source_families: list[str] = []
+    cluster_cues: list[Any] = []
+    main_claims: list[str] = []
+    signal_count = 0
+    for episode in episodes:
+        evidence_refs.extend(list_items(episode.get("evidence_refs")))
+        source_families.extend(list_items(episode.get("source_families")))
+        cluster_cues.extend(list_items(episode.get("cluster_cues")))
+        main_claims.extend(list_items(episode.get("main_claims")))
+        denominators = episode.get("denominators") if isinstance(episode.get("denominators"), dict) else {}
+        signal_count += int(denominators.get("signal_count") or 0)
+    return {
+        "side_key": side_key,
+        "episode_count": len(episodes),
+        "episode_ids": [maybe_text(episode.get("episode_id")) for episode in episodes],
+        "episode_refs": _episode_refs(episodes),
+        "item_count": signal_count,
+        "source_families": unique_values(source_families),
+        "main_claims": unique_values([claim for claim in main_claims if maybe_text(claim)])[:8],
+        "cluster_cues": cluster_cues[:DAILY_CLUSTER_LIMIT],
+        "evidence_refs": unique_values(evidence_refs)[:EVIDENCE_REF_SAMPLE_LIMIT],
+        "evidence_ref_sample_limit": EVIDENCE_REF_SAMPLE_LIMIT,
     }
 
 
@@ -227,8 +608,45 @@ def _context_node(
                 "evidence absence",
             ],
         },
-        "evidence_refs": refs_from_signals(signals),
-        "lineage": lineage_from_signals(signals),
+        "evidence_refs": refs_from_signals(_signal_sample(signals)),
+        "lineage": lineage_from_signals(_signal_sample(signals)),
+        "evidence_ref_sample_limit": EVIDENCE_REF_SAMPLE_LIMIT,
+    }
+
+
+def _context_node_from_episodes(
+    *,
+    run_id: str,
+    round_id: str,
+    date_value: str,
+    episodes: list[dict[str, Any]],
+    node_kind: str,
+) -> dict[str, Any]:
+    node_id = "fpp-context-" + stable_hash(run_id, round_id, date_value, node_kind)[:14]
+    side_key = "public-media" if node_kind.startswith("public") else "fact-policy"
+    summary = _episode_side_summary(episodes, side_key=side_key)
+    return {
+        "node_id": node_id,
+        "node_kind": node_kind,
+        "time_anchor_date": date_value,
+        "interaction_status": "single-sided-episode-context",
+        "interaction_basis": "lane_episode_cards",
+        "episode_refs": _episode_refs(episodes),
+        "side_summary": summary,
+        "claim_boundary": {
+            "report_boundary": (
+                "Use this as one-sided chronology only; do not write an interaction "
+                "claim without both fact/policy-side and public/media-side lane episodes."
+            ),
+            "excluded_inferences": [
+                "causality",
+                "policy impact",
+                "public response attribution",
+                "evidence absence",
+            ],
+        },
+        "evidence_refs": list_items(summary.get("evidence_refs")),
+        "lineage": [maybe_text(episode.get("episode_id")) for episode in episodes],
     }
 
 
@@ -285,52 +703,86 @@ def build_fact_policy_public_interaction_timeline(
     metadata: dict[str, Any],
     helper_artifacts: list[dict[str, Any]],
     max_nodes: int,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, str]], dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, str]], dict[str, Any], list[dict[str, Any]]]:
     env_buckets, env_missing = _group_by_date(environment_signals)
     formal_buckets, formal_missing = _group_by_date(formal_signals)
     public_buckets, public_missing = _group_by_date(public_signals)
     all_dates = sorted(set(env_buckets) | set(formal_buckets) | set(public_buckets))
     semantic_cues = _semantic_distribution_cues(helper_artifacts)
+    lane_episode_cards = _build_lane_episode_cards(
+        run_id=run_id,
+        round_id=round_id,
+        output_file=output_file,
+        env_buckets=env_buckets,
+        formal_buckets=formal_buckets,
+        public_buckets=public_buckets,
+        semantic_cues=semantic_cues,
+    )
+    episodes_by_date = _episodes_by_date_and_lane(lane_episode_cards)
     interaction_nodes: list[dict[str, Any]] = []
     parallel_timeline_nodes: list[dict[str, Any]] = []
     max_node_count = max(1, min(500, int(max_nodes or 200)))
 
     for date_value in all_dates:
-        fact_signals = env_buckets.get(date_value, [])
-        policy_signals = formal_buckets.get(date_value, [])
-        public_media_signals = public_buckets.get(date_value, [])
-        fact_or_policy_signals = [*fact_signals, *policy_signals]
-        if fact_or_policy_signals and public_media_signals and len(interaction_nodes) < max_node_count:
+        fact_episodes = episodes_by_date.get(date_value, {}).get("fact", [])
+        policy_episodes = episodes_by_date.get(date_value, {}).get("policy", [])
+        public_media_episodes = episodes_by_date.get(date_value, {}).get("public-media", [])
+        fact_or_policy_episodes = [*fact_episodes, *policy_episodes]
+        if fact_or_policy_episodes and public_media_episodes and len(interaction_nodes) < max_node_count:
             node_id = "fpp-node-" + stable_hash(run_id, round_id, date_value)[:16]
-            fact_or_policy_refs = refs_from_signals(fact_or_policy_signals)
-            public_refs = refs_from_signals(public_media_signals)
+            fact_or_policy_episode_refs = _episode_refs(fact_or_policy_episodes)
+            public_episode_refs = _episode_refs(public_media_episodes)
+            fact_or_policy_evidence_refs = unique_values(
+                [
+                    ref
+                    for episode in fact_or_policy_episodes
+                    for ref in list_items(episode.get("evidence_refs"))
+                ]
+            )[:EVIDENCE_REF_SAMPLE_LIMIT]
+            public_evidence_refs = unique_values(
+                [
+                    ref
+                    for episode in public_media_episodes
+                    for ref in list_items(episode.get("evidence_refs"))
+                ]
+            )[:EVIDENCE_REF_SAMPLE_LIMIT]
             interaction_nodes.append(
                 {
                     "node_id": node_id,
                     "node_kind": "fact-policy-public-interaction-context",
                     "time_anchor_date": date_value,
                     "interaction_status": "candidate-context",
-                    "fact_side": _side_summary(fact_signals, side_key="fact"),
-                    "policy_side": _side_summary(policy_signals, side_key="policy"),
-                    "public_media_side": _side_summary(
-                        public_media_signals,
+                    "interaction_basis": "lane_episode_cards",
+                    "fact_episodes": [_compact_episode_for_node(episode) for episode in fact_episodes],
+                    "policy_episodes": [_compact_episode_for_node(episode) for episode in policy_episodes],
+                    "public_media_episodes": [
+                        _compact_episode_for_node(episode)
+                        for episode in public_media_episodes
+                    ],
+                    "fact_side": _episode_side_summary(fact_episodes, side_key="fact"),
+                    "policy_side": _episode_side_summary(policy_episodes, side_key="policy"),
+                    "public_media_side": _episode_side_summary(
+                        public_media_episodes,
                         side_key="public-media",
                     ),
-                    "fact_or_policy_evidence_refs": fact_or_policy_refs,
-                    "public_or_media_evidence_refs": public_refs,
+                    "fact_or_policy_episode_refs": fact_or_policy_episode_refs,
+                    "public_or_media_episode_refs": public_episode_refs,
+                    "fact_or_policy_evidence_refs": fact_or_policy_evidence_refs,
+                    "public_or_media_evidence_refs": public_evidence_refs,
+                    "evidence_ref_sample_limit": EVIDENCE_REF_SAMPLE_LIMIT,
                     "semantic_cues": semantic_cues,
                     "communication_gap_notes": [
-                        "Compare what changed or was officially recorded with what the visible public/media sample discussed on the same date.",
+                        "Compare lane episode claims before writing interaction prose; do not infer response or policy effect from co-visibility.",
                         "Treat differences as chronology and framing context until a council object carries a stronger claim.",
                     ],
                     "misalignment_and_uncertainty_register": [
-                        "Same-date visibility does not establish response, influence, policy effect, or representativeness.",
+                        "Same-date lane episodes do not establish response, influence, policy effect, or representativeness.",
                         "Source-family denominators and text coverage must be cited for any semantic public claim.",
                     ],
                     "claim_boundary": {
                         "report_boundary": (
-                            "Can support bounded wording that fact/policy-side records and "
-                            "public/media records were visible in the same timeline window; "
+                            "Can support bounded wording that fact/policy-side lane episodes and "
+                            "public/media lane episodes were visible in the same timeline window; "
                             "cannot support causality, policy impact, or public sentiment "
                             "without council-carried basis and denominators."
                         ),
@@ -342,10 +794,17 @@ def build_fact_policy_public_interaction_timeline(
                             "evidence absence",
                         ],
                     },
-                    "evidence_refs": unique_values([*fact_or_policy_refs, *public_refs]),
-                    "lineage": lineage_from_signals(
-                        [*fact_or_policy_signals, *public_media_signals]
+                    "evidence_refs": unique_values(
+                        [*fact_or_policy_evidence_refs, *public_evidence_refs]
                     ),
+                    "episode_refs": unique_values(
+                        [*fact_or_policy_episode_refs, *public_episode_refs]
+                    ),
+                    "lineage": [
+                        maybe_text(episode.get("episode_id"))
+                        for episode in [*fact_or_policy_episodes, *public_media_episodes]
+                        if maybe_text(episode.get("episode_id"))
+                    ],
                     "provenance": {
                         "source_skill": skill_name,
                         "decision_source": metadata["decision_source"],
@@ -356,23 +815,23 @@ def build_fact_policy_public_interaction_timeline(
                 }
             )
             continue
-        if fact_or_policy_signals:
+        if fact_or_policy_episodes:
             parallel_timeline_nodes.append(
-                _context_node(
+                _context_node_from_episodes(
                     run_id=run_id,
                     round_id=round_id,
                     date_value=date_value,
-                    signals=fact_or_policy_signals,
+                    episodes=fact_or_policy_episodes,
                     node_kind="fact-policy-only-context",
                 )
             )
-        if public_media_signals:
+        if public_media_episodes:
             parallel_timeline_nodes.append(
-                _context_node(
+                _context_node_from_episodes(
                     run_id=run_id,
                     round_id=round_id,
                     date_value=date_value,
-                    signals=public_media_signals,
+                    episodes=public_media_episodes,
                     node_kind="public-media-only-context",
                 )
             )
@@ -397,6 +856,14 @@ def build_fact_policy_public_interaction_timeline(
         "environment_signal_count": len(environment_signals),
         "formal_signal_count": len(formal_signals),
         "public_signal_count": len(public_signals),
+        "lane_episode_card_count": len(lane_episode_cards),
+        "lane_episode_counts": {
+            lane_key: count
+            for lane_key, count in Counter(
+                maybe_text(card.get("lane_key")) for card in lane_episode_cards
+            ).items()
+            if lane_key
+        },
         "missing_timestamp_count": missing_total,
         "date_bucket_count": len(all_dates),
         "interaction_node_limit": max_node_count,
@@ -406,7 +873,7 @@ def build_fact_policy_public_interaction_timeline(
             if artifact.get("present")
         ],
     }
-    return interaction_nodes, parallel_timeline_nodes, warnings, basis
+    return interaction_nodes, parallel_timeline_nodes, warnings, basis, lane_episode_cards
 
 
 def run_build_fact_policy_public_interaction_timeline(
@@ -416,7 +883,7 @@ def run_build_fact_policy_public_interaction_timeline(
     round_id: str,
     output_path: str = "",
     max_nodes: int = 200,
-    limit: int = 1000,
+    limit: int = 100000,
 ) -> dict[str, Any]:
     skill_name = "build-fact-policy-public-interaction-timeline"
     run_dir_path = resolve_run_dir(run_dir)
@@ -448,15 +915,20 @@ def run_build_fact_policy_public_interaction_timeline(
     )
     metadata = helper_metadata(
         skill_name=skill_name,
-        rule_trace=["db-signal-date-buckets", "helper-artifact-context"],
+        rule_trace=[
+            "db-signal-date-buckets",
+            "lane-episode-card-synthesis",
+            "helper-artifact-context",
+        ],
         caveats=[
             "Interaction timeline nodes are descriptive chronology/context only.",
+            "Nodes are composed from lane episode cards, not raw signal co-visibility alone.",
             "Nodes do not prove causality, policy impact, public response attribution, representativeness, or evidence absence.",
             "Public semantic claims still require corpus, coverage, denominator, and council/reporting uptake.",
         ],
     )
     helper_artifacts = _helper_artifacts(run_dir_path, round_id)
-    interaction_nodes, parallel_nodes, warnings, basis = (
+    interaction_nodes, parallel_nodes, warnings, basis, lane_episode_cards = (
         build_fact_policy_public_interaction_timeline(
             environment_signals=environment_signals,
             formal_signals=formal_signals,
@@ -482,7 +954,7 @@ def run_build_fact_policy_public_interaction_timeline(
     status = "completed" if interaction_nodes else "insufficient-interaction-basis"
     semantic_shift_events = _semantic_shift_events(interaction_nodes)
     payload = {
-        "schema_version": "optional-analysis-fact-policy-public-interaction-timeline-v1",
+        "schema_version": "optional-analysis-fact-policy-public-interaction-timeline-v2",
         "skill": skill_name,
         "run_id": run_id,
         "round_id": round_id,
@@ -491,9 +963,10 @@ def run_build_fact_policy_public_interaction_timeline(
         "helper_governance": metadata,
         "timeline_scope": {
             "bucket_key": "UTC date from first available signal timestamp",
-            "fact_side": "environment-plane normalized signals",
-            "policy_side": "formal-plane normalized signals",
-            "public_media_side": "public-plane normalized signals",
+            "composition_input": "date-scoped lane_episode_cards built before interaction nodes",
+            "fact_side": "fact lane episode cards derived from environment-plane normalized signals",
+            "policy_side": "policy lane episode cards derived from formal-plane normalized signals",
+            "public_media_side": "public/media lane episode cards derived from public-plane normalized signals and public discourse helper artifacts",
         },
         "interaction_policy": {
             "advisory_only": True,
@@ -510,6 +983,8 @@ def run_build_fact_policy_public_interaction_timeline(
         },
         "observed_input_summary": basis,
         "helper_artifact_inputs": helper_artifact_inputs,
+        "lane_episode_cards": lane_episode_cards,
+        "lane_episode_card_count": len(lane_episode_cards),
         "interaction_nodes": interaction_nodes,
         "interaction_node_count": len(interaction_nodes),
         "semantic_shift_events": semantic_shift_events,

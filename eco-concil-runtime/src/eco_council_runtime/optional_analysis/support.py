@@ -321,7 +321,7 @@ def query_signals(
         + " ORDER BY COALESCE(NULLIF(observed_at_utc, ''), NULLIF(published_at_utc, ''), signal_id), signal_id LIMIT ?"
     )
     try:
-        rows = connection.execute(query, tuple([*params, max(1, min(1000, int(limit or 200)))])).fetchall()
+        rows = connection.execute(query, tuple([*params, max(1, min(100000, int(limit or 200)))])).fetchall()
     finally:
         connection.close()
     return [row_to_signal(row) for row in rows], str(db_file)
@@ -337,8 +337,13 @@ def first_timestamp(signal: dict[str, Any]) -> str:
 
 def date_key(value: str) -> str:
     text = maybe_text(value)
-    if len(text) >= 10:
+    parsed = parse_utc_datetime(text)
+    if parsed is not None:
+        return parsed.date().isoformat()
+    if len(text) >= 10 and text[4:5] == "-" and text[7:8] == "-":
         return text[:10]
+    if len(text) >= 8 and text[:8].isdigit():
+        return f"{text[:4]}-{text[4:6]}-{text[6:8]}"
     return ""
 
 
@@ -349,7 +354,17 @@ def parse_utc_datetime(value: str) -> datetime | None:
     try:
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
-        return None
+        digits = "".join(ch for ch in text if ch.isdigit())
+        parsed = None
+        for length, fmt in ((14, "%Y%m%d%H%M%S"), (12, "%Y%m%d%H%M"), (8, "%Y%m%d")):
+            if len(digits) >= length:
+                try:
+                    parsed = datetime.strptime(digits[:length], fmt)
+                except ValueError:
+                    continue
+                break
+        if parsed is None:
+            return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)

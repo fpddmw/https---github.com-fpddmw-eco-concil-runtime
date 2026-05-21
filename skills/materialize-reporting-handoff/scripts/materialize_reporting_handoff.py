@@ -145,6 +145,7 @@ def load_interaction_timeline(run_dir: Path, round_id: str) -> dict[str, Any]:
             "path": str(artifact_path.resolve()),
             "interaction_nodes": [],
             "parallel_timeline_nodes": [],
+            "lane_episode_cards": [],
             "payload": {},
         }
     try:
@@ -155,6 +156,7 @@ def load_interaction_timeline(run_dir: Path, round_id: str) -> dict[str, Any]:
             "path": str(artifact_path.resolve()),
             "interaction_nodes": [],
             "parallel_timeline_nodes": [],
+            "lane_episode_cards": [],
             "payload": {},
             "warning": "interaction timeline artifact is not valid JSON",
         }
@@ -170,18 +172,32 @@ def load_interaction_timeline(run_dir: Path, round_id: str) -> dict[str, Any]:
         for item in list_items(payload.get("parallel_timeline_nodes"))
         if isinstance(item, dict)
     ]
+    lane_episode_cards = [
+        item
+        for item in list_items(payload.get("lane_episode_cards"))
+        if isinstance(item, dict)
+    ]
     return {
-        "present": bool(interaction_nodes),
+        "present": bool(interaction_nodes or lane_episode_cards),
         "path": str(artifact_path.resolve()),
         "interaction_nodes": interaction_nodes,
         "parallel_timeline_nodes": parallel_nodes,
+        "lane_episode_cards": lane_episode_cards,
         "payload": payload,
     }
 
 
-def _brief_refs(nodes: list[dict[str, Any]], *, limit: int = 20) -> list[Any]:
+def _brief_refs(nodes: list[dict[str, Any]], episodes: list[dict[str, Any]] | None = None, *, limit: int = 20) -> list[Any]:
     refs: list[Any] = []
+    for episode in episodes or []:
+        ref = episode.get("episode_ref")
+        if isinstance(ref, dict):
+            refs.append(ref)
+        refs.extend(list_items(episode.get("evidence_refs")))
+        if len(refs) >= limit:
+            break
     for node in nodes:
+        refs.extend(list_items(node.get("episode_refs")))
         refs.extend(list_items(node.get("fact_or_policy_evidence_refs")))
         refs.extend(list_items(node.get("public_or_media_evidence_refs")))
         refs.extend(list_items(node.get("evidence_refs")))
@@ -220,6 +236,11 @@ def build_interaction_section_briefs(
         if isinstance(payload.get("observed_input_summary"), dict)
         else {}
     )
+    lane_episode_cards = [
+        item
+        for item in list_items(timeline_context.get("lane_episode_cards"))
+        if isinstance(item, dict)
+    ]
     limitations = unique_texts(
         [
             maybe_text(
@@ -238,6 +259,8 @@ def build_interaction_section_briefs(
     )
     denominators = {
         "interaction_node_count": len(nodes),
+        "lane_episode_card_count": len(lane_episode_cards),
+        "lane_episode_counts": observed_input_summary.get("lane_episode_counts", {}),
         "parallel_timeline_node_count": len(
             list_items(timeline_context.get("parallel_timeline_nodes"))
         ),
@@ -254,7 +277,7 @@ def build_interaction_section_briefs(
             "and annotation denominators."
         ),
     }
-    refs = _brief_refs(nodes)
+    refs = _brief_refs(nodes, lane_episode_cards)
     return [
         {
             "brief_id": "section-brief-fpp-"
@@ -268,13 +291,14 @@ def build_interaction_section_briefs(
             "denominator": denominators,
             "limitations": limitations,
             "candidate_section_claims": [
-                "Fact/policy-side records and public/media records were visible in the same timeline windows listed in the cited nodes."
+                "Fact/policy-side lane episode cards and public/media lane episode cards were visible in the same timeline windows listed in the cited nodes."
             ],
             "if_not_used_report_boundary": (
                 "Omit interaction framing and keep fact/policy chronology separate "
                 "from public/media sample discussion."
             ),
             "report_use_requires": [
+                "lane-episode-cards",
                 "finding-record",
                 "evidence-bundle",
                 "round-synthesis",
@@ -1221,6 +1245,11 @@ def materialize_reporting_handoff_skill(
         for node in list_items(interaction_timeline_context.get("interaction_nodes"))
         if isinstance(node, dict)
     ]
+    lane_episode_cards = [
+        card
+        for card in list_items(interaction_timeline_context.get("lane_episode_cards"))
+        if isinstance(card, dict)
+    ]
     section_briefs = build_interaction_section_briefs(interaction_timeline_context)
     supporting_proposal_ids = unique_texts(
         report_basis_freeze.get("supporting_proposal_ids", [])
@@ -1282,6 +1311,16 @@ def materialize_reporting_handoff_skill(
         ),
     }
     report_packet["interaction_timeline_nodes"] = interaction_nodes
+    report_packet["lane_episode_cards"] = lane_episode_cards
+    report_packet["lane_episode_card_policy"] = {
+        "artifact_path": maybe_text(interaction_timeline_context.get("path")),
+        "present": bool(lane_episode_cards),
+        "advisory_semantics": (
+            "Lane episode cards are the required pre-composition layer for interaction "
+            "timeline nodes. They organize each lane before report-editor synthesis and "
+            "do not prove causality, representativeness, or policy effectiveness."
+        ),
+    }
     report_packet["interaction_timeline_policy"] = {
         "artifact_path": maybe_text(interaction_timeline_context.get("path")),
         "present": bool(interaction_timeline_context.get("present")),
@@ -1356,6 +1395,8 @@ def materialize_reporting_handoff_skill(
         ),
         "claim_gap_action_card_count": len(claim_gap_action_cards),
         "claim_gap_action_cards": claim_gap_action_cards,
+        "lane_episode_card_count": len(lane_episode_cards),
+        "lane_episode_cards": lane_episode_cards,
         "interaction_timeline_path": maybe_text(
             interaction_timeline_context.get("path")
         ),

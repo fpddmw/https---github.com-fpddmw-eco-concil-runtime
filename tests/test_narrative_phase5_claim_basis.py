@@ -112,6 +112,7 @@ class NarrativePhase5ClaimBasisTests(unittest.TestCase):
                                 "claim_strength": "bounded-descriptive-context-only",
                                 "denominator": {
                                     "interaction_node_count": 1,
+                                    "lane_episode_card_count": 3,
                                     "parallel_timeline_node_count": 0,
                                     "environment_signal_count": 1,
                                     "formal_signal_count": 1,
@@ -135,10 +136,16 @@ class NarrativePhase5ClaimBasisTests(unittest.TestCase):
                             {
                                 "node_id": "fact-policy-public-interaction-node-test",
                                 "node_kind": "interaction",
+                                "interaction_basis": "lane_episode_cards",
                                 "date": "2023-06-07",
                                 "fact_policy_refs": ["signal:fact-policy-001"],
                                 "public_media_refs": ["signal:public-media-001"],
                             }
+                        ],
+                        "lane_episode_cards": [
+                            {"episode_id": "lane-episode-fact", "lane_key": "fact"},
+                            {"episode_id": "lane-episode-policy", "lane_key": "policy"},
+                            {"episode_id": "lane-episode-public", "lane_key": "public-media"},
                         ],
                     },
                 },
@@ -174,6 +181,7 @@ class NarrativePhase5ClaimBasisTests(unittest.TestCase):
             self.assertIsInstance(interaction_meta, dict)
             self.assertEqual(1, interaction_meta["section_brief_count"])
             self.assertEqual(1, interaction_meta["interaction_node_count"])
+            self.assertEqual(3, interaction_meta["lane_episode_card_count"])
             prose = "\n".join(interaction_sections[0]["paragraphs"])
             self.assertIn("bounded-descriptive-context-only", prose)
             self.assertIn("not causality", prose)
@@ -186,6 +194,31 @@ class NarrativePhase5ClaimBasisTests(unittest.TestCase):
             draft["sections"][0]["paragraphs"] = [
                 "The official action drove public response to the policy on the same day."
             ]
+            validation = validate_draft(run_dir, draft)
+            self.assertEqual("invalid", validation["status"])
+            self.assertIn("interaction-claim-without-timeline-basis", issue_codes(validation))
+
+    def test_validator_blocks_raw_timeline_basis_without_lane_episode_cards(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_narrative_draft()
+            draft["sections"][0]["paragraphs"] = [
+                "The official action drove public response to the policy on the same day."
+            ]
+            draft["source_material"] = {
+                "interaction_timeline": {
+                    "path": "analytics/fact_policy_public_interaction_timeline_round-test.json",
+                    "section_brief_count": 1,
+                    "interaction_node_count": 1,
+                },
+                "section_briefs": [
+                    {
+                        "brief_id": "section-brief-fpp-raw-only",
+                        "section_key": "fact-policy-public-interaction-timeline",
+                        "denominator": {"interaction_node_count": 1},
+                    }
+                ],
+            }
             validation = validate_draft(run_dir, draft)
             self.assertEqual("invalid", validation["status"])
             self.assertIn("interaction-claim-without-timeline-basis", issue_codes(validation))

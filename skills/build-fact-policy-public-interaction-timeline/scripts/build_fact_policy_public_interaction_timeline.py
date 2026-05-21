@@ -27,7 +27,7 @@ def main() -> int:
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--output-path", default="")
     parser.add_argument("--max-nodes", type=int, default=200)
-    parser.add_argument("--limit", type=int, default=1000)
+    parser.add_argument("--limit", type=int, default=100000)
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args()
     payload = run_build_fact_policy_public_interaction_timeline(

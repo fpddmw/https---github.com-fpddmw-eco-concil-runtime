@@ -396,10 +396,16 @@ class ClaimGapActionCardTests(unittest.TestCase):
                     "schema_version": "fixture",
                     "run_id": RUN_ID,
                     "round_id": ROUND_ID,
+                    "lane_episode_card_count": 2,
+                    "lane_episode_cards": [
+                        {"episode_id": "lane-episode-fact", "lane_key": "fact"},
+                        {"episode_id": "lane-episode-public", "lane_key": "public-media"},
+                    ],
                     "interaction_node_count": 1,
                     "interaction_nodes": [
                         {
                             "node_id": "fact-policy-public-interaction-node-fixture",
+                            "interaction_basis": "lane_episode_cards",
                             "time_anchor_date": "2023-06-07",
                             "interaction_status": "two-sided-context",
                             "fact_or_policy_evidence_refs": ["signal:fact-policy-001"],

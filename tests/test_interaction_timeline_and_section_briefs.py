@@ -155,7 +155,7 @@ class InteractionTimelineAndSectionBriefTests(unittest.TestCase):
                 source_skill="fetch-federal-register-documents",
                 title="Official smoke response notice",
                 body_text="Agency notice described smoke response coordination.",
-                timestamp="2023-06-07T10:00:00Z",
+                timestamp="20230607100000",
             )
             insert_signal(
                 run_dir,
@@ -164,7 +164,7 @@ class InteractionTimelineAndSectionBriefTests(unittest.TestCase):
                 source_skill="fetch-youtube-comments",
                 title="Public comment",
                 body_text="Residents asked why smoke guidance was unclear.",
-                timestamp="2023-06-07T14:00:00Z",
+                timestamp="20230607T140000Z",
             )
 
             result = run_script(
@@ -182,9 +182,11 @@ class InteractionTimelineAndSectionBriefTests(unittest.TestCase):
                 / f"fact_policy_public_interaction_timeline_{ROUND_ID}.json"
             )
             nodes = artifact["interaction_nodes"]
+            lane_episode_cards = artifact["lane_episode_cards"]
 
             self.assertEqual("completed", result["status"])
             self.assertEqual(1, len(nodes))
+            self.assertEqual(3, len(lane_episode_cards))
             self.assertIn("semantic_shift_events", artifact)
             self.assertEqual([], forbidden_helper_fields(artifact))
             self.assertEqual([], result["board_handoff"]["suggested_next_skills"])
@@ -193,8 +195,14 @@ class InteractionTimelineAndSectionBriefTests(unittest.TestCase):
                 result["analysis_sync"]["analysis_kind"],
             )
             for node in nodes:
+                self.assertEqual("lane_episode_cards", node["interaction_basis"])
+                self.assertTrue(node["fact_episodes"])
+                self.assertTrue(node["policy_episodes"])
+                self.assertTrue(node["public_media_episodes"])
                 self.assertTrue(node["fact_or_policy_evidence_refs"])
                 self.assertTrue(node["public_or_media_evidence_refs"])
+                self.assertTrue(node["fact_side"]["cluster_cues"])
+                self.assertTrue(node["public_media_side"]["cluster_cues"])
                 self.assertIn(
                     "causality",
                     node["claim_boundary"]["excluded_inferences"],
@@ -217,6 +225,7 @@ class InteractionTimelineAndSectionBriefTests(unittest.TestCase):
 
             self.assertEqual("completed", handoff["status"])
             self.assertEqual(1, handoff_artifact["interaction_timeline_node_count"])
+            self.assertEqual(3, handoff_artifact["lane_episode_card_count"])
             self.assertEqual(1, handoff_artifact["section_brief_count"])
             self.assertEqual(section_briefs, handoff_artifact["section_briefs"])
             self.assertTrue(section_briefs[0]["refs"])
@@ -225,6 +234,10 @@ class InteractionTimelineAndSectionBriefTests(unittest.TestCase):
                 section_briefs[0]["claim_strength"],
             )
             self.assertIn("denominator", section_briefs[0])
+            self.assertEqual(
+                3,
+                section_briefs[0]["denominator"]["lane_episode_card_count"],
+            )
             self.assertTrue(section_briefs[0]["limitations"])
             self.assertEqual(
                 nodes,

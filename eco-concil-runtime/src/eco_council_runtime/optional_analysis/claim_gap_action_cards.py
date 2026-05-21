@@ -331,6 +331,7 @@ def _helper_artifacts(run_dir: Path, round_id: str) -> dict[str, dict[str, Any]]
         "formal_comment_issue_annotations": analytics / f"formal_comment_issue_annotations_{round_id}.json",
         "environment_evidence_aggregate": analytics / f"environment_evidence_aggregate_{round_id}.json",
         "spatiotemporal_relation_cues": analytics / f"spatiotemporal_relation_cues_{round_id}.json",
+        "fact_policy_public_interaction_timeline": analytics / f"fact_policy_public_interaction_timeline_{round_id}.json",
         "reporting_handoff": run_dir / "reporting" / f"reporting_handoff_{round_id}.json",
         "round_readiness": run_dir / "reporting" / f"round_readiness_{round_id}.json",
     }
@@ -351,6 +352,8 @@ def _helper_artifacts(run_dir: Path, round_id: str) -> dict[str, dict[str, Any]]
                     "aggregation_id",
                     "aggregate_id",
                     "handoff_status",
+                    "interaction_node_count",
+                    "lane_episode_card_count",
                     "readiness_status",
                 )
                 if field_name in payload
@@ -736,17 +739,25 @@ def run_materialize_claim_gap_action_cards(
             "fact-policy-public-interaction-timeline",
         }
     )
+    timeline_helper = helper_artifacts.get("fact_policy_public_interaction_timeline", {})
+    timeline_summary = timeline_helper.get("summary") if isinstance(timeline_helper.get("summary"), dict) else {}
+    interaction_timeline_present = bool(
+        interaction_timeline_present
+        and timeline_helper.get("present")
+        and int(timeline_summary.get("interaction_node_count") or 0) > 0
+        and int(timeline_summary.get("lane_episode_card_count") or 0) > 0
+    )
     if interaction_requested and not interaction_timeline_present:
         _new_card(
             cards,
             run_id=run_id,
             round_id=round_id,
             card_kind="claim-gap",
-            claim_gap="Fact, policy action, and public/media semantic interaction claim lacks an interaction timeline with two-sided refs.",
+            claim_gap="Fact, policy action, and public/media semantic interaction claim lacks lane episode cards plus two-sided interaction nodes.",
             why_it_matters=(
-                "Interaction language needs fact/policy evidence and public/media "
-                "semantic evidence on the same node; otherwise timing overlap can "
-                "be mistaken for causation."
+                "Interaction language needs each lane to organize its own episode "
+                "cards before timeline composition; raw same-date signal overlap can "
+                "be mistaken for analysis or causation."
             ),
             candidate_skills=[
                 "build-fact-policy-public-interaction-timeline",
@@ -755,12 +766,13 @@ def run_materialize_claim_gap_action_cards(
                 "review-spatiotemporal-relation-alternatives",
             ],
             required_inputs=[
-                "fact or official action refs",
-                "public/media semantic refs",
+                "fact or official action lane episode refs",
+                "public/media semantic lane episode refs",
                 "time-window alignment",
                 "challenger limitation review",
             ],
             expected_artifacts=[
+                "lane_episode_cards",
                 "fact_policy_public_interaction_timeline",
                 "semantic_shift_events",
                 "communication_gap_notes",

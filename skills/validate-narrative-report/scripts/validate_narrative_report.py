@@ -282,6 +282,9 @@ REPRESENTATIVENESS_LIMIT_TERMS = (
     "\u975e\u4ee3\u8868\u6027",
     "\u4e0d\u4ee3\u8868",
     "\u4e0d\u662f\u603b\u4f53",
+    "\u4e0d\u80fd\u5916\u63a8",
+    "\u4e0d\u662f\u968f\u673a\u62bd\u6837",
+    "\u4e0d\u662f\u53d7\u5f71\u54cd\u4eba\u7fa4",
 )
 REPRESENTATIVE_SAMPLING_DESIGN_TERMS = (
     "representative sampling design",
@@ -446,6 +449,8 @@ INTERACTION_TIMELINE_BASIS_MARKERS = (
     "fact_policy_public_interaction_timeline",
     "fact-policy-public-interaction",
     "fact-policy-public-interaction-node",
+    "lane_episode_cards",
+    "lane episode card",
     "section-brief-fpp-",
     "interaction_timeline_nodes",
     "interaction timeline",
@@ -1036,14 +1041,26 @@ def formal_comment_structure_claim_present(text: str) -> bool:
 
 
 def formal_comment_stance_distribution_present(text: str) -> bool:
-    lowered = normalized_text(text)
-    if not contains_any_phrase(lowered, FORMAL_COMMENT_STRUCTURE_TERMS):
-        return False
-    if contains_any_phrase(lowered, FORMAL_COMMENT_STANCE_DISTRIBUTION_TERMS):
+    if text_window_contains(
+        text,
+        FORMAL_COMMENT_STRUCTURE_TERMS,
+        FORMAL_COMMENT_STANCE_DISTRIBUTION_TERMS,
+        window=220,
+    ):
         return True
     return (
-        contains_any_phrase(lowered, ("support", "oppose", "opposed", "stance", "\u652f\u6301", "\u53cd\u5bf9"))
-        and contains_any_phrase(lowered, ("distribution", "proportion", "share", "most", "majority", "%", "\u5206\u5e03", "\u6bd4\u4f8b"))
+        text_window_contains(
+            text,
+            FORMAL_COMMENT_STRUCTURE_TERMS,
+            ("support", "oppose", "opposed", "stance", "\u652f\u6301", "\u53cd\u5bf9"),
+            window=220,
+        )
+        and text_window_contains(
+            text,
+            FORMAL_COMMENT_STRUCTURE_TERMS,
+            ("distribution", "proportion", "share", "most", "majority", "%", "\u5206\u5e03", "\u6bd4\u4f8b"),
+            window=220,
+        )
     )
 
 
@@ -1865,17 +1882,25 @@ def interaction_timeline_basis_visible(draft: dict[str, Any], *, run_dir: Path |
         if isinstance(source_material.get("interaction_timeline"), dict)
         else {}
     )
-    if any(
-        [
-            maybe_text(timeline_meta.get("path")),
-            int_value(timeline_meta.get("section_brief_count")) > 0,
-            int_value(timeline_meta.get("interaction_node_count")) > 0,
-        ]
+    if (
+        int_value(timeline_meta.get("section_brief_count")) > 0
+        and int_value(timeline_meta.get("interaction_node_count")) > 0
+        and int_value(timeline_meta.get("lane_episode_card_count")) > 0
+    ):
+        return True
+    lane_episode_cards = source_material.get("lane_episode_cards")
+    if (
+        isinstance(lane_episode_cards, list)
+        and lane_episode_cards
+        and int_value(timeline_meta.get("interaction_node_count")) > 0
     ):
         return True
     section_briefs = source_material.get("section_briefs")
     if isinstance(section_briefs, list) and any(
-        isinstance(brief, dict) and contains_any_phrase("\n".join(strings_from(brief)), INTERACTION_TIMELINE_BASIS_MARKERS)
+        isinstance(brief, dict)
+        and isinstance(brief.get("denominator"), dict)
+        and int_value(brief["denominator"].get("interaction_node_count")) > 0
+        and int_value(brief["denominator"].get("lane_episode_card_count")) > 0
         for brief in section_briefs
     ):
         return True
@@ -1889,7 +1914,10 @@ def interaction_timeline_basis_visible(draft: dict[str, Any], *, run_dir: Path |
             ),
         ]
     )
-    return contains_any_phrase(combined, INTERACTION_TIMELINE_BASIS_MARKERS)
+    return (
+        contains_any_phrase(combined, ("lane_episode_cards", "lane episode card"))
+        and contains_any_phrase(combined, INTERACTION_TIMELINE_BASIS_MARKERS)
+    )
 
 
 def interaction_boundary_visible(text: str) -> bool:

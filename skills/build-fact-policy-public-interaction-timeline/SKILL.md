@@ -8,7 +8,8 @@ description: Optional-analysis helper that aligns fact/policy-side and public/me
 ## Core Goal
 - Read DB-backed environment, formal, and public signal timestamps for one run/round.
 - Read available public discourse helper artifacts as advisory denominator and semantic context.
-- Emit interaction nodes only when a date bucket has fact/policy-side refs and public/media-side refs.
+- First synthesize date-scoped `lane_episode_cards` for fact, policy, and public/media lanes.
+- Emit interaction nodes only when a date bucket has fact/policy-side lane episodes and public/media-side lane episodes.
 - Emit one-sided chronology nodes as limitations, not interaction claims.
 - Avoid causality, policy-impact, response-attribution, representative-public, source-ranking, or execution recommendations.
 
@@ -16,7 +17,8 @@ description: Optional-analysis helper that aligns fact/policy-side and public/me
 - Reads `run_dir/analytics/signal_plane.sqlite`
 - Reads optional helper artifacts from `run_dir/analytics/public_discourse_*_<round_id>.json`
 - Writes `run_dir/analytics/fact_policy_public_interaction_timeline_<round_id>.json`
-- Syncs `interaction_nodes` into the analysis plane as `fact-policy-public-interaction-node`
+- Writes `lane_episode_cards`, `interaction_nodes`, one-sided context nodes, semantic-shift candidates, and boundary metadata.
+- Syncs `interaction_nodes` into the analysis plane as `fact-policy-public-interaction-node`.
 
 ## Required Input
 - `run_dir`
@@ -35,6 +37,7 @@ description: Optional-analysis helper that aligns fact/policy-side and public/me
   public/media-side refs before downstream use.
 - Empty or one-sided output is visibility context only and does not prove that no
   interaction, public response, official action, or source evidence exists.
+- Timeline nodes must be composed from lane episode cards, not raw same-date signal co-visibility alone.
 - A council agent or report editor must explicitly carry useful nodes into a
   finding, evidence bundle, round synthesis, report section draft, or reporting
   basis before downstream use.

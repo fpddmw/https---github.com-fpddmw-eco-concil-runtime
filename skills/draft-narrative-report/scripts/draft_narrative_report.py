@@ -1804,6 +1804,27 @@ def query_objects(run_dir: Path, *, run_id: str, round_id: str, object_kind: str
     return [item for item in objects if isinstance(item, dict)]
 
 
+def compact_lane_episode_card(card: dict[str, Any]) -> dict[str, Any]:
+    denominators = card.get("denominators") if isinstance(card.get("denominators"), dict) else {}
+    episode_ref = card.get("episode_ref") if isinstance(card.get("episode_ref"), dict) else {}
+    return {
+        "episode_id": maybe_text(card.get("episode_id")),
+        "episode_kind": maybe_text(card.get("episode_kind")),
+        "lane_key": maybe_text(card.get("lane_key")),
+        "owner_role": maybe_text(card.get("owner_role")),
+        "time_anchor_date": maybe_text(card.get("time_anchor_date")),
+        "claim_strength": maybe_text(card.get("claim_strength")),
+        "main_claims": text_list(card.get("main_claims"))[:4],
+        "source_families": text_list(card.get("source_families"))[:8],
+        "denominators": {
+            "signal_count": denominators.get("signal_count", 0),
+            "source_family_counts": list_items(denominators.get("source_family_counts"))[:8],
+        },
+        "episode_ref": episode_ref,
+        "limitations": text_list(card.get("limitations"))[:4],
+    }
+
+
 def artifact_row(kind: str, path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     if not payload:
         return {}
@@ -1876,6 +1897,14 @@ def artifact_row(kind: str, path: Path, payload: dict[str, Any]) -> dict[str, An
             for item in [
                 *list_items(payload.get("interaction_timeline_nodes")),
                 *list_items(report_packet.get("interaction_timeline_nodes")),
+            ]
+            if isinstance(item, dict)
+        ],
+        "lane_episode_cards": [
+            compact_lane_episode_card(item)
+            for item in [
+                *list_items(payload.get("lane_episode_cards")),
+                *list_items(report_packet.get("lane_episode_cards")),
             ]
             if isinstance(item, dict)
         ],
@@ -1966,6 +1995,25 @@ def interaction_timeline_nodes_from_reporting_basis(reporting_basis: list[dict[s
             seen.add(node_id)
             nodes.append(node)
     return nodes
+
+
+def lane_episode_cards_from_reporting_basis(reporting_basis: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    cards: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in reporting_basis:
+        for card in row.get("lane_episode_cards", []):
+            if not isinstance(card, dict):
+                continue
+            card_id = maybe_text(card.get("episode_id")) or json.dumps(
+                card,
+                ensure_ascii=True,
+                sort_keys=True,
+            )
+            if card_id in seen:
+                continue
+            seen.add(card_id)
+            cards.append(card)
+    return cards
 
 
 def refs_from_section_briefs(section_briefs: list[dict[str, Any]]) -> list[str]:
@@ -2671,6 +2719,7 @@ def build_interaction_timeline_addendum(
     brief = interaction_briefs[0] if interaction_briefs else {}
     denominator = brief.get("denominator") if isinstance(brief.get("denominator"), dict) else {}
     node_count = int(denominator.get("interaction_node_count") or len(interaction_nodes))
+    episode_count = int(denominator.get("lane_episode_card_count") or 0)
     parallel_count = int(denominator.get("parallel_timeline_node_count") or 0)
     fact_count = int(denominator.get("environment_signal_count") or 0) + int(
         denominator.get("formal_signal_count") or 0
@@ -2684,18 +2733,12 @@ def build_interaction_timeline_addendum(
         paragraphs = [
             (
                 "互动时间线只用于把事实/政策侧记录与公共/媒体侧记录放入同一时间坐标。"
-                f"当前可见互动节点 {node_count} 个，单侧背景节点 {parallel_count} 个；"
+                f"当前可见 lane episode cards {episode_count} 个、互动节点 {node_count} 个，单侧背景节点 {parallel_count} 个；"
                 f"事实/政策侧可见信号 {fact_count} 条，公共/媒体侧可见信号 {public_count} 条。"
             ),
             (
                 f"本节 claim strength 为 `{claim_strength}`。"
-                + (
-                    "可写入的有界判断是："
-                    + "；".join(claim.rstrip("。") for claim in candidate_claims[:2])
-                    + "。"
-                    if candidate_claims
-                    else "可写入的判断仅限同一时间窗口内两侧记录共同可见。"
-                )
+                + "可写入的有界判断仅限：事实/政策侧 lane episode cards 与公共/媒体侧 lane episode cards 在同一时间窗口内共同可见。"
             ),
             (
                 "这不是因果、政策效果或公众反应归因。若要写语义变化、政策回应缺口或责任判断，"
@@ -2703,12 +2746,14 @@ def build_interaction_timeline_addendum(
             ),
         ]
         if limitations:
-            paragraphs.append("本节限制包括：" + "；".join(limitations[:3]) + "。")
+            paragraphs.append(
+                "本节限制包括：section brief 只是报告组织线索；共同可见不能证明因果、政策效果、公众响应归因、代表性民意或证据缺失。"
+            )
     else:
         paragraphs = [
             (
                 "The interaction timeline places fact/policy-side records and public/media-side records on the same chronology. "
-                f"The handoff exposes {node_count} interaction node(s), {parallel_count} one-sided context node(s), "
+                f"The handoff exposes {episode_count} lane episode card(s), {node_count} interaction node(s), {parallel_count} one-sided context node(s), "
                 f"{fact_count} fact/policy-side visible signal(s), and {public_count} public/media-side visible signal(s)."
             ),
             (
@@ -3044,6 +3089,17 @@ def zh_academic_markdown_from_sections(draft: dict[str, Any], academic_sections:
     limitations = text_list(academic_sections.get("limitations"))
     conclusion = text_list(academic_sections.get("conclusion"))
     results = [item for item in list_items(academic_sections.get("results")) if isinstance(item, dict)]
+    extra_sections = [
+        item
+        for item in list_items(draft.get("sections"))
+        if isinstance(item, dict)
+        and maybe_text(item.get("section_id"))
+        in {
+            "fact-policy-public-interaction",
+            "public-discourse-deepening",
+        }
+        and text_list(item.get("paragraphs"))
+    ]
 
     zh_add_paragraph_section(lines, "摘要", abstract)
     if keywords:
@@ -3060,9 +3116,21 @@ def zh_academic_markdown_from_sections(draft: dict[str, Any], academic_sections:
             lines.extend([f"### 3.{index} {title_text}", ""])
             for paragraph in unique_texts([zh_clean_report_prose(p) for p in paragraphs if maybe_text(p)]):
                 lines.extend([paragraph, ""])
-    zh_add_paragraph_section(lines, "4. 讨论", discussion)
-    zh_add_paragraph_section(lines, "5. 局限性", limitations)
-    zh_add_paragraph_section(lines, "6. 结论", conclusion)
+    next_number = 4
+    if extra_sections:
+        lines.extend([f"## {next_number}. 互动时间线与舆情语义补充", ""])
+        for index, item in enumerate(extra_sections, 1):
+            title_text = maybe_text(item.get("title")) or f"补充 {index}"
+            paragraphs = text_list(item.get("paragraphs"))
+            lines.extend([f"### {next_number}.{index} {title_text}", ""])
+            for paragraph in unique_texts([zh_clean_report_prose(p) for p in paragraphs if maybe_text(p)]):
+                lines.extend([paragraph, ""])
+        next_number += 1
+    zh_add_paragraph_section(lines, f"{next_number}. 讨论", discussion)
+    next_number += 1
+    zh_add_paragraph_section(lines, f"{next_number}. 局限性", limitations)
+    next_number += 1
+    zh_add_paragraph_section(lines, f"{next_number}. 结论", conclusion)
     audit_refs = [maybe_text(ref) for ref in draft.get("audit_refs", []) if maybe_text(ref)]
     source_refs = text_list(academic_sections.get("source_refs"))
     lines.extend(["## 参考文献与审计索引", ""])
@@ -3332,6 +3400,7 @@ def draft_narrative_report(
     interaction_timeline_nodes = interaction_timeline_nodes_from_reporting_basis(
         reporting_basis
     )
+    lane_episode_cards = lane_episode_cards_from_reporting_basis(reporting_basis)
     section_brief_refs = refs_from_section_briefs(section_briefs)
     object_sets = council_basis_objects(
         run_dir_path,
@@ -3952,8 +4021,10 @@ def draft_narrative_report(
                 "path": first_section_brief_path(section_briefs),
                 "section_brief_count": len(section_briefs),
                 "interaction_node_count": len(interaction_timeline_nodes),
-                "advisory_only": bool(section_briefs or interaction_timeline_nodes),
+                "lane_episode_card_count": len(lane_episode_cards),
+                "advisory_only": bool(section_briefs or interaction_timeline_nodes or lane_episode_cards),
             },
+            "lane_episode_cards": lane_episode_cards,
             "formal_policy_helper_summary": formal_helper_meta,
         },
         "audit_refs": all_refs,
