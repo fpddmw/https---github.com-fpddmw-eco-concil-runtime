@@ -16,6 +16,13 @@ from typing import Any
 
 SKILL_NAME = "open-investigation-round"
 SOURCE_SELECTION_ROLES = ("social-investigator", "environmental-investigator")
+COUNCIL_ROLES = (
+    "environmental-investigator",
+    "social-investigator",
+    "challenger",
+    "report-editor",
+    "moderator",
+)
 COORDINATION_HINT_SEMANTICS = (
     "Optional coordination context only; it does not restrict agent write "
     "surfaces, agenda control, evidence acceptance, or investigator autonomy."
@@ -268,6 +275,66 @@ def coordination_related_ids(context: dict[str, Any]) -> list[str]:
             context.get("round_brief_id"),
         ]
     )
+
+
+def coordination_round_category(context: dict[str, Any]) -> str:
+    return maybe_text(context.get("round_category")).casefold()
+
+
+def coordination_is_acquisition_round(context: dict[str, Any]) -> bool:
+    category = coordination_round_category(context)
+    mode = maybe_text(context.get("round_mode")).casefold()
+    return (
+        "acquisition" in category
+        or "data-acquisition" in category
+        or "acquisition" in mode
+    )
+
+
+def role_boundaries_from_context(context: dict[str, Any]) -> dict[str, list[str]]:
+    boundaries_by_role: dict[str, list[str]] = {role: [] for role in COUNCIL_ROLES}
+    for boundary in text_values(context.get("agent_responsibility_boundaries")):
+        role, sep, detail = boundary.partition(":")
+        role = maybe_text(role)
+        detail_text = maybe_text(detail if sep else boundary)
+        if role in boundaries_by_role and detail_text:
+            boundaries_by_role[role].append(detail_text)
+    return {
+        role: unique_texts(values)
+        for role, values in boundaries_by_role.items()
+        if unique_texts(values)
+    }
+
+
+def objective_for_context_role(context: dict[str, Any], role: str) -> str:
+    question = maybe_text(context.get("round_subtitle_question"))
+    title = maybe_text(context.get("round_title"))
+    category = coordination_round_category(context)
+    prefix = {
+        "scope-deliberation": "Deliberate scope and claim boundaries",
+        "framing-scope": "Deliberate scope and claim boundaries",
+        "semantic-analysis": "Analyze bounded semantic claim basis",
+        "data-analysis-semantic-synthesis": "Analyze bounded semantic claim basis",
+        "analysis-semantic-synthesis": "Analyze bounded semantic claim basis",
+        "interaction-timeline-synthesis": "Synthesize interaction timeline boundaries",
+        "interaction-timeline": "Synthesize interaction timeline boundaries",
+        "policy-evaluation-basis-synthesis": "Synthesize policy-evaluation basis boundaries",
+        "report-readiness-synthesis": "Review report claim readiness and downgrade boundaries",
+    }.get(category, "Participate in the issue council round")
+    return f"{prefix} as {role}: {question or title}".rstrip(": ")
+
+
+def requirement_type_for_context(context: dict[str, Any]) -> str:
+    category = coordination_round_category(context)
+    if "scope" in category or "framing" in category:
+        return "scope-boundary-obligation"
+    if "semantic" in category or "analysis" in category:
+        return "analysis-boundary-obligation"
+    if "interaction" in category or "timeline" in category:
+        return "interaction-boundary-obligation"
+    if "policy" in category or "readiness" in category:
+        return "claim-readiness-obligation"
+    return "council-round-obligation"
 
 
 def expected_output_kinds_for_role(role: str, existing: list[Any] | None = None) -> list[str]:
@@ -564,7 +631,9 @@ def carryover_requirements(
     open_task_count: int,
     role_actions: list[dict[str, Any]],
     next_round_id: str,
+    coordination_context: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    context = coordination_context if isinstance(coordination_context, dict) else {}
     top_objectives = [maybe_text(action.get("objective")) for action in role_actions if maybe_text(action.get("objective"))][:3]
     summary_bits = [
         f"source_round={source_round_id}",
@@ -574,6 +643,22 @@ def carryover_requirements(
     ]
     if top_objectives:
         summary_bits.append("top_actions=" + "; ".join(top_objectives))
+    if context and not coordination_is_acquisition_round(context):
+        question = maybe_text(context.get("round_subtitle_question"))
+        return [
+            {
+                "requirement_id": f"req-{role}-{next_round_id}-council-boundary",
+                "requirement_type": requirement_type_for_context(context),
+                "summary": (
+                    f"Address the round question within the role boundary: {question}. "
+                    + "Carry forward prior-round context without treating it as an evidence collection route: "
+                    + ", ".join(summary_bits)
+                    + "."
+                ),
+                "priority": "high",
+                "source_round_id": source_round_id,
+            }
+        ]
     return [
         {
             "requirement_id": f"req-{role}-{next_round_id}-cross-round-carryover",
@@ -583,6 +668,62 @@ def carryover_requirements(
             "source_round_id": source_round_id,
         }
     ]
+
+
+def program_issue_council_tasks(
+    *,
+    run_id: str,
+    round_id: str,
+    source_round_id: str,
+    mission: dict[str, Any],
+    coordination_context: dict[str, Any],
+    active_hypothesis_count: int,
+    open_challenge_count: int,
+    open_task_count: int,
+    role_actions: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    window = mission.get("window") if isinstance(mission.get("window"), dict) else {}
+    region = mission.get("region") if isinstance(mission.get("region"), dict) else {}
+    geometry = region.get("geometry") if isinstance(region.get("geometry"), dict) else {}
+    boundaries_by_role = role_boundaries_from_context(coordination_context)
+    roles = unique_texts([*boundaries_by_role.keys(), "moderator"])
+    tasks: list[dict[str, Any]] = []
+    for index, role in enumerate(roles, start=1):
+        tasks.append(
+            {
+                "task_id": f"task-{role}-{round_id}-{index:02d}",
+                "run_id": run_id,
+                "round_id": round_id,
+                "assigned_role": role,
+                "status": "planned",
+                "source_round_id": source_round_id,
+                "objective": objective_for_context_role(coordination_context, role),
+                "expected_output_kinds": [
+                    "agent-position",
+                    "readiness-opinion",
+                    "round-synthesis" if role == "moderator" else "role-boundary-note",
+                ],
+                "inputs": {
+                    "mission_window": window,
+                    "mission_geometry": geometry,
+                    "source_skills": [],
+                    "prior_round_ids": [source_round_id],
+                    "round_coordination_context": coordination_context,
+                    "role_responsibility_boundaries": boundaries_by_role.get(role, []),
+                    "evidence_requirements": carryover_requirements(
+                        role=role,
+                        source_round_id=source_round_id,
+                        active_hypothesis_count=active_hypothesis_count,
+                        open_challenge_count=open_challenge_count,
+                        open_task_count=open_task_count,
+                        role_actions=role_actions.get(role, []),
+                        next_round_id=round_id,
+                        coordination_context=coordination_context,
+                    ),
+                },
+            }
+        )
+    return tasks
 
 
 def build_followup_round_tasks(
@@ -606,8 +747,23 @@ def build_followup_round_tasks(
     )
     role_actions = {
         role: [item for item in action_items(next_actions) if maybe_text(item.get("assigned_role")) == role]
-        for role in SOURCE_SELECTION_ROLES
+        for role in COUNCIL_ROLES
     }
+    if task_coordination_context and not coordination_is_acquisition_round(task_coordination_context):
+        return (
+            program_issue_council_tasks(
+                run_id=run_id,
+                round_id=round_id,
+                source_round_id=source_round_id,
+                mission=mission,
+                coordination_context=task_coordination_context,
+                active_hypothesis_count=active_hypothesis_count,
+                open_challenge_count=open_challenge_count,
+                open_task_count=open_task_count,
+                role_actions=role_actions,
+            ),
+            warnings,
+        )
 
     if source_tasks:
         tasks: list[dict[str, Any]] = []
@@ -641,6 +797,7 @@ def build_followup_round_tasks(
                     open_task_count=open_task_count,
                     role_actions=role_actions.get(role or "", []),
                     next_round_id=round_id,
+                    coordination_context=task_coordination_context,
                 )
             )
             inputs["evidence_requirements"] = requirements
@@ -692,6 +849,7 @@ def build_followup_round_tasks(
                         open_task_count=open_task_count,
                         role_actions=role_actions.get(role, []),
                         next_round_id=round_id,
+                        coordination_context=task_coordination_context,
                     ),
                 },
             }
