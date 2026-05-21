@@ -1,0 +1,6 @@
+name: materialize-acquisition-checkpoints
+description: Materialize lightweight claim-impact acquisition checkpoints.
+default_prompt: >
+  Use $materialize-acquisition-checkpoints only for claim-impact acquisition
+  feedback. Keep it advisory, avoid per-tool-call paperwork, and do not treat
+  checkpoint output as proof, source ranking, or report readiness.

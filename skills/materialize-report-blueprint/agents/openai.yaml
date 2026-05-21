@@ -1,0 +1,6 @@
+name: materialize-report-blueprint
+description: Materialize report-framing questions and investigation themes.
+default_prompt: >
+  Use $materialize-report-blueprint to create mission-driven claim slots and
+  investigation themes. Do not fetch, choose source routes, write conclusions,
+  or turn claim slots into a fixed template.

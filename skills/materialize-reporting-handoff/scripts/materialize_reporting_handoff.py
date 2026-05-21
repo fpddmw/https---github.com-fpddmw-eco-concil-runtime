@@ -38,6 +38,7 @@ from eco_council_runtime.report_basis_policy import (  # noqa: E402
     report_basis_input_policy,
     unresolved_challenges_from_constraints,
 )
+from eco_council_runtime.reporting_objects import query_reporting_objects  # noqa: E402
 
 
 def normalize_space(value: Any) -> str:
@@ -187,6 +188,42 @@ def load_interaction_timeline(run_dir: Path, round_id: str) -> dict[str, Any]:
     }
 
 
+def load_analysis_item_artifact(
+    run_dir: Path,
+    round_id: str,
+    *,
+    file_stem: str,
+    item_key: str,
+) -> dict[str, Any]:
+    artifact_path = run_dir / "analytics" / f"{file_stem}_{round_id}.json"
+    if not artifact_path.exists():
+        return {
+            "present": False,
+            "path": str(artifact_path.resolve()),
+            "items": [],
+            "payload": {},
+        }
+    try:
+        payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "present": False,
+            "path": str(artifact_path.resolve()),
+            "items": [],
+            "payload": {},
+            "warning": f"{file_stem} artifact is not valid JSON",
+        }
+    if not isinstance(payload, dict):
+        payload = {}
+    items = [item for item in list_items(payload.get(item_key)) if isinstance(item, dict)]
+    return {
+        "present": bool(items),
+        "path": str(artifact_path.resolve()),
+        "items": items,
+        "payload": payload,
+    }
+
+
 def _brief_refs(nodes: list[dict[str, Any]], episodes: list[dict[str, Any]] | None = None, *, limit: int = 20) -> list[Any]:
     refs: list[Any] = []
     for episode in episodes or []:
@@ -306,6 +343,29 @@ def build_interaction_section_briefs(
                 "report-basis citation",
             ],
         }
+    ]
+
+
+def load_agent_section_briefs(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    try:
+        payload = query_reporting_objects(
+            run_dir,
+            object_kind="agent-section-brief",
+            run_id=run_id,
+            round_id=round_id,
+            limit=100,
+        )
+    except Exception:
+        return []
+    return [
+        item
+        for item in list_items(payload.get("objects"))
+        if isinstance(item, dict)
     ]
 
 
@@ -1240,6 +1300,18 @@ def materialize_reporting_handoff_skill(
         run_dir_path,
         basis_round_id,
     )
+    acquisition_checkpoint_context = load_analysis_item_artifact(
+        run_dir_path,
+        basis_round_id,
+        file_stem="acquisition_checkpoints",
+        item_key="acquisition_checkpoints",
+    )
+    theme_sufficiency_context = load_analysis_item_artifact(
+        run_dir_path,
+        basis_round_id,
+        file_stem="theme_sufficiency_review",
+        item_key="theme_sufficiency_reviews",
+    )
     interaction_nodes = [
         node
         for node in list_items(interaction_timeline_context.get("interaction_nodes"))
@@ -1250,7 +1322,23 @@ def materialize_reporting_handoff_skill(
         for card in list_items(interaction_timeline_context.get("lane_episode_cards"))
         if isinstance(card, dict)
     ]
-    section_briefs = build_interaction_section_briefs(interaction_timeline_context)
+    acquisition_checkpoints = [
+        item
+        for item in list_items(acquisition_checkpoint_context.get("items"))
+        if isinstance(item, dict)
+    ]
+    theme_sufficiency_reviews = [
+        item
+        for item in list_items(theme_sufficiency_context.get("items"))
+        if isinstance(item, dict)
+    ]
+    agent_section_briefs = load_agent_section_briefs(
+        run_dir_path,
+        run_id=run_id,
+        round_id=basis_round_id,
+    )
+    interaction_section_briefs = build_interaction_section_briefs(interaction_timeline_context)
+    section_briefs = [*agent_section_briefs, *interaction_section_briefs]
     supporting_proposal_ids = unique_texts(
         report_basis_freeze.get("supporting_proposal_ids", [])
         if isinstance(report_basis_freeze.get("supporting_proposal_ids"), list)
@@ -1331,14 +1419,37 @@ def materialize_reporting_handoff_skill(
             "representativeness, or evidence absence."
         ),
     }
+    report_packet["acquisition_checkpoints"] = acquisition_checkpoints
+    report_packet["acquisition_checkpoint_policy"] = {
+        "artifact_path": maybe_text(acquisition_checkpoint_context.get("path")),
+        "present": bool(acquisition_checkpoints),
+        "advisory_semantics": (
+            "Acquisition checkpoints are lightweight claim-impact notes only. "
+            "They appear when acquisition state can change claim strength, "
+            "source-limit rationale, report downgrade, or recovery choice; "
+            "they are not per-tool-call forms or findings."
+        ),
+    }
+    report_packet["theme_sufficiency_reviews"] = theme_sufficiency_reviews
+    report_packet["theme_sufficiency_review_policy"] = {
+        "artifact_path": maybe_text(theme_sufficiency_context.get("path")),
+        "present": bool(theme_sufficiency_reviews),
+        "advisory_semantics": (
+            "Theme sufficiency review states which claim slots can be supported, "
+            "downgraded, or lack basis. It is not a runtime truth mechanism and "
+            "does not replace council objects, report basis, gate, or freeze."
+        ),
+    }
     report_packet["section_briefs"] = section_briefs
     report_packet["section_brief_policy"] = {
-        "source": "reporting-handoff-derived-from-carried-helper-artifacts",
+        "source": "db-agent-section-briefs-plus-carried-helper-fallbacks",
         "present": bool(section_briefs),
+        "agent_section_brief_count": len(agent_section_briefs),
+        "derived_interaction_section_brief_count": len(interaction_section_briefs),
         "advisory_semantics": (
-            "Section briefs expose refs, claim strength, denominators, and "
-            "limitations for report-editor judgement; they do not create a "
-            "parallel report path."
+            "Agent section briefs are report-editor inputs authored or adopted by "
+            "roles before synthesis. Derived helper fallbacks stay advisory. Briefs "
+            "do not create a parallel report path or replace frozen/reporting basis."
         ),
     }
     board_excerpt = excerpt_text(board_brief_text)
@@ -1402,7 +1513,19 @@ def materialize_reporting_handoff_skill(
         ),
         "interaction_timeline_node_count": len(interaction_nodes),
         "interaction_timeline_nodes": interaction_nodes,
+        "acquisition_checkpoint_path": maybe_text(
+            acquisition_checkpoint_context.get("path")
+        ),
+        "acquisition_checkpoint_count": len(acquisition_checkpoints),
+        "acquisition_checkpoints": acquisition_checkpoints,
+        "theme_sufficiency_review_path": maybe_text(
+            theme_sufficiency_context.get("path")
+        ),
+        "theme_sufficiency_review_count": len(theme_sufficiency_reviews),
+        "theme_sufficiency_reviews": theme_sufficiency_reviews,
         "section_brief_count": len(section_briefs),
+        "agent_section_brief_count": len(agent_section_briefs),
+        "derived_interaction_section_brief_count": len(interaction_section_briefs),
         "section_briefs": section_briefs,
         "challenger_constraint_count": len(
             list_items(report_basis_freeze.get("challenger_constraints"))
@@ -1478,6 +1601,10 @@ def materialize_reporting_handoff_skill(
             "decision_packet_id": maybe_text(decision_packet.get("packet_id")),
             "report_packet_id": maybe_text(report_packet.get("packet_id")),
             "evidence_index_count": len(list_items(evidence_packet.get("evidence_index"))),
+            "acquisition_checkpoint_count": len(acquisition_checkpoints),
+            "theme_sufficiency_review_count": len(theme_sufficiency_reviews),
+            "agent_section_brief_count": len(agent_section_briefs),
+            "derived_interaction_section_brief_count": len(interaction_section_briefs),
             "unresolved_challenger_constraint_count": len(
                 unresolved_challenger_constraints
             ),

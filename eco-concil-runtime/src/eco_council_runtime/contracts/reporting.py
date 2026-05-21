@@ -4,6 +4,38 @@ from .types import CanonicalContract, PLANE_REPORTING, _contract
 
 
 REPORTING_CONTRACTS: dict[str, CanonicalContract] = {
+    "agent-section-brief": _contract(
+        "agent-section-brief",
+        plane=PLANE_REPORTING,
+        schema_version="agent-section-brief-v1",
+        id_field="brief_id",
+        required_text_fields=(
+            "decision_source",
+            "agent_role",
+            "status",
+            "section_role",
+            "claim_strength",
+            "recommended_report_use",
+        ),
+        required_list_fields=(
+            "evidence_refs",
+            "lineage",
+            "main_claims",
+            "source_families",
+            "limitations",
+            "blocked_phrases",
+        ),
+        required_dict_fields=("provenance", "denominators"),
+        required_non_empty_list_fields=("main_claims", "limitations"),
+        required_non_empty_dict_fields=("provenance", "denominators"),
+        optional_text_fields=("section_key",),
+        optional_list_fields=(
+            "claim_slots_supported",
+            "theme_ids",
+            "basis_object_ids",
+            "sufficiency_review_ids",
+        ),
+    ),
     "report-section-draft": _contract(
         "report-section-draft",
         plane=PLANE_REPORTING,

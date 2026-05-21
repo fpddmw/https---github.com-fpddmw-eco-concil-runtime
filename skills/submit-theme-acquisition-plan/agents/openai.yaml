@@ -1,0 +1,7 @@
+name: submit-theme-acquisition-plan
+description: Submit an investigator-authored or adopted theme acquisition plan.
+default_prompt: >
+  Use $submit-theme-acquisition-plan when you own or explicitly adopt an
+  investigation theme route. State candidate source families, query variants,
+  denominators, recovery choices, and downgrade boundaries without treating the
+  plan as proof or moderator-imposed source selection.

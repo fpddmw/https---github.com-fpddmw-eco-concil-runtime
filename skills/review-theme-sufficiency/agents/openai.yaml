@@ -1,0 +1,6 @@
+name: review-theme-sufficiency
+description: Review claim-slot support and downgrade boundaries by theme.
+default_prompt: >
+  Use $review-theme-sufficiency to make supported slots, unsupported slots,
+  denominators, source-family limits, and required downgrades explicit. Keep it
+  advisory and do not use it as a runtime gate, score, or truth mechanism.

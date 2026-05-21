@@ -16,6 +16,12 @@ The council remains responsible for:
 3. Deciding whether unresolved refs still have actionable investigation paths.
 4. Recording limitations when issuing a weak or bounded report.
 
+Report-facing `claim_slots` are mission-driven questions to be answered, not a
+fixed topic template and not a list of conclusions the system is expected to
+prove. A sufficiency review may help the council decide which claim slots are
+supportable or must be downgraded, but it is not a runtime truth mechanism and
+does not replace council acceptance.
+
 ## Weak Reports
 
 Weak or bounded reports are allowed. They are useful when the council can provide
@@ -37,6 +43,12 @@ continuation should remain visible before final closure.
 Runtime does not judge whether those refs are enough. It only exposes the
 obligation so moderator, investigators, challenger, and report editor have a
 shared closing boundary.
+
+For policy evaluation wording, the basis must be synthesized from supported fact
+records, official actions, governance records, public/media/formal semantics,
+and challenger-visible limitations. `policy_evaluation_basis` is therefore a
+report synthesis boundary, not an independent data lane or a special source
+family.
 
 ## Public Discourse And Tone Claims
 

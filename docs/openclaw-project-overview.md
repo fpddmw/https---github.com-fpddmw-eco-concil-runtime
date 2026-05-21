@@ -31,6 +31,8 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
    - 报告正文必须来自 frozen/reporting basis，而不是临时 helper artifact。
 7. `thin runtime surfaces`
    - runtime 只展示权限、对象状态、refs、receipt、ledger 和可执行命令模板；不把 agenda、source 选择、证据权重或结论采信写成运行时规则。
+8. `report-driven investigation`
+   - 调查工作应由报告需要回答的 mission-driven claim slots 和 evidence contract 牵引，而不是先堆积材料再由 report-editor 拼接。报告蓝图约束证据需求，但不预设结论，不提供固定题型模板。
 
 ### 概念模型和代码角色模型
 
@@ -66,22 +68,23 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
 
 当前主干流程：
 
-`mission -> run/round -> scoping/round brief -> agent-led evidence acquisition -> fetch/import -> normalize -> query/analysis -> council deliberation -> readiness/gate -> report basis freeze -> reporting -> archive/history`
+`mission -> run/round -> report framing / scoping -> investigation themes -> agent-led evidence acquisition -> in-round coverage feedback -> council deliberation -> readiness/gate -> report basis freeze -> reporting -> archive/history`
 
 细化为：
 
 1. `scaffold-mission-run`
    - 创建 run/round、mission、初始 board、round task scaffold。
-2. `scoping / round brief`
-   - 在开放型 mission 缺少完整 window/region/source requests 时，moderator 先提交 investigation plan、candidate scope、round brief 和 evidence request。
+2. `report framing / scoping`
+   - 在开放型 mission 缺少完整 window/region/source requests 时，moderator 先提交 investigation plan、candidate scope、round brief 和 evidence request。面向形势分析报告的 run 还应形成 `report_blueprint`、`claim_slots`、`investigation_themes` 和 claim-basis 边界；report-editor 可参与定义报告问题，但不得提前写结论，也不得把 claim slots 固化成领域模板。
 3. `agent-led evidence acquisition`
-   - investigator 根据 evidence request、finding、challenge 和自身判断提出或执行取证动作；runtime 负责权限、side-effect approval、receipt 和 ledger，不替 agent 排序 source 或采信证据。
+   - investigator 根据 evidence request、report claim slots、finding、challenge 和自身判断提出或执行取证动作；runtime 负责权限、side-effect approval、receipt 和 ledger，不替 agent 排序 source 或采信证据。moderator 可以提出主题和 evidence need，但 source、query、skill 路线必须由 investigator 自主选择、撰写或显式采纳。
 4. `prepare-round`
    - 根据 mission、round tasks、source governance 和已有 coordination context 生成可审计 fetch plan。该 plan 是运行面材料，不替 agent 采信证据。
 5. `fetch/import + normalize`
    - 抓取或导入 raw artifact，并通过对应 normalizer 写入 signal plane。
-6. `query`
+6. `query + in-round coverage feedback`
    - investigator 通过 public/formal/environment/raw/normalized query surfaces 获取 item-level evidence basis。
+   - 对舆情、正式记录、政策动作和大体量环境数据，agent 应在当前 round 内进行小批量抓取、coverage checkpoint、query/窗口/来源恢复和 challenger 快速质疑；只有达到可讨论状态或明确 source-limit 后再提交议会收口。checkpoint 只在结果影响 claim strength、降级表述或恢复路径时记录，不能变成每次 tool call 的表单负担。
 7. `council write`
    - agent 提交 finding、evidence bundle、proposal、review comment、challenge、hypothesis、readiness opinion。
 8. `optional analysis`
@@ -109,6 +112,8 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
 
 public/environment query 支持 `round_scope=current|up-to-current|all`，因此第二轮可以读取第一轮和当前轮的 normalized signals。source queue 也会记录 prior-round family memory，并支持受治理的 prior-round anchor。
 
+Round 是议会形成阶段性判断的单位，不是 API 重试、query variant 扩展或低量恢复的单位。若一个主题在当前 round 内经过初次抓取后明显不足，优先走 in-round 反馈闭环：source owner 修正查询和来源路径，challenger 快速审查覆盖和外推风险，moderator 只在需要改变主题边界、接受 source-limit 或打开新调查主题时介入。只有当当前 round 内没有合理恢复路径、或主题需要跨 agent 重定边界时，才打开 follow-up round。sufficiency review 只说明可支撑、必须降级和缺 basis 的 claim，不是 runtime 判真、证据打分或自动 report-ready 机制。
+
 当前已完成的基线是：开放型 mission 可以保持 `scoping-required`，moderator 可以在 scoping round 中提交 investigation plan、candidate scope、round brief、round synthesis、evidence request 和 context packet；investigator 可以通过薄 `source-acquisition-proposal` 自主记录取证意图，并通过 execution lineage helper 把 proposal 与 receipt / normalized signal refs 串联；agent entry 和 source surfaces 会暴露同一信源家族内的可选多层工作流（例如 GDELT DOC recon 到 Events/Mentions/GKG，YouTube video search 到 comments，Regulations.gov list 到 detail），但这些 workflow 不排序、不评分、不固定议程；round liveness 可把 unresolved refs 带入 continuation round，并提供不排序的 closing checklist；失败、blocked、receipt-only、executed-without-normalized-refs 或 zero-signal acquisition attempt 必须被 source owner 反思后，moderator 才能把 `no-actionable-path` 作为非继续理由；弱报告允许生成，但必须显式记录 claim strength、limitations、unresolved refs 和不继续调查的理由，不能把检索失败当成过早收口的依据；archive/history 可在 checkpoint 后暴露历史 evidence refs。source-family workflow 的常驻说明见 `docs/openclaw-source-family-workflows.md`；claim-strength 收口义务见 `docs/openclaw-claim-strength-obligations.md`。
 
 ## 5. Council Agent 与 Runtime Principal
@@ -124,7 +129,7 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 4. `challenger`
    - 提交反证、开启 challenge/probe、质疑证据范围、taxonomy、时空匹配和结论表述。
 5. `report-editor`
-   - 基于 frozen basis 写报告，不改变调查状态。
+   - 参与 report framing，帮助把 mission 拆成报告问题和 claim slots；在 reporting 阶段基于 frozen basis、agent section brief 和 DB reporting objects 写报告，不改变调查状态。
 
 代码模型中的 runtime principal：
 
@@ -204,6 +209,49 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 6. `challenger` 对舆情标注的默认职责是样本边界、taxonomy fit、ambiguous clusters、outlier examples 和报告措辞审计；不要求逐条复核所有非 GDELT 情感标签。只有报告要引用争议样本、强影响结论或可见讽刺/转述/翻译歧义时，才需要局部 item-level 复核。
 7. 当前已具备 corpus materialization、coverage audit、annotation worker、annotation aggregation、GDELT tone enrichment、cross-source comparison 和 sample summary 的初步闭环；这些输出都保持 optional-analysis/advisory 属性，必须由议会对象承接后才能进入 report basis。
 
+### 公共政策形势分析 Lane
+
+面向毕业设计和公共政策形势分析的报告链采用四条主 lane 和一个报告综合层。这些 lane 是 agent 可调用、可组合的能力链，不是 runtime 固定议程。
+
+1. `fact / official action lane`
+   - 获取、归一化、查询和聚合环境事实、运行记录、官方行动和正式政策节点。
+   - 输出事实/官方动作时间线、环境过程摘要和 claim boundary。
+   - 环境指标不能直接推出政策成败、责任归属或公众态度；官方记录能证明制度动作存在，不自动证明政策有效性。
+2. `public-policy corpus lane`
+   - 为媒体材料、公众样本、正式政策文本和正式评论建立 corpus。
+   - 记录 query variants、source family、window、eligible count、dedup count、failed/zero/low-volume rationale。
+   - 没有 corpus 和 coverage audit 的公共语义只能作为个例或线索，不能写成样本结构判断。
+3. `semantic perception lane`
+   - 对公众样本、媒体文本和正式政策文本做 bounded semantic labels。
+   - 聚合样本内议题、情绪、来源叙事、责任归因、政策诉求、信任/不信任和不确定性表达。
+   - GDELT tone 是媒体/文档语气，不是公众情绪；source narrative 是公共来源叙事，不是物理来源归因。
+4. `interaction timeline lane`
+   - 将事实节点、官方动作、媒体可见性和公众/政策语义放入同一时间坐标。
+   - 互动判断必须先有各 lane 自己整理的 episode cards，再做时间编排；同日可见不能写成因果、政策效果或公众反应归因。
+5. `policy evaluation basis`
+   - 不是独立调查 lane，而是 moderator、challenger 和 report-editor 基于前四条 lane 与 frozen basis 形成的综合产物。
+   - 它只能说明哪些材料可作为政策沟通、公众参与、风险治理或政策回应评估的依据，不能无证据给政策成败评分，也不能被实现成单独抓取一种“政策评估数据”的 lane。
+
+报告 claim 的最低 basis 采用软义务：如果报告要写公众比例，必须有 corpus、coverage audit、annotation、aggregation、denominator 和非代表性边界；如果要写事实/政策/公共语义互动，必须有 interaction timeline、lane episode cards 和至少两类 evidence refs；如果要写政策评估依据，必须有事实/行动证据、公共-政策语义证据、claim boundary 和 challenger review。弱报告允许生成，但必须降级表述并说明缺失 basis。
+
+### Report Framing 与 Agent Section Brief
+
+面向形势分析的调查应从 `report_blueprint` 开始。该 blueprint 不预设答案，而是把 mission 拆成可调查的 `claim_slots` 和 `investigation_themes`。claim slots 是 mission-driven 的待回答问题槽，不是固定题型模板。典型主题包括事实过程、官方/政策行动、公共舆情语义、媒体/政策框架和互动时间线；政策评估依据属于报告综合层，不是单独 acquisition theme。
+
+各 agent 在报告前应提交或参与生成自己的 section brief：
+
+1. `section_role`
+2. `main_claims`
+3. `evidence_refs`
+4. `source_families`
+5. `claim_strength`
+6. `denominators`
+7. `limitations`
+8. `recommended_report_use`
+9. `blocked_phrases`
+
+report-editor 可以组织语言、调整结构和提升可读性，但新增的实质 claim 必须能回溯到 section brief、frozen basis 或 council object。challenger 标记为 unsupported 的句子必须修改、降级、删除，或由 moderator 决定是否继续调查。
+
 ### 环境证据压缩 Lane
 
 环境证据压缩是 `optional analysis/helper` 能力，不是新的 round type，也不是专业环境模型。它用于把 AirNow、OpenAQ、Open-Meteo、USGS、NASA FIRMS 等 normalized environment signals 压成可读的覆盖和统计摘要，帮助 agent 避免直接读取百万级原始记录。
@@ -211,7 +259,7 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 该 lane 的治理边界：
 
 1. `query-environment-signals` 返回 item-level 环境证据 rows 和 evidence refs，适合抽查和写 finding 时引用。
-2. `aggregate-environment-evidence` 负责描述性覆盖和统计摘要；毕业提交前的彻底升级路径见 `docs/openclaw-public-policy-situation-analysis-upgrade-plan.md`。
+2. `aggregate-environment-evidence` 负责描述性覆盖和统计摘要；下一阶段面向报告主导调查的工程计划见 `docs/openclaw-public-policy-situation-analysis-upgrade-plan.md`。
 3. 环境聚合只输出 source/metric/time/spatial coverage、数值 min/max/mean、bucket counts、缺测和样本 refs。
 4. 时序观测和点事件应按数据形态处理，而不是按 provider 写厚规则。
 5. 环境聚合不得输出风险等级、source 排序、证据权重、健康暴露评估、水资源短缺严重性、火源证明或输送/归因结论。
@@ -228,6 +276,7 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 5. report basis gate、freeze、reporting、archive/history。
 6. approval-gated optional-analysis helper governance。
 7. 环境侧已有 `query-environment-signals` 和基础 `aggregate-environment-evidence`，可做 item-level 查询和描述性覆盖摘要。
+8. 已有 claim-gap action cards、公共语义 corpus/coverage/annotation/aggregation、interaction timeline、reporting handoff 和 narrative validator 的初步 typed artifact 链路。
 
 仍有限：
 
@@ -238,6 +287,7 @@ public/environment query 支持 `round_scope=current|up-to-current|all`，因此
 5. archive/history 已能 checkpoint 并提供历史 evidence refs；更大规模 raw receipt cache 和跨案例复用策略仍需后续设计。
 6. optional-analysis helper 多为启发式视图，默认 `audit-pending`，不是专业结论模型。
 7. 现有环境聚合层仍偏覆盖摘要；对百万级时序数据需要补齐全量统计、时序 bucket、点事件摘要和小型 evidence-ref sample 输出。
+8. report-driven investigation 仍未完全产品化：report-framing round、theme acquisition plan、in-round checkpoint、agent-authored section brief 和 policy lane coverage 还需要进一步实现和回归。
 
 ## 8. 当前收口状态
 
@@ -254,7 +304,7 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
 
 ## 9. 文档地图
 
-当前 docs 以基础文档为主；历史工作计划、迁移清单、真实 run timeline 和临时审计计划的有效常驻内容已并入基础文档。毕业提交前的代码层工程收口以公共政策形势分析升级计划为准；实验和案例安排单独记录，不混入代码开发计划。
+当前 docs 以基础文档为主；历史工作计划、迁移清单、真实 run timeline 和临时审计计划的有效常驻内容已并入基础文档。当前代码层工程收口以报告主导调查和及时反馈工作计划为准；实验和案例安排单独记录，不混入代码开发计划。
 
 1. `docs/openclaw-project-overview.md`
    - 项目定位、概念模型/代码角色模型、主工作流、多轮能力、agent/runtime principal、数据契约、skill 分层、公共舆情深化 lane、当前能力边界和质量门。
@@ -265,7 +315,7 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
 4. `docs/openclaw-experiment-case-plan.md`
    - 毕业设计实验与案例计划；记录两主案例、两轻量验证、第二主案例风险对比、降级策略和展示材料安排。
 5. `docs/openclaw-public-policy-situation-analysis-upgrade-plan.md`
-   - 毕业提交前的公共政策形势分析升级计划；记录四条主 lane、claim-gap action cards、public-policy corpus、互动时间线、政策评估依据和报告组织轮重写。
+   - 当前工程工作计划；聚焦 report-framing round、theme acquisition contract、in-round coverage feedback、agent section brief、policy lane 补强和报告回归验收。
 6. `docs/frozen-case-packages/nyc-smoke-20230607/baseline-case-package.md`
    - NYC smoke 第一主案例冻结包；汇总 mission、最终报告、证据链、claim boundary、公共舆情样本结构和答辩可引用的基线结论。
 7. `docs/frozen-case-packages/nyc-smoke-20230607/defense-onepager.md`

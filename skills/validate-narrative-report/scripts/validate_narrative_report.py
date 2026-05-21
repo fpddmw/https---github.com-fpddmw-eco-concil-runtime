@@ -570,6 +570,57 @@ POLICY_EVALUATION_BASIS_MARKERS = (
     "\u653f\u7b56\u9009\u9879",
     "\u6743\u8861",
 )
+OFFICIAL_ACTION_GOVERNANCE_BASIS_MARKERS = (
+    "official action",
+    "official-action",
+    "agency action",
+    "agency response",
+    "governance record",
+    "governance-record",
+    "formal record",
+    "formal-record",
+    "federal register",
+    "regulations.gov",
+    "docket",
+    "notice of",
+    "rulemaking",
+    "policy record",
+    "policy action",
+    "\u5b98\u65b9\u884c\u52a8",
+    "\u673a\u6784\u884c\u52a8",
+    "\u6cbb\u7406\u8bb0\u5f55",
+    "\u6b63\u5f0f\u8bb0\u5f55",
+    "\u653f\u7b56\u8bb0\u5f55",
+)
+INSUFFICIENT_BASIS_MARKERS = (
+    "insufficient",
+    "missing",
+    "absent",
+    "blocked",
+    "unsupported",
+    "downgrade",
+    "no official",
+    "no governance",
+    "without official",
+    "\u7f3a\u5c11",
+    "\u4e0d\u8db3",
+    "\u964d\u7ea7",
+    "\u672a\u652f\u6491",
+)
+POLICY_EVALUATION_ACQUISITION_FIELDS = (
+    "theme_id",
+    "theme_question",
+    "source_family",
+    "source_families",
+    "source_family_candidates",
+    "source_skill",
+    "query_variant_plan",
+    "expected_artifacts",
+    "acquisition_lane",
+    "lane_key",
+    "object_kind",
+    "target_kind",
+)
 ENVIRONMENT_ATTRIBUTION_PHRASES = (
     "caused by",
     "causal attribution",
@@ -954,6 +1005,10 @@ def strings_from(value: Any) -> list[str]:
     return results
 
 
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
 def report_prose_text(draft: dict[str, Any]) -> str:
     parts: list[Any] = [draft.get("title")]
     boundary = draft.get("claim_boundary") if isinstance(draft.get("claim_boundary"), dict) else {}
@@ -1143,8 +1198,57 @@ def council_object_counts(draft: dict[str, Any]) -> dict[str, int]:
     return normalized
 
 
+def source_material_dict(draft: dict[str, Any]) -> dict[str, Any]:
+    source_material = draft.get("source_material")
+    return source_material if isinstance(source_material, dict) else {}
+
+
+def source_material_list(draft: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    value = source_material_dict(draft).get(key)
+    return [item for item in list_items(value) if isinstance(item, dict)]
+
+
+def reporting_artifact_rows(draft: dict[str, Any]) -> list[dict[str, Any]]:
+    return source_material_list(draft, "reporting_artifacts")
+
+
+def section_brief_rows(draft: dict[str, Any]) -> list[dict[str, Any]]:
+    return source_material_list(draft, "section_briefs")
+
+
+def theme_sufficiency_review_rows(draft: dict[str, Any]) -> list[dict[str, Any]]:
+    return source_material_list(draft, "theme_sufficiency_reviews")
+
+
+def frozen_or_reporting_basis_visible(draft: dict[str, Any]) -> bool:
+    if any(
+        isinstance(row, dict) and maybe_text(row.get("kind")) == "report-basis-freeze"
+        for row in reporting_artifact_rows(draft)
+    ):
+        return True
+    counts = council_object_counts(draft)
+    return any(
+        counts.get(kind, 0) > 0
+        for kind in (
+            "report-basis-freeze",
+            "finding",
+            "evidence-bundle",
+            "round-synthesis",
+            "agent-position",
+        )
+    )
+
+
+def claim_chain_basis_visible(draft: dict[str, Any]) -> bool:
+    return (
+        bool(section_brief_rows(draft))
+        or bool(theme_sufficiency_review_rows(draft))
+        or frozen_or_reporting_basis_visible(draft)
+    )
+
+
 def has_public_discourse_basis(draft: dict[str, Any], text: str) -> bool:
-    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    source_material = source_material_dict(draft)
     public_summary = (
         source_material.get("public_discourse_summary")
         if isinstance(source_material.get("public_discourse_summary"), dict)
@@ -1664,6 +1768,76 @@ def source_family_count(payload: dict[str, Any]) -> int:
     )
 
 
+def public_semantic_source_family_denominator_visible(draft: dict[str, Any], *, run_dir: Path | None) -> bool:
+    payload = public_discourse_summary_payload(draft, run_dir=run_dir)
+    if source_family_count(payload) > 0:
+        return True
+    for key in ("source_family_denominators", "distribution_denominators"):
+        value = payload.get(key)
+        if isinstance(value, list) and any(
+            isinstance(row, dict)
+            and maybe_text(row.get("source_family"))
+            and (
+                int_value(row.get("denominator")) > 0
+                or int_value(row.get("sample_count")) > 0
+                or int_value(row.get("eligible_signal_count")) > 0
+                or int_value(row.get("signal_count")) > 0
+            )
+            for row in value
+        ):
+            return True
+        if isinstance(value, dict) and value:
+            return True
+    source_material = source_material_dict(draft)
+    public_basis = (
+        source_material.get("public_discourse_basis")
+        if isinstance(source_material.get("public_discourse_basis"), dict)
+        else {}
+    )
+    if any(
+        isinstance(row, dict)
+        and maybe_text(row.get("source_family"))
+        and (
+            int_value(row.get("denominator")) > 0
+            or int_value(row.get("sample_count")) > 0
+            or int_value(row.get("eligible_signal_count")) > 0
+            or int_value(row.get("signal_count")) > 0
+        )
+        for row in list_items(public_basis.get("source_family_denominators"))
+    ):
+        return True
+    formal_helper = (
+        source_material.get("formal_policy_helper_summary")
+        if isinstance(source_material.get("formal_policy_helper_summary"), dict)
+        else {}
+    )
+    helper_family_counts = formal_helper.get("source_family_counts")
+    if isinstance(helper_family_counts, dict) and any(int_value(value) > 0 for value in helper_family_counts.values()):
+        return True
+    if isinstance(helper_family_counts, list) and any(
+        isinstance(row, dict)
+        and maybe_text(row.get("source_family"))
+        and int_value(row.get("signal_count")) > 0
+        for row in helper_family_counts
+    ):
+        return True
+    if any(
+        isinstance(row, dict)
+        and maybe_text(row.get("source_family"))
+        and int_value(row.get("observed_signal_count")) > 0
+        for row in list_items(formal_helper.get("coverage_cues"))
+    ):
+        return True
+    for brief in section_brief_rows(draft):
+        source_families = [maybe_text(value) for value in list_items(brief.get("source_families"))]
+        denominators = brief.get("denominators") if isinstance(brief.get("denominators"), dict) else {}
+        legacy_denominator = brief.get("denominator") if isinstance(brief.get("denominator"), dict) else {}
+        denominator_text = "\n".join(strings_from([denominators, legacy_denominator]))
+        if source_families and contains_any_phrase(denominator_text, ("denominator", "sample_count", "eligible_signal_count", "signal_count")):
+            return True
+    return False
+
+
 def has_optional_analysis_carrier(draft: dict[str, Any], helper_id: str) -> bool:
     source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
     reporting_artifacts = (
@@ -1876,7 +2050,7 @@ def interaction_judgement_present(text: str) -> bool:
 
 
 def interaction_timeline_basis_visible(draft: dict[str, Any], *, run_dir: Path | None) -> bool:
-    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    source_material = source_material_dict(draft)
     timeline_meta = (
         source_material.get("interaction_timeline")
         if isinstance(source_material.get("interaction_timeline"), dict)
@@ -1920,6 +2094,120 @@ def interaction_timeline_basis_visible(draft: dict[str, Any], *, run_dir: Path |
     )
 
 
+def interaction_node_ref_classes(node: dict[str, Any]) -> set[str]:
+    classes: set[str] = set()
+    fact_refs = (
+        list_items(node.get("fact_or_policy_evidence_refs"))
+        or list_items(node.get("fact_policy_refs"))
+        or list_items(node.get("fact_or_policy_episode_refs"))
+    )
+    public_refs = (
+        list_items(node.get("public_or_media_evidence_refs"))
+        or list_items(node.get("public_media_refs"))
+        or list_items(node.get("public_or_media_episode_refs"))
+    )
+    if fact_refs:
+        classes.add("fact-or-policy")
+    if public_refs:
+        classes.add("public-or-media")
+    return classes
+
+
+def interaction_timeline_quality_issues(draft: dict[str, Any]) -> list[dict[str, str]]:
+    source_material = source_material_dict(draft)
+    nodes = source_material_list(draft, "interaction_timeline_nodes")
+    lane_episode_cards = source_material_list(draft, "lane_episode_cards")
+    if not nodes:
+        return []
+    issues: list[dict[str, str]] = []
+    missing_summary_count = sum(1 for node in nodes if not maybe_text(node.get("node_summary")))
+    if missing_summary_count:
+        issues.append(
+            issue(
+                "interaction-node-summary-missing",
+                (
+                    "Interaction timeline claims require readable node_summary values "
+                    f"on every carried node; {missing_summary_count} node(s) lack one."
+                ),
+                "error",
+            )
+        )
+    if not lane_episode_cards:
+        issues.append(
+            issue(
+                "interaction-claim-without-lane-episode-cards",
+                "Interaction claims require lane episode cards before timeline synthesis.",
+                "error",
+            )
+        )
+    if not any({"fact-or-policy", "public-or-media"}.issubset(interaction_node_ref_classes(node)) for node in nodes):
+        issues.append(
+            issue(
+                "interaction-node-two-ref-classes-missing",
+                (
+                    "Interaction timeline claims require at least one carried node with "
+                    "fact/policy refs and public/media refs."
+                ),
+                "error",
+            )
+        )
+    timeline_meta = (
+        source_material.get("interaction_timeline")
+        if isinstance(source_material.get("interaction_timeline"), dict)
+        else {}
+    )
+    if int_value(timeline_meta.get("lane_episode_card_count")) <= 0 and not lane_episode_cards:
+        issues.append(
+            issue(
+                "interaction-denominator-lane-episode-count-missing",
+                "Interaction timeline basis should carry a lane episode card denominator.",
+                "warning",
+            )
+        )
+    return issues
+
+
+def strong_report_claim_present(text: str) -> bool:
+    return (
+        policy_evaluation_claim_present(text)
+        or responsibility_claim_present(text)
+        or interaction_judgement_present(text)
+        or contains_unnegated_phrase(text, STRONG_ENVIRONMENT_ATTRIBUTION_PHRASES)
+    )
+
+
+def policy_evaluation_basis_acquisition_lane_misuse(value: Any) -> bool:
+    if isinstance(value, dict):
+        if value.get("not_acquisition_theme") is True or value.get("policy_evaluation_basis_is_not_acquisition_lane") is True:
+            return False
+        selected_text = " ".join(
+            "\n".join(strings_from(value.get(field_name)))
+            for field_name in POLICY_EVALUATION_ACQUISITION_FIELDS
+        )
+        mentions_policy_basis = contains_any_phrase(
+            selected_text,
+            ("policy_evaluation_basis", "policy evaluation basis"),
+        )
+        acquisition_shaped = any(
+            key in value
+            for key in (
+                "source_family",
+                "source_families",
+                "source_family_candidates",
+                "source_skill",
+                "query_variant_plan",
+                "acquisition_lane",
+                "theme_question",
+            )
+        ) or maybe_text(value.get("object_kind")) in {"investigation-theme", "theme-acquisition-plan"}
+        if mentions_policy_basis and acquisition_shaped:
+            return True
+        return any(policy_evaluation_basis_acquisition_lane_misuse(child) for child in value.values())
+    if isinstance(value, list):
+        return any(policy_evaluation_basis_acquisition_lane_misuse(child) for child in value)
+    return False
+
+
 def interaction_boundary_visible(text: str) -> bool:
     return contains_any_phrase(text, INTERACTION_BOUNDARY_TERMS)
 
@@ -1928,20 +2216,72 @@ def policy_evaluation_claim_present(text: str) -> bool:
     return contains_unnegated_phrase(text, POLICY_EVALUATION_CLAIM_PHRASES)
 
 
+def policy_lane_declares_absence(draft: dict[str, Any]) -> bool:
+    policy_lane = source_material_dict(draft).get("policy_lane")
+    if not isinstance(policy_lane, dict):
+        return False
+    value = policy_lane.get("official_action_or_governance_record_basis_visible")
+    return value is False or maybe_text(value).casefold() in {"false", "0", "no"}
+
+
+def official_action_or_governance_record_basis_visible(draft: dict[str, Any], *, run_dir: Path | None) -> bool:
+    source_material = source_material_dict(draft)
+    policy_lane = source_material.get("policy_lane")
+    if isinstance(policy_lane, dict):
+        visible = policy_lane.get("official_action_or_governance_record_basis_visible")
+        if visible is True or maybe_text(visible).casefold() in {"true", "1", "yes"}:
+            return True
+        if visible is False or maybe_text(visible).casefold() in {"false", "0", "no"}:
+            return False
+    for brief in section_brief_rows(draft):
+        refs = [*list_items(brief.get("evidence_refs")), *list_items(brief.get("refs"))]
+        if not refs:
+            continue
+        text = "\n".join(
+            [
+                maybe_text(brief.get("section_key")),
+                maybe_text(brief.get("section_role")),
+                maybe_text(brief.get("claim_strength")),
+                "\n".join(strings_from(brief.get("source_families"))),
+                "\n".join(strings_from(brief.get("main_claims"))),
+            ]
+        )
+        if contains_any_phrase(text, OFFICIAL_ACTION_GOVERNANCE_BASIS_MARKERS) and not contains_any_phrase(
+            text,
+            INSUFFICIENT_BASIS_MARKERS,
+        ):
+            return True
+    combined = "\n".join(
+        [
+            "\n".join(strings_from(source_material)),
+            "\n".join(all_evidence_refs(draft)),
+            "\n".join(
+                "\n".join(strings_from(artifact))
+                for artifact in helper_artifacts_from_draft(draft, run_dir=run_dir)
+            ),
+        ]
+    )
+    return contains_any_phrase(combined, OFFICIAL_ACTION_GOVERNANCE_BASIS_MARKERS) and not (
+        policy_lane_declares_absence(draft)
+    )
+
+
 def policy_evaluation_basis_visible(draft: dict[str, Any], *, run_dir: Path | None) -> bool:
+    if not official_action_or_governance_record_basis_visible(draft, run_dir=run_dir):
+        return False
     counts = council_object_counts(draft)
     if any(
         counts.get(kind, 0) > 0
         for kind in (
-            "proposal",
             "finding",
             "evidence-bundle",
             "round-synthesis",
             "readiness-opinion",
+            "proposal",
         )
-    ):
+    ) or claim_chain_basis_visible(draft):
         return True
-    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    source_material = source_material_dict(draft)
     combined = "\n".join(
         [
             "\n".join(strings_from(source_material)),
@@ -2015,6 +2355,32 @@ def validate_claim_boundary_semantics(
     text = report_prose_text(draft)
     if not text:
         return issues
+
+    if strong_report_claim_present(text) and not claim_chain_basis_visible(draft):
+        issues.append(
+            issue(
+                "strong-claim-without-brief-review-or-frozen-basis",
+                (
+                    "Strong policy, responsibility, interaction, public semantic, or "
+                    "attribution claims require an agent section brief, theme "
+                    "sufficiency review, or frozen/reporting basis."
+                ),
+                "error",
+            )
+        )
+
+    if policy_evaluation_basis_acquisition_lane_misuse(source_material_dict(draft)):
+        issues.append(
+            issue(
+                "policy-evaluation-basis-as-acquisition-lane",
+                (
+                    "policy_evaluation_basis must remain a report synthesis layer. "
+                    "It must not appear as an investigation theme, source family, "
+                    "query lane, or theme acquisition plan target."
+                ),
+                "error",
+            )
+        )
 
     has_representative_design = mission_has_representative_sampling_design(run_dir)
     if (
@@ -2154,6 +2520,17 @@ def validate_claim_boundary_semantics(
         for key, (code, message) in required_basis_messages.items():
             if not public_basis[key]:
                 issues.append(issue(code, message, "error"))
+        if not public_semantic_source_family_denominator_visible(draft, run_dir=run_dir):
+            issues.append(
+                issue(
+                    "public-semantic-source-family-denominator-missing",
+                    (
+                        "Public semantic percentages or label distributions require "
+                        "a visible source family and denominator in the carried basis."
+                    ),
+                    "error",
+                )
+            )
         if not public_discourse_sample_boundary_visible(text):
             issues.append(
                 issue(
@@ -2285,6 +2662,7 @@ def validate_claim_boundary_semantics(
                     "warning",
                 )
             )
+        issues.extend(interaction_timeline_quality_issues(draft))
 
     if policy_evaluation_claim_present(text) and not policy_evaluation_basis_visible(draft, run_dir=run_dir):
         issues.append(
@@ -2292,8 +2670,22 @@ def validate_claim_boundary_semantics(
                 "policy-evaluation-claim-without-basis",
                 (
                     "Policy success, failure, effectiveness, harm, or improvement claims "
-                    "require a proposal, finding, evidence bundle, policy-evaluation basis, "
-                    "or equivalent council-carried object."
+                    "require official action or governance record basis plus a "
+                    "council-carried/reporting basis. policy_evaluation_basis is a "
+                    "synthesis layer, not an acquisition lane."
+                ),
+                "error",
+            )
+        )
+
+    if (policy_evaluation_claim_present(text) or responsibility_claim_present(text)) and policy_lane_declares_absence(draft):
+        issues.append(
+            issue(
+                "policy-lane-absence-claim-downgrade-required",
+                (
+                    "The draft source_material records no official action or governance "
+                    "record basis. Policy effectiveness, policy response, or "
+                    "responsibility conclusions must be downgraded to a basis gap."
                 ),
                 "error",
             )

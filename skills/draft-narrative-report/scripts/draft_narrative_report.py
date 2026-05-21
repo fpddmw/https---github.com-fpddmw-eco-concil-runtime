@@ -1892,6 +1892,22 @@ def artifact_row(kind: str, path: Path, payload: dict[str, Any]) -> dict[str, An
             ]
             if isinstance(item, dict)
         ],
+        "acquisition_checkpoints": [
+            item
+            for item in [
+                *list_items(payload.get("acquisition_checkpoints")),
+                *list_items(report_packet.get("acquisition_checkpoints")),
+            ]
+            if isinstance(item, dict)
+        ],
+        "theme_sufficiency_reviews": [
+            item
+            for item in [
+                *list_items(payload.get("theme_sufficiency_reviews")),
+                *list_items(report_packet.get("theme_sufficiency_reviews")),
+            ]
+            if isinstance(item, dict)
+        ],
         "interaction_timeline_nodes": [
             item
             for item in [
@@ -1978,6 +1994,26 @@ def section_briefs_from_reporting_basis(reporting_basis: list[dict[str, Any]]) -
     return briefs
 
 
+def reporting_basis_items(reporting_basis: list[dict[str, Any]], item_key: str) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in reporting_basis:
+        for item in row.get(item_key, []):
+            if not isinstance(item, dict):
+                continue
+            key = (
+                maybe_text(item.get("checkpoint_id"))
+                or maybe_text(item.get("review_id"))
+                or maybe_text(item.get("brief_id"))
+                or json.dumps(item, ensure_ascii=True, sort_keys=True)
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(item)
+    return items
+
+
 def interaction_timeline_nodes_from_reporting_basis(reporting_basis: list[dict[str, Any]]) -> list[dict[str, Any]]:
     nodes: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -2032,7 +2068,46 @@ def first_section_brief_path(section_briefs: list[dict[str, Any]]) -> str:
         path = maybe_text(brief.get("source_artifact_path"))
         if path:
             return path
+        provenance = brief.get("provenance") if isinstance(brief.get("provenance"), dict) else {}
+        path = maybe_text(provenance.get("artifact_path"))
+        if path:
+            return path
     return ""
+
+
+def brief_denominators(brief: dict[str, Any]) -> dict[str, Any]:
+    denominators = brief.get("denominators")
+    if isinstance(denominators, dict):
+        return denominators
+    denominator = brief.get("denominator")
+    return denominator if isinstance(denominator, dict) else {}
+
+
+def policy_lane_basis_visible(section_briefs: list[dict[str, Any]], reporting_basis: list[dict[str, Any]]) -> bool:
+    for brief in section_briefs:
+        text = " ".join(
+            [
+                maybe_text(brief.get("section_key")),
+                maybe_text(brief.get("section_role")),
+                " ".join(text_list(brief.get("source_families"))),
+                maybe_text(brief.get("claim_strength")),
+            ]
+        ).casefold()
+        refs = [*evidence_ref_texts(brief.get("evidence_refs")), *evidence_ref_texts(brief.get("refs"))]
+        if refs and any(term in text for term in ("official", "policy", "governance", "formal-record", "regulationsgov")):
+            if "insufficient" not in text and "missing" not in text:
+                return True
+    for row in reporting_basis:
+        text = " ".join(
+            [
+                maybe_text(row.get("summary")),
+                json.dumps(row.get("evidence_index", []), ensure_ascii=True),
+                json.dumps(row.get("sections", []), ensure_ascii=True),
+            ]
+        ).casefold()
+        if any(term in text for term in ("official action", "governance record", "federal register", "formal-record")):
+            return True
+    return False
 
 
 def council_basis_objects(run_dir: Path, *, run_id: str, basis_round_id: str, limit: int) -> dict[str, list[dict[str, Any]]]:
@@ -2717,7 +2792,7 @@ def build_interaction_timeline_addendum(
     if not interaction_briefs and not interaction_nodes:
         return {}
     brief = interaction_briefs[0] if interaction_briefs else {}
-    denominator = brief.get("denominator") if isinstance(brief.get("denominator"), dict) else {}
+    denominator = brief_denominators(brief)
     node_count = int(denominator.get("interaction_node_count") or len(interaction_nodes))
     episode_count = int(denominator.get("lane_episode_card_count") or 0)
     parallel_count = int(denominator.get("parallel_timeline_node_count") or 0)
@@ -3397,6 +3472,12 @@ def draft_narrative_report(
         report_round_id=round_id,
     )
     section_briefs = section_briefs_from_reporting_basis(reporting_basis)
+    acquisition_checkpoints = reporting_basis_items(reporting_basis, "acquisition_checkpoints")
+    theme_sufficiency_reviews = reporting_basis_items(
+        reporting_basis,
+        "theme_sufficiency_reviews",
+    )
+    policy_basis_visible = policy_lane_basis_visible(section_briefs, reporting_basis)
     interaction_timeline_nodes = interaction_timeline_nodes_from_reporting_basis(
         reporting_basis
     )
@@ -3754,6 +3835,13 @@ def draft_narrative_report(
             "Public, media, and formal-record material supports bounded semantic or governance context where cited; it is not representative public sentiment or physical source attribution by itself.",
             "The report is usable as a bounded synthesis, but stronger causal, attribution, representativeness, or policy claims require further investigation and council adoption.",
         ]
+    if not policy_basis_visible:
+        policy_limit = (
+            "政策线限制：本轮没有可见的 official action / governance record section brief 或等价报告依据；报告只能把政策评估写成缺口和后续评估维度，不能写政策有效性、政策回应或责任结论。"
+            if is_zh(report_language)
+            else "Policy-lane limitation: no official action / governance record section brief or equivalent report basis is visible, so the report may describe the policy-evaluation gap and follow-up dimensions but must not state policy effectiveness, policy response, or responsibility conclusions."
+        )
+        limitation_narrative = unique_texts([policy_limit, *limitation_narrative])
     public_discourse_addendum = build_public_discourse_addendum(
         summary=public_summary,
         summary_path=public_summary_path,
@@ -4017,12 +4105,22 @@ def draft_narrative_report(
                 "advisory_only": bool(public_summary),
             },
             "section_briefs": section_briefs,
+            "acquisition_checkpoints": acquisition_checkpoints,
+            "theme_sufficiency_reviews": theme_sufficiency_reviews,
             "interaction_timeline": {
                 "path": first_section_brief_path(section_briefs),
                 "section_brief_count": len(section_briefs),
                 "interaction_node_count": len(interaction_timeline_nodes),
                 "lane_episode_card_count": len(lane_episode_cards),
                 "advisory_only": bool(section_briefs or interaction_timeline_nodes or lane_episode_cards),
+            },
+            "policy_lane": {
+                "official_action_or_governance_record_basis_visible": policy_basis_visible,
+                "policy_evaluation_basis_is_synthesis_layer": True,
+                "policy_evaluation_basis_is_not_acquisition_lane": True,
+                "if_absent_report_boundary": (
+                    "Downgrade policy evaluation to missing basis/follow-up dimensions; do not write policy effectiveness, policy response, or responsibility conclusions."
+                ),
             },
             "lane_episode_cards": lane_episode_cards,
             "formal_policy_helper_summary": formal_helper_meta,

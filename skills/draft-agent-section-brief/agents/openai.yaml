@@ -1,0 +1,6 @@
+name: draft-agent-section-brief
+description: Draft one agent-authored section brief for reporting handoff.
+default_prompt: >
+  Use $draft-agent-section-brief to submit a bounded report section brief with
+  refs, source families, denominators, limitations, and blocked phrases. Do not
+  add new findings or bypass frozen/reporting basis.

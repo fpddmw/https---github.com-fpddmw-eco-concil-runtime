@@ -4,6 +4,55 @@ from .types import CanonicalContract, PLANE_ANALYSIS, _contract
 
 
 ANALYSIS_CONTRACTS: dict[str, CanonicalContract] = {
+    "acquisition-checkpoint": _contract(
+        "acquisition-checkpoint",
+        plane=PLANE_ANALYSIS,
+        schema_version="acquisition-checkpoint-v1",
+        id_field="checkpoint_id",
+        required_text_fields=(
+            "decision_source",
+            "theme_id",
+            "checkpoint_status",
+            "stop_or_continue_reason",
+        ),
+        required_list_fields=(
+            "evidence_refs",
+            "lineage",
+            "source_family_counts",
+            "query_variant_hits",
+            "zero_low_volume_or_failed_attempts",
+            "coverage_risks",
+            "challenger_quick_review",
+            "next_recovery_choice",
+        ),
+        required_dict_fields=("provenance", "visible_denominators"),
+        required_non_empty_dict_fields=("provenance",),
+    ),
+    "theme-sufficiency-review": _contract(
+        "theme-sufficiency-review",
+        plane=PLANE_ANALYSIS,
+        schema_version="theme-sufficiency-review-v1",
+        id_field="review_id",
+        required_text_fields=(
+            "decision_source",
+            "theme_id",
+            "review_status",
+            "summary",
+        ),
+        required_list_fields=(
+            "evidence_refs",
+            "lineage",
+            "supported_claim_slots",
+            "unsupported_claim_slots",
+            "valid_denominators",
+            "source_family_limits",
+            "representativeness_limits",
+            "required_downgrades",
+            "recommended_section_brief_inputs",
+        ),
+        required_dict_fields=("provenance",),
+        required_non_empty_dict_fields=("provenance",),
+    ),
     "spatiotemporal-relation-cue": _contract(
         "spatiotemporal-relation-cue",
         plane=PLANE_ANALYSIS,

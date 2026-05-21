@@ -15,6 +15,9 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (
 
 
 OBJECT_KIND_PROPOSAL = "proposal"
+OBJECT_KIND_REPORT_BLUEPRINT = "report-blueprint"
+OBJECT_KIND_INVESTIGATION_THEME = "investigation-theme"
+OBJECT_KIND_THEME_ACQUISITION_PLAN = "theme-acquisition-plan"
 OBJECT_KIND_FINDING = "finding"
 OBJECT_KIND_DISCUSSION_MESSAGE = "discussion-message"
 OBJECT_KIND_EVIDENCE_BUNDLE = "evidence-bundle"
@@ -41,6 +44,9 @@ OBJECT_KIND_REPORT_BASIS_FREEZE = "report-basis-freeze"
 OBJECT_KIND_DECISION_TRACE = "decision-trace"
 
 DYNAMIC_INVESTIGATION_OBJECT_KINDS = (
+    OBJECT_KIND_REPORT_BLUEPRINT,
+    OBJECT_KIND_INVESTIGATION_THEME,
+    OBJECT_KIND_THEME_ACQUISITION_PLAN,
     OBJECT_KIND_INVESTIGATION_PLAN,
     OBJECT_KIND_SUBISSUE,
     OBJECT_KIND_INVESTIGATION_SCOPE,
@@ -55,6 +61,9 @@ DYNAMIC_INVESTIGATION_OBJECT_KINDS = (
 )
 
 DYNAMIC_INVESTIGATION_ID_FIELDS = {
+    OBJECT_KIND_REPORT_BLUEPRINT: "blueprint_id",
+    OBJECT_KIND_INVESTIGATION_THEME: "theme_id",
+    OBJECT_KIND_THEME_ACQUISITION_PLAN: "plan_id",
     OBJECT_KIND_INVESTIGATION_PLAN: "plan_id",
     OBJECT_KIND_SUBISSUE: "subissue_id",
     OBJECT_KIND_INVESTIGATION_SCOPE: "scope_id",
@@ -69,6 +78,9 @@ DYNAMIC_INVESTIGATION_ID_FIELDS = {
 }
 
 DYNAMIC_INVESTIGATION_STATUS_DEFAULTS = {
+    OBJECT_KIND_REPORT_BLUEPRINT: "framed",
+    OBJECT_KIND_INVESTIGATION_THEME: "open",
+    OBJECT_KIND_THEME_ACQUISITION_PLAN: "submitted",
     OBJECT_KIND_INVESTIGATION_PLAN: "draft",
     OBJECT_KIND_SUBISSUE: "proposed",
     OBJECT_KIND_INVESTIGATION_SCOPE: "candidate",
@@ -118,6 +130,12 @@ DYNAMIC_INVESTIGATION_LINEAGE_FIELDS = (
     "subissue_ids",
     "scope_ids",
     "evidence_request_ids",
+    "claim_slots_supported",
+    "theme_ids",
+    "investigation_theme_ids",
+    "theme_acquisition_plan_ids",
+    "acquisition_checkpoint_ids",
+    "theme_sufficiency_review_ids",
     "position_ids",
     "context_packet_ids",
     "source_acquisition_proposal_ids",
@@ -435,6 +453,36 @@ def validate_source_acquisition_proposal_payload(payload: dict[str, Any]) -> Non
         )
 
 
+def validate_theme_acquisition_plan_payload(payload: dict[str, Any]) -> None:
+    author_role = maybe_text(payload.get("author_role"))
+    allowed_author_roles = {"environmental-investigator", "social-investigator"}
+    if author_role not in allowed_author_roles:
+        raise ValueError(
+            "theme-acquisition-plan must be authored or adopted by an investigator; "
+            f"got author_role `{author_role or '<empty>'}`."
+        )
+
+    authoring_mode = maybe_text(payload.get("authoring_mode")).casefold()
+    if authoring_mode not in {"agent-authored", "agent-adopted"}:
+        raise ValueError(
+            "theme-acquisition-plan authoring_mode must be `agent-authored` or "
+            f"`agent-adopted`; got `{authoring_mode or '<empty>'}`."
+        )
+
+    selected_route_text = " ".join(
+        [
+            " ".join(normalized_text_list(payload.get("source_family_candidates"))),
+            " ".join(normalized_text_list(payload.get("query_variant_plan"))),
+            " ".join(normalized_text_list(payload.get("expected_denominators"))),
+        ]
+    ).casefold()
+    if "policy_evaluation_basis" in selected_route_text or "policy evaluation basis" in selected_route_text:
+        raise ValueError(
+            "theme-acquisition-plan cannot treat policy_evaluation_basis as a "
+            "source family, query route, denominator, or acquisition lane."
+        )
+
+
 def normalized_dynamic_investigation_object_payload(
     payload: dict[str, Any],
     *,
@@ -585,6 +633,8 @@ def normalized_dynamic_investigation_object_payload(
     normalized[id_field] = maybe_text(normalized.get(id_field)) or object_id
     if normalized_kind == OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL:
         validate_source_acquisition_proposal_payload(normalized)
+    if normalized_kind == OBJECT_KIND_THEME_ACQUISITION_PLAN:
+        validate_theme_acquisition_plan_payload(normalized)
     normalized["schema_version"] = canonical_contract(normalized_kind).schema_version
     return validate_canonical_payload(normalized_kind, normalized)
 

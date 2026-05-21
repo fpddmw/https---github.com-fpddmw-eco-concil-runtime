@@ -1,288 +1,160 @@
-# OpenClaw 公共政策形势分析升级计划
+# OpenClaw 报告主导调查与及时反馈工作计划
 
-文档性质：本文是 OpenClaw 毕业设计提交前的工程升级计划，目标是把系统从“证据可审计的环境事件报告链路”升级为“面向生态环境形势分析的事实核查、舆情语义感知、政策语义互动和政策评估依据生成链路”。
+文档性质：本文是当前工程收口计划。旧版公共政策形势分析升级计划中的长期架构原则已经并入 `docs/openclaw-project-overview.md` 和 `docs/openclaw-source-family-workflows.md`；本文只保留下一阶段需要实现、回归和验收的任务。
 
-本文不是固定调查脚本，不是 runtime gate，不是 source 排序规则，也不要求所有 case 走同一套议程。它定义的是：当报告想提出某类 claim 时，系统应如何帮助 agent 找到可行动证据路径，并在报告层阻止没有 basis 的越界表述。
+本文不是 runtime 固定议程，不是 source 排序规则，不是硬数据量规则。它的目标是把 OpenClaw 从“先调查、后拼报告”的链路改成“报告 claim slots 和 evidence contract 前置，agents 围绕分主题调查，并在 round 内获得及时反馈”的链路。
 
-## 1. 核心目标
+## 1. 当前问题
 
-升级后的报告应围绕用户 mission 形成一条可审计论证链：
+NYC smoke backtest 已经证明 `lane_episode_cards -> interaction nodes -> section brief -> narrative report -> validator` 的基本链路可跑通，但报告本身仍不令人满意：
 
-`事实核查 -> 事实/官方动作时间线 -> 公共/政策语义样本 -> 事实、政策与公共语义互动 -> 政策评估依据 -> 可审计中文报告`
+1. `report-editor` 仍是主要写作者，其它 agents 只通过既有 artifacts 间接参与报告。
+2. 调查轮次没有由最终报告 claim slots 反推 evidence contract。
+3. 舆情和政策数据不足时，系统多是 advisory 提醒，不会形成及时补采和充分性讨论闭环。
+4. interaction timeline 有 typed structure，但节点缺少可读的逐日分析摘要。
+5. policy / official action lane 容易为空，导致报告不能支撑政策沟通、政策回应或政策有效性依据。
+6. validator 能阻断一部分无 basis claim，但还不能稳定检查报告叙事质量、policy lane absence、重复标签和分母异常。
 
-报告需要回答：
+## 2. 目标链路
 
-1. 事件或治理争议发生了什么，哪些事实可核查。
-2. 环境数据、正式政策记录、媒体材料和公众样本分别能证明什么、不能证明什么。
-3. 媒体、公众样本、正式政策记录如何描述问题、责任、风险、政策选择和不确定性。
-4. 公共语义和正式政策语义在哪里一致、错位或互补。
-5. 这些证据能为风险沟通、公众参与、政策回应和政策有效性评估提供哪些依据。
-6. 哪些结论仍不能被当前证据支持，尤其不能把样本内表达写成总体民意。
+目标链路：
 
-## 2. 不变的治理边界
+`mission -> report-framing round -> claim slots -> investigation themes -> theme acquisition plans -> in-round acquisition checkpoints -> sufficiency review -> agent section briefs -> report synthesis -> validator/backtest`
 
-1. `runtime kernel` 只负责执行、权限、审批、receipt、ledger、DB 持久化和 operator 可见状态。
-2. `runtime` 不选择 source，不固定议程，不给证据排序、打分或设置权重。
-3. `moderator` 是议会组织者，负责议题边界、round synthesis、readiness、continuation / closure 判断。
-4. `investigators` 保留自主调查权；系统只能暴露可行动路径和 claim gap，不替 agent 采信证据。
-5. `challenger` 审查外推、归因、代表性、政策责任和 unsupported claim。
-6. `report-editor` 只能消费 frozen/reporting basis、section brief 或 council object，不新增事实。
-7. optional-analysis/helper artifact 默认是 advisory，必须被 finding、evidence bundle、readiness opinion、round synthesis、reporting handoff 或 report basis 承接后才能进入报告主文。
+核心原则：
 
-## 3. 能力架构：四条主 Lane + 报告综合层
+1. 报告内容主导调查工作，但不预设调查结论。
+2. claim slots 是 mission-driven 的待回答问题槽，不是固定题型模板、领域模板或预设结论。
+3. report-editor 参与前置 framing，负责提出报告问题、claim slots 和写作所需 evidence shape。
+4. moderator 把 claim slots 拆成可分配、可讨论的 investigation themes。
+5. investigators 对各自 theme 自主选择 sources、queries 和 skills。
+6. theme acquisition plan 必须由 investigator 自己撰写，或由 investigator 显式采纳、修改后使用。
+7. moderator 可以提出主题和 evidence need，但不能替 investigator 决定 source、query 或 skill 路线。
+8. checkpoint 只在抓取结果会影响 claim strength、source-limit 或报告降级时记录，不能变成每次 tool call 的表单负担。
+9. sufficiency review 不是 runtime 判真机制，只回答“哪些 claim 能支撑、哪些必须降级、哪些缺 basis”；最终采信仍由议会通过 finding、evidence bundle、synthesis、readiness 或 report basis 完成。
+10. `policy_evaluation_basis` 是报告综合层产物，由事实、官方行动、公众语义、治理记录共同支撑，不是独立数据 lane。
+11. challenger 在 round 内及时审查覆盖、外推、分母、policy lane absence 和 unsupported wording。
+12. 数据量是否足够由 agents 协作形成 sufficiency review，不靠全局硬阈值。
+13. 弱报告仍允许生成，但必须明确 claim strength、缺失 basis、source-limit rationale 和降级表述。
 
-Lane 是 agent 可调用和推进的能力链，不是 runtime 固定议程。每条 lane 可以被 moderator 或 investigator 在 round brief、evidence request、finding、challenge、readiness 或 continuation 中显式提出。
+## 2.1 不可误读的设计边界
 
-### 3.1 Fact / Official Action Lane
+1. `claim_slots` 不是固定题型模板。它们必须从 mission、用户关注、已有议会对象和 report framing 现场生成，表达“本报告要回答什么”，而不是表达“系统一定要证明什么”。
+2. `investigation_theme` 不是 source queue。theme 只定义问题边界和 claim-basis 需求，不规定必须使用哪个 source family、query 或 skill。
+3. `theme_acquisition_plan` 必须 agent-authored 或 agent-adopted。moderator/report-editor 可以提出主题和证据缺口，但 investigator 必须保留路线选择权。
+4. `acquisition_checkpoint` 是及时反馈，不是合规表单。只有当结果会改变 claim strength、报告降级、source-limit rationale 或下一步恢复选择时才需要记录。
+5. `theme_sufficiency_review` 不是 runtime 判真、证据打分或自动放行。它只把可支撑 claim、必须降级 claim 和缺失 basis 显式化，供议会采信或挑战。
+6. `policy_evaluation_basis` 不是“政策评估数据”抓取 lane。它只能由 fact / official action、public-policy corpus、semantic perception 和 interaction timeline 的已承接材料综合而来。
 
-职责：
+## 3. 新增或重构对象
 
-1. 获取、归一化、查询和聚合环境事实、运行记录、官方行动和正式政策节点。
-2. 构建事实与官方动作时间线。
-3. 说明事实支持范围和不能升级的 claim。
+### 3.1 `report_blueprint`
 
-典型材料：
+用途：定义报告最终要回答的问题，不写结论，不生成固定题型模板。
 
-1. AirNow、OpenAQ、Open-Meteo、USGS、USBR RISE、NASA FIRMS 等环境/运行数据。
-2. Federal Register、USBR、DOI、EPA、agency notice、public involvement page 等正式记录。
-3. 官方健康建议、风险沟通公告、政策动作、会议和程序节点。
+字段建议：
 
-关键输出：
-
-1. `verified_fact_timeline`
-2. `environment_process_summary`
-3. `official_action_timeline`
-4. `fact_claim_boundary`
-
-边界：
-
-1. 环境指标不能直接推出政策成败、责任归属或公众态度。
-2. 官方记录能证明制度动作或程序入口存在，不自动证明政策有效性或共识。
-3. 对来源归因、传输链、政策责任等强 claim，必须保留替代解释和未证边界。
-
-### 3.2 Public-Policy Corpus Lane
-
-职责：
-
-1. 为公共讨论、媒体材料、正式政策文本和正式评论材料建立 corpus。
-2. 记录 query variants、source family、window、eligible count、dedup count、failed/zero/low-volume rationale。
-3. 形成覆盖审计，说明样本能代表什么、不能代表什么。
-
-关键输出：
-
-1. `public_policy_corpus_plan`
-2. `query_variant_pack`
-3. `materialized_public_policy_corpus`
-4. `public_policy_corpus_coverage_audit`
-5. `source_limit_rationale`
-
-边界：
-
-1. 没有 corpus audit 的公共语义只能作为个例或线索，不能进入报告主文的样本结构判断。
-2. GDELT、YouTube、Bluesky、formal comments 不得混用 denominator。
-3. API 不足时，系统输出 source-limit rationale，不能编造宏观舆情。
-
-### 3.3 Semantic Perception Lane
-
-职责：
-
-1. 对公众样本、媒体文本和正式政策文本分别做 bounded semantic labels。
-2. 聚合样本内议题、情绪、来源叙事、责任归因、政策诉求、信任/不信任、不确定性表达。
-3. 保持 source family、sample definition 和 denominator 隔离。
-
-关键输出：
-
-1. `public_semantic_annotations`
-2. `policy_semantic_annotations`
-3. `media_tone_summary`
-4. `semantic_aggregate`
-5. `cross_source_semantic_comparison`
-
-边界：
-
-1. GDELT tone 是媒体/文档语气，不是公众情绪。
-2. YouTube / Bluesky / comments 等平台样本只能声明样本内结构。
-3. 非互斥标签必须说明，不能相加解释为 100% 的意见组成。
-4. source narrative 是公共来源叙事，不是物理来源归因。
-
-### 3.4 Interaction Timeline Lane
-
-职责：
-
-1. 将事实节点、官方动作、媒体可见性和公众/政策语义放在同一时间线上。
-2. 分析语义如何随事件事实、政策动作和信息发布发生阶段性变化。
-3. 标出事实语义错位、政策回应缺口、风险沟通节点和不确定性。
-
-关键输出：
-
-1. `fact_policy_public_interaction_timeline`
-2. `semantic_shift_events`
-3. `communication_gap_notes`
-4. `misalignment_and_uncertainty_register`
-
-边界：
-
-1. 时间相关性不能写成因果。
-2. 每个“互动”判断至少应引用事实/政策侧和公共/媒体侧证据。
-3. 若只有单侧证据，只能写成待验证线索或报告限制。
-
-### 3.5 报告综合层：Policy Evaluation Basis
-
-`policy_evaluation_basis` 不作为独立调查 lane。它是 moderator / challenger / report-editor 基于前四条 lane 和 frozen basis 形成的综合产物。
-
-允许输出：
-
-1. 哪些证据可用于评估政策沟通、公众参与、风险治理或政策回应。
-2. 哪些评估维度已有材料支持。
-3. 哪些维度只能作为后续调查方向。
-4. 哪些 claim 不能写成政策有效/无效或责任结论。
-
-禁止输出：
-
-1. 无证据的政策成败评分。
-2. 总体公众态度断言。
-3. 把样本内情绪、媒体 tone 或正式记录直接写成政策效果。
-
-## 4. Claim-Basis Soft Obligations
-
-以下是报告 claim 的软义务，不是固定调查议程。若报告不写对应 claim，可以不运行对应分析；若报告要写对应 claim，则必须有 basis，否则 report validator 应要求降级、删除或补证。
-
-| 报告 claim | 需要的最低 basis | 不满足时的写法 |
-| --- | --- | --- |
-| 公众样本中某类情绪/议题/来源叙事比例 | corpus、coverage audit、annotation、aggregation、denominator、非代表性边界 | 只能写个例或小样本线索 |
-| 正式评论主要争点/关切/立场线索 | candidate audit、可读 comment/detail/attachment text、issue classification、aggregation | 只能写找到了候选评论入口 |
-| 环境趋势/峰值/运行状态 | `aggregate-environment-evidence` 或等价统计摘要；否则 item-level boundary | 只能写具体证据例子 |
-| 事实、政策动作和公共语义互动 | interaction timeline，且每个节点有至少两类 refs | 只能写并列时间线或待验证线索 |
-| 来源归因、因果、传输链、政策责任 | normalized refs、relation/fact-check/challenger review、alternatives/limitations | 写成相容性、线索或仍需验证 |
-| 政策沟通/参与/回应评估依据 | fact/action evidence、public-policy semantic evidence、claim boundary、challenger review | 只能写后续可评估维度 |
-
-## 5. Skill 推荐机制：Claim-Gap Action Cards
-
-当前问题不是缺少 `Skill.md`，而是 agent 很难稳定理解“什么时候用哪个 skill、用完接什么、失败后怎么恢复、不能证明什么”。因此推荐机制应从自然语言文档升级为机器可读 advisory surface。
-
-推荐机制名称建议：
-
-`materialize-claim-gap-action-cards`
-
-它不是 scheduler，不是 gate，不排序，不打分，不自动执行。它只输出可行动卡片，帮助 moderator 和 investigators 看见 claim gap。
-
-输入：
-
-1. mission focus。
-2. 当前 round / prior round council objects。
-3. normalized signal counts。
-4. existing helper artifacts。
-5. failed / zero / low-volume / receipt-only acquisition attempts。
-6. open challenges。
-7. report readiness gaps。
-
-输出 action card：
-
-1. `claim_gap`
-2. `why_it_matters`
-3. `candidate_skills`
-4. `required_inputs`
-5. `expected_artifacts`
-6. `if_not_done_report_boundary`
-7. `owner_role_suggestions`
+1. `report_questions`
+2. `claim_slots`
+3. `required_evidence_families`
+4. `forbidden_claims_without_basis`
+5. `expected_sections`
+6. `policy_evaluation_boundaries`
 
 验收：
 
-1. 输出多个并列行动卡，不输出优先级排名。
-2. 不自动触发 skill。
-3. operator 只批准高影响动作和记录边界，不手动告诉 agent 查什么。
-4. investigator / moderator 可以选择采纳、拒绝或改写 action card，并应写入 council object。
+1. NYC smoke blueprint 能基于 mission 明确事实核查、官方/政策动作、舆情语义、互动时间线和政策评估依据五类待回答问题。
+2. Colorado River blueprint 能基于 mission 明确水文压力、治理节点、正式记录、公共语义、多主体叙事和政策评估依据。
+3. blueprint 不能写成“所有环境事件都套同一组问题”的领域模板。
 
-## 6. Skill 契约字段
+### 3.2 `investigation_theme`
 
-每个关键 skill 应逐步声明以下 metadata。该 metadata 用于 action cards、agent entry surface、report validation 和文档生成，不用于 runtime source 排序。
+用途：把 report claim slots 拆成天然适配议会结构的分主题。
 
-1. `observes`：该 skill 能观察什么。
-2. `cannot_prove`：该 skill 不能证明什么。
-3. `requires`：前置输入、corpus、artifact 或 DB state。
-4. `produces`：结构化 artifact kind、DB object、normalized signal 或 advisory summary。
-5. `followups`：正常输出后的候选后续 skill。
-6. `failure_recovery`：zero / failed / low-volume / receipt-only 后的恢复路径。
-7. `claim_limits`：报告中允许和禁止的 claim。
-8. `report_uses`：输出可支持哪些报告用途。
-9. `owner_roles`：哪些 agent 可主导使用。
+典型 theme：
+
+1. `fact_event_process`
+2. `official_policy_action`
+3. `public_semantic_perception`
+4. `media_policy_framing`
+5. `interaction_timeline`
+
+`policy_evaluation_basis` 不列为普通 acquisition theme。它可以作为报告综合问题或 synthesis target 出现，但其材料必须来自事实、官方行动、公共/媒体语义、治理记录和互动时间线等上游 theme。
 
 验收：
 
-1. Agent entry surface 能展示当前 skill 的 followups 和 failure recovery。
-2. fetch skill 的 zero-result 不直接终止 source family，至少产生 recovery action card 或 source-limit record。
-3. public-policy 相关 helper 输出 typed artifacts，不能只输出自由文本。
+1. 每个 theme 有 owner role、claim boundary、expected artifacts 和 completion criteria。
+2. theme 不固定 source，不预设结论，不携带 query 或 skill 路线。
 
-## 7. Advisory Lane State
+### 3.3 `theme_acquisition_plan`
 
-Lane state 只帮助 agent 理解当前缺口，不作为 runtime hard gate。
+用途：让 investigator 在抓取前说明当前 theme 需要什么材料、准备用什么来源和低量时如何恢复。该计划必须由 investigator 撰写，或由 investigator 明确采纳并可修改；moderator 不能替 investigator 决定 source、query 或 skill 路线。
 
-建议状态：
+字段建议：
 
-1. `unscoped`
-2. `corpus-planned`
-3. `acquisition-attempted`
-4. `corpus-materialized`
-5. `coverage-audited`
-6. `annotated`
-7. `aggregated`
-8. `interaction-timeline-built`
-9. `section-brief-ready`
-10. `report-basis-carried`
+1. `theme_id`
+2. `claim_slots_supported`
+3. `source_family_candidates`
+4. `query_variant_plan`
+5. `time_window`
+6. `sample_unit`
+7. `expected_denominators`
+8. `failure_recovery_plan`
+9. `downgrade_boundary`
 
-使用规则：
+验收：
 
-1. 如果报告要写样本内语义比例，状态应至少达到 `aggregated`，否则必须降级表述。
-2. 如果报告要写事实/政策/公共语义互动，状态应达到 `interaction-timeline-built`，否则只能写并列时间线或待验证关系。
-3. 如果 helper 结果未被 council object 或 report basis 承接，状态不能视为 `report-basis-carried`。
-4. 弱报告允许生成，但必须说明缺少哪些 state 和对应 claim 限制。
+1. public / policy theme 不允许没有 source-family 思考就直接进入报告。
+2. plan 是 agent-authored 或 agent-adopted，不是 runtime 自动排序，也不是 moderator 指派的 source/script。
+3. plan 可以引用 action cards 或 source-family workflows，但 investigator 必须显式选择、拒绝或改写。
 
-## 8. Skill 调整范围
+### 3.4 `acquisition_checkpoint`
 
-原则：能重构现有 skill 就不新增平行 skill。新增只用于确实没有现有职责承接的新能力。
+用途：在当前 round 内做及时反馈，避免“抓一次数据、开一次新 round”的低效循环。checkpoint 只在抓取、查询或归一化结果会影响 claim strength、source-limit、降级表述或恢复路径时记录；不为每次 tool call 生成表单。
 
-### 8.1 优先重构现有 Skills
+字段建议：
 
-| 现有 skill | 重构方向 | 备注 |
-| --- | --- | --- |
-| `materialize-public-discourse-corpus` | 扩展为 public-policy corpus 的物化基础，支持媒体、公众样本、正式政策文本的 source-family metadata | 不急于新增 `materialize-public-policy-corpus` |
-| `audit-public-discourse-sample-coverage` | 扩展 query variants、failed/zero/low-volume rationale、source family coverage、denominator | 作为 corpus coverage 主路径 |
-| `classify-public-discourse-affect` | 扩展为 bounded semantic labels：affect、issue frame、source narrative、policy demand、trust/confidence、uncertainty、responsibility attribution | 可保留旧名，也可加 alias |
-| `aggregate-public-discourse-annotations` | 扩展 denominator 隔离、source-family 分组、非互斥标签说明 | 支撑样本内比例 |
-| `compare-formal-public-footprints` | 扩展为 formal-public semantic comparison | 不新增平行 comparison skill |
-| `aggregate-environment-evidence` | 增强事实/官方动作 lane 的环境和运行摘要支持 | 仍保持描述性，不能做风险等级或归因 |
-| `draft-narrative-report` | 重构为 situation-analysis report 的主写作路径 | 不新增平行 compose skill |
-| `validate-narrative-report` | 扩展 claim-basis validation：denominator、formal comment corpus、environment aggregate、interaction timeline、policy basis | 不新增平行 validator |
-| `materialize-reporting-handoff` | 承接 section brief、claim gap、helper carried status | 保持 report basis 边界 |
+1. `theme_id`
+2. `source_family_counts`
+3. `query_variant_hits`
+4. `zero_low_volume_or_failed_attempts`
+5. `visible_denominators`
+6. `coverage_risks`
+7. `challenger_quick_review`
+8. `next_recovery_choice`
+9. `stop_or_continue_reason`
 
-### 8.2 建议新增 Skills
+验收：
 
-| 新 skill | 理由 | 边界 |
-| --- | --- | --- |
-| `materialize-claim-gap-action-cards` | 跨 lane advisory surface，现有 skill 无法自然承接 | 不排序、不调度、不自动执行 |
-| `build-fact-policy-public-interaction-timeline` | 新的核心分析能力，用于事实、政策动作、媒体/公众语义互动 | 只输出时间线、相邻关系和 limitations，不做因果断言 |
-| `draft-agent-section-brief` | 让各 agent 向 report-editor 提供可审计 brief，减少报告胡编 | 可先作为 reporting handoff 扩展；若实现成本低再新增 |
+1. checkpoint 能在同一 round 内触发 query 修正、same-family follow-up、source switch 或 source-limit rationale。
+2. checkpoint 不要求长表单，不为每个 tool call 生成官僚记录，只在结果将影响 claim strength 时触发。
+3. checkpoint 不替代 finding、evidence bundle、sufficiency review 或 readiness opinion。
 
-### 8.3 暂缓新增 Skills
+### 3.5 `theme_sufficiency_review`
 
-以下名字暂缓，不作为第一阶段新增，避免平行架构膨胀：
+用途：由 source owner、challenger、moderator 和必要时 report-editor 协作判断“当前数据能支撑哪些 claim，不能支撑哪些 claim”。它不是 runtime 判真机制，不自动决定证据采信、报告通过或调查结束。
 
-1. `plan-public-policy-analysis-lane`
-2. `expand-eco-public-queries`
-3. `plan-public-corpus-acquisition`
-4. `synthesize-policy-evaluation-basis`
-5. `compose-situation-analysis-report`
-6. `validate-situation-analysis-report`
+字段建议：
 
-这些能力优先并入 action cards、corpus coverage、semantic aggregation、reporting handoff、draft narrative report 和 validate narrative report。
+1. `supported_claim_slots`
+2. `unsupported_claim_slots`
+3. `valid_denominators`
+4. `source_family_limits`
+5. `representativeness_limits`
+6. `required_downgrades`
+7. `recommended_section_brief_inputs`
 
-## 9. 报告组织轮改造
+验收：
 
-报告组织轮从“把材料交给 report-editor 自行组织”改为“agent brief + frozen basis + report-editor compose”。
+1. 舆情数据量不再只靠硬规则；必须通过 sufficiency review 说明样本内结构是否足够。
+2. policy lane 为空时，review 必须显式阻止政策有效性或政策回应 claim。
+3. review 的结论必须由议会对象或 report basis 承接后，才能成为报告依据。
 
-### 9.1 Agent Brief
+### 3.6 `agent_section_brief`
 
-每个 agent section brief 建议包含：
+用途：让其它 agents 在报告撰写前提交可审计 brief，而不是只把事实材料交给 report-editor。
+
+字段建议：
 
 1. `section_role`
 2. `main_claims`
@@ -294,183 +166,186 @@ Lane state 只帮助 agent 理解当前缺口，不作为 runtime hard gate。
 8. `recommended_report_use`
 9. `blocked_phrases`
 
-### 9.2 进入报告的规则
+验收：
 
-1. report-editor 可以组织语言、调整结构和提升可读性。
-2. report-editor 新增的实质 claim 必须能回溯到 section brief、frozen basis 或 council object。
-3. challenger 标记为 unsupported 的句子必须修改、降级、删除，或由 moderator 决定开 continuation round。
-4. 没有 section brief 的材料不绝对禁止进入报告，但必须来自 frozen/reporting basis，并通过 validator 检查。
-5. 报告主文围绕 mission 问题、事件/治理过程、证据链、语义互动和结论边界展开，不写 runtime 日志。
+1. environmental-investigator 至少提交事实过程 brief。
+2. social-investigator 至少提交公共语义/媒体语义 brief。
+3. policy/formal material 由 social-investigator 或 moderator 形成 official action / policy record brief。
+4. report-editor 新增实质 claim 必须能回溯到 brief、frozen basis 或 council object。
 
-## 10. 案例目标
+## 4. 开发步骤
 
-### 10.1 NYC Smoke
-
-目标报告主线：
-
-`加拿大野火烟霾输送与纽约空气质量恶化事实核查、风险沟通语义变化、公众样本反应和政策沟通评估依据分析`
-
-报告应包含：
-
-1. AirNow / Open-Meteo / NASA FIRMS / 风场分别证明什么。
-2. 可以支持区域输送相容性，不能证明具体源火场责任。
-3. 事件前兆、高峰、缓解和后续解释阶段。
-4. 官方健康建议、学校/户外活动调整、交通/工作生活影响、媒体关注高峰等 policy communication anchors。
-5. GDELT 作为媒体/文档 tone 和可见性，不能代表公众情绪。
-6. YouTube / Bluesky / comments 作为平台样本，必须有样本定义、query variants、window、denominator 和边界。
-7. 事实、官方沟通和公众样本语义之间的互动分析。
-
-数据目标不设置硬数量阈值。若评论样本量低，必须通过 coverage audit 说明 query、window、quota、视频选择和 API 限制。
-
-### 10.2 Colorado River / Glen Canyon
-
-目标报告主线：
-
-`科罗拉多河水资源短缺与格伦峡谷大坝运行争议中的水文压力、联邦治理过程、公共与政策语义互动及政策评估依据分析`
-
-报告应包含：
-
-1. USBR RISE / USGS / Lake Powell / Glen Canyon releases 等数据说明 reservoir elevation、storage、inflow、release 和 powerplant release 的变化。
-2. 只描述运行事实和压力背景，不把单一水文指标写成政策责任或政策成败。
-3. DOI / USBR / Federal Register / SEIS / post-2026 guidelines / public involvement / Adaptive Management Work Group 等治理节点。
-4. 正式政策语义、媒体语义和公众样本语义的差异。
-5. 水位、release、治理动作和公共叙事变化之间的互动线索。
-6. 政策评估依据：参与机制覆盖、政策文本回应范围、公众关注与正式议程错位、风险沟通充分性、长期治理不确定性表达。
-
-## 11. 开发步骤
-
-### Phase 0: 文档与边界清理
+### Phase 1: 文档与对象契约收口
 
 任务：
 
-1. 将本计划作为毕业提交前代码层工程收口文档。
-2. 更新 `openclaw-project-overview.md` 中对本计划的引用。
-3. 清理或归档过时工作计划，保留 frozen case package 和必要 timeline。
+1. 以本文替换旧升级计划。
+2. 在常驻文档中保留 report-driven investigation、in-round feedback、四条主 lane 和 section brief 规则。
+3. 为 `report_blueprint`、`investigation_theme`、`theme_acquisition_plan`、`acquisition_checkpoint`、`theme_sufficiency_review`、`agent_section_brief` 定义 canonical schema 或 typed artifact shape。
 
 验收：
 
-1. 文档地图清晰。
-2. 旧计划不再与当前架构冲突。
+1. docs 不再重复旧 phase 列表。
+2. 新对象 shape 可被 tests 构造 fixture。
+3. 旧 action cards / interaction timeline / reporting handoff 的语义与新对象不冲突。
 
-### Phase 1: Skill Contract Metadata 与 Action Cards
+### Phase 2: Report-Framing Round
 
 任务：
 
-1. 为核心 fetch / normalize / query / optional-analysis / reporting skills 添加或补齐 contract metadata。
-2. 实现 `materialize-claim-gap-action-cards`。
-3. 将 action cards 暴露到 agent entry surface 和 operator 可见 artifact。
+1. 增加 framing 产物生成路径，可由 moderator/report-editor 基于 mission 生成 `report_blueprint`。
+2. 将 blueprint 拆成 `investigation_themes`。
+3. 将 themes 暴露给 agent entry surface 和 round brief。
+4. 明确 claim slots 的 mission-driven 属性，防止生成固定题型模板。
 
 验收：
 
-1. Action cards 不排序、不自动执行。
-2. failed / zero / low-volume / receipt-only attempt 能产生 recovery card 或 source-limit card。
-3. agent 能看到 followups、failure recovery 和 claim limits。
+1. NYC smoke 自动或半自动生成五类 claim slots：事实核查、官方行动、舆情语义、互动时间线、政策评估依据。
+2. Colorado River 自动或半自动生成水文、治理记录、公共/媒体/正式语义、互动、政策评估依据 themes。
+3. framing 不触发 fetch，不选择 source，不写结论。
+4. 相同框架在不同 mission 下生成的问题槽应明显不同，不能只是复用领域模板。
 
-### Phase 2: Corpus 与 Coverage 重构
+### Phase 3: Theme Acquisition 与 In-Round Feedback
 
 任务：
 
-1. 扩展 corpus materialization。
-2. 扩展 coverage audit。
-3. 将 GDELT DOC/tone/table、YouTube video/comments、Bluesky false-zero、formal record/comment coverage 纳入 source-family 审计。
+1. 为 public / policy / environment themes 生成或接收 `theme_acquisition_plan`。
+2. 在 corpus materialization、coverage audit、claim-gap action cards 周围增加 `acquisition_checkpoint` 输出。
+3. 让 checkpoint 能承接 failed / zero / low-volume / receipt-only attempts，并提出恢复路径。
+4. challenger 能对 checkpoint 做快速审查，不必等报告 validator 才发现问题。
+5. 保证 acquisition plan 的 source / query / skill 路线由 investigator 采纳或改写。
 
 验收：
 
-1. 每个 corpus 有 source family、sample definition、window、query variants、eligible count、dedup count、failure rationale。
-2. 不同 source family denominator 不混用。
+1. 舆情低量时，系统能在当前 round 内暴露 query variant、source-family 和 denominator 问题。
+2. GDELT tone、YouTube comments、Bluesky posts、formal comments 的 denominator 不混合。
+3. policy lane 为空时，checkpoint 明确提示 official action / governance record 补采或 report downgrade。
+4. 不通过全局硬阈值决定是否足够。
+5. checkpoint 数量与 claim-impact 绑定，不因普通成功 tool call 膨胀。
 
-### Phase 3: Semantic Perception 重构
+### Phase 4: Sufficiency Review 与 Agent Section Brief
 
 任务：
 
-1. 扩展 semantic taxonomy。
-2. 扩展 annotation worker。
-3. 扩展 aggregation。
-4. 支持 formal policy semantic labels 和 public/media semantic labels 的分离。
+1. 新增或重构 `draft-agent-section-brief` 路径。
+2. 将 `theme_sufficiency_review` 接入 reporting handoff。
+3. 让 environmental、social、policy/formal 相关主题都能产出 brief。
+4. section brief 必须携带 refs、claim strength、denominator、limitations、blocked phrases。
+5. 将 `policy_evaluation_basis` 保持为 report synthesis 层，不新增独立“政策评估数据”采集 lane。
 
 验收：
 
-1. 任一比例都有 denominator 和 sample definition。
-2. GDELT tone、YouTube comments、formal comments 不会混成同一个情绪比例。
-3. public source narrative 不会被写成 physical source attribution。
+1. report handoff 不再只由脚本从 artifacts 合成单一 section brief。
+2. 其它 agents 可以实质参与报告内容组织。
+3. 没有 policy brief 时，报告不能写政策有效性或政策回应结论，只能写缺口和后续评估维度。
+4. sufficiency review 不直接让 runtime 判定 report-ready；report-ready 仍由议会和 gate/freeze 链路承接。
 
-### Phase 4: Interaction Timeline 与 Section Brief
+### Phase 5: Interaction Timeline 和报告可读性
 
 任务：
 
-1. 实现 `build-fact-policy-public-interaction-timeline`。
-2. 实现或扩展 `draft-agent-section-brief`。
-3. 将 interaction timeline 和 section brief 接入 reporting handoff。
+1. interaction timeline 节点必须从 lane episode cards 生成可读 `node_summary`。
+2. interaction timeline 区分事实侧、政策侧、公共/媒体侧。
+3. narrative report 渲染逐日或阶段性互动线，而不是只写 artifact counts。
+4. 公共语义 section 清理重复标签、分母异常和“100% 中性报道”这类不可读输出。
 
 验收：
 
-1. 每个互动节点引用事实/政策侧和公共/媒体侧证据。
-2. section brief 带 refs、claim strength、denominator、limitations。
+1. NYC smoke 报告能讲清楚 6 月 6 日、6 月 7 日、6 月 8 日事实变化、公共语义变化和官方/政策动作是否缺失。
+2. interaction section 不再只写“49 个 lane episode cards、6 个节点”。
+3. validator 能识别缺少 node summary、policy lane absence 和 denominator 异常。
 
-### Phase 5: Report 与 Validator 重构
+### Phase 6: Policy / Official Action Lane 补强
 
 任务：
 
-1. 重构 `draft-narrative-report`，使其成为 situation-analysis report 主路径。
-2. 重构 `validate-narrative-report`，加入 claim-basis 检查。
-3. validator 识别公众比例、正式评论争点、环境趋势、互动判断、政策评估依据、强归因/责任 claim 的 basis 缺口。
+1. 为突发环境事件补齐 official action acquisition routes，例如 agency alerts、health guidance、school/outdoor activity changes、public service advisories。
+2. 为治理争议案例补齐 Federal Register、agency pages、public involvement、EIS/SEIS、USBR/DOI project records。
+3. normalize-official-governance-records 输出要能形成 policy lane episode cards。
 
 验收：
 
-1. 报告像专业调研/学术汇报，不像 runtime 日志。
-2. 没有 basis 的强 claim 被阻断、降级或要求补证。
-3. helper artifact 未被 council/report basis 承接时不能直接进入主文。
+1. NYC smoke full run 至少形成 official action / risk communication episodes，若确实未抓到则输出 source-limit rationale。
+2. Colorado River run 至少形成 governance record / public involvement / policy process episodes。
+3. policy lane 不再默默为空。
 
-### Phase 6: 双案例补跑与冻结
+### Phase 7: Validator 与回归
 
 任务：
 
-1. NYC smoke：补齐 action cards、corpus audit、semantic aggregation、interaction timeline、section brief、report rewrite。
-2. Colorado River：补齐环境聚合、治理记录承接、public-policy semantic comparison、interaction timeline、section brief、report rewrite。
-3. 冻结 case package、report basis、narrative report、defense onepager。
+1. 扩展 validator，检查 report claim 是否有对应 section brief、sufficiency review 或 frozen basis。
+2. 检查 public semantic percentages 的 denominator 和 source family。
+3. 检查 interaction claims 是否有 lane episode cards、node summaries 和至少两类 evidence refs。
+4. 检查 policy evaluation wording 是否有 policy/official action basis。
+5. 建立旧 run report-chain backtest 和完整 run 验收标准。
 
 验收：
 
-1. 两个报告均通过 validator。
-2. 报告能展示事实核查、舆情语义感知、政策语义互动和政策评估依据。
-3. 答辩材料能说明系统不是泛化民意预测，而是可审计的生态环境形势分析与样本内语义感知框架。
+1. NYC old-run backtest 能明确指出 policy lane 缺失导致的降级，而不是简单 valid。
+2. 新 full run 报告应通过 validator，并在人工阅读上具备事实核查、语义变化、互动时间线和政策评估依据主线。
+3. 测试覆盖新增对象、checkpoint、brief、validator failure cases 和报告渲染。
 
-## 12. 总体验收条件
+## 5. 非目标
 
-工程验收：
+1. 不写固定 source 队列。
+2. 不引入全局样本量硬阈值。
+3. 不把 action cards 变成 scheduler。
+4. 不让 runtime 排序 source、证据或 claim。
+5. 不新增平行 report composer / validator，优先增强现有 `draft-narrative-report` 和 `validate-narrative-report`。
+6. 不把 GDELT media tone 写成 public sentiment。
+7. 不把 sample-internal semantic structure 写成总体民意。
+8. 不把 claim slots 做成固定题型模板。
+9. 不让 moderator 替 investigator 决定 acquisition plan。
+10. 不把 checkpoint 做成每次工具调用都要填写的表单。
+11. 不把 sufficiency review 做成 runtime 判真或自动采信机制。
+12. 不把 `policy_evaluation_basis` 做成独立数据 lane。
 
-1. Action cards 稳定减少 operator 手动引导，但不替 agent 决策。
-2. 核心 skill contract metadata 可被 agent entry surface 和 report validator 使用。
-3. Public-policy corpus、semantic aggregate、interaction timeline、section brief 都有 typed artifacts。
-4. 旧 narrative report path 不再是主写作风格，但 report publication 能力保留。
+## 6. 回归案例
 
-数据验收：
+### 6.1 NYC Smoke
 
-1. 公共/政策 corpus 的低量、失败和偏差被显式审计。
-2. GDELT 媒体 tone 与公众样本情绪严格分离。
-3. API 不足时，系统输出 source-limit rationale，而不是空泛舆情结论。
+必须验证：
 
-报告验收：
+1. 事实核查仍保留 AirNow / Open-Meteo / FIRMS / wind 的边界。
+2. public discourse corpus 有 source family、query variants、coverage audit、annotation aggregation 和 denominator。
+3. official action / policy lane 有 episode 或 source-limit rationale。
+4. interaction timeline 能形成阶段性叙事。
+5. report 不再只给 artifact counts，而能解释事实、语义和政策沟通之间的关系。
 
-1. 报告有主线、时间线和互动分析。
-2. 报告能为政策评估提供证据依据，但不越权给政策成败评分。
-3. 所有 public semantic claims 都有 source family、sample definition 和 denominator。
-4. 读者可以看出事实核查、舆情语义感知和政策分析之间的互动关系。
+### 6.2 Colorado River / Glen Canyon
 
-论文验收：
+必须验证：
 
-1. 方法章节可以描述多 agent、DB-first、skill graph、action cards、public-policy corpus、semantic perception 和 report validation。
-2. 实验章节可以展示 NYC smoke 和 Colorado River 两个不同类型案例。
-3. 讨论章节可以诚实说明 API 覆盖和代表性限制，同时证明系统具备可审计、可扩展、可复核的舆情语义感知能力。
+1. 水文/运行数据形成环境压力背景，不越界写政策责任。
+2. Reclamation / DOI / Federal Register / public involvement 形成治理记录 lane。
+3. 公共/媒体/正式记录语义分开聚合。
+4. interaction timeline 能连接水文压力、治理动作、公共/政策语义。
+5. policy evaluation basis 只写依据、缺口和后续评估维度，不写无证据的政策成败评分。
 
-## 13. 截止期执行顺序
+## 7. 完成标准
 
-5 月 29 日提交前，按风险压缩执行：
+工程完成标准：
 
-1. 先完成 skill contract metadata、action cards、section brief 和 report validator。
-2. 再完成 corpus coverage 和 semantic aggregation 的重构。
-3. 再完成 interaction timeline。
-4. 最后补跑 NYC 与 Colorado 并冻结材料。
+1. 新对象链路可被生成、读取、写入 handoff，并有 tests。
+2. in-round checkpoint 能减少明显低效的跨 round 补采。
+3. action cards 仍保持 advisory，但能被 theme plan、checkpoint 和 sufficiency review 承接。
+4. agent section brief 成为 report-editor 的主要输入之一。
 
-如果时间不足，不退回旧报告链路；保留已完成 typed artifacts、validator 结果和 source-limit rationale，并在论文中把未完成部分写成受审计的能力边界。
+数据完成标准：
 
+1. 舆情数据质量由 source-family coverage、query variants、denominator 和 sufficiency review 共同说明。
+2. policy / official action 数据不会默默缺席。
+3. failed / zero / low-volume / receipt-only attempts 都能成为 recovery choice 或 source-limit rationale。
+
+报告完成标准：
+
+1. 报告有明确主线、时间线和互动分析。
+2. 报告能说明事实核查、舆情语义感知和政策分析如何互相约束。
+3. 报告能为政策评估提供依据，但不越权给政策成败评分。
+4. 所有强 claim 都能回溯到 brief、sufficiency review、frozen basis 或 council object。
+
+论文完成标准：
+
+1. 方法章节可以描述 DB-first 议会、report-driven investigation、in-round feedback、public-policy corpus、semantic perception、interaction timeline 和 validator。
+2. 实验章节可以展示 NYC smoke 和 Colorado River 两类案例。
+3. 讨论章节可以诚实说明 API 覆盖、非代表性样本和政策评估边界，同时证明系统具备可审计、可扩展、可复核的舆情语义感知能力。

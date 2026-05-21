@@ -565,6 +565,29 @@ def _episode_side_summary(episodes: list[dict[str, Any]], *, side_key: str) -> d
     }
 
 
+def _readable_node_summary(
+    *,
+    date_value: str,
+    fact_count: int,
+    policy_count: int,
+    public_count: int,
+    status: str,
+) -> str:
+    parts: list[str] = []
+    if fact_count:
+        parts.append(f"{fact_count} fact-side episode(s)")
+    if policy_count:
+        parts.append(f"{policy_count} policy/official episode(s)")
+    if public_count:
+        parts.append(f"{public_count} public/media episode(s)")
+    visible = ", ".join(parts) if parts else "no lane episodes"
+    return (
+        f"On {date_value}, {visible} were visible in the timeline. "
+        f"Status: {status}. This is descriptive co-visibility, not causality, "
+        "policy impact, public response attribution, or evidence absence."
+    )
+
+
 def _warning(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
 
@@ -594,6 +617,13 @@ def _context_node(
         "node_id": node_id,
         "node_kind": node_kind,
         "time_anchor_date": date_value,
+        "node_summary": _readable_node_summary(
+            date_value=date_value,
+            fact_count=1 if node_kind.startswith("fact") else 0,
+            policy_count=1 if node_kind.startswith("policy") else 0,
+            public_count=1 if node_kind.startswith("public") else 0,
+            status="single-sided-context",
+        ),
         "interaction_status": "single-sided-context",
         "side_summary": _side_summary(signals, side_key=node_kind),
         "claim_boundary": {
@@ -629,6 +659,13 @@ def _context_node_from_episodes(
         "node_id": node_id,
         "node_kind": node_kind,
         "time_anchor_date": date_value,
+        "node_summary": _readable_node_summary(
+            date_value=date_value,
+            fact_count=summary.get("episode_count", 0) if side_key == "fact-policy" else 0,
+            policy_count=0,
+            public_count=summary.get("episode_count", 0) if side_key == "public-media" else 0,
+            status="single-sided-episode-context",
+        ),
         "interaction_status": "single-sided-episode-context",
         "interaction_basis": "lane_episode_cards",
         "episode_refs": _episode_refs(episodes),
@@ -751,6 +788,13 @@ def build_fact_policy_public_interaction_timeline(
                     "node_id": node_id,
                     "node_kind": "fact-policy-public-interaction-context",
                     "time_anchor_date": date_value,
+                    "node_summary": _readable_node_summary(
+                        date_value=date_value,
+                        fact_count=len(fact_episodes),
+                        policy_count=len(policy_episodes),
+                        public_count=len(public_media_episodes),
+                        status="candidate-context",
+                    ),
                     "interaction_status": "candidate-context",
                     "interaction_basis": "lane_episode_cards",
                     "fact_episodes": [_compact_episode_for_node(episode) for episode in fact_episodes],

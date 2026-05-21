@@ -112,6 +112,60 @@ GDELT tone enrichment, cross-source comparison, and report handoff. Their output
 remain advisory until a council agent cites them in a finding, evidence bundle,
 challenge, readiness opinion, synthesis, or report-basis object.
 
+## In-Round Coverage Feedback
+
+Round boundaries should not be used for routine query repair. A source owner can
+run a small batch, inspect coverage, revise the query/window/provider mode, and
+try the same-family next step inside the same investigation round before asking
+the council to discuss sufficiency.
+
+For public discourse and policy-record work, the preferred in-round loop is:
+
+1. State the report claim slot or investigation theme the data is meant to
+   support.
+2. Run a bounded acquisition batch or DB query.
+3. Materialize a lightweight checkpoint with source family counts, query variant
+   hits, visible denominators, zero/low-volume notes, and obvious next routes.
+4. Let the source owner revise terms, select same-family follow-up skills, switch
+   source family, or document a source-limit rationale.
+5. Let challenger inspect only the checkpoint-level risks: denominator mixing,
+   GDELT tone misuse, platform bias, policy-lane absence, unsupported negative
+   claims, and report wording that would overstate the sample.
+
+This feedback loop is intentionally lighter than a full council debate. It
+should produce enough information for the agent to continue or stop responsibly,
+not a hard source quota. It should be recorded only when a result affects claim
+strength, a source-limit rationale, downgrade wording, or the next recovery
+choice. The council should be asked for a round-level decision only when the
+theme is ready for sufficiency review, the evidence need must be reframed, or no
+reasonable recovery path remains.
+
+## Sufficiency Review
+
+Public and policy data volume should be judged through collaborative sufficiency,
+not fixed global thresholds. A large number of weak or denominator-confused rows
+does not support stronger claims; a small but clearly bounded sample may support
+sample-local semantic observations.
+
+Sufficiency review is not a runtime truth mechanism. It does not assign source
+weights, certify evidence, mark a report as ready, or decide final claim
+acceptance. It only states which report claim slots are currently supported,
+which must be downgraded, and which still lack basis. The council must still
+carry any accepted judgement through finding, evidence bundle, challenge
+disposition, readiness opinion, synthesis, section brief, or report basis.
+
+A sufficiency review should answer:
+
+1. Which report claim slots are supported by the current evidence.
+2. Which source families, query variants, windows, and text units are visible.
+3. Which denominators are valid and which must stay isolated.
+4. Which missing layers were tried, failed, low-volume, or not attempted.
+5. Which claims must be downgraded to examples, cues, limitations, or future work.
+
+The review can be written as a readiness opinion, challenge disposition, round
+synthesis, evidence bundle, or report section brief. It should remain short and
+claim-specific; it is not a compliance form for every tool call.
+
 ## Acquisition Attempt Review
 
 `failed`, `blocked`, `receipt-only`, `executed` without normalized signal refs,

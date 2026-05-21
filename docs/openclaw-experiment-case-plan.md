@@ -1,6 +1,6 @@
 # OpenClaw 毕业设计实验与案例计划
 
-文档性质：本文只记录毕业设计展示用实验/案例安排，不规定代码开发任务，不作为 runtime 议程脚本，也不要求 agent 固定使用某个 source。代码层架构基线见 `docs/openclaw-project-overview.md`；毕业提交前的彻底升级路径见 `docs/openclaw-public-policy-situation-analysis-upgrade-plan.md`。
+文档性质：本文只记录毕业设计展示用实验/案例安排，不规定代码开发任务，不作为 runtime 议程脚本，也不要求 agent 固定使用某个 source。代码层架构基线见 `docs/openclaw-project-overview.md`；当前工程收口计划见 `docs/openclaw-public-policy-situation-analysis-upgrade-plan.md`。
 
 ## 1. 实验目标
 

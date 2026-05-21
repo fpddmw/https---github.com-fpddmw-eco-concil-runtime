@@ -23,6 +23,7 @@ OBJECT_KIND_REPORTING_HANDOFF = "reporting-handoff"
 OBJECT_KIND_COUNCIL_DECISION = "council-decision"
 OBJECT_KIND_EXPERT_REPORT = "expert-report"
 OBJECT_KIND_REPORT_SECTION_DRAFT = "report-section-draft"
+OBJECT_KIND_AGENT_SECTION_BRIEF = "agent-section-brief"
 OBJECT_KIND_FINAL_PUBLICATION = "final-publication"
 
 REPORTING_STAGE_VALUES = {"draft", "canonical"}
@@ -63,6 +64,16 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
         "id_column": "section_id",
         "timestamp_column": "generated_at_utc",
         "order_by": "generated_at_utc DESC, section_id DESC",
+        "agent_role_column": "agent_role",
+        "status_column": "status",
+        "decision_id_column": "",
+        "stage_column": "",
+    },
+    OBJECT_KIND_AGENT_SECTION_BRIEF: {
+        "table_name": "agent_section_briefs",
+        "id_column": "brief_id",
+        "timestamp_column": "generated_at_utc",
+        "order_by": "generated_at_utc DESC, brief_id DESC",
         "agent_role_column": "agent_role",
         "status_column": "status",
         "decision_id_column": "",
@@ -318,6 +329,183 @@ def store_report_section_draft_record(
     }
 
 
+def normalized_agent_section_brief_payload(
+    brief: dict[str, Any],
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
+    normalized = dict(brief)
+    normalized_run_id = maybe_text(normalized.get("run_id")) or run_id
+    normalized_round_id = maybe_text(normalized.get("round_id")) or round_id
+    agent_role = maybe_text(normalized.get("agent_role")) or "report-editor"
+    section_role = maybe_text(normalized.get("section_role")) or maybe_text(
+        normalized.get("section_key")
+    )
+    normalized["run_id"] = normalized_run_id
+    normalized["round_id"] = normalized_round_id
+    normalized["generated_at_utc"] = maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    normalized["decision_source"] = maybe_text(normalized.get("decision_source")) or agent_role
+    normalized["agent_role"] = agent_role
+    normalized["status"] = maybe_text(normalized.get("status")) or "submitted"
+    normalized["section_key"] = maybe_text(normalized.get("section_key")) or "agent-section"
+    normalized["section_role"] = section_role or normalized["section_key"]
+    normalized["claim_strength"] = maybe_text(normalized.get("claim_strength")) or "bounded"
+    normalized["recommended_report_use"] = maybe_text(
+        normalized.get("recommended_report_use")
+    ) or "Use only with frozen/reporting basis and stated limitations."
+    normalized["main_claims"] = unique_items(list_items(normalized.get("main_claims")))
+    normalized["evidence_refs"] = unique_items(list_items(normalized.get("evidence_refs")))
+    normalized["source_families"] = unique_items(list_items(normalized.get("source_families")))
+    normalized["limitations"] = unique_items(list_items(normalized.get("limitations")))
+    normalized["blocked_phrases"] = unique_items(list_items(normalized.get("blocked_phrases")))
+    normalized["claim_slots_supported"] = unique_items(
+        list_items(normalized.get("claim_slots_supported"))
+    )
+    normalized["theme_ids"] = unique_items(list_items(normalized.get("theme_ids")))
+    normalized["basis_object_ids"] = unique_items(
+        list_items(normalized.get("basis_object_ids"))
+    )
+    normalized["sufficiency_review_ids"] = unique_items(
+        list_items(normalized.get("sufficiency_review_ids"))
+    )
+    denominators_value = normalized.get("denominators")
+    normalized["denominators"] = (
+        dict(denominators_value) if isinstance(denominators_value, dict) else {}
+    )
+    provenance_value = normalized.get("provenance")
+    provenance = dict(provenance_value) if isinstance(provenance_value, dict) else {}
+    if not provenance:
+        provenance = {
+            "decision_source": normalized["decision_source"],
+            "agent_role": normalized["agent_role"],
+            "section_key": normalized["section_key"],
+        }
+    normalized["provenance"] = provenance
+    normalized["lineage"] = unique_items(
+        [
+            *list_items(normalized.get("lineage")),
+            normalized["agent_role"],
+            normalized["section_key"],
+            *normalized["claim_slots_supported"],
+            *normalized["theme_ids"],
+            *normalized["basis_object_ids"],
+            *normalized["sufficiency_review_ids"],
+        ]
+    )
+    normalized["brief_id"] = (
+        maybe_text(normalized.get("brief_id"))
+        or "agent-section-brief-"
+        + stable_hash(
+            "agent-section-brief",
+            normalized_run_id,
+            normalized_round_id,
+            normalized["agent_role"],
+            normalized["section_key"],
+            json.dumps(normalized["main_claims"], ensure_ascii=True, sort_keys=True),
+        )[:12]
+    )
+    normalized["schema_version"] = canonical_contract(OBJECT_KIND_AGENT_SECTION_BRIEF).schema_version
+    return validate_canonical_payload(OBJECT_KIND_AGENT_SECTION_BRIEF, normalized)
+
+
+def agent_section_brief_row_from_payload(
+    brief: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str,
+) -> dict[str, Any]:
+    return {
+        "brief_id": maybe_text(brief.get("brief_id")),
+        "run_id": maybe_text(brief.get("run_id")),
+        "round_id": maybe_text(brief.get("round_id")),
+        "generated_at_utc": maybe_text(brief.get("generated_at_utc")),
+        "agent_role": maybe_text(brief.get("agent_role")),
+        "status": maybe_text(brief.get("status")),
+        "section_key": maybe_text(brief.get("section_key")),
+        "section_role": maybe_text(brief.get("section_role")),
+        "claim_strength": maybe_text(brief.get("claim_strength")),
+        "decision_source": maybe_text(brief.get("decision_source")),
+        "evidence_refs_json": json.dumps(brief.get("evidence_refs", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "main_claims_json": json.dumps(brief.get("main_claims", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "source_families_json": json.dumps(brief.get("source_families", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "limitations_json": json.dumps(brief.get("limitations", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "blocked_phrases_json": json.dumps(brief.get("blocked_phrases", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "denominators_json": json.dumps(brief.get("denominators", {}), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "provenance_json": json.dumps(brief.get("provenance", {}), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "lineage_json": json.dumps(brief.get("lineage", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator),
+        "raw_json": json.dumps(brief, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+    }
+
+
+def write_agent_section_brief_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO agent_section_briefs (
+            brief_id, run_id, round_id, generated_at_utc, agent_role,
+            status, section_key, section_role, claim_strength, decision_source,
+            evidence_refs_json, main_claims_json, source_families_json,
+            limitations_json, blocked_phrases_json, denominators_json,
+            provenance_json, lineage_json, artifact_path, record_locator, raw_json
+        ) VALUES (
+            :brief_id, :run_id, :round_id, :generated_at_utc, :agent_role,
+            :status, :section_key, :section_role, :claim_strength, :decision_source,
+            :evidence_refs_json, :main_claims_json, :source_families_json,
+            :limitations_json, :blocked_phrases_json, :denominators_json,
+            :provenance_json, :lineage_json, :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def store_agent_section_brief_record(
+    run_dir: str | Path,
+    *,
+    brief_payload: dict[str, Any],
+    artifact_path: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = Path(run_dir).expanduser().resolve()
+    payload = dict(brief_payload) if isinstance(brief_payload, dict) else {}
+    normalized_payload = normalized_agent_section_brief_payload(
+        payload,
+        run_id=maybe_text(payload.get("run_id")),
+        round_id=maybe_text(payload.get("round_id")),
+    )
+    run_id = maybe_text(normalized_payload.get("run_id"))
+    round_id = maybe_text(normalized_payload.get("round_id"))
+    agent_role = maybe_text(normalized_payload.get("agent_role"))
+    section_key = maybe_text(normalized_payload.get("section_key"))
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            connection.execute(
+                """
+                DELETE FROM agent_section_briefs
+                WHERE run_id = ? AND round_id = ? AND agent_role = ? AND section_key = ?
+                """,
+                (run_id, round_id, agent_role, section_key),
+            )
+            write_agent_section_brief_row(
+                connection,
+                agent_section_brief_row_from_payload(
+                    normalized_payload,
+                    artifact_path=artifact_path,
+                    record_locator="$.brief",
+                ),
+            )
+    finally:
+        connection.close()
+    return {
+        "schema_version": "agent-section-brief-append-v1",
+        "db_path": str(_db_file),
+        "brief": normalized_payload,
+    }
+
+
 def _unsupported_filter_error(
     *,
     object_kind: str,
@@ -379,7 +567,7 @@ def query_reporting_objects(
             raise _unsupported_filter_error(
                 object_kind=normalized_kind,
                 filter_name="agent_role",
-                supported_kinds=[OBJECT_KIND_EXPERT_REPORT],
+                supported_kinds=[OBJECT_KIND_EXPERT_REPORT, OBJECT_KIND_AGENT_SECTION_BRIEF],
             )
         where_clauses.append(f"{agent_role_column} = ?")
         params.append(agent_role_text)
@@ -465,8 +653,10 @@ __all__ = [
     "OBJECT_KIND_COUNCIL_DECISION",
     "OBJECT_KIND_EXPERT_REPORT",
     "OBJECT_KIND_FINAL_PUBLICATION",
+    "OBJECT_KIND_AGENT_SECTION_BRIEF",
     "OBJECT_KIND_REPORT_SECTION_DRAFT",
     "OBJECT_KIND_REPORTING_HANDOFF",
+    "store_agent_section_brief_record",
     "store_report_section_draft_record",
     "query_reporting_objects",
     "reporting_queryable_object_kinds",
