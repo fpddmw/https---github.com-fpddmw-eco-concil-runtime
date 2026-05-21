@@ -1,0 +1,8 @@
+name: submit-theme-evidence-boundary-plan
+description: Submit an investigator-authored or adopted theme evidence boundary plan.
+default_prompt: >
+  Use $submit-theme-evidence-boundary-plan when you own or explicitly adopt an
+  investigation theme obligation. State evidence obligations, success criteria,
+  denominator obligations, recovery choices, and downgrade boundaries. Do not
+  state source families, source skills, query variants, query parameters, or
+  route rankings in this plan.

@@ -1,0 +1,1136 @@
+{
+  "category_counts": {
+    "archive-history": 5,
+    "deliberation-write": 21,
+    "optional-analysis": 27,
+    "planning-program": 5,
+    "query": 7,
+    "reporting": 11,
+    "runtime-state": 6,
+    "source-fetch": 21,
+    "source-normalize": 21
+  },
+  "compatibility_aliases": [],
+  "discovery_rule": "skills/**/SKILL.md with skill name taken from the skill directory name",
+  "public_identifier": "skill_name",
+  "schema_version": "openclaw-skill-taxonomy-manifest-v1",
+  "skill_count": 124,
+  "skills": [
+    {
+      "physical_path": "skills/optional-analysis/aggregate-environment-evidence",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "aggregate-environment-evidence",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/aggregate-public-discourse-annotations",
+      "skill_category": "optional-analysis",
+      "skill_family": "public-discourse",
+      "skill_layer": "optional-analysis",
+      "skill_name": "aggregate-public-discourse-annotations",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/apply-approved-formal-public-taxonomy",
+      "skill_category": "optional-analysis",
+      "skill_family": "formal-public",
+      "skill_layer": "optional-analysis",
+      "skill_name": "apply-approved-formal-public-taxonomy",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/archive-history/archive-case-library",
+      "skill_category": "archive-history",
+      "skill_family": "runtime-admin",
+      "skill_layer": "runtime-admin",
+      "skill_name": "archive-case-library",
+      "workflow_stage": "archive-history",
+      "write_scope": "archive-write"
+    },
+    {
+      "physical_path": "skills/archive-history/archive-signal-corpus",
+      "skill_category": "archive-history",
+      "skill_family": "runtime-admin",
+      "skill_layer": "runtime-admin",
+      "skill_name": "archive-signal-corpus",
+      "workflow_stage": "archive-history",
+      "write_scope": "archive-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/audit-formal-comment-candidate-corpus",
+      "skill_category": "optional-analysis",
+      "skill_family": "formal-public",
+      "skill_layer": "optional-analysis",
+      "skill_name": "audit-formal-comment-candidate-corpus",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/audit-public-discourse-sample-coverage",
+      "skill_category": "optional-analysis",
+      "skill_family": "public-discourse",
+      "skill_layer": "optional-analysis",
+      "skill_name": "audit-public-discourse-sample-coverage",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/build-fact-policy-public-interaction-timeline",
+      "skill_category": "optional-analysis",
+      "skill_family": "fact-policy-public-interaction",
+      "skill_layer": "optional-analysis",
+      "skill_name": "build-fact-policy-public-interaction-timeline",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/claim-board-task",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "claim-board-task",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/classify-formal-comment-issues",
+      "skill_category": "optional-analysis",
+      "skill_family": "formal-public",
+      "skill_layer": "optional-analysis",
+      "skill_name": "classify-formal-comment-issues",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/classify-public-discourse-affect",
+      "skill_category": "optional-analysis",
+      "skill_family": "public-discourse",
+      "skill_layer": "optional-analysis",
+      "skill_name": "classify-public-discourse-affect",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/close-challenge-ticket",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "close-challenge-ticket",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/compare-formal-public-footprints",
+      "skill_category": "optional-analysis",
+      "skill_family": "formal-public",
+      "skill_layer": "optional-analysis",
+      "skill_name": "compare-formal-public-footprints",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/compare-public-media-narratives",
+      "skill_category": "optional-analysis",
+      "skill_family": "public-discourse",
+      "skill_layer": "optional-analysis",
+      "skill_name": "compare-public-media-narratives",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/detect-temporal-cooccurrence-cues",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "detect-temporal-cooccurrence-cues",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/discover-discourse-issues",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "discover-discourse-issues",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/reporting/draft-agent-section-brief",
+      "skill_category": "reporting",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "draft-agent-section-brief",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
+    },
+    {
+      "physical_path": "skills/reporting/draft-council-decision",
+      "skill_category": "reporting",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "draft-council-decision",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
+    },
+    {
+      "physical_path": "skills/reporting/draft-expert-report",
+      "skill_category": "reporting",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "draft-expert-report",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
+    },
+    {
+      "physical_path": "skills/reporting/draft-narrative-report",
+      "skill_category": "reporting",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "draft-narrative-report",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/export-research-issue-map",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "export-research-issue-map",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/extract-document-text",
+      "skill_category": "source-normalize",
+      "skill_family": "source-normalize",
+      "skill_layer": "normalize",
+      "skill_name": "extract-document-text",
+      "workflow_stage": "normalize",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-airnow-hourly-observations",
+      "skill_category": "source-fetch",
+      "skill_family": "airnow",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-airnow-hourly-observations",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-bluesky-cascade",
+      "skill_category": "source-fetch",
+      "skill_family": "source-fetch",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-bluesky-cascade",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-epa-eis-records",
+      "skill_category": "source-fetch",
+      "skill_family": "source-fetch",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-epa-eis-records",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-federal-register-documents",
+      "skill_category": "source-fetch",
+      "skill_family": "source-fetch",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-federal-register-documents",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-gdelt-doc-search",
+      "skill_category": "source-fetch",
+      "skill_family": "gdelt",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-gdelt-doc-search",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-gdelt-events",
+      "skill_category": "source-fetch",
+      "skill_family": "gdelt",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-gdelt-events",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-gdelt-gkg",
+      "skill_category": "source-fetch",
+      "skill_family": "gdelt",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-gdelt-gkg",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-gdelt-mentions",
+      "skill_category": "source-fetch",
+      "skill_family": "gdelt",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-gdelt-mentions",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-nasa-firms-fire",
+      "skill_category": "source-fetch",
+      "skill_family": "source-fetch",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-nasa-firms-fire",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-open-meteo-air-quality",
+      "skill_category": "source-fetch",
+      "skill_family": "open-meteo",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-open-meteo-air-quality",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-open-meteo-flood",
+      "skill_category": "source-fetch",
+      "skill_family": "open-meteo",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-open-meteo-flood",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-open-meteo-historical",
+      "skill_category": "source-fetch",
+      "skill_family": "open-meteo",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-open-meteo-historical",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-openaq",
+      "skill_category": "source-fetch",
+      "skill_family": "openaq",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-openaq",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-regulationsgov-attachments",
+      "skill_category": "source-fetch",
+      "skill_family": "regulationsgov",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-regulationsgov-attachments",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-regulationsgov-comment-detail",
+      "skill_category": "source-fetch",
+      "skill_family": "regulationsgov",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-regulationsgov-comment-detail",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-regulationsgov-comments",
+      "skill_category": "source-fetch",
+      "skill_family": "regulationsgov",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-regulationsgov-comments",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-usbr-project-records",
+      "skill_category": "source-fetch",
+      "skill_family": "usbr",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-usbr-project-records",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-usbr-rise",
+      "skill_category": "source-fetch",
+      "skill_family": "usbr",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-usbr-rise",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-usgs-water-iv",
+      "skill_category": "source-fetch",
+      "skill_family": "usgs",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-usgs-water-iv",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-youtube-comments",
+      "skill_category": "source-fetch",
+      "skill_family": "youtube",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-youtube-comments",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/source-fetch/fetch-youtube-video-search",
+      "skill_category": "source-fetch",
+      "skill_family": "youtube",
+      "skill_layer": "fetch",
+      "skill_name": "fetch-youtube-video-search",
+      "workflow_stage": "fetch",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/runtime-state/freeze-report-basis",
+      "skill_category": "runtime-state",
+      "skill_family": "state-transition",
+      "skill_layer": "state-transition",
+      "skill_name": "freeze-report-basis",
+      "workflow_stage": "state-transition",
+      "write_scope": "state-transition-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/identify-representation-audit-cues",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "identify-representation-audit-cues",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/link-source-acquisition-execution",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "link-source-acquisition-execution",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/materialize-acquisition-checkpoints",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "materialize-acquisition-checkpoints",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/materialize-board-brief",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "materialize-board-brief",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/materialize-claim-gap-action-cards",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "materialize-claim-gap-action-cards",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/materialize-context-packet",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "materialize-context-packet",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/reporting/materialize-final-publication",
+      "skill_category": "reporting",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "materialize-final-publication",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
+    },
+    {
+      "physical_path": "skills/archive-history/materialize-history-context",
+      "skill_category": "archive-history",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "materialize-history-context",
+      "workflow_stage": "archive-history",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/materialize-public-discourse-corpus",
+      "skill_category": "optional-analysis",
+      "skill_family": "public-discourse",
+      "skill_layer": "optional-analysis",
+      "skill_name": "materialize-public-discourse-corpus",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/planning-program/materialize-report-blueprint",
+      "skill_category": "planning-program",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "materialize-report-blueprint",
+      "workflow_stage": "program-framing",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/reporting/materialize-reporting-handoff",
+      "skill_category": "reporting",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "materialize-reporting-handoff",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/materialize-research-issue-surface",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "materialize-research-issue-surface",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/reporting/materialize-spatiotemporal-relation-evidence-packet",
+      "skill_category": "reporting",
+      "skill_family": "fact-policy-public-interaction",
+      "skill_layer": "reporting",
+      "skill_name": "materialize-spatiotemporal-relation-evidence-packet",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-airnow-observation-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "airnow",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-airnow-observation-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-bluesky-cascade-public-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "source-normalize",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-bluesky-cascade-public-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-fetch-execution",
+      "skill_category": "source-normalize",
+      "skill_family": "source-normalize",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-fetch-execution",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-gdelt-doc-public-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "gdelt",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-gdelt-doc-public-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-gdelt-events-public-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "gdelt",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-gdelt-events-public-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-gdelt-gkg-public-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "gdelt",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-gdelt-gkg-public-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-gdelt-mentions-public-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "gdelt",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-gdelt-mentions-public-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-nasa-firms-fire-observation-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "source-normalize",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-nasa-firms-fire-observation-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-official-governance-records",
+      "skill_category": "source-normalize",
+      "skill_family": "source-normalize",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-official-governance-records",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-open-meteo-air-quality-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "open-meteo",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-open-meteo-air-quality-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-open-meteo-flood-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "open-meteo",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-open-meteo-flood-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-open-meteo-historical-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "open-meteo",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-open-meteo-historical-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-openaq-observation-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "openaq",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-openaq-observation-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-regulationsgov-attachment-text",
+      "skill_category": "source-normalize",
+      "skill_family": "regulationsgov",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-regulationsgov-attachment-text",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-regulationsgov-comment-detail-public-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "regulationsgov",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-regulationsgov-comment-detail-public-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-regulationsgov-comments-public-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "regulationsgov",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-regulationsgov-comments-public-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-usbr-rise-environment-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "usbr",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-usbr-rise-environment-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-usgs-water-observation-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "usgs",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-usgs-water-observation-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-youtube-comments-public-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "youtube",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-youtube-comments-public-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/source-normalize/normalize-youtube-video-public-signals",
+      "skill_category": "source-normalize",
+      "skill_family": "youtube",
+      "skill_layer": "normalize",
+      "skill_name": "normalize-youtube-video-public-signals",
+      "workflow_stage": "normalize",
+      "write_scope": "signal-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/open-challenge-ticket",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "open-challenge-ticket",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/open-falsification-probe",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "open-falsification-probe",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/open-followup-from-review-comment",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "open-followup-from-review-comment",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/runtime-state/open-investigation-round",
+      "skill_category": "runtime-state",
+      "skill_family": "state-transition",
+      "skill_layer": "state-transition",
+      "skill_name": "open-investigation-round",
+      "workflow_stage": "state-transition",
+      "write_scope": "state-transition-write"
+    },
+    {
+      "physical_path": "skills/runtime-state/open-report-writing-round",
+      "skill_category": "runtime-state",
+      "skill_family": "state-transition",
+      "skill_layer": "state-transition",
+      "skill_name": "open-report-writing-round",
+      "workflow_stage": "state-transition",
+      "write_scope": "state-transition-write"
+    },
+    {
+      "physical_path": "skills/runtime-state/plan-round-orchestration",
+      "skill_category": "runtime-state",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "plan-round-orchestration",
+      "workflow_stage": "state-transition",
+      "write_scope": "runtime-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/post-board-note",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "post-board-note",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/runtime-state/prepare-round",
+      "skill_category": "runtime-state",
+      "skill_family": "state-transition",
+      "skill_layer": "state-transition",
+      "skill_name": "prepare-round",
+      "workflow_stage": "state-transition",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/project-research-issue-views",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "project-research-issue-views",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/propose-next-actions",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "propose-next-actions",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/reporting/publish-council-decision",
+      "skill_category": "reporting",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "publish-council-decision",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
+    },
+    {
+      "physical_path": "skills/reporting/publish-expert-report",
+      "skill_category": "reporting",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "publish-expert-report",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
+    },
+    {
+      "physical_path": "skills/reporting/publish-narrative-report",
+      "skill_category": "reporting",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "publish-narrative-report",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
+    },
+    {
+      "physical_path": "skills/query/query-board-delta",
+      "skill_category": "query",
+      "skill_family": "query",
+      "skill_layer": "query",
+      "skill_name": "query-board-delta",
+      "workflow_stage": "query",
+      "write_scope": "read-only"
+    },
+    {
+      "physical_path": "skills/archive-history/query-case-library",
+      "skill_category": "archive-history",
+      "skill_family": "query",
+      "skill_layer": "query",
+      "skill_name": "query-case-library",
+      "workflow_stage": "archive-history",
+      "write_scope": "read-only"
+    },
+    {
+      "physical_path": "skills/query/query-environment-signals",
+      "skill_category": "query",
+      "skill_family": "query",
+      "skill_layer": "query",
+      "skill_name": "query-environment-signals",
+      "workflow_stage": "query",
+      "write_scope": "read-only"
+    },
+    {
+      "physical_path": "skills/query/query-formal-signals",
+      "skill_category": "query",
+      "skill_family": "formal-public",
+      "skill_layer": "query",
+      "skill_name": "query-formal-signals",
+      "workflow_stage": "query",
+      "write_scope": "read-only"
+    },
+    {
+      "physical_path": "skills/query/query-normalized-signal",
+      "skill_category": "query",
+      "skill_family": "query",
+      "skill_layer": "query",
+      "skill_name": "query-normalized-signal",
+      "workflow_stage": "query",
+      "write_scope": "read-only"
+    },
+    {
+      "physical_path": "skills/query/query-public-signals",
+      "skill_category": "query",
+      "skill_family": "query",
+      "skill_layer": "query",
+      "skill_name": "query-public-signals",
+      "workflow_stage": "query",
+      "write_scope": "read-only"
+    },
+    {
+      "physical_path": "skills/query/query-raw-record",
+      "skill_category": "query",
+      "skill_family": "query",
+      "skill_layer": "query",
+      "skill_name": "query-raw-record",
+      "workflow_stage": "query",
+      "write_scope": "read-only"
+    },
+    {
+      "physical_path": "skills/archive-history/query-signal-corpus",
+      "skill_category": "archive-history",
+      "skill_family": "query",
+      "skill_layer": "query",
+      "skill_name": "query-signal-corpus",
+      "workflow_stage": "archive-history",
+      "write_scope": "read-only"
+    },
+    {
+      "physical_path": "skills/query/query-spatiotemporal-relations",
+      "skill_category": "query",
+      "skill_family": "fact-policy-public-interaction",
+      "skill_layer": "query",
+      "skill_name": "query-spatiotemporal-relations",
+      "workflow_stage": "query",
+      "write_scope": "read-only"
+    },
+    {
+      "physical_path": "skills/optional-analysis/review-evidence-sufficiency",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "review-evidence-sufficiency",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/review-fact-check-evidence-scope",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "review-fact-check-evidence-scope",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/review-spatiotemporal-relation-alternatives",
+      "skill_category": "optional-analysis",
+      "skill_family": "fact-policy-public-interaction",
+      "skill_layer": "optional-analysis",
+      "skill_name": "review-spatiotemporal-relation-alternatives",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/planning-program/review-theme-sufficiency",
+      "skill_category": "planning-program",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "review-theme-sufficiency",
+      "workflow_stage": "progress-review",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/runtime-state/scaffold-mission-run",
+      "skill_category": "runtime-state",
+      "skill_family": "state-transition",
+      "skill_layer": "state-transition",
+      "skill_name": "scaffold-mission-run",
+      "workflow_stage": "state-transition",
+      "write_scope": "state-transition-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/submit-agent-position",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-agent-position",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/submit-challenge-disposition",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-challenge-disposition",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/submit-council-proposal",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-council-proposal",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/submit-evidence-request",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-evidence-request",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/submit-evidence-route-assessment",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-evidence-route-assessment",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/submit-investigation-plan",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-investigation-plan",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/submit-investigation-scope",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-investigation-scope",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/submit-readiness-opinion",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-readiness-opinion",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/planning-program/submit-round-brief",
+      "skill_category": "planning-program",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-round-brief",
+      "workflow_stage": "program-framing",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/submit-round-synthesis",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-round-synthesis",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/submit-source-acquisition-proposal",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-source-acquisition-proposal",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/planning-program/submit-theme-evidence-boundary-plan",
+      "skill_category": "planning-program",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "submit-theme-evidence-boundary-plan",
+      "workflow_stage": "theme-evidence-boundary",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/suggest-evidence-lanes",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "suggest-evidence-lanes",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/summarize-board-state",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "summarize-board-state",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "artifact-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/summarize-public-discourse-sample",
+      "skill_category": "optional-analysis",
+      "skill_family": "public-discourse",
+      "skill_layer": "optional-analysis",
+      "skill_name": "summarize-public-discourse-sample",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/optional-analysis/summarize-round-readiness",
+      "skill_category": "optional-analysis",
+      "skill_family": "optional-analysis",
+      "skill_layer": "optional-analysis",
+      "skill_name": "summarize-round-readiness",
+      "workflow_stage": "optional-analysis",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/planning-program/synthesize-council-investigation-program",
+      "skill_category": "planning-program",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "synthesize-council-investigation-program",
+      "workflow_stage": "program-framing",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/update-hypothesis-status",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "update-hypothesis-status",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/deliberation-write/update-source-acquisition-proposal-status",
+      "skill_category": "deliberation-write",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "update-source-acquisition-proposal-status",
+      "workflow_stage": "deliberation-write",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/reporting/validate-narrative-report",
+      "skill_category": "reporting",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "validate-narrative-report",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
+    }
+  ]
+}

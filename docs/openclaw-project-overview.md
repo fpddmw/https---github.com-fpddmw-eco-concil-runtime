@@ -33,6 +33,8 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
    - runtime 只展示权限、对象状态、refs、receipt、ledger 和可执行命令模板；不把 agenda、source 选择、证据权重或结论采信写成运行时规则。
 8. `report-driven investigation`
    - 调查工作应由报告需要回答的 mission-driven claim slots 和 evidence contract 牵引，而不是先堆积材料再由 report-editor 拼接。报告蓝图约束证据需求，但不预设结论，不提供固定题型模板。
+9. `program-aware rounds`
+   - round 不应只是泛泛的 `round-001`、`round-002`。面向复杂形势分析时，前置 framing/scope council 应先形成 `council-investigation-program`，再把后续 round 组织成带有 `round_mode`、`round_category`、`round_title`、问题式 `round_subtitle_question`、active themes、agent responsibility boundaries、internal phases、exit criteria 和 supplemental continuation criteria 的议会程序。机器可读 `round_id` 保持文件系统安全；语义标题和轮次目的写入 round brief / transition / program 对象。数据获取和数据分析/综合通常是 issue council round 内不同的 agent work turns；只有当议题边界、责任边界或议会采信需要重新组织时，才升级为 supplemental council round。
 
 ### 概念模型和代码角色模型
 
@@ -68,7 +70,7 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
 
 当前主干流程：
 
-`mission -> run/round -> report framing / scoping -> investigation themes -> agent-led evidence acquisition -> in-round coverage feedback -> council deliberation -> readiness/gate -> report basis freeze -> reporting -> archive/history`
+`mission -> run/round -> framing/scope council -> council investigation program -> issue council rounds with acquisition/analysis turns -> in-round coverage feedback -> council deliberation -> supplemental issue rounds or readiness/gate -> report basis freeze -> reporting -> archive/history`
 
 细化为：
 
@@ -76,6 +78,7 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
    - 创建 run/round、mission、初始 board、round task scaffold。
 2. `report framing / scoping`
    - 在开放型 mission 缺少完整 window/region/source requests 时，moderator 先提交 investigation plan、candidate scope、round brief 和 evidence request。面向形势分析报告的 run 还应形成 `report_blueprint`、`claim_slots`、`investigation_themes` 和 claim-basis 边界；report-editor 可参与定义报告问题，但不得提前写结论，也不得把 claim slots 固化成领域模板。
+   - 前置 framing/scope council 不能只做粗粒度 claim 拆分。它应组织 report-editor、environmental-investigator、social-investigator、challenger 和 moderator 的 positions，形成一个可审计的 `council-investigation-program`：后续有哪些问题式议题、哪些 round 承接哪些议题、各 agent 在每轮的责任边界是什么、每轮内部有哪些 acquisition / analysis / progress review / moderator synthesis turns、何时满足、何时降级、何时开启 supplemental issue council。
 3. `agent-led evidence acquisition`
    - investigator 根据 evidence request、report claim slots、finding、challenge 和自身判断提出或执行取证动作；runtime 负责权限、side-effect approval、receipt 和 ledger，不替 agent 排序 source 或采信证据。moderator/report-editor 可以提出主题和 evidence need；前置 theme plan 只能记录证据义务、分母义务、成功条件、恢复路径和降级边界，不能以任何形式预填 source family、source skill、query variant、query parameters 或 route ranking。具体取证路线只能由 investigator 在正式 acquisition turn 中自主形成。
 4. `prepare-round`
@@ -98,7 +101,7 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
 
 ## 4. 多轮调查能力
 
-系统支持分批取证。若议会认为证据不足，moderator 可以发起 `open-investigation-round` transition request，经 runtime-operator 批准后打开 follow-up round。
+系统支持分批取证和补充议题轮。若议会认为证据不足，moderator 可以发起 `open-investigation-round` transition request，经 runtime-operator 批准后打开 follow-up round 或 supplemental issue council round。普通 query repair、同源补采或小批量分析优先作为当前 issue council round 内的 agent work turn，而不是自动升级为新 round。
 
 新 round 会保留：
 
@@ -113,6 +116,19 @@ OpenClaw 是一个面向生态环境争议调查的 DB-first 议会框架与运�
 public/environment query 支持 `round_scope=current|up-to-current|all`，因此第二轮可以读取第一轮和当前轮的 normalized signals。source queue 也会记录 prior-round family memory，并支持受治理的 prior-round anchor。
 
 Round 是议会形成阶段性判断的单位，不是 API 重试、query variant 扩展或低量恢复的单位。若一个主题在当前 round 内经过初次抓取后明显不足，优先走 in-round 反馈闭环：source owner 修正查询和来源路径，challenger 快速审查覆盖和外推风险，moderator 只在需要改变主题边界、接受 source-limit 或打开新调查主题时介入。只有当当前 round 内没有合理恢复路径、或主题需要跨 agent 重定边界时，才打开 follow-up round。sufficiency review 只说明可支撑、必须降级和缺 basis 的 claim，不是 runtime 判真、证据打分或自动 report-ready 机制。
+
+程序化 round 命名采用多层语义：
+
+1. `round_id`
+   - 文件系统和 DB 友好的稳定 id，例如 `round-001-framing-scope`、`round-002-public-semantic`、`round-003-public-semantic-supplement-01`。
+2. `round_title` / `round_subtitle_question`
+   - 写入 round brief、transition 和 program。subtitle 优先采用问题形式，例如“哪些证据需要被取得？”、“已取得的数据能支持哪些 claim？”。
+3. `round_mode` / `round_category`
+   - 写入 round brief、transition 和 program，例如 `framing-scope-council`、`issue-council`、`supplemental-issue-council`、`report-writing`。
+4. `round_internal_phases`
+   - 写入 round brief 或 program，用于区分 acquisition turn、analysis turn、progress review 和 moderator synthesis。数据获取和数据分析/综合不应被伪装成同一种“调查轮”；它们通常是 issue council round 内不同组织环节。
+
+`open-investigation-round` 已支持 `round_mode`、`primary_focus_refs`、`context_packet_id` 和 `round_brief_id` 作为 continuation context；下一阶段应让这些字段深度绑定 `council-investigation-program`，使 supplemental round 不是泛泛“再查一次”，而是承接具体 theme、未满足 obligation、source-limit 争议或 challenger concern。
 
 当前已完成的基线是：开放型 mission 可以保持 `scoping-required`，moderator 可以在 scoping round 中提交 investigation plan、candidate scope、round brief、round synthesis、evidence request 和 context packet；investigator 可以通过薄 `source-acquisition-proposal` 自主记录取证意图，并通过 execution lineage helper 把 proposal 与 receipt / normalized signal refs 串联；agent entry 和 source surfaces 会暴露同一信源家族内的可选多层工作流（例如 GDELT DOC recon 到 Events/Mentions/GKG，YouTube video search 到 comments，Regulations.gov list 到 detail），但这些 workflow 不排序、不评分、不固定议程；round liveness 可把 unresolved refs 带入 continuation round，并提供不排序的 closing checklist；失败、blocked、receipt-only、executed-without-normalized-refs 或 zero-signal acquisition attempt 必须被 source owner 反思后，moderator 才能把 `no-actionable-path` 作为非继续理由；弱报告允许生成，但必须显式记录 claim strength、limitations、unresolved refs 和不继续调查的理由，不能把检索失败当成过早收口的依据；archive/history 可在 checkpoint 后暴露历史 evidence refs。source-family workflow 的常驻说明见 `docs/openclaw-source-family-workflows.md`；claim-strength 收口义务见 `docs/openclaw-claim-strength-obligations.md`。
 
@@ -259,7 +275,7 @@ report-editor 可以组织语言、调整结构和提升可读性，但新增的
 该 lane 的治理边界：
 
 1. `query-environment-signals` 返回 item-level 环境证据 rows 和 evidence refs，适合抽查和写 finding 时引用。
-2. `aggregate-environment-evidence` 负责描述性覆盖和统计摘要；下一阶段面向报告主导调查的工程计划见 `docs/openclaw-public-policy-situation-analysis-upgrade-plan.md`。
+2. `aggregate-environment-evidence` 负责描述性覆盖和统计摘要；下一阶段面向 runtime 议会程序加固的工程计划见 `docs/openclaw-runtime-council-program-upgrade-plan.md`。
 3. 环境聚合只输出 source/metric/time/spatial coverage、数值 min/max/mean、bucket counts、缺测和样本 refs。
 4. 时序观测和点事件应按数据形态处理，而不是按 provider 写厚规则。
 5. 环境聚合不得输出风险等级、source 排序、证据权重、健康暴露评估、水资源短缺严重性、火源证明或输送/归因结论。
@@ -287,7 +303,7 @@ report-editor 可以组织语言、调整结构和提升可读性，但新增的
 5. archive/history 已能 checkpoint 并提供历史 evidence refs；更大规模 raw receipt cache 和跨案例复用策略仍需后续设计。
 6. optional-analysis helper 多为启发式视图，默认 `audit-pending`，不是专业结论模型。
 7. 现有环境聚合层仍偏覆盖摘要；对百万级时序数据需要补齐全量统计、时序 bucket、点事件摘要和小型 evidence-ref sample 输出。
-8. report-driven investigation 仍未完全产品化：report-framing round、theme acquisition plan、in-round checkpoint、agent-authored section brief 和 policy lane coverage 还需要进一步实现和回归。
+8. report-driven investigation 仍未完全产品化：report-framing round、council investigation program、program-aware round brief、theme evidence boundary plan、in-round checkpoint、agent-authored section brief 和 policy lane coverage 还需要进一步实现和回归。
 
 ## 8. 当前收口状态
 
@@ -300,11 +316,11 @@ report-editor 可以组织语言、调整结构和提升可读性，但新增的
 5. archive/benchmark/replay 与 post-round/history bootstrap 的 package 化。
 6. agent-led source acquisition、source execution lineage、round synthesis、round liveness continuation / closing checklist、claim-strength obligation、approval handoff、archive checkpoint/history context 和 receipt-only normalization hints 已进入运行面基线；runtime 只展示对象、refs、权限和命令模板，不生成 source 排序、evidence 权重或固定调查剧本。
 
-skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 skill 混入多个独立能力、输入契约或 artifact 家族时，才重新评估是否拆分；不会按行数拆 skill。
+skills 不按行数或目录数量机械拆分，但当前平铺目录已经造成检索和理解成本。下一阶段会在不改变公共 `skill_name` 的前提下，为 registry 增加 category/family/stage metadata 和递归 discovery，再按 planning、runtime-state、fetch、normalize、query、optional-analysis、deliberation-write、reporting、archive-history 等职责整理物理目录。只有当某个 skill 混入多个独立 side-effect、输入契约、DB plane 或 artifact 家族时，才进一步合并或拆分能力。
 
 ## 9. 文档地图
 
-当前 docs 以基础文档为主；历史工作计划、迁移清单、真实 run timeline 和临时审计计划的有效常驻内容已并入基础文档。当前代码层工程收口以报告主导调查和及时反馈工作计划为准；实验和案例安排单独记录，不混入代码开发计划。
+当前 docs 以基础文档为主；历史工作计划、迁移清单、真实 run timeline 和临时审计计划的有效常驻内容已并入基础文档。当前代码层工程收口以 runtime 议会程序加固工作计划为准；实验和案例安排单独记录，不混入代码开发计划。
 
 1. `docs/openclaw-project-overview.md`
    - 项目定位、概念模型/代码角色模型、主工作流、多轮能力、agent/runtime principal、数据契约、skill 分层、公共舆情深化 lane、当前能力边界和质量门。
@@ -314,8 +330,8 @@ skills 当前形态可接受，不进入 P9 拆分。后续只在发现某个 sk
    - 弱报告、强 claim 和 unresolved refs 收口边界；用于防止过早放弃调查，同时不引入议题模板或证据打分。
 4. `docs/openclaw-experiment-case-plan.md`
    - 毕业设计实验与案例计划；记录两主案例、两轻量验证、第二主案例风险对比、降级策略和展示材料安排。
-5. `docs/openclaw-public-policy-situation-analysis-upgrade-plan.md`
-   - 当前工程工作计划；聚焦 report-framing round、theme acquisition contract、in-round coverage feedback、agent section brief、policy lane 补强和报告回归验收。
+5. `docs/openclaw-runtime-council-program-upgrade-plan.md`
+   - 当前工程工作计划；聚焦 framing/scope council、council investigation program、program-aware issue round brief、supplemental issue council、theme progress review、agent section brief 和报告回归验收。
 6. `docs/frozen-case-packages/nyc-smoke-20230607/baseline-case-package.md`
    - NYC smoke 第一主案例冻结包；汇总 mission、最终报告、证据链、claim boundary、公共舆情样本结构和答辩可引用的基线结论。
 7. `docs/frozen-case-packages/nyc-smoke-20230607/defense-onepager.md`

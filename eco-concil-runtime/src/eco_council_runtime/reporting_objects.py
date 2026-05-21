@@ -351,6 +351,7 @@ def normalized_agent_section_brief_payload(
     normalized["section_key"] = maybe_text(normalized.get("section_key")) or "agent-section"
     normalized["section_role"] = section_role or normalized["section_key"]
     normalized["claim_strength"] = maybe_text(normalized.get("claim_strength")) or "bounded"
+    normalized["program_id"] = maybe_text(normalized.get("program_id"))
     normalized["recommended_report_use"] = maybe_text(
         normalized.get("recommended_report_use")
     ) or "Use only with frozen/reporting basis and stated limitations."
@@ -368,6 +369,9 @@ def normalized_agent_section_brief_payload(
     )
     normalized["sufficiency_review_ids"] = unique_items(
         list_items(normalized.get("sufficiency_review_ids"))
+    )
+    normalized["theme_progress_review_ids"] = unique_items(
+        list_items(normalized.get("theme_progress_review_ids"))
     )
     denominators_value = normalized.get("denominators")
     normalized["denominators"] = (
@@ -391,6 +395,8 @@ def normalized_agent_section_brief_payload(
             *normalized["theme_ids"],
             *normalized["basis_object_ids"],
             *normalized["sufficiency_review_ids"],
+            *normalized["theme_progress_review_ids"],
+            normalized["program_id"],
         ]
     )
     normalized["brief_id"] = (

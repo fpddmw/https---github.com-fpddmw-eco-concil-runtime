@@ -8,7 +8,15 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from _workflow_support import load_json, reporting_path, run_script, runtime_src_path, script_path, write_json
+from _workflow_support import (
+    load_json,
+    reporting_path,
+    request_and_approve_transition,
+    run_script,
+    runtime_src_path,
+    script_path,
+    write_json,
+)
 
 RUNTIME_SRC = runtime_src_path()
 if str(RUNTIME_SRC) not in sys.path:
@@ -88,6 +96,50 @@ def materialize_blueprint(run_dir: Path) -> dict[str, Any]:
     return load_json(Path(payload["summary"]["output_path"]))
 
 
+def scaffold_program_run(run_dir: Path, *, run_id: str, round_id: str) -> None:
+    mission_path = run_dir / "mission_input.json"
+    write_json(
+        mission_path,
+        {
+            "run_id": run_id,
+            "topic": "Program-aware council smoke test",
+            "objective": "Frame issue council rounds without source route precommitment.",
+            "request_text": "Build a program-aware council flow for smoke-test reporting.",
+            "window": {
+                "start_utc": "2023-06-01T00:00:00Z",
+                "end_utc": "2023-06-10T00:00:00Z",
+            },
+            "region": {
+                "label": "NYC smoke governance context",
+                "geometry": {"type": "Point", "coordinates": [-73.985, 40.748]},
+            },
+            "hypotheses": [
+                {
+                    "title": "Program-aware framing hypothesis",
+                    "statement": "The council should split report questions into issue rounds before source route choices.",
+                    "owner_role": "moderator",
+                    "status": "active",
+                }
+            ],
+            "artifact_imports": [],
+            "source_requests": [],
+        },
+    )
+    run_script(
+        script_path("scaffold-mission-run"),
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--round-id",
+        round_id,
+        "--mission-path",
+        str(mission_path),
+        "--orchestration-mode",
+        "openclaw-agent",
+    )
+
+
 def minimal_draft() -> dict[str, Any]:
     sections: list[dict[str, Any]] = []
     for section_id in (
@@ -165,6 +217,200 @@ class ReportChainUpgradeTests(unittest.TestCase):
             self.assertTrue(all("source_selection_policy" in theme for theme in themes))
             self.assertTrue(artifact["synthesis_targets"][0]["not_acquisition_theme"])
 
+    def test_framing_positions_synthesize_council_investigation_program(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            artifact = materialize_blueprint(run_dir)
+            blueprint_id = artifact["report_blueprint"]["blueprint_id"]
+            for role in ("environmental-investigator", "social-investigator", "challenger"):
+                run_script(
+                    script_path("submit-agent-position"),
+                    "--run-dir",
+                    str(run_dir),
+                    "--run-id",
+                    RUN_ID,
+                    "--round-id",
+                    ROUND_ID,
+                    "--author-role",
+                    role,
+                    "--target-kind",
+                    "report-blueprint",
+                    "--target-id",
+                    blueprint_id,
+                    "--rationale",
+                    f"{role} records framing boundary position.",
+                    "--payload-json",
+                    json.dumps(
+                        {
+                            "position_text": f"{role} accepts the report questions with bounded claim language.",
+                            "boundary_notes": [
+                                "Do not convert report questions into fixed source or task queues."
+                            ],
+                            "proposed_agenda_questions": [
+                                f"Which {role} boundary should the issue council preserve?"
+                            ],
+                        },
+                        ensure_ascii=True,
+                        sort_keys=True,
+                    ),
+                )
+
+            result = run_script(
+                script_path("synthesize-council-investigation-program"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--blueprint-id",
+                blueprint_id,
+            )
+            program_artifact = load_json(Path(result["summary"]["output_path"]))
+            program = program_artifact["council_investigation_program"]
+            round_briefs = program_artifact["materialized_round_briefs"]
+            self.assertEqual("council-investigation-program", program["object_kind"])
+            self.assertGreaterEqual(len(program["round_sequence"]), 3)
+            self.assertEqual(len(program["round_sequence"]), len(round_briefs))
+            self.assertEqual(len(round_briefs), result["summary"]["materialized_round_brief_count"])
+            self.assertFalse(result["summary"]["missing_agent_position_roles"])
+            self.assertEqual(
+                {
+                    "environmental-investigator",
+                    "social-investigator",
+                    "challenger",
+                },
+                set(program["framing_position_roles"]),
+            )
+            self.assertTrue(
+                any(
+                    "accepts the report questions" in summary["position_text"]
+                    for summary in program["agent_position_summaries"]
+                )
+            )
+            self.assertIn(
+                "Which challenger boundary should the issue council preserve?",
+                program["council_agenda_questions"],
+            )
+            self.assertTrue(
+                all(
+                    item["round_subtitle_question"].endswith("?")
+                    for item in program["round_sequence"]
+                )
+            )
+            first_issue_brief = next(
+                brief for brief in round_briefs if brief["round_category"] == "issue-deliberation"
+            )
+            self.assertEqual(program["program_id"], first_issue_brief["program_id"])
+            self.assertEqual("round-brief", first_issue_brief["object_kind"])
+            self.assertTrue(first_issue_brief["active_theme_ids"])
+            self.assertTrue(first_issue_brief["agent_responsibility_boundaries"])
+            self.assertIn("theme-progress-review", first_issue_brief["expected_council_objects"])
+            for forbidden in (
+                "source_family",
+                "source_skill",
+                "query",
+                "query_parameters",
+                "priority_score",
+                "route_ranking",
+                "scheduler_queue",
+                "auto_execute",
+            ):
+                self.assertIn(forbidden, program["forbidden_scheduler_fields"])
+                self.assertNotIn(forbidden, {key for key in program if key != "forbidden_scheduler_fields"})
+            for round_item in program["round_sequence"]:
+                self.assertNotIn("source_family", round_item)
+                self.assertNotIn("source_skill", round_item)
+                self.assertNotIn("query_parameters", round_item)
+
+    def test_open_issue_round_loads_program_projected_round_brief(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            framing_round_id = "round-001-framing-scope"
+            scaffold_program_run(run_dir, run_id=RUN_ID, round_id=framing_round_id)
+            blueprint_result = run_script(
+                script_path("materialize-report-blueprint"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                framing_round_id,
+                "--mission-text",
+                "Analyze NYC wildfire smoke air quality, official advisories, public discourse, and policy response boundaries.",
+            )
+            blueprint_artifact = load_json(Path(blueprint_result["summary"]["output_path"]))
+            blueprint_id = blueprint_artifact["report_blueprint"]["blueprint_id"]
+            for role in ("environmental-investigator", "social-investigator", "challenger"):
+                run_script(
+                    script_path("submit-agent-position"),
+                    "--run-dir",
+                    str(run_dir),
+                    "--run-id",
+                    RUN_ID,
+                    "--round-id",
+                    framing_round_id,
+                    "--author-role",
+                    role,
+                    "--target-kind",
+                    "report-blueprint",
+                    "--target-id",
+                    blueprint_id,
+                    "--rationale",
+                    f"{role} records framing boundary position.",
+                )
+
+            program_result = run_script(
+                script_path("synthesize-council-investigation-program"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                framing_round_id,
+                "--blueprint-id",
+                blueprint_id,
+            )
+            program_artifact = load_json(Path(program_result["summary"]["output_path"]))
+            program = program_artifact["council_investigation_program"]
+            first_issue_round = next(
+                item
+                for item in program["round_sequence"]
+                if item["round_category"] == "issue-deliberation"
+            )
+            target_round_id = first_issue_round["round_id"]
+            transition_request_id = request_and_approve_transition(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=framing_round_id,
+                transition_kind="open-investigation-round",
+                target_round_id=target_round_id,
+                source_round_id=framing_round_id,
+                rationale="Open the first program-aware issue council round.",
+                request_payload={"program_id": program["program_id"]},
+            )
+            opened = run_script(
+                script_path("open-investigation-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                target_round_id,
+                "--source-round-id",
+                framing_round_id,
+                "--transition-request-id",
+                transition_request_id,
+            )
+            transition = load_json(Path(opened["summary"]["output_path"]))
+            self.assertEqual(program["program_id"], transition["program_id"])
+            self.assertEqual("issue-deliberation", transition["round_category"])
+            self.assertTrue(transition["round_brief_id"])
+            self.assertEqual(first_issue_round["active_theme_ids"], transition["active_theme_ids"])
+            self.assertTrue(transition["round_internal_phases"])
+            self.assertTrue(transition["agent_responsibility_boundaries"])
+            self.assertTrue(transition["observed_inputs"]["program_round_brief_loaded"])
+
     def test_acquisition_checkpoints_only_emit_when_claim_impact_visible(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -230,6 +476,28 @@ class ReportChainUpgradeTests(unittest.TestCase):
             review_artifact = load_json(Path(review["summary"]["output_path"]))
             self.assertTrue(review_artifact["unsupported_claim_slots"])
             self.assertTrue(review_artifact["required_downgrades"])
+            self.assertEqual(4, len(review_artifact["theme_progress_reviews"]))
+            from eco_council_runtime.objects.council import query_council_objects
+
+            queried_progress = query_council_objects(
+                run_dir,
+                object_kind="theme-progress-review",
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                limit=20,
+            )
+            self.assertEqual(4, len(queried_progress["objects"]))
+            self.assertTrue(
+                all(
+                    item["recommended_disposition"] in {
+                        "downgrade-required",
+                        "needs-in-round-recovery",
+                        "satisfied-for-current-claim-strength",
+                        "blocked-by-program-mismatch",
+                    }
+                    for item in review_artifact["theme_progress_reviews"]
+                )
+            )
 
             brief = run_script(
                 script_path("draft-agent-section-brief"),
@@ -258,6 +526,7 @@ class ReportChainUpgradeTests(unittest.TestCase):
             handoff_artifact = load_json(Path(handoff["summary"]["output_path"]))
             self.assertEqual(1, handoff_artifact["agent_section_brief_count"])
             self.assertEqual(4, handoff_artifact["theme_sufficiency_review_count"])
+            self.assertEqual(4, handoff_artifact["theme_progress_review_count"])
             self.assertEqual(
                 "social-investigator",
                 handoff_artifact["report_packet"]["section_briefs"][0]["agent_role"],
@@ -286,7 +555,7 @@ class ReportChainUpgradeTests(unittest.TestCase):
             self.assertFalse(interaction_review["supported_claim_slots"])
             self.assertIn("claim-slot-interaction-timeline", interaction_review["unsupported_claim_slots"])
 
-    def test_theme_acquisition_plan_requires_investigator_authorship(self) -> None:
+    def test_theme_evidence_boundary_plan_requires_investigator_authorship(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
             common_args = (
@@ -297,7 +566,7 @@ class ReportChainUpgradeTests(unittest.TestCase):
                 "--round-id",
                 ROUND_ID,
                 "--rationale",
-                "Investigator adopts a bounded public semantic acquisition route.",
+                "Investigator adopts a bounded public semantic evidence boundary.",
                 "--theme-id",
                 "theme-public-semantic-perception",
                 "--authoring-mode",
@@ -323,13 +592,13 @@ class ReportChainUpgradeTests(unittest.TestCase):
             )
             with self.assertRaises(AssertionError):
                 run_script(
-                    script_path("submit-theme-acquisition-plan"),
+                    script_path("submit-theme-evidence-boundary-plan"),
                     *common_args,
                     "--author-role",
                     "moderator",
                 )
             payload = run_script(
-                script_path("submit-theme-acquisition-plan"),
+                script_path("submit-theme-evidence-boundary-plan"),
                 *common_args,
                 "--author-role",
                 "social-investigator",
@@ -337,7 +606,7 @@ class ReportChainUpgradeTests(unittest.TestCase):
             self.assertEqual("completed", payload["status"])
             with self.assertRaises(AssertionError):
                 run_script(
-                    script_path("submit-theme-acquisition-plan"),
+                    script_path("submit-theme-evidence-boundary-plan"),
                     *common_args,
                     "--author-role",
                     "social-investigator",
@@ -353,9 +622,9 @@ class ReportChainUpgradeTests(unittest.TestCase):
             draft["source_material"] = {
                 "theme_sufficiency_reviews": [{"review_id": "rev-policy"}],
                 "policy_lane": {"official_action_or_governance_record_basis_visible": False},
-                "theme_acquisition_plans": [
+                "theme_evidence_boundary_plans": [
                     {
-                        "object_kind": "theme-acquisition-plan",
+                        "object_kind": "theme-evidence-boundary-plan",
                         "theme_id": "policy_evaluation_basis",
                         "source_family_candidates": ["policy_evaluation_basis"],
                     }
@@ -439,6 +708,79 @@ class ReportChainUpgradeTests(unittest.TestCase):
             }
             codes = validate_draft(run_dir, draft)
             self.assertIn("public-semantic-source-family-denominator-missing", codes)
+
+    def test_validator_marks_missing_challenger_boundary_review_for_strong_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_draft()
+            draft["sections"][0]["paragraphs"] = [
+                "The same-day interaction is reported as co-visible descriptive chronology, not causality."
+            ]
+            draft["source_material"] = {
+                "section_briefs": [
+                    {
+                        "brief_id": "section-brief-interaction",
+                        "agent_role": "moderator",
+                        "section_key": "fact-policy-public-interaction-timeline",
+                        "denominator": {
+                            "interaction_node_count": 1,
+                            "lane_episode_card_count": 2,
+                        },
+                    }
+                ],
+                "interaction_timeline": {
+                    "section_brief_count": 1,
+                    "interaction_node_count": 1,
+                    "lane_episode_card_count": 2,
+                },
+                "interaction_timeline_nodes": [
+                    {
+                        "node_id": "node-bounded",
+                        "summary": "Bounded co-visibility node.",
+                        "fact_or_policy_evidence_refs": ["signal:formal"],
+                        "public_or_media_evidence_refs": ["signal:public"],
+                    }
+                ],
+                "lane_episode_cards": [{"episode_id": "fact"}, {"episode_id": "public"}],
+            }
+            self.assertIn("challenger-boundary-review-missing", validate_draft(run_dir, draft))
+
+            draft["source_material"]["section_briefs"].append(
+                {
+                    "brief_id": "section-brief-challenger",
+                    "agent_role": "challenger",
+                    "section_key": "challenger_limitations",
+                    "limitations": ["Interaction is descriptive, not causal."],
+                }
+            )
+            self.assertNotIn("challenger-boundary-review-missing", validate_draft(run_dir, draft))
+
+    def test_validator_treats_raw_progress_review_as_advisory_until_carried(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            draft = minimal_draft()
+            draft["sections"][0]["paragraphs"] = [
+                "The policy was effective and caused a public response."
+            ]
+            draft["source_material"] = {
+                "theme_progress_reviews": [
+                    {
+                        "review_id": "theme-progress-review-advisory",
+                        "recommended_disposition": "satisfied-for-current-claim-strength",
+                    }
+                ],
+            }
+            codes = validate_draft(run_dir, draft)
+            self.assertIn("strong-claim-without-brief-review-or-frozen-basis", codes)
+
+            draft["source_material"]["theme_progress_reviews"][0][
+                "uptake_status"
+            ] = "council-carried"
+            codes_carried = validate_draft(run_dir, draft)
+            self.assertNotIn(
+                "strong-claim-without-brief-review-or-frozen-basis",
+                codes_carried,
+            )
 
 
 if __name__ == "__main__":

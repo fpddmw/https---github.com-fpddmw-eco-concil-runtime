@@ -16,12 +16,15 @@ from eco_council_runtime.kernel.governance.skill_registry import (  # noqa: E402
     NORMALIZE_SKILLS,
     OPTIONAL_ANALYSIS_SKILLS,
     QUERY_SKILLS,
+    SKILL_CATEGORIES,
     SKILL_LAYER_FETCH,
     SKILL_LAYER_NORMALIZE,
     SKILL_LAYER_OPTIONAL_ANALYSIS,
     SKILL_LAYER_QUERY,
     evidence_only_skill_names,
     resolve_skill_policy,
+    skill_directory,
+    skill_directory_index,
     skill_boundary_violations,
     skill_registry_snapshot,
     validate_skill_output_boundary,
@@ -30,8 +33,8 @@ from eco_council_runtime.kernel.source_queue.source_queue_contract import (  # n
     source_capability_hints,
 )
 
+WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 
-SKILLS_ROOT = Path(__file__).resolve().parents[1] / "skills"
 
 P3_HISTORY_HELPER_AND_REPORTING_SKILLS = [
     "archive-case-library",
@@ -72,23 +75,24 @@ COUNCIL_WRITE_AND_TRANSITION_SKILLS = [
     "submit-evidence-route-assessment",
     "submit-investigation-plan",
     "submit-investigation-scope",
-    "submit-theme-acquisition-plan",
+    "submit-theme-evidence-boundary-plan",
     "submit-readiness-opinion",
     "submit-round-brief",
     "submit-round-synthesis",
     "submit-source-acquisition-proposal",
     "summarize-board-state",
+    "synthesize-council-investigation-program",
     "update-hypothesis-status",
     "update-source-acquisition-proposal-status",
 ]
 
 
 def skill_doc_text(skill_name: str) -> str:
-    return (SKILLS_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
+    return (skill_directory(skill_name) / "SKILL.md").read_text(encoding="utf-8")
 
 
 def agent_metadata_text(skill_name: str) -> str:
-    return (SKILLS_ROOT / skill_name / "agents" / "openai.yaml").read_text(
+    return (skill_directory(skill_name) / "agents" / "openai.yaml").read_text(
         encoding="utf-8"
     )
 
@@ -157,15 +161,39 @@ class SkillEvidenceOnlyBoundaryTests(unittest.TestCase):
             with self.subTest(skill=skill_name):
                 self.assertEqual({}, skill.get("skill_boundary", {}))
 
+    def test_skill_registry_uses_recursive_taxonomy_without_top_level_skill_dirs(self) -> None:
+        snapshot = skill_registry_snapshot()
+        discovered = skill_directory_index()
+        self.assertEqual(snapshot["skill_count"], len(discovered))
+        self.assertEqual(124, snapshot["skill_count"])
+        self.assertTrue(set(snapshot["skill_category_counts"]).issubset(set(SKILL_CATEGORIES)))
+
+        top_level_dirs = {
+            child.name
+            for child in (WORKSPACE_ROOT / "skills").iterdir()
+            if child.is_dir()
+        }
+        self.assertEqual(set(SKILL_CATEGORIES), top_level_dirs)
+
+        for skill in snapshot["skills"]:
+            with self.subTest(skill=skill["skill_name"]):
+                physical_path = Path(str(skill["physical_path"]))
+                self.assertTrue(physical_path.exists())
+                self.assertEqual(
+                    skill["skill_category"],
+                    physical_path.relative_to(WORKSPACE_ROOT / "skills").parts[0],
+                )
+                self.assertIn("skill_family", skill)
+                self.assertIn("workflow_stage", skill)
+
     def test_evidence_only_scripts_do_not_accept_scoring_or_ranking_flags(self) -> None:
-        skills_root = Path(__file__).resolve().parents[1] / "skills"
         forbidden_flags = {
             "--" + field_name.replace("_", "-")
             for field_name in EVIDENCE_ONLY_FORBIDDEN_OUTPUT_FIELDS
         }
 
         for skill_name in evidence_only_skill_names():
-            script_dir = skills_root / skill_name / "scripts"
+            script_dir = skill_directory(skill_name) / "scripts"
             scripts = sorted(script_dir.glob("*.py"))
             self.assertTrue(scripts, skill_name)
             for script_path in scripts:

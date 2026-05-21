@@ -22,6 +22,13 @@ prove. A sufficiency review may help the council decide which claim slots are
 supportable or must be downgraded, but it is not a runtime truth mechanism and
 does not replace council acceptance.
 
+For complex public-policy situation analysis, claim-strength obligations should
+be attached to a council investigation program and to the active themes of each
+round. A round can close only after the council records whether its active theme
+obligations are supported, downgraded, scoped out, or carried into a named
+supplemental investigation round. This is still advisory governance: runtime
+does not decide truth, source weight, or public-policy validity.
+
 ## Weak Reports
 
 Weak or bounded reports are allowed. They are useful when the council can provide
@@ -91,3 +98,8 @@ These surfaces ask the moderator to record claim strength, limitations,
 unresolved refs, and non-continuation rationale before closing with a weak report.
 If live actionable follow-up remains, the moderator should request or open a
 continuation round rather than treating the report as complete.
+
+Supplemental rounds should be issue-specific. Prefer names and metadata such as
+`round-003-public-semantic-supplement-01` with `round_mode=supplemental-investigation`
+and `primary_focus_refs` pointing to the unresolved theme or review object, rather
+than a generic next round that repeats the same acquisition uncertainty.

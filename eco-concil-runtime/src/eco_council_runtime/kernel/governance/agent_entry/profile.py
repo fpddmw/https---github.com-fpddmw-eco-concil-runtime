@@ -54,6 +54,7 @@ REPORT_WRITING_ROUND_MODES = {
 }
 
 COORDINATION_READ_OBJECT_KINDS = (
+    "council-investigation-program",
     "investigation-plan",
     "subissue",
     "investigation-scope",
@@ -94,6 +95,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         ],
         "write_skills": [
             "submit-investigation-plan",
+            "synthesize-council-investigation-program",
             "submit-investigation-scope",
             "submit-round-brief",
             "submit-round-synthesis",
@@ -963,6 +965,23 @@ def default_role_entry_points(
                         ],
                     )
                 )
+            elif skill_name == "synthesize-council-investigation-program":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--author-role",
+                            role,
+                            "--blueprint-id",
+                            "<report_blueprint_id>",
+                        ],
+                    )
+                )
             elif skill_name == "submit-investigation-scope":
                 role_write_commands.append(
                     run_skill_command(
@@ -1001,7 +1020,19 @@ def default_role_entry_points(
                             "--author-role",
                             role,
                             "--round-mode",
-                            "<scoping|investigation|supplemental|synthesis>",
+                            "<framing-scope-council|issue-council|supplemental-issue-council|report-writing>",
+                            "--round-category",
+                            "<planning|issue-deliberation|supplemental-issue-deliberation|reporting>",
+                            "--round-subtitle-question",
+                            "<question_form_round_agenda>",
+                            "--program-id",
+                            "<council_investigation_program_id>",
+                            "--active-theme-id",
+                            "<active_theme_id>",
+                            "--round-internal-phase",
+                            "<agenda-question|agent-acquisition-turns|agent-analysis-turns|progress-review|moderator-synthesis>",
+                            "--agent-responsibility-boundary",
+                            "<role claim/denominator/limitation/review boundary>",
                             "--rationale",
                             "<rationale>",
                             "--primary-focus-ref",
@@ -2069,6 +2100,12 @@ def default_agent_entry_operator_commands(
             round_id,
             "--include-contract",
             "--pretty",
+        ),
+        "query_council_investigation_programs_command": query_coordination_object_command(
+            run_dir=run_dir,
+            run_id=run_id,
+            round_id=round_id,
+            object_kind="council-investigation-program",
         ),
         "query_investigation_plans_command": query_coordination_object_command(
             run_dir=run_dir,

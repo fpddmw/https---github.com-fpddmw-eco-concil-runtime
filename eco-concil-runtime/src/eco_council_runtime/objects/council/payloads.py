@@ -17,7 +17,9 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (
 OBJECT_KIND_PROPOSAL = "proposal"
 OBJECT_KIND_REPORT_BLUEPRINT = "report-blueprint"
 OBJECT_KIND_INVESTIGATION_THEME = "investigation-theme"
-OBJECT_KIND_THEME_ACQUISITION_PLAN = "theme-acquisition-plan"
+OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM = "council-investigation-program"
+OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN = "theme-evidence-boundary-plan"
+OBJECT_KIND_THEME_PROGRESS_REVIEW = "theme-progress-review"
 OBJECT_KIND_FINDING = "finding"
 OBJECT_KIND_DISCUSSION_MESSAGE = "discussion-message"
 OBJECT_KIND_EVIDENCE_BUNDLE = "evidence-bundle"
@@ -46,7 +48,9 @@ OBJECT_KIND_DECISION_TRACE = "decision-trace"
 DYNAMIC_INVESTIGATION_OBJECT_KINDS = (
     OBJECT_KIND_REPORT_BLUEPRINT,
     OBJECT_KIND_INVESTIGATION_THEME,
-    OBJECT_KIND_THEME_ACQUISITION_PLAN,
+    OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM,
+    OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN,
+    OBJECT_KIND_THEME_PROGRESS_REVIEW,
     OBJECT_KIND_INVESTIGATION_PLAN,
     OBJECT_KIND_SUBISSUE,
     OBJECT_KIND_INVESTIGATION_SCOPE,
@@ -63,7 +67,9 @@ DYNAMIC_INVESTIGATION_OBJECT_KINDS = (
 DYNAMIC_INVESTIGATION_ID_FIELDS = {
     OBJECT_KIND_REPORT_BLUEPRINT: "blueprint_id",
     OBJECT_KIND_INVESTIGATION_THEME: "theme_id",
-    OBJECT_KIND_THEME_ACQUISITION_PLAN: "plan_id",
+    OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM: "program_id",
+    OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN: "plan_id",
+    OBJECT_KIND_THEME_PROGRESS_REVIEW: "review_id",
     OBJECT_KIND_INVESTIGATION_PLAN: "plan_id",
     OBJECT_KIND_SUBISSUE: "subissue_id",
     OBJECT_KIND_INVESTIGATION_SCOPE: "scope_id",
@@ -80,7 +86,9 @@ DYNAMIC_INVESTIGATION_ID_FIELDS = {
 DYNAMIC_INVESTIGATION_STATUS_DEFAULTS = {
     OBJECT_KIND_REPORT_BLUEPRINT: "framed",
     OBJECT_KIND_INVESTIGATION_THEME: "open",
-    OBJECT_KIND_THEME_ACQUISITION_PLAN: "submitted",
+    OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM: "proposed",
+    OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN: "submitted",
+    OBJECT_KIND_THEME_PROGRESS_REVIEW: "advisory",
     OBJECT_KIND_INVESTIGATION_PLAN: "draft",
     OBJECT_KIND_SUBISSUE: "proposed",
     OBJECT_KIND_INVESTIGATION_SCOPE: "candidate",
@@ -124,6 +132,97 @@ FORBIDDEN_DYNAMIC_INVESTIGATION_FIELDS = (
     "weights",
 )
 
+PROGRAM_ROUTE_FORBIDDEN_FIELDS = (
+    "auto_execute",
+    "automatic_execution",
+    "execution_queue",
+    "query",
+    "queries",
+    "query_parameters",
+    "query_variant",
+    "query_variant_plan",
+    "query_variants",
+    "priority_score",
+    "priority_scores",
+    "required_source_skills",
+    "route_priority",
+    "route_ranking",
+    "route_rankings",
+    "route_score",
+    "route_scores",
+    "scheduler_queue",
+    "selected_source",
+    "selected_sources",
+    "source_families",
+    "source_family",
+    "source_family_candidates",
+    "source_hints",
+    "source_priority",
+    "source_priorities",
+    "source_refs",
+    "source_skill",
+    "source_skill_candidates",
+    "source_skills",
+    "task_queue",
+    "task_sequence",
+)
+
+PHASE_STATE_MACHINE_FIELDS = (
+    "auto_advance",
+    "auto_progress",
+    "blocks_until_complete",
+    "current_phase",
+    "hard_gate",
+    "next_phase",
+    "phase_gate",
+    "phase_state",
+    "phase_status",
+    "required_phase_order",
+    "runtime_state",
+    "state_machine",
+)
+
+RESPONSIBILITY_SEQUENCE_PHRASES = (
+    "auto execute",
+    "automatic execution",
+    "execute skill",
+    "fetch-",
+    "must execute",
+    "must fetch",
+    "must query",
+    "query parameters",
+    "run skill",
+    "scheduler queue",
+    "source family",
+    "source skill",
+    "task queue",
+    "task sequence",
+    "then run",
+)
+
+SUPPLEMENTAL_IN_ROUND_REPAIR_TERMS = (
+    "query repair",
+    "query variant",
+    "query-variant",
+    "same-family",
+    "same family",
+    "zero result",
+    "zero-result",
+)
+
+SUPPLEMENTAL_ESCALATION_TERMS = (
+    "boundary",
+    "challenger",
+    "claim strength",
+    "cross-agent",
+    "denominator",
+    "no reasonable recovery",
+    "policy lane absence",
+    "responsibility",
+    "source-limit",
+    "transition approval",
+)
+
 DYNAMIC_INVESTIGATION_LINEAGE_FIELDS = (
     "source_object_ids",
     "related_object_ids",
@@ -132,8 +231,12 @@ DYNAMIC_INVESTIGATION_LINEAGE_FIELDS = (
     "evidence_request_ids",
     "claim_slots_supported",
     "theme_ids",
+    "active_theme_ids",
     "investigation_theme_ids",
-    "theme_acquisition_plan_ids",
+    "theme_evidence_boundary_plan_ids",
+    "theme_progress_review_ids",
+    "council_investigation_program_ids",
+    "program_ids",
     "acquisition_checkpoint_ids",
     "theme_sufficiency_review_ids",
     "position_ids",
@@ -396,6 +499,153 @@ def reject_dynamic_investigation_heuristic_fields(
             )
 
 
+def populated(value: Any) -> bool:
+    if value in (None, "", [], {}):
+        return False
+    if isinstance(value, str):
+        return bool(maybe_text(value))
+    return True
+
+
+def field_paths_with_forbidden_names(
+    value: Any,
+    *,
+    forbidden_fields: tuple[str, ...],
+    path: str = "",
+) -> list[str]:
+    forbidden = {field.casefold() for field in forbidden_fields}
+    matches: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            key_text = maybe_text(key)
+            child_path = f"{path}.{key_text}" if path else key_text
+            if key_text.casefold() in forbidden and populated(child):
+                matches.append(child_path)
+            matches.extend(
+                field_paths_with_forbidden_names(
+                    child,
+                    forbidden_fields=forbidden_fields,
+                    path=child_path,
+                )
+            )
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            matches.extend(
+                field_paths_with_forbidden_names(
+                    child,
+                    forbidden_fields=forbidden_fields,
+                    path=f"{path}[{index}]" if path else f"[{index}]",
+                )
+            )
+    return matches
+
+
+def reject_source_route_scheduler_fields(
+    object_kind: str,
+    payload: dict[str, Any],
+    *,
+    forbidden_fields: tuple[str, ...] = PROGRAM_ROUTE_FORBIDDEN_FIELDS,
+) -> None:
+    matches = field_paths_with_forbidden_names(
+        payload,
+        forbidden_fields=forbidden_fields,
+    )
+    if matches:
+        raise ValueError(
+            f"{object_kind} cannot include source/query/route/scheduler field(s): "
+            + ", ".join(sorted(matches))
+            + ". Program and round coordination objects define questions, themes, "
+            "responsibility boundaries, exits, downgrade boundaries, and recovery "
+            "semantics only; source routes belong in investigator acquisition "
+            "turns, source-acquisition-proposal, or route assessment."
+        )
+
+
+def text_blob(value: Any) -> str:
+    if isinstance(value, dict):
+        return " ".join([maybe_text(key) + " " + text_blob(child) for key, child in value.items()])
+    if isinstance(value, list):
+        return " ".join(text_blob(item) for item in value)
+    return maybe_text(value)
+
+
+def validate_agent_responsibility_boundaries(
+    object_kind: str,
+    boundaries: Any,
+) -> None:
+    if not isinstance(boundaries, list) or not boundaries:
+        raise ValueError(f"{object_kind} requires non-empty agent_responsibility_boundaries.")
+    forbidden_names = field_paths_with_forbidden_names(
+        boundaries,
+        forbidden_fields=PROGRAM_ROUTE_FORBIDDEN_FIELDS,
+    )
+    lowered = text_blob(boundaries).casefold()
+    forbidden_phrases = [
+        phrase
+        for phrase in RESPONSIBILITY_SEQUENCE_PHRASES
+        if phrase in lowered
+    ]
+    if forbidden_names or forbidden_phrases:
+        details = [*sorted(forbidden_names), *sorted(set(forbidden_phrases))]
+        raise ValueError(
+            f"{object_kind} agent_responsibility_boundaries must describe this "
+            "round's claim, denominator, limitation, or review responsibility "
+            "boundaries. They cannot become a source/query/skill/task sequence. "
+            "Remove: " + ", ".join(details)
+        )
+
+
+def validate_round_internal_phase_semantics(
+    object_kind: str,
+    phases: Any,
+) -> None:
+    if phases in (None, "", [], {}):
+        return
+    if not isinstance(phases, list):
+        raise ValueError(f"{object_kind} round_internal_phases must be a list.")
+    matches = field_paths_with_forbidden_names(
+        phases,
+        forbidden_fields=PHASE_STATE_MACHINE_FIELDS,
+    )
+    if matches:
+        raise ValueError(
+            f"{object_kind} round_internal_phases are descriptive organization "
+            "hints only, not a runtime state machine or hard gate. Remove: "
+            + ", ".join(sorted(matches))
+        )
+
+
+def validate_supplemental_round_restraint(
+    object_kind: str,
+    payload: dict[str, Any],
+) -> None:
+    supplemental_text = " ".join(
+        [
+            text_blob(payload.get("supplemental_round_triggers")),
+            text_blob(payload.get("supplemental_round_policy")),
+            text_blob(payload.get("in_round_feedback_triggers")),
+        ]
+    ).casefold()
+    if not supplemental_text:
+        return
+    ordinary_terms = [
+        term for term in SUPPLEMENTAL_IN_ROUND_REPAIR_TERMS if term in supplemental_text
+    ]
+    escalation_terms = [
+        term for term in SUPPLEMENTAL_ESCALATION_TERMS if term in supplemental_text
+    ]
+    if ordinary_terms and not escalation_terms:
+        raise ValueError(
+            f"{object_kind} supplemental round policy cannot treat ordinary "
+            "query repair, zero-result diagnosis, query-variant expansion, or "
+            "same-family follow-up as an automatic supplemental round trigger. "
+            "Keep those in the current issue council round unless an unresolved "
+            "theme boundary, responsibility boundary, challenger concern, "
+            "denominator/source-limit dispute, policy-lane absence, or transition "
+            "approval need is explicit."
+        )
+
+
 def normalize_query_parameters(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
@@ -453,52 +703,41 @@ def validate_source_acquisition_proposal_payload(payload: dict[str, Any]) -> Non
         )
 
 
-def validate_theme_acquisition_plan_payload(payload: dict[str, Any]) -> None:
+def validate_theme_evidence_boundary_plan_payload(payload: dict[str, Any]) -> None:
     author_role = maybe_text(payload.get("author_role"))
     allowed_author_roles = {"environmental-investigator", "social-investigator"}
     if author_role not in allowed_author_roles:
         raise ValueError(
-            "theme-acquisition-plan must be authored or adopted by an investigator; "
+            "theme-evidence-boundary-plan must be authored or adopted by an investigator; "
             f"got author_role `{author_role or '<empty>'}`."
         )
 
     authoring_mode = maybe_text(payload.get("authoring_mode")).casefold()
     if authoring_mode not in {"agent-authored", "agent-adopted"}:
         raise ValueError(
-            "theme-acquisition-plan authoring_mode must be `agent-authored` or "
+            "theme-evidence-boundary-plan authoring_mode must be `agent-authored` or "
             f"`agent-adopted`; got `{authoring_mode or '<empty>'}`."
         )
-
-    forbidden_route_fields = (
-        "source_family",
-        "source_families",
-        "source_family_candidates",
-        "source_skill",
-        "source_hints",
-        "source_refs",
-        "query_variant_plan",
-        "query_parameters",
-        "considered_source_families",
-        "considered_source_skills",
-    )
-    populated_route_fields = [
-        field_name
-        for field_name in forbidden_route_fields
-        if (
-            normalized_text_list(payload.get(field_name))
-            if isinstance(payload.get(field_name), list)
-            else maybe_text(payload.get(field_name))
-            if not isinstance(payload.get(field_name), dict)
-            else payload.get(field_name)
-        )
-    ]
-    if populated_route_fields:
+    theme_id = maybe_text(payload.get("theme_id"))
+    if not theme_id:
+        raise ValueError("theme-evidence-boundary-plan requires theme_id.")
+    active_theme_ids = normalized_text_list(payload.get("active_theme_ids"))
+    if active_theme_ids and theme_id not in active_theme_ids:
         raise ValueError(
-            "theme-acquisition-plan cannot preselect data sources, source "
-            "families, skills, query variants, or query parameters. Route "
-            "choice stays inside the later investigator acquisition turn. "
-            "Remove: " + ", ".join(sorted(populated_route_fields))
+            "theme-evidence-boundary-plan theme_id must be one of active_theme_ids "
+            "when active_theme_ids are supplied."
         )
+
+    reject_source_route_scheduler_fields(
+        "theme-evidence-boundary-plan",
+        payload,
+        forbidden_fields=(
+            *PROGRAM_ROUTE_FORBIDDEN_FIELDS,
+            "considered_source_families",
+            "considered_source_skills",
+            "alternate_routes",
+        ),
+    )
 
     required_plan_lists = (
         "claim_slots_supported",
@@ -515,7 +754,7 @@ def validate_theme_acquisition_plan_payload(payload: dict[str, Any]) -> None:
     ]
     if missing_plan_lists:
         raise ValueError(
-            "theme-acquisition-plan requires non-empty obligation fields: "
+            "theme-evidence-boundary-plan requires non-empty obligation fields: "
             + ", ".join(missing_plan_lists)
         )
 
@@ -530,9 +769,86 @@ def validate_theme_acquisition_plan_payload(payload: dict[str, Any]) -> None:
     ).casefold()
     if "policy_evaluation_basis" in plan_text or "policy evaluation basis" in plan_text:
         raise ValueError(
-            "theme-acquisition-plan cannot treat policy_evaluation_basis as a "
+            "theme-evidence-boundary-plan cannot treat policy_evaluation_basis as a "
             "source family, query route, denominator, or acquisition lane."
         )
+
+
+def validate_council_investigation_program_payload(payload: dict[str, Any]) -> None:
+    reject_source_route_scheduler_fields(OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM, payload)
+    if maybe_text(payload.get("author_role")) not in {"moderator", "runtime-operator"}:
+        raise ValueError(
+            "council-investigation-program must be synthesized by moderator "
+            "or attributed to runtime-operator import; it is not an investigator "
+            "source plan."
+        )
+    required_lists = (
+        "program_questions",
+        "theme_threads",
+        "council_agenda_questions",
+        "agent_responsibility_boundaries",
+        "round_sequence",
+        "round_exit_criteria",
+        "downgrade_conditions",
+        "supplemental_round_triggers",
+        "forbidden_scheduler_fields",
+    )
+    missing_lists = [
+        field_name
+        for field_name in required_lists
+        if not isinstance(payload.get(field_name), list) or not payload.get(field_name)
+    ]
+    if missing_lists:
+        raise ValueError(
+            "council-investigation-program requires non-empty list fields: "
+            + ", ".join(missing_lists)
+        )
+    validate_agent_responsibility_boundaries(
+        OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM,
+        payload.get("agent_responsibility_boundaries"),
+    )
+    validate_round_internal_phase_semantics(
+        OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM,
+        payload.get("round_internal_phase_model"),
+    )
+    for index, round_item in enumerate(payload.get("round_sequence", [])):
+        if not isinstance(round_item, dict):
+            raise ValueError("council-investigation-program round_sequence items must be objects.")
+        if not maybe_text(round_item.get("round_subtitle_question")).endswith(("?", "？")):
+            raise ValueError(
+                "council-investigation-program round_sequence "
+                f"item {index} requires a question-form round_subtitle_question."
+            )
+        validate_round_internal_phase_semantics(
+            OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM,
+            round_item.get("round_internal_phases"),
+        )
+        validate_agent_responsibility_boundaries(
+            OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM,
+            round_item.get("agent_responsibility_boundaries"),
+        )
+    validate_supplemental_round_restraint(
+        OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM,
+        payload,
+    )
+
+
+def validate_round_brief_payload(payload: dict[str, Any]) -> None:
+    reject_source_route_scheduler_fields(OBJECT_KIND_ROUND_BRIEF, payload)
+    if maybe_text(payload.get("round_subtitle_question")) and not maybe_text(
+        payload.get("round_subtitle_question")
+    ).endswith(("?", "？")):
+        raise ValueError("round-brief round_subtitle_question must be question-form.")
+    if populated(payload.get("agent_responsibility_boundaries")):
+        validate_agent_responsibility_boundaries(
+            OBJECT_KIND_ROUND_BRIEF,
+            payload.get("agent_responsibility_boundaries"),
+        )
+    validate_round_internal_phase_semantics(
+        OBJECT_KIND_ROUND_BRIEF,
+        payload.get("round_internal_phases"),
+    )
+    validate_supplemental_round_restraint(OBJECT_KIND_ROUND_BRIEF, payload)
 
 
 def normalized_dynamic_investigation_object_payload(
@@ -685,8 +1001,12 @@ def normalized_dynamic_investigation_object_payload(
     normalized[id_field] = maybe_text(normalized.get(id_field)) or object_id
     if normalized_kind == OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL:
         validate_source_acquisition_proposal_payload(normalized)
-    if normalized_kind == OBJECT_KIND_THEME_ACQUISITION_PLAN:
-        validate_theme_acquisition_plan_payload(normalized)
+    if normalized_kind == OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM:
+        validate_council_investigation_program_payload(normalized)
+    if normalized_kind == OBJECT_KIND_ROUND_BRIEF:
+        validate_round_brief_payload(normalized)
+    if normalized_kind == OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN:
+        validate_theme_evidence_boundary_plan_payload(normalized)
     normalized["schema_version"] = canonical_contract(normalized_kind).schema_version
     return validate_canonical_payload(normalized_kind, normalized)
 

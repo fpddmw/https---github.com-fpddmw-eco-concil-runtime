@@ -6,7 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from eco_council_runtime.kernel.core.paths import registry_path
-from eco_council_runtime.kernel.governance.skill_registry import resolve_skill_policy, skill_registry_snapshot
+from eco_council_runtime.kernel.governance.skill_registry import (
+    resolve_skill_policy,
+    skill_directory,
+    skill_directory_index,
+    skill_registry_snapshot,
+)
 from eco_council_runtime.kernel.source_queue.source_queue_profile import source_queue_profile, source_queue_profile_summary
 
 
@@ -196,7 +201,7 @@ def parse_agent_metadata(agent_config_path: Path) -> dict[str, str]:
     return interface
 
 
-def build_skill_entry(skill_dir: Path) -> dict[str, object] | None:
+def build_skill_entry(skill_dir: Path, root: Path | None = None) -> dict[str, object] | None:
     skill_name = skill_dir.name
     script_path = skill_dir / "scripts" / f"{skill_name.replace('-', '_')}.py"
     if not script_path.exists():
@@ -206,10 +211,14 @@ def build_skill_entry(skill_dir: Path) -> dict[str, object] | None:
     skill_doc_text = load_text_if_exists(skill_doc_path)
     frontmatter = parse_frontmatter(skill_doc_text)
     contract = parse_contract(skill_doc_text)
-    skill_access = resolve_skill_policy(skill_name)
+    skill_access = resolve_skill_policy(skill_name, root)
     return {
         "skill_name": skill_name,
         "script_path": str(script_path.resolve()),
+        "physical_path": str(skill_dir.resolve()),
+        "skill_category": maybe_text(skill_access.get("skill_category")),
+        "skill_family": maybe_text(skill_access.get("skill_family")),
+        "workflow_stage": maybe_text(skill_access.get("workflow_stage")),
         "skill_doc_path": str(skill_doc_path.resolve()) if skill_doc_path.exists() else "",
         "agent_config_path": str(agent_config_path.resolve()) if agent_config_path.exists() else "",
         "description": maybe_text(frontmatter.get("description")),
@@ -225,14 +234,12 @@ def build_skill_entry(skill_dir: Path) -> dict[str, object] | None:
 
 def scan_skills(root: Path | None = None) -> list[dict[str, object]]:
     resolved_root = root or workspace_root()
-    skills_root = resolved_root / "skills"
     entries: list[dict[str, object]] = []
-    if not skills_root.exists():
+    skill_dirs = skill_directory_index(resolved_root)
+    if not skill_dirs:
         return entries
-    for child in sorted(skills_root.iterdir(), key=lambda item: item.name):
-        if not child.is_dir():
-            continue
-        entry = build_skill_entry(child)
+    for skill_dir in [skill_dirs[name] for name in sorted(skill_dirs)]:
+        entry = build_skill_entry(skill_dir, resolved_root)
         if entry is not None:
             entries.append(entry)
     return entries
@@ -254,6 +261,9 @@ def registry_snapshot(root: Path | None = None) -> dict[str, object]:
                 0,
             ),
             "skill_layer_counts": access_snapshot.get("skill_layer_counts", {}),
+            "skill_category_counts": access_snapshot.get("skill_category_counts", {}),
+            "skill_family_counts": access_snapshot.get("skill_family_counts", {}),
+            "workflow_stage_counts": access_snapshot.get("workflow_stage_counts", {}),
             "write_scope_counts": access_snapshot.get("write_scope_counts", {}),
         },
         "skills": skills,
@@ -269,10 +279,8 @@ def write_registry(run_dir: Path, root: Path | None = None) -> dict[str, object]
 
 def resolve_skill_entry(skill_name: str, root: Path | None = None) -> dict[str, object]:
     resolved_root = root or workspace_root()
-    skill_dir = resolved_root / "skills" / skill_name
-    if not skill_dir.exists():
-        raise ValueError(f"Unknown skill: {skill_name}")
-    entry = build_skill_entry(skill_dir)
+    skill_dir = skill_directory(skill_name, resolved_root)
+    entry = build_skill_entry(skill_dir, resolved_root)
     if entry is None:
         raise ValueError(f"Unknown skill: {skill_name}")
     return entry

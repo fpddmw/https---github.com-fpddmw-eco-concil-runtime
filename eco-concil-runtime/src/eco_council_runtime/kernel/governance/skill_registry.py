@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,28 @@ SKILL_LAYER_DELIBERATION_WRITE = "deliberation-write"
 SKILL_LAYER_REPORTING = "reporting"
 SKILL_LAYER_STATE_TRANSITION = "state-transition"
 SKILL_LAYER_RUNTIME_ADMIN = "runtime-admin"
+
+SKILL_CATEGORY_PLANNING_PROGRAM = "planning-program"
+SKILL_CATEGORY_RUNTIME_STATE = "runtime-state"
+SKILL_CATEGORY_DELIBERATION_WRITE = "deliberation-write"
+SKILL_CATEGORY_SOURCE_FETCH = "source-fetch"
+SKILL_CATEGORY_SOURCE_NORMALIZE = "source-normalize"
+SKILL_CATEGORY_QUERY = "query"
+SKILL_CATEGORY_OPTIONAL_ANALYSIS = "optional-analysis"
+SKILL_CATEGORY_REPORTING = "reporting"
+SKILL_CATEGORY_ARCHIVE_HISTORY = "archive-history"
+
+SKILL_CATEGORIES = (
+    SKILL_CATEGORY_PLANNING_PROGRAM,
+    SKILL_CATEGORY_RUNTIME_STATE,
+    SKILL_CATEGORY_DELIBERATION_WRITE,
+    SKILL_CATEGORY_SOURCE_FETCH,
+    SKILL_CATEGORY_SOURCE_NORMALIZE,
+    SKILL_CATEGORY_QUERY,
+    SKILL_CATEGORY_OPTIONAL_ANALYSIS,
+    SKILL_CATEGORY_REPORTING,
+    SKILL_CATEGORY_ARCHIVE_HISTORY,
+)
 
 WRITE_SCOPE_READ_ONLY = "read-only"
 WRITE_SCOPE_ARTIFACT = "artifact-write"
@@ -103,6 +126,10 @@ def unique_texts(values: list[Any]) -> list[str]:
 
 def workspace_root() -> Path:
     return Path(__file__).resolve().parents[5]
+
+
+def skills_root(root: Path | None = None) -> Path:
+    return (root or workspace_root()) / "skills"
 
 
 def _policy(
@@ -334,9 +361,11 @@ OPTIONAL_ANALYSIS_HELPER_FREEZE_LINES: dict[str, dict[str, Any]] = {
     },
     "review-theme-sufficiency": {
         "rule_id": "HEUR-THEME-SUFFICIENCY-001",
-        "destination": "theme-level claim-slot support and downgrade review",
+        "destination": "theme-level claim-slot support, downgrade, and progress review",
         "caveats": [
             "Theme sufficiency review is not a runtime gate, score, or truth mechanism.",
+            "Theme progress review recommends disposition only and cannot open supplemental rounds or allow report use by itself.",
+            "Ordinary query repair, zero-result diagnosis, query-variant expansion, and same-family follow-up stay in the current issue round unless council uptake records a changed theme boundary or no reasonable in-round recovery.",
             "Report use requires uptake through council objects, agent section briefs, frozen basis, or reporting basis.",
         ],
     },
@@ -913,6 +942,22 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_DELIBERATION,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
+        "synthesize-council-investigation-program": _policy(
+            skill_name="synthesize-council-investigation-program",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[ROLE_MODERATOR],
+            required_capabilities=[CAPABILITY_DISCUSSION_WRITE],
+            side_effect_scope=["artifact-write", "db-read", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=[
+                "report-blueprint",
+                "investigation-theme",
+                "agent-position",
+            ],
+            output_object_kinds=["council-investigation-program"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+            default_actor_role_hint=ROLE_MODERATOR,
+        ),
         "submit-investigation-scope": _policy(
             skill_name="submit-investigation-scope",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
@@ -1007,15 +1052,15 @@ POLICIES.update(
             output_object_kinds=["source-acquisition-proposal"],
             write_scope=WRITE_SCOPE_DELIBERATION,
         ),
-        "submit-theme-acquisition-plan": _policy(
-            skill_name="submit-theme-acquisition-plan",
+        "submit-theme-evidence-boundary-plan": _policy(
+            skill_name="submit-theme-evidence-boundary-plan",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
-            allowed_roles=[*INVESTIGATOR_ROLES, ROLE_CHALLENGER],
+            allowed_roles=[*INVESTIGATOR_ROLES],
             required_capabilities=[CAPABILITY_DISCUSSION_WRITE],
             side_effect_scope=["artifact-write", "db-write:deliberation"],
             db_write_planes=["deliberation"],
             input_object_kinds=["investigation-theme", "report-blueprint", "claim-gap-action-card"],
-            output_object_kinds=["theme-acquisition-plan"],
+            output_object_kinds=["theme-evidence-boundary-plan"],
             write_scope=WRITE_SCOPE_DELIBERATION,
         ),
         "submit-evidence-route-assessment": _policy(
@@ -1074,7 +1119,7 @@ POLICIES.update(
             input_object_kinds=[
                 "report-blueprint",
                 "investigation-theme",
-                "theme-acquisition-plan",
+                "theme-evidence-boundary-plan",
                 "finding",
                 "evidence-bundle",
                 "subissue",
@@ -1242,7 +1287,17 @@ POLICIES.update(
             required_capabilities=[CAPABILITY_REPORT_DRAFT],
             side_effect_scope=["artifact-write", "db-read", "db-write:reporting"],
             db_write_planes=["reporting"],
-            input_object_kinds=["report-basis-freeze", "runtime-control-freeze", "finding", "evidence-bundle", "proposal", "readiness-opinion"],
+            input_object_kinds=[
+                "report-basis-freeze",
+                "runtime-control-freeze",
+                "council-investigation-program",
+                "theme-progress-review",
+                "agent-section-brief",
+                "finding",
+                "evidence-bundle",
+                "proposal",
+                "readiness-opinion",
+            ],
             output_object_kinds=["reporting-handoff"],
             write_scope=WRITE_SCOPE_REPORTING,
             requires_operator_approval=True,
@@ -1256,6 +1311,8 @@ POLICIES.update(
             side_effect_scope=["artifact-write", "db-read", "db-write:reporting"],
             db_write_planes=["reporting"],
             input_object_kinds=[
+                "council-investigation-program",
+                "theme-progress-review",
                 "theme-sufficiency-review",
                 "finding",
                 "evidence-bundle",
@@ -1934,12 +1991,158 @@ for _skill_name, _policy_payload in POLICIES.items():
     )
 
 
+PLANNING_PROGRAM_SKILLS = {
+    "materialize-report-blueprint",
+    "synthesize-council-investigation-program",
+    "submit-round-brief",
+    "submit-theme-evidence-boundary-plan",
+    "review-theme-sufficiency",
+}
+
+RUNTIME_STATE_SKILLS = {
+    "scaffold-mission-run",
+    "prepare-round",
+    "open-investigation-round",
+    "open-report-writing-round",
+    "freeze-report-basis",
+    "plan-round-orchestration",
+}
+
+ARCHIVE_HISTORY_SKILLS = {
+    "archive-case-library",
+    "archive-signal-corpus",
+    "materialize-history-context",
+    "query-case-library",
+    "query-signal-corpus",
+}
+
+
+@lru_cache(maxsize=16)
+def _skill_directory_index_cached(root_path_text: str) -> tuple[tuple[str, str], ...]:
+    root_path = Path(root_path_text)
+    if not root_path.exists():
+        return ()
+    index: dict[str, Path] = {}
+    duplicates: dict[str, list[str]] = {}
+    for skill_doc_path in sorted(root_path.rglob("SKILL.md")):
+        skill_dir = skill_doc_path.parent
+        skill_name = skill_dir.name
+        script_path = skill_dir / "scripts" / f"{skill_name.replace('-', '_')}.py"
+        if not script_path.exists():
+            continue
+        if skill_name in index:
+            duplicates.setdefault(skill_name, [str(index[skill_name])]).append(
+                str(skill_dir)
+            )
+            continue
+        index[skill_name] = skill_dir
+    if duplicates:
+        details = "; ".join(
+            f"{name}: {', '.join(paths)}" for name, paths in sorted(duplicates.items())
+        )
+        raise ValueError("Duplicate skill directories discovered: " + details)
+    return tuple((name, str(path)) for name, path in sorted(index.items()))
+
+
+def skill_directory_index(root: Path | None = None) -> dict[str, Path]:
+    root_path = skills_root(root).resolve()
+    index = {
+        name: Path(path)
+        for name, path in _skill_directory_index_cached(str(root_path))
+    }
+    return index
+
+
+def skill_directory(skill_name: str, root: Path | None = None) -> Path:
+    index = skill_directory_index(root)
+    normalized_name = maybe_text(skill_name)
+    skill_dir = index.get(normalized_name)
+    if skill_dir is None:
+        raise ValueError(f"Unknown skill directory: {skill_name}")
+    return skill_dir
+
+
+def skill_category_for_policy(skill_name: str, policy: dict[str, Any]) -> str:
+    normalized_name = maybe_text(skill_name)
+    if normalized_name in PLANNING_PROGRAM_SKILLS:
+        return SKILL_CATEGORY_PLANNING_PROGRAM
+    if normalized_name in RUNTIME_STATE_SKILLS:
+        return SKILL_CATEGORY_RUNTIME_STATE
+    if normalized_name in ARCHIVE_HISTORY_SKILLS:
+        return SKILL_CATEGORY_ARCHIVE_HISTORY
+    layer = maybe_text(policy.get("skill_layer"))
+    if layer == SKILL_LAYER_FETCH:
+        return SKILL_CATEGORY_SOURCE_FETCH
+    if layer == SKILL_LAYER_NORMALIZE:
+        return SKILL_CATEGORY_SOURCE_NORMALIZE
+    if layer == SKILL_LAYER_QUERY:
+        return SKILL_CATEGORY_QUERY
+    if layer == SKILL_LAYER_OPTIONAL_ANALYSIS:
+        return SKILL_CATEGORY_OPTIONAL_ANALYSIS
+    if layer == SKILL_LAYER_REPORTING:
+        return SKILL_CATEGORY_REPORTING
+    if layer == SKILL_LAYER_STATE_TRANSITION:
+        return SKILL_CATEGORY_RUNTIME_STATE
+    if layer == SKILL_LAYER_DELIBERATION_WRITE:
+        return SKILL_CATEGORY_DELIBERATION_WRITE
+    if layer == SKILL_LAYER_RUNTIME_ADMIN:
+        return SKILL_CATEGORY_ARCHIVE_HISTORY
+    return SKILL_CATEGORY_DELIBERATION_WRITE
+
+
+def skill_family_for_name(skill_name: str, policy: dict[str, Any]) -> str:
+    normalized_name = maybe_text(skill_name)
+    category = skill_category_for_policy(normalized_name, policy)
+    if normalized_name.startswith(("fetch-gdelt-", "normalize-gdelt-")):
+        return "gdelt"
+    if "regulationsgov" in normalized_name:
+        return "regulationsgov"
+    if "youtube" in normalized_name:
+        return "youtube"
+    if "open-meteo" in normalized_name:
+        return "open-meteo"
+    if "openaq" in normalized_name:
+        return "openaq"
+    if "airnow" in normalized_name:
+        return "airnow"
+    if "usbr" in normalized_name:
+        return "usbr"
+    if "usgs" in normalized_name:
+        return "usgs"
+    if "public-discourse" in normalized_name or "public-media" in normalized_name:
+        return "public-discourse"
+    if "formal" in normalized_name:
+        return "formal-public"
+    if "spatiotemporal" in normalized_name or "timeline" in normalized_name:
+        return "fact-policy-public-interaction"
+    if category in {
+        SKILL_CATEGORY_SOURCE_FETCH,
+        SKILL_CATEGORY_SOURCE_NORMALIZE,
+        SKILL_CATEGORY_QUERY,
+    }:
+        return category
+    return maybe_text(policy.get("skill_layer")) or category
+
+
+def workflow_stage_for_policy(skill_name: str, policy: dict[str, Any]) -> str:
+    category = skill_category_for_policy(skill_name, policy)
+    if category == SKILL_CATEGORY_PLANNING_PROGRAM:
+        if skill_name == "review-theme-sufficiency":
+            return "progress-review"
+        if skill_name == "submit-theme-evidence-boundary-plan":
+            return "theme-evidence-boundary"
+        return "program-framing"
+    if category == SKILL_CATEGORY_RUNTIME_STATE:
+        return "state-transition"
+    if category == SKILL_CATEGORY_REPORTING:
+        return "reporting"
+    if category == SKILL_CATEGORY_ARCHIVE_HISTORY:
+        return "archive-history"
+    return maybe_text(policy.get("skill_layer")) or category
+
+
 def available_skill_names(root: Path | None = None) -> list[str]:
-    resolved_root = root or workspace_root()
-    skills_root = resolved_root / "skills"
-    if not skills_root.exists():
-        return []
-    return sorted(child.name for child in skills_root.iterdir() if child.is_dir())
+    return sorted(skill_directory_index(root))
 
 
 def validate_skill_registry(root: Path | None = None) -> None:
@@ -1961,9 +2164,17 @@ def resolve_skill_policy(skill_name: str, root: Path | None = None) -> dict[str,
     policy = POLICIES.get(maybe_text(skill_name))
     if not isinstance(policy, dict):
         raise ValueError(f"Unknown skill policy: {skill_name}")
+    skill_dir = skill_directory(skill_name, root)
+    skill_category = skill_category_for_policy(skill_name, policy)
+    skill_family = skill_family_for_name(skill_name, policy)
+    workflow_stage = workflow_stage_for_policy(skill_name, policy)
     return {
         "skill_name": maybe_text(policy.get("skill_name")),
         "skill_layer": maybe_text(policy.get("skill_layer")),
+        "skill_category": skill_category,
+        "skill_family": skill_family,
+        "workflow_stage": workflow_stage,
+        "physical_path": str(skill_dir.resolve()),
         "allowed_roles": unique_texts(policy.get("allowed_roles", [])),
         "denied_roles": unique_texts(policy.get("denied_roles", [])),
         "required_capabilities": unique_texts(policy.get("required_capabilities", [])),
@@ -2009,11 +2220,22 @@ def skill_registry_snapshot(root: Path | None = None) -> dict[str, Any]:
     validate_skill_registry(root)
     skills = [resolve_skill_policy(name, root) for name in available_skill_names(root)]
     layer_counts: dict[str, int] = {}
+    category_counts: dict[str, int] = {}
+    family_counts: dict[str, int] = {}
+    workflow_stage_counts: dict[str, int] = {}
     write_scope_counts: dict[str, int] = {}
     approval_required_count = 0
     for skill in skills:
         layer = maybe_text(skill.get("skill_layer")) or "unknown"
         layer_counts[layer] = int(layer_counts.get(layer) or 0) + 1
+        category = maybe_text(skill.get("skill_category")) or "unknown"
+        category_counts[category] = int(category_counts.get(category) or 0) + 1
+        family = maybe_text(skill.get("skill_family")) or "unknown"
+        family_counts[family] = int(family_counts.get(family) or 0) + 1
+        workflow_stage = maybe_text(skill.get("workflow_stage")) or "unknown"
+        workflow_stage_counts[workflow_stage] = (
+            int(workflow_stage_counts.get(workflow_stage) or 0) + 1
+        )
         write_scope = maybe_text(skill.get("write_scope")) or WRITE_SCOPE_READ_ONLY
         write_scope_counts[write_scope] = int(write_scope_counts.get(write_scope) or 0) + 1
         if bool(skill.get("requires_operator_approval")):
@@ -2023,6 +2245,9 @@ def skill_registry_snapshot(root: Path | None = None) -> dict[str, Any]:
         "skill_count": len(skills),
         "operator_approval_required_count": approval_required_count,
         "skill_layer_counts": layer_counts,
+        "skill_category_counts": category_counts,
+        "skill_family_counts": family_counts,
+        "workflow_stage_counts": workflow_stage_counts,
         "write_scope_counts": write_scope_counts,
         "skills": skills,
     }
@@ -2038,6 +2263,16 @@ __all__ = [
     "SKILL_LAYER_REPORTING",
     "SKILL_LAYER_RUNTIME_ADMIN",
     "SKILL_LAYER_STATE_TRANSITION",
+    "SKILL_CATEGORIES",
+    "SKILL_CATEGORY_ARCHIVE_HISTORY",
+    "SKILL_CATEGORY_DELIBERATION_WRITE",
+    "SKILL_CATEGORY_OPTIONAL_ANALYSIS",
+    "SKILL_CATEGORY_PLANNING_PROGRAM",
+    "SKILL_CATEGORY_QUERY",
+    "SKILL_CATEGORY_REPORTING",
+    "SKILL_CATEGORY_RUNTIME_STATE",
+    "SKILL_CATEGORY_SOURCE_FETCH",
+    "SKILL_CATEGORY_SOURCE_NORMALIZE",
     "WRITE_SCOPE_ANALYSIS",
     "WRITE_SCOPE_ARCHIVE",
     "WRITE_SCOPE_ARTIFACT",
@@ -2059,6 +2294,8 @@ __all__ = [
     "default_actor_role_hint",
     "evidence_only_skill_names",
     "resolve_skill_policy",
+    "skill_directory",
+    "skill_directory_index",
     "skill_registry_snapshot",
     "skill_boundary_violations",
     "skill_requires_write_actor_role",

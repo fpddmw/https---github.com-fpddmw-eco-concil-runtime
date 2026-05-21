@@ -23,16 +23,107 @@ RUN_ID = "run-dynamic-investigation-001"
 ROUND_ID = "round-dynamic-investigation-001"
 
 
+def minimal_council_program_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "run_id": RUN_ID,
+        "round_id": ROUND_ID,
+        "object_kind": "council-investigation-program",
+        "author_role": "moderator",
+        "status": "proposed",
+        "target_kind": "report-blueprint",
+        "target_id": "report-blueprint-001",
+        "rationale": "Synthesize council agenda questions without choosing acquisition routes.",
+        "program_id": "council-program-unit-001",
+        "mission_question": "What should the report answer?",
+        "report_blueprint_ref": "report-blueprint:report-blueprint-001",
+        "agent_position_refs": [
+            "agent-position:env",
+            "agent-position:social",
+            "agent-position:challenger",
+        ],
+        "program_questions": ["What facts, governance records, and boundaries must be answered?"],
+        "theme_threads": [
+            {
+                "theme_id": "theme-fact",
+                "theme_question": "Which fact boundary is visible?",
+                "claim_slots_supported": ["claim-slot-fact"],
+            }
+        ],
+        "council_agenda_questions": ["Which fact boundary is visible?"],
+        "agent_responsibility_boundaries": [
+            "environmental-investigator: define fact-process claim basis and limitation boundary.",
+            "challenger: review causal, denominator, and policy-evaluation overreach.",
+        ],
+        "round_sequence": [
+            {
+                "round_id": "round-002-fact",
+                "round_title": "Fact issue council",
+                "round_subtitle_question": "Which fact boundary is visible?",
+                "round_mode": "issue-council",
+                "round_category": "issue-deliberation",
+                "active_theme_ids": ["theme-fact"],
+                "agent_responsibility_boundaries": [
+                    "environmental-investigator: define fact-process claim basis and limitation boundary.",
+                    "challenger: review causal, denominator, and policy-evaluation overreach.",
+                ],
+                "round_internal_phases": [
+                    "agenda-question",
+                    "agent-acquisition-turns",
+                    "agent-analysis-turns",
+                    "progress-review",
+                    "moderator-synthesis",
+                ],
+            }
+        ],
+        "round_internal_phase_model": [
+            "round_internal_phases are descriptive organization hints only"
+        ],
+        "round_exit_criteria": [
+            "Active theme status is recorded as supported, downgraded, scoped out, or carried forward."
+        ],
+        "downgrade_conditions": ["Missing denominator basis requires downgrade."],
+        "supplemental_round_triggers": [
+            "No reasonable in-round recovery remains for a named theme responsibility boundary."
+        ],
+        "source_autonomy_boundary": "Investigators choose acquisition routes in their work turns; this program does not choose them.",
+        "policy_evaluation_boundary": "policy_evaluation_basis is a report synthesis boundary, not an acquisition lane.",
+        "adoption_status": "proposed-for-council-use",
+        "forbidden_scheduler_fields": [
+            "source_family",
+            "source_skill",
+            "query",
+            "query_parameters",
+            "priority_score",
+            "route_ranking",
+            "source_priority",
+            "scheduler_queue",
+            "auto_execute",
+        ],
+        "evidence_refs": [],
+        "provenance": {"source": "unit-test"},
+    }
+    payload.update(overrides)
+    return payload
+
+
 class DynamicInvestigationObjectTests(unittest.TestCase):
     def test_dynamic_investigation_contracts_are_thin_envelopes(self) -> None:
         for object_kind in DYNAMIC_INVESTIGATION_OBJECT_KINDS:
             contract = canonical_contract(object_kind)
 
-            self.assertEqual("object_id", contract.id_field)
+            expected_id_field = {
+                "report-blueprint": "blueprint_id",
+                "investigation-theme": "theme_id",
+                "council-investigation-program": "program_id",
+                "theme-evidence-boundary-plan": "plan_id",
+                "theme-progress-review": "review_id",
+            }.get(object_kind, "object_id")
+            self.assertEqual(expected_id_field, contract.id_field)
             self.assertEqual((), contract.required_number_fields)
             self.assertEqual((), contract.required_non_empty_list_fields)
             self.assertNotIn("confidence", contract.required_text_fields)
-            self.assertIn("object_kind", contract.required_text_fields)
+            if object_kind != "theme-progress-review":
+                self.assertIn("object_kind", contract.required_text_fields)
             self.assertIn("evidence_refs", contract.required_list_fields)
 
     def test_dynamic_objects_store_and_query_without_evidence_scoring(self) -> None:
@@ -111,6 +202,228 @@ class DynamicInvestigationObjectTests(unittest.TestCase):
                         "provenance": {"source": "unit-test"},
                     },
                 )
+
+    def test_council_program_contract_rejects_source_route_scheduler_fields(self) -> None:
+        forbidden_fields = (
+            "source_family",
+            "source_skill",
+            "query",
+            "query_parameters",
+            "route_ranking",
+            "source_priority",
+            "scheduler_queue",
+            "auto_execute",
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            stored = append_dynamic_investigation_object_record(
+                run_dir,
+                object_kind="council-investigation-program",
+                object_payload=minimal_council_program_payload(),
+            )
+            self.assertEqual(
+                "council-investigation-program",
+                stored["object"]["object_kind"],
+            )
+            self.assertEqual(
+                "council-program-unit-001",
+                stored["object"]["program_id"],
+            )
+            for field_name in forbidden_fields:
+                with self.subTest(field_name=field_name):
+                    payload = minimal_council_program_payload(
+                        program_id=f"council-program-forbidden-{field_name}",
+                        object_id=f"council-program-forbidden-{field_name}",
+                    )
+                    payload[field_name] = {"value": "precommitment"} if field_name == "query_parameters" else "precommitment"
+                    with self.assertRaisesRegex(ValueError, "source/query/route/scheduler"):
+                        append_dynamic_investigation_object_record(
+                            run_dir,
+                            object_kind="council-investigation-program",
+                            object_payload=payload,
+                        )
+
+            payload = minimal_council_program_payload(
+                program_id="council-program-forbidden-provenance",
+                object_id="council-program-forbidden-provenance",
+            )
+            payload["provenance"] = {"source_skill": "hidden-precommitment"}
+            with self.assertRaisesRegex(ValueError, "provenance.source_skill"):
+                append_dynamic_investigation_object_record(
+                    run_dir,
+                    object_kind="council-investigation-program",
+                    object_payload=payload,
+                )
+
+    def test_program_and_round_brief_reject_mechanical_responsibility_sequence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            payload = minimal_council_program_payload(
+                agent_responsibility_boundaries=[
+                    "social-investigator must run skill fetch-youtube-comments then query parameters."
+                ]
+            )
+            with self.assertRaisesRegex(ValueError, "cannot become a source/query/skill/task sequence"):
+                append_dynamic_investigation_object_record(
+                    run_dir,
+                    object_kind="council-investigation-program",
+                    object_payload=payload,
+                )
+
+            with self.assertRaisesRegex(ValueError, "cannot become a source/query/skill/task sequence"):
+                append_dynamic_investigation_object_record(
+                    run_dir,
+                    object_kind="round-brief",
+                    object_payload={
+                        "run_id": RUN_ID,
+                        "round_id": ROUND_ID,
+                        "object_kind": "round-brief",
+                        "author_role": "moderator",
+                        "target_kind": "round",
+                        "target_id": ROUND_ID,
+                        "rationale": "Brief must not become a task sequence.",
+                        "program_id": "council-program-unit-001",
+                        "round_subtitle_question": "Which boundary should this round resolve?",
+                        "agent_responsibility_boundaries": [
+                            "social-investigator must query a fixed provider sequence."
+                        ],
+                        "evidence_refs": [],
+                        "provenance": {"source": "unit-test"},
+                    },
+                )
+
+    def test_round_brief_accepts_program_payload_but_rejects_phase_state_machine(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            stored = append_dynamic_investigation_object_record(
+                run_dir,
+                object_kind="round-brief",
+                object_payload={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "object_kind": "round-brief",
+                    "author_role": "moderator",
+                    "target_kind": "round",
+                    "target_id": ROUND_ID,
+                    "rationale": "Program-aware round brief for issue council.",
+                    "program_id": "council-program-unit-001",
+                    "round_title": "Fact issue council",
+                    "round_subtitle_question": "Which fact boundary is visible?",
+                    "round_mode": "issue-council",
+                    "round_category": "issue-deliberation",
+                    "active_theme_ids": ["theme-fact"],
+                    "agent_responsibility_boundaries": [
+                        "environmental-investigator: define fact-process claim basis and limitation boundary."
+                    ],
+                    "round_internal_phases": [
+                        "agenda-question",
+                        "agent-acquisition-turns",
+                        "agent-analysis-turns",
+                        "progress-review",
+                        "moderator-synthesis",
+                    ],
+                    "expected_council_objects": [
+                        "theme-evidence-boundary-plan",
+                        "finding",
+                        "theme-progress-review",
+                        "round-synthesis",
+                    ],
+                    "round_exit_criteria": [
+                        "Active theme status is recorded as support, downgrade, scope-out, or carry-forward."
+                    ],
+                    "in_round_feedback_triggers": [
+                        "source owner records recovery status when claim strength would change."
+                    ],
+                    "supplemental_round_policy": "Supplement only after unresolved responsibility boundary or challenger concern survives in-round recovery.",
+                    "forbidden_source_precommitments": [
+                        "No preselected route, provider, query, or scheduler queue."
+                    ],
+                    "evidence_refs": [],
+                    "provenance": {"source": "unit-test"},
+                },
+            )
+            self.assertEqual("council-program-unit-001", stored["object"]["program_id"])
+            self.assertEqual(["theme-fact"], stored["object"]["active_theme_ids"])
+
+            with self.assertRaisesRegex(ValueError, "not a runtime state machine"):
+                append_dynamic_investigation_object_record(
+                    run_dir,
+                    object_kind="round-brief",
+                    object_payload={
+                        "run_id": RUN_ID,
+                        "round_id": ROUND_ID,
+                        "object_kind": "round-brief",
+                        "author_role": "moderator",
+                        "target_kind": "round",
+                        "target_id": ROUND_ID,
+                        "rationale": "Invalid hard-gated phase brief.",
+                        "round_subtitle_question": "Which boundary should this round resolve?",
+                        "round_internal_phases": [{"phase_state": "must-complete"}],
+                        "evidence_refs": [],
+                        "provenance": {"source": "unit-test"},
+                    },
+                )
+
+    def test_supplemental_round_policy_rejects_ordinary_query_repair_trigger(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            with self.assertRaisesRegex(ValueError, "ordinary query repair"):
+                append_dynamic_investigation_object_record(
+                    run_dir,
+                    object_kind="round-brief",
+                    object_payload={
+                        "run_id": RUN_ID,
+                        "round_id": ROUND_ID,
+                        "object_kind": "round-brief",
+                        "author_role": "moderator",
+                        "target_kind": "round",
+                        "target_id": ROUND_ID,
+                        "rationale": "Invalid automatic supplemental trigger.",
+                        "round_subtitle_question": "Which boundary should this round resolve?",
+                        "supplemental_round_triggers": [
+                            "Open supplemental round for zero result or query variant expansion."
+                        ],
+                        "evidence_refs": [],
+                        "provenance": {"source": "unit-test"},
+                    },
+                )
+
+    def test_theme_boundary_plan_rejects_route_and_scheduler_precommitment_fields(self) -> None:
+        base_payload = {
+            "run_id": RUN_ID,
+            "round_id": ROUND_ID,
+            "object_kind": "theme-evidence-boundary-plan",
+            "author_role": "social-investigator",
+            "target_kind": "investigation-theme",
+            "target_id": "theme-public",
+            "rationale": "Claim-basis boundary plan, not route plan.",
+            "theme_id": "theme-public",
+            "authoring_mode": "agent-authored",
+            "sample_unit": "bounded sample",
+            "downgrade_boundary": "examples only",
+            "claim_slots_supported": ["claim-slot-public"],
+            "evidence_obligations": ["record sample boundary and basis obligations"],
+            "success_criteria": ["basis and denominator are visible"],
+            "denominator_obligations": ["source-local denominator"],
+            "failure_recovery_plan": ["downgrade or scope out after source-owner recovery note"],
+            "forbidden_precommitments": ["no route precommitment"],
+            "time_window": {},
+            "evidence_refs": [],
+            "provenance": {"source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            for field_name in ("query", "query_parameters", "route_ranking", "scheduler_queue", "auto_execute"):
+                with self.subTest(field_name=field_name):
+                    payload = dict(base_payload)
+                    payload["object_id"] = f"theme-plan-{field_name}"
+                    payload[field_name] = {"value": "x"} if field_name == "query_parameters" else "x"
+                    with self.assertRaisesRegex(ValueError, "source/query/route/scheduler"):
+                        append_dynamic_investigation_object_record(
+                            run_dir,
+                            object_kind="theme-evidence-boundary-plan",
+                            object_payload=payload,
+                        )
 
     def test_source_acquisition_proposal_is_thin_and_queryable_by_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

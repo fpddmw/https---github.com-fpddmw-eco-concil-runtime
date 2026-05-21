@@ -9,6 +9,14 @@ Runtime exposes source-family workflows so agents can see common data-dependency
 paths such as recon-to-table-pull and list-to-detail. These workflows do not rank
 sources, assign weights, select evidence, or force a fixed round agenda.
 
+Program-aware framing must preserve the same boundary. A `council-investigation-program`,
+`round-brief`, `investigation-theme`, or theme evidence boundary plan (legacy
+`theme-evidence-boundary-plan`) may state the claim slot, theme, evidence obligation,
+denominator obligation, exit condition, or downgrade boundary, but it must not
+preselect source families, source skills, query variants, query parameters, or
+route rankings. Those choices belong to the investigator during the acquisition
+turn or in a `source-acquisition-proposal` / route assessment.
+
 The agent remains responsible for:
 
 1. Choosing source families and queries.
@@ -16,6 +24,8 @@ The agent remains responsible for:
 3. Deciding whether a follow-up skill is needed.
 4. Recording source acquisition proposals, execution lineage, evidence positions,
    readiness opinions, and follow-up requests.
+5. Explaining when a supplemental round is needed because a theme obligation
+   remains unresolved after reasonable in-round recovery.
 
 ## Current Source-Family Workflows
 

@@ -387,7 +387,7 @@ class SourceQueueRebuildTests(unittest.TestCase):
             self.assertEqual(1, lookup_payload["result_count"])
 
     def test_openaq_split_commands_emit_raw_fetch_contracts(self) -> None:
-        router = Path("skills/fetch-openaq/scripts/fetch_openaq.py")
+        router = script_path("fetch-openaq")
         for args, operation_kind in (
             (["fetch-metadata", "--entity", "locations", "--api-query", "countries_id=9", "--dry-run"], "metadata-fetch"),
             (

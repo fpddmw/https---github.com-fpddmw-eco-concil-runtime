@@ -1,0 +1,3 @@
+name: synthesize-council-investigation-program
+description: Synthesize program-aware council agenda questions and issue-round boundaries.
+default_prompt: "Use $synthesize-council-investigation-program after report blueprint and framing positions are visible. Produce council agenda questions, active themes, responsibility boundaries, descriptive internal phases, exits, downgrades, and supplemental-round policy. Do not preselect source families, source skills, queries, route rankings, scheduler queues, or automatic execution."

@@ -115,7 +115,7 @@ def merged_provenance(
         else {}
     )
     merged.update(parse_json_dict(provenance_json, option_name="--provenance-json"))
-    merged.setdefault("source_skill", maybe_text(source_skill))
+    merged.setdefault("skill_name", maybe_text(source_skill))
     return merged
 
 

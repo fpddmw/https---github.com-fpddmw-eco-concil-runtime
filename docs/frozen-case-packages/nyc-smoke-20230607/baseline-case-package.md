@@ -1,6 +1,6 @@
 # NYC Smoke 基线案例包
 
-文档性质：本文是毕业设计展示用的 NYC smoke 冻结基线案例包。它整理既有 run 产物，不新增事实、不重跑议会、不改变 report basis。当前工程收口计划见 `docs/openclaw-public-policy-situation-analysis-upgrade-plan.md`。
+文档性质：本文是毕业设计展示用的 NYC smoke 冻结基线案例包。它整理既有 run 产物，不新增事实、不重跑议会、不改变 report basis。当前工程收口计划见 `docs/openclaw-runtime-council-program-upgrade-plan.md`。
 
 ## 1. 案例身份
 

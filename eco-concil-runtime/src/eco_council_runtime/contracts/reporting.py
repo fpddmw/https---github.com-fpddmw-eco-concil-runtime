@@ -28,12 +28,13 @@ REPORTING_CONTRACTS: dict[str, CanonicalContract] = {
         required_dict_fields=("provenance", "denominators"),
         required_non_empty_list_fields=("main_claims", "limitations"),
         required_non_empty_dict_fields=("provenance", "denominators"),
-        optional_text_fields=("section_key",),
+        optional_text_fields=("section_key", "program_id"),
         optional_list_fields=(
             "claim_slots_supported",
             "theme_ids",
             "basis_object_ids",
             "sufficiency_review_ids",
+            "theme_progress_review_ids",
         ),
     ),
     "report-section-draft": _contract(

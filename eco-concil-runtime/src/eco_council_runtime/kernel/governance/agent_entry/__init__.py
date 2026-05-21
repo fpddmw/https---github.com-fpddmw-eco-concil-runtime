@@ -27,6 +27,7 @@ from eco_council_runtime.runtime_command_hints import kernel_command
 
 
 COORDINATION_OBJECT_KINDS = (
+    "council-investigation-program",
     "investigation-plan",
     "subissue",
     "investigation-scope",
@@ -294,6 +295,16 @@ def compact_coordination_object(payload: dict[str, Any]) -> dict[str, Any]:
         "comparison_frame",
         "ordering_semantics",
         "compression_policy",
+        "program_id",
+        "mission_question",
+        "report_blueprint_ref",
+        "source_autonomy_boundary",
+        "policy_evaluation_boundary",
+        "adoption_status",
+        "round_title",
+        "round_subtitle_question",
+        "round_category",
+        "supplemental_round_policy",
     ):
         value = maybe_text(payload.get(field_name))
         if value:
@@ -317,6 +328,17 @@ def compact_coordination_object(payload: dict[str, Any]) -> dict[str, Any]:
         "source_refs",
         "evidence_refs",
         "lineage",
+        "agent_position_refs",
+        "program_questions",
+        "council_agenda_questions",
+        "agent_responsibility_boundaries",
+        "active_theme_ids",
+        "round_internal_phases",
+        "expected_council_objects",
+        "round_exit_criteria",
+        "in_round_feedback_triggers",
+        "forbidden_source_precommitments",
+        "theme_progress_review_ids",
     ):
         values = text_list(payload.get(field_name))
         if values:
@@ -417,6 +439,9 @@ def round_opening_context_surface(run_dir: Path, *, round_id: str) -> dict[str, 
     round_brief_id = maybe_text(transition.get("round_brief_id")) or maybe_text(
         task_context.get("round_brief_id")
     )
+    program_id = maybe_text(transition.get("program_id")) or maybe_text(
+        task_context.get("program_id")
+    )
     return {
         key: value
         for key, value in {
@@ -436,6 +461,27 @@ def round_opening_context_surface(run_dir: Path, *, round_id: str) -> dict[str, 
             or maybe_text(task_context.get("source_round_id")),
             "round_mode": maybe_text(transition.get("round_mode"))
             or maybe_text(task_context.get("round_mode")),
+            "program_id": program_id,
+            "round_title": maybe_text(transition.get("round_title"))
+            or maybe_text(task_context.get("round_title")),
+            "round_subtitle_question": maybe_text(transition.get("round_subtitle_question"))
+            or maybe_text(task_context.get("round_subtitle_question")),
+            "round_category": maybe_text(transition.get("round_category"))
+            or maybe_text(task_context.get("round_category")),
+            "active_theme_ids": text_list(transition.get("active_theme_ids"))
+            or text_list(task_context.get("active_theme_ids")),
+            "round_internal_phases": text_list(transition.get("round_internal_phases"))
+            or text_list(task_context.get("round_internal_phases")),
+            "agent_responsibility_boundaries": text_list(transition.get("agent_responsibility_boundaries"))
+            or text_list(task_context.get("agent_responsibility_boundaries")),
+            "unresolved_responsibility_boundary_refs": text_list(
+                transition.get("unresolved_responsibility_boundary_refs")
+            )
+            or text_list(task_context.get("unresolved_responsibility_boundary_refs")),
+            "parent_theme_progress_review_refs": text_list(
+                transition.get("parent_theme_progress_review_refs")
+            )
+            or text_list(task_context.get("parent_theme_progress_review_refs")),
             "primary_focus_refs": primary_focus_refs,
             "target_challenge_id": maybe_text(transition.get("target_challenge_id"))
             or maybe_text(task_context.get("target_challenge_id")),
@@ -836,6 +882,7 @@ def agent_entry_operator_view(
         "query_review_comments_command": maybe_text(entry_commands.get("query_review_comments_command")),
         "query_evidence_bundles_command": maybe_text(entry_commands.get("query_evidence_bundles_command")),
         "query_readiness_opinions_command": maybe_text(entry_commands.get("query_readiness_opinions_command")),
+        "query_council_investigation_programs_command": maybe_text(entry_commands.get("query_council_investigation_programs_command")),
         "query_investigation_plans_command": maybe_text(entry_commands.get("query_investigation_plans_command")),
         "query_subissues_command": maybe_text(entry_commands.get("query_subissues_command")),
         "query_investigation_scopes_command": maybe_text(entry_commands.get("query_investigation_scopes_command")),
